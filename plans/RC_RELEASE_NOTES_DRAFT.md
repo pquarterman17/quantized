@@ -410,3 +410,79 @@ installer/icon/taskbar check, and ChatGPT-Sol's wording/menu review
 (`POST_SPRINT_INDEPENDENT_REVIEW.md` R2). Promotion to plain `v0.23.2` = cut
 the tag at the accepted sha, then dispatch `release.yml` and `pypi.yml`
 (`target: pypi`) at that ref.
+
+---
+
+## Changes since `v0.23.2-rc2` (`1264b2a4`) → next candidate `f57dcb5`
+
+Nineteen commits. Compiled 2026-09-01 by reading `git log 1264b2a4..f57dcb5`,
+not by trusting the entries above.
+
+### P3.5 — Unified Recipe Library (the bulk of this delta)
+A single browse-first surface over all six recipe systems (plot, quick plot,
+analysis, peak, graph, fit model), which previously had six separate homes.
+
+- **#271** common contract + a sidecar index for favourites/tags/recency,
+  keyed per system without touching any recipe format.
+- **#272 / #276** collection completeness made source-aware and then
+  workspace-backed and reactive, so a partially-read source is *known* to be
+  partial. This is what makes pruning safe: every source reader returns `[]`
+  both for "empty" and for "the read failed", and pruning against a failed
+  read would delete the user's favourites.
+- **#273** the browse-first library itself: filters, favourites, tags,
+  last-used ordering.
+- **#277** usage recording wired into the real apply paths, and stale-index
+  pruning gated on that completeness signal.
+- **#278** capability-aware row actions. Unsupported operations are absent
+  rather than greyed out, and Apply/Open are labelled apart because they are
+  different verbs.
+- **#282** keyboard focus survives renaming a recipe whose id *is* its name
+  (the four name-keyed kinds), where committing the rename remounts the row.
+- **#283** secondary actions move into the shared overflow menu so a long
+  name no longer pays for every capability its kind supports; one busy state
+  now covers the inline controls too.
+
+**Within-window regression, introduced and fixed before any release:** #278
+gave `ConfirmDialog` focus-on-open without a matching restore-on-close, which
+dropped focus to `<body>` for all 22 `askConfirm` call sites. #283 fixed it.
+Anyone on rc2 or earlier never saw it; noted here because the same commit
+range contains both halves.
+
+### P3.4 — diagnostics
+- **#267** a copyable diagnostic bundle that **excludes project content by
+  default** — the sensitive material in this application is the science
+  (unpublished sample names, collaborator compounds in column labels,
+  absolute paths, measurements), not credentials.
+- **#268** four defects in that bundle, all on failure paths.
+- **#269** diagnostic storage keys allowlisted, and the build that produced a
+  report is stamped into it.
+
+### Accessibility and help
+- **#266** OS "reduce motion" is honoured, and help is contextual per
+  workshop rather than one undifferentiated page.
+
+### Bundle, build, dependencies
+- **#274 / #275** a per-module eager-bundle profile plus a ranked reduction
+  plan, and the Origin-apply half of the figure library deferred out of the
+  eager path.
+- **#270** the config's file URL is converted with `fileURLToPath` rather than
+  `.pathname` — the latter is wrong on Windows.
+- **#279 / #280 / #281** dependency bumps (npm dev group, `codeql-action`,
+  and a four-package Python minor/patch group including `statsmodels` 0.14.6
+  → 0.15.0 and `ruff` 0.16.3 → 0.16.5).
+
+### Measured on this exact tree (`f57dcb5`), after the dependency bumps
+- Backend: **3900 passed, 181 skipped, 18 xfailed**; `ruff check src tests`
+  and `mypy src` (266 files) both clean.
+- Frontend: **587 files / 9015 tests**; `tsc --noEmit` and `eslint src` clean.
+- Eager bundle: **885.4 kB against the 889.4 kB budget** (3.9 kB headroom —
+  the dependency bumps returned ~0.9 kB).
+
+### Acceptance still owed
+Unchanged in kind from rc1, and still owed against this tree: the packaged
+Windows/macOS install + workflow smoke pass, the 60–90 minute interactive
+real-data session with friction log, the installer/icon/taskbar check, and
+ChatGPT-Sol's wording/menu review. None of these can be run in CI.
+
+`plans/RELEASE_BLOCKERS.md` remains accurate: all three BLOCKER entries are
+closed, and nothing in this delta opens a new one.
