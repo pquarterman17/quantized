@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { makeStep } from "../../../lib/pipeline";
@@ -588,6 +588,36 @@ describe("row actions (P3.5 slice 3)", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "More actions for Safe" }),
     );
+  });
+
+  it("a scroll that closes the menu does not drag the viewport back to the row", async () => {
+    // ContextMenu closes on scroll and resize as well as on item-run, so the
+    // trigger refocus fires on a plain scroll too. A bare focus() scrolls that
+    // button into view — fighting the very scroll that closed the menu. Only
+    // the call contract is assertable here: jsdom does not scroll, so a test
+    // that merely watched the viewport would pass either way.
+    saveTemplate({
+      version: 1, name: "Loop fit",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<RecipeLibraryPanel />);
+
+    const trigger = screen.getByRole("button", { name: "More actions for Loop fit" });
+    const focusSpy = vi.spyOn(trigger, "focus");
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+
+    fireEvent.scroll(window);
+
+    // Wait on STATE (the menu is gone), not on the spy — the weak-wait ratchet
+    // in architecture.test.ts bans the latter, and the microtask that refocuses
+    // has necessarily run by the time the unmount is observable.
+    await waitFor(() =>
+      expect(screen.queryByRole("menuitem", { name: "Rename" })).not.toBeInTheDocument(),
+    );
+    expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+    focusSpy.mockRestore();
   });
 
   it("Escape cancels a rename without saving it", () => {

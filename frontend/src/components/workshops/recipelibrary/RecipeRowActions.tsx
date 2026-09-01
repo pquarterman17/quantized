@@ -70,7 +70,7 @@ export default function RecipeRowActions({
     // clicked menu item is already on its way out -- so without this the
     // dialog captures <body> and a CANCELLED delete drops the user out of the
     // list instead of back onto the row they were acting on.
-    menuButtonRef.current?.focus();
+    menuButtonRef.current?.focus({ preventScroll: true });
     void askConfirm(
       `Delete ${RECIPE_KIND_LABEL[row.kind].toLowerCase()} "${row.name}" (${row.ref.scope === "project" ? "this project" : "global"})?`,
       deleteIsUndoable(row.ref) ? "You can undo this." : "This cannot be undone.",
@@ -175,8 +175,15 @@ export default function RecipeRowActions({
             // and Copy leave nothing focused once the menu unmounts, so it
             // fires. Escape is already handled inside ContextMenu, which
             // restores the pre-open focus itself -- also not <body>.
+            // preventScroll is load-bearing, not tidiness: ContextMenu also
+            // closes on scroll and resize (its own listeners), so a plain
+            // focus() here scrolls the trigger back into view and fights the
+            // very scroll that closed the menu. ContextMenu grabs focus the
+            // same way on open, for the same reason.
             queueMicrotask(() => {
-              if (document.activeElement === document.body) menuButtonRef.current?.focus();
+              if (document.activeElement === document.body) {
+                menuButtonRef.current?.focus({ preventScroll: true });
+              }
             });
           }}
         />
