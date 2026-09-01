@@ -4,7 +4,6 @@
 // manager until the operation layer reaches parity across all six kinds.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import { pruneEntries, setFavorite, setTags } from "../../../lib/recipeIndex";
 import {
   RECIPE_KIND_LABEL,
@@ -23,9 +22,7 @@ import RecipeRowActions from "./RecipeRowActions";
 import { renameRecipe, type ActionResult } from "./recipeActions";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
-
 type KindFilter = "all" | RecipeKind;
-
 /** Success, refusal, and the third state — needs-confirmation — are separated
  *  by more than colour: the text itself is prefixed ("Not done — …"), because
  *  a border tint alone fails WCAG 1.4.1 and several refusal strings come
@@ -34,7 +31,6 @@ function resultClass(result: ActionResult | null): string {
   if (result === null || result.ok) return "qz-recipe-library-result";
   return `qz-recipe-library-result ${result.pending ? "qz-is-pending" : "qz-is-refused"}`;
 }
-
 function sortRows(rows: readonly RecipeDescriptor[]): RecipeDescriptor[] {
   return [...rows].sort((a, b) => {
     if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
@@ -88,11 +84,13 @@ function RecipeRow({
   const skipBlurCommit = useRef(false);
   const nameButtonRef = useRef<HTMLButtonElement | null>(null);
   const openNameEditor = (): void => {
+    if (busy) return;
     skipBlurCommit.current = false;
     setNameText(row.name);
     setEditingName(true);
   };
   const openTagEditor = (): void => {
+    if (busy) return;
     skipBlurCommit.current = false;
     setEditingTags(true);
   };
@@ -140,6 +138,7 @@ function RecipeRow({
     <li className="qz-recipe-library-row">
       <button
         className="qz-recipe-favorite"
+        disabled={busy}
         aria-label={`${row.favorite ? "Remove" : "Add"} ${row.name} ${row.favorite ? "from" : "to"} favorites`}
         aria-pressed={row.favorite}
         title={row.favorite ? "Remove from favorites" : "Add to favorites"}
@@ -152,6 +151,7 @@ function RecipeRow({
           {editingName ? (
             <input
               autoFocus
+              disabled={busy}
               className="qz-recipe-name-input"
               aria-label={`Rename ${row.name}`}
               value={nameText}
@@ -189,6 +189,7 @@ function RecipeRow({
               aria-label={`Rename ${row.name}`}
               title={`Rename ${row.name}`}
               ref={nameButtonRef}
+              disabled={busy}
               onClick={openNameEditor}
             >
               {row.name}
@@ -209,6 +210,7 @@ function RecipeRow({
         {editingTags ? (
           <input
             autoFocus
+            disabled={busy}
             className="qz-recipe-tag-input"
             aria-label={`Tags for ${row.name}`}
             value={tagText}
@@ -234,6 +236,7 @@ function RecipeRow({
         ) : (
           <button
             className="qz-recipe-tags"
+            disabled={busy}
             aria-label={`Edit tags for ${row.name}`}
             title={`Edit tags for ${row.name}`}
             onClick={openTagEditor}
@@ -242,7 +245,9 @@ function RecipeRow({
           </button>
         )}
       </div>
-      <RecipeRowActions row={row} onChanged={refresh} onResult={onResult} busy={busy} setBusy={setBusy} />
+      <RecipeRowActions row={row} onChanged={refresh} onResult={onResult}
+        busy={busy} setBusy={setBusy}
+        onRename={supportsOperation(row.kind, "rename") ? openNameEditor : undefined} />
     </li>
   );
 }
@@ -268,7 +273,8 @@ export default function RecipeLibraryPanel() {
   // here is ordinary ("select a dataset first", "that recipe no longer
   // exists"), not an error worth a modal.
   const [result, setResult] = useState<ActionResult | null>(null);
-  // One in-flight action across the whole list — see RecipeRowActions' prop doc.
+  // One in-flight operation across the whole list, including inline metadata
+  // controls — see RecipeRowActions' prop doc.
   const [busy, setBusy] = useState(false);
   // Which row should take focus on its next mount. Lives HERE, not in the row,
   // because a rename can destroy the row that asked for it.

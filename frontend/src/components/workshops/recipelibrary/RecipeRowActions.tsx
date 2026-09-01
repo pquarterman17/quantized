@@ -10,7 +10,10 @@
 // action. Rename/Duplicate/Export/Copy appear only where the kind supports
 // them. Apply and Delete are always present because every kind has both.
 
+import { useRef, useState } from "react";
+
 import { askConfirm } from "../../overlays/ConfirmDialog";
+import ContextMenu, { type ContextMenuItem } from "../../overlays/ContextMenu";
 import { RECIPE_KIND_LABEL, supportsOperation, type RecipeDescriptor } from "../../../lib/recipeLibrary";
 import { Button } from "../../primitives";
 import {
@@ -30,6 +33,7 @@ export default function RecipeRowActions({
   onResult,
   busy,
   setBusy,
+  onRename,
 }: {
   row: RecipeDescriptor;
   /** Something in a recipe SYSTEM changed — the caller re-reads its sources. */
@@ -37,19 +41,17 @@ export default function RecipeRowActions({
   /** Report an outcome to the panel's status line. */
   onResult: (result: ActionResult) => void;
   /** PANEL-level, not row-level. An apply is async and reports its outcome
-   *  through one shared status line, so a second apply started on another row
-   *  meanwhile would both race for that line and read store state the first
-   *  one is still mutating.
-   *
-   *  Scope, precisely: this gates the ACTION BUTTONS on every row. The inline
-   *  favorite, tag and rename controls are not gated — they are synchronous
-   *  and the first two touch only the sidecar, so calling this "one in-flight
-   *  action at a time across the whole list" would be wider than it is. An
-   *  inline rename during an in-flight apply can still write the shared result
-   *  line; that is a cosmetic race, not a data one. */
+   *  through one shared status line, so a second operation meanwhile would
+   *  race for that line and could read store state the first is mutating.
+   *  RecipeRowActions gates this row's buttons; RecipeRow gates the inline
+   *  favorite, tag, and rename controls with the same value. */
   busy: boolean;
   setBusy: (busy: boolean) => void;
+  /** Open the row's inline name editor. Present only for renameable kinds. */
+  onRename?: () => void;
 }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   /** Run one action, report it, and refresh only when it succeeded. A refusal
    *  changed nothing, so re-reading every source would be pure work. */
@@ -61,6 +63,34 @@ export default function RecipeRowActions({
 
   const primary = primaryActionLabel(row.kind);
   const scopeVerb = row.ref.scope === "project" ? "Copy to global" : "Copy to project";
+
+  const confirmDelete = (): void => {
+    void askConfirm(
+      `Delete ${RECIPE_KIND_LABEL[row.kind].toLowerCase()} "${row.name}" (${row.ref.scope === "project" ? "this project" : "global"})?`,
+      deleteIsUndoable(row.ref) ? "You can undo this." : "This cannot be undone.",
+      "Delete",
+      true,
+    ).then((confirmed) => {
+      if (confirmed) run(() => deleteRecipe(row.ref));
+    });
+  };
+
+  const secondary: ContextMenuItem[] = [
+    ...(supportsOperation(row.kind, "rename") && onRename
+      ? [{ label: "Rename", run: onRename } satisfies ContextMenuItem]
+      : []),
+    ...(supportsOperation(row.kind, "duplicate")
+      ? [{ label: "Duplicate", run: () => run(() => duplicateRecipe(row.ref)) } satisfies ContextMenuItem]
+      : []),
+    ...(supportsOperation(row.kind, "export")
+      ? [{ label: "Export…", run: () => run(() => exportRecipe(row.ref)) } satisfies ContextMenuItem]
+      : []),
+    ...(supportsOperation(row.kind, "copyScope")
+      ? [{ label: scopeVerb, run: () => run(() => copyToOtherScope(row.ref)) } satisfies ContextMenuItem]
+      : []),
+    { separator: true },
+    { label: "Delete", danger: true, run: confirmDelete },
+  ];
 
   return (
     <div className="qz-recipe-row-actions">
@@ -100,47 +130,36 @@ export default function RecipeRowActions({
         {primary}
       </Button>
 
-      {supportsOperation(row.kind, "duplicate") && (
-        <Button size="sm" disabled={busy} aria-label={`Duplicate ${row.name}`} onClick={() => run(() => duplicateRecipe(row.ref))}>
-          Duplicate
-        </Button>
-      )}
-
-      {supportsOperation(row.kind, "export") && (
-        <Button size="sm" disabled={busy} aria-label={`Export ${row.name}`} onClick={() => run(() => exportRecipe(row.ref))}>
-          Export…
-        </Button>
-      )}
-
-      {supportsOperation(row.kind, "copyScope") && (
-        <Button size="sm" disabled={busy} aria-label={`${scopeVerb}: ${row.name}`} title={scopeVerb} onClick={() => run(() => copyToOtherScope(row.ref))}>
-          {scopeVerb}
-        </Button>
-      )}
-
-      <Button
-        size="sm"
-        variant="danger"
+      <button
+        type="button"
+        ref={menuButtonRef}
+        className="qz-btn qz-sm"
         disabled={busy}
-        aria-label={`Delete ${row.name}`}
-        onClick={() => {
-          // Confirm first: for the four name-keyed kinds this is irreversible,
-          // and the dialog is the only warning the user gets.
-          void askConfirm(
-            // Names the KIND and SCOPE too: a peak recipe and a graph template
-            // can both be called "Standard", and this dialog is the only gate
-            // on an irreversible delete.
-            `Delete ${RECIPE_KIND_LABEL[row.kind].toLowerCase()} "${row.name}" (${row.ref.scope === "project" ? "this project" : "global"})?`,
-            deleteIsUndoable(row.ref) ? "You can undo this." : "This cannot be undone.",
-            "Delete",
-            true,
-          ).then((confirmed) => {
-            if (confirmed) run(() => deleteRecipe(row.ref));
-          });
+        aria-label={`More actions for ${row.name}`}
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        title="More actions"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setMenu({ x: rect.right, y: rect.bottom });
         }}
       >
-        Delete
-      </Button>
+        ⋯
+      </button>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={secondary}
+          onClose={() => {
+            setMenu(null);
+            // ContextMenu restores focus itself on Escape. Selection and
+            // click-away also need a stable landing point; a selected Rename
+            // subsequently transfers focus into the editor via autoFocus.
+            queueMicrotask(() => menuButtonRef.current?.focus());
+          }}
+        />
+      )}
     </div>
   );
 }

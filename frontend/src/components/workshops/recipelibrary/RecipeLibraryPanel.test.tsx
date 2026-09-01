@@ -257,9 +257,12 @@ describe("row actions (P3.5 slice 3)", () => {
     render(<RecipeLibraryPanel />);
 
     expect(screen.getByRole("button", { name: "Open in Pipeline: Loop fit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate Loop fit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Loop fit" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Copy to/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Loop fit" }));
+    expect(screen.getByRole("menuitem", { name: "Rename" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Export…" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Copy to/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveClass("danger");
   });
 
   it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
@@ -346,8 +349,12 @@ describe("row actions (P3.5 slice 3)", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Apply: Second" })).toBeDisabled(),
     );
-    // Every other row's actions are held too, not just the clicked row's.
-    expect(screen.getByRole("button", { name: "Delete Second" })).toBeDisabled();
+    // Every other row's actions and inline metadata controls are held too,
+    // not just the clicked row's primary button.
+    expect(screen.getByRole("button", { name: "More actions for Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rename Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Edit tags for Second" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Add Second to favorites" })).toBeDisabled();
 
     release(true);
     await waitFor(() =>

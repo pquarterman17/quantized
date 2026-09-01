@@ -1498,10 +1498,30 @@ Original acceptance criteria (unchanged):
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.3/P1.6.
 
-- [ ] Project/global scope, favorites, recent, tags, version, preview,
-  duplicate, rename, import/export.
+- [x] Common browse-first library for Plot, Quick Plot, Analysis, Peak,
+  Graph, and Fit Model recipes, with project/global scope where the backing
+  format supports it.
+- [x] Favorites, tags, last-used ordering, type/scope filters, and stale-index
+  pruning with incomplete-source safeguards.
+- [x] Capability-aware Apply/Open, duplicate, rename, export, scope-copy, and
+  safe delete actions. Unsupported operations are omitted rather than shown
+  disabled. Secondary actions use a keyboard-accessible overflow menu so long
+  recipe names remain readable; one busy state prevents conflicting edits.
+- [ ] Add a selected-recipe details/preview surface, including visible schema
+  version and useful kind-specific metadata. Do not imply that a recipe can be
+  edited or applied when its kind does not support that operation.
+- [ ] Add a library-level import entry point and finish import/export parity
+  for recipe kinds with safe, portable formats. Keep capability gating for
+  kinds that cannot yet round-trip without loss.
 - [ ] Search comes later if real use proves navigation insufficient.
 - [ ] Revisit organization after usage; do not freeze it prematurely.
+
+**Status update — 2026-08-31 (ChatGPT / Sol):** core P3.5 browsing, usage
+tracking, cleanup, and row operations shipped through PRs #273, #277, #278,
+and #282. The remaining work is details/preview/version plus library-level
+import and round-trip parity; the prior single unchecked line obscured that
+split. New eager UI work must respect the bundle ratchet (the 2026-08-31
+verification had about 4.0 kB of headroom).
 
 ### P3.6 — Office/report export acceptance
 
