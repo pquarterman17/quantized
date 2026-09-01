@@ -9,6 +9,7 @@ import { loadTemplates, saveTemplate } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
+import ConfirmDialog from "../../overlays/ConfirmDialog";
 import RecipeLibraryPanel from "./RecipeLibraryPanel";
 
 const plot = {
@@ -538,6 +539,54 @@ describe("row actions (P3.5 slice 3)", () => {
     release(true);
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Apply: Second" })).not.toBeDisabled(),
+    );
+  });
+
+  it("deletes through the overflow menu once the confirm is accepted", async () => {
+    // Delete moved off the row and behind the ⋯ menu, onto a path nothing
+    // exercised end to end — not here and not before this change. The wording
+    // matters as much as the deletion: this dialog is the only gate, so it has
+    // to name the kind and scope (a peak recipe and a graph template can both
+    // be called "Standard") and say whether undo will help.
+    saveTemplate({
+      version: 1, name: "Doomed",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<><RecipeLibraryPanel /><ConfirmDialog /></>);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Doomed" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveAccessibleName('Delete analysis template "Doomed" (global)?');
+    expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(loadTemplates()).toHaveLength(0));
+  });
+
+  it("a CANCELLED delete puts focus back on the row's ⋯ trigger", async () => {
+    // ConfirmDialog restores focus to whatever was focused when it opened, and
+    // the clicked menu item is already detached by then — so the row has to
+    // claim focus before opening the dialog. Otherwise backing out of a delete
+    // drops the user on <body>, out of the list entirely.
+    saveTemplate({
+      version: 1, name: "Safe",
+      steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })],
+      outputs: [],
+    });
+    render(<><RecipeLibraryPanel /><ConfirmDialog /></>);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Safe" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Safe"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "More actions for Safe" }),
     );
   });
 

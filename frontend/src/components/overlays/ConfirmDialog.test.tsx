@@ -122,4 +122,50 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(await answer).toBe(false);
   });
+
+  it("gives focus BACK to whatever opened it when it closes", async () => {
+    // Moving focus into the dialog without ever restoring it left every caller
+    // dropping focus to <body> on close: cancel a delete and you are dumped
+    // out of the list you were working in. The move-in and the give-back are
+    // one feature; shipping only the first half was the regression.
+    render(
+      <>
+        <button type="button">Open it</button>
+        <ConfirmDialog />
+      </>,
+    );
+    const trigger = screen.getByRole("button", { name: "Open it" });
+    trigger.focus();
+    expect(document.activeElement).toBe(trigger);
+
+    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
+    await screen.findByRole("dialog");
+    expect(document.activeElement).not.toBe(trigger); // the dialog took it
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(await answer).toBe(false);
+    expect(document.activeElement, "focus was dropped to <body> on close").toBe(trigger);
+  });
+
+  it("still closes cleanly when the confirmed action removed its own trigger", async () => {
+    // Confirming a destructive action usually destroys the very control that
+    // opened the dialog, so the restore runs against a detached node. This
+    // pins that the dialog still resolves and unmounts in that case — it does
+    // NOT pin the `isConnected` guard, which is unfalsifiable here because
+    // focusing a detached node is already a silent no-op.
+    const { rerender } = render(
+      <>
+        <button type="button">Open it</button>
+        <ConfirmDialog />
+      </>,
+    );
+    screen.getByRole("button", { name: "Open it" }).focus();
+    const answer = askConfirm("Delete it?", "", "Delete", true);
+    await screen.findByRole("dialog");
+
+    rerender(<><ConfirmDialog /></>); // the trigger goes away, as a real delete would
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await answer).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
 });

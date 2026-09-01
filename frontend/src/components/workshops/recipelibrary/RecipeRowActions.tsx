@@ -65,6 +65,12 @@ export default function RecipeRowActions({
   const scopeVerb = row.ref.scope === "project" ? "Copy to global" : "Copy to project";
 
   const confirmDelete = (): void => {
+    // Put focus on the trigger BEFORE the dialog opens. ConfirmDialog restores
+    // focus to whatever was focused when it mounted, and by this point the
+    // clicked menu item is already on its way out -- so without this the
+    // dialog captures <body> and a CANCELLED delete drops the user out of the
+    // list instead of back onto the row they were acting on.
+    menuButtonRef.current?.focus();
     void askConfirm(
       `Delete ${RECIPE_KIND_LABEL[row.kind].toLowerCase()} "${row.name}" (${row.ref.scope === "project" ? "this project" : "global"})?`,
       deleteIsUndoable(row.ref) ? "You can undo this." : "This cannot be undone.",
