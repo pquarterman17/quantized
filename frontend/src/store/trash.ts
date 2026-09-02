@@ -62,6 +62,27 @@ export function byteSize(payload: unknown): number {
   return JSON.stringify(payload).length;
 }
 
+/** Approximate serialized characters per numeric cell — a JSON float like
+ *  `-1234.5678901,` runs 10–16 characters; 14 sits in the middle and errs
+ *  slightly high, which is the safe direction for a cap. */
+const APPROX_CHARS_PER_NUMBER = 14;
+
+/** Size estimate for a DATASET entry. Datasets are the one kind whose payload
+ *  can be huge: P0.4's 1M-row member serializes to ~140 MB, and measured here
+ *  (2026-09-02, node 22) `JSON.stringify` of that dataset takes ~1.2 s on the
+ *  main thread — a stall added to every DELETE of a big dataset, on a path
+ *  that used to be instant. The cap only needs an order-of-magnitude number,
+ *  so a dimension-based estimate (20 ms on the same dataset, ~30% under the
+ *  exact figure with the constant above) is the honest trade. Every other
+ *  kind's payload is small and keeps the exact `byteSize`. */
+export function datasetByteEstimate(dataset: Dataset): number {
+  const d = dataset.data;
+  let cells = d.time.length;
+  for (const row of d.values) cells += row.length;
+  const text = d.labels.join("").length + d.units.join("").length + dataset.name.length;
+  return cells * APPROX_CHARS_PER_NUMBER + text;
+}
+
 interface TrashEntryBase {
   /** Epoch ms the entry was trashed. */
   at: number;
@@ -106,6 +127,17 @@ export interface FolderTrashEntry extends TrashEntryBase {
   folders: FolderNode[];
   datasets: FolderTrashMember[];
   workbooks: FolderTrashMember[];
+  /** Where the delete SENT every member and child: `undefined` (the root)
+   *  for "cascade", the deleted node's own parent for "reparent". Restore
+   *  treats a member still sitting exactly there as "where the delete left
+   *  it" and re-homes it; anything else the user moved since stays put.
+   *  Without this, a reparent-deleted nested folder's members (re-parented
+   *  UP, not to the root) read as user-moved and were never re-homed. */
+  dest?: string;
+  /** "reparent" only: the child folders that survived, re-parented up to
+   *  `dest` — restore re-parents them back under `folders[0]`. Empty for
+   *  "cascade", where children are part of `folders` itself. */
+  childFolders: FolderTrashMember[];
 }
 
 export type TrashEntry =
@@ -258,7 +290,7 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
     sendToTrash: (datasets, now = Date.now()) => {
       if (datasets.length === 0) return;
       get().sendEntriesToTrash(
-        datasets.map((dataset): TrashEntry => ({ kind: "dataset", at: now, bytes: byteSize(dataset), dataset })),
+        datasets.map((dataset): TrashEntry => ({ kind: "dataset", at: now, bytes: datasetByteEstimate(dataset), dataset })),
         now,
       );
     },
@@ -272,8 +304,12 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
       const state = get();
       const entry = state.trash.find((e) => trashEntryId(e) === entryId);
       if (!entry) return { ok: false, reason: "that entry is no longer in the trash" };
-      // Restoring is itself an undoable edit — it changes the library.
-      get().recordHistory("restore from trash");
+      // Deliberately NOT an undo step (review finding, P3.7). `trash` is not
+      // part of the history snapshot (store/history.ts's `snapshotOf`), so a
+      // restore that recorded history would let Ctrl+Z remove the restored
+      // object AGAIN while its trash entry stayed consumed — the one sequence
+      // that turns "recoverable" into "gone". Restore is reversed by deleting
+      // the object again, which lands it back in the trash.
 
       if (entry.kind === "dataset") {
         const result: RestoreResult = { ok: true };

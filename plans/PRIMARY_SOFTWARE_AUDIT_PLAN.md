@@ -1629,11 +1629,21 @@ verification had about 4.0 kB of headroom).
   moved where they put it (noted). `report` restores as-is. `page` restore
   is as-is too — a residual: its panels' missing-figure state follows the
   existing F3 `resolvePagePanel` semantics unchanged, not a new mechanism.
+  Review round (same day): the "reparent" mode sends members and child
+  folders to the deleted node's PARENT, not the root, so the entry now
+  records that destination (`dest`) plus the re-parented `childFolders`,
+  and restore re-homes whatever still sits exactly there. Restore is
+  deliberately NOT an undo step: `trash` is outside the history snapshot,
+  so an undoable restore would let Ctrl+Z remove the object again with its
+  entry already consumed (`store/trash.test.ts` pins it).
 - [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
   2026-09-02: `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
   P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
   newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
-  `bytes` computed once at trash time, never per render. `lib/trashSummary.ts`
+  `bytes` computed once at trash time, never per render — a dimension ESTIMATE
+  for datasets (`datasetByteEstimate`; the exact `JSON.stringify` measured
+  1.2 s on P0.4's 1M-row dataset, a stall this would have added to every
+  delete), exact for every other kind. `lib/trashSummary.ts`
   (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
   `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
   naming exactly what would be lost, destructive-styled, before `purgeTrash()`.

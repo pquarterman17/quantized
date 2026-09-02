@@ -72,10 +72,25 @@ export function captureFolderDeletion(
   s: Pick<AppState, "folders" | "datasets" | "workbooks">,
   id: string,
   mode: "reparent" | "cascade",
-): { folders: FolderNode[]; datasets: FolderTrashMember[]; workbooks: FolderTrashMember[] } | null {
+): {
+  folders: FolderNode[];
+  datasets: FolderTrashMember[];
+  workbooks: FolderTrashMember[];
+  dest?: string;
+  childFolders: FolderTrashMember[];
+} | null {
   const target = s.folders.find((f) => f.id === id);
   if (!target) return null;
   const dead = mode === "cascade" ? subtreeIds(s.folders, id) : new Set([id]);
+  // Mirrors `lib/foldertree.ts`'s `deleteFolder`: "reparent" sends members and
+  // child folders to the deleted node's parent; "cascade" clears them to the
+  // root (`undefined`). Recorded so restore can tell "still where the delete
+  // left it" from "moved by the user since".
+  const dest = mode === "reparent" ? (target.parentId ?? undefined) : undefined;
+  const childFolders: FolderTrashMember[] =
+    mode === "reparent"
+      ? s.folders.filter((f) => f.parentId === id).map((f) => ({ id: f.id, folderId: id }))
+      : [];
   // `dead` (a Set) inserts `id` first and every node before its children —
   // Set iteration order is insertion order, so this is parent-first "for
   // free", `subtreeIds`'s own DFS shape.
@@ -84,7 +99,7 @@ export function captureFolderDeletion(
     .filter((f): f is FolderNode => f !== undefined);
   const member = <T extends { id: string; folderId?: string }>(items: readonly T[]): FolderTrashMember[] =>
     items.filter((x) => x.folderId && dead.has(x.folderId)).map((x) => ({ id: x.id, folderId: x.folderId! }));
-  return { folders, datasets: member(s.datasets), workbooks: member(s.workbooks) };
+  return { folders, datasets: member(s.datasets), workbooks: member(s.workbooks), dest, childFolders };
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;

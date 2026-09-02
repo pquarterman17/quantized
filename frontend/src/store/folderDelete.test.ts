@@ -188,6 +188,39 @@ describe("deleteFolder — trash capture + restore (P3.7)", () => {
     expect(s.workbooks.find((w) => w.id === "book")!.folderId).toBe("child"); // re-homed
   });
 
+  it("reparent restore: members and child folders sent UP to the parent come back under the restored node", async () => {
+    // Review finding: "reparent" sends members to the deleted node's PARENT,
+    // not the root, so a restore rule that only re-homed `folderId ===
+    // undefined` read every one of them as user-moved and left them in
+    // "parent" — the default delete mode never restored placement at all.
+    useApp.getState().deleteFolder("child", "reparent"); // s1/s2/book + grandchild -> "parent"
+    const entry = useApp.getState().trash[0] as FolderTrashEntry;
+    expect(entry.dest).toBe("parent");
+    expect(entry.childFolders).toEqual([{ id: "grandchild", folderId: "child" }]);
+
+    const result = await useApp.getState().restoreFromTrash("folder:child");
+    expect(result).toEqual({ ok: true, note: undefined }); // nothing counted as "moved"
+    const s = useApp.getState();
+    expect(s.folders.find((f) => f.id === "child")!.parentId).toBe("parent");
+    expect(s.folders.find((f) => f.id === "grandchild")!.parentId).toBe("child"); // child folder re-homed
+    expect(s.workbooks.find((w) => w.id === "book")!.folderId).toBe("child");
+    for (const id of ["s1", "s2"]) expect(s.datasets.find((d) => d.id === id)!.folderId).toBe("child");
+    expect(s.datasets.find((d) => d.id === "c1")!.folderId).toBe("parent"); // a genuine "parent" member is untouched
+  });
+
+  it("reparent restore leaves a member the user moved elsewhere since, and says so", async () => {
+    useApp.getState().deleteFolder("child", "reparent");
+    useApp.getState().moveDatasetToFolder("s1", null); // user moves ONE member to the root
+    const result = await useApp.getState().restoreFromTrash("folder:child");
+    expect(result).toEqual({
+      ok: true,
+      note: 'restored folder "child"; 1 of 3 members had been moved and were left where they are',
+    });
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "s1")!.folderId ?? undefined).toBeUndefined(); // left where the user put it
+    expect(s.datasets.find((d) => d.id === "s2")!.folderId).toBe("child");
+  });
+
   it("restoring a folder whose OWN parent died too attaches it at root instead of dangling", async () => {
     useApp.getState().deleteFolder("child", "cascade");
     useApp.getState().deleteFolder("parent", "cascade"); // "parent" (child's captured parent) is now gone too

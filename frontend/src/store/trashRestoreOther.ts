@@ -133,9 +133,16 @@ export function computeOtherRestore(
       // The subtree's OWN parent may itself be gone since — attach at root,
       // the same rule pruneOrphans/parseFolders apply elsewhere
       // (lib/foldertree.ts), reused rather than reimplemented.
-      const folders = merged.map((f) =>
-        addedIds.has(f.id) && f.parentId && !mergedIds.has(f.parentId) ? { ...f, parentId: null } : f,
-      );
+      const restoredRootId = entry.folders[0].id;
+      const childIds = new Set(entry.childFolders.map((c) => c.id));
+      const folders = merged.map((f) => {
+        if (addedIds.has(f.id) && f.parentId && !mergedIds.has(f.parentId)) return { ...f, parentId: null };
+        // "reparent" re-parented these children UP to `dest`; one still
+        // sitting exactly there goes back under the restored node. One the
+        // user has since moved elsewhere stays where they put it.
+        if (childIds.has(f.id) && (f.parentId ?? undefined) === entry.dest) return { ...f, parentId: restoredRootId };
+        return f;
+      });
 
       let moved = 0;
       const totalMembers = entry.datasets.length + entry.workbooks.length;
@@ -146,10 +153,11 @@ export function computeOtherRestore(
         live.map((item) => {
           const capturedMember = captured.find((m) => m.id === item.id);
           if (!capturedMember) return item;
-          // Still un-parented (folderId undefined) = re-point back to its
-          // captured folder. Already re-homed elsewhere since the delete =
-          // leave it where the user put it.
-          if (item.folderId !== undefined) {
+          // Still exactly where the delete SENT it (`entry.dest`: the root
+          // for "cascade", the deleted node's parent for "reparent") =
+          // re-point back to its captured folder. Anywhere else = the user
+          // re-homed it since; leave it where they put it.
+          if (item.folderId !== entry.dest) {
             moved += 1;
             return item;
           }

@@ -14,6 +14,7 @@ import type { ReportEntry } from "../lib/report";
 import type { Dataset } from "../lib/types";
 import {
   byteSize,
+  datasetByteEstimate,
   evictTrash,
   trashEntryId,
   TRASH_MAX_AGE_MS,
@@ -92,6 +93,7 @@ describe("byteSize / trashEntryId", () => {
         folders: [{ id: "f1", name: "F", parentId: null, order: 0 }],
         datasets: [],
         workbooks: [],
+        childFolders: [],
       }),
     ).toBe("folder:f1");
   });
@@ -155,10 +157,27 @@ describe("trash slice — dataset (unchanged behaviour, P3.7 return-envelope upd
     expect(useApp.getState().trash).toEqual([]);
   });
 
-  it("stores bytes computed once at trash time", () => {
+  it("stores bytes computed once at trash time — a dimension ESTIMATE for datasets, never a full stringify", () => {
     useApp.getState().removeDataset("a");
     const entry = useApp.getState().trash[0] as DatasetTrashEntry;
-    expect(entry.bytes).toBe(byteSize(ds("a")));
+    expect(entry.bytes).toBe(datasetByteEstimate(ds("a")));
+    // The estimate is dimension-based (cells × ~14 chars + label text), so it
+    // must NOT equal the exact serialization — the exact figure is what costs
+    // ~1.2 s on a 1M-row dataset (measured; see datasetByteEstimate's doc).
+    expect(entry.bytes).not.toBe(byteSize(ds("a")));
+    expect(datasetByteEstimate(ds("a"))).toBeGreaterThan(0);
+  });
+
+  it("undo after a restore never removes the restored object again (restore is not an undo step)", async () => {
+    // `trash` is not in the history snapshot, so if restore recorded history,
+    // Ctrl+Z after it would remove the dataset AGAIN with its trash entry
+    // already consumed — the one sequence that makes the trash lose data.
+    useApp.getState().removeDataset("a");
+    const historyAfterDelete = useApp.getState().history.length;
+    await useApp.getState().restoreFromTrash("dataset:a");
+    expect(useApp.getState().history).toHaveLength(historyAfterDelete); // no new step
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.map((d) => d.id).sort()).toEqual(["a", "b"]);
   });
 });
 
