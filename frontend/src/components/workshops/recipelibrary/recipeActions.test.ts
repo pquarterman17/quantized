@@ -98,11 +98,11 @@ describe("capability gating happens BEFORE anything is touched", () => {
     });
     expect(importRecipe("graph", "global", "{}").ok).toBe(false);
     // Asserting the exact REASON, not merely `.ok === false`: without the
-    // capability guard these fall through to a store lookup and refuse with
+    // capability guard this falls through to a store lookup and refuses with
     // "no longer exists" — still false, so an `.ok` assertion passes against
-    // the bug (measured). The reason is what proves the guard ran, and the
-    // guard is what stops a quickPlot id colliding with a plot id and
-    // operating on the wrong recipe.
+    // the bug (measured). The reason is what proves the guard ran. (A quickPlot
+    // duplicate refusal used to sit here too; that operation is real now and
+    // has its own positive test below.)
     expect(copyToOtherScope(ref("graph", "G"))).toEqual({
       ok: false,
       reason: "Graph templates cannot be copied between project and global yet",

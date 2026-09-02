@@ -99,11 +99,11 @@ export interface RecipeCapabilities {
  *  recipeManagerActions.ts).
  *
  *  P3.5 closed part of the gap this table exposed — rename and duplicate are
- *  now real for the four name-keyed kinds (`lib/nameKeyedRecipes.ts`) — and
- *  deliberately left the rest open rather than lying about it. What is still
- *  genuinely absent, and why:
+ *  now real for the four name-keyed kinds (`lib/nameKeyedRecipes.ts`), and
+ *  quickPlot gained `duplicateQuickPlotTemplate` (store/quickPlotTemplates.ts)
+ *  — and deliberately left the rest open rather than lying about it. What is
+ *  still genuinely absent, and why:
  *
- *    - quickPlot duplicate: no action in `store/quickPlotTemplates.ts`.
  *    - peak/graph/fitModel import/export: no serializer or validator exists,
  *      and inventing an ad-hoc JSON shape here would make this module the
  *      owner of a format it has no business defining.
