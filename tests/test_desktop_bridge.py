@@ -905,6 +905,115 @@ def test_write_project_file_preserves_the_prior_file_when_the_disk_is_full(
     assert leftovers == []
 
 
+# --- P1.2 box 3: fsync durability (kill-process / power-loss half) ---------
+#
+# Prior to this, `_replace` did `os.fdopen -> f.write -> os.replace` with NO
+# `flush`+`fsync` on the temp file before the rename -- on a delayed-
+# allocation filesystem a crash or power loss right after `os.replace`
+# returns can leave a zero-length/partial `.dwk` AT THE REAL PATH, exactly
+# the "half-written file" the module's docstring claimed could not happen.
+
+
+def test_write_project_file_fsyncs_the_temp_file_before_os_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RED-FIRST: `os.fsync` must be called (on the temp file's fd) BEFORE
+    `os.replace` runs the atomic rename -- order recorded via two wrapped
+    real calls, not merely "both happened somewhere". A best-effort
+    directory `fsync` runs too (see the sibling tests below), so this only
+    asserts the FIRST `fsync` precedes the rename -- that first one is the
+    temp file's, since the directory can only be fsynced after the replace
+    it is meant to make durable has already happened."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+
+    calls: list[str] = []
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def _fsync(fd: int) -> None:
+        calls.append("fsync")
+        real_fsync(fd)
+
+    def _replace(src: str, dst: str) -> None:
+        calls.append("replace")
+        real_replace(src, dst)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.fsync", _fsync)
+    monkeypatch.setattr("quantized.desktop_bridge.os.replace", _replace)
+
+    out = api.write_project_file(save_out["path"], _workspace_json("good"))
+
+    assert out["ok"] is True
+    assert "fsync" in calls and "replace" in calls
+    assert calls.index("fsync") < calls.index("replace"), calls
+
+
+def test_write_project_file_preserves_the_prior_file_when_fsync_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mocked OS failure mode #3: the temp file's `fsync` itself fails
+    (`EIO` -- a realistic stand-in for a failing disk). Same preservation
+    guarantee as the `os.replace`/disk-full failures above: the prior good
+    generation survives byte-for-byte, `ok` is False with the error text
+    reported, and no `.qz-write-*` stray is left behind (the failure is
+    inside the `with os.fdopen(...)` block, before `os.replace`, so the
+    `finally` cleanup still runs)."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    def _boom(_fd: int) -> None:
+        raise OSError("Input/output error")
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.fsync", _boom)
+    out = api.write_project_file(save_out["path"], _workspace_json("new"))
+
+    assert out["ok"] is False
+    assert "Input/output error" in out["error"]
+    assert dest.read_text(encoding="utf-8") == good
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []
+
+
+def test_write_project_file_directory_fsync_failure_does_not_fail_the_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The best-effort directory `fsync` (POSIX-only, `_fsync_directory_
+    best_effort`) is opened read-only -- the ONLY `os.open` call this module
+    makes with `O_RDONLY` (the temp file goes through `tempfile.mkstemp`,
+    not a bare `os.open`). Forcing exactly that call to fail (as Windows'
+    "no directory fd" AttributeError, or a filesystem that rejects it,
+    would in practice) must NOT turn an otherwise-successful save into a
+    reported failure -- the file fsync before the replace is what is
+    load-bearing; the directory fsync only narrows a smaller window
+    further."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+
+    real_open = os.open
+
+    def _open_raising_for_readonly(path: str, flags: int, *a: Any, **kw: Any) -> int:
+        if flags == os.O_RDONLY:
+            raise OSError("directory fsync not supported here")
+        return real_open(path, flags, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.open", _open_raising_for_readonly)
+
+    good = _workspace_json("good")
+    out = api.write_project_file(save_out["path"], good)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == good
+
+
 # --- stray .qz-write-* cleanup (P2-2, adversarial review) -------------------
 #
 # A crash between the successful temp write and `os.replace` (killed process,

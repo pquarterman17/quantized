@@ -220,8 +220,18 @@ class DesktopApi(DesktopDialogBridge):
         process. The write itself is temp-file-plus-``os.replace`` (same
         directory, so the replace is atomic on a normal filesystem) so a
         crash mid-write cannot leave a half-written ``.dwk`` at the real
-        path. ``content`` must pass ``validate_workspace_payload`` or the
-        write is refused before a temp file is even opened.
+        path — **and**, since P1.2 box 3's hardening, the temp file is
+        ``flush``ed and ``fsync``ed BEFORE that replace, so a crash or
+        power loss right after ``os.replace`` returns finds the new bytes
+        durable on disk rather than whatever the filesystem's delayed
+        allocation had buffered. Not guaranteed: durability of the
+        containing directory's own metadata beyond a best-effort directory
+        ``fsync`` (POSIX-only, swallowed on failure — see
+        ``_fsync_directory_best_effort``), which only narrows that window
+        further; it is never load-bearing for the prior file's survival,
+        which the temp-file-only failure mode above already covers.
+        ``content`` must pass ``validate_workspace_payload`` or the write
+        is refused before a temp file is even opened.
 
         **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
         non-empty, the token is verified AND the temp-write-plus-`os.replace`
@@ -272,8 +282,11 @@ class DesktopApi(DesktopDialogBridge):
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content)
+                    f.flush()
+                    os.fsync(f.fileno())
                 os.replace(tmp_path, granted)
                 tmp_path = None  # replaced — nothing left to clean up
+                _fsync_directory_best_effort(directory)
             finally:
                 if tmp_path is not None:
                     try:
@@ -404,6 +417,28 @@ class DesktopApi(DesktopDialogBridge):
         A no-op for a refusal, `UnverifiableLock`, or `Contended`."""
         if ok and isinstance(record, lockmod.LockRecord):
             self._last_known_lock_record[granted] = record
+
+
+def _fsync_directory_best_effort(directory: str) -> None:
+    """After ``os.replace`` lands the new file, best-effort ``fsync`` the
+    CONTAINING directory so the renamed directory entry itself is durable
+    sooner too — POSIX only; there is no directory file descriptor to open
+    on Windows, and NFS/some filesystems reject it regardless. Swallowed on
+    purpose: the file's own ``fsync`` (before the replace, in ``_replace``
+    above) is what makes the *content* durable-ordered — this call only
+    narrows the window in which the rename itself could still be lost to a
+    crash, and a save must never be reported as failed over a step that is
+    inherently unsupported on part of the fleet."""
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except (OSError, AttributeError):
+        return
+    try:
+        os.fsync(fd)
+    except (OSError, AttributeError):
+        pass
+    finally:
+        os.close(fd)
 
 
 def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None) -> dict[str, Any]:
