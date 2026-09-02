@@ -11,13 +11,13 @@ import {
   type RecipeDescriptor,
   type RecipeKind,
 } from "../../../lib/recipeLibrary";
-import { collectRecipes, liveKeys } from "../../../lib/recipeSources";
+import { collectRecipes, liveKeys, type RecipeSourceInput } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { RecipeRow, rowKey } from "./RecipeRow";
-import { type ActionResult } from "./recipeActions";
+import { importAnyRecipe, type ActionResult } from "./recipeActions";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
 type KindFilter = "all" | RecipeKind;
@@ -67,15 +67,23 @@ export default function RecipeLibraryPanel() {
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   // Stable identity so the row's focus effect does not re-run every render.
   const clearFocusRow = useCallback(() => setFocusRowKey(null), []);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => hydrateGlobal(), [hydrateGlobal]);
-
-  const collection = collectRecipes({
+  // Hoisted to a variable (not just an inline `collectRecipes({...})` argument)
+  // so the SAME snapshot can also be threaded down to each row for its
+  // Details disclosure (`lib/recipeDetails.ts` needs it to locate a
+  // workspace-backed record) — one read, two consumers, never two reads that
+  // could disagree.
+  const sourceInput: RecipeSourceInput = {
     plotProject: projectPlots,
     plotGlobal: globalPlots,
     quickPlot: quickPlots,
     plotSourcesComplete: globalHydrated && globalComplete && workspaceComplete,
-  });
+  };
+
+  useEffect(() => hydrateGlobal(), [hydrateGlobal]);
+
+  const collection = collectRecipes(sourceInput);
 
   // P3.5: drop sidecar metadata for recipes that no longer exist — the only
   // thing keeping `qz.recipeIndex` from growing forever as recipes come and go.
@@ -114,6 +122,45 @@ export default function RecipeLibraryPanel() {
    *  "deleted — undo restores it" after they undid, is worse than silence. */
   const clearResult = (): void => setResult(null);
 
+  /** The toolbar's "Import recipe…" file-picker handler. Sniffs the kind
+   *  from the file's own content (`recipeFile.ts`) rather than asking the
+   *  user, since a picked file already declares what it is. A plot recipe
+   *  always lands in THIS PROJECT's scope here -- the row menu's "Copy to
+   *  global" is the established way to move a recipe the other direction --
+   *  so the success message says which scope it landed in; the four global
+   *  kinds have only one scope, so theirs does not need to say so. */
+  const runLibraryImport = (file: File): void => {
+    void file
+      .text()
+      .then((text) => {
+        const outcome = importAnyRecipe(text, "project");
+        if (!outcome.ok) {
+          setResult(outcome);
+          return;
+        }
+        const landedRef = outcome.ref;
+        if (!landedRef) {
+          setResult(outcome); // defensive: every import path sets `ref` today
+          return;
+        }
+        const name =
+          landedRef.kind === "plot"
+            ? (useApp.getState().plotRecipes.find((r) => r.id === landedRef.id)?.name ?? landedRef.id)
+            : landedRef.id;
+        setResult({
+          ok: true,
+          message: landedRef.kind === "plot" ? `imported "${name}" into this project` : `imported "${name}"`,
+        });
+        setRevision((n) => n + 1);
+        setFocusRowKey(rowKey(landedRef));
+      })
+      .catch((e: unknown) => {
+        // Mirrors RecipeManagerPanel's own handling: `file.text()` itself can
+        // reject (a read error), not just resolve with malformed content.
+        setResult({ ok: false, reason: e instanceof Error ? e.message : "could not read that file" });
+      });
+  };
+
   return (
     <ToolWindow id="recipe-library" title="Recipe Library" width={620} onClose={close}>
       <div className="qz-recipe-library-toolbar">
@@ -130,7 +177,19 @@ export default function RecipeLibraryPanel() {
           Favorites only
         </Checkbox>
         <span className="qz-recipe-library-count">{rows.length} of {collection.recipes.length}</span>
+        <Button size="sm" disabled={busy} onClick={() => importInputRef.current?.click()}>Import recipe…</Button>
         <Button size="sm" onClick={() => openPlotManager()}>Manage Plot Recipes…</Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".json"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) runLibraryImport(f);
+            e.target.value = "";
+          }}
+        />
       </div>
 
       {/* Mounted unconditionally and emptied when idle. A live region that is
@@ -169,6 +228,7 @@ export default function RecipeLibraryPanel() {
             <RecipeRow
               key={rowKey(row.ref)}
               row={row}
+              sources={sourceInput}
               refresh={() => setRevision((n) => n + 1)}
               onResult={setResult}
               busy={busy}

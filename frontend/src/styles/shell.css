@@ -960,7 +960,10 @@ body {
 .qz-recipe-library-count { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-micro); }
 .qz-recipe-library-warning { margin-bottom: 8px; padding: 8px 10px; border: 1px solid var(--warn); border-radius: var(--radius-sm); color: var(--text-dim); }
 .qz-recipe-library-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: min(62vh, 560px); overflow: auto; }
-.qz-recipe-library-row { display: flex; gap: 9px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+/* flex-wrap lets the Details region (P3.5) drop onto its own full-width line
+   below the favorite/name/actions row, via its own flex-basis: 100% below,
+   rather than needing a second wrapper element around the whole row. */
+.qz-recipe-library-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
 .qz-recipe-library-row:hover { border-color: var(--border-strong); }
 .qz-recipe-favorite, .qz-recipe-tags { border: 0; background: transparent; color: var(--text-dim); cursor: default; }
 .qz-recipe-favorite { padding: 1px; font-size: 18px; color: var(--accent); }
@@ -992,3 +995,21 @@ body {
    confirmation elsewhere, which is neither a success nor a refusal. */
 .qz-recipe-library-result.qz-is-pending { border-color: var(--accent); }
 .qz-recipe-library-empty { display: grid; gap: 5px; justify-items: center; padding: 32px 18px; color: var(--text-faint); text-align: center; }
+/* Per-row Details disclosure (P3.5 slice 4). The toggle sits at the end of
+   the summary column; the region itself is a sibling of `.qz-recipe-library-main`
+   / `.qz-recipe-row-actions` inside the (now flex-wrap) row, forced onto its
+   own line by `flex: 1 1 100%` regardless of how much room the row above it
+   used. */
+.qz-recipe-details-toggle { margin-top: 5px; padding: 0; border: 0; background: transparent; color: var(--text-dim); font-size: 11px; text-align: left; cursor: default; }
+.qz-recipe-details-toggle:hover { color: var(--accent); }
+.qz-recipe-details { flex: 1 1 100%; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border); }
+.qz-recipe-details-gone { color: var(--text-faint); font-size: var(--type-label, 11px); }
+.qz-recipe-details-fields { display: grid; grid-template-columns: max-content 1fr; column-gap: 10px; row-gap: 3px; margin: 0; }
+.qz-recipe-details-row { display: contents; }
+.qz-recipe-details-row dt { color: var(--text-faint); font-size: var(--type-label, 11px); }
+.qz-recipe-details-row dd { margin: 0; color: var(--text-dim); font-size: var(--type-label, 11px); overflow-wrap: anywhere; }
+.qz-recipe-details .qz-mono { font-family: var(--font-mono); }
+.qz-recipe-details-section { margin-top: 8px; }
+.qz-recipe-details-section-title { color: var(--text-faint); font-size: var(--type-micro, 10px); font-weight: var(--weight-medium, 500); text-transform: uppercase; letter-spacing: 0.04em; }
+.qz-recipe-details-section ul { margin: 3px 0 0; padding-left: 16px; color: var(--text-dim); font-size: var(--type-label, 11px); }
+.qz-recipe-details-section .qz-recipe-details-empty { margin-top: 3px; color: var(--text-faint); font-size: var(--type-label, 11px); }
