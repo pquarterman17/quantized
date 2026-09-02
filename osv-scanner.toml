@@ -13,9 +13,12 @@
 # glib 0.20.0 but the chain is glib 0.18.5 <- gtk 0.18.2 <- tauri 2 (current
 # latest; its Linux backend has not moved to glib 0.20). Linux-only (.deb
 # artifact), never called directly by quantized. Alias GHSA-wrw7-89jp-8q8g.
+# Re-evaluated 2026-09-02 after GitHub reopened Dependabot alert #1 with no
+# lockfile change: tauri 2.11.5 is still the newest release and still pins
+# gtk 0.18; `cargo update -p glib --dry-run` locks 0 packages. Unchanged.
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0429"
-reason = "2026-08-01: mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
+reason = "2026-08-01 (re-checked 2026-09-02, unchanged): mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
 
 # gtk3-rs bindings are unmaintained upstream (announced 2024) — advisory
 # notices, not vulnerabilities. They are Tauri v2's Linux backend, reached
