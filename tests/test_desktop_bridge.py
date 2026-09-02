@@ -21,6 +21,7 @@ from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
     dir_grant_count,
+    grant_write_path,
     is_consented,
     is_declared_source,
     is_dir_consented,
@@ -1006,6 +1007,74 @@ def test_write_project_file_directory_fsync_failure_does_not_fail_the_save(
         return real_open(path, flags, *a, **kw)
 
     monkeypatch.setattr("quantized.desktop_bridge.os.open", _open_raising_for_readonly)
+
+    good = _workspace_json("good")
+    out = api.write_project_file(save_out["path"], good)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == good
+
+
+# --- P1.2 box 4: never save a project over one of its own raw sources ------
+#
+# `write_project_file`/`save_file_dialog` must refuse a path the OPEN
+# project's own payload declared as a dataset `source.path`
+# (`desktop_consent.is_declared_source`), even when that same path also
+# holds (or could hold) write consent -- a raw instrument file is never a
+# legal save target, full stop.
+
+
+def test_write_project_file_refuses_to_overwrite_a_declared_source(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw_bytes = "T,M\n1,10\n2,20\n"
+    raw.write_text(raw_bytes, encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+    resolved = os.path.realpath(str(raw))
+    assert is_declared_source(resolved)
+
+    # Simulate a stale/legitimate write grant for the same path existing
+    # (e.g. the user saved onto it once via some other route) -- the
+    # declared-source refusal must fire regardless, not merely because
+    # consent happens to be absent.
+    grant_write_path(str(raw))
+    assert is_write_consented(resolved)
+
+    out = api.write_project_file(str(raw), _workspace_json("malicious"))
+
+    assert out["ok"] is False
+    assert "data source of the open project" in out["error"]
+    assert raw.read_text(encoding="utf-8") == raw_bytes
+    leftovers = [p for p in tmp_path.iterdir() if p.name not in ("raw.csv", "workspace.dwk")]
+    assert leftovers == []
+
+
+def test_save_file_dialog_refuses_a_declared_source_and_grants_nothing(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n1,10\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+    resolved = os.path.realpath(str(raw))
+
+    api.attach(FakeWindow([str(raw)]))
+    save_out = api.save_file_dialog("raw.csv")
+
+    assert save_out["path"] is None
+    assert "error" in save_out
+    assert not is_write_consented(resolved)
+
+
+def test_write_project_file_still_saves_a_non_source_path_in_the_same_directory(
+    tmp_path: Path,
+) -> None:
+    """Positive control: the refusal is scoped to the declared source path
+    itself, not to the whole project directory."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n1,10\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+
+    dest = tmp_path / "elsewhere.dwk"
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("elsewhere.dwk")
+    assert save_out["path"] is not None
 
     good = _workspace_json("good")
     out = api.write_project_file(save_out["path"], good)
