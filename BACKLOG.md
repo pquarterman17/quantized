@@ -811,7 +811,7 @@ added safety.
   gate still fails (zero errors from a major bump is also what a silently
   disabled checker looks like).
 
-### Dependabot alert #1 (RESOLVED 2026-07-25 — dismissed as tolerable risk)
+### Dependabot alert #1 (dismissed 2026-07-25 as tolerable risk; REOPENED by GitHub by 2026-08-29 — re-dismiss, decision unchanged)
 
 `glib` 0.18.5, `RUSTSEC` unsoundness in the `Iterator`/`DoubleEndedIterator`
 impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
@@ -836,6 +836,19 @@ impls for `glib::VariantStrIter`. Medium, runtime scope, `src-tauri/Cargo.lock`.
   dismissed as `tolerable_risk` with a dated rationale on the alert naming
   the re-eval condition (Tauri adopting the gtk-rs 0.20 line; the alert then
   auto-resolves via the ordinary lockfile bump).
+- **Reopened without a lockfile change — re-evaluated 2026-09-02.** GitHub's
+  push notice listed only alert #24 as open on 2026-08-16 and "1 moderate"
+  at alert #1 on 2026-08-29; `src-tauri/Cargo.lock` had no glib/gtk change in
+  between (only `quantized-shell` version bumps), so the reopen came from
+  GitHub's side, not from a dependency change. Re-measured 2026-09-02:
+  `cargo update -p glib|gtk|tauri --dry-run` each lock 0 packages; tauri
+  2.11.5 (2026-07-01) is still the newest release and its `dev` branch still
+  pins `gtk = 0.18`; the weekly OSV sweep (run #10, on `75f887b`) reports
+  nothing beyond the registered ignores. Chain, reachability and shipping
+  surface are unchanged, so the decision is unchanged: re-dismiss as
+  `tolerable_risk` with the same dated rationale (an owner click in the
+  Security tab — the agent session has no Dependabot-alerts API path). The
+  re-eval trigger stays: Tauri adopting the gtk-rs 0.20 line.
 
 ## Blocked on external samples / specs
 
