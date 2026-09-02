@@ -542,7 +542,22 @@ weigh chunked/binary arrays for large members with that number in hand.
   the pre-P1.2 silent restore is unchanged (stated in this section's own
   "Current evidence" text above), which is not a consent gap since nothing
   named could be overwritten in that case.
-- [ ] Missing sources remain relinkable, metadata-rich placeholders.
+- [x] Missing sources remain relinkable, metadata-rich placeholders.
+  **(2026-09-02: resolved BY THE EMBEDDED MODE'S DESIGN.)** The only
+  implemented `ProjectPortabilityMode` (`lib/projectPortability.ts`) is
+  `"embedded"`, so every dataset always carries its full `DataStruct`
+  snapshot in the `.dwk` regardless of whether `source` is reachable
+  (`Dataset.source`'s own doc: the path is set "ONLY where a real path is
+  actually knowable" — the DATA is never gated on it). A missing/offline/
+  changed source can therefore never produce a placeholder, because no
+  data is ever missing to begin with — the dataset stays fully usable, and
+  `store/relink.ts`'s `RelinkPreviewRow` (datasetId/datasetName/oldPath/
+  candidatePath/status/changeVerdict/candidateChecksum/candidateMtime/
+  candidateSize) is exactly the rich metadata the Relink panel surfaces
+  for a `"missing"`/`"offline"`/`"permission_denied"` row. Verified: no
+  code path clears `Dataset.source` or `Dataset.data` on a failed probe. A
+  future `"linked"` mode (named, still deferred below) re-opens this box —
+  that mode's entire point is data NOT riding along.
 - [x] Define embedded versus linked portability. **Day-5 reconciliation
   (2026-08-19):** shipped under P1.7 slice 1, not this item —
   `lib/projectPortability.ts`'s `ProjectPortabilityMode = "embedded" |
@@ -550,10 +565,60 @@ weigh chunked/binary arrays for large members with that number in hand.
   "embedded" is implemented, "linked"/"portable" are named and deferred to a
   P1.7 follow-up (see that section). The definition itself — this box's
   actual ask — is done.
-- [ ] Add workspace version/migration tests.
+- [x] Add workspace version/migration tests. **(2026-09-02.)**
+  `frontend/src/lib/__fixtures__/workspace/` gains four frozen
+  `v1.dwk.json`..`v4.dwk.json` documents (see that directory's own README
+  for provenance — derived from one real `serializeWorkspace` call, never
+  hand-typed) and `lib/workspaceMigration.test.ts` (65 cases): every
+  fixture parses with zero `migrationWarnings`, re-serializes as
+  `version: 4`, round-trips idempotently (normalized for the one
+  documented, by-design volatile field — see the fixtures' README),
+  preserves dataset/folder/pipeline-and-recalc-mode/workbook content at
+  the version tier that introduced each, confirms `deriveWorkbooks`
+  derives exactly one workbook per dataset-group for v1-v3, and a
+  `version: 5` copy throws `/unsupported workspace version/`.
 - [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
-- [ ] Kill-process/interrupted-write and old-version round trips pass.
-- [ ] Raw source files are never rewritten.
+- [x] Kill-process/interrupted-write and old-version round trips pass.
+  **(2026-09-02.)** Backend: `desktop_bridge.py`'s `write_project_file` now
+  `flush`+`fsync`s the temp file BEFORE `os.replace`, and best-effort
+  `fsync`s the containing directory after (POSIX-only, swallowed on
+  failure/Windows) — closing the "a crash right after `os.replace` can
+  still leave a partial `.dwk` at the real path" gap the module's own
+  docstring used to claim couldn't happen.
+  `tests/test_desktop_bridge.py` red-first-pins the fsync-before-replace
+  call order, that an fsync failure leaves the prior file byte-identical
+  with no stray temp, and that a directory-fsync failure never fails the
+  save. Frontend: `lib/workspaceMigration.test.ts` truncates each of the
+  four version fixtures at 25%/50%/90%/`length-1` and asserts
+  `parseWorkspace` always throws (never returns a partial workspace) and
+  `workspaceParseCore.parseWorkspaceBlob` reports `{ok: false}` with the
+  same message; `lib/openWorkspaceCommand.test.ts` (new) pins the native-
+  open consumer fact (a throw never reaches `dispatch`, `setStatus`
+  reports `open failed: …`); `lib/autosave.test.ts` extends the existing
+  "falls back past a corrupt newest generation" case with a
+  TRUNCATED-real-document variant (not just a `"junk"` string) for the
+  realistic torn-write shape.
+- [x] Raw source files are never rewritten. **(2026-09-02.)** Backend:
+  `write_project_file`/`save_file_dialog` (`desktop_bridge.py`/
+  `desktop_bridge_dialogs.py`) now refuse — before touching disk, before
+  even checking write consent — when the target path is the OPEN
+  project's own declared dataset source (`desktop_consent.
+  is_declared_source`), red-first-tested in `tests/test_desktop_bridge.py`
+  (including a stale-write-consent adversarial case and a same-directory
+  positive control). `tests/test_write_sites.py` (new) is the repo-wide
+  ratchet this box asked for made checkable: an `ast` scan of every
+  filesystem-write call under `src/quantized/` must match a hand-
+  justified allowlist exactly — 10 files today (`desktop_bridge.py`,
+  `desktop_project_file.py`, `desktop_project_lock.py`, `io/hdf5.py`,
+  `io/import_filters.py`, `io/origin_project/writer.py`, `io/xrd_csv.py`,
+  `plugins/loader.py`, `routes/_uploadcache.py`,
+  `routes/_uploadstream.py`) — failing for either an unlisted new writer
+  or a stale entry that no longer writes. Frontend:
+  `store/workspaceIO.ts`'s `runSaveWorkspaceToFile` gains a fast, friendly
+  pre-check refusing a Save As destination equal to a live dataset's
+  `source.path`, tested in `store/workspaceIO.test.ts`. (The compressed-
+  containers box above stays open — P0.4 answered "not required" — so
+  this section is not all-checked.)
 
 ### P1.3 — Complete reusable plot-recipe templates [~]
 
