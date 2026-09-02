@@ -165,6 +165,23 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
+    // P1.2 box 4: a fast, friendly PRE-check — the desktop bridge itself
+    // (desktop_bridge.py's `write_project_file`/`save_file_dialog`, backed
+    // by `desktop_consent.is_declared_source`) is what actually enforces
+    // this (exact realpath equality, server-side), so this is belt only,
+    // never the buckle: it just turns "silently refused two calls later"
+    // into an immediate, specific status naming the dataset, without a
+    // round trip through the dialog/lock machinery first. Exact string
+    // equality only — the backend's realpath resolution is the source of
+    // truth for anything a case-insensitive filesystem might otherwise
+    // disagree about.
+    const sourceDataset = get().datasets.find((d) => d.source?.path === destination);
+    if (sourceDataset) {
+      const msg = `save refused — "${baseName(destination)}" is the data source of "${sourceDataset.name}"`;
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return; // never write, never fall back to a browser download
+    }
     // I2 (P0-3/P1-1): ACQUIRE the destination's lock first — see
     // `acquireDestinationLock`'s own doc. This replaces the old
     // "only check IF the lock happens to already be tracking this exact

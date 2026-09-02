@@ -21,6 +21,7 @@ import { UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
+import { useToasts } from "./toasts";
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
 
@@ -92,6 +93,7 @@ beforeEach(() => {
   setShell(null);
   localStorage.clear();
   useRecentProjects.setState({ recentProjects: [] });
+  useToasts.setState({ toasts: [] });
   useProjectLock.setState({
     status: "unlocked",
     record: null,
@@ -210,6 +212,34 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     expect(write).not.toHaveBeenCalled();
     expect(saveBlob).not.toHaveBeenCalled(); // a refusal, not a failure — no surprise download either
     expect(useApp.getState().status).toMatch(/refused|another instance/i);
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  // P1.2 box 4 (frontend fast pre-check — the backend, desktop_bridge.py's
+  // `save_file_dialog`/`write_project_file`, is what actually enforces
+  // this via `desktop_consent.is_declared_source`; see
+  // tests/test_desktop_bridge.py). Picking a project's own raw data source
+  // as the Save As destination must never write, never fall back to a
+  // browser download, and must name the affected dataset.
+  it("refuses to save onto a live dataset's own source path", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/data/raw.csv" }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/data/raw.csv" }),
+      write_project_file: write,
+    });
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.dat", data, source: { kind: "path", path: "/data/raw.csv" } }],
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("a.dat");
+    expect(useApp.getState().status).toMatch(/refused/);
+    const toasts = useToasts.getState().toasts;
+    expect(toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(toasts.at(-1)?.msg).toContain("a.dat");
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
   });
 
