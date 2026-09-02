@@ -149,6 +149,24 @@ describe("rotating generations (#32)", () => {
     expect(restored?.datasets[0].name).toBe("survivor");
   });
 
+  it("falls back past a TRUNCATED (not just junk) newest generation — P1.2 box 3", async () => {
+    // "{corrupt" above is never-valid-JSON-shaped junk; a real interrupted
+    // write (kill/power-loss mid-save) instead leaves a truncated PREFIX of
+    // a real document -- syntactically closer to valid, so it earns its own
+    // case rather than assuming the junk case already covers it.
+    const good = serializeWorkspace({ datasets: [ds("a", "survivor")] });
+    const full = serializeWorkspace({ datasets: [ds("b", "torn"), ds("c", "torn2")] });
+    const torn = full.slice(0, Math.floor(full.length * 0.6));
+    setAutosaveBackend(
+      memoryBackend([
+        { at: 2, text: torn },
+        { at: 1, text: good },
+      ]),
+    );
+    const restored = await loadAutosave();
+    expect(restored?.datasets[0].name).toBe("survivor");
+  });
+
   it("caps the retained set rather than growing forever", async () => {
     for (let at = 1; at <= 6; at++) {
       await saveAutosave({ datasets: [ds(`d${at}`, `n${at}`)] }, at);
