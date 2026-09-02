@@ -224,21 +224,116 @@ describe("import / export", () => {
     expect(loadTemplates()).toHaveLength(2);
   });
 
-  it("reports the kinds that genuinely have no serializer, rather than inventing one", () => {
-    for (const kind of ["peak", "graph", "fitModel"] as const) {
-      expect(exportNameKeyed(kind, "anything")).toEqual({
-        ok: false,
-        reason: `${kind} recipes cannot be exported yet`,
-      });
-      expect(importNameKeyed(kind, "{}")).toEqual({
-        ok: false,
-        reason: `${kind} recipes cannot be imported yet`,
-      });
-    }
+  // P3.5: peak/graph/fitModel used to have no serializer at all (this test
+  // pinned that refusal, verbatim, until now). Inverted rather than deleted —
+  // it now pins the opposite: every name-keyed kind round-trips.
+  it("peak, graph, and fit model recipes round-trip through export and import", () => {
+    savePeakRecipe({ ...DEFAULT_RECIPE, name: "Peaks" });
+    saveGraphTemplate({ name: "Graph", style: "line", overrides: null, seriesStyles: null });
+    saveCustomModel({ version: 1, name: "Model", equation: "y=a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
+
+    const peakExport = exportNameKeyed("peak", "Peaks");
+    const graphExport = exportNameKeyed("graph", "Graph");
+    const modelExport = exportNameKeyed("fitModel", "Model");
+    expect(peakExport.ok, "peak export").toBe(true);
+    expect(graphExport.ok, "graph export").toBe(true);
+    expect(modelExport.ok, "fitModel export").toBe(true);
+    if (!peakExport.ok || !graphExport.ok || !modelExport.ok) return;
+
+    localStorage.clear();
+
+    expect(importNameKeyed("peak", peakExport.text)).toEqual({ ok: true, name: "Peaks" });
+    expect(importNameKeyed("graph", graphExport.text)).toEqual({ ok: true, name: "Graph" });
+    expect(importNameKeyed("fitModel", modelExport.text)).toEqual({ ok: true, name: "Model" });
+
+    expect(loadPeakRecipes()[0].find.max_peaks).toBe(DEFAULT_RECIPE.find.max_peaks);
+    expect(loadGraphTemplates()[0].style).toBe("line");
+    expect(loadCustomModels()[0].equation).toBe("y=a*x");
+  });
+
+  // Property-style: parse(serialize(r)) must deep-equal r for a real stored
+  // record, field for field — not just "the name came back".
+  it("round-trips DEFAULT_RECIPE losslessly through peak export/import", () => {
+    const original = { ...DEFAULT_RECIPE, name: "Full peak recipe" };
+    savePeakRecipe(original);
+    const exported = exportNameKeyed("peak", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  it("round-trips a fit model with null bounds losslessly", () => {
+    const original = {
+      version: 1 as const,
+      name: "Null bounds",
+      equation: "y=a*x+b",
+      params: ["a", "b"],
+      guesses: [1, 2],
+      lower: [null, 0],
+      upper: [10, null],
+    };
+    saveCustomModel(original);
+    const exported = exportNameKeyed("fitModel", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("fitModel", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadCustomModels()[0]).toEqual(original);
+  });
+
+  it("round-trips a graph template with an Origin source and null overrides losslessly", () => {
+    const original = { name: "Origin style", style: "scatter", overrides: null, seriesStyles: null, source: "origin" };
+    saveGraphTemplate(original);
+    const exported = exportNameKeyed("graph", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(original);
+  });
+
+  it("round-trips a graph template with populated overrides and series styles losslessly", () => {
+    const original = {
+      name: "Populated",
+      style: "line",
+      overrides: { font_size: 12 },
+      seriesStyles: [null, { color: "#ff0000" }],
+    };
+    saveGraphTemplate(original);
+    const exported = exportNameKeyed("graph", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(original);
   });
 
   it("surfaces a parse failure as a refusal, not an exception", () => {
     expect(importNameKeyed("analysis", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("peak", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("graph", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("fitModel", "{{{ not json").ok).toBe(false);
+  });
+
+  it("refuses a garbage graph file carrying only name and style — the real shape always has more", () => {
+    // A REAL GraphTemplate always serializes both `overrides` and
+    // `seriesStyles` (required fields on the type); a file missing both is
+    // not something the app's own exporter could ever have produced.
+    expect(importNameKeyed("graph", JSON.stringify({ name: "G", style: "line" })).ok).toBe(false);
+  });
+
+  it("refuses an empty name on import, for every kind that gained a parser", () => {
+    expect(importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "" })).ok).toBe(false);
+    expect(
+      importNameKeyed(
+        "graph",
+        JSON.stringify({ name: "", style: "line", overrides: null, seriesStyles: null }),
+      ).ok,
+    ).toBe(false);
+    expect(
+      importNameKeyed(
+        "fitModel",
+        JSON.stringify({ version: 1, name: "", equation: "y=x", params: [], guesses: [], lower: [], upper: [] }),
+      ).ok,
+    ).toBe(false);
   });
 });
 

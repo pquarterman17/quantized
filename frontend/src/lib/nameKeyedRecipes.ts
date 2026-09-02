@@ -35,9 +35,14 @@
 // unexpected suffix. The result reports the name actually used so a caller can
 // say so.
 
-import { loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate } from "./figuredoc";
-import { loadCustomModels, saveCustomModel, deleteCustomModel } from "./fitmodels";
-import { deleteRecipe as deletePeakRecipe, loadRecipes as loadPeakRecipes, saveRecipe as savePeakRecipe } from "./peakwizard";
+import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate } from "./figuredoc";
+import { isCustomFitModel, loadCustomModels, saveCustomModel, deleteCustomModel } from "./fitmodels";
+import {
+  deleteRecipe as deletePeakRecipe,
+  isPeakRecipe,
+  loadRecipes as loadPeakRecipes,
+  saveRecipe as savePeakRecipe,
+} from "./peakwizard";
 import { dropEntry, moveEntry } from "./recipeIndex";
 import type { RecipeKind, RecipeRef } from "./recipeLibrary";
 import { uniqueTemplateName } from "./uniqueName";
@@ -71,10 +76,80 @@ interface Adapter {
    *  `name` replaced. */
   save: (record: NamedRecord) => void;
   remove: (name: string) => void;
-  /** Present only where the system genuinely has a serializer. Absent is the
-   *  honest answer for peak/graph/fitModel — see RECIPE_CAPABILITIES. */
+  /** Optional in the type so a future name-keyed kind without a serializer
+   *  compiles honestly; every entry in `ADAPTERS` below now sets one (P3.5) —
+   *  see RECIPE_CAPABILITIES for the resulting `canImportExport` matrix. */
   serialize?: (record: NamedRecord) => string;
   parse?: (text: string) => NamedRecord;
+}
+
+// ── P3.5 import/export for the three that had none ─────────────────────────
+//
+// Serialize matches `serializeTemplate` exactly (pretty, key-stable JSON) so
+// every name-keyed export reads the same in a diff. Parse validates with the
+// SAME guard each system's own loader uses (`isPeakRecipe`/`isGraphTemplate`/
+// `isCustomFitModel`), never a second hand-rolled shape check -- one
+// validator per format, used at both the storage boundary and the file
+// boundary.
+//
+// A non-empty name is required at the FILE boundary for all three, even
+// though `isPeakRecipe`/`isGraphTemplate` do not enforce it at the STORAGE
+// boundary (`isCustomFitModel` already does). That asymmetry is deliberate:
+// loosening the load-time validator would change what a stored (already
+// trusted) record is tolerated to look like, which is not this change's
+// business; an imported file is untrusted input and gets the stricter gate.
+function serializeRecord(record: NamedRecord): string {
+  return JSON.stringify(record, null, 2) + "\n";
+}
+
+function parseJsonRecord(text: string, label: string): Record<string, unknown> {
+  let v: unknown;
+  try {
+    v = JSON.parse(text);
+  } catch {
+    throw new Error(`not a valid ${label} file (bad JSON)`);
+  }
+  if (typeof v !== "object" || v === null) throw new Error(`not a valid ${label} file`);
+  return v as Record<string, unknown>;
+}
+
+function requireName(o: Record<string, unknown>, label: string): void {
+  if (typeof o.name !== "string" || !o.name.trim()) throw new Error(`${label} needs a name`);
+}
+
+function parsePeakRecipeFile(text: string): NamedRecord {
+  const o = parseJsonRecord(text, "peak recipe");
+  if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
+  requireName(o, "peak recipe");
+  return o;
+}
+
+function parseFitModelFile(text: string): NamedRecord {
+  const o = parseJsonRecord(text, "fit model");
+  if (!isCustomFitModel(o)) throw new Error("not a valid fit model file");
+  requireName(o, "fit model");
+  return o;
+}
+
+/** Stricter than the load-time `isGraphTemplate`: an imported file must
+ *  actually CARRY `overrides`/`seriesStyles` (present, and object-or-null /
+ *  array-or-null respectively), not merely omit them. Without this, a
+ *  garbage `{name, style}` object -- which `isGraphTemplate` alone accepts,
+ *  since it only checks those two fields -- would import as an empty-looking
+ *  "valid" template. Every REAL `GraphTemplate` (the type both fields are
+ *  required on) always carries both keys once serialized, so this refuses
+ *  nothing a genuine export could ever produce. */
+function parseGraphTemplateFile(text: string): NamedRecord {
+  const o = parseJsonRecord(text, "graph template");
+  if (!isGraphTemplate(o)) throw new Error("not a valid graph template file");
+  requireName(o, "graph template");
+  if (!("overrides" in o) || (o.overrides !== null && typeof o.overrides !== "object")) {
+    throw new Error("not a valid graph template file");
+  }
+  if (!("seriesStyles" in o) || (o.seriesStyles !== null && !Array.isArray(o.seriesStyles))) {
+    throw new Error("not a valid graph template file");
+  }
+  return o;
 }
 
 const ADAPTERS: Record<NameKeyedKind, Adapter> = {
@@ -89,16 +164,22 @@ const ADAPTERS: Record<NameKeyedKind, Adapter> = {
     load: loadPeakRecipes,
     save: (r) => void savePeakRecipe(r as ReturnType<typeof loadPeakRecipes>[number]),
     remove: (name) => void deletePeakRecipe(name),
+    serialize: serializeRecord,
+    parse: parsePeakRecipeFile,
   },
   graph: {
     load: loadGraphTemplates,
     save: (r) => void saveGraphTemplate(r as ReturnType<typeof loadGraphTemplates>[number]),
     remove: (name) => void deleteGraphTemplate(name),
+    serialize: serializeRecord,
+    parse: parseGraphTemplateFile,
   },
   fitModel: {
     load: loadCustomModels,
     save: (r) => void saveCustomModel(r as ReturnType<typeof loadCustomModels>[number]),
     remove: (name) => void deleteCustomModel(name),
+    serialize: serializeRecord,
+    parse: parseFitModelFile,
   },
 };
 
@@ -161,10 +242,10 @@ export function deleteNameKeyed(kind: NameKeyedKind, name: string): RecipeOpResu
   return { ok: true, name };
 }
 
-/** Serialized text for a record, or a refusal for a kind with no serializer.
- *  Only `analysis` has one today (`serializeTemplate`); peak/graph/fitModel
- *  are reported as unsupported rather than given an ad-hoc JSON shape this
- *  module would then own forever. */
+/** Serialized text for a record, or a refusal when the record itself is
+ *  already gone (a normal race with another tab or an undo). Every
+ *  name-keyed kind has a serializer as of P3.5 — the `adapter.serialize`
+ *  check stays as a type-level guard, not a live refusal path today. */
 export function exportNameKeyed(kind: NameKeyedKind, name: string): { ok: true; text: string; name: string } | { ok: false; reason: string } {
   const adapter = ADAPTERS[kind];
   if (!adapter.serialize) return { ok: false, reason: `${kind} recipes cannot be exported yet` };

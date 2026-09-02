@@ -90,7 +90,10 @@ export function regionsFromPeaks(
 // ── Saved recipes (localStorage, like recent files / prefs) ────────────────
 const KEY = "qz.peakRecipes";
 
-function isRecipe(v: unknown): v is PeakRecipe {
+/** Exported (P3.5) so `lib/nameKeyedRecipes.ts` can validate an imported file
+ *  with the SAME rules `loadRecipes` uses to sanitize storage, rather than a
+ *  second hand-rolled shape check that could drift from this one. */
+export function isPeakRecipe(v: unknown): v is PeakRecipe {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
@@ -114,7 +117,7 @@ export function loadRecipes(): PeakRecipe[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isRecipe) : [];
+    return Array.isArray(parsed) ? parsed.filter(isPeakRecipe) : [];
   } catch {
     return [];
   }

@@ -91,11 +91,16 @@ describe("capability table is honest about what each system can do", () => {
   });
 
   it("supportsOperation refuses what genuinely is not built", () => {
-    // The table is only worth having if a `false` reaches the UI. These are
-    // the ones that must stay refused until something real backs them.
-    for (const kind of ["peak", "graph", "fitModel"] as const) {
-      expect(supportsOperation(kind, "export"), kind).toBe(false);
-      expect(supportsOperation(kind, "import"), kind).toBe(false);
+    // The table is only worth having if a `false` reaches the UI. As of P3.5,
+    // quickPlot is the ONLY kind that still genuinely lacks a serializer (it
+    // is project-scoped, bound to a workbook/schema signature — no portable
+    // form exists yet); peak/graph/fitModel gained real ones alongside
+    // rename/duplicate (`lib/nameKeyedRecipes.ts`).
+    expect(supportsOperation("quickPlot", "export")).toBe(false);
+    expect(supportsOperation("quickPlot", "import")).toBe(false);
+    for (const kind of ["plot", "analysis", "peak", "graph", "fitModel"] as const) {
+      expect(supportsOperation(kind, "export"), kind).toBe(true);
+      expect(supportsOperation(kind, "import"), kind).toBe(true);
     }
     // Only `plot` lives in two scopes, so only `plot` can be copied between
     // them — derived from `scopes`, never a second flag to drift.
