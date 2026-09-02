@@ -9,6 +9,7 @@ import { defaultVisibleDetailsColumnKeys } from "../../lib/libraryDetailsColumns
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { askParams, type ParamValues } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
+import type { DatasetTrashEntry } from "../../store/trash";
 import { useToasts } from "../../store/toasts";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
@@ -271,7 +272,7 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
     row("worksheet:d1").focus();
     fireEvent.keyDown(row("worksheet:d1"), { key: "Delete" });
     expect(useApp.getState().datasets.map((item) => item.id).sort()).toEqual(["d2", "solo"]);
-    expect(useApp.getState().trash.map((item) => item.dataset.id)).toEqual(["d1"]);
+    expect((useApp.getState().trash as DatasetTrashEntry[]).map((item) => item.dataset.id)).toEqual(["d1"]);
   });
 
   it("focus wins over a stale worksheet selection", () => {
@@ -280,7 +281,7 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
     row("worksheet:d2").focus();
     fireEvent.keyDown(row("worksheet:d2"), { key: "Backspace" });
     expect(useApp.getState().datasets.map((item) => item.id).sort()).toEqual(["d1", "solo"]);
-    expect(useApp.getState().trash.map((item) => item.dataset.id)).toEqual(["d2"]);
+    expect((useApp.getState().trash as DatasetTrashEntry[]).map((item) => item.dataset.id)).toEqual(["d2"]);
   });
 
   it("deletes one focused worksheet's enclosing multi-selection as one batch", () => {
@@ -289,7 +290,7 @@ describe("LibraryDetails — focused-row Delete owns the keystroke (PR #140 revi
     row("worksheet:d2").focus();
     fireEvent.keyDown(row("worksheet:d2"), { key: "Delete" });
     expect(useApp.getState().datasets.map((item) => item.id)).toEqual(["solo"]);
-    expect(useApp.getState().trash.map((item) => item.dataset.id).sort()).toEqual(["d1", "d2"]);
+    expect((useApp.getState().trash as DatasetTrashEntry[]).map((item) => item.dataset.id).sort()).toEqual(["d1", "d2"]);
     expect(useApp.getState().history).toHaveLength(1);
   });
 

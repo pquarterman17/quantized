@@ -75,7 +75,7 @@ import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder"
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
-import { folderDeletePatch } from "./folderDelete";
+import { deleteFolderWithTrash } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
@@ -85,7 +85,7 @@ import { recomputeStaleFits } from "./recalcFits";
 import { removeDatasetsPatch } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
-import { createTrashSlice, type TrashSlice } from "./trash";
+import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, rowsChangedGuard, type CorrectionsSlice } from "./corrections";
@@ -1943,7 +1943,7 @@ export const useApp = create<AppState>((set, get) => ({
     return id;
   },
   renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
-  deleteFolder: (id, mode = "reparent") => (get().recordHistory("delete folder"), set((s) => folderDeletePatch(s, id, mode))),
+  deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
   moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
   moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
   toggleFolderExpanded: (id) =>
@@ -2569,11 +2569,7 @@ export const useApp = create<AppState>((set, get) => ({
         status: `report "${name}" created`,
       };
     }),
-  removeReport: (id) =>
-    set((s) => ({
-      reports: s.reports.filter((r) => r.id !== id),
-      openReportId: s.openReportId === id ? null : s.openReportId,
-    })),
+  removeReport: (id) => removeReportWithTrash(get, set, id),
   renameReport: (id, name) =>
     set((s) => ({
       reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
@@ -2583,7 +2579,7 @@ export const useApp = create<AppState>((set, get) => ({
   addFigureDoc: (doc) => set((s) => ({
     figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
   })),
-  removeFigureDoc: (id) => set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) })),
+  removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
   renameFigureDoc: (id, name) => set((s) => ({
       figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
   })),

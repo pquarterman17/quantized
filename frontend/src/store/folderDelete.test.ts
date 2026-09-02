@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { resolveImportTargetFolderId } from "./importTargetFolder";
+import { trashEntryId, type FolderTrashEntry } from "./trash";
 import { useApp } from "./useApp";
 import { buildLibraryHierarchy } from "../lib/libraryHierarchy";
 import type { Dataset, FolderNode } from "../lib/types";
@@ -35,6 +36,7 @@ beforeEach(() => {
     librarySelection: { kind: "folder", id: "child" },
     history: [],
     future: [],
+    trash: [], // P3.7: deleteFolder now captures — keep tests isolated from each other.
   });
 });
 
@@ -127,5 +129,78 @@ describe("deleteFolder — workbook-aware, atomic (PR #139 review)", () => {
     // exclusion; E2 owns its persistence) — it stays wherever the delete
     // retargeted it, which is always a live folder or null, never dangling.
     expect(s.librarySelection).toBeNull();
+  });
+});
+
+// P3.7: deleteFolder captures a `folder`-kind trash entry BEFORE the
+// removal/un-parenting, in both modes — see store/folderDelete.ts's
+// captureFolderDeletion doc for why the shape is a member->folder map, not a
+// flat id list (a multi-level cascade must restore each member to its OWN
+// original sub-folder, not dump everything at the subtree's root).
+describe("deleteFolder — trash capture + restore (P3.7)", () => {
+  it("cascade captures the whole subtree parent-first, and every un-parented member with its specific folder", () => {
+    useApp.getState().deleteFolder("child", "cascade");
+    const entry = useApp.getState().trash[0] as FolderTrashEntry;
+    expect(entry.kind).toBe("folder");
+    expect(entry.folders.map((f) => f.id)).toEqual(["child", "grandchild"]); // parent-first
+    expect(entry.datasets.sort((a, b) => a.id.localeCompare(b.id))).toEqual([
+      { id: "s1", folderId: "child" },
+      { id: "s2", folderId: "child" },
+    ]);
+    expect(entry.workbooks).toEqual([{ id: "book", folderId: "child" }]);
+    expect(trashEntryId(entry)).toBe("folder:child");
+  });
+
+  it("reparent captures just the one node — its children survived, re-parented up, so they're not members", () => {
+    useApp.getState().deleteFolder("child", "reparent");
+    const entry = useApp.getState().trash[0] as FolderTrashEntry;
+    expect(entry.folders.map((f) => f.id)).toEqual(["child"]);
+    // s1/s2/book moved to "parent" (still un-parented from "child"'s own
+    // point of view, but they moved to a LIVE folder, not root) — captured
+    // as former members of "child" all the same.
+    expect(entry.datasets.map((m) => m.id).sort()).toEqual(["s1", "s2"]);
+    expect(entry.workbooks.map((m) => m.id)).toEqual(["book"]);
+  });
+
+  it("cascade restore: folder subtree AND every still-un-parented member come back together", async () => {
+    useApp.getState().deleteFolder("child", "cascade");
+    const result = await useApp.getState().restoreFromTrash("folder:child");
+    expect(result).toEqual({ ok: true, note: undefined });
+    const s = useApp.getState();
+    expect(s.folders.map((f) => f.id).sort()).toEqual(["child", "grandchild", "parent"]);
+    expect(s.folders.find((f) => f.id === "grandchild")!.parentId).toBe("child");
+    expect(s.workbooks.find((w) => w.id === "book")!.folderId).toBe("child");
+    for (const id of ["s1", "s2"]) expect(s.datasets.find((d) => d.id === id)!.folderId).toBe("child");
+    expect(s.trash).toHaveLength(0);
+  });
+
+  it("a member the user re-homed in the meantime keeps its new folder, and the note says so", async () => {
+    useApp.getState().deleteFolder("child", "cascade"); // s1/s2/book un-parent to root
+    useApp.getState().moveDatasetToFolder("s1", "parent"); // user moves ONE of them elsewhere
+    const result = await useApp.getState().restoreFromTrash("folder:child");
+    expect(result).toEqual({
+      ok: true,
+      note: 'restored folder "child"; 1 of 3 members had been moved and were left where they are',
+    });
+    const s = useApp.getState();
+    expect(s.datasets.find((d) => d.id === "s1")!.folderId).toBe("parent"); // left alone
+    expect(s.datasets.find((d) => d.id === "s2")!.folderId).toBe("child"); // re-homed
+    expect(s.workbooks.find((w) => w.id === "book")!.folderId).toBe("child"); // re-homed
+  });
+
+  it("restoring a folder whose OWN parent died too attaches it at root instead of dangling", async () => {
+    useApp.getState().deleteFolder("child", "cascade");
+    useApp.getState().deleteFolder("parent", "cascade"); // "parent" (child's captured parent) is now gone too
+    const result = await useApp.getState().restoreFromTrash("folder:child");
+    expect(result.ok).toBe(true);
+    const restoredChild = useApp.getState().folders.find((f) => f.id === "child")!;
+    expect(restoredChild.parentId).toBeNull(); // pruneOrphans/parseFolders' own dangling-parent rule
+  });
+
+  it("never creates a duplicate folder id if it came back some other way", async () => {
+    useApp.getState().deleteFolder("child", "cascade");
+    useApp.setState({ folders: [...useApp.getState().folders, { id: "child", name: "recreated", parentId: null, order: 9 }] });
+    await useApp.getState().restoreFromTrash("folder:child");
+    expect(useApp.getState().folders.filter((f) => f.id === "child")).toHaveLength(1);
   });
 });

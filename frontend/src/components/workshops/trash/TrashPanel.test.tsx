@@ -1,14 +1,22 @@
-// Trash view (MAIN_PLAN #32). The behaviour worth pinning is the ASYMMETRY:
-// restoring is one click, deleting permanently is not — trash exists to make
-// deletion recoverable, so the recovering action should be frictionless and the
-// irreversible one should not.
+// Trash view (MAIN_PLAN #32; widened by P3.7). The behaviour worth pinning
+// is the ASYMMETRY: restoring is one click, deleting one row permanently is
+// two, and emptying the WHOLE trash shows a purge preview first — trash
+// exists to make deletion recoverable, so the recovering action should be
+// frictionless and the irreversible ones should not.
 
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import TrashPanel, { trashAge } from "./TrashPanel";
+import TrashPanel from "./TrashPanel";
+import { askConfirm } from "../../overlays/ConfirmDialog";
+import { byteSize, type DatasetTrashEntry } from "../../../store/trash";
 import { useApp } from "../../../store/useApp";
 import type { Dataset } from "../../../lib/types";
+
+vi.mock("../../overlays/ConfirmDialog", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../overlays/ConfirmDialog")>();
+  return { ...actual, askConfirm: vi.fn() };
+});
 
 const ds = (id: string): Dataset => ({
   id,
@@ -16,18 +24,13 @@ const ds = (id: string): Dataset => ({
   data: { time: [0], values: [[1]], labels: ["M"], units: [""], metadata: {} },
 });
 
-beforeEach(() => {
-  useApp.setState({ datasets: [], trash: [], trashOpen: true, activeId: null, status: "" });
+const dsEntry = (id: string, at = Date.now()): DatasetTrashEntry => ({
+  kind: "dataset", at, bytes: byteSize(ds(id)), dataset: ds(id),
 });
 
-describe("trashAge", () => {
-  it("buckets coarsely, like the Recent menu", () => {
-    const now = 100 * 86_400_000;
-    expect(trashAge(now, now)).toBe("just now");
-    expect(trashAge(now - 5 * 3_600_000, now)).toBe("5h ago");
-    expect(trashAge(now - 86_400_000, now)).toBe("yesterday");
-    expect(trashAge(now - 3 * 86_400_000, now)).toBe("3d ago");
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+  useApp.setState({ datasets: [], trash: [], trashOpen: true, activeId: null, status: "" });
 });
 
 describe("TrashPanel", () => {
@@ -36,31 +39,31 @@ describe("TrashPanel", () => {
     expect(screen.getByText(/Nothing deleted yet/)).toBeInTheDocument();
   });
 
-  it("lists trashed datasets", () => {
-    useApp.setState({ trash: [{ at: Date.now(), dataset: ds("a") }] });
+  it("lists trashed datasets with a kind badge and size", () => {
+    useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
     expect(screen.getByText("a.dat")).toBeInTheDocument();
+    expect(screen.getByText("Data")).toBeInTheDocument();
   });
 
   it("restores in ONE click", () => {
-    useApp.setState({ trash: [{ at: Date.now(), dataset: ds("a") }] });
+    useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]);
     expect(useApp.getState().trash).toHaveLength(0);
   });
 
-  it("does NOT delete permanently on the first click", () => {
-    // The irreversible action is two-step on purpose.
-    useApp.setState({ trash: [{ at: Date.now(), dataset: ds("a") }] });
+  it("does NOT delete one row permanently on the first click", () => {
+    useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
     fireEvent.click(screen.getByRole("button", { name: "✕" }));
     expect(useApp.getState().trash).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Sure?" })).toBeInTheDocument();
   });
 
-  it("deletes permanently on the confirm click", () => {
-    useApp.setState({ trash: [{ at: Date.now(), dataset: ds("a") }] });
+  it("deletes one row permanently on the confirm click", () => {
+    useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
     fireEvent.click(screen.getByRole("button", { name: "✕" }));
     fireEvent.click(screen.getByRole("button", { name: "Sure?" }));
@@ -68,12 +71,42 @@ describe("TrashPanel", () => {
     expect(useApp.getState().datasets).toHaveLength(0); // purge ≠ restore
   });
 
-  it("STATES the eviction rules rather than letting entries vanish silently", () => {
-    // An entry disappearing unannounced teaches users the trash cannot be
-    // trusted, which is worse than not having one.
-    useApp.setState({ trash: [{ at: Date.now(), dataset: ds("a") }] });
+  it("STATES the eviction rules (count/age/size) rather than letting entries vanish silently", () => {
+    useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
-    expect(screen.getByText(/most recent for/)).toBeInTheDocument();
+    expect(screen.getByText(/most recent, up to/)).toBeInTheDocument();
+    expect(screen.getByText(/MiB total/)).toBeInTheDocument();
     expect(screen.getByText(/Raw source files are never touched/)).toBeInTheDocument();
+  });
+
+  it("shows a summary line naming counts/kinds and total size", () => {
+    useApp.setState({ trash: [dsEntry("a"), dsEntry("b")] });
+    render(<TrashPanel />);
+    expect(screen.getByText(/2 datasets/)).toBeInTheDocument();
+  });
+
+  it("Empty trash asks first, with a purge-preview body naming what's lost", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    useApp.setState({ trash: [dsEntry("a"), dsEntry("b")] });
+    render(<TrashPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Empty trash" }));
+    // askConfirm is called synchronously, before emptyTrash's first await —
+    // a bare (unwrapped) assertion is fine (see architecture.test.ts's own
+    // weak-wait-ratchet doc); no need to synchronize on it.
+    expect(askConfirm).toHaveBeenCalled();
+    const [title, message] = vi.mocked(askConfirm).mock.calls[0];
+    expect(title).toMatch(/Empty trash/);
+    expect(message).toMatch(/2 datasets/);
+    expect(message).toMatch(/cannot be undone/);
+    await Promise.resolve(); // flush the resolved (cancelled) confirm
+    expect(useApp.getState().trash).toHaveLength(2); // cancelled — nothing purged
+  });
+
+  it("Empty trash purges everything only on confirm", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({ trash: [dsEntry("a"), dsEntry("b")] });
+    render(<TrashPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Empty trash" }));
+    await waitFor(() => expect(useApp.getState().trash).toHaveLength(0));
   });
 });
