@@ -39,7 +39,12 @@ export function sniffRecipeKind(parsed: unknown): RecipeKind | null {
   if (typeof parsed.schemaVersion === "number" && Array.isArray(parsed.signature) && isObj(parsed.mapping)) {
     return "plot";
   }
-  if (parsed.version === 1 && Array.isArray(parsed.steps) && Array.isArray(parsed.outputs)) {
+  // `steps` alone is the discriminant: no other kind carries one. `outputs` is
+  // deliberately NOT required here because `parseTemplate` itself tolerates
+  // its absence (defaults to []), and a sniffer stricter than the parser it
+  // routes to would refuse at the library door a file the per-kind import
+  // accepts.
+  if (parsed.version === 1 && Array.isArray(parsed.steps)) {
     return "analysis";
   }
   if (parsed.version === 1 && isObj(parsed.baseline) && isObj(parsed.model) && isObj(parsed.find)) {

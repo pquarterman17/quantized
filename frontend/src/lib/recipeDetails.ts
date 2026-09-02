@@ -140,7 +140,19 @@ function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot
   const fields = commonFields(row, t, t.technique);
   fields.push({ label: "Applies to", value: t.scope.kind === "schema" ? "This data type and schema" : "This workbook only" });
   fields.push(actionsField(row.kind));
-  const channels = t.signature.channels.map((_, i) => t.labels[i] ?? `#${i}`);
+  // `signature.channels` is every column in save-time order; `labels` holds
+  // the EXACT label only for the columns the mapping references (the others
+  // are simply absent). So: exact label where there is one, the signature's
+  // normalized label otherwise -- never a bare `#i` placeholder, which reads
+  // as "nothing here" for a column that plainly exists. Referenced columns
+  // are marked so the user can tell which ones the template actually uses.
+  const channels = t.signature.channels.map((ch, i) => {
+    const used = i in t.labels;
+    const label = used ? t.labels[i] : ch.label;
+    const unit = ch.unit ? ` (${ch.unit})` : "";
+    const role = ch.errorRole !== "value" ? ` · ${ch.errorRole}` : "";
+    return `${label}${unit}${role}${used ? "" : " · not used"}`;
+  });
   return { fields, sections: [{ title: "Channels", items: channels }] };
 }
 

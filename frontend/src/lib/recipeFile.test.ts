@@ -14,7 +14,7 @@ import { exportRecipeFile } from "./plotRecipeStorage";
 import { defaultPlotView } from "./plotview";
 import { DEFAULT_RECIPE, saveRecipe as savePeakRecipe } from "./peakwizard";
 import { sniffRecipeKind, sniffRecipeKindFromText } from "./recipeFile";
-import { serializeTemplate } from "./template";
+import { parseTemplate, serializeTemplate } from "./template";
 import type { Dataset } from "./types";
 
 const dataset: Dataset = {
@@ -59,6 +59,14 @@ describe("sniffRecipeKind", () => {
       outputs: ["R2"],
     };
     expect(sniffRecipeKind(JSON.parse(serializeTemplate(t)))).toBe("analysis");
+  });
+
+  it("identifies an analysis template that omits `outputs`, exactly as parseTemplate tolerates", () => {
+    // A sniffer stricter than the parser it routes to would refuse at the
+    // library door a file the per-kind import accepts.
+    const t = { version: 1, name: "T", steps: [makeStep("expression", "smooth", "qz.smooth(5)", { window: 5 })] };
+    expect(sniffRecipeKind(t)).toBe("analysis");
+    expect(() => parseTemplate(JSON.stringify(t))).not.toThrow();
   });
 
   it("identifies a peak recipe from its own exporter", () => {

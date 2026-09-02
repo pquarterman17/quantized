@@ -253,7 +253,11 @@ export function RecipeRow({
           type="button"
           className="qz-recipe-details-toggle"
           aria-expanded={detailsOpen}
-          aria-controls={detailsId}
+          // Only while the region is MOUNTED: `aria-controls` is an IDREF, and
+          // pointing it at an element that does not exist (the collapsed
+          // state unmounts the region) is a dangling reference assistive
+          // tech reports as an error.
+          aria-controls={detailsOpen ? detailsId : undefined}
           // The visible text is just "Details" -- a list of rows would
           // otherwise present many buttons all called that, indistinguishable
           // to a screen reader (same reasoning as every action button in

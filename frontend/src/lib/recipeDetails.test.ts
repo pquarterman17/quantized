@@ -110,6 +110,29 @@ describe("recipeDetails — schema version is always visible", () => {
     expect(details && fieldValue(details, "Schema version")).toBe("unversioned");
   });
 
+  it("quickPlot channels: exact label where the mapping references a column, the signature's label otherwise — never a bare #i", () => {
+    // Three columns in the signature, but `labels` only carries the two the
+    // mapping references (that is how captureLabels writes it). The third
+    // still exists and must be named, marked unused, and carry its role.
+    const sources = buildSources();
+    const withSigma: QuickPlotTemplate = {
+      ...quickPlotTemplate,
+      signature: {
+        channels: [
+          ...quickPlotTemplate.signature.channels,
+          { label: "sigma", unit: "cps", errorRole: "error-y" },
+        ],
+      },
+    };
+    const details = recipeDetails(
+      rowFor("quickPlot", sources),
+      { ...sources, quickPlot: [withSigma] },
+    );
+    const channels = details?.sections?.find((s) => s.title === "Channels")?.items ?? [];
+    expect(channels).toEqual(["2theta (deg)", "Intensity (cps)", "sigma (cps) · error-y · not used"]);
+    expect(channels.some((c) => /#\d/.test(c))).toBe(false);
+  });
+
   it("analysis/peak/fitModel: versioned, show v1", () => {
     seedNameKeyed();
     const sources = buildSources();

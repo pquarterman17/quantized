@@ -821,14 +821,21 @@ describe("row details disclosure (P3.5 slice 4)", () => {
     render(<RecipeLibraryPanel />);
     const toggle = screen.getByRole("button", { name: "Show details for XRD publication" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // Collapsed: the region is unmounted, so an IDREF to it would dangle.
+    expect(toggle).not.toHaveAttribute("aria-controls");
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Schema version")).toBeInTheDocument();
     expect(screen.getByText("v1")).toBeInTheDocument();
+    // Expanded: `aria-controls` names the region that actually exists.
+    const regionId = toggle.getAttribute("aria-controls");
+    expect(regionId).toBeTruthy();
+    expect(document.getElementById(regionId as string)).toContainElement(screen.getByText("Schema version"));
 
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).not.toHaveAttribute("aria-controls");
     expect(screen.queryByText("Schema version")).not.toBeInTheDocument();
   });
 
