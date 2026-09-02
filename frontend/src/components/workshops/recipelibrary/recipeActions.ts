@@ -34,12 +34,14 @@ import {
 } from "../../../lib/nameKeyedRecipes";
 import {
   deleteIsUndoable,
+  NAME_KEYED_WORKSHOP_LABEL,
   RECIPE_KIND_LABEL,
   supportsOperation,
   type RecipeKind,
   type RecipeRef,
 } from "../../../lib/recipeLibrary";
 import { saveBlob } from "../../../lib/download";
+import { sniffRecipeKindFromText } from "../../../lib/recipeFile";
 import { hydratedGlobalRecipes } from "../../../store/globalPlotRecipes";
 import { useApp } from "../../../store/useApp";
 import * as plotOps from "../recipemanager/recipeManagerActions";
@@ -83,10 +85,10 @@ function plotRecipeFor(ref: RecipeRef) {
  *  the Peak Analyzer and stepping through; the Library's job is to get the
  *  user there, not to pretend it can run it. */
 const WORKSHOP_OPENERS: Record<NameKeyedKind, { label: string; open: () => void }> = {
-  analysis: { label: "Pipeline", open: () => useApp.getState().setPipelineOpen(true) },
-  peak: { label: "Peak Analyzer", open: () => useApp.getState().setPeakWizardOpen(true) },
-  graph: { label: "Figure Builder", open: () => useApp.getState().setFigureBuilderOpen(true) },
-  fitModel: { label: "Curve Fit", open: () => useApp.getState().setCurveFitOpen(true) },
+  analysis: { label: NAME_KEYED_WORKSHOP_LABEL.analysis, open: () => useApp.getState().setPipelineOpen(true) },
+  peak: { label: NAME_KEYED_WORKSHOP_LABEL.peak, open: () => useApp.getState().setPeakWizardOpen(true) },
+  graph: { label: NAME_KEYED_WORKSHOP_LABEL.graph, open: () => useApp.getState().setFigureBuilderOpen(true) },
+  fitModel: { label: NAME_KEYED_WORKSHOP_LABEL.fitModel, open: () => useApp.getState().setCurveFitOpen(true) },
 };
 
 /** The primary row action. Two genuinely different verbs behind one entry
@@ -239,14 +241,33 @@ export function importRecipe(kind: RecipeKind, scope: RecipeRef["scope"], text: 
   }
   if (isNameKeyed(kind)) {
     const r = importNameKeyed(kind, text);
-    return r.ok ? { ok: true, message: `imported as "${r.name}"` } : r;
+    // `ref` is where the import LANDED: scope is always "global" for these
+    // four (`RECIPE_CAPABILITIES[kind].scopes`), and the id is the name the
+    // dedupe actually used, not whatever the imported file happened to say.
+    return r.ok
+      ? { ok: true, message: `imported as "${r.name}"`, ref: { kind, scope: "global", id: r.name } }
+      : r;
   }
   try {
-    plotOps.importRecipeToScope(scope, text); // throws its own message verbatim
-    return { ok: true, message: "imported" };
+    // `importRecipeToScope` mints the new row's id (P3.5) so a caller — the
+    // library-level import UI — can focus the row it just created without a
+    // second lookup racing whatever else touched the store meanwhile.
+    const id = plotOps.importRecipeToScope(scope, text); // throws its own message verbatim
+    return { ok: true, message: "imported", ref: { kind: "plot", scope, id } };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "not a valid recipe file" };
   }
+}
+
+/** Sniff `text`'s recipe kind and dispatch to `importRecipe` — the one entry
+ *  point the LIBRARY-LEVEL import button uses (per-row export/import already
+ *  knows its own kind and calls `importRecipe` directly). `plotScope` is
+ *  where a plot recipe lands if that is what the file turns out to be; it is
+ *  ignored for the four name-keyed kinds, which are always global. */
+export function importAnyRecipe(text: string, plotScope: RecipeRef["scope"]): ActionResult {
+  const sniff = sniffRecipeKindFromText(text);
+  if ("error" in sniff) return { ok: false, reason: sniff.error };
+  return importRecipe(sniff.kind, plotScope, text);
 }
 
 /** Plot only, and derived from `scopes` rather than a second flag: a kind that
