@@ -203,22 +203,37 @@ Practical conventions discovered while porting — follow them to stay green.
   workflow (`.github/workflows/codeql.yml`).
 
 ### Container / environment resets
-- **A remote container reset restores STALE installed dependencies.** After any
-  reset (new session, a checkout that suddenly shows an old HEAD, a
-  `frontend/node_modules` or `.venv` whose mtime predates recent dependabot
-  merges), run `cd frontend && npm ci` and `uv sync --group dev` BEFORE
-  trusting any gate. A full green suite on stale deps is not evidence — on
-  2026-09-02 a gate ran against `node_modules` from 2026-08-22 (vite 8.2.1 vs a
-  lockfile at 8.2.2) and a venv from 2026-08-15 (statsmodels 0.14.6 vs 0.15.0);
-  it was caught only because an agent's fresh worktree disagreed with it by
-  0.9 kB on the bundle. Quick check: compare
-  `node -p "require('./package-lock.json').packages['node_modules/vite'].version"`
-  with `node -p "require('./node_modules/vite/package.json').version"`.
-- **Keep the whole vitest output when a gate fails, not just the tail.** A
-  `| tail -5` log threw away the name of a one-off failing test (a flake that
-  passed on identical re-run); without the name it cannot be pursued per
-  `docs/testing.md`. Capture `grep -E "^ FAIL|AssertionError"` alongside the
-  summary.
+- **A remote container reset can restore STALE installed dependencies — check
+  deterministically, then act only if the check fails.** Do not assume every
+  new session is a reset, and do not read anything from directory mtimes
+  (`.venv/pyvenv.cfg` is written once at creation and never touched by `uv
+  sync`; it was cited as a signal on 2026-09-02 and means nothing). The
+  checks, both cheap:
+  - Python: `uv sync --check --group dev` — exits **0** when in sync, **1**
+    when not, and prints the exact package diff. Measured 2026-09-02 on a
+    forced one-package downgrade; restored with `uv sync --group dev`.
+  - Frontend: compare a pinned direct dependency in the lock against what is
+    installed —
+    `node -p "require('./frontend/package-lock.json').packages['node_modules/vite'].version"`
+    vs `node -p "require('./frontend/node_modules/vite/package.json').version"`.
+    A mismatch means `cd frontend && npm ci`.
+  The incident: a gate ran against `node_modules` from 2026-08-22 (vite 8.2.1
+  vs a lock at 8.2.2) and a venv from 2026-08-15 (statsmodels 0.14.6 vs
+  0.15.0), and a full green suite on that tree was treated as evidence. It was
+  caught only because an agent's fresh worktree disagreed by 0.9 kB on the
+  bundle. The same reset recurred later that day and the vite one-liner caught
+  it in one second.
+- **The complete raw log is authoritative; extraction is a convenience.** A
+  `| tail -5` gate log threw away the name of a one-off failing test (a flake
+  that passed on identical re-run), and without the name it cannot be pursued
+  per `docs/testing.md`. Save the whole output first, then search the saved
+  file: bash `npx vitest run 2>&1 | tee gate.log` then
+  `rg 'FAIL|AssertionError' gate.log`; PowerShell `npx vitest run 2>&1 |
+  Tee-Object gate.log` then `Select-String 'FAIL|AssertionError' gate.log`.
+  Never pipe through a filter alone — that repeats the original mistake.
+  (Vitest 4's `FAIL` line is plain text even under a real pty — measured with
+  `script` — so anchored matches work; portability across shells, not ANSI, is
+  why the search runs on a saved file.)
 
 ### Frontend
 - **Copy-vendor from `../fermiviewer/frontend/src`** with a
