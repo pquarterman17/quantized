@@ -707,4 +707,39 @@ describe("row actions (P3.5 slice 3)", () => {
     render(<RecipeLibraryPanel />);
     expect(screen.getByRole("button", { name: "Rename XRD publication" })).toBeInTheDocument();
   });
+
+  it("duplicates a quickPlot template from its row menu", async () => {
+    // Seed through the real store rather than a hand-rolled QuickPlotTemplate
+    // object: `lib/recipeSources.ts` reads `t.signature.channels.length`, and
+    // a partial fixture crashes the render.
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "d1.dat",
+        data: {
+          time: [0, 1, 2],
+          values: [[1, 10], [2, 20], [3, 30]],
+          labels: ["A", "B"],
+          units: ["", ""],
+          metadata: { technique: "magnetometry.mvsh" },
+        },
+      }],
+    });
+    useApp.getState().saveQuickPlotTemplate(
+      "d1",
+      { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [1] },
+      "line",
+      "Quick one",
+      { kind: "schema" },
+    );
+    render(<RecipeLibraryPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Quick one" }));
+    const item = screen.getByRole("menuitem", { name: "Duplicate" });
+    expect(item).toBeInTheDocument();
+    fireEvent.click(item);
+
+    await waitFor(() => expect(useApp.getState().quickPlotTemplates).toHaveLength(2));
+    expect(screen.getByText("Quick one copy")).toBeInTheDocument();
+  });
 });

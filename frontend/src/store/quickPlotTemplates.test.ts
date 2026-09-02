@@ -154,6 +154,79 @@ describe("renameQuickPlotTemplate / deleteQuickPlotTemplate (+ undo) (H3)", () =
   });
 });
 
+describe("duplicateQuickPlotTemplate", () => {
+  function saved(): string {
+    return useApp.getState().saveQuickPlotTemplate("d1", mapping(), "line", "Original", { kind: "schema" })!;
+  }
+
+  it("creates a copy with a fresh id, a deduped name, and fresh timestamps", () => {
+    // Fake timers force a real clock gap between save and duplicate -- on the
+    // real clock the two `new Date().toISOString()` calls can land in the
+    // SAME millisecond, which would make a bare "not equal" assertion flaky.
+    vi.useFakeTimers();
+    try {
+      const id = saved();
+      const src = useApp.getState().quickPlotTemplates.find((t) => t.id === id)!;
+      vi.advanceTimersByTime(1000);
+      const copyId = useApp.getState().duplicateQuickPlotTemplate(id);
+      expect(copyId).not.toBeNull();
+      expect(copyId).not.toBe(id);
+      const copy = useApp.getState().quickPlotTemplates.find((t) => t.id === copyId)!;
+      expect(copy.name).toBe("Original copy");
+      expect(copy.createdAt).not.toBe(src.createdAt);
+      expect(copy.modifiedAt).not.toBe(src.modifiedAt);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("records ONE undoable history entry, and undo removes only the copy", () => {
+    const id = saved();
+    const historyBefore = useApp.getState().history.length;
+    const copyId = useApp.getState().duplicateQuickPlotTemplate(id);
+    expect(useApp.getState().history.length).toBe(historyBefore + 1);
+
+    useApp.getState().undo();
+    expect(useApp.getState().quickPlotTemplates.find((t) => t.id === copyId)).toBeUndefined();
+    expect(useApp.getState().quickPlotTemplates.find((t) => t.id === id)).toBeDefined();
+  });
+
+  it("returns null and mutates nothing for an unknown id", () => {
+    saved();
+    const before = useApp.getState().quickPlotTemplates.length;
+    const historyBefore = useApp.getState().history.length;
+    expect(useApp.getState().duplicateQuickPlotTemplate("nope")).toBeNull();
+    expect(useApp.getState().quickPlotTemplates).toHaveLength(before);
+    expect(useApp.getState().history.length).toBe(historyBefore);
+  });
+
+  it("dedupes on collision -- duplicating twice yields '(2)'", () => {
+    const id = saved();
+    useApp.getState().duplicateQuickPlotTemplate(id);
+    useApp.getState().duplicateQuickPlotTemplate(id);
+    const names = useApp.getState().quickPlotTemplates.map((t) => t.name);
+    expect(names).toEqual(["Original", "Original copy", "Original copy (2)"]);
+  });
+
+  // Pins structuredClone over a shallow spread: a spread would share the
+  // nested `mapping` object with the source, so mutating the copy's mapping
+  // in place would silently corrupt the source too.
+  it("deep-copies nested fields -- mutating the copy's mapping does not touch the source", () => {
+    const id = saved();
+    const copyId = useApp.getState().duplicateQuickPlotTemplate(id)!;
+    const copy = useApp.getState().quickPlotTemplates.find((t) => t.id === copyId)!;
+    copy.mapping.yKeys.push(99);
+    const src = useApp.getState().quickPlotTemplates.find((t) => t.id === id)!;
+    expect(src.mapping.yKeys).toEqual([0]);
+  });
+
+  it("the copy starts with no favourite -- sidecar state keys off id and does not carry over", () => {
+    const id = saved();
+    const copyId = useApp.getState().duplicateQuickPlotTemplate(id)!;
+    expect(metaFor({ kind: "quickPlot", scope: "project", id: copyId }).favorite).toBe(false);
+  });
+});
+
 describe("applyQuickPlotTemplate (H3 apply delegates to the canonical create path)", () => {
   function saved(): string {
     return useApp.getState().saveQuickPlotTemplate("d1", mapping(), "line", "T", { kind: "schema" })!;

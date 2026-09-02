@@ -188,6 +188,10 @@ export function duplicateRecipe(ref: RecipeRef): ActionResult {
     const r = duplicateNameKeyed(ref.kind, ref.id);
     return r.ok ? { ok: true, message: `duplicated as "${r.name}"` } : r;
   }
+  if (ref.kind === "quickPlot") {
+    const id = useApp.getState().duplicateQuickPlotTemplate(ref.id);
+    return id ? { ok: true, message: "duplicated" } : { ok: false, reason: "that template no longer exists" };
+  }
   const id = plotOps.duplicateRecipe(ref.scope, ref.id);
   return id ? { ok: true, message: "duplicated" } : { ok: false, reason: "that recipe no longer exists" };
 }

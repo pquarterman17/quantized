@@ -93,7 +93,6 @@ describe("capability table is honest about what each system can do", () => {
   it("supportsOperation refuses what genuinely is not built", () => {
     // The table is only worth having if a `false` reaches the UI. These are
     // the ones that must stay refused until something real backs them.
-    expect(supportsOperation("quickPlot", "duplicate")).toBe(false);
     for (const kind of ["peak", "graph", "fitModel"] as const) {
       expect(supportsOperation(kind, "export"), kind).toBe(false);
       expect(supportsOperation(kind, "import"), kind).toBe(false);
@@ -108,6 +107,12 @@ describe("capability table is honest about what each system can do", () => {
       expect(supportsOperation(kind, "apply"), kind).toBe(true);
       expect(supportsOperation(kind, "delete"), kind).toBe(true);
     }
+  });
+
+  it("supportsOperation allows quickPlot duplicate now that the store action exists", () => {
+    // Was `false` above until `duplicateQuickPlotTemplate` landed in
+    // store/quickPlotTemplates.ts (P3.5).
+    expect(supportsOperation("quickPlot", "duplicate")).toBe(true);
   });
 
   it("plot recipes are the reference implementation and say so", () => {
