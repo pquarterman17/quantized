@@ -103,10 +103,6 @@ describe("capability gating happens BEFORE anything is touched", () => {
     // the bug (measured). The reason is what proves the guard ran, and the
     // guard is what stops a quickPlot id colliding with a plot id and
     // operating on the wrong recipe.
-    expect(duplicateRecipe(ref("quickPlot", "q1", "project"))).toEqual({
-      ok: false,
-      reason: "Quick Plot templates cannot be duplicated yet",
-    });
     expect(copyToOtherScope(ref("graph", "G"))).toEqual({
       ok: false,
       reason: "Graph templates cannot be copied between project and global yet",
@@ -220,6 +216,24 @@ describe("name-keyed operations route through the safe layer", () => {
 
   it("surfaces a malformed import file as a refusal", () => {
     expect(importRecipe("analysis", "global", "{{{ not json").ok).toBe(false);
+  });
+
+  it("duplicates a quickPlot template and refuses a stale ref", () => {
+    const id = useApp.getState().saveQuickPlotTemplate(
+      "d1",
+      { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] },
+      "line",
+      "Q",
+      { kind: "schema" },
+    )!;
+    expect(duplicateRecipe(ref("quickPlot", id, "project"))).toEqual({ ok: true, message: "duplicated" });
+    expect(useApp.getState().quickPlotTemplates).toHaveLength(2);
+    expect(useApp.getState().quickPlotTemplates.map((t) => t.name).sort()).toEqual(["Q", "Q copy"]);
+
+    expect(duplicateRecipe(ref("quickPlot", "ghost", "project"))).toEqual({
+      ok: false,
+      reason: "that template no longer exists",
+    });
   });
 });
 

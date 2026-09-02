@@ -130,7 +130,7 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
     // `store/quickPlotTemplates.ts` has exposed `renameQuickPlotTemplate`
     // since PR H. The table claimed to be read off the code and was not.
     canRename: true,
-    canDuplicate: false, // honest: that slice has no duplicate action
+    canDuplicate: true, // duplicateQuickPlotTemplate exists in store/quickPlotTemplates.ts
     canImportExport: false,
     hasTechnique: true,
     hasTimestamps: true,

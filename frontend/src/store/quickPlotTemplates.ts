@@ -73,6 +73,14 @@ export interface QuickPlotTemplatesSlice {
   renameQuickPlotTemplate: (id: string, name: string) => void;
   /** No-op for an unknown id (mirrors `deletePlotSpec`). Undoable. */
   deleteQuickPlotTemplate: (id: string) => void;
+  /** Deep-copy `id` under a deduped "<name> copy" name (mirrors
+   *  `duplicatePlotRecipe` in store/plotRecipes.ts exactly). Returns null
+   *  with zero mutation and no history entry for an unknown id (mirrors
+   *  `deleteQuickPlotTemplate`'s no-op). The copy starts with a fresh id and
+   *  none of the source's sidecar favourite/tags -- those key off id, and a
+   *  new id starts clean, same as plot duplicate. Returns the new
+   *  template's id. */
+  duplicateQuickPlotTemplate: (id: string) => string | null;
   /** Resolve `templateId` against `datasetId`'s LIVE dataset
    *  (`resolveTemplate`, H4) and, on a match, delegate to
    *  `createQuickFigureFromMapping` -- the ONE canonical create path (never
@@ -145,6 +153,18 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
       if (!get().quickPlotTemplates.some((t) => t.id === id)) return;
       get().recordHistory("Delete Quick Plot Template");
       set((s) => ({ quickPlotTemplates: s.quickPlotTemplates.filter((t) => t.id !== id) }));
+    },
+
+    duplicateQuickPlotTemplate: (id) => {
+      const state = get();
+      const src = state.quickPlotTemplates.find((t) => t.id === id);
+      if (!src) return null;
+      get().recordHistory("Duplicate Quick Plot Template");
+      const dedupedName = dedupeWindowTitle(`${src.name} copy`, state.quickPlotTemplates.map((t) => t.name));
+      const now = new Date().toISOString();
+      const copy: QuickPlotTemplate = { ...structuredClone(src), id: nextTemplateId(), name: dedupedName, createdAt: now, modifiedAt: now };
+      set((s) => ({ quickPlotTemplates: [...s.quickPlotTemplates, copy] }));
+      return copy.id;
     },
 
     applyQuickPlotTemplate: (templateId, datasetId) => {
