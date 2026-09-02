@@ -283,12 +283,28 @@ export async function readProject(path: string): Promise<OpenProjectResult | nul
  *  `write_project_file` to exist — the latter is what the caller will use
  *  next — so a caller is never handed a destination it then has no bridge
  *  method to write to. */
-export async function pickSaveDestination(suggestedName: string): Promise<string | Cancelled | null> {
+/** The save dialog REFUSED the pick (or failed) and said why — distinct from
+ *  the user cancelling. P1.2 box 4 made this reachable on purpose:
+ *  `save_file_dialog` now returns `{path: null, error}` when the chosen
+ *  destination is the open project's own declared raw source, and mapping
+ *  that onto `CANCELLED` (as this function did for every `path: null`) made
+ *  the refusal SILENT — the user picked their raw file, nothing happened, no
+ *  message. The caller shows `refused` as the save's status. */
+export interface SaveRefused {
+  readonly refused: string;
+}
+
+export async function pickSaveDestination(
+  suggestedName: string,
+): Promise<string | Cancelled | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
   try {
     const dialogOut = await bridge.save_file_dialog(suggestedName);
-    return str(dialogOut.path) ?? CANCELLED;
+    const path = str(dialogOut.path);
+    if (path !== null) return path;
+    const error = str(dialogOut.error);
+    return error === null ? CANCELLED : { refused: error };
   } catch {
     return null;
   }

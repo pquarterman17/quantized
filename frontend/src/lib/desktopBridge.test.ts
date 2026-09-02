@@ -173,6 +173,19 @@ describe("pickSaveDestination", () => {
     setShell({ save_file_dialog: async () => ({ path: "/p/w.dwk" }) });
     expect(await pickSaveDestination("w.dwk")).toBeNull();
   });
+
+  it("returns the dialog's own refusal reason — NOT a silent CANCELLED — when it reports an error with no path (P1.2 box 4)", async () => {
+    setShell({
+      save_file_dialog: async () => ({
+        path: null,
+        error: "refusing to save — that path is a data source of the open project",
+      }),
+      write_project_file: async () => ({ ok: true }),
+    });
+    expect(await pickSaveDestination("w.dwk")).toEqual({
+      refused: "refusing to save — that path is a data source of the open project",
+    });
+  });
 });
 
 describe("saveProjectAs", () => {

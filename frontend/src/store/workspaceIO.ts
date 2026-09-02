@@ -163,6 +163,16 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // holds the write lock for and silently overwriting it.
   const destination = await pickSaveDestination("workspace.dwk");
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
+  if (typeof destination === "object" && destination !== null) {
+    // The dialog itself refused the pick and said why (P1.2 box 4: the
+    // destination is the open project's own declared raw source — see
+    // desktop_bridge_dialogs.py's `save_file_dialog`). A refusal, not a
+    // cancel: say so, and never fall back to a download either.
+    const msg = `save refused — ${destination.refused}`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
     // P1.2 box 4: a fast, friendly PRE-check — the desktop bridge itself

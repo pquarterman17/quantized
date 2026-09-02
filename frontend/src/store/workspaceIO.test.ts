@@ -243,6 +243,32 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
   });
 
+  it("surfaces the bridge's OWN declared-source refusal as a status — never a silent cancel, never a download", async () => {
+    // The backend half of P1.2 box 4: `save_file_dialog` refuses a pick that
+    // is the OPEN project's declared raw source and returns `{path: null,
+    // error}`. Before this, every `path: null` read as "the user cancelled",
+    // so the refusal produced no message at all — the user picked their raw
+    // file, nothing happened, and nothing said why.
+    const write = vi.fn(async () => ({ ok: true, path: "/data/raw.csv" }));
+    setShell({
+      save_file_dialog: async () => ({
+        path: null,
+        error: "refusing to save — that path is a data source of the open project",
+      }),
+      write_project_file: write,
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe(
+      "save refused — refusing to save — that path is a data source of the open project",
+    );
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
   it("Save As onto a DIFFERENT, unheld destination still works normally", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/elsewhere.dwk" }));
     setShell({
