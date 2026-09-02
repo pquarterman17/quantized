@@ -638,8 +638,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   removeDataset: (id: string) => void;
   removeSelected: () => void;
   // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
-  // distinct from removeSelected, which acts on the transient row selection.
-  removeDatasets: (ids: string[]) => void;
+  // distinct from removeSelected. `{permanent}` (P3.7) bypasses Trash.
+  removeDatasets: (ids: string[], opts?: { permanent?: boolean }) => void;
   // Wipe the whole library (datasets + folders + figures + selection + view
   // state) — the File ▸ Remove all command; reuses loadWorkspace's reset.
   clearAll: () => void;
@@ -1775,9 +1775,10 @@ export const useApp = create<AppState>((set, get) => ({
   },
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
   // removeSelected, this doesn't touch/depend on the transient row selection.
-  removeDatasets: (ids) => {
+  removeDatasets: (ids, opts) => {
     get().recordHistory("remove datasets");
-    get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
+    // P3.7: permanent = explicit bypass, nothing captured; otherwise #32 trash.
+    if (!opts?.permanent) get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id)));
     set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook — see store/removeDatasets.ts
   },
 

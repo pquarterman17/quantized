@@ -316,30 +316,11 @@ export const datasetMoveActions: ContextAction<DatasetActionTarget>[] = [
   },
 ];
 
-export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
-  {
-    id: "dataset.remove",
-    label: "Remove",
-    destructive: true,
-    confirm: (t) => ({ title: `Remove "${t.dataset.name}"?`, confirmLabel: "Remove" }),
-    run: (t) => {
-      useApp.getState().removeDataset(t.dataset.id);
-      toast(`removed ${t.dataset.name}`);
-    },
-  },
-  {
-    id: "dataset.removeSelected",
-    label: (t) => `Remove ${t.selectedIds.length} selected`,
-    hidden: (t) => !multiSelected(t),
-    destructive: true,
-    confirm: (t) => ({ title: `Remove ${t.selectedIds.length} datasets?`, confirmLabel: "Remove" }),
-    run: (t) => {
-      const n = t.selectedIds.length;
-      useApp.getState().removeSelected();
-      toast(`removed ${n} datasets`);
-    },
-  },
-];
+// Moved to lib/datasetRemoveActions.ts (funds the .ts 500-line ceiling — see
+// that file's header); re-exported so every existing `from "./contextActions"`
+// importer is untouched.
+import { datasetRemoveActions } from "./datasetRemoveActions";
+export { datasetRemoveActions } from "./datasetRemoveActions";
 
 /** Every dataset action, flat — for callers that don't care about layout. */
 export const datasetActions: ContextAction<DatasetActionTarget>[] = [

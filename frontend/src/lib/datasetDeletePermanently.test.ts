@@ -1,0 +1,85 @@
+// P3.7 item 5: the explicit, warned Trash bypass — lib/contextActions.ts's
+// `dataset.deletePermanently` registry entry, tested directly against the
+// real registry (unlike contextActions.test.ts's synthetic-action-type
+// suite, which deliberately stays isolated from any one real registry — see
+// that file's own header).
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { datasetRemoveActions, runContextAction, type DatasetActionTarget } from "./contextActions";
+import type { DatasetTrashEntry } from "../store/trash";
+import { useApp } from "../store/useApp";
+import type { Dataset } from "./types";
+
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+
+const ds = (id: string): Dataset => ({
+  id,
+  name: `${id}.dat`,
+  data: { time: [0], values: [[1]], labels: ["M"], units: [""], metadata: {} },
+});
+
+const target = (dataset: Dataset): DatasetActionTarget => ({
+  dataset,
+  active: false,
+  selected: false,
+  selectedIds: [],
+  canMoveUp: false,
+  canMoveDown: false,
+  onRename: () => {},
+  onAddTag: () => {},
+});
+
+const action = datasetRemoveActions.find((a) => a.id === "dataset.deletePermanently")!;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  useApp.setState({ datasets: [ds("a")], activeId: "a", selectedIds: [], trash: [] });
+});
+
+describe("dataset.deletePermanently", () => {
+  it("exists and is destructive (routes through the confirm gate)", () => {
+    expect(action).toBeDefined();
+    expect(action.destructive).toBe(true);
+  });
+
+  it("the confirm body states the trash bypass and irreversibility", () => {
+    const spec = action.confirm!(target(ds("a")));
+    expect(spec.message).toMatch(/bypasses the trash/i);
+    expect(spec.message).toMatch(/cannot be undone/i);
+  });
+
+  it("cancelling leaves the dataset and the trash exactly as they were", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    runContextAction(action, target(ds("a")));
+    await Promise.resolve(); // askConfirm is awaited before run() fires
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]);
+    expect(useApp.getState().trash).toEqual([]);
+  });
+
+  it("confirming removes the dataset WITHOUT capturing it into trash", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    runContextAction(action, target(ds("a")));
+    await Promise.resolve();
+    expect(useApp.getState().datasets).toHaveLength(0);
+    expect(useApp.getState().trash).toEqual([]); // the whole point — no recovery path
+  });
+});
+
+describe("removeDatasets — {permanent: true} bypasses trash (the store side dataset.deletePermanently calls)", () => {
+  beforeEach(() => {
+    useApp.setState({ datasets: [ds("a"), ds("b")], activeId: "a", selectedIds: [], trash: [] });
+  });
+
+  it("removes the dataset and leaves the trash untouched", () => {
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b"]);
+    expect(useApp.getState().trash).toEqual([]);
+  });
+
+  it("an ordinary removeDatasets call (no opts) still captures, unaffected", () => {
+    useApp.getState().removeDatasets(["a"]);
+    expect((useApp.getState().trash as DatasetTrashEntry[]).map((e) => e.dataset.id)).toEqual(["a"]);
+  });
+});
