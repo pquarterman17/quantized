@@ -1605,10 +1605,44 @@ verification had about 4.0 kB of headroom).
 
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
-- [ ] Extend to folders, figures, reports, and durable objects.
-- [ ] Coherent dependency restore or clear limitation.
-- [ ] Bound by count/age/total size, with purge preview.
-- [ ] Allow explicit warned permanent deletion.
+- [x] ~~**Extend to folders, figures, reports, and durable objects.**~~ SHIPPED
+  2026-09-02 (`frontend/src/store/trash.ts`): `TrashEntry` is now a
+  discriminated union (`dataset`/`editableFigure`/`figureDoc`/`page`/
+  `report`/`folder`); every delete path (`deleteEditableFigure`,
+  `removeFigureDoc`, `deletePageDocument`, `removeReport`,
+  `deleteFolder(…, "reparent"|"cascade")`) captures before removing.
+  `deleteFolder` deletes no dataset either way (corrects the earlier
+  wording implying cascade destroys data — it only un-parents); the
+  `folder` entry captures the removed subtree plus which live
+  dataset/workbook members lost their `folderId`, so both delete modes
+  restore. Tests: `store/trash.test.ts`, `store/folderDelete.test.ts`.
+- [x] ~~**Coherent dependency restore or clear limitation.**~~ SHIPPED
+  2026-09-02: `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
+  `dataset` restore is unchanged (workbook self-heal). A live
+  `editableFigure`/`figureDoc` whose bound dataset is gone restores the
+  dataset too when it is ALSO in trash (same transaction, noted), else
+  restores with the binding nulled the same way a `.dwk` load clamps a
+  dangling ref (noted as a residual: renders frozen/disabled until
+  relinked). `folder` restore re-adds the subtree (dangling parent -> root,
+  reusing `pruneOrphans`/`parseFolders`'s own rule) and re-homes every
+  still-un-parented captured member, leaving a member the user has since
+  moved where they put it (noted). `report` restores as-is. `page` restore
+  is as-is too — a residual: its panels' missing-figure state follows the
+  existing F3 `resolvePagePanel` semantics unchanged, not a new mechanism.
+- [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
+  2026-09-02: `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
+  P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
+  newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
+  `bytes` computed once at trash time, never per render. `lib/trashSummary.ts`
+  (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
+  `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
+  naming exactly what would be lost, destructive-styled, before `purgeTrash()`.
+- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-02:
+  `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
+  the Library dataset menu's new "Delete permanently…" action
+  (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
+  bypass and irreversibility before calling it. Test:
+  `lib/datasetDeletePermanently.test.ts`.
 
 ---
 
