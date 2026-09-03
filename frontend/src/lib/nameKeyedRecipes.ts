@@ -153,7 +153,9 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *  -- would import "successfully" and then fail the moment it is used. The
  *  rules mirror the owning UI/domain constraints, no tighter:
  *    range          lo <= hi when both are set
- *    baseline       lam > 0 (ALS smoothness); 0 <= p <= 1 (ALS asymmetry);
+ *    baseline       lam > 0 (ALS smoothness); 0 < p < 1 (ALS asymmetry —
+ *                   calc/baseline.py's baseline_als raises outside the OPEN
+ *                   interval, so 0 and 1 are refused here too);
  *                   radius integer >= 1 (rolling-ball points);
  *                   order integer >= 0 (modpoly)
  *    find           snr_threshold >= 0; min_prominence >= 0;
@@ -174,7 +176,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   const baseline = o.baseline as Record<string, unknown>;
   if (!oneOf(baseline.method, PEAK_BASELINE_METHODS)) bad("baseline.method");
   if (!positive(baseline.lam)) bad("baseline.lam");
-  if (!nonneg(baseline.p) || baseline.p > 1) bad("baseline.p");
+  if (!positive(baseline.p) || baseline.p >= 1) bad("baseline.p");
   if (!posInt(baseline.radius)) bad("baseline.radius");
   if (!nonnegInt(baseline.order)) bad("baseline.order");
   const find = o.find as Record<string, unknown>;

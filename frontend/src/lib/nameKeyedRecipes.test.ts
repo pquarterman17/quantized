@@ -365,6 +365,10 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
       ["lam <= 0", { baseline: { ...DEFAULT_RECIPE.baseline, lam: 0 } }, /baseline\.lam/],
       ["p > 1", { baseline: { ...DEFAULT_RECIPE.baseline, p: 1.5 } }, /baseline\.p/],
       ["negative p", { baseline: { ...DEFAULT_RECIPE.baseline, p: -0.1 } }, /baseline\.p/],
+      // baseline_als (calc/baseline.py) raises unless 0 < p < 1 — the closed
+      // ends are exactly the "imports, then fails on first use" case.
+      ["p = 0", { baseline: { ...DEFAULT_RECIPE.baseline, p: 0 } }, /baseline\.p/],
+      ["p = 1", { baseline: { ...DEFAULT_RECIPE.baseline, p: 1 } }, /baseline\.p/],
       ["fractional radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 2.5 } }, /baseline\.radius/],
       ["zero radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 0 } }, /baseline\.radius/],
       ["negative order", { baseline: { ...DEFAULT_RECIPE.baseline, order: -1 } }, /baseline\.order/],
@@ -391,11 +395,13 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
   it("accepts the boundary values the wizard itself can produce", () => {
     // Everything the UI clamps TO, plus a half-open range and an equal-bounds
     // range, must still import: the rules mirror the constraints, no tighter.
+    // ALS p is the one OPEN interval (backend: 0 < p < 1), so its boundary
+    // cases are near-boundary interior values, not the ends.
     for (const patch of [
       { range: { lo: 20, hi: 20 } },
       { range: { lo: null, hi: 20 } },
-      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0, radius: 1, order: 0 } },
-      { baseline: { ...DEFAULT_RECIPE.baseline, p: 1 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0.001, radius: 1, order: 0 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0.999 } },
       { find: { snr_threshold: 0, min_prominence: 0, max_peaks: 1 } },
       { model: { shape: "TCH-pV", bgDegree: 0, linkMode: "Shared FWHM + eta", constrain: true } },
       { report: { mode: "integrate", regionWidth: 0.5 } },
