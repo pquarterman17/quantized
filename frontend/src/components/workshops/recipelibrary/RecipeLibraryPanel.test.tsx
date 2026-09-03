@@ -793,6 +793,32 @@ describe("library-level import (P3.5 slice 4)", () => {
     expect(screen.getByText(/imported "Loop fit"/)).toBeInTheDocument();
   });
 
+  it("owns the panel's busy state for the whole file read — a second operation cannot start mid-import", async () => {
+    // Review finding on #290: `File.text()` is async, and the import used to
+    // leave `busy` untouched while it was pending, so another apply/import
+    // could start in that window and race for the shared result/focus state.
+    // A deferred read holds the import open; the toolbar button (and every
+    // row control gated by `busy`) must be disabled until it settles.
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    let release!: (text: string) => void;
+    const pending = new Promise<string>((resolve) => { release = resolve; });
+    const file = new File(["placeholder"], "slow.qzt.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: () => pending });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    const importButton = screen.getByRole("button", { name: "Import recipe…" });
+    expect(importButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Add XRD publication to favorites/ })).toBeDisabled();
+
+    release(JSON.stringify({ version: 1, name: "Late", steps: [], outputs: [] }));
+    await waitFor(() => expect(screen.getByText("Late")).toBeInTheDocument());
+    expect(importButton).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Add XRD publication to favorites/ })).toBeEnabled();
+  });
+
   it("shows a refusal on the status line for a file it does not recognise", async () => {
     render(<RecipeLibraryPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Import recipe…" }));
