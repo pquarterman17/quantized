@@ -1591,3 +1591,54 @@ describe("file URLs are converted with fileURLToPath, never .pathname (#269)", (
     ).toEqual([]);
   });
 });
+
+// getState()-in-render ratchet (repo evaluation, 2026-09-03). An
+// inventory of every `useApp.getState()` call under src/components + App*.tsx
+// (rg -n 'useApp\.getState\(\)' src/components src/App*.tsx, non-test files,
+// 2026-09-03: 80 files, 276 call sites) classified each site as (a) inside an
+// event handler/effect/callback/async task — a legitimate imperative "read
+// the latest state right now" — or (b) directly in a component's render body
+// with no subscription, which silently skips React's rerender-on-change and
+// is a stale-read bug. The vast majority were (a); the one confirmed (b) was
+// LibraryWorkspace.tsx's module-level `selectedKey()` helper, called twice
+// directly in render (the third call, inside its `close()` callback, was
+// already legitimate) — fixed by making it a pure `deriveSelectedKey(selection,
+// selectedIds)` that takes its two source fields as params instead of calling
+// getState() itself, so the render-body call sites pass their own already-
+// subscribed `useApp((s) => ...)` values. Two other render-body reads
+// (FolderRow.tsx's `isDropCandidate`, PlotStage.tsx's `qfitRoi`/
+// `gadgetCursors` props, and PlotContextMenu.tsx's single-shot `useMemo`
+// snapshot) are NOT counted as bugs here — each carries its own comment
+// explaining why a one-time non-reactive read is the deliberate, correct
+// choice (folders don't change mid-drag; those two props deliberately stay
+// off a dependency list to avoid rebuilding the whole plot; the context menu
+// is single-shot and never needs to react to a later store change) — turning
+// those into selectors would add rerenders their authors were explicitly
+// avoiding, not fix a bug.
+//
+// The rule going forward, same iron law as every other ratchet in this file:
+// prefer a selector during render; reach for `useApp.getState()` only inside
+// a handler, effect, callback, or other imperative (non-render) context. This
+// guard does not re-classify every site on every run (that requires reading
+// the surrounding function, which a grep-only guard can't do reliably) — it
+// caps the FILE COUNT so the imperative-getState() footprint can only shrink,
+// the same shape as the weak-wait ratchet above.
+const GETSTATE_IN_RENDER_FILE_COUNT_PIN = 80;
+
+describe("getState()-in-render ratchet (repo evaluation 2026-09-03)", () => {
+  it("no more files under components/ + App*.tsx call useApp.getState() than the 2026-09-03 baseline", () => {
+    const withGetState = sources()
+      .filter(([p]) => p.startsWith("./components/") || /^\.\/App.*\.tsx$/.test(p))
+      .filter(([, src]) => src.includes("useApp.getState()"))
+      .map(([p]) => p);
+    expect(
+      withGetState.length,
+      `${withGetState.length} files call useApp.getState() under components/+App*.tsx, ` +
+        `> the ${GETSTATE_IN_RENDER_FILE_COUNT_PIN}-file baseline (2026-09-03). ` +
+        "A NEW imperative getState() call is fine (handlers/effects/callbacks); " +
+        "a NEW render-body getState() read is not — convert it to a selector " +
+        "(see LibraryWorkspace.tsx's deriveSelectedKey for the pattern) instead " +
+        "of adding to this count.",
+    ).toBeLessThanOrEqual(GETSTATE_IN_RENDER_FILE_COUNT_PIN);
+  });
+});

@@ -30,6 +30,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
+import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
 import { DATASET_DND } from "../Library/dnd";
@@ -45,13 +46,13 @@ import PlotWindowFrame from "./PlotWindowFrame";
 import SnapshotPlotWindow from "./SnapshotPlotWindow";
 
 export default function WindowCanvas() {
-  const plotWindows = useApp((s) => s.plotWindows);
-  const focusedWindowId = useApp((s) => s.focusedWindowId);
+  const plotWindows = useWindowsStore((s) => s.plotWindows);
+  const focusedWindowId = useWindowsStore((s) => s.focusedWindowId);
   const datasets = useApp((s) => s.datasets);
-  const restoreWindow = useApp((s) => s.restoreWindow);
-  const setPlotCanvasBounds = useApp((s) => s.setPlotCanvasBounds);
-  const createWindowAt = useApp((s) => s.createWindowAt);
-  const focusWindow = useApp((s) => s.focusWindow);
+  const restoreWindow = useWindowsStore((s) => s.restoreWindow);
+  const setPlotCanvasBounds = useWindowsStore((s) => s.setPlotCanvasBounds);
+  const createWindowAt = useWindowsStore((s) => s.createWindowAt);
+  const focusWindow = useWindowsStore((s) => s.focusWindow);
   // P3.4 slice 4: read the WHOLE staging set once here (not a per-window
   // hook inside `.map()` below, which would call a hook a variable number of
   // times per render) — a window's own gate is then a plain `.has(win.id)`.

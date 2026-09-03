@@ -54,6 +54,7 @@ import {
 } from "../../../lib/roi";
 import type { Dataset, DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useRoisStore } from "../../../store/hooks/useRoisStore";
 import type { MapSectorState } from "../../../store/rois";
 import { useCutLanding } from "../../Stage/useCutLanding";
 
@@ -252,15 +253,15 @@ export interface RoiCutsState {
 export function useRoiCuts(): RoiCutsState {
   const active = useActiveDataset();
   const selectedIds = useApp((s) => s.selectedIds);
-  const mapRoi = useApp((s) => s.mapRoi);
-  const setMapRoi = useApp((s) => s.setMapRoi);
-  const mapRuler = useApp((s) => s.mapRuler);
-  const mapSector = useApp((s) => s.mapSector);
-  const setMapSector = useApp((s) => s.setMapSector);
-  const savedRois = useApp((s) => s.savedRois);
-  const saveRoi = useApp((s) => s.saveRoi);
-  const applySavedRoi = useApp((s) => s.applySavedRoi);
-  const removeSavedRoi = useApp((s) => s.removeSavedRoi);
+  const mapRoi = useRoisStore((s) => s.mapRoi);
+  const setMapRoi = useRoisStore((s) => s.setMapRoi);
+  const mapRuler = useRoisStore((s) => s.mapRuler);
+  const mapSector = useRoisStore((s) => s.mapSector);
+  const setMapSector = useRoisStore((s) => s.setMapSector);
+  const savedRois = useRoisStore((s) => s.savedRois);
+  const saveRoi = useRoisStore((s) => s.saveRoi);
+  const applySavedRoi = useRoisStore((s) => s.applySavedRoi);
+  const removeSavedRoi = useRoisStore((s) => s.removeSavedRoi);
   const { busy, land } = useCutLanding();
 
   const isMap = active ? is2DMap(active.data) : false;

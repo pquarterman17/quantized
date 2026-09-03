@@ -19,6 +19,7 @@ import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { BatchMetadataPatch } from "../../store/datasetMeta";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import LibraryDetailsColumnsMenu from "./LibraryDetailsColumnsMenu";
@@ -64,7 +65,7 @@ function isSelected(node: LibraryNode, selectedIds: readonly string[], selection
 
 export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary }: Props) {
   const selectedIds = useApp((s) => s.selectedIds);
-  const selection = useApp((s) => s.librarySelection);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
