@@ -58,12 +58,27 @@ export function scrubDatasetsFromHistory(
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** P3.7 review round 3: the trash can ALREADY hold a copy of a dataset that
+ *  is live again — ordinary delete captured it, Undo restored the history
+ *  snapshot, and trash sits outside history on purpose (store/history.ts).
+ *  "Delete permanently" on that dataset must drop the older `dataset:<id>`
+ *  entry too, or one click of Restore contradicts "cannot be undone".
+ *  Only dataset-kind entries whose payload is one of `ids` go; a folder
+ *  entry that merely lists the id as a member records placement, not data. */
+export function scrubDatasetsFromTrash(
+  s: Pick<AppState, "trash">,
+  ids: readonly string[],
+): Pick<AppState, "trash"> {
+  const gone = new Set(ids);
+  return { trash: s.trash.filter((e) => !(e.kind === "dataset" && gone.has(e.dataset.id))) };
+}
+
 /** The `removeDatasets` action (bulk-remove by explicit id list — item 17's
  *  "manage books" dialog; unlike `removeSelected` it never touches the
  *  transient row selection). `{permanent}` (P3.7, review round) means no
- *  trash entry, no undo step, AND no earlier snapshot still holding the
- *  dataset — see `scrubDatasetsFromHistory`. Nothing in this session can
- *  bring it back. */
+ *  trash entry (not even an older one — `scrubDatasetsFromTrash`), no undo
+ *  step, AND no earlier snapshot still holding the dataset — see
+ *  `scrubDatasetsFromHistory`. Nothing in this session can bring it back. */
 export function removeDatasetsWithTrash(
   get: SliceGet,
   set: SliceSet,
@@ -71,7 +86,11 @@ export function removeDatasetsWithTrash(
   opts?: { permanent?: boolean },
 ): void {
   if (opts?.permanent) {
-    set((s) => ({ ...removeDatasetsPatch(s, ids), ...scrubDatasetsFromHistory(s, ids) }));
+    set((s) => ({
+      ...removeDatasetsPatch(s, ids),
+      ...scrubDatasetsFromHistory(s, ids),
+      ...scrubDatasetsFromTrash(s, ids),
+    }));
     return;
   }
   get().recordHistory("remove datasets");

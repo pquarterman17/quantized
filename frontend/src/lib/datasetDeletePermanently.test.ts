@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { datasetRemoveActions, runContextAction, type DatasetActionTarget } from "./contextActions";
-import type { DatasetTrashEntry } from "../store/trash";
+import { trashEntryId, type DatasetTrashEntry } from "../store/trash";
 import { useApp } from "../store/useApp";
 import type { Dataset } from "./types";
 
@@ -92,6 +92,34 @@ describe("removeDatasets — {permanent: true} bypasses trash (the store side da
     expect(useApp.getState().history.at(-1)?.snapshot.datasets.some((d) => d.id === "a")).toBe(false);
     useApp.getState().undo(); // the OLDER edit
     expect(useApp.getState().datasets.some((d) => d.id === "a")).toBe(false);
+  });
+
+  it("drops an OLDER trash copy of the same dataset: delete → Undo → delete permanently leaves nothing to restore (review round 3 on #292)", async () => {
+    useApp.getState().removeDatasets(["a"]); // ordinary: captured into trash, one undo step
+    expect(useApp.getState().trash.map(trashEntryId)).toEqual(["dataset:a"]);
+    useApp.getState().undo(); // history snapshot comes back; trash is outside history, so the copy stays
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a", "b"]);
+    expect(useApp.getState().trash.map(trashEntryId)).toEqual(["dataset:a"]);
+
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b"]);
+    expect(useApp.getState().trash).toEqual([]); // the older copy went with it
+    await expect(useApp.getState().restoreFromTrash("dataset:a")).resolves.toEqual({
+      ok: false,
+      reason: "that entry is no longer in the trash",
+    });
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b"]);
+  });
+
+  it("leaves UNRELATED trash entries alone when scrubbing the permanent delete's ids", () => {
+    useApp.getState().removeDatasets(["a"]);
+    useApp.getState().undo();
+    const other: DatasetTrashEntry = { kind: "dataset", at: Date.now(), bytes: 1, dataset: ds("zz") };
+    useApp.getState().sendEntriesToTrash([other]);
+    expect(useApp.getState().trash.map(trashEntryId).sort()).toEqual(["dataset:a", "dataset:zz"]);
+
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    expect(useApp.getState().trash.map(trashEntryId)).toEqual(["dataset:zz"]);
   });
 
   it("an ordinary removeDatasets call (no opts) still captures, unaffected", () => {
