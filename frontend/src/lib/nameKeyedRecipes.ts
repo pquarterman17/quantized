@@ -43,6 +43,8 @@ import {
   deleteRecipe as deletePeakRecipe,
   isPeakRecipe,
   loadRecipes as loadPeakRecipes,
+  PEAK_LINK_MODES,
+  PEAK_SHAPES,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
 } from "./peakwizard";
@@ -126,6 +128,10 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 const finiteOrNull = (v: unknown): v is number | null => v === null || finite(v);
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): v is T =>
   typeof v === "string" && (allowed as readonly string[]).includes(v);
+const nonneg = (v: unknown): v is number => finite(v) && v >= 0;
+const positive = (v: unknown): v is number => finite(v) && v > 0;
+const nonnegInt = (v: unknown): v is number => nonneg(v) && Number.isInteger(v);
+const posInt = (v: unknown): v is number => positive(v) && Number.isInteger(v);
 
 const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly"] as const;
 const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
@@ -138,7 +144,23 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *  expects numbers and enums. An imported file is untrusted, so every field
  *  the `PeakRecipe` type declares is checked for type, finiteness and enum
  *  membership here; nothing structurally "present but empty" gets through.
- *  Unknown extra keys are dropped rather than persisted. */
+ *  Unknown extra keys are dropped rather than persisted.
+ *
+ *  SEMANTIC bounds too (review round 3 on #290): a well-typed value the
+ *  wizard could never produce -- it rounds `order`/`max_peaks`/`bgDegree`
+ *  and clamps `max_peaks >= 1`, `bgDegree >= 0`; the backend declares the
+ *  counts/orders as `int` and refuses unknown shapes/link modes at fit time
+ *  -- would import "successfully" and then fail the moment it is used. The
+ *  rules mirror the owning UI/domain constraints, no tighter:
+ *    range          lo <= hi when both are set
+ *    baseline       lam > 0 (ALS smoothness); 0 <= p <= 1 (ALS asymmetry);
+ *                   radius integer >= 1 (rolling-ball points);
+ *                   order integer >= 0 (modpoly)
+ *    find           snr_threshold >= 0; min_prominence >= 0;
+ *                   max_peaks integer >= 1
+ *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
+ *                   bgDegree integer >= 0
+ *    report         regionWidth > 0 (a width in x FWHM) */
 function parsePeakRecipeFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "peak recipe");
   if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
@@ -148,16 +170,25 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   };
   const range = o.range as Record<string, unknown>;
   if (!finiteOrNull(range.lo) || !finiteOrNull(range.hi)) bad("range");
+  if (range.lo !== null && range.hi !== null && (range.lo as number) > (range.hi as number)) bad("range: lo > hi");
   const baseline = o.baseline as Record<string, unknown>;
   if (!oneOf(baseline.method, PEAK_BASELINE_METHODS)) bad("baseline.method");
-  if (!finite(baseline.lam) || !finite(baseline.p) || !finite(baseline.radius) || !finite(baseline.order)) bad("baseline");
+  if (!positive(baseline.lam)) bad("baseline.lam");
+  if (!nonneg(baseline.p) || baseline.p > 1) bad("baseline.p");
+  if (!posInt(baseline.radius)) bad("baseline.radius");
+  if (!nonnegInt(baseline.order)) bad("baseline.order");
   const find = o.find as Record<string, unknown>;
-  if (!finite(find.snr_threshold) || !finite(find.min_prominence) || !finite(find.max_peaks)) bad("find");
+  if (!nonneg(find.snr_threshold)) bad("find.snr_threshold");
+  if (!nonneg(find.min_prominence)) bad("find.min_prominence");
+  if (!posInt(find.max_peaks)) bad("find.max_peaks");
   const model = o.model as Record<string, unknown>;
-  if (typeof model.shape !== "string" || !model.shape.trim()) bad("model.shape");
-  if (!finite(model.bgDegree) || typeof model.linkMode !== "string" || typeof model.constrain !== "boolean") bad("model");
+  if (!oneOf(model.shape, PEAK_SHAPES)) bad("model.shape");
+  if (!oneOf(model.linkMode, PEAK_LINK_MODES)) bad("model.linkMode");
+  if (!nonnegInt(model.bgDegree)) bad("model.bgDegree");
+  if (typeof model.constrain !== "boolean") bad("model.constrain");
   const report = o.report as Record<string, unknown>;
-  if (!oneOf(report.mode, PEAK_REPORT_MODES) || !finite(report.regionWidth)) bad("report");
+  if (!oneOf(report.mode, PEAK_REPORT_MODES)) bad("report.mode");
+  if (!positive(report.regionWidth)) bad("report.regionWidth");
   const record: PeakRecipe = {
     version: 1,
     name: o.name as string,

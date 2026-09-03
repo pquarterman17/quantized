@@ -20,6 +20,14 @@ export interface PeakRecipe {
   report: { mode: "fit" | "integrate"; regionWidth: number }; // width in ×FWHM
 }
 
+/** The peak shapes and width-linking modes the wizard offers (steps.tsx) —
+ *  mirrors the backend's `MODELS` (calc/peak_fit.py) and `LINK_MODES`
+ *  (routes/peaks.py), which reject anything else at fit time. The recipe
+ *  file importer (lib/nameKeyedRecipes.ts) validates against these same
+ *  tuples so an imported recipe cannot name a shape the fit will refuse. */
+export const PEAK_SHAPES = ["Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV"] as const;
+export const PEAK_LINK_MODES = ["None", "Shared FWHM", "Shared FWHM + eta"] as const;
+
 export const DEFAULT_RECIPE: PeakRecipe = {
   version: 1,
   name: "",
