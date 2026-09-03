@@ -231,7 +231,7 @@ export function useFitYByX(): FitYByXState {
     }
     let cancelled = false;
     setByBusy(true);
-    Promise.all(
+    void Promise.all(
       byPartition.levels.map(async (lvl): Promise<FitYByXLevelResult> => {
         try {
           const leg = await runLeg(lvl.data, kind, xCol, yCol, order, bandInterval);

@@ -1,12 +1,12 @@
 // ESLint 10 flat config (PRIMARY SOFTWARE P4.1 — the `npm run lint` restore).
 //
-// Scope: NON-type-aware linting. The repo's TypeScript is 7.0.2 (the native
-// port) while typescript-eslint 8.65 declares `typescript >=4.8.4 <6.1.0`,
-// so the deps are installed with --legacy-peer-deps and only syntax-level
-// rules run; type-aware presets (recommendedTypeChecked) stay off until
-// typescript-eslint supports TS 7. tsc (via `npm run build`) remains the
-// type-error gate — lint adds the correctness rules tsc does not check
-// (hooks discipline, unused vars, import hygiene).
+// Type-aware linting is ON. package.json pins `typescript ~6.0.3`, and
+// typescript-eslint 8.68's declared peer range is `>=4.8.4 <6.1.0`, so TS
+// 6.0.3 is within the supported range — `recommendedTypeChecked` runs with
+// no --legacy-peer-deps workaround needed. tsc (via `npm run build`) remains
+// the type-error gate; lint adds the correctness rules tsc does not check
+// (hooks discipline, unused vars, import hygiene, and now async correctness:
+// no-floating-promises, no-misused-promises, await-thenable, etc).
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
@@ -22,7 +22,23 @@ export default tseslint.config(
       "src/lib/api/schema.d.ts",
     ],
   },
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    // Config/tooling files live outside tsconfig.json's `include: ["src"]`,
+    // so projectService can't type-check them — drop back to syntax-only
+    // rules for this handful of files (npm run lint only targets `src`
+    // anyway, but this keeps a direct `eslint .` from erroring on them).
+    files: ["*.config.{js,ts,mjs,cjs}", "scripts/**/*.{js,mjs,cjs}"],
+    extends: [tseslint.configs.disableTypeChecked],
+  },
   {
     files: ["src/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
@@ -47,6 +63,71 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
+      // store/commands.ts's `Action.run` is deliberately typed `() => void`
+      // even though several commands (every File-menu export, plus a couple
+      // of dialog-driven Plot commands) have `async` bodies — the doc
+      // comment on `isThenable`/`runAction` there spells out why: TS's
+      // void-return covariance lets an async function satisfy `() => void`,
+      // and `runAction` is the one chokepoint that inspects the real return
+      // value at runtime to register export progress with the shared
+      // pendingOps store. Flagging every such `run:`/`onFitTogether:`-style
+      // property assignment (13 sites, 2026-09-03) would fight a documented,
+      // intentional pattern rather than catch a bug — the JSX event-handler
+      // half of this rule (`attributes`) stays on and those ~12 sites are
+      // fixed at the call site with `onClick={() => void thing()}` instead.
+      "@typescript-eslint/no-misused-promises": ["error", { checksVoidReturn: { properties: false } }],
+    },
+  },
+  {
+    // `unbound-method` (29 sites, 2026-09-03, all in *.test.ts(x)) is a
+    // well-documented false-positive generator against test doubles: a spy
+    // object cast to a real interface (`{ save: vi.fn(), ... } as unknown as
+    // CanvasRenderingContext2D`, `fakePlot()`'s uPlot stand-in) makes
+    // `expect(ctx.save).toHaveBeenCalledOnce()` read as an unbound real
+    // method reference, and the same fires for the save/restore-a-native-
+    // method idiom (`const orig = HTMLInputElement.prototype.click; ...;
+    // HTMLInputElement.prototype.click = orig;`) since the reference is
+    // never actually invoked detached from its receiver. Every hit audited
+    // was one of these two shapes, not a genuine `this`-losing call site —
+    // off for test files only; application code keeps the rule.
+    files: ["src/**/*.test.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/unbound-method": "off",
+    },
+  },
+  {
+    // `recommendedTypeChecked` rules turned OFF as a deliberate follow-up,
+    // not a blanket type-aware opt-out (2026-09-03 count alongside each).
+    // Every one of these is a real, largely mechanical cleanup — none was a
+    // load-bearing async/`this`-binding bug like the rules fixed above — but
+    // each has enough sites that fixing it here would swamp this diff.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      // 298 sites, almost all test-double methods that intentionally
+      // satisfy an async interface (`workspaceIO.test.ts`'s mocked
+      // `save_file_dialog`/`write_project_file`/etc, `act(async () => ...)`
+      // wrappers added above for `await-thenable`) without themselves
+      // needing to await anything — not missing-await bugs.
+      "@typescript-eslint/require-await": "off",
+      // 280 sites — largely defensive assertions against loosely-typed
+      // wire/store data (`api/openapi.json` responses, `DataStruct.metadata:
+      // Record<string, unknown>`) that tsc's own narrowing has since caught
+      // up with; each is a real (if low-value) cleanup, not a bug.
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      // no-unsafe-{assignment,member-access,argument,return}: 96 + 72 + 21 +
+      // 17 = 206 sites, concentrated in `any`-typed test mocks/fixtures and
+      // a handful of untyped third-party surfaces — the `any` itself is the
+      // thing to fix (a separate, larger typing campaign), not each
+      // downstream access of it.
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+      // 68 sites, all template-literal interpolation of a loosely-typed
+      // dict value (`DataStruct.metadata?.["x_column_name"] ?? "x"`, a
+      // dialog-field union) that is a string at every real call site —
+      // `metadata`'s `Record<string, unknown>` typing is the actual gap.
+      "@typescript-eslint/no-base-to-string": "off",
     },
   },
 );

@@ -164,7 +164,7 @@ export function useVariability(): VariabilityState {
     setBusy(true);
     setError(null);
     const groups = toWireGroups(levels);
-    (async () => {
+    void (async () => {
       try {
         const [anovaRes, summaryRes] = await Promise.all([
           statsNestedAnova(groups),

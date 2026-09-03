@@ -155,10 +155,10 @@ export default function WaterfallView() {
 
         {/* Export */}
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="qz-btn" disabled={!canPlot} onClick={() => w.exportCSV(true)}>
+          <button className="qz-btn" disabled={!canPlot} onClick={() => void w.exportCSV(true)}>
             Export CSV (with offset)
           </button>
-          <button className="qz-btn" disabled={!canPlot} onClick={() => w.exportCSV(false)}>
+          <button className="qz-btn" disabled={!canPlot} onClick={() => void w.exportCSV(false)}>
             Export CSV (raw)
           </button>
         </div>

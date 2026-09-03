@@ -208,10 +208,10 @@ export default function CurveFitPanel() {
       )}
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <Button size="sm" disabled={!active || busy} onClick={() => run("guess")}>
+        <Button size="sm" disabled={!active || busy} onClick={() => void run("guess")}>
           Auto-guess
         </Button>
-        <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => run("fit")}>
+        <Button variant="primary" size="sm" disabled={!active || busy} onClick={() => void run("fit")}>
           {busy ? "Fitting…" : "Fit"}
         </Button>
       </div>

@@ -327,7 +327,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
         hasGroupSplit: groupCol !== null,
       });
     const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
-    fetchPlot(
+    void fetchPlot(
       active.data,
       p.yScale === "log",
       p.xScale === "log",
