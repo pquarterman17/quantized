@@ -398,16 +398,29 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
 });
 
 describe("import verifies the write LANDED (review finding on #290)", () => {
-  it("refuses — and announces nothing — when localStorage.setItem throws", () => {
-    const original = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => {
-      throw new Error("QuotaExceededError");
-    };
+  it("refuses — and announces nothing — when the storage write throws", () => {
+    // The repo's ratchet (architecture.test.ts): replace the localStorage
+    // BINDING with a fake, never patch Storage.prototype — jsdom does not
+    // reliably route through prototype patches.
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (): null => null,
+        setItem: (): never => {
+          throw new DOMException("quota", "QuotaExceededError");
+        },
+        removeItem: (): void => undefined,
+        clear: (): void => undefined,
+        key: (): null => null,
+        length: 0,
+      },
+    });
     try {
       const r = importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "P" }));
       expect(r).toEqual({ ok: false, reason: "could not save the imported peak recipe — storage is full or unavailable" });
     } finally {
-      Storage.prototype.setItem = original;
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
     }
     expect(loadPeakRecipes()).toEqual([]);
   });
