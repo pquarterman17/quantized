@@ -359,6 +359,53 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
     expect(loadPeakRecipes()).toEqual([]);
   });
 
+  it("refuses a peak recipe that is well-typed but semantically unusable (review round 3 on #290)", () => {
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ["reversed range", { range: { lo: 40, hi: 20 } }, /range: lo > hi/],
+      ["lam <= 0", { baseline: { ...DEFAULT_RECIPE.baseline, lam: 0 } }, /baseline\.lam/],
+      ["p > 1", { baseline: { ...DEFAULT_RECIPE.baseline, p: 1.5 } }, /baseline\.p/],
+      ["negative p", { baseline: { ...DEFAULT_RECIPE.baseline, p: -0.1 } }, /baseline\.p/],
+      ["fractional radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 2.5 } }, /baseline\.radius/],
+      ["zero radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 0 } }, /baseline\.radius/],
+      ["negative order", { baseline: { ...DEFAULT_RECIPE.baseline, order: -1 } }, /baseline\.order/],
+      ["fractional order", { baseline: { ...DEFAULT_RECIPE.baseline, order: 1.5 } }, /baseline\.order/],
+      ["negative snr", { find: { ...DEFAULT_RECIPE.find, snr_threshold: -3 } }, /find\.snr_threshold/],
+      ["negative prominence", { find: { ...DEFAULT_RECIPE.find, min_prominence: -0.5 } }, /find\.min_prominence/],
+      ["max_peaks -1.5", { find: { ...DEFAULT_RECIPE.find, max_peaks: -1.5 } }, /find\.max_peaks/],
+      ["max_peaks 0", { find: { ...DEFAULT_RECIPE.find, max_peaks: 0 } }, /find\.max_peaks/],
+      ["max_peaks fractional", { find: { ...DEFAULT_RECIPE.find, max_peaks: 2.5 } }, /find\.max_peaks/],
+      ["unknown shape", { model: { ...DEFAULT_RECIPE.model, shape: "Voigt-ish" } }, /model\.shape/],
+      ["unknown link mode", { model: { ...DEFAULT_RECIPE.model, linkMode: "Shared everything" } }, /model\.linkMode/],
+      ["negative bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: -1 } }, /model\.bgDegree/],
+      ["fractional bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: 1.5 } }, /model\.bgDegree/],
+      ["zero regionWidth", { report: { ...DEFAULT_RECIPE.report, regionWidth: 0 } }, /report\.regionWidth/],
+      ["negative regionWidth", { report: { ...DEFAULT_RECIPE.report, regionWidth: -3 } }, /report\.regionWidth/],
+    ];
+    for (const [label, patch, reason] of cases) {
+      const r = importNameKeyed("peak", peakJson(patch));
+      expect(r, label).toMatchObject({ ok: false, reason: expect.stringMatching(reason) });
+    }
+    expect(loadPeakRecipes()).toEqual([]);
+  });
+
+  it("accepts the boundary values the wizard itself can produce", () => {
+    // Everything the UI clamps TO, plus a half-open range and an equal-bounds
+    // range, must still import: the rules mirror the constraints, no tighter.
+    for (const patch of [
+      { range: { lo: 20, hi: 20 } },
+      { range: { lo: null, hi: 20 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0, radius: 1, order: 0 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 1 } },
+      { find: { snr_threshold: 0, min_prominence: 0, max_peaks: 1 } },
+      { model: { shape: "TCH-pV", bgDegree: 0, linkMode: "Shared FWHM + eta", constrain: true } },
+      { report: { mode: "integrate", regionWidth: 0.5 } },
+    ]) {
+      const r = importNameKeyed("peak", peakJson({ ...patch, name: `ok-${loadPeakRecipes().length}` }));
+      expect(r.ok, JSON.stringify(patch)).toBe(true);
+    }
+    expect(loadPeakRecipes()).toHaveLength(7);
+  });
+
   it("drops unknown extra keys from an imported peak recipe instead of persisting them", () => {
     const r = importNameKeyed("peak", peakJson({ junk: "x" }));
     expect(r.ok).toBe(true);
