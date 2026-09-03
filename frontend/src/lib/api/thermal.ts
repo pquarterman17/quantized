@@ -4,15 +4,26 @@
 // only) calculator set into the eager bundle purely by file co-location.
 // NOT re-exported by lib/api.ts (zero headroom there); ThermalTab imports
 // directly from this path.
+//
+// Typed-transport pattern (`postApi`, over the generated schema.d.ts) — see
+// api/vacuum.ts's header for the full rationale. Short version: request
+// bodies are checked against the backend's actual pydantic models; response
+// casts document a shape the schema itself doesn't promise yet (no
+// `response_model` on these routes).
 
-import { postJSON } from "./http";
+import { postApi } from "./http";
 
 /** Wiedemann-Franz κ = L₀·σ·T (W/(m·K)). σ in S/cm, T in K. */
 export function thermalWiedemannFranz(
   sigma: number,
   temperature: number,
 ): Promise<{ kappa: number; sigma: number; temperature: number; lorenz: number }> {
-  return postJSON("/api/thermal/wiedemann-franz", { sigma, temperature });
+  return postApi("/api/thermal/wiedemann-franz", { sigma, temperature }) as Promise<{
+    kappa: number;
+    sigma: number;
+    temperature: number;
+    lorenz: number;
+  }>;
 }
 
 /** Debye temperature Θ_D = (ħ/k_B)·v_s·(6π²·n)^(1/3) (K). v_s in m/s, n in m⁻³. */
@@ -20,7 +31,11 @@ export function thermalDebye(
   vS: number,
   n: number,
 ): Promise<{ theta_D: number; v_s: number; n: number }> {
-  return postJSON("/api/thermal/debye", { v_s: vS, n });
+  return postApi("/api/thermal/debye", { v_s: vS, n }) as Promise<{
+    theta_D: number;
+    v_s: number;
+    n: number;
+  }>;
 }
 
 /** Thermal diffusivity α = κ/(ρ·c_p) (m²/s). */
@@ -29,5 +44,11 @@ export function thermalDiffusivity(
   rho: number,
   cp: number,
 ): Promise<{ alpha: number; alpha_mm2: number; kappa: number; rho: number; cp: number }> {
-  return postJSON("/api/thermal/diffusivity", { kappa, rho, cp });
+  return postApi("/api/thermal/diffusivity", { kappa, rho, cp }) as Promise<{
+    alpha: number;
+    alpha_mm2: number;
+    kappa: number;
+    rho: number;
+    cp: number;
+  }>;
 }

@@ -498,7 +498,12 @@ const TS_MODULE_PINS: Record<string, number> = {
 };
 
 describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {
-  const ts = sources().filter(([p]) => p.endsWith(".ts"));
+  // lib/api/schema.d.ts is generated wholesale by `npm run api:types`
+  // (openapi-typescript, from api/openapi.json) — thousands of lines of
+  // machine-produced type declarations with no cohesive slice to extract.
+  // Excluded from the ratchet rather than pinned: a pin implies "shrink me",
+  // and this file only grows as the backend's route surface grows.
+  const ts = sources().filter(([p]) => p.endsWith(".ts") && !p.endsWith("/lib/api/schema.d.ts"));
 
   it("no .ts module exceeds its ceiling (500, or its pin if already over)", () => {
     const over: string[] = [];

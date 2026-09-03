@@ -93,6 +93,14 @@ jobs:
         # different dependency versions than any local checkout (this hid a
         # real Playwright 1.61-vs-1.62 e2e regression on 2026-07-25).
         run: npm ci
+      # Freshness guard for the generated API-types foundation: schema.d.ts is
+      # committed (not built on the fly) so a stale generation can't silently
+      # ship. If this fails, regenerate locally and commit the diff:
+      #   uv run python tools/dump_openapi.py && cd frontend && npm run api:types
+      - name: Generated API types are up to date
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.d.ts
       # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
       # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
       # warning fails CI same as an error — no warning can go unnoticed again.
