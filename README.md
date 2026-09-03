@@ -144,7 +144,7 @@ for the gate and the flake-fix evidence standard.
 
 ```bash
 uv sync --group dev          # backend deps
-uv run pytest                # backend tests (+ `-m golden` for MATLAB parity)
+uv run pytest -n auto        # backend tests (+ `-m golden` for MATLAB parity)
 uv run ruff check src tests && uv run mypy src
 cd frontend && npm test && npm run build
 ```

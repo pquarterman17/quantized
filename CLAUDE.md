@@ -84,7 +84,7 @@ uv sync --group dev        # backend deps
 uv run qz                  # API + SPA on :8000, opens browser
 uv run qz --desktop        # native window (pywebview)
 uv run qz --dev            # Vite HMR + reloading backend
-uv run pytest              # backend tests
+uv run pytest -n auto      # backend tests (pytest-xdist parallel across cores)
 uv run pytest -m golden    # parity vs frozen MATLAB outputs
 uv run ruff check src tests
 uv run mypy src
