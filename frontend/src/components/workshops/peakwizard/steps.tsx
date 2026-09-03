@@ -6,6 +6,7 @@
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
+import { PEAK_LINK_MODES, PEAK_SHAPES } from "../../../lib/peakwizard";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -217,9 +218,7 @@ export function StepModel({ w }: { w: PeakWizardState }) {
     <>
       <label className="qzk-field-lbl">Peak shape</label>
       <Select
-        options={["Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV"].map(
-          (s) => ({ value: s, label: s }),
-        )}
+        options={PEAK_SHAPES.map((s) => ({ value: s, label: s }))}
         value={m.shape}
         onChange={(e) => w.patchRecipe({ model: { shape: e.target.value } })}
       />
@@ -227,10 +226,7 @@ export function StepModel({ w }: { w: PeakWizardState }) {
         Width linking
       </label>
       <Select
-        options={["None", "Shared FWHM", "Shared FWHM + eta"].map((s) => ({
-          value: s,
-          label: s,
-        }))}
+        options={PEAK_LINK_MODES.map((s) => ({ value: s, label: s }))}
         value={m.linkMode}
         onChange={(e) => w.patchRecipe({ model: { linkMode: e.target.value } })}
       />
