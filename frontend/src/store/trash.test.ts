@@ -4,7 +4,36 @@
 // later". The eviction rules are pure so the policy is testable without a
 // store.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Review finding on #292: a purge can land while a non-dataset restore is
+// still awaiting its dynamically imported chunk. This gate lets a test HOLD
+// that import boundary deterministically: `arm()` before the restore, purge
+// while it is held, `release()`, then observe the outcome. Hoisted so the
+// `vi.mock` factory below can see it; the factory is a pass-through to the
+// real module whenever the gate is not armed.
+const restoreGate = vi.hoisted(() => {
+  let release: () => void = () => {};
+  let held: Promise<void> | null = null;
+  return {
+    arm(): void {
+      held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    },
+    release(): void {
+      release();
+      held = null;
+    },
+    get held(): Promise<void> | null {
+      return held;
+    },
+  };
+});
+vi.mock("./trashRestoreOther", async (importOriginal) => {
+  if (restoreGate.held) await restoreGate.held;
+  return importOriginal();
+});
 
 import { createFigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
@@ -343,6 +372,30 @@ describe("restoreFromTrash — legacy figureDoc dependency rule", () => {
 });
 
 // ── page: restore as-is; a missing panel is the existing F3 semantics ──────
+
+describe("restoreFromTrash — a purge that lands mid-restore wins (review finding on #292)", () => {
+  it("re-validates the entry inside the final transaction: a purged entry is never resurrected", async () => {
+    useApp.setState({
+      datasets: [ds("d1")], editableFigures: [editableDoc("f1", "d1")], trash: [], history: [], future: [],
+    });
+    useApp.getState().deleteEditableFigure("f1");
+    expect(trashEntryId(useApp.getState().trash[0])).toBe("editableFigure:f1");
+
+    // Force the NEXT dynamic import of the restore chunk to re-evaluate the
+    // (gated) mock factory, then hold it open.
+    vi.resetModules();
+    restoreGate.arm();
+    const pending = useApp.getState().restoreFromTrash("editableFigure:f1");
+    // The "Sure?" click lands while the chunk is still loading.
+    useApp.getState().purgeTrash("editableFigure:f1");
+    expect(useApp.getState().trash).toHaveLength(0);
+    restoreGate.release();
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: "that entry is no longer in the trash" });
+    expect(useApp.getState().editableFigures).toHaveLength(0); // permanent stayed permanent
+    expect(useApp.getState().trash).toHaveLength(0);
+  });
+});
 
 describe("restoreFromTrash — page", () => {
   const pg = () => createPageDocument({

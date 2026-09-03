@@ -340,6 +340,15 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
       const { computeOtherRestore } = await import("./trashRestoreOther");
       let result: RestoreResult = { ok: true };
       set((s) => {
+        // Review finding on #292: the entry was captured BEFORE the await
+        // above, and a per-row "Sure?" or Empty trash can purge it while the
+        // chunk loads — restoring the captured payload afterwards would undo
+        // a deletion the user was promised was permanent. Re-validate inside
+        // the transaction and refuse if it is gone.
+        if (!s.trash.some((e) => trashEntryId(e) === entryId)) {
+          result = { ok: false, reason: "that entry is no longer in the trash" };
+          return {};
+        }
         const withoutEntry = (extraIds: readonly string[] = []) =>
           s.trash.filter((e) => {
             const id = trashEntryId(e);

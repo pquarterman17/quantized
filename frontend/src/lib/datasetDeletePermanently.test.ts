@@ -69,13 +69,29 @@ describe("dataset.deletePermanently", () => {
 
 describe("removeDatasets — {permanent: true} bypasses trash (the store side dataset.deletePermanently calls)", () => {
   beforeEach(() => {
-    useApp.setState({ datasets: [ds("a"), ds("b")], activeId: "a", selectedIds: [], trash: [] });
+    useApp.setState({ datasets: [ds("a"), ds("b")], activeId: "a", selectedIds: [], trash: [], history: [], future: [] });
   });
 
   it("removes the dataset and leaves the trash untouched", () => {
     useApp.getState().removeDatasets(["a"], { permanent: true });
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b"]);
     expect(useApp.getState().trash).toEqual([]);
+  });
+
+  it("is NOT undoable: Ctrl+Z after a permanent delete does not bring the dataset back (review finding on #292)", () => {
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    expect(useApp.getState().datasets.some((d) => d.id === "a")).toBe(false);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets.some((d) => d.id === "a")).toBe(false);
+  });
+
+  it("scrubs the dataset from EARLIER snapshots too — undoing an older edit cannot resurrect it", () => {
+    useApp.getState().recordHistory("some earlier edit"); // snapshot still holds "a"
+    expect(useApp.getState().history.at(-1)?.snapshot.datasets.some((d) => d.id === "a")).toBe(true);
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    expect(useApp.getState().history.at(-1)?.snapshot.datasets.some((d) => d.id === "a")).toBe(false);
+    useApp.getState().undo(); // the OLDER edit
+    expect(useApp.getState().datasets.some((d) => d.id === "a")).toBe(false);
   });
 
   it("an ordinary removeDatasets call (no opts) still captures, unaffected", () => {

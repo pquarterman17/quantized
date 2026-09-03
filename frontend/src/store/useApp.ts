@@ -82,7 +82,7 @@ import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workboo
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
 import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
 import { recomputeStaleFits } from "./recalcFits";
-import { removeDatasetsPatch } from "./removeDatasets";
+import { removeDatasetsPatch, scrubDatasetsFromHistory } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
@@ -1776,9 +1776,15 @@ export const useApp = create<AppState>((set, get) => ({
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
   // removeSelected, this doesn't touch/depend on the transient row selection.
   removeDatasets: (ids, opts) => {
+    if (opts?.permanent) {
+      // P3.7 (review round): "permanently" means no trash entry, no undo
+      // step, AND no earlier snapshot still holding the dataset — see
+      // scrubDatasetsFromHistory. Nothing in this session can bring it back.
+      set((s) => ({ ...removeDatasetsPatch(s, ids), ...scrubDatasetsFromHistory(s, ids) }));
+      return;
+    }
     get().recordHistory("remove datasets");
-    // P3.7: permanent = explicit bypass, nothing captured; otherwise #32 trash.
-    if (!opts?.permanent) get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id)));
+    get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
     set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook — see store/removeDatasets.ts
   },
 

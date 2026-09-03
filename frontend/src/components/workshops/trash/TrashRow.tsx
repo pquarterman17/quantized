@@ -62,6 +62,9 @@ export default function TrashRow({ entry, now }: { entry: TrashEntry; now: numbe
         <Button
           size="sm"
           variant="danger"
+          // Review finding on #292: one of many "Sure?" buttons in a list is
+          // indistinguishable to assistive tech — the name carries the row.
+          aria-label={`Confirm permanent delete: ${name}`}
           onClick={() => {
             purge(id);
             setConfirming(false);
@@ -72,7 +75,13 @@ export default function TrashRow({ entry, now }: { entry: TrashEntry; now: numbe
           Sure?
         </Button>
       ) : (
-        <Button size="sm" variant="ghost" onClick={() => setConfirming(true)} title="Delete permanently">
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={`Delete permanently: ${name}`}
+          onClick={() => setConfirming(true)}
+          title="Delete permanently"
+        >
           ✕
         </Button>
       )}

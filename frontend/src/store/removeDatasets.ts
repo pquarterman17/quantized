@@ -31,3 +31,23 @@ export function removeDatasetsPatch(s: AppState, ids: readonly string[]): Partia
   const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
   return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
 }
+
+/** P3.7 review round: "Delete permanently" must be exactly that. Removing a
+ *  dataset while leaving it inside earlier undo snapshots lets Ctrl+Z (or an
+ *  undo of any OLDER edit) resurrect it, contradicting the confirmation the
+ *  user just accepted. Strip `ids` from every retained history AND future
+ *  snapshot's `datasets` — `restorePatch` already nulls window bindings and
+ *  drops selections that name a dataset absent from a snapshot, so the
+ *  scrubbed snapshots restore coherently. */
+export function scrubDatasetsFromHistory(
+  s: Pick<AppState, "history" | "future">,
+  ids: readonly string[],
+): Pick<AppState, "history" | "future"> {
+  const gone = new Set(ids);
+  const scrub = (entries: AppState["history"]): AppState["history"] =>
+    entries.map((e) => ({
+      ...e,
+      snapshot: { ...e.snapshot, datasets: e.snapshot.datasets.filter((d) => !gone.has(d.id)) },
+    }));
+  return { history: scrub(s.history), future: scrub(s.future) };
+}

@@ -57,16 +57,16 @@ describe("TrashPanel", () => {
   it("does NOT delete one row permanently on the first click", () => {
     useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Delete permanently: / }));
     expect(useApp.getState().trash).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Sure?" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Confirm permanent delete: / })).toBeInTheDocument();
   });
 
   it("deletes one row permanently on the confirm click", () => {
     useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
-    fireEvent.click(screen.getByRole("button", { name: "Sure?" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Delete permanently: / }));
+    fireEvent.click(screen.getByRole("button", { name: /^Confirm permanent delete: / }));
     expect(useApp.getState().trash).toHaveLength(0);
     expect(useApp.getState().datasets).toHaveLength(0); // purge ≠ restore
   });

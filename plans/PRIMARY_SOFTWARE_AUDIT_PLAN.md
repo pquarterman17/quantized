@@ -1653,8 +1653,16 @@ verification had about 4.0 kB of headroom).
   `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
   the Library dataset menu's new "Delete permanently…" action
   (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
-  bypass and irreversibility before calling it. Test:
-  `lib/datasetDeletePermanently.test.ts`.
+  bypass and irreversibility before calling it. Review round (2026-09-03):
+  the permanent branch records no undo step AND scrubs the dataset from
+  every retained history/future snapshot (`scrubDatasetsFromHistory`), so
+  neither Ctrl+Z nor an undo of an older edit can bring it back — the
+  confirmation's "cannot be undone" is literally true; a non-dataset
+  restore re-validates its entry inside the final transaction, so a purge
+  that lands while the restore chunk loads wins; the per-row ✕ / Sure?
+  controls carry row-naming accessible labels. Tests:
+  `lib/datasetDeletePermanently.test.ts`, `store/trash.test.ts`,
+  `components/workshops/trash/TrashPanel.test.tsx`.
 
 ---
 
