@@ -598,22 +598,24 @@ weigh chunked/binary arrays for large members with that number in hand.
   "falls back past a corrupt newest generation" case with a
   TRUNCATED-real-document variant (not just a `"junk"` string) for the
   realistic torn-write shape.
-- [x] Raw source files are never rewritten. **(2026-09-02.)** Backend:
-  `write_project_file`/`save_file_dialog` (`desktop_bridge.py`/
-  `desktop_bridge_dialogs.py`) now refuse — before touching disk, before
-  even checking write consent — when the target path is the OPEN
-  project's own declared dataset source (`desktop_consent.
-  is_declared_source`), red-first-tested in `tests/test_desktop_bridge.py`
-  (including a stale-write-consent adversarial case and a same-directory
-  positive control). `tests/test_write_sites.py` (new) is the repo-wide
-  ratchet this box asked for made checkable: an `ast` scan of every
-  filesystem-write call under `src/quantized/` must match a hand-
-  justified allowlist exactly — 10 files today (`desktop_bridge.py`,
-  `desktop_project_file.py`, `desktop_project_lock.py`, `io/hdf5.py`,
-  `io/import_filters.py`, `io/origin_project/writer.py`, `io/xrd_csv.py`,
-  `plugins/loader.py`, `routes/_uploadcache.py`,
-  `routes/_uploadstream.py`) — failing for either an unlisted new writer
-  or a stale entry that no longer writes. Frontend:
+- [x] Raw source files are never rewritten — **scoped to the application's
+  project-save path** (review round, 2026-09-03). **(2026-09-02.)** Backend:
+  `write_project_file` refuses — before touching disk — when the target
+  path is a declared dataset source of the workspace being written, judged
+  TWO ways: the payload's own `datasets[].source.path` entries (the
+  authoritative description of the current workspace, realpath-resolved so
+  a symlink or `sub/../` spelling cannot slip by — covers a never-opened,
+  freshly imported or relinked workspace) AND the cached set a native
+  project open recorded (`desktop_consent.is_declared_source`);
+  `save_file_dialog` refuses the cached set at pick time. Red-first-tested
+  in `tests/test_desktop_bridge.py` (stale-write-consent, alias spelling,
+  symlink, relinked-source and positive-control cases).
+  `tests/test_write_sites.py` (new) is a heuristic INVENTORY of every
+  filesystem-write site under `src/quantized/` (an `ast` scan matching a
+  hand-justified allowlist exactly, two-sided) — it keeps the set of
+  writers visible and reviewed, it is not a proof about arbitrary output
+  paths; library exporters that take a caller path are listed with the
+  justification that no route feeds them user input. Frontend:
   `store/workspaceIO.ts`'s `runSaveWorkspaceToFile` gains a fast, friendly
   pre-check refusing a Save As destination equal to a live dataset's
   `source.path`, tested in `store/workspaceIO.test.ts`. (The compressed-
