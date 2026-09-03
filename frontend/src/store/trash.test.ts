@@ -30,7 +30,7 @@ const restoreGate = vi.hoisted(() => {
     },
   };
 });
-vi.mock("./trashRestoreOther", async (importOriginal) => {
+vi.mock("./trashRestore", async (importOriginal) => {
   if (restoreGate.held) await restoreGate.held;
   return importOriginal();
 });
@@ -393,6 +393,22 @@ describe("restoreFromTrash — a purge that lands mid-restore wins (review findi
 
     await expect(pending).resolves.toEqual({ ok: false, reason: "that entry is no longer in the trash" });
     expect(useApp.getState().editableFigures).toHaveLength(0); // permanent stayed permanent
+    expect(useApp.getState().trash).toHaveLength(0);
+  });
+
+  it("holds for the dataset kind too — it crosses the same dynamic import since 2026-09-03", async () => {
+    useApp.setState({ datasets: [], trash: [], history: [], future: [] });
+    useApp.getState().sendToTrash([ds("a")]);
+    expect(trashEntryId(useApp.getState().trash[0])).toBe("dataset:a");
+
+    vi.resetModules();
+    restoreGate.arm();
+    const pending = useApp.getState().restoreFromTrash("dataset:a");
+    useApp.getState().purgeTrash("dataset:a");
+    restoreGate.release();
+
+    await expect(pending).resolves.toEqual({ ok: false, reason: "that entry is no longer in the trash" });
+    expect(useApp.getState().datasets).toHaveLength(0);
     expect(useApp.getState().trash).toHaveLength(0);
   });
 });

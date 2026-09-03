@@ -6,7 +6,10 @@
 // history snapshot on top. Reference pruning (origin figures/fidelity,
 // reports, publication/editable figure bindings, plot windows) is identical
 // for both callers by construction. Trash capture stays with the callers
-// (`sendToTrash` BEFORE the patch) — this is the pure post-trash state math.
+// (`sendToTrash` BEFORE the patch) — `removeDatasetsPatch` is the pure
+// post-trash state math; `removeDatasetsWithTrash` is the `removeDatasets`
+// ACTION itself (history + trash + patch, or the permanent variant), homed
+// here rather than in useApp.ts at its own size ratchet.
 
 import { pruneEditableFigureRefs } from "./figureLifecycle";
 import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
@@ -50,4 +53,28 @@ export function scrubDatasetsFromHistory(
       snapshot: { ...e.snapshot, datasets: e.snapshot.datasets.filter((d) => !gone.has(d.id)) },
     }));
   return { history: scrub(s.history), future: scrub(s.future) };
+}
+
+type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
+
+/** The `removeDatasets` action (bulk-remove by explicit id list — item 17's
+ *  "manage books" dialog; unlike `removeSelected` it never touches the
+ *  transient row selection). `{permanent}` (P3.7, review round) means no
+ *  trash entry, no undo step, AND no earlier snapshot still holding the
+ *  dataset — see `scrubDatasetsFromHistory`. Nothing in this session can
+ *  bring it back. */
+export function removeDatasetsWithTrash(
+  get: SliceGet,
+  set: SliceSet,
+  ids: readonly string[],
+  opts?: { permanent?: boolean },
+): void {
+  if (opts?.permanent) {
+    set((s) => ({ ...removeDatasetsPatch(s, ids), ...scrubDatasetsFromHistory(s, ids) }));
+    return;
+  }
+  get().recordHistory("remove datasets");
+  get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
+  set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook (workbookActions.ts)
 }

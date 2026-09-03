@@ -1,25 +1,52 @@
-// The restore logic for every trash kind EXCEPT `dataset` — split out of
-// store/trash.ts and reached only via a dynamic `import()` (see
-// `restoreFromTrash`'s "dataset" fast path in trash.ts). trash.ts is EAGER
-// (part of useApp's slice composition, bundle-size measured); the every-
-// kind restore rules below are real logic, not panel display — but they are
-// ALSO only ever exercised from the already-lazy TrashPanel/TrashRow, on an
-// explicit user click, which is exactly MAIN_PLAN #29's "anything only
-// needed after a user action can be a dynamic import()" case. Moving them
-// here (P3.7) recovered the eager-bundle growth this slice would otherwise
-// have cost store/trash.ts directly.
+// The restore rule for EVERY trash kind — split out of store/trash.ts and
+// reached only via a dynamic `import()` from `restoreFromTrash` there.
+// trash.ts is EAGER (part of useApp's slice composition, bundle-size
+// measured); the per-kind restore rules below are real logic, not panel
+// display — but they are ALSO only ever exercised from the already-lazy
+// TrashPanel/TrashRow, on an explicit user click, which is exactly
+// MAIN_PLAN #29's "anything only needed after a user action can be a
+// dynamic import()" case. Moving them here (P3.7) recovered the eager-
+// bundle growth this slice would otherwise have cost store/trash.ts
+// directly; the `dataset` kind followed once the review-round fixes on the
+// stack put the eager total 53 B over the pin (2026-09-03), so the fast path
+// no longer lives on the eager side either — one `await import()` for all.
 
+import type { Dataset } from "../lib/types";
+import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
+import { trashEntryId, type DatasetTrashEntry, type FolderTrashMember, type RestoreResult, type TrashEntry } from "./trash";
 import type { AppState } from "./useApp";
-import {
-  restoreDatasetInto,
-  trashEntryId,
-  type DatasetTrashEntry,
-  type FolderTrashMember,
-  type RestoreResult,
-  type TrashEntry,
-} from "./trash";
+import { nextWorkbookId } from "./workbookIds";
 
-type OtherEntry = Exclude<TrashEntry, DatasetTrashEntry>;
+/** Shared by the standalone `dataset`-kind restore AND the dependency-aware
+ *  restore a bound `editableFigure`/`figureDoc` triggers when ITS dataset is
+ *  also in the trash (P3.7) — one self-heal implementation, not two copies
+ *  that could drift. Assumes the caller already checked `dataset.id` is not
+ *  currently live (the "id came back some other way" guard runs once, at
+ *  each call site, before this). */
+export function restoreDatasetInto(
+  s: AppState,
+  dataset: Dataset,
+): { dataset: Dataset; datasets: Dataset[]; workbooks: WorkbookNode[]; expandedWorkbookIds: string[] } {
+  let restored = dataset;
+  let workbooks = s.workbooks;
+  let expandedWorkbookIds = s.expandedWorkbookIds;
+  const hasLiveWorkbook = restored.workbookId != null && s.workbooks.some((w) => w.id === restored.workbookId);
+  if (!hasLiveWorkbook) {
+    // P1 fix, carried over unchanged: deleteWorkbook removes the
+    // WorkbookNode once every member dataset is trashed, so restoring one
+    // of its worksheets here would otherwise carry a workbookId naming
+    // nothing. Self-heal the SAME way (deriveWorkbooks), in-store, the
+    // instant it comes back — mirrors importDatasets.ts's single-file path.
+    const derived = deriveWorkbooks([restored], s.folders, nextWorkbookId);
+    workbooks = [...s.workbooks, ...derived.workbooks];
+    restored = { ...restored, workbookId: derived.membership[restored.id] };
+    // The fresh workbook starts expanded (import-time creation's own rule) —
+    // a restored row hidden behind a collapsed disclosure would look like a
+    // failed restore.
+    expandedWorkbookIds = [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])];
+  }
+  return { dataset: restored, datasets: [...s.datasets, restored], workbooks, expandedWorkbookIds };
+}
 
 /** Restoring a live-mode `editableFigure`/`figureDoc` whose bound dataset is
  *  gone: restore the dataset too if IT is also in trash (dependency restore,
@@ -59,14 +86,39 @@ function resolveDatasetDependency<T>(
   };
 }
 
-/** Every non-`dataset` restore rule. `withoutEntry` mirrors trash.ts's own
- *  closure (same shape) so both halves of the switch stay one guarantee. */
-export function computeOtherRestore(
+/** Every kind's restore rule, as a pure patch on the state the caller's
+ *  `set` transaction hands in. `withoutEntry(extra)` is the trash minus the
+ *  entry being restored (and any dependency entries it consumed). Pure so
+ *  the rules are testable without a store; the transaction, the mid-await
+ *  re-validation and the history decision all stay in trash.ts. */
+export function computeRestore(
   s: AppState,
-  entry: OtherEntry,
+  entry: TrashEntry,
   withoutEntry: (extraIds?: readonly string[]) => TrashEntry[],
 ): { patch: Partial<AppState>; result: RestoreResult } {
   switch (entry.kind) {
+    case "dataset": {
+      // Guard against an id that came back some other way (a re-import,
+      // an undo) while it was sitting in the trash: never create a
+      // duplicate, never spend a workbook derivation on it.
+      if (s.datasets.some((d) => d.id === entry.dataset.id)) {
+        return { patch: { trash: withoutEntry() }, result: { ok: true } };
+      }
+      const r = restoreDatasetInto(s, entry.dataset);
+      return {
+        patch: {
+          datasets: r.datasets,
+          workbooks: r.workbooks,
+          expandedWorkbookIds: r.expandedWorkbookIds,
+          trash: withoutEntry(),
+          activeId: s.activeId ?? entry.dataset.id,
+          // L0.25 coherence: a restore that IS an activation (nothing was
+          // active) yields the tree selection, like every other activation path.
+          ...(s.activeId == null ? { librarySelection: null } : {}),
+        },
+        result: { ok: true },
+      };
+    }
     case "editableFigure": {
       if (s.editableFigures.some((d) => d.id === entry.document.id)) {
         return { patch: { trash: withoutEntry() }, result: { ok: true } };

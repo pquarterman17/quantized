@@ -50,9 +50,7 @@ import type { FigureDoc } from "../lib/figuredoc";
 import type { FolderNode, Dataset } from "../lib/types";
 import type { PageDocument } from "../lib/pageDocument";
 import type { ReportEntry } from "../lib/report";
-import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
 import type { AppState } from "./useApp";
-import { nextWorkbookId } from "./workbookIds";
 
 /** One serialized byte count, computed once at the moment an object is
  *  trashed and stored on the entry (`TrashEntryBase.bytes`) — the size cap
@@ -226,8 +224,8 @@ export interface TrashSlice {
   sendEntriesToTrash: (entries: readonly TrashEntry[], now?: number) => void;
   /** Put one back, by its `trashEntryId`. Dependency-aware: see the
    *  implementation's own doc for the exact rule per kind. Async: every
-   *  kind but `dataset` resolves through a dynamic import (bundle-size —
-   *  see trashRestoreOther.ts's header); await it before reading the result. */
+   *  kind resolves through one dynamic import (bundle-size — see
+   *  trashRestore.ts's header); await it before reading the result. */
   restoreFromTrash: (entryId: string) => Promise<RestoreResult>;
   /** Permanently drop one entry (by `trashEntryId`), or the whole trash when
    *  `entryId` is omitted. */
@@ -239,45 +237,14 @@ export type RestoreResult = { ok: true; note?: string } | { ok: false; reason: s
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
-/** Shared by the standalone `dataset`-kind restore AND the dependency-aware
- *  restore a bound `editableFigure`/`figureDoc` triggers when ITS dataset is
- *  also in the trash (P3.7) — one self-heal implementation, not two copies
- *  that could drift. Assumes the caller already checked `dataset.id` is not
- *  currently live (the "id came back some other way" guard runs once, at
- *  each call site, before this). */
-export function restoreDatasetInto(
-  s: AppState,
-  dataset: Dataset,
-): { dataset: Dataset; datasets: Dataset[]; workbooks: WorkbookNode[]; expandedWorkbookIds: string[] } {
-  let restored = dataset;
-  let workbooks = s.workbooks;
-  let expandedWorkbookIds = s.expandedWorkbookIds;
-  const hasLiveWorkbook = restored.workbookId != null && s.workbooks.some((w) => w.id === restored.workbookId);
-  if (!hasLiveWorkbook) {
-    // P1 fix, carried over unchanged: deleteWorkbook removes the
-    // WorkbookNode once every member dataset is trashed, so restoring one
-    // of its worksheets here would otherwise carry a workbookId naming
-    // nothing. Self-heal the SAME way (deriveWorkbooks), in-store, the
-    // instant it comes back — mirrors importDatasets.ts's single-file path.
-    const derived = deriveWorkbooks([restored], s.folders, nextWorkbookId);
-    workbooks = [...s.workbooks, ...derived.workbooks];
-    restored = { ...restored, workbookId: derived.membership[restored.id] };
-    // The fresh workbook starts expanded (import-time creation's own rule) —
-    // a restored row hidden behind a collapsed disclosure would look like a
-    // failed restore.
-    expandedWorkbookIds = [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])];
-  }
-  return { dataset: restored, datasets: [...s.datasets, restored], workbooks, expandedWorkbookIds };
-}
-
-// The dependency-aware restore rule for a live-mode `editableFigure`/
-// `figureDoc` whose bound dataset is gone (restore the dataset too if it's
-// ALSO in trash, else null the binding the same way a `.dwk` load clamps a
-// dangling ref), plus every OTHER kind's restore rule, live in
-// store/trashRestoreOther.ts — reached only via a dynamic `import()` in
-// `restoreFromTrash` below (BUNDLE SIZE: this file is eager; everything in
-// that one is only ever exercised from the already-lazy TrashPanel, on an
-// explicit click — see that file's own header).
+// Every kind's restore rule — the dependency-aware rule for a live-mode
+// `editableFigure`/`figureDoc` whose bound dataset is gone (restore the
+// dataset too if it's ALSO in trash, else null the binding the same way a
+// `.dwk` load clamps a dangling ref), the dataset workbook self-heal, and
+// the folder re-home — lives in store/trashRestore.ts, reached only via the
+// dynamic `import()` in `restoreFromTrash` below (BUNDLE SIZE: this file is
+// eager; everything in that one is only ever exercised from the already-
+// lazy TrashPanel, on an explicit click — see that file's own header).
 
 export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
   return {
@@ -301,9 +268,9 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
     },
 
     restoreFromTrash: async (entryId) => {
-      const state = get();
-      const entry = state.trash.find((e) => trashEntryId(e) === entryId);
-      if (!entry) return { ok: false, reason: "that entry is no longer in the trash" };
+      if (!get().trash.some((e) => trashEntryId(e) === entryId)) {
+        return { ok: false, reason: "that entry is no longer in the trash" };
+      }
       // Deliberately NOT an undo step (review finding, P3.7). `trash` is not
       // part of the history snapshot (store/history.ts's `snapshotOf`), so a
       // restore that recorded history would let Ctrl+Z remove the restored
@@ -311,41 +278,19 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
       // that turns "recoverable" into "gone". Restore is reversed by deleting
       // the object again, which lands it back in the trash.
 
-      if (entry.kind === "dataset") {
-        const result: RestoreResult = { ok: true };
-        set((s) => {
-          const trash = s.trash.filter((e) => trashEntryId(e) !== entryId);
-          // Guard against an id that came back some other way (a re-import,
-          // an undo) while it was sitting in the trash: never create a
-          // duplicate, never spend a workbook derivation on it.
-          if (s.datasets.some((d) => d.id === entry.dataset.id)) return { trash };
-          const r = restoreDatasetInto(s, entry.dataset);
-          return {
-            datasets: r.datasets,
-            workbooks: r.workbooks,
-            expandedWorkbookIds: r.expandedWorkbookIds,
-            trash,
-            activeId: s.activeId ?? entry.dataset.id,
-            // L0.25 coherence: a restore that IS an activation (nothing was
-            // active) yields the tree selection, like every other activation path.
-            ...(s.activeId == null ? { librarySelection: null } : {}),
-          };
-        });
-        return result;
-      }
-
-      // Every other kind's restore rule lives in a dynamically-imported
-      // chunk (bundle-size — see trashRestoreOther.ts's header): reached
-      // only from the already-lazy TrashPanel, on an explicit click.
-      const { computeOtherRestore } = await import("./trashRestoreOther");
+      // Every kind's restore rule lives in a dynamically-imported chunk
+      // (bundle-size — see trashRestore.ts's header): reached only from the
+      // already-lazy TrashPanel, on an explicit click.
+      const { computeRestore } = await import("./trashRestore");
       let result: RestoreResult = { ok: true };
       set((s) => {
-        // Review finding on #292: the entry was captured BEFORE the await
-        // above, and a per-row "Sure?" or Empty trash can purge it while the
-        // chunk loads — restoring the captured payload afterwards would undo
-        // a deletion the user was promised was permanent. Re-validate inside
-        // the transaction and refuse if it is gone.
-        if (!s.trash.some((e) => trashEntryId(e) === entryId)) {
+        // Review finding on #292: a per-row "Sure?" or Empty trash can purge
+        // the entry while the chunk loads — restoring a payload captured
+        // before the await would undo a deletion the user was promised was
+        // permanent. Look the entry up again INSIDE the transaction and
+        // refuse if it is gone.
+        const entry = s.trash.find((e) => trashEntryId(e) === entryId);
+        if (!entry) {
           result = { ok: false, reason: "that entry is no longer in the trash" };
           return {};
         }
@@ -354,7 +299,7 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
             const id = trashEntryId(e);
             return id !== entryId && !extraIds.includes(id);
           });
-        const { patch, result: computed } = computeOtherRestore(s, entry, withoutEntry);
+        const { patch, result: computed } = computeRestore(s, entry, withoutEntry);
         result = computed;
         return patch;
       });

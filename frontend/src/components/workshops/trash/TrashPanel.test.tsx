@@ -46,11 +46,13 @@ describe("TrashPanel", () => {
     expect(screen.getByText("Data")).toBeInTheDocument();
   });
 
-  it("restores in ONE click", () => {
+  it("restores in ONE click", async () => {
     useApp.setState({ trash: [dsEntry("a")] });
     render(<TrashPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
-    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]);
+    // Every kind's restore resolves through one dynamic import (store/
+    // trashRestore.ts) — wait on the STATE it lands, not on a call.
+    await waitFor(() => expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a"]));
     expect(useApp.getState().trash).toHaveLength(0);
   });
 
