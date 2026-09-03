@@ -20,12 +20,15 @@ upstream-blocked; alert #1 (glib) is dismissed as tolerable risk
 Shipped so far this session on branch `claude/repo-evaluation-l7y7k9` (not
 yet on `main`; `git log --oneline origin/main..HEAD`, newest first):
 
+- `51ce68a` refactor(store): domain-scoped hooks over three useApp slices; getState()-in-render ratchet
+- `2b788f3` chore(lint): enable type-aware ESLint; fix 27 floating promises and 25 misused ones
+- `f4bf751` docs: make CLAUDE.md the single agent-instruction file; AGENTS.md becomes a pointer
+- `079c349` docs(backlog): move the 24-pass reconciliation narrative to plans/archive/BACKLOG_HISTORY.md
 - `d7b7bb3` ci: parallel backend tests (pytest-xdist), dependency caching, trimmed redundant job
 - `7923a7b` feat(api): OpenAPI-generated frontend types with drift detection
 - `33c5af3` refactor(routes): route every 422 calc adapter through the shared CALC_ERRORS
 - `851d664` fix(io): share delimited helpers across parsers; apply the D5 nan-row fix to SIMS
-- this docs-only pass: the `BACKLOG.md`/`BACKLOG_HISTORY.md` split above,
-  and one new row below for the dead `errlog.ts` → `/api/debug/report` call.
+- `(this commit)` chore(dx): tools/gate.py, tools/bump_version.py, tools/ linted in CI, shared pytest client fixture, CHANGELOG.md
 
 ---
 

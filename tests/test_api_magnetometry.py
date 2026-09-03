@@ -7,10 +7,6 @@ from __future__ import annotations
 import numpy as np
 from fastapi.testclient import TestClient
 
-from quantized.app import app
-
-client = TestClient(app)
-
 
 def _loop(hc: float = 150.0) -> tuple[list[float], list[float]]:
     """A symmetric tanh M-H loop with coercivity ~hc (asc/desc branches)."""
@@ -23,7 +19,7 @@ def _loop(hc: float = 150.0) -> tuple[list[float], list[float]]:
     return list(h), list(m)
 
 
-def test_hysteresis_recovers_coercivity() -> None:
+def test_hysteresis_recovers_coercivity(client: TestClient) -> None:
     h, m = _loop(hc=150.0)
     resp = client.post("/api/magnetometry/hysteresis", json={"h": h, "m": m})
     assert resp.status_code == 200
@@ -35,12 +31,12 @@ def test_hysteresis_recovers_coercivity() -> None:
     assert set(out["ascending"]) == {"H", "M"}
 
 
-def test_hysteresis_too_few_points_is_422() -> None:
+def test_hysteresis_too_few_points_is_422(client: TestClient) -> None:
     resp = client.post("/api/magnetometry/hysteresis", json={"h": [0, 1], "m": [0, 1]})
     assert resp.status_code == 422
 
 
-def test_subtract_background_linear() -> None:
+def test_subtract_background_linear(client: TestClient) -> None:
     t = list(np.linspace(2, 300, 100))
     # signal + linear high-T background (slope 0.01, intercept 5)
     m = [0.01 * ti + 5.0 + (50.0 if ti < 50 else 0.0) for ti in t]
@@ -54,7 +50,7 @@ def test_subtract_background_linear() -> None:
     assert len(out["corrected"]) == len(t)
 
 
-def test_convert_units_oe_to_tesla() -> None:
+def test_convert_units_oe_to_tesla(client: TestClient) -> None:
     resp = client.post(
         "/api/magnetometry/convert-units",
         json={"x": [10000.0], "y": [1.0], "from_field": "Oe", "to_field": "T"},

@@ -8,10 +8,6 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from quantized.app import app
-
-client = TestClient(app)
-
 _BALANCED = [
     [[2.0, 4.0, 6.0], [4.0, 6.0, 8.0]],
     [[6.0, 8.0, 10.0], [8.0, 10.0, 12.0]],
@@ -19,7 +15,7 @@ _BALANCED = [
 ]
 
 
-def test_nested_anova_roundtrip() -> None:
+def test_nested_anova_roundtrip(client: TestClient) -> None:
     resp = client.post("/api/stats/nested-anova", json={"groups": _BALANCED})
     assert resp.status_code == 200
     out = resp.json()
@@ -30,14 +26,14 @@ def test_nested_anova_roundtrip() -> None:
     assert out["balanced"] is True
 
 
-def test_nested_anova_single_a_level_is_422_not_500() -> None:
+def test_nested_anova_single_a_level_is_422_not_500(client: TestClient) -> None:
     resp = client.post(
         "/api/stats/nested-anova", json={"groups": [[[1.0, 2.0], [3.0, 4.0]]]}
     )
     assert resp.status_code == 422
 
 
-def test_variance_components_roundtrip() -> None:
+def test_variance_components_roundtrip(client: TestClient) -> None:
     resp = client.post("/api/stats/variance-components", json={"groups": _BALANCED})
     assert resp.status_code == 200
     out = resp.json()
@@ -47,7 +43,7 @@ def test_variance_components_roundtrip() -> None:
     assert out["method"].startswith("ANOVA/EMS")
 
 
-def test_variance_components_non_estimable_is_422_not_500() -> None:
+def test_variance_components_non_estimable_is_422_not_500(client: TestClient) -> None:
     resp = client.post(
         "/api/stats/variance-components",
         json={"groups": [[[1.0, 2.0]], [[3.0, 4.0]]]},
@@ -55,7 +51,7 @@ def test_variance_components_non_estimable_is_422_not_500() -> None:
     assert resp.status_code == 422
 
 
-def test_variability_summary_roundtrip() -> None:
+def test_variability_summary_roundtrip(client: TestClient) -> None:
     resp = client.post("/api/stats/variability-summary", json={"groups": _BALANCED})
     assert resp.status_code == 200
     out = resp.json()
@@ -65,6 +61,6 @@ def test_variability_summary_roundtrip() -> None:
     assert len(out["a_groups"]) == 3
 
 
-def test_variability_summary_bad_shape_is_422_not_500() -> None:
+def test_variability_summary_bad_shape_is_422_not_500(client: TestClient) -> None:
     resp = client.post("/api/stats/variability-summary", json={"groups": [[[1.0]]]})
     assert resp.status_code == 422

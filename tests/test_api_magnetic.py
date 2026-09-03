@@ -8,12 +8,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from quantized.app import app
 
-client = TestClient(app)
-
-
-def test_curie_weiss_fit_recovers_synthetic_parameters() -> None:
+def test_curie_weiss_fit_recovers_synthetic_parameters(client: TestClient) -> None:
     # MATLAB docstring example: C=4, theta=50, chi = C/(T-theta).
     temps = [float(t) for t in range(100, 401)]
     chi = [4.0 / (t - 50.0) for t in temps]
@@ -27,7 +23,7 @@ def test_curie_weiss_fit_recovers_synthetic_parameters() -> None:
     assert body["theta_cw"] == pytest.approx(50.0, rel=1e-6)
 
 
-def test_curie_weiss_fit_requires_three_points() -> None:
+def test_curie_weiss_fit_requires_three_points(client: TestClient) -> None:
     r = client.post(
         "/api/magnetic/curie-weiss-fit",
         json={"temperature": [100.0, 200.0], "susceptibility": [0.1, 0.2]},
@@ -35,7 +31,7 @@ def test_curie_weiss_fit_requires_three_points() -> None:
     assert r.status_code == 422
 
 
-def test_langevin_extreme_finite_input_is_422_not_500() -> None:
+def test_langevin_extreme_finite_input_is_422_not_500(client: TestClient) -> None:
     """Regression: a huge field with a near-zero temperature drove
     calc.magnetic.langevin's saturation-argument division to
     ZeroDivisionError, escaping the route's old `except ValueError`."""

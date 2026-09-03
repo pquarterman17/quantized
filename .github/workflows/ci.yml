@@ -30,7 +30,7 @@ jobs:
       # Lint + type-check once, on the latest interpreter (OS/version-independent).
       - name: Lint
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests tools
       - name: Type check
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         run: uv run mypy src

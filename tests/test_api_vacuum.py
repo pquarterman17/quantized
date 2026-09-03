@@ -6,12 +6,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from quantized.app import app
 
-client = TestClient(app)
-
-
-def test_monolayer_time_extreme_finite_input_is_422_not_500() -> None:
+def test_monolayer_time_extreme_finite_input_is_422_not_500(client: TestClient) -> None:
     """Regression: a tiny pressure with a huge molecular mass/temperature
     underflows calc.vacuum.monolayer_time's impingement flux to exactly 0.0,
     a ZeroDivisionError escaping the route's old `except ValueError`."""

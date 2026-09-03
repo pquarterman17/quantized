@@ -22,16 +22,18 @@ Two sections:
 
 from __future__ import annotations
 
-import os
-
 import json
+import os
 import re
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-CORPUS_ROOT = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
+CORPUS_ROOT = (
+    Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data"))
+    / "origin"
+)
 SPEC = CORPUS_ROOT / "specimens"
 GT = SPEC / "ground_truth"
 

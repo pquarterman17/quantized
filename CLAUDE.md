@@ -80,13 +80,16 @@ the behavioural reference (parity + golden values).
 ## Commands (target — established as W0 lands)
 
 ```bash
-uv sync --group dev        # backend deps
+uv sync --group dev              # backend deps
+uv run python tools/gate.py      # the whole gate, one command (~8 min);
+                                  # --backend-only / --frontend-only / --skip-tests
+
 uv run qz                  # API + SPA on :8000, opens browser
 uv run qz --desktop        # native window (pywebview)
 uv run qz --dev            # Vite HMR + reloading backend
 uv run pytest -n auto      # backend tests (pytest-xdist parallel across cores)
 uv run pytest -m golden    # parity vs frozen MATLAB outputs
-uv run ruff check src tests
+uv run ruff check src tests tools
 uv run mypy src
 cd frontend && npm test    # frontend unit tests
 cd frontend && npm run build
@@ -191,7 +194,7 @@ Practical conventions discovered while porting — follow them to stay green.
   STATE, not on the call. A bare `expect(mock).toHaveBeenCalled()` is fine.
 
 ### Lint / CI
-- Always lint **`ruff check src tests`** (CI does) — not just `src`; a
+- Always lint **`ruff check src tests tools`** (CI does) — not just `src`; a
   tests-only import-sort slipped past a `src`-only local run and reddened CI.
 - CI is a matrix (ubuntu/win/mac × py3.11/3.13) + a frontend job; golden
   fixtures are committed so it needs no MATLAB. `main` is branch-protected

@@ -15,8 +15,19 @@ ubuntu/windows/macOS × py3.11/3.13 matrix plus a frontend job:
 
 ```bash
 uv sync --group dev
+uv run python tools/gate.py          # the whole gate, one command (~8 min)
+```
+
+`tools/gate.py` is the single source of truth for what the gate runs —
+cross-platform (`subprocess.run(..., shell=False)`, resolves `npm`/`npm.cmd`
+via `shutil.which`), prints each step and its elapsed time, and stops at the
+first failure. Flags: `--backend-only`, `--frontend-only`, `--skip-tests`.
+
+Individual steps, if you want to run just one by hand:
+
+```bash
 uv run pytest -n auto                # add -m golden for the MATLAB parity subset
-uv run ruff check src tests          # `src tests`, not just `src` — CI lints both
+uv run ruff check src tests tools    # `tools` too — CI lints all three
 uv run mypy src
 cd frontend && npm test && npm run build
 ```
