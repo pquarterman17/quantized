@@ -23,15 +23,22 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.io.origin_project import (
-    OriginProjectError,
     drop_empty_library_books,
     read_origin_project_all,
 )
 from quantized.routes._bookcache import cache_project_books, get_cached_book
+from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._uploadcache import resolve_upload_token
 from quantized.routes.parsers import _allowed_prefixes, _book_payload
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
+
+#: This route's re-parse can also hit a malformed Origin container's
+#: ``struct.unpack`` calls (``struct.error`` is not a ``CALC_ERRORS``
+#: member, and ``OriginProjectError`` -- also raised here -- already
+#: subclasses ``ValueError``, which is), on top of the usual calc-shaped/IO
+#: failures.
+_CALC_ERRORS_ORIGIN: tuple[type[BaseException], ...] = (*CALC_ERRORS_IO, struct.error)
 
 
 class BookDataRequest(BaseModel):
@@ -100,14 +107,7 @@ def book_data(req: BookDataRequest) -> dict[str, Any]:
     try:
         raw = resolved.read_bytes()
         _primary, all_books = read_origin_project_all(resolved, raw=raw)
-    except (
-        OriginProjectError,
-        ValueError,
-        ArithmeticError,
-        KeyError,
-        struct.error,
-        OSError,
-    ) as exc:
+    except _CALC_ERRORS_ORIGIN as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     books = drop_empty_library_books(all_books)
     cache_project_books(resolved, books)

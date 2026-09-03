@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc.reductions import (
@@ -18,6 +18,7 @@ from quantized.calc.reductions import (
     spin_asymmetry,
     williamson_hall,
 )
+from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/reductions", tags=["reductions"])
 
@@ -33,16 +34,13 @@ class WilliamsonHallRequest(BaseModel):
 @router.post("/williamson-hall")
 def williamson_hall_route(req: WilliamsonHallRequest) -> dict[str, Any]:
     """Crystallite size + microstrain from XRD peak positions and widths."""
-    try:
-        return williamson_hall(
-            req.two_theta_deg,
-            req.fwhm_deg,
-            wavelength_a=req.wavelength_a,
-            k_factor=req.k_factor,
-            instrumental_broadening_deg=req.instrumental_broadening_deg,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(williamson_hall,
+        req.two_theta_deg,
+        req.fwhm_deg,
+        wavelength_a=req.wavelength_a,
+        k_factor=req.k_factor,
+        instrumental_broadening_deg=req.instrumental_broadening_deg,
+    )
 
 
 class FFTThicknessRequest(BaseModel):
@@ -58,18 +56,15 @@ class FFTThicknessRequest(BaseModel):
 @router.post("/fft-thickness")
 def fft_thickness_route(req: FFTThicknessRequest) -> dict[str, Any]:
     """Film thickness from Laue-fringe periodicity (XRD FFT)."""
-    try:
-        return fft_thickness(
-            req.two_theta_deg,
-            req.intensity,
-            req.wavelength_a,
-            two_theta_min=req.two_theta_min,
-            two_theta_max=req.two_theta_max,
-            window=req.window,
-            max_thickness_nm=req.max_thickness_nm,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(fft_thickness,
+        req.two_theta_deg,
+        req.intensity,
+        req.wavelength_a,
+        two_theta_min=req.two_theta_min,
+        two_theta_max=req.two_theta_max,
+        window=req.window,
+        max_thickness_nm=req.max_thickness_nm,
+    )
 
 
 class ReflectivityFFTRequest(BaseModel):
@@ -88,21 +83,18 @@ class ReflectivityFFTRequest(BaseModel):
 @router.post("/reflectivity-fft")
 def reflectivity_fft_route(req: ReflectivityFFTRequest) -> dict[str, Any]:
     """Kiessig-fringe FFT thickness(es) + superlattice analysis."""
-    try:
-        return reflectivity_fft(
-            req.x,
-            req.reflectivity,
-            is_neutron=req.is_neutron,
-            wavelength_a=req.wavelength_a,
-            x_min=req.x_min,
-            x_max=req.x_max,
-            window=req.window,
-            preprocess=req.preprocess,
-            max_thickness_nm=req.max_thickness_nm,
-            peak_prominence_threshold=req.peak_prominence_threshold,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(reflectivity_fft,
+        req.x,
+        req.reflectivity,
+        is_neutron=req.is_neutron,
+        wavelength_a=req.wavelength_a,
+        x_min=req.x_min,
+        x_max=req.x_max,
+        window=req.window,
+        preprocess=req.preprocess,
+        max_thickness_nm=req.max_thickness_nm,
+        peak_prominence_threshold=req.peak_prominence_threshold,
+    )
 
 
 class SpinAsymmetryRequest(BaseModel):
@@ -115,7 +107,4 @@ class SpinAsymmetryRequest(BaseModel):
 @router.post("/spin-asymmetry")
 def spin_asymmetry_route(req: SpinAsymmetryRequest) -> dict[str, Any]:
     """Neutron spin asymmetry (R++ - R--)/(R++ + R--) with propagated error."""
-    try:
-        return spin_asymmetry(req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(spin_asymmetry, req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)

@@ -19,6 +19,7 @@ from quantized.calc.crystallography import (
     theoretical_density,
 )
 from quantized.calc.formula import formula_mass
+from quantized.routes._errors import CALC_ERRORS, call_calc
 
 router = APIRouter(prefix="/api/crystallography", tags=["crystallography"])
 
@@ -41,22 +42,19 @@ class DSpacingRequest(BaseModel):
 def dspacing(req: DSpacingRequest) -> dict[str, Any]:
     """Interplanar d-spacing for (h,k,l) — or (h,k,i,l) for hexagonal — in the
     given crystal system."""
-    try:
-        return d_spacing(
-            req.system,
-            req.a,
-            req.b,
-            req.c,
-            req.h,
-            req.k,
-            req.l,
-            alpha=req.alpha,
-            beta=req.beta,
-            gamma=req.gamma,
-            i=req.i,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(d_spacing,
+        req.system,
+        req.a,
+        req.b,
+        req.c,
+        req.h,
+        req.k,
+        req.l,
+        alpha=req.alpha,
+        beta=req.beta,
+        gamma=req.gamma,
+        i=req.i,
+    )
 
 
 class InterplanarAngleRequest(BaseModel):
@@ -79,24 +77,21 @@ class InterplanarAngleRequest(BaseModel):
 def angle(req: InterplanarAngleRequest) -> dict[str, Any]:
     """Angle between two lattice planes (h1k1l1) and (h2k2l2), for any of the
     seven crystal systems, via the reciprocal metric tensor."""
-    try:
-        return interplanar_angle(
-            req.system,
-            req.a,
-            req.b,
-            req.c,
-            req.h1,
-            req.k1,
-            req.l1,
-            req.h2,
-            req.k2,
-            req.l2,
-            alpha=req.alpha,
-            beta=req.beta,
-            gamma=req.gamma,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(interplanar_angle,
+        req.system,
+        req.a,
+        req.b,
+        req.c,
+        req.h1,
+        req.k1,
+        req.l1,
+        req.h2,
+        req.k2,
+        req.l2,
+        alpha=req.alpha,
+        beta=req.beta,
+        gamma=req.gamma,
+    )
 
 
 class CellRequest(BaseModel):
@@ -124,5 +119,5 @@ def cell(req: CellRequest) -> dict[str, Any]:
             out["molar_mass"] = mass
             out["density"] = theoretical_density(mass, req.z, volume)
         return out
-    except (ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

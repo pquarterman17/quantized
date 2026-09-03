@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc.spectral import fft_spectral
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/spectral", tags=["spectral"])
@@ -46,7 +47,7 @@ def fft(req: FftRequest) -> dict[str, Any]:
             sided=req.sided,
             detrend=req.detrend,
         )
-    except (ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # Drop the window-function array: same length as the input, internal detail
     # the caller never plots (keeps the response small).

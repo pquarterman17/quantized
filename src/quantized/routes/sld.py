@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc.sld_formula import (
@@ -17,6 +17,7 @@ from quantized.calc.sld_formula import (
     XRAY_WAVELENGTH,
     sld_from_formula,
 )
+from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/sld", tags=["sld"])
 
@@ -31,12 +32,9 @@ class SldRequest(BaseModel):
 @router.post("/formula")
 def formula(req: SldRequest) -> dict[str, Any]:
     """Neutron + X-ray SLD (real + imaginary) for a formula at a mass density."""
-    try:
-        return sld_from_formula(
-            req.formula,
-            req.density,
-            neutron_wavelength=req.neutron_wavelength,
-            xray_wavelength=req.xray_wavelength,
-        )
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(sld_from_formula,
+        req.formula,
+        req.density,
+        neutron_wavelength=req.neutron_wavelength,
+        xray_wavelength=req.xray_wavelength,
+    )

@@ -24,6 +24,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.routes._errors import call_calc
 from quantized.routes._export_common import (
     _DPI_MAX,
     _DPI_MIN,
@@ -82,19 +83,16 @@ def export_map_figure(req: MapFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
 
-    try:
-        data = render_map_figure(
-            req.x_axis, req.y_axis, req.z_grid,
-            contour_source=req.contour_source, z_values=req.z_values,
-            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
-            levels=req.levels, level_scale=req.level_scale,
-            label_contours=req.label_contours, colorbar=req.colorbar,
-            title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
-            width_in=req.width_in, height_in=req.height_in,
-            view_elev=req.view_elev, view_azim=req.view_azim,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    data = call_calc(render_map_figure,
+        req.x_axis, req.y_axis, req.z_grid,
+        contour_source=req.contour_source, z_values=req.z_values,
+        kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi, cmap=req.cmap,
+        levels=req.levels, level_scale=req.level_scale,
+        label_contours=req.label_contours, colorbar=req.colorbar,
+        title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
+        width_in=req.width_in, height_in=req.height_in,
+        view_elev=req.view_elev, view_azim=req.view_azim,
+    )
     return Response(
         content=data,
         media_type=_FIGURE_MIME[req.fmt],
@@ -134,14 +132,11 @@ def export_corner_figure(req: CornerFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_corner import render_corner_figure  # lazy: matplotlib is heavy
 
-    try:
-        img = render_corner_figure(
-            req.samples, req.param_names, truths=req.truths,
-            title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
-            width_in=req.width_in, height_in=req.height_in,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    img = call_calc(render_corner_figure,
+        req.samples, req.param_names, truths=req.truths,
+        title=req.title, fmt=req.fmt, style=req.style, dpi=dpi, bins=req.bins,
+        width_in=req.width_in, height_in=req.height_in,
+    )
     return Response(
         content=img,
         media_type=_FIGURE_MIME[req.fmt],
@@ -173,14 +168,11 @@ def export_ternary_figure(req: TernaryFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
 
-    try:
-        img = render_ternary_figure(
-            req.data, labels=req.labels, values=req.values,
-            fmt=req.fmt, style=req.style, dpi=dpi, marker_size=req.marker_size,
-            title=req.title,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    img = call_calc(render_ternary_figure,
+        req.data, labels=req.labels, values=req.values,
+        fmt=req.fmt, style=req.style, dpi=dpi, marker_size=req.marker_size,
+        title=req.title,
+    )
     return Response(
         content=img,
         media_type=_FIGURE_MIME[req.fmt],
@@ -215,14 +207,11 @@ def export_field_figure(req: FieldFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     from quantized.calc.figure_field import render_field_figure  # lazy: matplotlib
 
-    try:
-        img = render_field_figure(
-            req.x_axis, req.y_axis, req.u_grid, req.v_grid,
-            kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
-            title=req.title, x_label=req.x_label, y_label=req.y_label,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    img = call_calc(render_field_figure,
+        req.x_axis, req.y_axis, req.u_grid, req.v_grid,
+        kind=req.kind, fmt=req.fmt, style=req.style, dpi=dpi,
+        title=req.title, x_label=req.x_label, y_label=req.y_label,
+    )
     return Response(
         content=img,
         media_type=_FIGURE_MIME[req.fmt],

@@ -24,6 +24,7 @@ from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit, weights_from_dy
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
@@ -91,10 +92,7 @@ def list_models() -> dict[str, Any]:
 def autoguess(req: GuessRequest) -> dict[str, Any]:
     """Initial-parameter guess for ``model`` given (x, y)."""
     _require_model(req.model)
-    try:
-        p0 = auto_guess(req.model, req.x, req.y)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    p0 = call_calc(auto_guess, req.model, req.x, req.y)
     return {"p0": to_jsonable(p0)}
 
 
@@ -121,7 +119,7 @@ def fit(req: FitRequest) -> dict[str, Any]:
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return to_jsonable(result)  # type: ignore[no-any-return]
 
@@ -166,7 +164,7 @@ def bootstrap(req: BootstrapRequest) -> dict[str, Any]:
                 return_samples=req.return_samples,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -245,7 +243,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             fixed=req.fixed,
             calc_errors=req.calc_errors,
         )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     out["paramNames"] = names
@@ -290,7 +288,7 @@ def scan(req: ScanRequest) -> dict[str, Any]:
                 [e.model_dump() for e in req.equations] if req.equations is not None else None
             ),
         )
-    except (ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # A scan deliberately fits implausible candidates and reports each failure
     # as a per-candidate `error` string (calc/fit_scan._run_candidate) so the
@@ -373,7 +371,7 @@ def posterior(req: PosteriorRequest) -> dict[str, Any]:
                 upper=req.upper,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -428,10 +426,7 @@ def find_xy(req: FindXYRequest) -> dict[str, Any]:
     else:
         equation = req.equation
         assert equation is not None  # narrowed by the "exactly one" check above
-        try:
-            fcn, names = equation_model(equation)
-        except (ValueError, ArithmeticError, IndexError) as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        fcn, names = call_calc(equation_model, equation)
         if len(req.params) != len(names):
             raise HTTPException(
                 status_code=422,
@@ -444,5 +439,5 @@ def find_xy(req: FindXYRequest) -> dict[str, Any]:
         assert req.y is not None  # narrowed by the "exactly one" check above
         xs = find_x(fcn, req.params, req.y, req.x_min, req.x_max, grid_points=req.grid_points)
         return {"x": to_jsonable(xs)}
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

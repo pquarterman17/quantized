@@ -31,6 +31,7 @@ from quantized.io.import_preview import (
     parse_import,
     preview_import,
 )
+from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/import", tags=["import"])
@@ -45,7 +46,7 @@ def guess_route(req: GuessRequest) -> dict[str, Any]:
     """Best-effort starting settings for a pasted/uploaded file's text."""
     try:
         return guess_settings(req.text).to_dict()
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -64,7 +65,7 @@ def preview_route(req: PreviewRequest) -> dict[str, Any]:
             else ImportSettings.from_dict(req.settings)
         )
         return preview_import(req.text, settings, max_rows=max(1, min(200, req.max_rows)))
-    except (ValueError, ArithmeticError, IndexError, TypeError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -78,7 +79,7 @@ def parse_route(req: ParseRequest) -> dict[str, Any]:
     """Import the full text under confirmed settings into a DataStruct."""
     try:
         ds = parse_import(req.text, ImportSettings.from_dict(req.settings))
-    except (ValueError, ArithmeticError, IndexError, TypeError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(ds)
 
@@ -106,7 +107,7 @@ def save_filter_route(req: SaveFilterRequest) -> dict[str, Any]:
             name=req.name, glob=req.glob, settings=ImportSettings.from_dict(req.settings)
         )
         saved = save_filter(filt)
-    except (ValueError, ArithmeticError, TypeError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return saved.to_dict()
 
@@ -143,8 +144,5 @@ def parse_with_filter_route(req: ImportWithFilterRequest) -> dict[str, Any]:
             )
     else:
         raise HTTPException(status_code=422, detail="filename or filter_name is required")
-    try:
-        ds = parse_import(req.text, filt.settings)
-    except (ValueError, ArithmeticError, IndexError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    ds = call_calc(parse_import, req.text, filt.settings)
     return datastruct_payload(ds)
