@@ -20,6 +20,7 @@ import pytest
 from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
+    declared_source_count,
     dir_grant_count,
     grant_write_path,
     is_consented,
@@ -1237,3 +1238,89 @@ def test_write_project_file_a_concurrent_save_never_deletes_the_others_in_flight
     assert one["ok"] is True, one
     # Save 1 replaced LAST (it was paused, then released) — its content wins.
     assert dest.read_text(encoding="utf-8") == _workspace_json("from-save-one")
+
+
+# --- P1.2 box 4, review round on #291: the PAYLOAD describes the workspace ----
+#
+# The cached declared-source set is populated only by a native project open.
+# A workspace built from fresh imports (never opened from a .dwk), a relinked
+# source, or a project opened some other way is not in it -- and it may still
+# describe the PREVIOUS project. The payload being written is the authoritative
+# description of the current workspace, so `write_project_file` refuses its own
+# declared sources too, realpath-resolved.
+
+
+def _grant_write(api: DesktopApi, dest: Path) -> str:
+    api.attach(FakeWindow([str(dest)]))
+    out = api.save_file_dialog(dest.name)
+    assert out["path"] is not None, out
+    return out["path"]
+
+
+def test_write_refuses_a_payload_declared_source_with_no_project_open(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw_bytes = "T,M\n1,10\n"
+    raw.write_text(raw_bytes, encoding="utf-8")
+    api = DesktopApi()
+    assert declared_source_count() == 0  # nothing was ever opened natively
+    path = _grant_write(api, raw)  # the dialog cannot know yet -- it grants
+    out = api.write_project_file(path, _workspace_json_declaring(str(raw)))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_text(encoding="utf-8") == raw_bytes
+    assert [p.name for p in tmp_path.iterdir()] == ["raw.csv"]  # no temp, no stray
+
+
+def test_write_refuses_an_alias_spelling_of_a_payload_declared_source(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    api = DesktopApi()
+    path = _grant_write(api, raw)
+    alias = str(sub / ".." / "raw.csv")  # same file, different spelling
+    out = api.write_project_file(path, _workspace_json_declaring(alias))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_text(encoding="utf-8") == "T,M\n"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink creation needs privileges on Windows")
+def test_write_refuses_a_symlinked_payload_declared_source(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    link = tmp_path / "link.csv"
+    link.symlink_to(raw)
+    api = DesktopApi()
+    path = _grant_write(api, raw)
+    out = api.write_project_file(path, _workspace_json_declaring(str(link)))
+    assert out["ok"] is False
+    assert raw.read_text(encoding="utf-8") == "T,M\n"
+
+
+def test_write_refuses_a_relinked_source_the_cached_set_does_not_know(tmp_path: Path) -> None:
+    old = tmp_path / "old.csv"
+    new = tmp_path / "new.csv"
+    old.write_text("old\n", encoding="utf-8")
+    new.write_text("new\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(old))  # cached set = {old}
+    assert is_declared_source(os.path.realpath(str(old)))
+    assert not is_declared_source(os.path.realpath(str(new)))
+    path = _grant_write(api, new)
+    # The user relinked the dataset to new.csv; the payload says so, the cache does not.
+    out = api.write_project_file(path, _workspace_json_declaring(str(new)))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert new.read_text(encoding="utf-8") == "new\n"
+
+
+def test_write_project_file_payload_check_leaves_an_ordinary_save_alone(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    api = DesktopApi()
+    dest = tmp_path / "workspace.dwk"
+    path = _grant_write(api, dest)
+    content = _workspace_json_declaring(str(raw))  # declares raw.csv, saves ELSEWHERE
+    out = api.write_project_file(path, content)
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == content

@@ -35,12 +35,15 @@
 // unexpected suffix. The result reports the name actually used so a caller can
 // say so.
 
-import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate } from "./figuredoc";
+import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate, type GraphTemplate } from "./figuredoc";
+import { sanitizeFigureOverrides } from "./figureOverrides";
+import { sanitizeExportSeriesStyles } from "./publicationStyles";
 import { isCustomFitModel, loadCustomModels, saveCustomModel, deleteCustomModel } from "./fitmodels";
 import {
   deleteRecipe as deletePeakRecipe,
   isPeakRecipe,
   loadRecipes as loadPeakRecipes,
+  type PeakRecipe,
   saveRecipe as savePeakRecipe,
 } from "./peakwizard";
 import { dropEntry, moveEntry } from "./recipeIndex";
@@ -117,11 +120,69 @@ function requireName(o: Record<string, unknown>, label: string): void {
   if (typeof o.name !== "string" || !o.name.trim()) throw new Error(`${label} needs a name`);
 }
 
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const finiteOrNull = (v: unknown): v is number | null => v === null || finite(v);
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): v is T =>
+  typeof v === "string" && (allowed as readonly string[]).includes(v);
+
+const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly"] as const;
+const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
+
+/** FIELD-LEVEL validation at the file boundary (review finding on #290).
+ *  `isPeakRecipe` -- the storage-boundary guard -- only checks that the five
+ *  child values are non-null objects, which is the right tolerance for a
+ *  record this app wrote itself but accepts `{range:{}, baseline:{}, ...}`
+ *  from a file, and the Peak Analyzer then reads `undefined` where it
+ *  expects numbers and enums. An imported file is untrusted, so every field
+ *  the `PeakRecipe` type declares is checked for type, finiteness and enum
+ *  membership here; nothing structurally "present but empty" gets through.
+ *  Unknown extra keys are dropped rather than persisted. */
 function parsePeakRecipeFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "peak recipe");
   if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
   requireName(o, "peak recipe");
-  return o;
+  const bad = (field: string): never => {
+    throw new Error(`not a valid peak recipe file (${field})`);
+  };
+  const range = o.range as Record<string, unknown>;
+  if (!finiteOrNull(range.lo) || !finiteOrNull(range.hi)) bad("range");
+  const baseline = o.baseline as Record<string, unknown>;
+  if (!oneOf(baseline.method, PEAK_BASELINE_METHODS)) bad("baseline.method");
+  if (!finite(baseline.lam) || !finite(baseline.p) || !finite(baseline.radius) || !finite(baseline.order)) bad("baseline");
+  const find = o.find as Record<string, unknown>;
+  if (!finite(find.snr_threshold) || !finite(find.min_prominence) || !finite(find.max_peaks)) bad("find");
+  const model = o.model as Record<string, unknown>;
+  if (typeof model.shape !== "string" || !model.shape.trim()) bad("model.shape");
+  if (!finite(model.bgDegree) || typeof model.linkMode !== "string" || typeof model.constrain !== "boolean") bad("model");
+  const report = o.report as Record<string, unknown>;
+  if (!oneOf(report.mode, PEAK_REPORT_MODES) || !finite(report.regionWidth)) bad("report");
+  const record: PeakRecipe = {
+    version: 1,
+    name: o.name as string,
+    range: { lo: range.lo as number | null, hi: range.hi as number | null },
+    baseline: {
+      method: baseline.method as PeakRecipe["baseline"]["method"],
+      lam: baseline.lam as number,
+      p: baseline.p as number,
+      radius: baseline.radius as number,
+      order: baseline.order as number,
+    },
+    find: {
+      snr_threshold: find.snr_threshold as number,
+      min_prominence: find.min_prominence as number,
+      max_peaks: find.max_peaks as number,
+    },
+    model: {
+      shape: model.shape as string,
+      bgDegree: model.bgDegree as number,
+      linkMode: model.linkMode as string,
+      constrain: model.constrain as boolean,
+    },
+    report: { mode: report.mode as PeakRecipe["report"]["mode"], regionWidth: report.regionWidth as number },
+  };
+  return record;
 }
 
 function parseFitModelFile(text: string): NamedRecord {
@@ -131,25 +192,47 @@ function parseFitModelFile(text: string): NamedRecord {
   return o;
 }
 
-/** Stricter than the load-time `isGraphTemplate`: an imported file must
- *  actually CARRY `overrides`/`seriesStyles` (present, and object-or-null /
- *  array-or-null respectively), not merely omit them. Without this, a
- *  garbage `{name, style}` object -- which `isGraphTemplate` alone accepts,
- *  since it only checks those two fields -- would import as an empty-looking
- *  "valid" template. Every REAL `GraphTemplate` (the type both fields are
- *  required on) always carries both keys once serialized, so this refuses
- *  nothing a genuine export could ever produce. */
+/** FIELD-LEVEL validation at the file boundary (review finding on #290).
+ *  `isGraphTemplate` -- the storage-boundary guard -- only checks `name` and
+ *  `style` are strings, and a bare `typeof === "object"` check let an ARRAY
+ *  through as `overrides` and arbitrary values through inside `seriesStyles`.
+ *  Both nested shapes are now validated by the SAME sanitizers the rest of
+ *  the app trusts for persisted input (`sanitizeFigureOverrides`,
+ *  `sanitizeExportSeriesStyles`), never a second hand-rolled walk:
+ *
+ *   - `overrides`: null, or a plain (non-array) object; the sanitized result
+ *     (validated known keys only) is what gets stored.
+ *   - `seriesStyles`: null, or an array whose every entry is null or a plain
+ *     object -- a bare number or string entry is refused outright, not
+ *     silently nulled; the sanitized entries are what gets stored.
+ *
+ *  Both keys must be PRESENT (a real `GraphTemplate` always carries both once
+ *  serialized), which is what refuses a garbage `{name, style}` object.
+ *  Unknown extra keys are dropped rather than persisted. */
 function parseGraphTemplateFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "graph template");
   if (!isGraphTemplate(o)) throw new Error("not a valid graph template file");
   requireName(o, "graph template");
-  if (!("overrides" in o) || (o.overrides !== null && typeof o.overrides !== "object")) {
-    throw new Error("not a valid graph template file");
+  if (!("overrides" in o) || (o.overrides !== null && !isObj(o.overrides))) {
+    throw new Error("not a valid graph template file (overrides)");
   }
   if (!("seriesStyles" in o) || (o.seriesStyles !== null && !Array.isArray(o.seriesStyles))) {
-    throw new Error("not a valid graph template file");
+    throw new Error("not a valid graph template file (seriesStyles)");
   }
-  return o;
+  const rawStyles = o.seriesStyles as unknown[] | null;
+  if (rawStyles !== null && !rawStyles.every((entry) => entry === null || isObj(entry))) {
+    throw new Error("not a valid graph template file (seriesStyles)");
+  }
+  const overrides = o.overrides === null ? null : sanitizeFigureOverrides(o.overrides);
+  if (o.overrides !== null && overrides === null) throw new Error("not a valid graph template file (overrides)");
+  const record: GraphTemplate = {
+    name: o.name as string,
+    style: o.style as string,
+    overrides,
+    seriesStyles: rawStyles === null ? null : sanitizeExportSeriesStyles(rawStyles),
+    ...(typeof o.source === "string" ? { source: o.source } : {}),
+  };
+  return record;
 }
 
 const ADAPTERS: Record<NameKeyedKind, Adapter> = {
@@ -267,5 +350,13 @@ export function importNameKeyed(kind: NameKeyedKind, text: string): RecipeOpResu
   }
   const final = uniqueTemplateName(parsed.name, new Set(adapter.load().map((r) => r.name)));
   adapter.save({ ...parsed, name: final });
+  // Every `save*` swallows a `localStorage.setItem` failure (quota, private
+  // mode) and keeps the record session-local at best -- so a bare "saved"
+  // here would announce an import that did not persist and hand the panel a
+  // row to focus that the next read cannot find (review finding on #290).
+  // Re-read from storage: the record is imported only if it is THERE.
+  if (!adapter.load().some((r) => r.name === final)) {
+    return { ok: false, reason: `could not save the imported ${kind} recipe — storage is full or unavailable` };
+  }
   return { ok: true, name: final };
 }

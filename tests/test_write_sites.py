@@ -34,12 +34,23 @@ so this is a syntactic approximation -- see the false-positive note below):
     `Path.unlink` has no unrelated collision either (nothing else in this
     codebase's vocabulary is named `unlink`).
 
-This intentionally does NOT catch every conceivable filesystem write (e.g.
-a third-party library's own internal writes, like `h5py.File(path, "w")` in
-`io/hdf5.py` -- the CALL SHAPE isn't in the tracked-attribute set above,
-only the surrounding module's OWN `Path.unlink` earns its entry here). The
-scanned vocabulary matches P1.2's brief precisely; broadening it is a
-follow-up, not silently expanded here.
+  * Open-like calls with a WRITE-MODE LITERAL -- the builtin `open`, any
+    `.open(...)` method (`Path.open`), `os.fdopen`, and `h5py.File(path,
+    "w")` -- whatever the receiver (review finding on #291: the first
+    version tracked only the bare builtin). The mode literal is the
+    discriminant; a computed/non-literal mode is still not seen.
+
+WHAT THIS PROVES, AND WHAT IT DOES NOT. This is a syntactic INVENTORY of the
+places this codebase writes to disk, kept honest by the two-sided
+allowlist -- it is not a proof that no output path can ever equal an input
+path. Library functions that take a caller-supplied output path
+(`io/xrd_csv.write_xrd_csv`, `io/origin_project/writer.write_opj`,
+`io/hdf5.write_hdf5`) are LISTED with the justification that no HTTP route
+passes user input into them; the invariant P1.2 box 4 actually claims --
+that the app's own project-save path never lands on a declared raw source
+-- is enforced at write time by `desktop_bridge.write_project_file`
+(payload-derived AND cached declared-source refusal), and that is what the
+plan's completed acceptance criterion is scoped to.
 """
 
 from __future__ import annotations
@@ -73,6 +84,10 @@ _MODULE_QUALIFIED_WRITE_METHODS = frozenset(
     }
 )
 _WRITE_MODULES = frozenset({"os", "shutil", "tempfile"})
+# Open-like callables whose SECOND positional argument (or `mode=`) is the
+# file mode: the builtin, `Path.open`, `os.fdopen`-style wrappers, and
+# `h5py.File` (the one third-party writer this codebase drives with a mode).
+_OPEN_LIKE_CALLABLES = frozenset({"open", "File", "fdopen"})
 
 # Relative-to-SRC path -> one-line justification: what it writes, and why
 # that is never a user's raw imported/opened source file. Verified by
@@ -170,14 +185,24 @@ def _write_call_sites(tree: ast.AST) -> list[tuple[int, str]]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        if isinstance(func, ast.Name) and func.id == "open":
+        if isinstance(func, ast.Name) and func.id in _OPEN_LIKE_CALLABLES:
             if _open_mode_is_a_write(node):
-                found.append((node.lineno, "open(...)"))
+                found.append((node.lineno, f"{func.id}(...)"))
             continue
         if not isinstance(func, ast.Attribute):
             continue
         attr = func.attr
         base = _base_name(func.value)
+        # Review finding on #291: `Path.open(...)`, `h5py.File(path, "w")` and
+        # any other open-like METHOD taking a mode literal were invisible to
+        # the first version of this scan. Any attribute call named like an
+        # opener whose mode literal is a write mode is a write site, whatever
+        # the receiver -- the mode literal is the discriminant, so `str`/list
+        # methods (which take no mode) cannot false-positive here.
+        if attr in _OPEN_LIKE_CALLABLES:
+            if _open_mode_is_a_write(node):
+                found.append((node.lineno, f".{attr}(...)"))
+            continue
         if attr in _UNQUALIFIED_WRITE_METHODS:
             found.append((node.lineno, f".{attr}"))
         elif attr == "unlink" and base not in _WRITE_MODULES:

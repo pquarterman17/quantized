@@ -150,6 +150,7 @@ from quantized.desktop_consent import consented_write_path, is_declared_source
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
+    payload_declared_sources,
     validate_workspace_payload,
 )
 
@@ -280,6 +281,13 @@ class DesktopApi(DesktopDialogBridge):
         invalid = validate_workspace_payload(content)
         if invalid is not None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
+        # The cached set above only knows natively OPENED projects; the payload's
+        # own sources are refused too (`payload_declared_sources`, #291 review).
+        if resolved in payload_declared_sources(content):
+            return {
+                "ok": False,
+                "error": "refusing to write — that path is a data source of this workspace",
+            }
         directory = os.path.dirname(granted) or "."
 
         def _replace() -> None:

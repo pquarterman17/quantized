@@ -23,6 +23,7 @@ __all__ = [
     "WRITE_TEMP_PREFIX",
     "cleanup_stray_write_temps",
     "extract_declared_source_paths",
+    "payload_declared_sources",
     "validate_workspace_payload",
 ]
 
@@ -82,6 +83,30 @@ def extract_declared_source_paths(content: str) -> list[str]:
         if isinstance(path, str) and path:
             paths.append(path)
     return paths
+
+
+def payload_declared_sources(content: str) -> set[str]:
+    """Every dataset source path the payload itself declares, realpath-
+    resolved — the set ``write_project_file`` refuses as a save destination
+    (P1.2 box 4, review round on #291).
+
+    Why the payload and not only the cached ``desktop_consent`` set: that
+    set is populated ONLY by a native project open (``_read_granted``), so a
+    workspace built from fresh imports, a relinked source, or a project
+    opened any other way is not described by it — it may even still describe
+    the PREVIOUS project. The payload being written is the authoritative
+    description of the workspace it describes. Resolving through
+    ``os.path.realpath`` is what makes a symlink or a ``sub/../raw.csv``
+    spelling of the same file match; a string that cannot be resolved at all
+    is skipped (same tolerance as ``desktop_consent._normalize``) rather than
+    turning a save into a crash."""
+    out: set[str] = set()
+    for raw in extract_declared_source_paths(content):
+        try:
+            out.add(os.path.realpath(raw))
+        except (OSError, ValueError):
+            continue
+    return out
 
 
 def validate_workspace_payload(content: str) -> str | None:
