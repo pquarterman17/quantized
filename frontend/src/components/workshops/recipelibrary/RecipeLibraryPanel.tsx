@@ -130,6 +130,11 @@ export default function RecipeLibraryPanel() {
    *  so the success message says which scope it landed in; the four global
    *  kinds have only one scope, so theirs does not need to say so. */
   const runLibraryImport = (file: File): void => {
+    // OWN the panel's busy state for the whole read+import (review finding on
+    // #290): `File.text()` is async, and without this a second apply/import
+    // could start during the read and race this one for the shared result
+    // line and focus request that `busy` exists to serialize.
+    setBusy(true);
     void file
       .text()
       .then((text) => {
@@ -158,7 +163,8 @@ export default function RecipeLibraryPanel() {
         // Mirrors RecipeManagerPanel's own handling: `file.text()` itself can
         // reject (a read error), not just resolve with malformed content.
         setResult({ ok: false, reason: e instanceof Error ? e.message : "could not read that file" });
-      });
+      })
+      .finally(() => setBusy(false));
   };
 
   return (

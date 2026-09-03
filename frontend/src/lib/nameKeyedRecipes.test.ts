@@ -337,6 +337,82 @@ describe("import / export", () => {
   });
 });
 
+describe("import validates FIELDS at the file boundary, not just the shape (review finding on #290)", () => {
+  const peakJson = (patch: Record<string, unknown>) =>
+    JSON.stringify({ ...DEFAULT_RECIPE, name: "P", ...patch });
+
+  it("refuses a peak recipe whose five children are present but EMPTY objects", () => {
+    // Exactly the file `isPeakRecipe` alone accepts: every child is a non-null
+    // object, and every required numeric/enum field inside is absent.
+    const empty = JSON.stringify({ version: 1, name: "x", range: {}, baseline: {}, find: {}, model: {}, report: {} });
+    const r = importNameKeyed("peak", empty);
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/not a valid peak recipe file/) });
+    expect(loadPeakRecipes()).toEqual([]); // nothing persisted
+  });
+
+  it("refuses a peak recipe with a baseline method outside the enum, a non-finite number, or a non-boolean flag", () => {
+    expect(importNameKeyed("peak", peakJson({ baseline: { ...DEFAULT_RECIPE.baseline, method: "spline" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ find: { ...DEFAULT_RECIPE.find, max_peaks: "20" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ model: { ...DEFAULT_RECIPE.model, constrain: "yes" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ report: { ...DEFAULT_RECIPE.report, mode: "plot" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ range: { lo: "0", hi: null } })).ok).toBe(false);
+    expect(loadPeakRecipes()).toEqual([]);
+  });
+
+  it("drops unknown extra keys from an imported peak recipe instead of persisting them", () => {
+    const r = importNameKeyed("peak", peakJson({ junk: "x" }));
+    expect(r.ok).toBe(true);
+    const stored = loadPeakRecipes()[0] as unknown as Record<string, unknown>;
+    expect("junk" in stored).toBe(false);
+  });
+
+  it("refuses a graph template whose overrides is an ARRAY (an object to typeof, not to the type)", () => {
+    const r = importNameKeyed("graph", JSON.stringify({ name: "G", style: "scatter", overrides: [1, 2], seriesStyles: null }));
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/overrides/) });
+    expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  it("refuses a graph template with a bare number or string inside seriesStyles", () => {
+    for (const styles of [[42], ["red"], [{ color: "#000" }, 7]]) {
+      const r = importNameKeyed("graph", JSON.stringify({ name: "G", style: "scatter", overrides: null, seriesStyles: styles }));
+      expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/seriesStyles/) });
+    }
+    expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  it("sanitizes nested override/series keys on import — an unknown or mistyped nested field never persists", () => {
+    const r = importNameKeyed(
+      "graph",
+      JSON.stringify({
+        name: "G",
+        style: "scatter",
+        overrides: { font_size: "big", grid: true, bogus: 1 },
+        seriesStyles: [{ color: "#123456", width: -5, sneaky: true }, null],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    const stored = loadGraphTemplates()[0];
+    expect(stored.overrides).toEqual({ grid: true });
+    expect(stored.seriesStyles).toEqual([{ color: "#123456" }, null]);
+  });
+});
+
+describe("import verifies the write LANDED (review finding on #290)", () => {
+  it("refuses — and announces nothing — when localStorage.setItem throws", () => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error("QuotaExceededError");
+    };
+    try {
+      const r = importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "P" }));
+      expect(r).toEqual({ ok: false, reason: "could not save the imported peak recipe — storage is full or unavailable" });
+    } finally {
+      Storage.prototype.setItem = original;
+    }
+    expect(loadPeakRecipes()).toEqual([]);
+  });
+});
+
 describe("uniqueTemplateName", () => {
   it("returns the name untouched when free, then walks suffixes", () => {
     expect(uniqueTemplateName("A", new Set())).toBe("A");
