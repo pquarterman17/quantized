@@ -45,6 +45,18 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-04 — pin UNCHANGED at 910,711; one split funds P3.7's eager
+ *  growth. The trash capture paths (store/trash.ts estimates + dedupe,
+ *  removeDatasets' permanent scrub, folderDelete's capture) are store code
+ *  with no lazy-able panel behind them and measured +2,953 B locally
+ *  (904,718 -> 907,671 as a same-environment delta), which took the build
+ *  over the pin by ~0.5 kB. THE SPLIT (-3.5 kB local, 889.9 -> 886.4 kB,
+ *  907,689 B after): `components/Library/folderOps.ts` was eager through
+ *  two static edges — lib/contextActions.ts's folder actions and
+ *  MultiSelectBar's Export — although every use is inside a click handler.
+ *  Both now `import()` it on the click, which also drops the pipeline
+ *  runner chunk (`runTemplate`) that only folderOps reached eagerly.
+ *
  *  2026-08-29 — pin UNCHANGED at 910,711 after one split plus a full
  *  per-module profiling pass. CI at e276d56 measured 889.3 kB eager and
  *  printed "0.0 kB under budget" — 68 bytes of real headroom, i.e. the next

@@ -1619,10 +1619,62 @@ verification had about 4.0 kB of headroom).
 
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
-- [ ] Extend to folders, figures, reports, and durable objects.
-- [ ] Coherent dependency restore or clear limitation.
-- [ ] Bound by count/age/total size, with purge preview.
-- [ ] Allow explicit warned permanent deletion.
+- [x] ~~**Extend to folders, figures, reports, and durable objects.**~~ SHIPPED
+  2026-09-02 (`frontend/src/store/trash.ts`): `TrashEntry` is now a
+  discriminated union (`dataset`/`editableFigure`/`figureDoc`/`page`/
+  `report`/`folder`); every delete path (`deleteEditableFigure`,
+  `removeFigureDoc`, `deletePageDocument`, `removeReport`,
+  `deleteFolder(…, "reparent"|"cascade")`) captures before removing.
+  `deleteFolder` deletes no dataset either way (corrects the earlier
+  wording implying cascade destroys data — it only un-parents); the
+  `folder` entry captures the removed subtree plus which live
+  dataset/workbook members lost their `folderId`, so both delete modes
+  restore. Tests: `store/trash.test.ts`, `store/folderDelete.test.ts`.
+- [x] ~~**Coherent dependency restore or clear limitation.**~~ SHIPPED
+  2026-09-02: `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
+  `dataset` restore is unchanged (workbook self-heal). A live
+  `editableFigure`/`figureDoc` whose bound dataset is gone restores the
+  dataset too when it is ALSO in trash (same transaction, noted), else
+  restores with the binding nulled the same way a `.dwk` load clamps a
+  dangling ref (noted as a residual: renders frozen/disabled until
+  relinked). `folder` restore re-adds the subtree (dangling parent -> root,
+  reusing `pruneOrphans`/`parseFolders`'s own rule) and re-homes every
+  still-un-parented captured member, leaving a member the user has since
+  moved where they put it (noted). `report` restores as-is. `page` restore
+  is as-is too — a residual: its panels' missing-figure state follows the
+  existing F3 `resolvePagePanel` semantics unchanged, not a new mechanism.
+  Review round (same day): the "reparent" mode sends members and child
+  folders to the deleted node's PARENT, not the root, so the entry now
+  records that destination (`dest`) plus the re-parented `childFolders`,
+  and restore re-homes whatever still sits exactly there. Restore is
+  deliberately NOT an undo step: `trash` is outside the history snapshot,
+  so an undoable restore would let Ctrl+Z remove the object again with its
+  entry already consumed (`store/trash.test.ts` pins it).
+- [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
+  2026-09-02: `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
+  P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
+  newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
+  `bytes` computed once at trash time, never per render — a dimension ESTIMATE
+  for datasets (`datasetByteEstimate`; the exact `JSON.stringify` measured
+  1.2 s on P0.4's 1M-row dataset, a stall this would have added to every
+  delete), exact for every other kind. `lib/trashSummary.ts`
+  (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
+  `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
+  naming exactly what would be lost, destructive-styled, before `purgeTrash()`.
+- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-02:
+  `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
+  the Library dataset menu's new "Delete permanently…" action
+  (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
+  bypass and irreversibility before calling it. Review round (2026-09-03):
+  the permanent branch records no undo step AND scrubs the dataset from
+  every retained history/future snapshot (`scrubDatasetsFromHistory`), so
+  neither Ctrl+Z nor an undo of an older edit can bring it back — the
+  confirmation's "cannot be undone" is literally true; a non-dataset
+  restore re-validates its entry inside the final transaction, so a purge
+  that lands while the restore chunk loads wins; the per-row ✕ / Sure?
+  controls carry row-naming accessible labels. Tests:
+  `lib/datasetDeletePermanently.test.ts`, `store/trash.test.ts`,
+  `components/workshops/trash/TrashPanel.test.tsx`.
 
 ---
 

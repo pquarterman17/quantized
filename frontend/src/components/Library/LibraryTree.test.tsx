@@ -22,6 +22,7 @@ import type { WorkbookNode } from "../../lib/workbooks";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import { askParams } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
+import type { DatasetTrashEntry } from "../../store/trash";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 // P1 fix — Delete/Backspace routing: workbookDeleteActions[0]/folderDeleteActions[0]
@@ -269,7 +270,7 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     const s = useApp.getState();
     expect(s.workbooks.some((w) => w.id === "w1")).toBe(false); // workbook deleted
     expect(s.datasets.some((d) => d.id === "d1")).toBe(false); // member sent to trash
-    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id)).toEqual(["d1"]);
     expect(s.datasets.some((d) => d.id === "solo")).toBe(true); // the unrelated selected/active dataset untouched
   });
 
@@ -291,7 +292,7 @@ describe("LibraryTree — Delete/Backspace routes to the focused row's OWN delet
     const s = useApp.getState();
     expect(s.datasets.some((d) => d.id === "d1")).toBe(false); // the focused row went
     expect(s.datasets.some((d) => d.id === "solo")).toBe(true); // the selected/active one did NOT
-    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id)).toEqual(["d1"]);
   });
 });
 
@@ -494,7 +495,7 @@ describe("LibraryTree — focused-worksheet Delete targets the FOCUSED row (roun
     fireEvent.keyDown(worksheetRow("d1"), { key: "Delete" });
     const s = useApp.getState();
     expect(s.datasets.map((d) => d.id).sort()).toEqual(["d2", "solo"]); // solo (the activeId fallback victim) survives
-    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d1"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id)).toEqual(["d1"]);
   });
 
   it("reviewer scenario 2: worksheet A selected, focus B, Delete removes B — not A", () => {
@@ -505,7 +506,7 @@ describe("LibraryTree — focused-worksheet Delete targets the FOCUSED row (roun
     const s = useApp.getState();
     expect(s.datasets.some((d) => d.id === "d1")).toBe(true); // A survives
     expect(s.datasets.some((d) => d.id === "d2")).toBe(false); // B went
-    expect(s.trash.map((t) => t.dataset.id)).toEqual(["d2"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id)).toEqual(["d2"]);
   });
 
   it("a focused worksheet inside a Ctrl/Cmd multi-selection deletes the whole selection together", () => {
@@ -517,7 +518,7 @@ describe("LibraryTree — focused-worksheet Delete targets the FOCUSED row (roun
     fireEvent.keyDown(worksheetRow("d2"), { key: "Delete" });
     const s = useApp.getState();
     expect(s.datasets.map((d) => d.id)).toEqual(["solo"]);
-    expect(s.trash.map((t) => t.dataset.id).sort()).toEqual(["d1", "d2"]);
+    expect((s.trash as DatasetTrashEntry[]).map((t) => t.dataset.id).sort()).toEqual(["d1", "d2"]);
     expect(s.history).toHaveLength(1); // one batch, one Undo
   });
 

@@ -7,6 +7,7 @@ import type { AppState } from "./useApp";
 import { figurePublicationSourceUnavailable, resolveLibraryApply } from "./figurePublicationLibrary";
 import { liveWindowDocument } from "./liveWindowDocument";
 import { toast } from "./toasts";
+import { editableFigureByteEstimate } from "./trash";
 import { withPlotWindowDocument } from "./windowDocuments";
 
 // Re-exported so every existing importer (figureLifecycle.test.ts,
@@ -449,10 +450,18 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
     },
     deleteEditableFigure: (documentId) => {
       const state = get();
-      if (!state.editableFigures.some((document) => document.id === documentId)) return;
+      const document = state.editableFigures.find((candidate) => candidate.id === documentId);
+      if (!document) return;
       state.recordHistory("delete figure");
+      // P3.7: captured BEFORE removal, same two-call convention as
+      // removeDatasets (sendToTrash, then the removal set()) — Trash is the
+      // recovery path for this deletion the same way it already is for a
+      // dataset.
+      state.sendEntriesToTrash([
+        { kind: "editableFigure", at: Date.now(), bytes: editableFigureByteEstimate(document), document },
+      ]);
       set((current) => ({
-        editableFigures: current.editableFigures.filter((document) => document.id !== documentId),
+        editableFigures: current.editableFigures.filter((candidate) => candidate.id !== documentId),
         status: "editable figure deleted (Undo to restore)",
       }));
     },

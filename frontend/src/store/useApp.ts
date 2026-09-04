@@ -75,17 +75,17 @@ import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder"
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
-import { folderDeletePatch } from "./folderDelete";
+import { deleteFolderWithTrash } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
 import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
 import { recomputeStaleFits } from "./recalcFits";
-import { removeDatasetsPatch } from "./removeDatasets";
+import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
-import { createTrashSlice, type TrashSlice } from "./trash";
+import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, rowsChangedGuard, type CorrectionsSlice } from "./corrections";
@@ -638,8 +638,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   removeDataset: (id: string) => void;
   removeSelected: () => void;
   // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
-  // distinct from removeSelected, which acts on the transient row selection.
-  removeDatasets: (ids: string[]) => void;
+  // distinct from removeSelected. `{permanent}` (P3.7) bypasses Trash.
+  removeDatasets: (ids: string[], opts?: { permanent?: boolean }) => void;
   // Wipe the whole library (datasets + folders + figures + selection + view
   // state) — the File ▸ Remove all command; reuses loadWorkspace's reset.
   clearAll: () => void;
@@ -1775,11 +1775,7 @@ export const useApp = create<AppState>((set, get) => ({
   },
   // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
   // removeSelected, this doesn't touch/depend on the transient row selection.
-  removeDatasets: (ids) => {
-    get().recordHistory("remove datasets");
-    get().sendToTrash(get().datasets.filter((d) => ids.includes(d.id))); // #32 trash
-    set((s) => removeDatasetsPatch(s, ids)); // shared with deleteWorkbook — see store/removeDatasets.ts
-  },
+  removeDatasets: (ids, opts) => removeDatasetsWithTrash(get, set, ids, opts),
 
   // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
   // (clears per-dataset view state, overlays, styles, folders, figures) with an
@@ -1943,7 +1939,7 @@ export const useApp = create<AppState>((set, get) => ({
     return id;
   },
   renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
-  deleteFolder: (id, mode = "reparent") => (get().recordHistory("delete folder"), set((s) => folderDeletePatch(s, id, mode))),
+  deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
   moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
   moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
   toggleFolderExpanded: (id) =>
@@ -2569,11 +2565,7 @@ export const useApp = create<AppState>((set, get) => ({
         status: `report "${name}" created`,
       };
     }),
-  removeReport: (id) =>
-    set((s) => ({
-      reports: s.reports.filter((r) => r.id !== id),
-      openReportId: s.openReportId === id ? null : s.openReportId,
-    })),
+  removeReport: (id) => removeReportWithTrash(get, set, id),
   renameReport: (id, name) =>
     set((s) => ({
       reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
@@ -2583,7 +2575,7 @@ export const useApp = create<AppState>((set, get) => ({
   addFigureDoc: (doc) => set((s) => ({
     figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
   })),
-  removeFigureDoc: (id) => set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) })),
+  removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
   renameFigureDoc: (id, name) => set((s) => ({
       figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
   })),
