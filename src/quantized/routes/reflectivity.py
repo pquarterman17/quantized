@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
+from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/reflectivity", tags=["reflectivity"])
@@ -66,17 +67,14 @@ def simulate(req: SimulateRequest) -> dict[str, Any]:
     if req.q_max <= req.q_min:
         raise HTTPException(status_code=422, detail="q_max must exceed q_min")
     q = np.linspace(req.q_min, req.q_max, req.n_points)
-    try:
-        r = parratt_refl(
-            q,
-            req.layers,
-            roughness=req.roughness,
-            scale=req.scale,
-            background=req.background,
-            resolution=req.resolution,
-        )
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    r = call_calc(parratt_refl,
+        q,
+        req.layers,
+        roughness=req.roughness,
+        scale=req.scale,
+        background=req.background,
+        resolution=req.resolution,
+    )
     return {"q": to_jsonable(q), "r": to_jsonable(r)}
 
 
@@ -84,8 +82,5 @@ def simulate(req: SimulateRequest) -> dict[str, Any]:
 def sld_profile_route(req: SldProfileRequest) -> dict[str, Any]:
     """SLD(z) depth profile (error-function interfaces) for the layer stack."""
     _validate_layers(req.layers)
-    try:
-        z, sld = sld_profile(req.layers, n_points=req.n_points, padding=req.padding)
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    z, sld = call_calc(sld_profile, req.layers, n_points=req.n_points, padding=req.padding)
     return {"z": to_jsonable(z), "sld": to_jsonable(sld)}

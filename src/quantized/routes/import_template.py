@@ -25,8 +25,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, UploadFile
 
-from quantized.io.origin_project.container import OriginProjectError
 from quantized.io.origin_project.templates import read_origin_template
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
 router = APIRouter(prefix="/api/import/template", tags=["import"])
@@ -78,7 +78,7 @@ def import_template(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"file not found: {path}")
     try:
         return read_origin_template(Path(resolved))
-    except OriginProjectError as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -99,5 +99,5 @@ async def upload_template(file: UploadFile) -> dict[str, Any]:
             return read_origin_template(dest)
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except OriginProjectError as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

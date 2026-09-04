@@ -93,6 +93,7 @@ dev = [
     "lifelines>=0.27",
     # exercise the optional bumps fit engine (GOTO #10) in CI
     "bumps>=1.0",
+    "pytest-xdist>=3.8.0",
 ]
 # Desktop packaging only — used by the release workflow to freeze the server
 # into a self-contained sidecar (tools/bundle/qz-server.spec). Never a runtime
@@ -168,6 +169,7 @@ module = ["scipy.*", "uvicorn.*", "openpyxl.*", "h5py.*", "periodictable.*", "do
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 markers = [
     "golden: compares output against frozen quantized_matlab reference values",
     "realdata: needs the local-only instrument corpus (auto-skips when absent)",

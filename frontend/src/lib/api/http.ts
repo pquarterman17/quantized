@@ -17,6 +17,7 @@
 
 import { postJSONDatasetAware, isDatasetCachePath } from "./datasetCache";
 import { filenameFromDisposition, saveBlob } from "../download";
+import type { paths } from "./schema";
 
 /** Thrown by `ensureOk` on a non-2xx response. A plain `Error` subclass (so
  *  every existing `catch (err) { ... err.message }` site is unaffected) that
@@ -124,4 +125,59 @@ export async function postDownload(path: string, body: unknown, fallbackName: st
   });
   const blob = await (await ensureOk(res)).blob();
   saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
+}
+
+// --- Typed transport over the generated schema (schema.d.ts, `npm run
+// api:types`) ----------------------------------------------------------
+//
+// Bounded on purpose: this adds a typed POST wrapper, not a rewrite of the
+// whole transport. `postJSON` above stays exactly as it is (every existing
+// caller, and datasetCache's interception, is unaffected) — `postApi` is a
+// thin, opt-in layer on top that a domain module reaches for when it wants
+// its request body checked against the backend's actual schema instead of a
+// hand-maintained inline type.
+//
+// `package.json`'s `api:types` generates schema.d.ts with
+// `--default-non-nullable false`: a pydantic field with a default (e.g.
+// `temperature: float = 300.0`) is not in the OpenAPI `required` list, and
+// openapi-typescript's own default (`--default-non-nullable` true) would
+// still type it as a required, non-optional field on the theory that "it's
+// always defined, either you pass it or the default fills in." That
+// reasoning is about the value the SERVER sees, not the shape a CLIENT may
+// send — every wrapper in this codebase already treats such fields as
+// optional JS parameters, and `JSON.stringify` drops an explicit
+// `undefined` the same as an omitted key, so `--default-non-nullable false`
+// (fields without a `required` entry stay `?:`) is what actually matches
+// how these routes are called.
+
+/** Every backend path that accepts a POST — the shape `postJSON`/`postApi`
+ *  actually exercise. (A path with no `post` operation, e.g. a GET-only
+ *  route, is excluded; `getJSON` callers don't need this indexing.) */
+export type ApiPath = {
+  [P in keyof paths]: paths[P] extends { post: unknown } ? P : never;
+}[keyof paths];
+
+type PostOperation<P extends ApiPath> = paths[P] extends { post: infer Op } ? Op : never;
+
+/** The JSON request body type FastAPI/openapi-typescript declared for a POST
+ *  path's `application/json` body. */
+export type RequestBodyOf<P extends ApiPath> =
+  PostOperation<P> extends { requestBody?: { content: { "application/json": infer B } } } ? B : never;
+
+/** The 200-response JSON type for a POST path. Most backend routes declare
+ *  no `response_model` yet (see MeanFreePathRequest & friends in
+ *  schema.d.ts), so openapi-typescript infers `{ [key: string]: unknown }`
+ *  for those bodies — `ResponseOf` is exactly that honest: "whatever shape
+ *  the backend documents today," not a promise every field is typed. As
+ *  routes gain response models this type sharpens for free, with no change
+ *  needed here. */
+export type ResponseOf<P extends ApiPath> =
+  PostOperation<P> extends { responses: { 200: { content: { "application/json": infer R } } } } ? R : unknown;
+
+/** Typed sibling of `postJSON`: the path must be a real backend POST route,
+ *  and `body` must match that route's declared request schema. Delegates to
+ *  `postJSON` unchanged (same dataset-cache interception, same error
+ *  behavior) — this only narrows the two type parameters at the call site. */
+export function postApi<P extends ApiPath>(path: P, body: RequestBodyOf<P>, signal?: AbortSignal): Promise<ResponseOf<P>> {
+  return postJSON<ResponseOf<P>>(path, body, signal);
 }

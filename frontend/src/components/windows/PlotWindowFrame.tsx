@@ -29,6 +29,7 @@ import { type PlotWindow, type WindowGeometry } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { snapMovePosition, snapResizeSize } from "../../lib/windowSnap";
 import { useApp } from "../../store/useApp";
+import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { DATASET_DND } from "../Library/dnd";
 import { Badge } from "../primitives";
 import WindowTitleButtons from "./WindowTitleButtons";
@@ -88,12 +89,12 @@ export default function PlotWindowFrame({
   bounds,
   children,
 }: PlotWindowFrameProps) {
-  const moveWindow = useApp((s) => s.moveWindow);
-  const resizeWindow = useApp((s) => s.resizeWindow);
-  const focusWindow = useApp((s) => s.focusWindow);
-  const toggleMaximizeWindow = useApp((s) => s.toggleMaximizeWindow);
-  const renameWindow = useApp((s) => s.renameWindow);
-  const rebindWindow = useApp((s) => s.rebindWindow);
+  const moveWindow = useWindowsStore((s) => s.moveWindow);
+  const resizeWindow = useWindowsStore((s) => s.resizeWindow);
+  const focusWindow = useWindowsStore((s) => s.focusWindow);
+  const toggleMaximizeWindow = useWindowsStore((s) => s.toggleMaximizeWindow);
+  const renameWindow = useWindowsStore((s) => s.renameWindow);
+  const rebindWindow = useWindowsStore((s) => s.rebindWindow);
   const activeDrag = useApp((s) => s.activeDrag);
 
   // Item 14: this frame is a drop target for a Library dataset drag

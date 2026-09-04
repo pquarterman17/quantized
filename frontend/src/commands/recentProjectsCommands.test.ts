@@ -88,7 +88,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(readProject).toHaveBeenCalledWith("/p/workspace.dwk");
     expect(askConfirm).not.toHaveBeenCalled();
   });
@@ -98,7 +98,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
     expect(useApp.getState().projectDirty).toBe(false);
   });
@@ -110,7 +110,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     useApp.setState({ datasets: [{ id: "a", name: "a.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }] });
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(askConfirm).toHaveBeenCalledOnce();
   });
 
@@ -123,7 +123,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     const recent = useRecentProjects.getState().recentProjects;
     expect(recent).toHaveLength(1); // deduped by path — refreshed, not doubled
     expect(recent[0].path).toBe("/p/workspace.dwk");
@@ -139,7 +139,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     const before = useRecentProjects.getState().recentProjects[0].at;
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(askConfirm).toHaveBeenCalledOnce();
     expect(useRecentProjects.getState().recentProjects[0].at).toBe(before); // untouched
   });
@@ -148,7 +148,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(pathState).mockResolvedValue("offline");
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/mnt/share/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/mnt/share/workspace.dwk").run());
+    await act(async () => { action("recent-project-/mnt/share/workspace.dwk").run(); });
     expect(readProject).not.toHaveBeenCalled();
     expect(useToasts.getState().toasts.some((t) => /not available right now/.test(t.msg))).toBe(true);
   });
@@ -157,7 +157,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(pathState).mockResolvedValue("missing");
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(readProject).not.toHaveBeenCalled();
     expect(useToasts.getState().toasts.some((t) => /not found at its saved location/.test(t.msg))).toBe(true);
   });
@@ -167,7 +167,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     vi.mocked(readProject).mockResolvedValue(null);
     useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
     renderHook(() => useRecentProjectsCommands());
-    await act(() => action("recent-project-/p/workspace.dwk").run());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(useToasts.getState().toasts.some((t) => /could not be reopened/.test(t.msg))).toBe(true);
   });
 });

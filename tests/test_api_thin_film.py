@@ -7,12 +7,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from quantized.app import app
 
-client = TestClient(app)
-
-
-def test_scherrer_card_defaults() -> None:
+def test_scherrer_card_defaults(client: TestClient) -> None:
     r = client.post(
         "/api/thin-film/scherrer",
         json={"fwhm_deg": 0.5, "wavelength": 1.5406, "two_theta_deg": 33.0},
@@ -21,7 +17,7 @@ def test_scherrer_card_defaults() -> None:
     assert r.json()["D"] == pytest.approx(165.70975176473607, rel=1e-12)
 
 
-def test_scherrer_rejects_zero_fwhm() -> None:
+def test_scherrer_rejects_zero_fwhm(client: TestClient) -> None:
     r = client.post(
         "/api/thin-film/scherrer",
         json={"fwhm_deg": 0.0, "wavelength": 1.5406, "two_theta_deg": 33.0},
@@ -29,13 +25,13 @@ def test_scherrer_rejects_zero_fwhm() -> None:
     assert r.status_code == 422
 
 
-def test_sauerbrey_5mhz_sensitivity_factor() -> None:
+def test_sauerbrey_5mhz_sensitivity_factor(client: TestClient) -> None:
     r = client.post("/api/thin-film/sauerbrey", json={"delta_f": -10.0, "f0": 5e6})
     assert r.status_code == 200
     assert r.json()["Cf_hz_cm2_ug"] == pytest.approx(56.6, abs=0.05)
 
 
-def test_sauerbrey_with_area_and_density() -> None:
+def test_sauerbrey_with_area_and_density(client: TestClient) -> None:
     r = client.post(
         "/api/thin-film/sauerbrey",
         json={"delta_f": -10.0, "f0": 5e6, "area": 1.0, "density": 2.0},
@@ -46,19 +42,19 @@ def test_sauerbrey_with_area_and_density() -> None:
     assert body["thickness_nm"] == pytest.approx(body["thickness"] * 1e7, rel=1e-9)
 
 
-def test_sauerbrey_rejects_nonpositive_f0() -> None:
+def test_sauerbrey_rejects_nonpositive_f0(client: TestClient) -> None:
     r = client.post("/api/thin-film/sauerbrey", json={"delta_f": -10.0, "f0": 0.0})
     assert r.status_code == 422
 
 
-def test_sauerbrey_extreme_finite_input_is_422_not_500() -> None:
+def test_sauerbrey_extreme_finite_input_is_422_not_500(client: TestClient) -> None:
     """Regression: f0=1e308 overflowed calc.thin_film.sauerbrey's f0**2 term,
     an uncaught OverflowError escaping the route's old `except ValueError`."""
     r = client.post("/api/thin-film/sauerbrey", json={"delta_f": 1.0, "f0": 1e308})
     assert r.status_code == 422, r.text
 
 
-def test_kiessig_thickness_extreme_finite_input_is_422_not_500() -> None:
+def test_kiessig_thickness_extreme_finite_input_is_422_not_500(client: TestClient) -> None:
     """Regression: a huge delta_q with an sld correction overflows
     calc.thin_film.kiessig_thickness's delta_q**2 term."""
     r = client.post("/api/thin-film/kiessig-thickness", json={"delta_q": 1e308, "sld": 1.0})

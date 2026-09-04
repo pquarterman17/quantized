@@ -35,6 +35,7 @@ from quantized.io.origin_project.graph_preview import (
 )
 from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
+from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import datastruct_payload, jsonify
 from quantized.routes._uploadcache import stage_upload_stream
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
@@ -306,7 +307,7 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
         return _import_with_books(Path(safe_path), full_books=req.full_books)
-    except (ValueError, ArithmeticError, KeyError, OSError) as exc:
+    except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -340,5 +341,5 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> dict[str, A
             return _import_with_books(dest, full_books=full_books)
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, KeyError, OSError) as exc:
+    except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

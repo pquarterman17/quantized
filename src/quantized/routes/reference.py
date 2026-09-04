@@ -15,6 +15,7 @@ from quantized.calc.constants import constants, constants_by_system
 from quantized.calc.element_data import by_symbol, element_data
 from quantized.calc.unit_convert import unit_convert
 from quantized.calc.units_data import UNIT_CATEGORIES
+from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/reference", tags=["reference"])
@@ -62,10 +63,7 @@ def get_element(symbol: str) -> dict[str, Any]:
 @router.post("/convert")
 def convert(req: ConvertRequest) -> dict[str, Any]:
     """Convert a value between unit expressions (e.g. ``Oe`` -> ``T``)."""
-    try:
-        result, info = unit_convert(req.value, req.from_unit, req.to_unit)
-    except (ValueError, ArithmeticError, KeyError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result, info = call_calc(unit_convert, req.value, req.from_unit, req.to_unit)
     return {"result": to_jsonable(result), "info": to_jsonable(info)}
 
 

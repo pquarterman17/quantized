@@ -75,7 +75,7 @@ export function useCurveFitByLevel(
     }
     let cancelled = false;
     setBusy(true);
-    Promise.all(
+    void Promise.all(
       byPartition.levels.map(async (lvl): Promise<CurveFitLevelResult> => {
         const xv = xKey == null ? lvl.data.time : lvl.data.values.map((row) => row[xKey]);
         const yv = lvl.data.values.map((row) => row[yKey]);

@@ -325,7 +325,7 @@ export default function DatasetRow({
             title="Duplicate"
             onClick={(e) => {
               e.stopPropagation();
-              duplicateDataset(d.id);
+              void duplicateDataset(d.id);
             }}
           >
             ⧉

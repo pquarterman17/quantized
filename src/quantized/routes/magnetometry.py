@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc.magnetometry import (
@@ -17,6 +17,7 @@ from quantized.calc.magnetometry import (
     subtract_hysteresis_background,
     subtract_mag_background,
 )
+from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/magnetometry", tags=["magnetometry"])
@@ -58,31 +59,25 @@ class ConvertUnitsRequest(BaseModel):
 @router.post("/hysteresis")
 def hysteresis(req: HysteresisRequest) -> dict[str, Any]:
     """Analyze an M-H loop -> Hc / Mr / Ms / squareness / loop area / SFD."""
-    try:
-        result = hysteresis_analysis(
-            req.h,
-            req.m,
-            saturation_fraction=req.saturation_fraction,
-            pre_smooth=req.pre_smooth,
-            virgin_detect=req.virgin_detect,
-        )
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = call_calc(hysteresis_analysis,
+        req.h,
+        req.m,
+        saturation_fraction=req.saturation_fraction,
+        pre_smooth=req.pre_smooth,
+        virgin_detect=req.virgin_detect,
+    )
     return to_jsonable(result)  # type: ignore[no-any-return]
 
 
 @router.post("/subtract-background")
 def subtract_background(req: SubtractBgRequest) -> dict[str, Any]:
     """Subtract a linear high-T background from M(T)."""
-    try:
-        corrected, slope, intercept = subtract_mag_background(
-            req.temperature,
-            req.moment,
-            fit_range=req.fit_range,
-            auto_fraction=req.auto_fraction,
-        )
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    corrected, slope, intercept = call_calc(subtract_mag_background,
+        req.temperature,
+        req.moment,
+        fit_range=req.fit_range,
+        auto_fraction=req.auto_fraction,
+    )
     return {
         "corrected": to_jsonable(corrected),
         "slope": to_jsonable(slope),
@@ -95,12 +90,9 @@ def subtract_hysteresis_bg(req: HysteresisBgRequest) -> dict[str, Any]:
     """Remove a linear dia/paramagnetic background from an M-H loop and centre it
     vertically (per-tail slope + saturation-midpoint offset, so no vertical shift
     remains)."""
-    try:
-        corrected, slope, offset = subtract_hysteresis_background(
-            req.h, req.m, hi_fraction=req.hi_fraction, min_points=req.min_points
-        )
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    corrected, slope, offset = call_calc(subtract_hysteresis_background,
+        req.h, req.m, hi_fraction=req.hi_fraction, min_points=req.min_points
+    )
     return {
         "corrected": to_jsonable(corrected),
         "slope": to_jsonable(slope),
@@ -111,19 +103,16 @@ def subtract_hysteresis_bg(req: HysteresisBgRequest) -> dict[str, Any]:
 @router.post("/convert-units")
 def convert_units(req: ConvertUnitsRequest) -> dict[str, Any]:
     """Convert field (x) + moment (y) units (sample-aware)."""
-    try:
-        x_out, y_out, x_unit, y_unit, warning = convert_mag_units(
-            req.x,
-            req.y,
-            from_field=req.from_field,
-            to_field=req.to_field,
-            from_moment=req.from_moment,
-            to_moment=req.to_moment,
-            sample_mass=req.sample_mass,
-            sample_volume=req.sample_volume,
-        )
-    except (ValueError, ArithmeticError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    x_out, y_out, x_unit, y_unit, warning = call_calc(convert_mag_units,
+        req.x,
+        req.y,
+        from_field=req.from_field,
+        to_field=req.to_field,
+        from_moment=req.from_moment,
+        to_moment=req.to_moment,
+        sample_mass=req.sample_mass,
+        sample_volume=req.sample_volume,
+    )
     return {
         "x": to_jsonable(np.asarray(x_out, dtype=float)),
         "y": to_jsonable(np.asarray(y_out, dtype=float)),

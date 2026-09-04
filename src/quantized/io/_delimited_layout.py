@@ -20,13 +20,60 @@ import numpy as np
 
 __all__ = [
     "_datetime_epoch",
+    "_detect_delimiter",
     "_detect_layout",
     "_is_numeric",
+    "_is_numeric_like",
     "_looks_like_units_row",
     "_numeric_score",
+    "_to_float",
 ]
 
 _SCORE_CHUNK_ROWS = 4096
+
+# Shared across every delimited-text reader (delimited.py, sims.py, qd.py,
+# lakeshore.py): a `,`/tab/`;`/space plurality vote over the first 10 lines.
+_DELIM_CANDIDATES = (",", "\t", ";", " ")
+
+
+def _detect_delimiter(raw_lines: Sequence[str]) -> str:
+    """Pick the delimiter whose per-line count is both present on every
+    sampled line and least variable -- a plurality vote, not a strict
+    majority, so a ragged preamble line doesn't disqualify the real
+    delimiter by itself (see the ``std < mean * 0.5`` consistency check).
+    Defaults to comma when nothing qualifies (e.g. every candidate is
+    absent from at least one of the first 10 lines)."""
+    test = raw_lines[:10]
+    best_delim = ","
+    best_score = 0.0
+    for ch in _DELIM_CANDIDATES:
+        counts = [line.count(ch) for line in test]
+        if counts and all(c > 0 for c in counts):
+            mean = sum(counts) / len(counts)
+            std = (sum((c - mean) ** 2 for c in counts) / len(counts)) ** 0.5
+            if std < mean * 0.5 and mean > best_score:
+                best_score = mean
+                best_delim = ch
+    return best_delim
+
+
+def _to_float(token: str) -> float:
+    """Best-effort ``str`` -> ``float``; never raises.
+
+    Anything ``float()`` rejects -- an empty cell, an NA spelling ("na",
+    "-", "n/a", ...), stray text -- becomes NaN. A literal "nan"/"inf"
+    spelling is handled by ``float()`` itself, so no separate NA-token
+    table is needed: every spelling a hand-rolled pre-check could catch is,
+    by construction, also one ``float()`` itself rejects (verified for the
+    5 near-identical copies this consolidates: ``delimited._to_float``'s
+    former ``_NA_TOKENS`` pre-check, ``sims``/``qd``/``lakeshore``'s bare
+    empty-string guard, and ``ncnr``'s former ``_safe_float`` with no guard
+    at all -- all four were behaviourally this exact function already).
+    """
+    try:
+        return float(token.strip())
+    except ValueError:
+        return float("nan")
 
 
 def _is_numeric(token: str) -> bool:
@@ -48,10 +95,10 @@ def _is_numeric_like(token: str) -> bool:
     ``_numeric_score``'s row-CLASSIFICATION heuristic, meant a data row
     with one missing numeric cell scored as if that cell were text. This
     app's own writers emit literal ``"nan"`` for a missing value
-    (``io.delimited._to_float``, ``io.origin_project.writer``), so the
-    reader's layout scorer must accept its own output. Used ONLY by
+    (``_to_float`` above, ``io.origin_project.writer``), so the reader's
+    layout scorer must accept its own output. Used ONLY by
     ``_numeric_score``/``_score_chunk`` below -- never by the actual
-    string -> float data conversion path (``_convert_column``/
+    string -> float data conversion path (``delimited._convert_column``/
     ``_to_float``), which still must turn "nan" into NaN, not reject it,
     and never by ``_looks_like_units_row``, which keeps the original
     str2double-parity ``_is_numeric``.

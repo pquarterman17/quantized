@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._delimited_layout import _to_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, resolve_column
 
 __all__ = ["import_lake_shore", "is_lakeshore_file"]
@@ -32,16 +33,6 @@ def _is_nan_token(token: str) -> bool:
         return False
     except ValueError:
         return True
-
-
-def _to_float(token: str) -> float:
-    token = token.strip()
-    if not token:
-        return float("nan")
-    try:
-        return float(token)
-    except ValueError:
-        return float("nan")
 
 
 def _detect_header_row(lines: Sequence[str]) -> int:

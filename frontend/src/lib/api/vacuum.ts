@@ -4,8 +4,16 @@
 // only) calculator set into the eager bundle purely by file co-location.
 // NOT re-exported by lib/api.ts (zero headroom there); VacuumTab imports
 // directly from this path.
+//
+// Typed-transport pattern (`postApi`, over the generated schema.d.ts):
+// request bodies below are checked against the backend's actual pydantic
+// models (a wrong/missing/misspelled field is a `tsc` error, not a runtime
+// 422). Responses are cast — none of these routes declares a
+// `response_model` yet, so the schema only promises `{ [key: string]:
+// unknown }` back; the cast documents the shape this module has always
+// hand-maintained, same as every other wrapper here before the migration.
 
-import { postJSON } from "./http";
+import { postApi } from "./http";
 
 /** Mean free path λ = kT/(√2·π·d²·P) (m / mm / µm). P in Pa, T in K, d in m. */
 export function vacuumMeanFreePath(
@@ -13,7 +21,14 @@ export function vacuumMeanFreePath(
   temperature?: number,
   d?: number,
 ): Promise<{ mfp: number; mfpMm: number; mfpUm: number; P: number; T: number; d: number }> {
-  return postJSON("/api/vacuum/mean-free-path", { p, temperature, d });
+  return postApi("/api/vacuum/mean-free-path", { p, temperature, d }) as Promise<{
+    mfp: number;
+    mfpMm: number;
+    mfpUm: number;
+    P: number;
+    T: number;
+    d: number;
+  }>;
 }
 
 /** Monolayer formation time from impingement flux. P in Pa. */
@@ -23,7 +38,12 @@ export function vacuumMonolayerTime(
   temperature?: number,
   aSite?: number,
 ): Promise<{ tMono: number; flux: number; P: number; T: number }> {
-  return postJSON("/api/vacuum/monolayer-time", { p, m, temperature, a_site: aSite });
+  return postApi("/api/vacuum/monolayer-time", { p, m, temperature, a_site: aSite }) as Promise<{
+    tMono: number;
+    flux: number;
+    P: number;
+    T: number;
+  }>;
 }
 
 /** Knudsen number Kn = λ/L and the resulting flow regime. */
@@ -31,7 +51,12 @@ export function vacuumKnudsen(
   mfp: number,
   length: number,
 ): Promise<{ Kn: number; regime: string; mfp: number; L: number }> {
-  return postJSON("/api/vacuum/knudsen", { mfp, length });
+  return postApi("/api/vacuum/knudsen", { mfp, length }) as Promise<{
+    Kn: number;
+    regime: string;
+    mfp: number;
+    L: number;
+  }>;
 }
 
 /** Pump-down time t = (V/S)·ln(P0/Pf). */
@@ -49,7 +74,15 @@ export function vacuumPumpDownTime(
   P0: number;
   Pf: number;
 }> {
-  return postJSON("/api/vacuum/pump-down", { v, s, p0, pf });
+  return postApi("/api/vacuum/pump-down", { v, s, p0, pf }) as Promise<{
+    time: number;
+    timeMin: number;
+    tau: number;
+    V: number;
+    S: number;
+    P0: number;
+    Pf: number;
+  }>;
 }
 
 /** Sputter yield (atoms/ion) for a material + ion at a given energy (eV). */
@@ -58,7 +91,12 @@ export function vacuumSputterYield(
   energy: number,
   ion?: string,
 ): Promise<{ Y: number; material: string; ion: string; energy: number }> {
-  return postJSON("/api/vacuum/sputter-yield", { material, energy, ion });
+  return postApi("/api/vacuum/sputter-yield", { material, energy, ion }) as Promise<{
+    Y: number;
+    material: string;
+    ion: string;
+    energy: number;
+  }>;
 }
 
 /** Gas-flow conductance (molecular + viscous) and throughput. */
@@ -70,5 +108,11 @@ export function vacuumGasFlow(
   temperature?: number,
   m?: number,
 ): Promise<{ Cmol: number; Cvisc: number; throughput: number; Kn: number; regime: string }> {
-  return postJSON("/api/vacuum/gas-flow", { p1, p2, d, length, temperature, m });
+  return postApi("/api/vacuum/gas-flow", { p1, p2, d, length, temperature, m }) as Promise<{
+    Cmol: number;
+    Cvisc: number;
+    throughput: number;
+    Kn: number;
+    regime: string;
+  }>;
 }

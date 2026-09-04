@@ -131,7 +131,12 @@ flow — the project doesn't exist until the first publish):
 1. **Bump the version everywhere — a correct release commit touches
    EIGHT files** (verified against the v0.13.0 release commit; the three
    lockfiles record the project version too, and a stale one fails the
-   `--locked` CI builds):
+   `--locked` CI builds). Run `tools/bump_version.py` — it makes all eight
+   edits in one shot:
+
+   ```bash
+   uv run python tools/bump_version.py 0.25.0            # or --dry-run first
+   ```
 
    Five declarations (`tests/test_version_consistency.py` enforces they
    agree):
@@ -142,13 +147,17 @@ flow — the project doesn't exist until the first publish):
    - `frontend/package.json` → `version`
 
    Three lockfiles, regenerated with their own tools (each diff is just
-   the project's own version line):
+   the project's own version line) — `tools/bump_version.py` runs these for
+   you, or run them by hand:
 
    ```bash
    uv lock                                            # uv.lock
    cd frontend && npm install --package-lock-only     # package-lock.json
    cd src-tauri && cargo update -w --offline          # Cargo.lock
    ```
+
+   Also update `CHANGELOG.md`: move the `[Unreleased]` items under a new
+   `## [X.Y.Z] - YYYY-MM-DD` heading.
 
 2. **Commit + tag + push:**
 

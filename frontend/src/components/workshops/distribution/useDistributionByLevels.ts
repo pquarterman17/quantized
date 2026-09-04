@@ -122,7 +122,7 @@ export function useDistributionByLevels(
     }
     let cancelled = false;
     setBusy(true);
-    Promise.all(
+    void Promise.all(
       byPartition.levels.map(async (lvl): Promise<DistributionLevelResult> => {
         const vals = colValues(lvl.data, col).filter((v) => Number.isFinite(v));
         const [h, d, s] = await Promise.allSettled([

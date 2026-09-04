@@ -15,7 +15,10 @@ from typing import Any
 
 import numpy as np
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from quantized.app import create_app
 from quantized.datastruct import DataStruct
 from quantized.security import ALLOWED_HOSTS
 
@@ -53,6 +56,19 @@ def _resolve_test_data_corpus() -> Path:
 
 # Local-only, like the MATLAB corpus — tests using it carry @pytest.mark.realdata.
 TEST_DATA_CORPUS = _resolve_test_data_corpus()
+
+
+@pytest.fixture(scope="session")
+def app() -> FastAPI:
+    """A single session-scoped FastAPI instance for tests that just need
+    ``client.get/post`` against the real app — avoids re-building the app
+    (routers, plugin loading) once per test module."""
+    return create_app()
+
+
+@pytest.fixture
+def client(app: FastAPI) -> TestClient:
+    return TestClient(app)
 
 
 @pytest.fixture
