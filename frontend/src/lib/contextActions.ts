@@ -23,14 +23,9 @@
 // #1).
 
 import { multiSelected } from "./multiSelected";
-import {
-  applyActiveCorrectionsToFolder,
-  exportFolderCsv,
-  openFolderProperties,
-  removeFolderWithDatasets,
-  runTemplateOnFolder,
-  selectFolderContents,
-} from "../components/Library/folderOps";
+// folderOps (and the pipeline runner + template libs it pulls in) load on
+// the click, not at launch: every use is inside a `run` (bundle-size ratchet).
+const folderOps = () => import("../components/Library/folderOps");
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { plotInNewWindow } from "./plotInNewWindow";
@@ -366,7 +361,7 @@ export const folderCoreActions: ContextAction<FolderActionTarget>[] = [
     },
   },
   { id: "folder.rename", label: "Rename…", run: (t) => t.onRename() },
-  { id: "folder.properties", label: "Properties…", run: (t) => void openFolderProperties(t.folder) },
+  { id: "folder.properties", label: "Properties…", run: (t) => void folderOps().then((m) => m.openFolderProperties(t.folder)) },
 ];
 
 // ── bulk ops over the whole subtree (project-organization plan item 8) ──
@@ -375,25 +370,25 @@ export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
     id: "folder.selectAll",
     label: (t) => `Select all in folder (${t.count})`,
     enabled: (t) => t.count > 0,
-    run: (t) => selectFolderContents(t.folder),
+    run: (t) => void folderOps().then((m) => m.selectFolderContents(t.folder)),
   },
   {
     id: "folder.exportCsv",
     label: "Export folder as consolidated CSV",
     enabled: (t) => t.count > 0,
-    run: (t) => void exportFolderCsv(t.folder),
+    run: (t) => void folderOps().then((m) => m.exportFolderCsv(t.folder)),
   },
   {
     id: "folder.applyActiveCorrections",
     label: (t) => `Apply active corrections to folder (${t.count})`,
     hidden: (t) => t.count === 0 || !activeDataset()?.corrections,
-    run: (t) => void applyActiveCorrectionsToFolder(t.folder),
+    run: (t) => void folderOps().then((m) => m.applyActiveCorrectionsToFolder(t.folder)),
   },
   {
     id: "folder.runTemplate",
     label: "Run analysis template on folder…",
     hidden: (t) => t.count === 0 || loadTemplates().length === 0,
-    run: (t) => void runTemplateOnFolder(t.folder),
+    run: (t) => void folderOps().then((m) => m.runTemplateOnFolder(t.folder)),
   },
 ];
 
@@ -418,7 +413,7 @@ export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
       message: "This can't be undone.",
       confirmLabel: "Delete",
     }),
-    run: (t) => removeFolderWithDatasets(t.folder),
+    run: (t) => void folderOps().then((m) => m.removeFolderWithDatasets(t.folder)),
   },
 ];
 
