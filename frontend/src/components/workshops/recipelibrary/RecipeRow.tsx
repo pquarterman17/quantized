@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { recipeDetails } from "../../../lib/recipeDetails";
+import { recipeDetails, type RecipeDetails as RecipeDetailsData } from "../../../lib/recipeDetails";
 import { setFavorite, setTags } from "../../../lib/recipeIndex";
 import {
   RECIPE_KIND_LABEL,
@@ -32,9 +32,18 @@ export function rowKey(ref: RecipeRef): string {
   return `${ref.kind}:${ref.scope}:${ref.id}`;
 }
 
+interface DetailsCache {
+  key: string;
+  plotProject: RecipeSourceInput["plotProject"];
+  plotGlobal: RecipeSourceInput["plotGlobal"];
+  quickPlot: RecipeSourceInput["quickPlot"];
+  value: RecipeDetailsData | null;
+}
+
 export function RecipeRow({
   row,
   sources,
+  revision,
   refresh,
   onResult,
   busy,
@@ -48,6 +57,11 @@ export function RecipeRow({
    *  so `recipeDetails` can locate the underlying record without a second,
    *  possibly-inconsistent read of the workspace-backed kinds. */
   sources: RecipeSourceInput;
+  /** The panel's mutation counter — bumps on every library-level change
+   *  (favorite, tag, rename, import, delete). It is the cache key for the
+   *  Details disclosure below, so the four name-keyed systems' storage is
+   *  re-read when something actually changed, not on every re-render. */
+  revision: number;
   /** Re-render the panel. ONE mechanism serves both a sidecar change and a
    *  change to a recipe system itself, because `collectRecipes` is called on
    *  every render and re-reads every source — so a re-render IS a re-read.
@@ -140,6 +154,39 @@ export function RecipeRow({
       queueMicrotask(() => nameButtonRef.current?.focus());
     }
   };
+
+  // `recipeDetails` re-reads (and JSON.parses) a name-keyed kind's whole
+  // localStorage list. The panel re-renders every row on every `busy` flip,
+  // so an expanded row would otherwise pay that read for output that only
+  // changes when the library does (self-review on #290). Cache per (row key,
+  // panel revision, store snapshot): `revision` covers every library-driven
+  // change; the three store arrays' identities cover a workspace-backed
+  // record changing underneath. Collapsing the disclosure drops the cache,
+  // so reopening always re-reads.
+  const detailsCache = useRef<DetailsCache | null>(null);
+  let details: RecipeDetailsData | null = null;
+  if (detailsOpen) {
+    const key = `${rowKey(row.ref)}\u0000${revision}`;
+    const c = detailsCache.current;
+    const fresh =
+      c !== null &&
+      c.key === key &&
+      c.plotProject === sources.plotProject &&
+      c.plotGlobal === sources.plotGlobal &&
+      c.quickPlot === sources.quickPlot;
+    if (!fresh) {
+      detailsCache.current = {
+        key,
+        plotProject: sources.plotProject,
+        plotGlobal: sources.plotGlobal,
+        quickPlot: sources.quickPlot,
+        value: recipeDetails(row, sources),
+      };
+    }
+    details = detailsCache.current!.value;
+  } else {
+    detailsCache.current = null;
+  }
 
   return (
     <li className="qz-recipe-library-row">
@@ -275,7 +322,7 @@ export function RecipeRow({
       <RecipeRowActions row={row} onChanged={refresh} onResult={onResult}
         busy={busy} setBusy={setBusy}
         onRename={supportsOperation(row.kind, "rename") ? openNameEditor : undefined} />
-      {detailsOpen && <RecipeDetails id={detailsId} details={recipeDetails(row, sources)} />}
+      {detailsOpen && <RecipeDetails id={detailsId} details={details} />}
     </li>
   );
 }

@@ -28,6 +28,27 @@ export interface PeakRecipe {
 export const PEAK_SHAPES = ["Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV"] as const;
 export const PEAK_LINK_MODES = ["None", "Shared FWHM", "Shared FWHM + eta"] as const;
 
+/** The wizard's per-field edit rules (steps.tsx applies these to every typed
+ *  value BEFORE `patchRecipe`), kept pure so they can be unit-tested and so
+ *  the recipe-file importer (lib/nameKeyedRecipes.ts) can mirror exactly the
+ *  same bounds: a recipe this app saved must always re-import. `null` means
+ *  "reject the edit, keep the previous value" — used for the fields with an
+ *  open interval where no clamp target exists (ALS `lam` > 0, ALS `p` in
+ *  (0, 1) per calc/baseline.py's baseline_als, region width > 0). Integer
+ *  counts/orders round, then clamp at their floor (rolling-ball radius >= 1
+ *  point, modpoly order >= 0, max peaks >= 1, background degree >= 0);
+ *  thresholds clamp at 0. */
+export const peakClamp = {
+  lam: (v: number): number | null => (v > 0 ? v : null),
+  p: (v: number): number | null => (v > 0 && v < 1 ? v : null),
+  radius: (v: number): number => Math.max(1, Math.round(v)),
+  order: (v: number): number => Math.max(0, Math.round(v)),
+  snrThreshold: (v: number): number => Math.max(0, v),
+  maxPeaks: (v: number): number => Math.max(1, Math.round(v)),
+  bgDegree: (v: number): number => Math.max(0, Math.round(v)),
+  regionWidth: (v: number): number | null => (v > 0 ? v : null),
+} as const;
+
 export const DEFAULT_RECIPE: PeakRecipe = {
   version: 1,
   name: "",

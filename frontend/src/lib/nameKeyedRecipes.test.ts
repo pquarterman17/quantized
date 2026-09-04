@@ -362,17 +362,17 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
   it("refuses a peak recipe that is well-typed but semantically unusable (review round 3 on #290)", () => {
     const cases: [string, Record<string, unknown>, RegExp][] = [
       ["reversed range", { range: { lo: 40, hi: 20 } }, /range: lo > hi/],
-      ["lam <= 0", { baseline: { ...DEFAULT_RECIPE.baseline, lam: 0 } }, /baseline\.lam/],
-      ["p > 1", { baseline: { ...DEFAULT_RECIPE.baseline, p: 1.5 } }, /baseline\.p/],
-      ["negative p", { baseline: { ...DEFAULT_RECIPE.baseline, p: -0.1 } }, /baseline\.p/],
+      ["lam <= 0", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", lam: 0 } }, /baseline\.lam/],
+      ["p > 1", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 1.5 } }, /baseline\.p/],
+      ["negative p", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: -0.1 } }, /baseline\.p/],
       // baseline_als (calc/baseline.py) raises unless 0 < p < 1 — the closed
       // ends are exactly the "imports, then fails on first use" case.
-      ["p = 0", { baseline: { ...DEFAULT_RECIPE.baseline, p: 0 } }, /baseline\.p/],
-      ["p = 1", { baseline: { ...DEFAULT_RECIPE.baseline, p: 1 } }, /baseline\.p/],
-      ["fractional radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 2.5 } }, /baseline\.radius/],
-      ["zero radius", { baseline: { ...DEFAULT_RECIPE.baseline, radius: 0 } }, /baseline\.radius/],
-      ["negative order", { baseline: { ...DEFAULT_RECIPE.baseline, order: -1 } }, /baseline\.order/],
-      ["fractional order", { baseline: { ...DEFAULT_RECIPE.baseline, order: 1.5 } }, /baseline\.order/],
+      ["p = 0", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 0 } }, /baseline\.p/],
+      ["p = 1", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 1 } }, /baseline\.p/],
+      ["fractional radius", { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", radius: 2.5 } }, /baseline\.radius/],
+      ["zero radius", { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", radius: 0 } }, /baseline\.radius/],
+      ["negative order", { baseline: { ...DEFAULT_RECIPE.baseline, method: "modpoly", order: -1 } }, /baseline\.order/],
+      ["fractional order", { baseline: { ...DEFAULT_RECIPE.baseline, method: "modpoly", order: 1.5 } }, /baseline\.order/],
       ["negative snr", { find: { ...DEFAULT_RECIPE.find, snr_threshold: -3 } }, /find\.snr_threshold/],
       ["negative prominence", { find: { ...DEFAULT_RECIPE.find, min_prominence: -0.5 } }, /find\.min_prominence/],
       ["max_peaks -1.5", { find: { ...DEFAULT_RECIPE.find, max_peaks: -1.5 } }, /find\.max_peaks/],
@@ -382,14 +382,72 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
       ["unknown link mode", { model: { ...DEFAULT_RECIPE.model, linkMode: "Shared everything" } }, /model\.linkMode/],
       ["negative bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: -1 } }, /model\.bgDegree/],
       ["fractional bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: 1.5 } }, /model\.bgDegree/],
-      ["zero regionWidth", { report: { ...DEFAULT_RECIPE.report, regionWidth: 0 } }, /report\.regionWidth/],
-      ["negative regionWidth", { report: { ...DEFAULT_RECIPE.report, regionWidth: -3 } }, /report\.regionWidth/],
+      ["zero regionWidth", { report: { mode: "integrate", regionWidth: 0 } }, /report\.regionWidth/],
+      ["negative regionWidth", { report: { mode: "integrate", regionWidth: -3 } }, /report\.regionWidth/],
     ];
     for (const [label, patch, reason] of cases) {
       const r = importNameKeyed("peak", peakJson(patch));
       expect(r, label).toMatchObject({ ok: false, reason: expect.stringMatching(reason) });
     }
     expect(loadPeakRecipes()).toEqual([]);
+  });
+
+  it("applies a semantic rule only to the fields the selected method / mode reads, but type-checks every field (self-review on #290)", () => {
+    // The wizard keeps whatever was typed for a method the user switched
+    // AWAY from (rolling-ball radius 0.5, then ALS), and ALS never reads it —
+    // so a recipe the app itself saved must still re-import. Non-numbers
+    // are still refused everywhere: the record type says number.
+    const okCases = [
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "none", p: 1, radius: 0.5, order: -1 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", radius: 0.5, order: 2.5 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", lam: 0, p: 7 } },
+      { report: { mode: "fit", regionWidth: 0 } },
+    ];
+    for (const patch of okCases) {
+      const r = importNameKeyed("peak", peakJson({ ...patch, name: `ok-${loadPeakRecipes().length}` }));
+      expect(r.ok, JSON.stringify(patch)).toBe(true);
+    }
+    expect(loadPeakRecipes()).toHaveLength(okCases.length);
+    const r = importNameKeyed("peak", peakJson({ baseline: { ...DEFAULT_RECIPE.baseline, method: "none", radius: "x" } }));
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/baseline\.radius/) });
+  });
+
+  it("refuses a fit model that is well-typed but unusable, naming the parameter (self-review on #290)", () => {
+    const model = (patch: Record<string, unknown>) =>
+      JSON.stringify({
+        version: 1, name: "F", equation: "y = a*x + b", params: ["a", "b"],
+        guesses: [1, 2], lower: [null, null], upper: [null, null], ...patch,
+      });
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ["lower > upper", { lower: [1, null], upper: [0, null] }, /bounds\[a\]: lower > upper/],
+      ["guess below lower", { lower: [5, null] }, /guess\[a\]: outside/],
+      ["guess above upper", { upper: [null, 1] }, /guess\[b\]: outside/],
+      ["blank param name", { params: ["a", " "] }, /params\[1\]: empty/],
+      ["duplicate param name", { params: ["a", "a"] }, /params\[1\]: duplicate/],
+    ];
+    for (const [label, patch, reason] of cases) {
+      expect(importNameKeyed("fitModel", model(patch)), label).toMatchObject({
+        ok: false,
+        reason: expect.stringMatching(reason),
+      });
+    }
+    expect(loadCustomModels()).toEqual([]);
+    // Boundary-inclusive: a guess ON its bound, and one-sided bounds, are fine.
+    expect(importNameKeyed("fitModel", model({ lower: [1, null], upper: [null, 2] })).ok).toBe(true);
+  });
+
+  it("drops unknown extra keys from an imported fit model instead of persisting them", () => {
+    const r = importNameKeyed(
+      "fitModel",
+      JSON.stringify({
+        version: 1, name: "F", equation: "y = a*x", params: ["a"], guesses: [1], lower: [null], upper: [null],
+        junk: "x".repeat(1000),
+      }),
+    );
+    expect(r.ok).toBe(true);
+    const stored = loadCustomModels()[0] as unknown as Record<string, unknown>;
+    expect("junk" in stored).toBe(false);
+    expect(stored).toEqual({ version: 1, name: "F", equation: "y = a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
   });
 
   it("accepts the boundary values the wizard itself can produce", () => {

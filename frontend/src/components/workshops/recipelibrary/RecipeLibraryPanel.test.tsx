@@ -793,6 +793,30 @@ describe("library-level import (P3.5 slice 4)", () => {
     expect(screen.getByText(/imported "Loop fit"/)).toBeInTheDocument();
   });
 
+  it("never lets a HIDDEN landed row hold a focus request: import under 'Favorites only', then reveal it (self-review on #290)", async () => {
+    render(<RecipeLibraryPanel />);
+    const favoritesOnly = screen.getByRole("checkbox", { name: "Favorites only" });
+    fireEvent.click(favoritesOnly);
+    fireEvent.click(screen.getByRole("button", { name: "Import recipe…" }));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(
+      [JSON.stringify({ version: 1, name: "Hidden fit", steps: [{ kind: "expression", label: "s", code: "qz.smooth(5)", params: {} }], outputs: [] })],
+      "hidden.qzt.json",
+      { type: "application/json" },
+    );
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+    await waitFor(() => expect(screen.getByText(/imported "Hidden fit"/)).toBeInTheDocument());
+    // The new row is not a favorite, so the filter hides it — nothing to focus.
+    expect(screen.queryByText("Hidden fit")).not.toBeInTheDocument();
+
+    // Reveal it later: the row mounts, and must NOT yank focus off the checkbox.
+    favoritesOnly.focus();
+    fireEvent.click(favoritesOnly);
+    await waitFor(() => expect(screen.getByText("Hidden fit")).toBeInTheDocument());
+    expect(document.activeElement).toBe(favoritesOnly);
+  });
+
   it("owns the panel's busy state for the whole file read — a second operation cannot start mid-import", async () => {
     // Review finding on #290: `File.text()` is async, and the import used to
     // leave `busy` untouched while it was pending, so another apply/import
