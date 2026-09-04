@@ -1083,7 +1083,7 @@ describe("useFigureBuilder", () => {
       await waitFor(() => expect(result.current.hitmap).not.toBeNull());
       act(() => result.current.setRefLineValue("r1", 42));
       act(() => result.current.addRefLine("y", -3));
-      act(() => result.current.apply());
+      await act(() => result.current.apply());
 
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();
@@ -1266,7 +1266,7 @@ describe("useFigureBuilder", () => {
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.hitmap).not.toBeNull());
       act(() => result.current.setYFmtCanonical({ mode: "sci", digits: 3 }));
-      act(() => result.current.apply());
+      await act(() => result.current.apply());
 
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();
@@ -1376,13 +1376,13 @@ describe("useFigureBuilder", () => {
       expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([eb(0, -1, "x", "both")]);
     });
 
-    it("detectErrorBindings replaces the draft's bindings with the pure name-inference result", () => {
+    it("detectErrorBindings replaces the draft's bindings with the pure name-inference result", async () => {
       useApp.setState({
         datasets: [{ id: "d1", name: "scan.dat", data: { ...DATA, labels: ["R", "dR"] } }],
         figurePublicationSession: session(errorDocument("figure-err-e", [])),
       });
       const { result } = renderHook(() => useFigureBuilder());
-      act(() => result.current.detectErrorBindings());
+      await act(() => result.current.detectErrorBindings());
       expect(useApp.getState().figurePublicationSession!.draft.bindings.errors).toEqual([eb(1, 0, "y", "both")]);
     });
 
@@ -1410,7 +1410,7 @@ describe("useFigureBuilder", () => {
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.hitmap).not.toBeNull());
       act(() => result.current.addErrorBinding(0, -1, "x", "both"));
-      act(() => result.current.apply());
+      await act(() => result.current.apply());
 
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();
@@ -1554,7 +1554,7 @@ describe("useFigureBuilder", () => {
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.hitmap).not.toBeNull());
       act(() => result.current.toggleChannelY(1));
-      act(() => result.current.apply());
+      await act(() => result.current.apply());
 
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();
@@ -1668,7 +1668,7 @@ describe("useFigureBuilder", () => {
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.hitmap).not.toBeNull());
       act(() => result.current.setGroupKey(1));
-      act(() => result.current.apply());
+      await act(() => result.current.apply());
 
       const state = useApp.getState();
       expect(state.figurePublicationSession).toBeNull();

@@ -26,6 +26,7 @@ from quantized.calc.baseline import (
     estimate_background,
     fit_region_background,
 )
+from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import jsonify, to_jsonable
 
 router = APIRouter(prefix="/api/baseline", tags=["baseline"])
@@ -109,20 +110,17 @@ class XrdLowAngleRequest(BaseModel):
 @router.post("/estimate")
 def estimate(req: EstimateRequest) -> dict[str, Any]:
     """SNIP / polynomial background, optionally peak-masked and refined."""
-    try:
-        bg = estimate_background(
-            req.x,
-            req.y,
-            method=req.method,
-            max_window_deg=req.max_window_deg,
-            smooth_passes=req.smooth_passes,
-            poly_degree=req.poly_degree,
-            iterative=req.iterative,
-            iter_max_passes=req.iter_max_passes,
-            iter_sigma=req.iter_sigma,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg = call_calc(estimate_background,
+        req.x,
+        req.y,
+        method=req.method,
+        max_window_deg=req.max_window_deg,
+        smooth_passes=req.smooth_passes,
+        poly_degree=req.poly_degree,
+        iterative=req.iterative,
+        iter_max_passes=req.iter_max_passes,
+        iter_sigma=req.iter_sigma,
+    )
     return {"baseline": jsonify(bg)}
 
 
@@ -137,7 +135,7 @@ def als(req: ALSRequest) -> dict[str, Any]:
             max_iter=req.max_iter,
             tol=req.tol,
         )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"baseline": jsonify(bg)}
 
@@ -145,22 +143,16 @@ def als(req: ALSRequest) -> dict[str, Any]:
 @router.post("/rollingball")
 def rollingball(req: RollingBallRequest) -> dict[str, Any]:
     """Rolling-ball (grayscale morphological opening) baseline."""
-    try:
-        bg, info = baseline_rolling_ball(req.y, radius=req.radius, smooth=req.smooth)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg, info = call_calc(baseline_rolling_ball, req.y, radius=req.radius, smooth=req.smooth)
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
 
 @router.post("/modpoly")
 def modpoly(req: ModPolyRequest) -> dict[str, Any]:
     """Modified-polynomial (Lieber) baseline."""
-    try:
-        bg, info = baseline_modpoly(
-            req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg, info = call_calc(baseline_modpoly,
+        req.y, order=req.order, max_iter=req.max_iter, tol=req.tol
+    )
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
 
@@ -168,10 +160,7 @@ def modpoly(req: ModPolyRequest) -> dict[str, Any]:
 def anchor(req: AnchorRequest) -> dict[str, Any]:
     """Baseline through user-picked (x, y) anchors (GOTO #2); extrapolation
     clamps to the end anchors."""
-    try:
-        bg = anchor_baseline(req.x, req.y, req.anchors, method=req.method)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg = call_calc(anchor_baseline, req.x, req.y, req.anchors, method=req.method)
     return {"baseline": jsonify(bg)}
 
 
@@ -179,26 +168,20 @@ def anchor(req: AnchorRequest) -> dict[str, Any]:
 def shirley(req: ShirleyRequest) -> dict[str, Any]:
     """Iterative Shirley step background (GOTO #3). Non-convergence is a 422
     (the calc raises ValueError), never a 500."""
-    try:
-        bg, info = shirley_background(
-            req.x, req.y, max_iter=req.max_iter, tol=req.tol,
-            edge_average=req.edge_average,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg, info = call_calc(shirley_background,
+        req.x, req.y, max_iter=req.max_iter, tol=req.tol,
+        edge_average=req.edge_average,
+    )
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
 
 @router.post("/xrdlowangle")
 def xrd_low_angle(req: XrdLowAngleRequest) -> dict[str, Any]:
     """Hyperbolic (One_on_X) low-angle air-scatter background (GOTO #7a)."""
-    try:
-        bg, info = xrd_low_angle_background(
-            req.x, req.y, include_x2=req.include_x2,
-            max_iter=req.max_iter, tol=req.tol,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    bg, info = call_calc(xrd_low_angle_background,
+        req.x, req.y, include_x2=req.include_x2,
+        max_iter=req.max_iter, tol=req.tol,
+    )
     return {"baseline": jsonify(bg), "info": to_jsonable(info)}
 
 
@@ -206,13 +189,10 @@ def xrd_low_angle(req: XrdLowAngleRequest) -> dict[str, Any]:
 def region(req: RegionBackgroundRequest) -> dict[str, Any]:
     """Fit a polynomial background from a boxed x/y region (BosonPlotter
     "Fit BG from Box"); returns coeffs + the full-range background + region stats."""
-    try:
-        result = fit_region_background(
-            req.x, req.y, req.x_min, req.x_max,
-            y_min=req.y_min, y_max=req.y_max, order=req.order,
-        )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = call_calc(fit_region_background,
+        req.x, req.y, req.x_min, req.x_max,
+        y_min=req.y_min, y_max=req.y_max, order=req.order,
+    )
     bg = result.pop("background")
     out: dict[str, Any] = to_jsonable(result)
     out["background"] = jsonify(bg)

@@ -18,6 +18,7 @@ from quantized.calc.peak_fit import MODELS, fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
+from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import jsonify, to_jsonable
 
 # Models accepted by the simultaneous fit (compositeEval branches).
@@ -43,21 +44,18 @@ class FindPeaksRequest(BaseModel):
 @router.post("/find")
 def find(req: FindPeaksRequest) -> dict[str, Any]:
     """Find peaks in (x, y); returns the peak list + the estimated background."""
-    try:
-        peaks, background = find_peaks_robust(
-            req.x,
-            req.y,
-            snr_threshold=req.snr_threshold,
-            min_separation=req.min_separation,
-            max_peaks=req.max_peaks,
-            max_window_deg=req.max_window_deg,
-            min_width_deg=req.min_width_deg,
-            max_width_deg=req.max_width_deg,
-            min_prominence=req.min_prominence,
-            sensitivity=req.sensitivity,
-        )
-    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    peaks, background = call_calc(find_peaks_robust,
+        req.x,
+        req.y,
+        snr_threshold=req.snr_threshold,
+        min_separation=req.min_separation,
+        max_peaks=req.max_peaks,
+        max_window_deg=req.max_window_deg,
+        min_width_deg=req.min_width_deg,
+        max_width_deg=req.max_width_deg,
+        min_prominence=req.min_prominence,
+        sensitivity=req.sensitivity,
+    )
     return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
 
 
@@ -85,7 +83,7 @@ def fit(req: FitPeakRequest) -> dict[str, Any]:
             model=req.model,
             snip_bg=req.snip_bg,
         )
-    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     out: dict[str, Any] = to_jsonable(result)
     return out
@@ -119,14 +117,11 @@ def fit_multi(req: FitMultiPeakRequest) -> dict[str, Any]:
     if not req.peaks:
         raise HTTPException(status_code=422, detail="need at least one peak seed")
     seeds = [p.model_dump(exclude_none=True) for p in req.peaks]
-    try:
-        result = fit_multi_peak(
-            req.x, req.y, seeds,
-            model=req.model, bg_degree=req.bg_degree,
-            constrain=req.constrain, link_mode=req.link_mode,
-        )
-    except (ValueError, ArithmeticError, IndexError, KeyError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = call_calc(fit_multi_peak,
+        req.x, req.y, seeds,
+        model=req.model, bg_degree=req.bg_degree,
+        constrain=req.constrain, link_mode=req.link_mode,
+    )
     out: dict[str, Any] = to_jsonable(result)
     return out
 
@@ -150,7 +145,7 @@ def integrate(req: IntegrateRequest) -> dict[str, Any]:
                 baseline=req.baseline,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -186,5 +181,5 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
                 reference=req.reference, labels=req.labels,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

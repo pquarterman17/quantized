@@ -162,8 +162,8 @@ export default function PeaksPanel() {
         <PeakFitControls
           disabled={peaks.length === 0}
           fitting={fitting}
-          onFitTogether={fitTogether}
-          onFitEach={fitEach}
+          onFitTogether={(opts) => void fitTogether(opts)}
+          onFitEach={(opts) => void fitEach(opts)}
         />
       )}
 

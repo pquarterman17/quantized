@@ -337,7 +337,7 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
       </Field>
 
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <Button variant="primary" size="sm" disabled={busy || hasScaleIssue} onClick={onApply}>
+        <Button variant="primary" size="sm" disabled={busy || hasScaleIssue} onClick={() => void onApply()}>
           {busy ? "Applying…" : "Apply"}
         </Button>
         <Button variant="ghost" size="sm" disabled={busy || !active.raw} onClick={onReset}>

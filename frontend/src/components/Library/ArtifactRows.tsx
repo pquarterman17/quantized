@@ -19,6 +19,7 @@
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openLibraryNode } from "./libraryOpen";
 
 type ArtifactNode = Extract<
@@ -79,7 +80,7 @@ export default function ArtifactRow({ node, depth }: Props) {
       : node.kind === "report" ? node.entity.datasetId
       : null;
   const datasetName = useDatasetName(datasetId);
-  const selection = useApp((s) => s.librarySelection);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const selected = selection?.kind === node.kind && selection.id === node.entityId;
   const { glyph, meta } = glyphAndMeta(node, datasetName);
   // L0.25 (PR #139 review): single click SELECTS (librarySelection now

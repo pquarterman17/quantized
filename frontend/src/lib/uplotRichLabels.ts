@@ -187,7 +187,13 @@ export function richLabelsPlugin(
             return;
           }
           // Same defaults buildOpts produces: x bottom (2), y left (3), y2 right (1).
-          const side = axis.side ?? (i === 0 ? 2 : i === 1 ? 3 : 1);
+          // Widened to plain `number`: uPlot's `Axis.Side` is a `const enum`
+          // (0 top/1 right/2 bottom/3 left) — mixed with the literal
+          // fallbacks above, comparing it against bare 0/3 below is exactly
+          // the enum-vs-non-enum-literal mix no-unsafe-enum-comparison
+          // flags; the values are correct (there is no other side to
+          // compare against), only the static enum identity is being erased.
+          const side: number = axis.side ?? (i === 0 ? 2 : i === 1 ? 3 : 1);
           const shiftDir = side === 0 || side === 3 ? -1 : 1;
           const lposCss = axis._lpos + (axis.labelGap ?? 0) * shiftDir;
           const lpos = Math.round(lposCss * pxr);

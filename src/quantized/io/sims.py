@@ -21,12 +21,12 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io import _delimited_layout as layout
 from quantized.io.base import read_head
 
 __all__ = ["import_sims", "is_sims_file"]
 
 _COMMENT_CHARS = "#%"
-_DELIM_CANDIDATES = (",", "\t", ";", " ")
 _EXCEL_EXTS = {".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"}
 
 # SIMS exports share .csv/.tsv/.xlsx with generic tables, so detect them by a
@@ -75,24 +75,6 @@ def is_sims_file(path: Path) -> bool:
     return _sims_signals(text)
 
 
-def _is_numeric(token: str) -> bool:
-    try:
-        value = float(token)
-    except ValueError:
-        return False
-    return not math.isnan(value)
-
-
-def _to_float(token: str) -> float:
-    stripped = token.strip()
-    if not stripped:
-        return float("nan")
-    try:
-        return float(stripped)
-    except ValueError:
-        return float("nan")
-
-
 def _read_raw_lines(text: str) -> list[str]:
     out: list[str] = []
     for raw in text.splitlines():
@@ -103,27 +85,39 @@ def _read_raw_lines(text: str) -> list[str]:
     return out
 
 
-def _detect_delimiter(raw_lines: Sequence[str]) -> str:
-    test = raw_lines[:10]
-    best, best_score = ",", 0.0
-    for ch in _DELIM_CANDIDATES:
-        counts = [line.count(ch) for line in test]
-        if counts and all(c > 0 for c in counts):
-            mean = sum(counts) / len(counts)
-            std = (sum((c - mean) ** 2 for c in counts) / len(counts)) ** 0.5
-            if std < mean * 0.5 and mean > best_score:
-                best, best_score = ch, mean
-    return best
-
-
 def _numeric_score(row: Sequence[str]) -> float:
+    """Fraction of ``row``'s cells that are numeric -- SIMS-specific twin of
+    ``_delimited_layout._numeric_score``, not a byte-for-byte duplicate:
+
+    * shares the D5 fix (``_is_numeric_like``, so a "nan" cell counts as
+      numeric rather than silently mis-scoring the row it's in -- the same
+      class of bug, now fixed here too);
+    * but deliberately does NOT also try ``_datetime_epoch`` the way the
+      shared version does. A SIMS vendor preamble routinely carries a bare
+      date line (``"03/18/2026"``, see ``tests/fixtures/sims_barrier.csv``)
+      several rows above the real header; scoring that single-cell row as
+      100% "numeric" via datetime detection would make `_detect_layout`
+      mistake the preamble for the data region. Delimited lab-instrument
+      exports legitimately have date/time X columns and want that credit;
+      a depth-profile preamble never should.
+    """
     if not row:
         return 0.0
-    return sum(1 for t in row if _is_numeric(t.strip())) / len(row)
+    return sum(1 for t in row if layout._is_numeric_like(t.strip())) / len(row)
 
 
 def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int]:
-    """0-based (header_row, data_start); header walks back past blank rows."""
+    """0-based (header_row, data_start); header walks back past blank rows.
+
+    SIMS-specific twin of ``_delimited_layout._detect_layout``, not a
+    byte-for-byte duplicate: this format has no units row (units live in
+    the header cells themselves, see ``_clean_element_names``) so there is
+    no 3rd return value to detect, and an Excel-sourced sheet (unlike a
+    text file, whose blank raw lines are already dropped by
+    `_read_raw_lines`) can carry a genuinely blank row between the vendor
+    preamble and the header -- the walk-back below skips past it, which
+    the shared version's single-row look-back does not do.
+    """
     scores = [_numeric_score(r) for r in tokens]
     first_data = next((i for i, s in enumerate(scores) if s > 0.5), 0)
     header_row = -1
@@ -263,7 +257,7 @@ def _read_text_tokens(path: Path) -> list[list[str]]:
     raw_lines = _read_raw_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = _detect_delimiter(raw_lines)
+    delim = layout._detect_delimiter(raw_lines)
     return [line.split(delim) for line in raw_lines]
 
 
@@ -324,7 +318,7 @@ def import_sims(
     matrix = np.full((len(data_rows), n_cols), np.nan)
     for r, row in enumerate(data_rows):
         for c in range(min(len(row), n_cols)):
-            matrix[r, c] = _to_float(row[c])
+            matrix[r, c] = layout._to_float(row[c])
 
     empty_mask = np.all(np.isnan(matrix), axis=0)
     matrix = matrix[:, ~empty_mask]
@@ -391,7 +385,7 @@ def _recover_paired_names(
         odd = [p.strip() for p in parts[0::2]]
         even = [p.strip() for p in parts[1::2]]
         n_even_blank = sum(1 for p in even if not p)
-        n_odd_text = sum(1 for p in odd if p and not _is_numeric(p))
+        n_odd_text = sum(1 for p in odd if p and not layout._is_numeric(p))
         if n_even_blank >= n_e // 2 and n_odd_text >= n_e // 2:
             for p in range(n_e):
                 if not elem_names[p] and odd[p]:

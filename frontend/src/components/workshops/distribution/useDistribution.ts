@@ -230,7 +230,7 @@ export function useDistribution(): DistributionState {
     setBusy(true);
     setError(null);
     setNormNote(null);
-    Promise.allSettled([
+    void Promise.allSettled([
       statsHistogram(finite),
       statsDescriptive(finite),
       statsShapiro(finite),

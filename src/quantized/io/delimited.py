@@ -22,18 +22,6 @@ from quantized.io.base import resolve_column
 __all__ = ["import_csv"]
 
 _COMMENT_CHARS = "#%"
-_NA_TOKENS = {"", "nan", "na", "-", "n/a"}
-_DELIM_CANDIDATES = (",", "\t", ";", " ")
-
-
-def _to_float(token: str) -> float:
-    stripped = token.strip()
-    if stripped.lower() in _NA_TOKENS:
-        return float("nan")
-    try:
-        return float(stripped)
-    except ValueError:
-        return float("nan")
 
 
 def _read_raw_lines(text: str) -> list[str]:
@@ -60,21 +48,6 @@ def _split_lines(text: str) -> tuple[list[str], list[str]]:
         else:
             data.append(stripped)
     return data, comments
-
-
-def _detect_delimiter(raw_lines: Sequence[str]) -> str:
-    test = raw_lines[:10]
-    best_delim = ","
-    best_score = 0.0
-    for ch in _DELIM_CANDIDATES:
-        counts = [line.count(ch) for line in test]
-        if counts and all(c > 0 for c in counts):
-            mean = sum(counts) / len(counts)
-            std = (sum((c - mean) ** 2 for c in counts) / len(counts)) ** 0.5
-            if std < mean * 0.5 and mean > best_score:
-                best_score = mean
-                best_delim = ch
-    return best_delim
 
 
 def _split_trailing_bracket(header: str, opener: str, closer: str) -> tuple[str, str] | None:
@@ -176,18 +149,19 @@ def _convert_column(cells: Sequence[str]) -> np.ndarray:
     case of an already-clean numeric column.
 
     ``np.asarray(cells, dtype=float)`` parses every cell in one C-level pass
-    -- but it RAISES on the first cell it can't parse (including every
-    ``_NA_TOKENS`` spelling other than the "nan"/"inf" ones numpy's own
-    parser already accepts), so a column with even one stray NA token or
-    typo falls back to the exact old element-by-element ``_to_float`` loop.
-    That fallback only runs on the (rare) messy column, never on the file as
-    a whole, so a clean numeric file -- the common case, including the P0.4
-    1M-row benchmark -- takes the fast path for every column.
+    -- but it RAISES on the first cell it can't parse (including any NA
+    spelling like "na", "-", or "n/a" -- anything but the "nan"/"inf"
+    spellings numpy's own parser already accepts), so a column with even one
+    stray NA token or typo falls back to the exact old element-by-element
+    ``_to_float`` loop. That fallback only runs on the (rare) messy column,
+    never on the file as a whole, so a clean numeric file -- the common
+    case, including the P0.4 1M-row benchmark -- takes the fast path for
+    every column.
     """
     try:
         return np.asarray(cells, dtype=np.float64)
     except (ValueError, TypeError):
-        return np.asarray([_to_float(c) for c in cells], dtype=np.float64)
+        return np.asarray([layout._to_float(c) for c in cells], dtype=np.float64)
 
 
 def _encode_categorical(cells: Sequence[str]) -> tuple[np.ndarray, tuple[str, ...]]:
@@ -223,7 +197,7 @@ def import_csv(
     raw_lines, comment_lines = _split_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
-    delim = _detect_delimiter(raw_lines)
+    delim = layout._detect_delimiter(raw_lines)
     tokens = [line.split(delim) for line in raw_lines]
 
     header_row, data_start, units_row = layout._detect_layout(tokens)

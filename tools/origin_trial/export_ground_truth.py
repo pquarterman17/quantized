@@ -29,15 +29,17 @@ Run while the trial lasts:  uv run python tools/origin_trial/export_ground_truth
 
 from __future__ import annotations
 
-import os
-
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import win32com.client as wc
 
-CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
+CORPUS = (
+    Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data"))
+    / "origin"
+)
 SPEC = CORPUS / "specimens"
 GT = SPEC / "ground_truth"
 

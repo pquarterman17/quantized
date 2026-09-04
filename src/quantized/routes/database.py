@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.io.sqlite_query import query_sqlite
+from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes.parsers import _allowed_prefixes
 
 router = APIRouter(prefix="/api/database", tags=["database"])
@@ -50,5 +51,5 @@ def sqlite_query(req: SqliteQueryRequest) -> dict[str, object]:
         return query_sqlite(
             db_path, req.query, x_column=req.x_column or None, max_rows=req.max_rows
         ).to_dict()
-    except (OSError, ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

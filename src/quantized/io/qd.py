@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._delimited_layout import _to_float
 from quantized.io.base import NO_COLUMN, parse_col_header, read_head, resolve_column
 
 __all__ = ["import_mpms", "import_ppms", "import_qd_vsm", "is_ppms_dat", "is_qd_file"]
@@ -46,16 +47,6 @@ def is_qd_file(path: Path) -> bool:
     """Content sniffer: a Quantum Design ``.dat`` has [Header] ... [Data]."""
     head = read_head(path, 4096).lower()
     return "[header]" in head and ("[data]" in head or "byapp" in head)
-
-
-def _to_float(token: str) -> float:
-    token = token.strip()
-    if not token:
-        return float("nan")
-    try:
-        return float(token)
-    except ValueError:
-        return float("nan")
 
 
 # MPMS3 ``.dat`` files leave the legacy "Moment" column blank and write the

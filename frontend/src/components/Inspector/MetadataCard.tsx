@@ -36,7 +36,7 @@ export default function MetadataCard({ active }: { active: Dataset | null }) {
           </div>
         ))}
       </div>
-      <button type="button" className="qz-btn" onClick={copyAll} style={{ marginTop: 6 }}>
+      <button type="button" className="qz-btn" onClick={() => void copyAll()} style={{ marginTop: 6 }}>
         ⧉ Copy metadata
       </button>
     </Card>

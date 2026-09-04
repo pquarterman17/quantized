@@ -93,7 +93,7 @@ export function usePlotStageActions(
     if (!displayPayload) return;
     const nRows = displayPayload.data[0]?.length ?? 0;
     const nCols = displayPayload.series.length + 1; // + the x column
-    copyText(payloadToTSV(displayPayload)).then((ok) =>
+    void copyText(payloadToTSV(displayPayload)).then((ok) =>
       useApp.getState().setStatus(ok ? `copied ${nRows}×${nCols} to clipboard` : "clipboard unavailable"),
     );
   }
@@ -120,7 +120,7 @@ export function usePlotStageActions(
   function snapshot() {
     const u = plotRef.current;
     if (!u) return;
-    plotPngBlob(u).then(async (blob) => {
+    void plotPngBlob(u).then(async (blob) => {
       if (!blob) {
         toast("snapshot failed", "danger");
         return;

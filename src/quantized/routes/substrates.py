@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc import substrates
+from quantized.routes._errors import CALC_ERRORS, call_calc
 
 router = APIRouter(prefix="/api/substrates", tags=["substrates"])
 
@@ -47,10 +48,7 @@ def get_substrate(name: str) -> dict[str, Any]:
 @router.post("/mismatch")
 def mismatch(req: MismatchRequest) -> dict[str, Any]:
     """f = (a_film - a_sub)/a_sub, with tensile/compressive/matched label."""
-    try:
-        return substrates.lattice_mismatch(req.a_film, req.a_sub)
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(substrates.lattice_mismatch, req.a_film, req.a_sub)
 
 
 @router.post("/critical-thickness")
@@ -61,5 +59,5 @@ def critical_thickness(req: CriticalThicknessRequest) -> dict[str, Any]:
         if math.isinf(result["h_c"]):
             return {**result, "h_c": None, "h_c_nm": None, "matched": True}
         return {**result, "matched": False}
-    except (ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

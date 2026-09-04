@@ -18,7 +18,7 @@ export default function MacroCard() {
   const setStatus = useApp((s) => s.setStatus);
 
   const copyScript = (): void => {
-    copyText(pipelineToScript(steps)).then((ok) =>
+    void copyText(pipelineToScript(steps)).then((ok) =>
       setStatus(ok ? `copied macro — ${steps.length} steps` : "clipboard unavailable"),
     );
   };

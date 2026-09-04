@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._delimited_layout import _to_float
 
 __all__ = ["import_ncnr_dat", "import_ncnr_pnr", "import_ncnr_refl", "is_ncnr_refl"]
 
@@ -195,13 +196,6 @@ _NCNR_DAT_LABELS = ["dQ", "R", "dR", "theory", "fresnel"]
 _NCNR_DAT_UNITS = ["1/A", "", "", "", ""]
 
 
-def _safe_float(text: str) -> float:
-    try:
-        return float(text.strip())
-    except ValueError:
-        return float("nan")
-
-
 def import_ncnr_dat(filepath: str | Path) -> DataStruct:
     """Import an NCNR refl1d-fit cross section (.datA/.datB/.datC/.datD)."""
     path = Path(filepath)
@@ -220,9 +214,9 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
     # the column header or first data row.
     for i, line in enumerate(lines):
         if line.startswith("# intensity:"):
-            intensity = _safe_float(line.split(":", 1)[1])
+            intensity = _to_float(line.split(":", 1)[1])
         elif line.startswith("# background:"):
-            background = _safe_float(line.split(":", 1)[1])
+            background = _to_float(line.split(":", 1)[1])
         elif line.startswith("#") and "Q (1/A)" in line:
             data_start = i + 1
             break

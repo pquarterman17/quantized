@@ -58,7 +58,7 @@ describe("selection mutual exclusion — every writer that establishes a dataset
   });
 
   it("splitDatasetByColumn (context-menu split acts on any row, selected or not)", () => {
-    useApp.getState().splitDatasetByColumn("d1", 0);
+    void useApp.getState().splitDatasetByColumn("d1", 0);
     expect(invariantHolds()).toBe(true);
   });
 
