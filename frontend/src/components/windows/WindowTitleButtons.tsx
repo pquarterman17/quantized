@@ -20,6 +20,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { nextPlotBg, type PlotBg, type PlotWindow } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
+import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate } from "../../store/windowHydration";
 import { editableFigureDirty } from "../../store/figureLifecycle";
 import { buildMenuItems } from "../../lib/contextActions";
@@ -32,10 +33,10 @@ const BG_LABEL: Record<PlotBg, string> = { theme: "Theme", light: "Light", dark:
 export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
   const saveFigure = useApp((s) => s.saveFigure);
   const figureDirty = useApp((s) => editableFigureDirty(s, win));
-  const setWindowBg = useApp((s) => s.setWindowBg);
-  const cycleWindowLinkGroup = useApp((s) => s.cycleWindowLinkGroup);
-  const toggleWindowPin = useApp((s) => s.toggleWindowPin);
-  const rebindWindow = useApp((s) => s.rebindWindow);
+  const setWindowBg = useWindowsStore((s) => s.setWindowBg);
+  const cycleWindowLinkGroup = useWindowsStore((s) => s.cycleWindowLinkGroup);
+  const toggleWindowPin = useWindowsStore((s) => s.toggleWindowPin);
+  const rebindWindow = useWindowsStore((s) => s.rebindWindow);
   const datasets = useApp((s) => s.datasets);
   const [rebindMenu, setRebindMenu] = useState<{ x: number; y: number } | null>(null);
   const [titleMenu, setTitleMenu] = useState<{ x: number; y: number } | null>(null);

@@ -274,7 +274,7 @@ export default function FigureBuilderView() {
               }}
             >
               <span title={exportDisabled ? (f.error ?? "figure is not ready to export") : undefined}>
-                <Button variant="primary" onClick={f.exportNow} disabled={exportDisabled}>
+                <Button variant="primary" onClick={() => void f.exportNow()} disabled={exportDisabled}>
                   Export {f.fmt.toUpperCase()}
                 </Button>
               </span>

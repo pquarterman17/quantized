@@ -25,7 +25,7 @@ describe("AnnotationTextDialog / askAnnotationText", () => {
 
   it("shows the title and seeds the field with the initial text", () => {
     render(<AnnotationTextDialog />);
-    open("Edit annotation text", "Tc");
+    void open("Edit annotation text", "Tc");
     expect(screen.getByText("Edit annotation text")).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("Tc");
   });

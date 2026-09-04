@@ -3,6 +3,7 @@ import {
   originFidelityStatusLabel,
 } from "../../lib/originFidelity";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 
 export default function OriginFidelitySection() {
   const entries = useApp((s) => s.originFidelity);
@@ -19,8 +20,8 @@ export default function OriginFidelitySection() {
   // (store/libraryPanel.ts's `originFidelitySectionExpanded`, same
   // session-only convention as `expandedWorkbookIds`) so it survives that
   // unmount/remount; still starts collapsed in a fresh session.
-  const expanded = useApp((s) => s.originFidelitySectionExpanded);
-  const toggleExpanded = useApp((s) => s.toggleOriginFidelitySectionExpanded);
+  const expanded = useLibraryStore((s) => s.originFidelitySectionExpanded);
+  const toggleExpanded = useLibraryStore((s) => s.toggleOriginFidelitySectionExpanded);
   const collapsed = !expanded;
   if (entries.length === 0) return null;
 

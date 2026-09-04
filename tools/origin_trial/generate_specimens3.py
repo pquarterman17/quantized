@@ -21,12 +21,14 @@ concurrent with another COM tool. Run:
 from __future__ import annotations
 
 import os
-
 from pathlib import Path
 
 import win32com.client as wc
 
-CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
+CORPUS = (
+    Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data"))
+    / "origin"
+)
 SPEC = CORPUS / "specimens"
 
 X = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
@@ -95,7 +97,10 @@ def main() -> None:
     put_book("FitBook", [X, D])  # clean linear-ish data
     ok = lt("fitlr iy:=[FitBook]1!(1,2);")
     if not ok:
-        ok = lt('nlbegin iy:=[FitBook]1!(1,2) func:=line; nlfit; nlend autoupdate:=au_off output:=1;')
+        ok = lt(
+            "nlbegin iy:=[FitBook]1!(1,2) func:=line; nlfit; "
+            "nlend autoupdate:=au_off output:=1;"
+        )
     print(f"  fit ran: {ok}")
     save(SPEC / "fitreport.opju")
 

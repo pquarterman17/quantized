@@ -325,7 +325,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      computeFacetGroupDraws(slices, mode, groupCol, valueCol, plotted, valueLabel, groupLabel)
+      void computeFacetGroupDraws(slices, mode, groupCol, valueCol, plotted, valueLabel, groupLabel)
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -352,7 +352,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       const effectiveConnectMeans = showConnectMeans && groupCol != null;
       setBusy(true);
       if (mode === "box") {
-        computeBoxDraw(
+        void computeBoxDraw(
           finiteGroups, valueLabel, groupLabel,
           showPoints ? finiteIndexedGroups : null, showMeanCI, effectiveConnectMeans,
         )
@@ -363,7 +363,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
           })
           .finally(() => !cancelled && setBusy(false));
       } else if (mode === "strip") {
-        computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI, effectiveConnectMeans)
+        void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI, effectiveConnectMeans)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
             setDrawData(draw);
@@ -374,7 +374,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         // Never fabricate a KDE offline — computeViolinDraw itself degrades
         // to the exact same box stats Box mode would show for these groups
         // (its `mode: "box"` on the returned draw IS the degrade signal).
-        computeViolinDraw(finiteGroups, valueLabel, groupLabel)
+        void computeViolinDraw(finiteGroups, valueLabel, groupLabel)
           .then((draw) => {
             if (cancelled) return;
             setDrawData(draw);

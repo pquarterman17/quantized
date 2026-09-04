@@ -12,6 +12,7 @@ from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.datastruct import DataStruct
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import jsonify, to_jsonable
 
 router = APIRouter(prefix="/api/plot", tags=["plot"])
@@ -71,7 +72,7 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
             y_log=req.y_log,
         )
         plot = build_series(ds, state)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     x = plot.x
@@ -152,7 +153,7 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
             idw_power=req.idw_power,
         )
         m = map_from_datastruct(ds, req.x_key, req.y_key, req.z_key, state)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     response.headers["X-Dataset-Handle"] = handle

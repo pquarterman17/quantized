@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc.stats_outliers import dixon_q_test, grubbs_test, mad_outliers, rosner_test
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -51,7 +52,7 @@ def grubbs_route(req: GrubbsRequest) -> dict[str, Any]:
         return _wrap(
             grubbs_test(np.asarray(req.x, dtype=float), alpha=req.alpha, tail=req.tail)
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -60,7 +61,7 @@ def rosner_route(req: RosnerRequest) -> dict[str, Any]:
     """Generalized ESD test (Rosner) for up to k outliers."""
     try:
         return _wrap(rosner_test(np.asarray(req.x, dtype=float), req.k, alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -69,7 +70,7 @@ def dixon_q_route(req: DixonQRequest) -> dict[str, Any]:
     """Dixon's Q test for a single outlier in a small sample (3 <= n <= 30)."""
     try:
         return _wrap(dixon_q_test(np.asarray(req.x, dtype=float), alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -78,5 +79,5 @@ def mad_outliers_route(req: MadOutliersRequest) -> dict[str, Any]:
     """Robust modified z-score (MAD-based) outlier flagging."""
     try:
         return _wrap(mad_outliers(np.asarray(req.x, dtype=float), threshold=req.threshold))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

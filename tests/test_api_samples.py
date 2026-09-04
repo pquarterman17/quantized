@@ -9,12 +9,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from quantized.app import app
 
-client = TestClient(app)
-
-
-def test_demo_dataset_shape() -> None:
+def test_demo_dataset_shape(client: TestClient) -> None:
     resp = client.get("/api/samples/demo")
     assert resp.status_code == 200
     payload = resp.json()
@@ -27,7 +23,7 @@ def test_demo_dataset_shape() -> None:
     assert payload["units"] == ["emu"]
 
 
-def test_demo_dataset_is_finite_and_sorted() -> None:
+def test_demo_dataset_is_finite_and_sorted(client: TestClient) -> None:
     payload = client.get("/api/samples/demo").json()
     times = payload["time"]
     assert all(v is not None for v in times)
@@ -36,7 +32,7 @@ def test_demo_dataset_is_finite_and_sorted() -> None:
     assert all(v is not None for v in values)
 
 
-def test_demo_dataset_metadata_names_the_field_axis() -> None:
+def test_demo_dataset_metadata_names_the_field_axis(client: TestClient) -> None:
     payload = client.get("/api/samples/demo").json()
     assert payload["metadata"]["x_column_name"] == "Field"
     assert payload["metadata"]["x_column_unit"] == "Oe"

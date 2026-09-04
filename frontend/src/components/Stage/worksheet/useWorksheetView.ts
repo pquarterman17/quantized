@@ -472,7 +472,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     if (pendingGuard("Copy")) return;
     const rows = order.filter((r) => !masked.has(r));
     const data = rows.map((r) => [time[r], ...labels.map((_, c) => values[r]?.[c])]);
-    copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
+    void copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
       setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
     );
   }
@@ -480,7 +480,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   function copyRow(r: number) {
     if (pendingGuard("Copy")) return;
     const data = [[time[r], ...labels.map((_, c) => values[r]?.[c])]];
-    copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
+    void copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
       setStatus(ok ? `copied row ${r + 1}` : "clipboard unavailable"),
     );
   }

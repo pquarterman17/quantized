@@ -238,7 +238,7 @@ export default function FigurePageView() {
           )}
 
           <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-            <Button variant="primary" onClick={p.exportNow}>
+            <Button variant="primary" onClick={() => void p.exportNow()}>
               Export {p.fmt.toUpperCase()}
             </Button>
             <Button onClick={() => void p.copyNow()} title="Copy a 300 DPI image of this page to the clipboard">

@@ -23,18 +23,21 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Sync deps
         run: uv sync --group dev
       # Lint + type-check once, on the latest interpreter (OS/version-independent).
       - name: Lint
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests tools
       - name: Type check
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
         run: uv run mypy src
       # Golden fixtures + frozen JSON are committed, so the suite runs without MATLAB.
+      # -n auto (pytest-xdist): parallelizes across the runner's cores.
       - name: Tests
-        run: uv run pytest -q
+        run: uv run pytest -q -n auto
 
   # POST_SPRINT_INDEPENDENT_REVIEW.md R7: bounded performance-regression
   # protection for the large-2-D-map import+regrid path. `tests/test_perf_
@@ -56,6 +59,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
       - name: Sync deps
         run: uv sync --group dev
       - name: Run R7 large-map perf guard (non-blocking)
@@ -87,12 +92,22 @@ jobs:
           # (ROBUSTNESS_PLAN #2) -- resolved relative to the repo root
           # regardless of this job's `working-directory: frontend` default.
           node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install
         # npm ci, not npm install: install exactly the lockfile. `npm install`
         # resolves ^ranges to whatever is newest, so CI silently tested
         # different dependency versions than any local checkout (this hid a
         # real Playwright 1.61-vs-1.62 e2e regression on 2026-07-25).
         run: npm ci
+      # Freshness guard for the generated API-types foundation: schema.d.ts is
+      # committed (not built on the fly) so a stale generation can't silently
+      # ship. If this fails, regenerate locally and commit the diff:
+      #   uv run python tools/dump_openapi.py && cd frontend && npm run api:types
+      - name: Generated API types are up to date
+        run: |
+          npm run api:types
+          git diff --exit-code -- src/lib/api/schema.d.ts
       # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
       # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
       # warning fails CI same as an error — no warning can go unnoticed again.
@@ -123,6 +138,13 @@ jobs:
   # runtime issue (a `localStorage` global Node 20+ ships), not OS-specific,
   # so widening the OS axis too would add CI cost without covering a failure
   # class this repo has actually seen.
+  #
+  # Lint and build are NOT repeated here (cut 2026-09-03 as a CI wall-clock
+  # trim): both are already covered by the `frontend` job above on the
+  # pinned Node version, and neither is Node-version-sensitive the way the
+  # 2026-07-29 vitest break was (a runtime global vitest picked up). Only
+  # the unit-test run — the actual Node-version-sensitive check this job
+  # exists for — is repeated against the latest Node release.
   frontend-node-current:
     runs-on: ubuntu-latest
     defaults:
@@ -133,14 +155,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: current
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
-      # R9 (POST_SPRINT_INDEPENDENT_REVIEW): `lint` runs `eslint --max-warnings=0
-      # src` (package.json), so a react-hooks/exhaustive-deps (or any other)
-      # warning fails CI same as an error — no warning can go unnoticed again.
-      - name: Lint (eslint flat config; errors AND warnings fail via --max-warnings=0)
-        run: npm run lint
       - name: Unit tests (vitest)
         run: npm test
-      - name: Build (includes typecheck)
-        run: npm run build

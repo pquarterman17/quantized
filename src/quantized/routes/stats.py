@@ -44,6 +44,7 @@ from quantized.calc.stats_tests import (
     sign_test,
     wilcoxon_signed_rank,
 )
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -147,7 +148,7 @@ def descriptive(req: DescriptiveRequest) -> dict[str, Any]:
     """Descriptive statistics of a 1-D array (NaNs dropped)."""
     try:
         return _wrap(descriptive_stats(np.asarray(req.x, dtype=float)))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -181,7 +182,7 @@ def regression(req: RegressionRequest) -> dict[str, Any]:
                 ),
             }
         return _wrap(result)
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -200,7 +201,7 @@ def ttest(req: TTestRequest) -> dict[str, Any]:
                 tail=req.tail,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -210,7 +211,7 @@ def anova(req: AnovaRequest) -> dict[str, Any]:
     try:
         groups = [np.asarray(g, dtype=float) for g in req.groups]
         return _wrap(anova1(groups, alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -226,7 +227,7 @@ def pca(req: PCARequest) -> dict[str, Any]:
                 num_components=req.num_components,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -241,7 +242,7 @@ def mann_whitney_route(req: TwoSampleRequest) -> dict[str, Any]:
                 alternative=req.alternative,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -255,7 +256,7 @@ def wilcoxon_route(req: PairedOrOneSampleRequest) -> dict[str, Any]:
                 np.asarray(req.x, dtype=float), y, mu=req.mu, alternative=req.alternative
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -264,7 +265,7 @@ def kruskal_route(req: GroupsRequest) -> dict[str, Any]:
     """Kruskal-Wallis H test on a list of group vectors."""
     try:
         return _wrap(kruskal_wallis([np.asarray(g, dtype=float) for g in req.groups]))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -273,7 +274,7 @@ def friedman_route(req: GroupsRequest) -> dict[str, Any]:
     """Friedman test (k treatments x n blocks, equal lengths)."""
     try:
         return _wrap(friedman([np.asarray(g, dtype=float) for g in req.groups]))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -285,7 +286,7 @@ def sign_test_route(req: PairedOrOneSampleRequest) -> dict[str, Any]:
         return _wrap(
             sign_test(np.asarray(req.x, dtype=float), y, mu=req.mu, alternative=req.alternative)
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -294,7 +295,7 @@ def shapiro_route(req: OneSampleRequest) -> dict[str, Any]:
     """Shapiro-Wilk normality test."""
     try:
         return _wrap(shapiro_wilk(np.asarray(req.x, dtype=float)))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -303,7 +304,7 @@ def anderson_route(req: OneSampleRequest) -> dict[str, Any]:
     """Anderson-Darling normality test (critical-value table, no p)."""
     try:
         return _wrap(anderson_darling(np.asarray(req.x, dtype=float)))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -314,7 +315,7 @@ def levene_route(req: LeveneRequest) -> dict[str, Any]:
         return _wrap(
             levene([np.asarray(g, dtype=float) for g in req.groups], center=req.center)
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -323,7 +324,7 @@ def ks_normal_route(req: KSNormalRequest) -> dict[str, Any]:
     """One-sample KS test vs a normal distribution."""
     try:
         return _wrap(ks_normal(np.asarray(req.x, dtype=float), loc=req.loc, scale=req.scale))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -338,7 +339,7 @@ def regression_multi(req: MultiRegressionRequest) -> dict[str, Any]:
                 alpha=req.alpha,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -351,7 +352,7 @@ def correlation(req: CorrelationRequest) -> dict[str, Any]:
                 [np.asarray(c, dtype=float) for c in req.columns], method=req.method
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -360,7 +361,7 @@ def partial_correlation_route(req: PartialCorrelationRequest) -> dict[str, Any]:
     """Partial correlation of every pair controlling for all other columns."""
     try:
         return _wrap(partial_correlation([np.asarray(c, dtype=float) for c in req.columns]))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -375,7 +376,7 @@ def ks_two_sample_route(req: TwoSampleRequest) -> dict[str, Any]:
                 alternative=req.alternative,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -397,7 +398,7 @@ def fit_distribution_route(req: FitDistRequest) -> dict[str, Any]:
             # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
             return _wrap(fit_distributions(x))
         return _wrap(fit_distribution(x, req.dist))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -425,7 +426,7 @@ def power_route(req: PowerRequest) -> dict[str, Any]:
                 req.effect_size, req.power, kind=req.kind, alpha=req.alpha, tails=req.tails
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -448,5 +449,5 @@ def stepwise_route(req: StepwiseRequest) -> dict[str, Any]:
                 direction=req.direction,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

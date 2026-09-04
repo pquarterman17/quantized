@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from quantized.calc.xray import neutron_calc, xray_calc
+from quantized.routes._errors import call_calc
 
 router = APIRouter(prefix="/api/xray", tags=["xray"])
 
@@ -29,10 +30,7 @@ class XrayCalcRequest(BaseModel):
 def calc(req: XrayCalcRequest) -> dict[str, Any]:
     """Bragg / Q / energy↔wavelength conversion. ``mode`` selects the quantity
     (see ``calc.xray`` for the full list)."""
-    try:
-        return xray_calc(req.mode, req.wavelength, req.value, req.n)
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(xray_calc, req.mode, req.wavelength, req.value, req.n)
 
 
 class NeutronCalcRequest(BaseModel):
@@ -45,7 +43,4 @@ def neutron(req: NeutronCalcRequest) -> dict[str, Any]:
     """Neutron wavelength/energy/velocity/temperature, all derived from one
     input ``quantity`` (``wavelength``, ``energy``, ``velocity``, or
     ``temperature``); see ``calc.xray.neutron_calc``."""
-    try:
-        return neutron_calc(req.quantity, req.value)
-    except (ValueError, ArithmeticError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return call_calc(neutron_calc, req.quantity, req.value)

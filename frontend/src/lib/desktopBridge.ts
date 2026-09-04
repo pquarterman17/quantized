@@ -294,9 +294,13 @@ export interface SaveRefused {
   readonly refused: string;
 }
 
-export async function pickSaveDestination(
-  suggestedName: string,
-): Promise<string | Cancelled | SaveRefused | null> {
+// `string` already subsumes the `Cancelled` literal (a `qz/desktop-bridge/
+// cancelled`-valued string) at the type level — the return type keeps just
+// `string` (callers still narrow with `=== CANCELLED`); the eliminated
+// literal added no-redundant-type-constituents noise without adding a
+// distinguishable case for tsc. `SaveRefused` IS a distinguishable case (an
+// object), so it stays.
+export async function pickSaveDestination(suggestedName: string): Promise<string | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
   try {
@@ -460,9 +464,13 @@ export interface PickDirError {
  *  attempt (backend `{path: null, error}` response, or the bridge call
  *  throwing) — the caller should SAY so, never silently swallow it as a
  *  cancel or misreport it as a missing bridge. */
+// Same redundant-constituent trim as `pickSaveDestination` above: `Cancelled`
+// is a `string` literal, so folding it into the plain `string` member here
+// changes nothing tsc can observe (callers still narrow with `=== CANCELLED`
+// before the `typeof !== "string"` check that isolates `PickDirError`).
 export async function pickRelinkDirectory(
   directory?: string,
-): Promise<string | Cancelled | PickDirError | null> {
+): Promise<string | PickDirError | null> {
   const bridge = api();
   if (!bridge?.pick_relink_directory) return null;
   try {

@@ -148,14 +148,10 @@ export default function RecipeLibraryPanel() {
           setResult(outcome); // defensive: every import path sets `ref` today
           return;
         }
-        const name =
-          landedRef.kind === "plot"
-            ? (useApp.getState().plotRecipes.find((r) => r.id === landedRef.id)?.name ?? landedRef.id)
-            : landedRef.id;
-        setResult({
-          ok: true,
-          message: landedRef.kind === "plot" ? `imported "${name}" into this project` : `imported "${name}"`,
-        });
+        // `outcome.message` already names the landed recipe (and, for a plot
+        // recipe, the scope it landed in) — recipeActions owns that wording,
+        // so this panel never reads the store imperatively to learn the name.
+        setResult(outcome);
         setRevision((n) => n + 1);
         setFocusRowKey(rowKey(landedRef));
       })

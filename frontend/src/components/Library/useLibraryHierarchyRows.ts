@@ -14,6 +14,7 @@ import {
   type LibraryNodeKey,
 } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 
 export interface LibraryHierarchyModel {
   hierarchy: LibraryHierarchy;
@@ -32,7 +33,7 @@ export function useLibraryHierarchyModel(): LibraryHierarchyModel {
   const pages = useApp((s) => s.pages);
   const reports = useApp((s) => s.reports);
   const expandedFolders = useApp((s) => s.expandedFolders);
-  const expandedWorkbookIds = useApp((s) => s.expandedWorkbookIds);
+  const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
 
   const hierarchy = useMemo(
     () =>
