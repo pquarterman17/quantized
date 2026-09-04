@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildArtifactMenu, deleteArtifactConfirmed, type ArtifactNode } from "./artifactContextActions";
 import { askConfirm } from "../overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
+import { createFigureDocument } from "../../lib/figureDocument";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
 import { createPageDocument } from "../../lib/pageDocumentActions";
+import { defaultPlotView } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -46,7 +48,9 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
     const referencing = { ...page, panels: page.panels.map((panel, i) => (i === 0 ? { ...panel, figureId: "fig1" } : panel)) };
     useApp.setState({
       pages: [referencing],
-      editableFigures: [{ id: "fig1", name: "Moment sweep" } as never],
+      // A real document: the trash path sizes `data` on delete (#292), so an
+      // under-shaped fixture would fail inside the store, not in the assertion.
+      editableFigures: [createFigureDocument({ id: "fig1", name: "Moment sweep", datasetId: null, view: defaultPlotView() })],
     });
     const node = {
       key: "editable-figure:fig1", entityId: "fig1", kind: "editable-figure", name: "Moment sweep",
