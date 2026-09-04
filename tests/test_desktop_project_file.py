@@ -255,7 +255,11 @@ def test_payload_declares_source_never_resolves_a_source_on_another_root(
         return real_realpath(path, **kw)
 
     def fake_splitdrive(p: str) -> tuple[str, str]:
-        return ("//server/share", p[14:]) if p.startswith("//server/share") else ("", p)
+        # Separator/case-agnostic: on Windows the implementation hands this
+        # the `normcase(abspath(...))` spelling (`\\server\share\...`), on
+        # POSIX the forward-slash one — both must read as the UNC root.
+        q = p.replace("\\", "/").lower()
+        return ("//server/share", p[14:]) if q.startswith("//server/share") else ("", p)
 
     monkeypatch.setattr(os.path, "splitdrive", fake_splitdrive)
     monkeypatch.setattr(os.path, "realpath", spy)
