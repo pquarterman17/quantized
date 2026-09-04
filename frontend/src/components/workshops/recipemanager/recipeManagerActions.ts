@@ -100,19 +100,20 @@ export function exportRecipe(recipe: PlotRecipe): void {
   );
 }
 
-/** Parse+import `text` (a picked file's contents) into `scope`. Throws
- *  `importRecipeFile`'s own message verbatim on malformed input -- the
- *  caller surfaces it, this function does not swallow it (there is no sane
- *  default for a file the user explicitly chose, same contract
- *  `importRecipeFile` itself states). Delegates the actual insertion to each
- *  scope's own copy-in action (`copyPlotRecipeIn`/`copyIn`) -- the SAME
- *  fresh-id + deduped-name + (for global) hydrate-first guard (finding 5)
- *  `copyRecipeToOtherScope` uses, rather than a third hand-rolled insertion
- *  with its own chance to drift. `importRecipeFile` already mints its own
- *  fresh id; minting a SECOND one here is harmless (still unique) and keeps
- *  this a plain, un-special-cased call into the shared seam. */
-export function importRecipeToScope(scope: RecipeScope, text: string): void {
+/** Parse+import `text` (a picked file's contents) into `scope`, returning the
+ *  LANDED recipe's id. Throws `importRecipeFile`'s own message verbatim on
+ *  malformed input -- the caller surfaces it, this function does not swallow
+ *  it (there is no sane default for a file the user explicitly chose, same
+ *  contract `importRecipeFile` itself states). Delegates the actual
+ *  insertion to each scope's own copy-in action (`copyPlotRecipeIn`/
+ *  `copyIn`) -- the SAME fresh-id + deduped-name + (for global) hydrate-first
+ *  guard (finding 5) `copyRecipeToOtherScope` uses, rather than a third
+ *  hand-rolled insertion with its own chance to drift. `importRecipeFile`
+ *  already mints its own fresh id; minting a SECOND one here (P3.5: this is
+ *  the id the caller gets back, so a library-level import can focus the new
+ *  row) is harmless -- still unique -- and keeps this a plain,
+ *  un-special-cased call into the shared seam. */
+export function importRecipeToScope(scope: RecipeScope, text: string): string {
   const recipe = importRecipeFile(text); // throws on malformed
-  if (scope === "project") useApp.getState().copyPlotRecipeIn(recipe);
-  else useGlobalPlotRecipes.getState().copyIn(recipe);
+  return scope === "project" ? useApp.getState().copyPlotRecipeIn(recipe) : useGlobalPlotRecipes.getState().copyIn(recipe);
 }

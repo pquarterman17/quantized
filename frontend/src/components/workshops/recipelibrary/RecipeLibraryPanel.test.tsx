@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { saveCustomModel } from "../../../lib/fitmodels";
 import type { PlotRecipe } from "../../../lib/plotRecipeSchema";
 import { makeStep } from "../../../lib/pipeline";
 import { metaFor, recordUse, setFavorite } from "../../../lib/recipeIndex";
@@ -264,6 +265,19 @@ describe("row actions (P3.5 slice 3)", () => {
     expect(screen.getByRole("menuitem", { name: "Export…" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: /Copy to/ })).not.toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveClass("danger");
+  });
+
+  // P3.5: peak/graph/fitModel gained real serializers, and their row menus
+  // must show Export now — inverting the earlier "no serializer" pin rather
+  // than deleting it (recipeActions.test.ts / recipeIndex.test.ts carry the
+  // dispatcher/capability-table halves of this same inversion).
+  it("shows Export for peak, graph, and fit model rows now that they have real serializers", () => {
+    saveCustomModel({
+      version: 1, name: "Arrhenius", equation: "y=a*x", params: ["a"], guesses: [1], lower: [null], upper: [null],
+    });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Arrhenius" }));
+    expect(screen.getByRole("menuitem", { name: "Export…" })).toBeInTheDocument();
   });
 
   it("says Apply for plot recipes and Open for workshop-owned kinds", () => {
@@ -741,5 +755,180 @@ describe("row actions (P3.5 slice 3)", () => {
 
     await waitFor(() => expect(useApp.getState().quickPlotTemplates).toHaveLength(2));
     expect(screen.getByText("Quick one copy")).toBeInTheDocument();
+  });
+});
+
+describe("library-level import (P3.5 slice 4)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
+    useRecipeManager.setState({ open: true, library: true });
+  });
+
+  it("imports a recipe file, lands a new row, and hands it focus", async () => {
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Import recipe…" }));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(
+      [
+        JSON.stringify({
+          version: 1,
+          name: "Loop fit",
+          steps: [{ kind: "expression", label: "smooth", code: "qz.smooth(5)", params: {} }],
+          outputs: [],
+        }),
+      ],
+      "Loop fit.qzt.json",
+      { type: "application/json" },
+    );
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    // Wait on STATE (the row's presence and where focus landed), not on a mock.
+    await waitFor(() => expect(screen.getByText("Loop fit")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Rename Loop fit" })),
+    );
+    expect(screen.getByText(/imported "Loop fit"/)).toBeInTheDocument();
+  });
+
+  it("never lets a HIDDEN landed row hold a focus request: import under 'Favorites only', then reveal it (self-review on #290)", async () => {
+    render(<RecipeLibraryPanel />);
+    const favoritesOnly = screen.getByRole("checkbox", { name: "Favorites only" });
+    fireEvent.click(favoritesOnly);
+    fireEvent.click(screen.getByRole("button", { name: "Import recipe…" }));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(
+      [JSON.stringify({ version: 1, name: "Hidden fit", steps: [{ kind: "expression", label: "s", code: "qz.smooth(5)", params: {} }], outputs: [] })],
+      "hidden.qzt.json",
+      { type: "application/json" },
+    );
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+    await waitFor(() => expect(screen.getByText(/imported "Hidden fit"/)).toBeInTheDocument());
+    // The new row is not a favorite, so the filter hides it — nothing to focus.
+    expect(screen.queryByText("Hidden fit")).not.toBeInTheDocument();
+
+    // Reveal it later: the row mounts, and must NOT yank focus off the checkbox.
+    favoritesOnly.focus();
+    fireEvent.click(favoritesOnly);
+    await waitFor(() => expect(screen.getByText("Hidden fit")).toBeInTheDocument());
+    expect(document.activeElement).toBe(favoritesOnly);
+  });
+
+  it("owns the panel's busy state for the whole file read — a second operation cannot start mid-import", async () => {
+    // Review finding on #290: `File.text()` is async, and the import used to
+    // leave `busy` untouched while it was pending, so another apply/import
+    // could start in that window and race for the shared result/focus state.
+    // A deferred read holds the import open; the toolbar button (and every
+    // row control gated by `busy`) must be disabled until it settles.
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    let release!: (text: string) => void;
+    const pending = new Promise<string>((resolve) => { release = resolve; });
+    const file = new File(["placeholder"], "slow.qzt.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: () => pending });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    const importButton = screen.getByRole("button", { name: "Import recipe…" });
+    expect(importButton).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Add XRD publication to favorites/ })).toBeDisabled();
+
+    release(JSON.stringify({ version: 1, name: "Late", steps: [], outputs: [] }));
+    await waitFor(() => expect(screen.getByText("Late")).toBeInTheDocument());
+    expect(importButton).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Add XRD publication to favorites/ })).toBeEnabled();
+  });
+
+  it("shows a refusal on the status line for a file it does not recognise", async () => {
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Import recipe…" }));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["not json"], "bad.json", { type: "application/json" });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    fireEvent.change(fileInput);
+
+    expect(await screen.findByText(/Not done — /)).toBeInTheDocument();
+  });
+});
+
+describe("row details disclosure (P3.5 slice 4)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useApp.setState({
+      datasets: [], activeId: null, plotRecipes: [], quickPlotTemplates: [],
+      recipeSourcesComplete: true, pipelineOpen: false, status: "",
+    });
+    useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
+    useRecipeManager.setState({ open: true, library: true });
+  });
+
+  it("toggles aria-expanded and reveals the schema-version line, then hides it again", () => {
+    useApp.setState({ plotRecipes: [plot] });
+    render(<RecipeLibraryPanel />);
+    const toggle = screen.getByRole("button", { name: "Show details for XRD publication" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // Collapsed: the region is unmounted, so an IDREF to it would dangle.
+    expect(toggle).not.toHaveAttribute("aria-controls");
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Schema version")).toBeInTheDocument();
+    expect(screen.getByText("v1")).toBeInTheDocument();
+    // Expanded: `aria-controls` names the region that actually exists.
+    const regionId = toggle.getAttribute("aria-controls");
+    expect(regionId).toBeTruthy();
+    expect(document.getElementById(regionId as string)).toContainElement(screen.getByText("Schema version"));
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).not.toHaveAttribute("aria-controls");
+    expect(screen.queryByText("Schema version")).not.toBeInTheDocument();
+  });
+
+  it("shows a fit model's equation once its Details are opened", () => {
+    saveCustomModel({
+      version: 1,
+      name: "Arrhenius",
+      equation: "y = a*exp(-x/t) + c",
+      params: ["a", "t", "c"],
+      guesses: [1, 2, 3],
+      lower: [null, 0, null],
+      upper: [10, null, null],
+    });
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Arrhenius" }));
+    expect(screen.getByText("y = a*exp(-x/t) + c")).toBeInTheDocument();
+  });
+
+  it("a quickPlot row's details say unversioned and never list Export among available actions", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "d1.dat",
+        data: {
+          time: [0, 1, 2],
+          values: [[1, 10], [2, 20], [3, 30]],
+          labels: ["A", "B"],
+          units: ["", ""],
+          metadata: { technique: "magnetometry.mvsh" },
+        },
+      }],
+    });
+    useApp.getState().saveQuickPlotTemplate(
+      "d1",
+      { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [1] },
+      "line",
+      "Quick one",
+      { kind: "schema" },
+    );
+    render(<RecipeLibraryPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Show details for Quick one" }));
+    expect(screen.getByText("unversioned")).toBeInTheDocument();
+    const actionsRow = screen.getByText("Available actions").closest(".qz-recipe-details-row");
+    expect(actionsRow?.textContent).not.toMatch(/Export/);
   });
 });

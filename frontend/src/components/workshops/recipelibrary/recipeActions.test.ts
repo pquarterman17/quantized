@@ -6,8 +6,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadGraphTemplates, saveGraphTemplate } from "../../../lib/figuredoc";
+import { saveCustomModel } from "../../../lib/fitmodels";
+import { exportNameKeyed } from "../../../lib/nameKeyedRecipes";
+import { DEFAULT_RECIPE, saveRecipe as savePeakRecipe } from "../../../lib/peakwizard";
 import { makeStep } from "../../../lib/pipeline";
 import { captureRecipe } from "../../../lib/plotRecipe";
+import { exportRecipeFile } from "../../../lib/plotRecipeStorage";
 import { defaultPlotView } from "../../../lib/plotview";
 import { metaFor, setFavorite } from "../../../lib/recipeIndex";
 import type { RecipeRef } from "../../../lib/recipeLibrary";
@@ -21,6 +25,7 @@ import {
   deleteRecipe,
   duplicateRecipe,
   exportRecipe,
+  importAnyRecipe,
   importRecipe,
   primaryActionLabel,
   renameRecipe,
@@ -88,27 +93,41 @@ beforeEach(() => {
 
 describe("capability gating happens BEFORE anything is touched", () => {
   it("refuses operations the kind genuinely cannot do", () => {
-    saveGraphTemplate({ name: "G", style: "line", overrides: null, seriesStyles: null });
-
-    // No serializer exists for graph templates; the dispatcher must not
-    // invent a JSON shape just because a button was clicked.
-    expect(exportRecipe(ref("graph", "G"))).toEqual({
+    // quickPlot is the one kind that STILL genuinely lacks import/export
+    // (P3.5 gave peak/graph/fitModel real serializers — see
+    // lib/nameKeyedRecipes.ts) and copyScope (only `plot` lives in two
+    // scopes). No template needs to exist for any of this: the capability
+    // gate runs before any store lookup, so the dispatcher must not invent
+    // behaviour for an unsupported kind just because a button was clicked.
+    expect(exportRecipe(ref("quickPlot", "Q", "project"))).toEqual({
       ok: false,
-      reason: "Graph templates cannot be exported yet",
+      reason: "Quick Plot templates cannot be exported yet",
     });
-    expect(importRecipe("graph", "global", "{}").ok).toBe(false);
     // Asserting the exact REASON, not merely `.ok === false`: without the
     // capability guard this falls through to a store lookup and refuses with
     // "no longer exists" — still false, so an `.ok` assertion passes against
-    // the bug (measured). The reason is what proves the guard ran. (A quickPlot
-    // duplicate refusal used to sit here too; that operation is real now and
-    // has its own positive test below.)
+    // the bug (measured). The reason is what proves the guard ran.
+    expect(importRecipe("quickPlot", "project", "{}")).toEqual({
+      ok: false,
+      reason: "Quick Plot templates cannot be imported yet",
+    });
+    expect(copyToOtherScope(ref("quickPlot", "Q", "project"))).toEqual({
+      ok: false,
+      reason: "Quick Plot templates cannot be copied between project and global yet",
+    });
+
+    expect(useApp.getState().quickPlotTemplates).toHaveLength(0); // nothing was mutated by any refusal
+  });
+
+  it("peak, graph, and fit model now genuinely support export/import — the capability gate lets them through", () => {
+    saveGraphTemplate({ name: "G", style: "line", overrides: null, seriesStyles: null });
+    expect(exportRecipe(ref("graph", "G")).ok).toBe(true);
+    expect(loadGraphTemplates()).toHaveLength(1); // export never mutates
+    // Still global-only: gaining a serializer did not give it a second scope.
     expect(copyToOtherScope(ref("graph", "G"))).toEqual({
       ok: false,
       reason: "Graph templates cannot be copied between project and global yet",
     });
-
-    expect(loadGraphTemplates()).toHaveLength(1); // nothing was mutated by any refusal
   });
 
   it("refuses a stale ref instead of throwing or half-acting", () => {
@@ -210,7 +229,11 @@ describe("name-keyed operations route through the safe layer", () => {
       name: "Shared",
       steps: [{ kind: "expression", label: "s", code: "c", params: {} }],
       outputs: [],
-    }))).toEqual({ ok: true, message: 'imported as "Shared (2)"' });
+    }))).toEqual({
+      ok: true,
+      message: 'imported "Shared (2)"',
+      ref: { kind: "analysis", scope: "global", id: "Shared (2)" },
+    });
     expect(loadTemplates()).toHaveLength(2); // an import never overwrites
   });
 
@@ -332,3 +355,79 @@ describe("delete tells the truth about whether undo will help", () => {
 function deleteNameKeyedViaDispatcher(name: string) {
   return deleteRecipe(ref("analysis", name));
 }
+
+describe("importAnyRecipe — the library-level import button's one entry point", () => {
+  it("sniffs a plot recipe and lands it in the requested scope, deduped on collision", async () => {
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const recipe = captureRecipe(xrd(["2theta", "Intensity", "Ierr"]), view, null, {
+      id: "p-orig",
+      name: "X",
+      appVersion: "0",
+    });
+    const text = exportRecipeFile(recipe);
+    // Force a name collision: a DIFFERENT recipe already occupies "X" in the
+    // destination (project) scope.
+    useApp.setState({ plotRecipes: [{ ...recipe, id: "p-other", name: "X" }] });
+
+    const result = importAnyRecipe(text, "project");
+    expect(result.ok).toBe(true);
+    if (!result.ok || !result.ref) throw new Error(`expected an ok import with a ref: ${JSON.stringify(result)}`);
+    expect(result.ref.kind).toBe("plot");
+    expect(result.ref.scope).toBe("project");
+    const landed = useApp.getState().plotRecipes.find((r) => r.id === result.ref!.id);
+    expect(landed?.name).toBe("X (2)");
+    // The message carries the LANDED name and scope so the panel can show it
+    // verbatim without reading the store (getState()-in-render ratchet).
+    expect(result.message).toBe('imported "X (2)" into this project');
+  });
+
+  it("sniffs each name-keyed kind and dedupes its name on collision", () => {
+    seedAnalysis("X");
+    savePeakRecipe({ ...DEFAULT_RECIPE, name: "X" });
+    saveGraphTemplate({ name: "X", style: "line", overrides: null, seriesStyles: null });
+    saveCustomModel({ version: 1, name: "X", equation: "y=x", params: [], guesses: [], lower: [], upper: [] });
+
+    for (const kind of ["analysis", "peak", "graph", "fitModel"] as const) {
+      const exported = exportNameKeyed(kind, "X");
+      if (!exported.ok) throw new Error(`export failed for ${kind}`);
+      expect(importAnyRecipe(exported.text, "project")).toEqual({
+        ok: true,
+        message: 'imported "X (2)"',
+        ref: { kind, scope: "global", id: "X (2)" },
+      });
+    }
+  });
+
+  it("refuses quickPlot-shaped text — quickPlot has no serializer to sniff for", () => {
+    const quickPlotLike = JSON.stringify({
+      id: "q1",
+      name: "Q",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      modifiedAt: "2026-01-01T00:00:00.000Z",
+      scope: { kind: "schema" },
+      technique: "generic",
+      signature: { channels: [] },
+      mapping: { xKey: null, yKeys: [], errorBindings: [], ignoredKeys: [] },
+      style: "line",
+      labels: {},
+    });
+    const result = importAnyRecipe(quickPlotLike, "project");
+    expect(result).toEqual({ ok: false, reason: "not a recognised recipe file" });
+  });
+
+  it("refuses garbage text", () => {
+    expect(importAnyRecipe("{{{ not json", "project")).toEqual({
+      ok: false,
+      reason: "not a valid recipe file (bad JSON)",
+    });
+    expect(importAnyRecipe("{}", "project")).toEqual({
+      ok: false,
+      reason: "not a recognised recipe file",
+    });
+  });
+
+  it("refuses a malformed graph file carrying only name and style", () => {
+    const result = importAnyRecipe(JSON.stringify({ name: "G", style: "line" }), "project");
+    expect(result.ok).toBe(false);
+  });
+});

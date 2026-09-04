@@ -11,13 +11,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { recipeDetails, type RecipeDetails as RecipeDetailsData } from "../../../lib/recipeDetails";
 import { setFavorite, setTags } from "../../../lib/recipeIndex";
 import {
   RECIPE_KIND_LABEL,
+  refKey,
   supportsOperation,
   type RecipeDescriptor,
   type RecipeRef,
 } from "../../../lib/recipeLibrary";
+import type { RecipeSourceInput } from "../../../lib/recipeSources";
+import { RecipeDetails } from "./RecipeDetails";
 import RecipeRowActions from "./RecipeRowActions";
 import { renameRecipe, type ActionResult } from "./recipeActions";
 
@@ -28,8 +32,18 @@ export function rowKey(ref: RecipeRef): string {
   return `${ref.kind}:${ref.scope}:${ref.id}`;
 }
 
+interface DetailsCache {
+  key: string;
+  plotProject: RecipeSourceInput["plotProject"];
+  plotGlobal: RecipeSourceInput["plotGlobal"];
+  quickPlot: RecipeSourceInput["quickPlot"];
+  value: RecipeDetailsData | null;
+}
+
 export function RecipeRow({
   row,
+  sources,
+  revision,
   refresh,
   onResult,
   busy,
@@ -39,6 +53,15 @@ export function RecipeRow({
   onRenamedTo,
 }: {
   row: RecipeDescriptor;
+  /** The same snapshot the panel built for `collectRecipes` — passed through
+   *  so `recipeDetails` can locate the underlying record without a second,
+   *  possibly-inconsistent read of the workspace-backed kinds. */
+  sources: RecipeSourceInput;
+  /** The panel's mutation counter — bumps on every library-level change
+   *  (favorite, tag, rename, import, delete). It is the cache key for the
+   *  Details disclosure below, so the four name-keyed systems' storage is
+   *  re-read when something actually changed, not on every re-render. */
+  revision: number;
   /** Re-render the panel. ONE mechanism serves both a sidecar change and a
    *  change to a recipe system itself, because `collectRecipes` is called on
    *  every render and re-reads every source — so a re-render IS a re-read.
@@ -58,6 +81,14 @@ export function RecipeRow({
   const [tagText, setTagText] = useState(row.tags.join(", "));
   const [editingName, setEditingName] = useState(false);
   const [nameText, setNameText] = useState(row.name);
+  // LOCAL, not lifted to the panel: unlike focus-after-rename, nothing else
+  // needs to know whether this row is expanded. It resets to collapsed
+  // whenever the row REMOUNTS -- which for a name-keyed kind happens on every
+  // committed rename, since `rowKey` (this row's React key) contains the id
+  // and the id IS the name for those four. That is an accepted trade — a
+  // rename closing the very panel you just used to open it is a minor,
+  // truthful surprise, not a bug to work around.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // Reset on OPEN, not only consumed on blur. Removing a focused element fires
   // NO blur in any browser or in jsdom, so an Escape-cancel — which unmounts
   // the input — leaves this flag set and the NEXT click-away commit, in either
@@ -65,6 +96,11 @@ export function RecipeRow({
   // claimed "Escape fires before blur"; it does not. Verified in review.)
   const skipBlurCommit = useRef(false);
   const nameButtonRef = useRef<HTMLButtonElement | null>(null);
+  // `refKey` (not `rowKey`) because this becomes a DOM `id`: it percent-encodes
+  // the id half of the composite, so a name-keyed recipe whose name contains
+  // whitespace or other id-unsafe characters still yields a valid `id`
+  // attribute for `aria-controls` to point at.
+  const detailsId = `recipe-details-${refKey(row.ref)}`;
   // `busy` gates OPENING an editor, never one already open: disabling a live
   // <input> strands half-typed text and a browser blurs the disabled element,
   // dropping focus to <body>.
@@ -118,6 +154,39 @@ export function RecipeRow({
       queueMicrotask(() => nameButtonRef.current?.focus());
     }
   };
+
+  // `recipeDetails` re-reads (and JSON.parses) a name-keyed kind's whole
+  // localStorage list. The panel re-renders every row on every `busy` flip,
+  // so an expanded row would otherwise pay that read for output that only
+  // changes when the library does (self-review on #290). Cache per (row key,
+  // panel revision, store snapshot): `revision` covers every library-driven
+  // change; the three store arrays' identities cover a workspace-backed
+  // record changing underneath. Collapsing the disclosure drops the cache,
+  // so reopening always re-reads.
+  const detailsCache = useRef<DetailsCache | null>(null);
+  let details: RecipeDetailsData | null = null;
+  if (detailsOpen) {
+    const key = `${rowKey(row.ref)}\u0000${revision}`;
+    const c = detailsCache.current;
+    const fresh =
+      c !== null &&
+      c.key === key &&
+      c.plotProject === sources.plotProject &&
+      c.plotGlobal === sources.plotGlobal &&
+      c.quickPlot === sources.quickPlot;
+    if (!fresh) {
+      detailsCache.current = {
+        key,
+        plotProject: sources.plotProject,
+        plotGlobal: sources.plotGlobal,
+        quickPlot: sources.quickPlot,
+        value: recipeDetails(row, sources),
+      };
+    }
+    details = detailsCache.current!.value;
+  } else {
+    detailsCache.current = null;
+  }
 
   return (
     <li className="qz-recipe-library-row">
@@ -227,10 +296,33 @@ export function RecipeRow({
             {row.tags.length ? row.tags.map((tag) => `#${tag}`).join("  ") : "+ Add tags"}
           </button>
         )}
+        <button
+          type="button"
+          className="qz-recipe-details-toggle"
+          aria-expanded={detailsOpen}
+          // Only while the region is MOUNTED: `aria-controls` is an IDREF, and
+          // pointing it at an element that does not exist (the collapsed
+          // state unmounts the region) is a dangling reference assistive
+          // tech reports as an error.
+          aria-controls={detailsOpen ? detailsId : undefined}
+          // The visible text is just "Details" -- a list of rows would
+          // otherwise present many buttons all called that, indistinguishable
+          // to a screen reader (same reasoning as every action button in
+          // RecipeRowActions.tsx). The label CONTAINS the visible text, as
+          // WCAG 2.5.3 requires for voice control.
+          aria-label={`${detailsOpen ? "Hide" : "Show"} details for ${row.name}`}
+          // Deliberately NOT gated by `busy`: unlike the favorite/tag/rename
+          // controls above, this changes no state an in-flight action reads
+          // -- it only shows or hides a read of what is already loaded.
+          onClick={() => setDetailsOpen((v) => !v)}
+        >
+          <span aria-hidden="true">{detailsOpen ? "▾" : "▸"}</span> Details
+        </button>
       </div>
       <RecipeRowActions row={row} onChanged={refresh} onResult={onResult}
         busy={busy} setBusy={setBusy}
         onRename={supportsOperation(row.kind, "rename") ? openNameEditor : undefined} />
+      {detailsOpen && <RecipeDetails id={detailsId} details={details} />}
     </li>
   );
 }

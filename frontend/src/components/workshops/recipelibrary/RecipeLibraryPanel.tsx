@@ -11,13 +11,13 @@ import {
   type RecipeDescriptor,
   type RecipeKind,
 } from "../../../lib/recipeLibrary";
-import { collectRecipes, liveKeys } from "../../../lib/recipeSources";
+import { collectRecipes, liveKeys, type RecipeSourceInput } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { RecipeRow, rowKey } from "./RecipeRow";
-import { type ActionResult } from "./recipeActions";
+import { importAnyRecipe, type ActionResult } from "./recipeActions";
 import { Checkbox } from "../../primitives/Checkbox";
 import { Button, Select } from "../../primitives";
 type KindFilter = "all" | RecipeKind;
@@ -54,7 +54,7 @@ export default function RecipeLibraryPanel() {
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
   // One shared line for every action outcome, success or refusal. A refusal
   // here is ordinary ("select a dataset first", "that recipe no longer
   // exists"), not an error worth a modal.
@@ -67,15 +67,23 @@ export default function RecipeLibraryPanel() {
   const [focusRowKey, setFocusRowKey] = useState<string | null>(null);
   // Stable identity so the row's focus effect does not re-run every render.
   const clearFocusRow = useCallback(() => setFocusRowKey(null), []);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => hydrateGlobal(), [hydrateGlobal]);
-
-  const collection = collectRecipes({
+  // Hoisted to a variable (not just an inline `collectRecipes({...})` argument)
+  // so the SAME snapshot can also be threaded down to each row for its
+  // Details disclosure (`lib/recipeDetails.ts` needs it to locate a
+  // workspace-backed record) — one read, two consumers, never two reads that
+  // could disagree.
+  const sourceInput: RecipeSourceInput = {
     plotProject: projectPlots,
     plotGlobal: globalPlots,
     quickPlot: quickPlots,
     plotSourcesComplete: globalHydrated && globalComplete && workspaceComplete,
-  });
+  };
+
+  useEffect(() => hydrateGlobal(), [hydrateGlobal]);
+
+  const collection = collectRecipes(sourceInput);
 
   // P3.5: drop sidecar metadata for recipes that no longer exist — the only
   // thing keeping `qz.recipeIndex` from growing forever as recipes come and go.
@@ -109,10 +117,54 @@ export default function RecipeLibraryPanel() {
     (kind === "all" || row.kind === kind) && (!favoritesOnly || row.favorite),
   );
 
+  // A focus request can only be honoured by a row that is RENDERED. Rename
+  // always leaves its row visible, but a library import can land a row the
+  // current filters hide ("Favorites only", a kind filter) — and a request no
+  // row consumed would sit until the filter changed minutes later, then yank
+  // keyboard focus off whatever the user was on the moment the row mounted
+  // (self-review on #290). Drop it as soon as no visible row matches.
+  useEffect(() => {
+    if (focusRowKey !== null && !rows.some((row) => rowKey(row.ref) === focusRowKey)) setFocusRowKey(null);
+  }, [focusRowKey, rows]);
+
   /** Drop a stale outcome when the thing it described is no longer on screen.
    *  "select a dataset first" sitting there after the user selected one, or
    *  "deleted — undo restores it" after they undid, is worse than silence. */
   const clearResult = (): void => setResult(null);
+
+  /** The toolbar's "Import recipe…" file-picker handler. Sniffs the kind
+   *  from the file's own content (`recipeFile.ts`) rather than asking the
+   *  user, since a picked file already declares what it is. A plot recipe
+   *  always lands in THIS PROJECT's scope here -- the row menu's "Copy to
+   *  global" is the established way to move a recipe the other direction --
+   *  so the success message says which scope it landed in; the four global
+   *  kinds have only one scope, so theirs does not need to say so. */
+  const runLibraryImport = (file: File): void => {
+    // OWN the panel's busy state for the whole read+import (review finding on
+    // #290): `File.text()` is async, and without this a second apply/import
+    // could start during the read and race this one for the shared result
+    // line and focus request that `busy` exists to serialize.
+    setBusy(true);
+    void file
+      .text()
+      .then((text) => {
+        const outcome = importAnyRecipe(text, "project");
+        // `outcome.message` already names the landed recipe (and, for a plot
+        // recipe, the scope it landed in) — recipeActions owns that wording,
+        // so this panel never reads the store imperatively to learn the name.
+        setResult(outcome);
+        if (outcome.ok && outcome.ref) {
+          setRevision((n) => n + 1);
+          setFocusRowKey(rowKey(outcome.ref));
+        }
+      })
+      .catch((e: unknown) => {
+        // Mirrors RecipeManagerPanel's own handling: `file.text()` itself can
+        // reject (a read error), not just resolve with malformed content.
+        setResult({ ok: false, reason: e instanceof Error ? e.message : "could not read that file" });
+      })
+      .finally(() => setBusy(false));
+  };
 
   return (
     <ToolWindow id="recipe-library" title="Recipe Library" width={620} onClose={close}>
@@ -130,7 +182,19 @@ export default function RecipeLibraryPanel() {
           Favorites only
         </Checkbox>
         <span className="qz-recipe-library-count">{rows.length} of {collection.recipes.length}</span>
+        <Button size="sm" disabled={busy} onClick={() => importInputRef.current?.click()}>Import recipe…</Button>
         <Button size="sm" onClick={() => openPlotManager()}>Manage Plot Recipes…</Button>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".json"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) runLibraryImport(f);
+            e.target.value = "";
+          }}
+        />
       </div>
 
       {/* Mounted unconditionally and emptied when idle. A live region that is
@@ -169,6 +233,8 @@ export default function RecipeLibraryPanel() {
             <RecipeRow
               key={rowKey(row.ref)}
               row={row}
+              sources={sourceInput}
+              revision={revision}
               refresh={() => setRevision((n) => n + 1)}
               onResult={setResult}
               busy={busy}
