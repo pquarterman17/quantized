@@ -133,6 +133,28 @@ describe("recipeDetails — schema version is always visible", () => {
     expect(channels.some((c) => /#\d/.test(c))).toBe(false);
   });
 
+  it("quickPlot channels: usage comes from the MAPPING, so a referenced column with no saved label is still marked used (self-review on #290)", () => {
+    // `labels` omits a referenced column whose label was empty at save time
+    // (quickPlotTemplates.ts's own doc) — membership in `labels` is not the
+    // same as "used". Column 2 is bound as an error channel but absent from
+    // `labels`; column 3 is an ignored extra.
+    const sources = buildSources();
+    const t: QuickPlotTemplate = {
+      ...quickPlotTemplate,
+      signature: {
+        channels: [
+          ...quickPlotTemplate.signature.channels,
+          { label: "", unit: "cps", errorRole: "error-y" },
+          { label: "temp", unit: "K", errorRole: "value" },
+        ],
+      },
+      mapping: { xKey: 0, yKeys: [1], errorBindings: [{ channel: 2, target: 1, axis: "y", side: "both" }], ignoredKeys: [3] },
+    };
+    const details = recipeDetails(rowFor("quickPlot", sources), { ...sources, quickPlot: [t] });
+    const channels = details?.sections?.find((s) => s.title === "Channels")?.items ?? [];
+    expect(channels).toEqual(["2theta (deg)", "Intensity (cps)", " (cps) · error-y", "temp (K) · not used"]);
+  });
+
   it("analysis/peak/fitModel: versioned, show v1", () => {
     seedNameKeyed();
     const sources = buildSources();

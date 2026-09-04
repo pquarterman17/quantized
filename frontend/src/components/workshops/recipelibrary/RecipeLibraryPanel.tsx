@@ -54,7 +54,7 @@ export default function RecipeLibraryPanel() {
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);
-  const [, setRevision] = useState(0);
+  const [revision, setRevision] = useState(0);
   // One shared line for every action outcome, success or refusal. A refusal
   // here is ordinary ("select a dataset first", "that recipe no longer
   // exists"), not an error worth a modal.
@@ -117,6 +117,16 @@ export default function RecipeLibraryPanel() {
     (kind === "all" || row.kind === kind) && (!favoritesOnly || row.favorite),
   );
 
+  // A focus request can only be honoured by a row that is RENDERED. Rename
+  // always leaves its row visible, but a library import can land a row the
+  // current filters hide ("Favorites only", a kind filter) — and a request no
+  // row consumed would sit until the filter changed minutes later, then yank
+  // keyboard focus off whatever the user was on the moment the row mounted
+  // (self-review on #290). Drop it as soon as no visible row matches.
+  useEffect(() => {
+    if (focusRowKey !== null && !rows.some((row) => rowKey(row.ref) === focusRowKey)) setFocusRowKey(null);
+  }, [focusRowKey, rows]);
+
   /** Drop a stale outcome when the thing it described is no longer on screen.
    *  "select a dataset first" sitting there after the user selected one, or
    *  "deleted — undo restores it" after they undid, is worse than silence. */
@@ -139,21 +149,14 @@ export default function RecipeLibraryPanel() {
       .text()
       .then((text) => {
         const outcome = importAnyRecipe(text, "project");
-        if (!outcome.ok) {
-          setResult(outcome);
-          return;
-        }
-        const landedRef = outcome.ref;
-        if (!landedRef) {
-          setResult(outcome); // defensive: every import path sets `ref` today
-          return;
-        }
         // `outcome.message` already names the landed recipe (and, for a plot
         // recipe, the scope it landed in) — recipeActions owns that wording,
         // so this panel never reads the store imperatively to learn the name.
         setResult(outcome);
-        setRevision((n) => n + 1);
-        setFocusRowKey(rowKey(landedRef));
+        if (outcome.ok && outcome.ref) {
+          setRevision((n) => n + 1);
+          setFocusRowKey(rowKey(outcome.ref));
+        }
       })
       .catch((e: unknown) => {
         // Mirrors RecipeManagerPanel's own handling: `file.text()` itself can
@@ -231,6 +234,7 @@ export default function RecipeLibraryPanel() {
               key={rowKey(row.ref)}
               row={row}
               sources={sourceInput}
+              revision={revision}
               refresh={() => setRevision((n) => n + 1)}
               onResult={setResult}
               busy={busy}

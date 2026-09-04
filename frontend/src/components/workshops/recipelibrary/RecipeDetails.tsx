@@ -30,7 +30,7 @@ export function RecipeDetails({ id, details }: { id: string; details: RecipeDeta
           {s.items.length === 0 ? (
             <div className="qz-recipe-details-empty">none</div>
           ) : (
-            <ul>
+            <ul className={s.mono ? "qz-mono" : undefined}>
               {s.items.map((item, i) => (
                 // Kind-specific text lines, not identifiers — no stable key
                 // exists to use besides position, and this list is never

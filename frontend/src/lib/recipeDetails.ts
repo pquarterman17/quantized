@@ -44,6 +44,9 @@ export interface RecipeDetailsField {
 export interface RecipeDetailsSection {
   readonly title: string;
   readonly items: readonly string[];
+  /** Items that are mostly numbers (fit parameters) render in the mono face,
+   *  the same rule `RecipeDetailsField.mono` applies to a single value. */
+  readonly mono?: boolean;
 }
 
 export interface RecipeDetails {
@@ -104,7 +107,7 @@ function commonFields(
     { label: "Scope", value: row.ref.scope === "project" ? "This project" : "Global" },
     // The plan requires the version to be VISIBLE even when there isn't one —
     // an omitted line reads as "forgot to check", not "doesn't apply".
-    { label: "Schema version", value: c.schemaVersioned ? `v${row.schemaVersion ?? "?"}` : "unversioned" },
+    { label: "Schema version", value: c.schemaVersioned ? `v${row.schemaVersion ?? "?"}` : "unversioned", mono: c.schemaVersioned },
   ];
   if (c.hasTimestamps && timestamps) {
     if (timestamps.createdAt) fields.push({ label: "Created", value: new Date(timestamps.createdAt).toLocaleString(), mono: true });
@@ -115,7 +118,7 @@ function commonFields(
   }
   if (row.lastUsedAt) {
     fields.push({ label: "Last used", value: new Date(row.lastUsedAt).toLocaleString(), mono: true });
-    fields.push({ label: "Use count", value: String(row.useCount) });
+    fields.push({ label: "Use count", value: String(row.useCount), mono: true });
   }
   fields.push({ label: "Tags", value: row.tags.length ? row.tags.join(", ") : "—" });
   return fields;
@@ -140,15 +143,24 @@ function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot
   const fields = commonFields(row, t, t.technique);
   fields.push({ label: "Applies to", value: t.scope.kind === "schema" ? "This data type and schema" : "This workbook only" });
   fields.push(actionsField(row.kind));
-  // `signature.channels` is every column in save-time order; `labels` holds
-  // the EXACT label only for the columns the mapping references (the others
-  // are simply absent). So: exact label where there is one, the signature's
-  // normalized label otherwise -- never a bare `#i` placeholder, which reads
-  // as "nothing here" for a column that plainly exists. Referenced columns
-  // are marked so the user can tell which ones the template actually uses.
+  // `signature.channels` is every column in save-time order. Which columns
+  // the template USES comes from the mapping itself (x, every y, every
+  // error binding's channel and real target) — never from `labels`, which
+  // omits a referenced column whose label was empty at save time
+  // (lib/quickPlotTemplates.ts's own doc; self-review on #290). `labels`
+  // only supplies the exact display string where it has one; otherwise the
+  // signature's label — never a bare `#i` placeholder, which reads as
+  // "nothing here" for a column that plainly exists.
+  const referenced = new Set<number>();
+  if (t.mapping.xKey !== null) referenced.add(t.mapping.xKey);
+  for (const y of t.mapping.yKeys) referenced.add(y);
+  for (const b of t.mapping.errorBindings) {
+    referenced.add(b.channel);
+    if (b.target >= 0) referenced.add(b.target);
+  }
   const channels = t.signature.channels.map((ch, i) => {
-    const used = i in t.labels;
-    const label = used ? t.labels[i] : ch.label;
+    const used = referenced.has(i);
+    const label = i in t.labels ? t.labels[i] : ch.label;
     const unit = ch.unit ? ` (${ch.unit})` : "";
     const role = ch.errorRole !== "value" ? ` · ${ch.errorRole}` : "";
     return `${label}${unit}${role}${used ? "" : " · not used"}`;
@@ -166,13 +178,14 @@ function analysisDetails(row: RecipeDescriptor, t: AnalysisTemplate): RecipeDeta
 function peakDetails(row: RecipeDescriptor, r: PeakRecipe): RecipeDetails {
   const fields = commonFields(row, null, undefined);
   fields.push(
-    { label: "Range", value: `${r.range.lo ?? "auto"} – ${r.range.hi ?? "auto"}` },
+    { label: "Range", value: `${r.range.lo ?? "auto"} – ${r.range.hi ?? "auto"}`, mono: true },
     { label: "Baseline method", value: r.baseline.method },
     {
       label: "Find thresholds",
       value: `SNR ≥ ${r.find.snr_threshold}, prominence ≥ ${r.find.min_prominence}, max ${r.find.max_peaks} peaks`,
+      mono: true,
     },
-    { label: "Model", value: `${r.model.shape}, bg degree ${r.model.bgDegree}, link ${r.model.linkMode}` },
+    { label: "Model", value: `${r.model.shape}, bg degree ${r.model.bgDegree}, link ${r.model.linkMode}`, mono: true },
     { label: "Report mode", value: r.report.mode },
   );
   fields.push(actionsField(row.kind));
@@ -193,15 +206,15 @@ function fitModelDetails(row: RecipeDescriptor, m: CustomFitModel): RecipeDetail
   const params = m.params.map(
     (name, i) => `${name} = ${m.guesses[i]} [${boundText(m.lower[i], "−∞")}, ${boundText(m.upper[i], "∞")}]`,
   );
-  return { fields, sections: [{ title: "Parameters", items: params }] };
+  return { fields, sections: [{ title: "Parameters", items: params, mono: true }] };
 }
 
 function graphDetails(row: RecipeDescriptor, t: GraphTemplate): RecipeDetails {
   const fields = commonFields(row, null, undefined);
   fields.push(
     { label: "Style", value: t.style },
-    { label: "Overrides", value: String(t.overrides ? Object.keys(t.overrides).length : 0) },
-    { label: "Series styles", value: String(t.seriesStyles ? t.seriesStyles.length : 0) },
+    { label: "Overrides", value: String(t.overrides ? Object.keys(t.overrides).length : 0), mono: true },
+    { label: "Series styles", value: String(t.seriesStyles ? t.seriesStyles.length : 0), mono: true },
     { label: "Source", value: t.source === "origin" ? "imported from Origin" : "saved in Figure Builder" },
   );
   fields.push(actionsField(row.kind));
