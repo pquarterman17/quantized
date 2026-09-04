@@ -23,6 +23,7 @@ from quantized.calc.stats_glm import logistic_regression, poisson_regression
 from quantized.calc.stats_roc import auc, roc_curve, youden_optimal_threshold
 from quantized.calc.stats_survival import cox_proportional_hazards, kaplan_meier, logrank_test
 from quantized.calc.stats_tests import recommend_test
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -42,7 +43,7 @@ def anova2_route(req: Anova2Request) -> dict[str, Any]:
     """Balanced two-way factorial ANOVA with interaction."""
     try:
         return _wrap(anova2(req.cells, alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -65,7 +66,7 @@ def anova2_unbalanced_route(req: Anova2UnbalancedRequest) -> dict[str, Any]:
                 ss_type=req.ss_type, alpha=req.alpha,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -79,7 +80,7 @@ def anova_rm_route(req: RepeatedMeasuresRequest) -> dict[str, Any]:
     """One-way repeated-measures (within-subjects) ANOVA + sphericity."""
     try:
         return _wrap(repeated_measures_anova(req.data, alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -95,7 +96,7 @@ def tukey_route(req: PostHocRequest) -> dict[str, Any]:
     """Tukey HSD all-pairs post-hoc."""
     try:
         return _wrap(tukey_hsd([np.asarray(g, dtype=float) for g in req.groups], alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -109,7 +110,7 @@ def dunnett_route(req: PostHocRequest) -> dict[str, Any]:
                 control=req.control, alpha=req.alpha, alternative=req.alternative,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -129,7 +130,7 @@ def recommend_route(req: RecommendRequest) -> dict[str, Any]:
                 paired=req.paired, alpha=req.alpha,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -143,7 +144,7 @@ def adjust_p_route(req: AdjustPRequest) -> dict[str, Any]:
     """Bonferroni / Holm / Benjamini-Hochberg p-value adjustment."""
     try:
         return _wrap(adjust_pvalues(req.p_values, method=req.method))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -164,7 +165,7 @@ def chi_square_independence_route(req: ContingencyRequest) -> dict[str, Any]:
     """Pearson chi-square test of independence + Cramer's V effect size."""
     try:
         return _wrap(chi_square_independence(req.table))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -179,7 +180,7 @@ def fisher_exact_route(req: FisherExactRequest) -> dict[str, Any]:
     """Fisher's exact test (2x2 table): odds ratio + exact p-value."""
     try:
         return _wrap(fisher_exact_test(req.table, alternative=req.alternative))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -195,7 +196,7 @@ def chi_square_gof_route(req: ChiSquareGofRequest) -> dict[str, Any]:
     try:
         expected = np.asarray(req.expected, dtype=float) if req.expected is not None else None
         return _wrap(chi_square_gof(np.asarray(req.observed, dtype=float), expected))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -224,7 +225,7 @@ def glm_logistic_route(req: GlmRequest) -> dict[str, Any]:
         return _wrap(logistic_regression(predictors, y, alpha=req.alpha))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -237,7 +238,7 @@ def glm_poisson_route(req: GlmRequest) -> dict[str, Any]:
         return _wrap(poisson_regression(predictors, y, alpha=req.alpha))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -284,7 +285,7 @@ def kaplan_meier_route(req: KaplanMeierRequest) -> dict[str, Any]:
         return _wrap(kaplan_meier(time, event))
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -300,7 +301,7 @@ def logrank_route(req: LogRankRequest) -> dict[str, Any]:
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -317,7 +318,7 @@ def cox_ph_route(req: CoxRequest) -> dict[str, Any]:
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -350,7 +351,7 @@ def roc_curve_route(req: RocRequest) -> dict[str, Any]:
         y_true = np.asarray(req.y_true, dtype=float)
         y_score = np.asarray(req.y_score, dtype=float)
         return _wrap(roc_curve(y_true, y_score))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -360,7 +361,7 @@ def auc_route(req: AucRequest) -> dict[str, Any]:
     try:
         auc_val = auc(np.asarray(req.fpr, dtype=float), np.asarray(req.tpr, dtype=float))
         return _wrap({"auc": auc_val})
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -374,5 +375,5 @@ def youden_route(req: YoudenRequest) -> dict[str, Any]:
                 np.asarray(req.thresholds, dtype=float),
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

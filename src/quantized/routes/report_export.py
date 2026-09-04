@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from quantized.calc import report_emit
 from quantized.calc.report import ReportSheet, validate_report
 from quantized.io.report_export import ReportExportError, render_report
+from quantized.routes._errors import CALC_ERRORS, call_calc
 
 router = APIRouter(prefix="/api/report", tags=["report"])
 
@@ -82,10 +83,7 @@ def _emit_sheet(req: ReportEmitRequest) -> ReportSheet:
 @router.post("/emit")
 def emit_report(req: ReportEmitRequest) -> dict[str, Any]:
     """Result dict + kind -> a validated #36 report sheet (JSON)."""
-    try:
-        sheet = _emit_sheet(req)
-    except (ValueError, ArithmeticError, KeyError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    sheet = call_calc(_emit_sheet, req)
     payload = sheet.to_dict()
     # calc stays deterministic/pure; the route stamps the creation time.
     payload["created"] = datetime.now(UTC).isoformat(timespec="seconds")
@@ -103,7 +101,7 @@ def export_report(req: ReportExportRequest) -> Response:
     """Report dict + format -> downloadable file (.tex/.html/.docx/.pptx)."""
     try:
         validate_report(req.report)
-    except (ValueError, ArithmeticError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     try:
         data, mime, _is_text = render_report(req.report, req.format)

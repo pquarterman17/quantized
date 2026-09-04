@@ -20,6 +20,7 @@ from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bumps import BUMPS_ENGINES, bumps_available, fit_bumps
 from quantized.calc.fit_models import FIT_MODELS
 from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/fitting", tags=["fitting"])
@@ -61,7 +62,7 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
         )
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     kwargs: dict[str, Any] = {
         "model": req.model,
@@ -93,8 +94,5 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
         except JobQueueFullError as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
 
-    try:
-        result = fit_bumps(req.x, req.y, req.dy, **kwargs)
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    result = call_calc(fit_bumps, req.x, req.y, req.dy, **kwargs)
     return to_jsonable(result)  # type: ignore[no-any-return]

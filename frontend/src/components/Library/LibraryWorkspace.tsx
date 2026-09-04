@@ -9,6 +9,8 @@ import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import type { LibrarySelection } from "../../store/libraryPanel";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
@@ -21,10 +23,17 @@ interface Props {
   onClose: () => void;
 }
 
-function selectedKey(): LibraryNodeKey | null {
-  const s = useApp.getState();
-  if (s.librarySelection) return `${s.librarySelection.kind}:${s.librarySelection.id}` as LibraryNodeKey;
-  return s.selectedIds[0] ? `worksheet:${s.selectedIds[0]}` : null;
+// Pure — takes the two source fields as params instead of reading the store
+// itself, so render-time call sites can pass their already-subscribed
+// `useApp((s) => ...)` values (no untracked getState() read during render;
+// see the two render-body call sites below) while imperative call sites
+// (e.g. the close() callback) can still pass a fresh getState() snapshot.
+function deriveSelectedKey(
+  selection: LibrarySelection | null,
+  selectedIds: readonly string[],
+): LibraryNodeKey | null {
+  if (selection) return `${selection.kind}:${selection.id}` as LibraryNodeKey;
+  return selectedIds[0] ? `worksheet:${selectedIds[0]}` : null;
 }
 
 function parentChain(node: LibraryNode | undefined, byKey: ReadonlyMap<LibraryNodeKey, LibraryNode>): LibraryNode[] {
@@ -39,9 +48,9 @@ function parentChain(node: LibraryNode | undefined, byKey: ReadonlyMap<LibraryNo
 
 export default function LibraryWorkspace({ onClose }: Props) {
   const { hierarchy } = useLibraryHierarchyModel();
-  const selection = useApp((s) => s.librarySelection);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const selectedIds = useApp((s) => s.selectedIds);
-  const initialKey = selectedKey();
+  const initialKey = deriveSelectedKey(selection, selectedIds);
   const initialNode = initialKey ? hierarchy.byKey.get(initialKey) : undefined;
   const [containerKey, setContainerKey] = useState<LibraryNodeKey | null>(() =>
     initialNode?.kind === "folder" || initialNode?.kind === "workbook" ? initialNode.key : initialNode?.parentKey ?? null,
@@ -99,7 +108,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
     // virt.ensureVisible is stable per (virtualized, refs) — not a re-run key.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, rovingKey]);
-  const currentSelectedKey = selectedKey();
+  const currentSelectedKey = deriveSelectedKey(selection, selectedIds);
   const selectedInItems = items.some((node) => node.key === currentSelectedKey);
   const rovingInItems = items.some((node) => node.key === rovingKey);
   const tabStopKey = rovingInItems ? rovingKey : selectedInItems ? currentSelectedKey : items[0]?.key ?? null;
@@ -113,8 +122,11 @@ export default function LibraryWorkspace({ onClose }: Props) {
   const breadcrumbs = useMemo(() => parentChain(container, hierarchy.byKey), [container, hierarchy.byKey]);
 
   const close = useCallback((): void => {
-    const key = selectedKey();
-    if (key) useApp.getState().requestReveal(key);
+    // Imperative site (event handler, not render) — fresh getState() read is
+    // correct here; deriveSelectedKey itself stays pure.
+    const st = useApp.getState();
+    const key = deriveSelectedKey(st.librarySelection, st.selectedIds);
+    if (key) st.requestReveal(key);
     onClose();
     if (!key) return;
     let attempts = 0;

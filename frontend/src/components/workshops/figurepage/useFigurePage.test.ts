@@ -874,12 +874,12 @@ describe("useFigurePage F3.3 save/reopen/dirty", () => {
       act(() => result.current.assign(0, { kind: "figdoc", id: "f3", name: "Lossy figure" }));
 
       askConfirm.mockResolvedValueOnce(false);
-      await act(() => result.current.promoteSlot(0));
+      await act(async () => { result.current.promoteSlot(0); });
       expect(useApp.getState().editableFigures).toHaveLength(0);
       expect(askConfirm).toHaveBeenCalledOnce();
 
       askConfirm.mockResolvedValueOnce(true);
-      await act(() => result.current.promoteSlot(0));
+      await act(async () => { result.current.promoteSlot(0); });
       const figures = useApp.getState().editableFigures;
       expect(figures).toHaveLength(1);
       expect(result.current.slots[0].source).toMatchObject({ kind: "figure", id: figures[0].id });

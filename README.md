@@ -126,6 +126,8 @@ ships without a UI.
   getting started, feature guides, Origin interop
 - **[Releases](https://github.com/pquarterman17/quantized/releases)** —
   installers + changelogs
+- [`CHANGELOG.md`](https://github.com/pquarterman17/quantized/blob/main/CHANGELOG.md)
+  — plain-language changes per release, Keep a Changelog format
 - [`RELEASE.md`](https://github.com/pquarterman17/quantized/blob/main/RELEASE.md)
   — how releases are built and published
 - In-app: **⌘K** command palette, **Help ▸ Keyboard shortcuts**, and
@@ -143,9 +145,12 @@ for the rules and
 for the gate and the flake-fix evidence standard.
 
 ```bash
-uv sync --group dev          # backend deps
-uv run pytest                # backend tests (+ `-m golden` for MATLAB parity)
-uv run ruff check src tests && uv run mypy src
+uv sync --group dev                    # backend deps
+uv run python tools/gate.py            # the whole gate, one command (~8 min)
+
+# what it runs, if you want to run a step by hand:
+uv run pytest -n auto        # backend tests (+ `-m golden` for MATLAB parity)
+uv run ruff check src tests tools && uv run mypy src
 cd frontend && npm test && npm run build
 ```
 

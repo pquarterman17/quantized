@@ -29,6 +29,7 @@ import { buildWorkbookRowMenu } from "./workbookRowMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import ContextMenu from "../overlays/ContextMenu";
 
 interface Props {
@@ -40,10 +41,10 @@ interface Props {
 
 export default function WorkbookRow({ node, depth, expanded, hasChildren }: Props) {
   const workbook = node.entity;
-  const toggle = useApp((s) => s.toggleWorkbookExpanded);
-  const selection = useApp((s) => s.librarySelection);
+  const toggle = useLibraryStore((s) => s.toggleWorkbookExpanded);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const renameWorkbook = useApp((s) => s.renameWorkbook);
-  const setActiveDrag = useApp((s) => s.setActiveDrag);
+  const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const [rename, setRename] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const selected = selection?.kind === "workbook" && selection.id === workbook.id;

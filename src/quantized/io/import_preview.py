@@ -35,12 +35,15 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
-from quantized.io._delimited_layout import _looks_like_units_row, _numeric_score
-from quantized.io.delimited import (
+from quantized.io._delimited_layout import (
     _detect_delimiter,
+    _looks_like_units_row,
+    _numeric_score,
+    _to_float,
+)
+from quantized.io.delimited import (
     _encode_categorical,
     _extract_units,
-    _to_float,
 )
 
 __all__ = [

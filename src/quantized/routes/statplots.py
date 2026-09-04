@@ -19,6 +19,7 @@ from quantized.calc.statplots import (
     qq_plot,
     violin_kde,
 )
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/statplots", tags=["statplots"])
@@ -39,7 +40,7 @@ def box_route(req: BoxRequest) -> dict[str, Any]:
     """Box/whisker stats for one or more groups (matplotlib-compatible)."""
     try:
         return _wrap(grouped_box_stats(req.groups, labels=req.labels, whis=req.whis))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -63,7 +64,7 @@ def violin_route(req: ViolinRequest) -> dict[str, Any]:
                 bw_method=req.bw_method, n_points=req.n_points, cut=req.cut,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -77,7 +78,7 @@ def qq_route(req: QQRequest) -> dict[str, Any]:
     """Quantile-quantile / probability-plot coordinates against a distribution."""
     try:
         return _wrap(qq_plot(np.asarray(req.data, dtype=float), dist=req.dist))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -104,5 +105,5 @@ def histogram_route(req: HistogramRequest) -> dict[str, Any]:
                 bins=req.bins, density=req.density, fit=req.fit,
             )
         )
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

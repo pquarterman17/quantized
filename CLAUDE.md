@@ -32,13 +32,13 @@ the behavioural reference (parity + golden values).
   Split before merging. Raise ONLY with written justification in the
   commit message. (The predecessor `BosonPlotter.m` hit ~7k lines; the
   decomposition is still ongoing. Never again.)
-- **Frontend component ceiling: ~400 lines per `.tsx` component.**
-  Convention today, NOT yet test-enforced (a committed vitest is
-  PROJECT_ORGANIZATION_PLAN #7; `architecture.test.ts` currently guards
-  only the #11 row-state chokepoint, not line count). Two files exceed it:
-  `App.tsx` (~780, root orchestrator) and `ThinFilmTab.tsx` (~440). Heavy
-  features become a `workshops/` subtree (state hook + view +
-  sub-components), the React analogue of the MATLAB "workshop pattern".
+- **Frontend component ceiling: 400 lines per `.tsx` component**, test-
+  enforced by `architecture.test.ts` (PROJECT_ORGANIZATION_PLAN #7) with
+  zero grandfathered pins — every `.tsx` meets the ceiling. `App.tsx` and
+  `ThinFilmTab.tsx` were the last holdouts and have since been decomposed
+  well under it. Heavy features become a `workshops/` subtree (state hook +
+  view + sub-components), the React analogue of the MATLAB "workshop
+  pattern".
   (`thin_film_toolkit`'s `FigureBuilder.vue` hit 2,669 lines — the
   anti-pattern.)
 - **Data contract:** every parser returns a frozen `DataStruct`
@@ -80,13 +80,16 @@ the behavioural reference (parity + golden values).
 ## Commands (target — established as W0 lands)
 
 ```bash
-uv sync --group dev        # backend deps
+uv sync --group dev              # backend deps
+uv run python tools/gate.py      # the whole gate, one command (~8 min);
+                                  # --backend-only / --frontend-only / --skip-tests
+
 uv run qz                  # API + SPA on :8000, opens browser
 uv run qz --desktop        # native window (pywebview)
 uv run qz --dev            # Vite HMR + reloading backend
-uv run pytest              # backend tests
+uv run pytest -n auto      # backend tests (pytest-xdist parallel across cores)
 uv run pytest -m golden    # parity vs frozen MATLAB outputs
-uv run ruff check src tests
+uv run ruff check src tests tools
 uv run mypy src
 cd frontend && npm test    # frontend unit tests
 cd frontend && npm run build
@@ -191,7 +194,7 @@ Practical conventions discovered while porting — follow them to stay green.
   STATE, not on the call. A bare `expect(mock).toHaveBeenCalled()` is fine.
 
 ### Lint / CI
-- Always lint **`ruff check src tests`** (CI does) — not just `src`; a
+- Always lint **`ruff check src tests tools`** (CI does) — not just `src`; a
   tests-only import-sort slipped past a `src`-only local run and reddened CI.
 - CI is a matrix (ubuntu/win/mac × py3.11/3.13) + a frontend job; golden
   fixtures are committed so it needs no MATLAB. `main` is branch-protected
@@ -234,6 +237,39 @@ Practical conventions discovered while porting — follow them to stay green.
   (Vitest 4's `FAIL` line is plain text even under a real pty — measured with
   `script` — so anchored matches work; portability across shells, not ANSI, is
   why the search runs on a saved file.)
+
+### Origin graph-recovery safety (2026-07-13 incident)
+- Treat Origin graph recovery as one scientific pipeline: **file bytes ->
+  per-curve `(book, X, Y)` binding -> dataset construction -> acquisition
+  order -> renderer path -> axis state**. A local field decode is not valid if
+  the final graph is wrong.
+- **Do not reintroduce byte-17 `connect=segment2`.** PRs #30/#31 were reverted
+  by #32 after a corpus-wide false positive broke continuous curves (see
+  `plans/ORIGIN_FILE_DECODE_PLAN.md` item 52 and
+  `docs/origin_re/curve_axis_fidelity.md`). Origin line and line+symbol curves
+  remain continuous unless a controlled specimen, COM/LabTalk oracle,
+  rendered-Origin reference, and plausible corpus distribution independently
+  prove another mode.
+- **Protect multi-X worksheets.** Origin commonly stores `X,Y,X,Y,X,Y`; each Y
+  binds to its nearest-preceding X-designated column (`opj_curves.py`,
+  `opju_curves*.py`). Never collapse them to the book's first X or form a
+  sorted X union.
+- **Protect non-monotonic X.** Hysteresis loops need full-data X/Y extents,
+  full-range line/marker path builders, and original row order preserved.
+  Any curve-render change must exercise a non-ascending fixture and verify
+  interactive/export agreement.
+- **Fail closed** (the pattern used throughout `io/origin_project/`): an
+  explicitly referenced but undecoded X/Y is omitted and diagnosed; never
+  coerce it to time/default X or another similarly named book/column.
+- A backend visual decode requires: controlled specimen, independent
+  Origin/COM/rendered oracle, plausible whole-corpus distribution, positive
+  and negative controls, and representative gallery review (at minimum Moke,
+  PNR, and RockingCurve). Synthetic tests may lock proven behavior but cannot
+  establish the proof themselves.
+- Default to UI/rendering work here and treat the Origin backend contracts
+  (byte layouts, column bindings, parser rules, axis semantics) as
+  deliberate — don't reinterpret them without an explicit handoff and
+  independent evidence.
 
 ### Frontend
 - **Copy-vendor from `../fermiviewer/frontend/src`** with a

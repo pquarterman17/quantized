@@ -54,6 +54,7 @@ const LibraryTree = lazy(() => import("./LibraryTree"));
 const LibraryDetails = lazy(() => import("./LibraryDetails"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 
 let demoSeq = 0;
@@ -78,10 +79,10 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const addCollection = useApp((s) => s.addCollection);
   const expandedFolders = useApp((s) => s.expandedFolders);
   const toggleFolderExpanded = useApp((s) => s.toggleFolderExpanded);
-  const expandedWorkbookIds = useApp((s) => s.expandedWorkbookIds);
-  const toggleWorkbookExpanded = useApp((s) => s.toggleWorkbookExpanded);
-  const revealTarget = useApp((s) => s.revealTarget);
-  const clearReveal = useApp((s) => s.clearReveal);
+  const expandedWorkbookIds = useLibraryStore((s) => s.expandedWorkbookIds);
+  const toggleWorkbookExpanded = useLibraryStore((s) => s.toggleWorkbookExpanded);
+  const revealTarget = useLibraryStore((s) => s.revealTarget);
+  const clearReveal = useLibraryStore((s) => s.clearReveal);
   const startResize = useLibraryResize();
   const { hierarchy, rows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");

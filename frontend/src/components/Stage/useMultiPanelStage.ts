@@ -292,7 +292,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       })
         ? defaultDecimateWidthHint()
         : null;
-    fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey, decimateWidth).then(
+    void fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey, decimateWidth).then(
       (p) => {
         if (!cancelled) setPayload(p);
       },
@@ -315,7 +315,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       setSpatialPayloads((prev) => (prev.length === 0 ? prev : []));
       return;
     }
-    Promise.all(
+    void Promise.all(
       panels.map((p) => {
         const ds = datasets.find((d) => d.id === p.datasetId);
         // Each panel owns its OWN dataset (decode-plan #36) — a spatial

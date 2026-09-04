@@ -213,7 +213,7 @@ export default function SubstratesTab() {
                 <span className="qzk-field-lbl" style={{ margin: 0 }}>
                   Å
                 </span>
-                <button className="qz-btn" onClick={runMismatch}>
+                <button className="qz-btn" onClick={() => void runMismatch()}>
                   Mismatch
                 </button>
               </span>

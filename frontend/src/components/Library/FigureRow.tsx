@@ -16,6 +16,7 @@ import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import OriginSavedPreviewWindow from "./OriginSavedPreviewWindow";
 
 export default function FigureRow({ entry, depth = 0, treeMode = false }: {
@@ -33,7 +34,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
   const remakeOriginFigure = useApp((s) => s.remakeOriginFigure);
   const figures = useApp((s) => s.originFigures);
   const datasets = useApp((s) => s.datasets);
-  const selection = useApp((s) => s.librarySelection);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const selected = treeMode && selection?.kind === "origin-figure" && selection.id === entry.id;
   const select = () => useApp.getState().setLibrarySelection({ kind: "origin-figure", id: entry.id });
   const sourceResolution = resolveOriginFigureSources(entry, figures, datasets);

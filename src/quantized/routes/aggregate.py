@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from quantized.calc.aggregate import dataset_algebra
 from quantized.datastruct import DataStruct
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import datastruct_payload
 
 router = APIRouter(prefix="/api/aggregate", tags=["aggregate"])
@@ -41,6 +42,6 @@ def algebra(req: AlgebraRequest) -> dict[str, Any]:
             channel_a=req.channel_a,
             channel_b=req.channel_b,
         )
-    except (ValueError, ArithmeticError, KeyError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return datastruct_payload(out)

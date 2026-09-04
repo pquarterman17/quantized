@@ -267,7 +267,7 @@ export default function OriginProvenanceCard({ active }: { active: Dataset | nul
       ) : null}
 
       {rawLog && (
-        <Button size="sm" onClick={copyLog} style={{ marginTop: 6 }}>
+        <Button size="sm" onClick={() => void copyLog()} style={{ marginTop: 6 }}>
           ⧉ Copy results log
         </Button>
       )}

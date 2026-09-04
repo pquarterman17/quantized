@@ -175,7 +175,11 @@ function parseEditableFigures(value: unknown, datasetIds: ReadonlySet<string>, m
   for (const candidate of value) {
     const version = figureDocumentVersion(candidate);
     if (version !== null && version > FIGURE_DOCUMENT_VERSION) {
-      const id = typeof candidate === "object" && candidate !== null && typeof (candidate as Record<string, unknown>).id === "string" ? ` "${(candidate as Record<string, unknown>).id}"` : "";
+      const candidateId =
+        typeof candidate === "object" && candidate !== null
+          ? (candidate as Record<string, unknown>).id
+          : undefined;
+      const id = typeof candidateId === "string" ? ` "${candidateId}"` : "";
       migrationWarnings.push(`skipped saved FigureDocument${id} with unsupported version ${version}`);
       continue;
     }

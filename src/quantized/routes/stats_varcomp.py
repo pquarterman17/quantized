@@ -17,6 +17,7 @@ from quantized.calc.stats_varcomp import (
     variability_summary,
     variance_components_nested,
 )
+from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
@@ -44,7 +45,7 @@ def nested_anova_route(req: NestedAnovaRequest) -> dict[str, Any]:
     B(A) tested against Error."""
     try:
         return _wrap(nested_anova(req.groups, alpha=req.alpha))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -53,7 +54,7 @@ def variance_components_route(req: NestedGroupsRequest) -> dict[str, Any]:
     """ANOVA/EMS-method variance-component estimates for a 2-level nested design."""
     try:
         return _wrap(variance_components_nested(req.groups))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -62,5 +63,5 @@ def variability_summary_route(req: NestedGroupsRequest) -> dict[str, Any]:
     """Per-cell / per-A-group / grand summary stats for the variability chart."""
     try:
         return _wrap(variability_summary(req.groups))
-    except (ValueError, ArithmeticError, IndexError) as exc:
+    except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

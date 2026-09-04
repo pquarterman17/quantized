@@ -61,6 +61,7 @@ import {
 import type { FolderNode } from "../../lib/types";
 import { ACCENT_SWATCHES } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 
 /** The floating drop-outcome label's text for the given zone (sub-item 3). */
 function dropLabelText(zone: DropZone3, name: string): string {
@@ -77,12 +78,12 @@ interface Props {
 
 export default function FolderRow({ folder, depth, count, expanded }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
-  const selection = useApp((s) => s.librarySelection);
+  const selection = useLibraryStore((s) => s.librarySelection);
   const renameFolder = useApp((s) => s.renameFolder);
   const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
   const moveFolder = useApp((s) => s.moveFolder);
-  const activeDrag = useApp((s) => s.activeDrag);
-  const setActiveDrag = useApp((s) => s.setActiveDrag);
+  const activeDrag = useLibraryStore((s) => s.activeDrag);
+  const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const [rename, setRename] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   // Unified drop indicator: "into" for a whole-row dataset-drop OR a folder

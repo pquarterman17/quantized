@@ -27,14 +27,16 @@ Run (Windows, Origin installed):
 """
 from __future__ import annotations
 
-import os
-
 import json
+import os
 from pathlib import Path
 
 import win32com.client as wc
 
-CORPUS = Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data")) / "origin"
+CORPUS = (
+    Path(os.environ.get("QZ_TEST_DATA_ROOT") or (Path(__file__).resolve().parents[3] / "test-data"))
+    / "origin"
+)
 GT = CORPUS / "specimens" / "ground_truth"
 FILES = ["hc2convert.opj", "Hc2 data.opju"]
 MAX_PLOTS = 60
