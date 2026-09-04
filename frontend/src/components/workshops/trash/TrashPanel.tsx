@@ -1,3 +1,4 @@
+import { useRef } from "react";
 // Project trash view (MAIN_PLAN #32; widened to every deletable kind by
 // PRIMARY_SOFTWARE_AUDIT_PLAN P3.7).
 //
@@ -33,6 +34,13 @@ export default function TrashPanel() {
   const days = Math.round(TRASH_MAX_AGE_MS / 86_400_000);
   const maxMiB = Math.round(TRASH_MAX_BYTES / (1024 * 1024));
 
+  // The confirm is awaited, and a delete can land meanwhile (the Library's
+  // Delete key is not blocked by the dialog) — the count reported must be
+  // what `purgeAll` actually removed, not the render the dialog opened from
+  // (self-review on #292). A ref tracks the latest trash without an
+  // imperative store read.
+  const trashRef = useRef(trash);
+  trashRef.current = trash;
   const emptyTrash = async () => {
     const ok = await askConfirm(
       "Empty trash?",
@@ -41,8 +49,9 @@ export default function TrashPanel() {
       true,
     );
     if (!ok) return;
+    const removed = trashRef.current.length;
     purgeAll();
-    setStatus(`emptied trash (${summary.count} item${summary.count === 1 ? "" : "s"})`);
+    setStatus(`emptied trash (${removed} item${removed === 1 ? "" : "s"})`);
   };
 
   return (

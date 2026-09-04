@@ -11,6 +11,8 @@
 // stack put the eager total 53 B over the pin (2026-09-03), so the fast path
 // no longer lives on the eager side either — one `await import()` for all.
 
+import type { FigureDocument } from "../lib/figureDocument";
+import type { FigureDoc } from "../lib/figuredoc";
 import type { Dataset } from "../lib/types";
 import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
 import { trashEntryId, type DatasetTrashEntry, type FolderTrashMember, type RestoreResult, type TrashEntry } from "./trash";
@@ -86,6 +88,19 @@ function resolveDatasetDependency<T>(
   };
 }
 
+const nullEditableBinding = (doc: FigureDocument): FigureDocument => ({
+  ...doc,
+  bindings: { ...doc.bindings, datasetId: null },
+});
+const nullFigureDocBinding = (doc: FigureDoc): FigureDoc => ({ ...doc, datasetId: null });
+
+/** The load-time clamp, applied to a restored frozen document: null a
+ *  binding that names no live dataset, leave a live one alone. */
+function clampBinding<T>(s: AppState, doc: T, bound: (doc: T) => string | null, withNulled: (doc: T) => T): T {
+  const id = bound(doc);
+  return id !== null && !s.datasets.some((d) => d.id === id) ? withNulled(doc) : doc;
+}
+
 /** Every kind's restore rule, as a pure patch on the state the caller's
  *  `set` transaction hands in. `withoutEntry(extra)` is the trash minus the
  *  entry being restored (and any dependency entries it consumed). Pure so
@@ -123,12 +138,16 @@ export function computeRestore(
       if (s.editableFigures.some((d) => d.id === entry.document.id)) {
         return { patch: { trash: withoutEntry() }, result: { ok: true } };
       }
-      const dep = resolveDatasetDependency(
-        s,
-        entry.document.data.mode === "live" ? entry.document.bindings.datasetId : null,
-        entry.document,
-        (doc) => ({ ...doc, bindings: { ...doc.bindings, datasetId: null } }),
-      );
+      // A FROZEN document renders from its own snapshot, so it gets exactly
+      // what the load-time clamps give it (`parseEditableFigures`): a
+      // binding that names no live dataset is nulled, silently, and no
+      // dependency restore is attempted — it needs none (self-review on
+      // #292: the old live-only rule let a restored frozen figure be the
+      // one object in the app carrying a dataset id that names nothing).
+      const dep =
+        entry.document.data.mode === "live"
+          ? resolveDatasetDependency(s, entry.document.bindings.datasetId, entry.document, nullEditableBinding)
+          : { restored: clampBinding(s, entry.document, (d) => d.bindings.datasetId, nullEditableBinding), extraPatch: {}, consumedEntryIds: [] };
       return {
         patch: {
           editableFigures: [...s.editableFigures, dep.restored],
@@ -142,12 +161,9 @@ export function computeRestore(
       if (s.figureDocs.some((d) => d.id === entry.doc.id)) {
         return { patch: { trash: withoutEntry() }, result: { ok: true } };
       }
-      const dep = resolveDatasetDependency(
-        s,
-        entry.doc.live ? entry.doc.datasetId : null,
-        entry.doc,
-        (doc) => ({ ...doc, datasetId: null }),
-      );
+      const dep = entry.doc.live
+        ? resolveDatasetDependency(s, entry.doc.datasetId, entry.doc, nullFigureDocBinding)
+        : { restored: clampBinding(s, entry.doc, (d) => d.datasetId, nullFigureDocBinding), extraPatch: {}, consumedEntryIds: [] };
       return {
         patch: {
           figureDocs: [...s.figureDocs, dep.restored],

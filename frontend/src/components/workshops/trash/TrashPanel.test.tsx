@@ -87,6 +87,26 @@ describe("TrashPanel", () => {
     expect(screen.getByText(/2 datasets/)).toBeInTheDocument();
   });
 
+  it("a restore whose lazy chunk fails to load reports it instead of doing nothing (self-review on #292)", async () => {
+    useApp.setState({ trash: [dsEntry("a")], restoreFromTrash: async () => { throw new Error("chunk load failed"); } });
+    render(<TrashPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(useApp.getState().status).toMatch(/could not restore a\.dat/));
+    expect(useApp.getState().trash).toHaveLength(1); // nothing was consumed
+  });
+
+  it("Empty trash reports what it ACTUALLY removed when a delete lands while the confirm is open (self-review on #292)", async () => {
+    useApp.setState({ trash: [dsEntry("a")] });
+    vi.mocked(askConfirm).mockImplementation(async () => {
+      useApp.getState().sendEntriesToTrash([dsEntry("late")]); // a Delete keypress during the dialog
+      return true;
+    });
+    render(<TrashPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Empty trash" }));
+    await waitFor(() => expect(useApp.getState().trash).toHaveLength(0));
+    expect(useApp.getState().status).toBe("emptied trash (2 items)");
+  });
+
   it("Empty trash asks first, with a purge-preview body naming what's lost", async () => {
     vi.mocked(askConfirm).mockResolvedValue(false);
     useApp.setState({ trash: [dsEntry("a"), dsEntry("b")] });

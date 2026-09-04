@@ -22,6 +22,7 @@
 // is the policy for now" (undo itself is still owner-gated, GUI_INTERACTION
 // #1).
 
+import { multiSelected } from "./multiSelected";
 import {
   applyActiveCorrectionsToFolder,
   exportFolderCsv,
@@ -175,7 +176,6 @@ export interface DatasetActionTarget {
   onStageOpen?: () => void;
 }
 
-export const multiSelected = (t: DatasetActionTarget) => t.selected && t.selectedIds.length > 1;
 
 // Grouped (not one flat array) so `datasetRowMenu.ts` can splice the
 // genuinely-dynamic per-folder "Move to …" list (one entry per live folder —
@@ -478,3 +478,5 @@ export const curveActions: ContextAction<CurveActionTarget>[] = [
     run: (t) => t.ctx.resetStyle(t.series.channel),
   },
 ];
+
+export { multiSelected };

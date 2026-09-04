@@ -43,7 +43,9 @@ import type { ReportEntry } from "../lib/report";
 import type { Dataset } from "../lib/types";
 import {
   byteSize,
+  dataStructByteEstimate,
   datasetByteEstimate,
+  editableFigureByteEstimate,
   evictTrash,
   trashEntryId,
   TRASH_MAX_AGE_MS,
@@ -336,15 +338,30 @@ describe("restoreFromTrash — editableFigure dependency rule (both branches)", 
     expect(restored.bindings.datasetId).toBeNull();
   });
 
-  it("a frozen document's own snapshot means no dependency note at all", async () => {
+  it("a frozen document's own snapshot means no dependency note — but a dangling binding is still clamped, as on load", async () => {
     const frozen = createFigureDocument({
       id: "fz1", name: "Frozen", datasetId: "d1", view: defaultPlotView(),
       data: { mode: "frozen", snapshot: ds("d1").data },
     });
     useApp.setState({ editableFigures: [frozen] });
     useApp.getState().deleteEditableFigure("fz1");
-    useApp.setState({ datasets: [] }); // dataset gone — irrelevant to a frozen doc
+    useApp.setState({ datasets: [] }); // dataset gone — the frozen doc renders from its snapshot regardless
     await expect(useApp.getState().restoreFromTrash("editableFigure:fz1")).resolves.toEqual({ ok: true });
+    // Self-review on #292: `parseEditableFigures` nulls a binding that names
+    // no dataset for EVERY mode; a restore must not be the one path that
+    // leaves a frozen figure pointing at nothing.
+    expect(useApp.getState().editableFigures.find((f) => f.id === "fz1")?.bindings.datasetId).toBeNull();
+  });
+
+  it("a frozen document whose dataset is still live keeps its binding", async () => {
+    const frozen = createFigureDocument({
+      id: "fz2", name: "Frozen", datasetId: "d1", view: defaultPlotView(),
+      data: { mode: "frozen", snapshot: ds("d1").data },
+    });
+    useApp.setState({ editableFigures: [frozen] });
+    useApp.getState().deleteEditableFigure("fz2");
+    await expect(useApp.getState().restoreFromTrash("editableFigure:fz2")).resolves.toEqual({ ok: true });
+    expect(useApp.getState().editableFigures.find((f) => f.id === "fz2")?.bindings.datasetId).toBe("d1");
   });
 
   it("guards against a duplicate id that came back some other way", async () => {
@@ -372,6 +389,38 @@ describe("restoreFromTrash — legacy figureDoc dependency rule", () => {
 });
 
 // ── page: restore as-is; a missing panel is the existing F3 semantics ──────
+
+describe("trash capture — self-review on #292", () => {
+  it("delete → Undo → delete again keeps ONE entry per object (the newer capture wins)", () => {
+    useApp.setState({ datasets: [ds("a")], activeId: "a", trash: [], history: [], future: [] });
+    useApp.getState().removeDatasets(["a"]);
+    useApp.getState().undo();
+    useApp.getState().removeDatasets(["a"]);
+    expect(useApp.getState().trash.map(trashEntryId)).toEqual(["dataset:a"]);
+  });
+
+  it("a FROZEN figure's byte estimate never stringifies its snapshot", () => {
+    const snapshot = { time: Array.from({ length: 1000 }, (_, i) => i), values: [Array.from({ length: 1000 }, () => 1.5)], labels: ["M"], units: [""], metadata: {} };
+    const frozen = createFigureDocument({
+      id: "fz", name: "Frozen", datasetId: "d1", view: defaultPlotView(), data: { mode: "frozen", snapshot },
+    });
+    const live = createFigureDocument({ id: "lv", name: "Live", datasetId: "d1", view: defaultPlotView() });
+    const expected = byteSize({ ...frozen, data: { mode: "frozen" } }) + dataStructByteEstimate(snapshot);
+    expect(editableFigureByteEstimate(frozen)).toBe(expected);
+    // Dimension-based: the same shape with long floats costs the same
+    // estimate, while the exact stringified size grows with every digit.
+    const longFloats = { ...snapshot, values: [Array.from({ length: 1000 }, () => 1234.5678901234)] };
+    const frozenLong = createFigureDocument({
+      id: "fz", name: "Frozen", datasetId: "d1", view: defaultPlotView(), data: { mode: "frozen", snapshot: longFloats },
+    });
+    expect(editableFigureByteEstimate(frozenLong)).toBe(editableFigureByteEstimate(frozen));
+    expect(byteSize(frozenLong)).toBeGreaterThan(byteSize(frozen));
+    expect(editableFigureByteEstimate(live)).toBe(byteSize(live)); // no snapshot: exact
+    useApp.setState({ datasets: [ds("d1")], editableFigures: [frozen], trash: [], history: [], future: [] });
+    useApp.getState().deleteEditableFigure("fz");
+    expect(useApp.getState().trash[0].bytes).toBe(expected);
+  });
+});
 
 describe("restoreFromTrash — a purge that lands mid-restore wins (review finding on #292)", () => {
   it("re-validates the entry inside the final transaction: a purged entry is never resurrected", async () => {

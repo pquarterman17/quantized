@@ -8,6 +8,7 @@
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
+import { multiSelected } from "./multiSelected";
 
 export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
   {
@@ -23,7 +24,7 @@ export const datasetRemoveActions: ContextAction<DatasetActionTarget>[] = [
   {
     id: "dataset.removeSelected",
     label: (t) => `Remove ${t.selectedIds.length} selected`,
-    hidden: (t) => !(t.selected && t.selectedIds.length > 1), // multiSelected(t), inlined to avoid a cross-file cycle
+    hidden: (t) => !multiSelected(t),
     destructive: true,
     confirm: (t) => ({ title: `Remove ${t.selectedIds.length} datasets?`, confirmLabel: "Remove" }),
     run: (t) => {

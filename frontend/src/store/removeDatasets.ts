@@ -17,7 +17,25 @@ import type { AppState } from "./useApp";
 import { pruneWindowDatasetRefs } from "./windowDocuments";
 import { pruneReportRefs } from "../lib/report";
 
-export function removeDatasetsPatch(s: AppState, ids: readonly string[]): Partial<AppState> {
+/** The slice of state `removeDatasetsPatch` reads and rewrites — every
+ *  id-bearing field a dataset removal must prune. A `HistorySnapshot`
+ *  carries the same fields, which is what lets `scrubDatasetsFromHistory`
+ *  below run each retained snapshot through the SAME pruning. */
+export type RemovableState = Pick<
+  AppState,
+  | "datasets"
+  | "activeId"
+  | "worksheetId"
+  | "selectedIds"
+  | "originFigures"
+  | "originFidelity"
+  | "reports"
+  | "figureDocs"
+  | "editableFigures"
+  | "plotWindows"
+>;
+
+export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): Partial<RemovableState> {
   if (ids.length === 0) return {};
   const drop = new Set(ids);
   const datasets = s.datasets.filter((d) => !drop.has(d.id));
@@ -38,20 +56,18 @@ export function removeDatasetsPatch(s: AppState, ids: readonly string[]): Partia
 /** P3.7 review round: "Delete permanently" must be exactly that. Removing a
  *  dataset while leaving it inside earlier undo snapshots lets Ctrl+Z (or an
  *  undo of any OLDER edit) resurrect it, contradicting the confirmation the
- *  user just accepted. Strip `ids` from every retained history AND future
- *  snapshot's `datasets` — `restorePatch` already nulls window bindings and
- *  drops selections that name a dataset absent from a snapshot, so the
- *  scrubbed snapshots restore coherently. */
+ *  user just accepted. Each retained history AND future snapshot is run
+ *  through `removeDatasetsPatch` — the SAME pruning a live removal applies
+ *  (self-review on #292: stripping only `datasets` left `activeId`,
+ *  `selectedIds`, `worksheetId`, figure bindings and Origin refs naming the
+ *  ghost id, so an undo restored a state that violated the live-dataset
+ *  selection invariant and handed a phantom id to the next Delete). */
 export function scrubDatasetsFromHistory(
   s: Pick<AppState, "history" | "future">,
   ids: readonly string[],
 ): Pick<AppState, "history" | "future"> {
-  const gone = new Set(ids);
   const scrub = (entries: AppState["history"]): AppState["history"] =>
-    entries.map((e) => ({
-      ...e,
-      snapshot: { ...e.snapshot, datasets: e.snapshot.datasets.filter((d) => !gone.has(d.id)) },
-    }));
+    entries.map((e) => ({ ...e, snapshot: { ...e.snapshot, ...removeDatasetsPatch(e.snapshot, ids) } }));
   return { history: scrub(s.history), future: scrub(s.future) };
 }
 

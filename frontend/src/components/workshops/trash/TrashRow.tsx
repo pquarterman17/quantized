@@ -50,9 +50,15 @@ export default function TrashRow({ entry, now }: { entry: TrashEntry; now: numbe
       <Button
         size="sm"
         onClick={() => {
-          void restore(id).then((result) => {
-            setStatus(result.ok ? (result.note ? `restored ${name} — ${result.note}` : `restored ${name}`) : result.reason);
-          });
+          restore(id)
+            .then((result) => {
+              setStatus(result.ok ? (result.note ? `restored ${name} — ${result.note}` : `restored ${name}`) : result.reason);
+            })
+            // The restore crosses a dynamic import (store/trashRestore.ts);
+            // a stale tab after a rebuild or a dropped connection rejects
+            // the chunk load, and a silent click is the wrong answer
+            // (self-review on #292).
+            .catch(() => setStatus(`could not restore ${name} — reload and try again`));
         }}
         title="Put this back where it was"
       >

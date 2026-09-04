@@ -19,7 +19,7 @@ describe("trashSummary", () => {
     expect(trashSummary([], 1000)).toEqual({
       count: 0, bytes: 0,
       byKind: { dataset: 0, editableFigure: 0, figureDoc: 0, page: 0, report: 0, folder: 0 },
-      oldestAt: null, newestAt: null, oldestAgeMs: null,
+      oldestAt: null, oldestAgeMs: null,
     });
   });
 
@@ -31,7 +31,6 @@ describe("trashSummary", () => {
     expect(s.byKind.dataset).toBe(2);
     expect(s.byKind.report).toBe(1);
     expect(s.oldestAt).toBe(50);
-    expect(s.newestAt).toBe(200);
     expect(s.oldestAgeMs).toBe(950);
   });
 });

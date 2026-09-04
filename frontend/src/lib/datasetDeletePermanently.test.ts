@@ -11,6 +11,8 @@ import { datasetRemoveActions, runContextAction, type DatasetActionTarget } from
 import { trashEntryId, type DatasetTrashEntry } from "../store/trash";
 import { useApp } from "../store/useApp";
 import type { Dataset } from "./types";
+import { createFigureDocument } from "./figureDocument";
+import { defaultPlotView } from "./plotview";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -109,6 +111,26 @@ describe("removeDatasets — {permanent: true} bypasses trash (the store side da
       reason: "that entry is no longer in the trash",
     });
     expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["b"]);
+  });
+
+  it("scrubs EVERY id-bearing field of a retained snapshot, not just `datasets` (self-review on #292)", () => {
+    // activeId / selectedIds / worksheetId / a figure binding all naming "a"
+    // at the time of an OLDER edit; after the permanent delete an undo of
+    // that edit must not restore a state where they still name the ghost.
+    const figure = createFigureDocument({ id: "f1", name: "F", datasetId: "a", view: defaultPlotView() });
+    useApp.setState({ activeId: "a", selectedIds: ["a"], worksheetId: "a", editableFigures: [figure] });
+    useApp.getState().recordHistory("older edit");
+    useApp.setState({ activeId: "b", selectedIds: ["b"], worksheetId: "b" });
+
+    useApp.getState().removeDatasets(["a"], { permanent: true });
+    useApp.getState().undo();
+
+    const s = useApp.getState();
+    expect(s.datasets.map((d) => d.id)).toEqual(["b"]);
+    expect(s.activeId).not.toBe("a");
+    expect(s.selectedIds).not.toContain("a");
+    expect(s.worksheetId).not.toBe("a");
+    expect(s.editableFigures.find((f) => f.id === "f1")?.bindings.datasetId).toBeNull();
   });
 
   it("leaves UNRELATED trash entries alone when scrubbing the permanent delete's ids", () => {

@@ -47,7 +47,7 @@
 
 import type { FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
-import type { FolderNode, Dataset } from "../lib/types";
+import type { DataStruct, Dataset, FolderNode } from "../lib/types";
 import type { PageDocument } from "../lib/pageDocument";
 import type { ReportEntry } from "../lib/report";
 import type { AppState } from "./useApp";
@@ -74,11 +74,33 @@ const APPROX_CHARS_PER_NUMBER = 14;
  *  exact figure with the constant above) is the honest trade. Every other
  *  kind's payload is small and keeps the exact `byteSize`. */
 export function datasetByteEstimate(dataset: Dataset): number {
-  const d = dataset.data;
+  return dataStructByteEstimate(dataset.data) + dataset.name.length;
+}
+
+/** The dimension-based estimate for one `DataStruct` — shared by the dataset
+ *  entry and by a FROZEN figure, whose document carries a full copy of its
+ *  dataset (`FigureDocument.data.snapshot` / `FigureDoc.dataSnapshot`), so
+ *  stringifying it on delete would be the same ~1.2 s stall the dataset
+ *  path already avoids (self-review on #292). */
+export function dataStructByteEstimate(d: DataStruct): number {
   let cells = d.time.length;
   for (const row of d.values) cells += row.length;
-  const text = d.labels.join("").length + d.units.join("").length + dataset.name.length;
-  return cells * APPROX_CHARS_PER_NUMBER + text;
+  return cells * APPROX_CHARS_PER_NUMBER + d.labels.join("").length + d.units.join("").length;
+}
+
+/** Size estimate for an `editableFigure` entry: the exact size of the
+ *  document WITHOUT its frozen snapshot, plus the snapshot's estimate. A
+ *  live document has no snapshot and is measured exactly. */
+export function editableFigureByteEstimate(document: FigureDocument): number {
+  const snapshot = document.data.snapshot;
+  if (!snapshot) return byteSize(document);
+  return byteSize({ ...document, data: { mode: document.data.mode } }) + dataStructByteEstimate(snapshot);
+}
+
+/** Same rule for a legacy `figureDoc` entry (`dataSnapshot`). */
+export function figureDocByteEstimate(doc: FigureDoc): number {
+  const { dataSnapshot, ...rest } = doc;
+  return dataSnapshot ? byteSize(rest) + dataStructByteEstimate(dataSnapshot) : byteSize(doc);
 }
 
 interface TrashEntryBase {
@@ -264,7 +286,14 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
 
     sendEntriesToTrash: (entries, now = Date.now()) => {
       if (entries.length === 0) return;
-      set((s) => ({ trash: evictTrash([...entries, ...s.trash], now) }));
+      // One entry per object: delete → Undo → delete again used to leave two
+      // entries with the same `trashEntryId` (duplicate React keys, a big
+      // dataset counted twice against the byte cap, an evicted bystander).
+      // The newer capture replaces the older one (self-review on #292).
+      const incoming = new Set(entries.map(trashEntryId));
+      set((s) => ({
+        trash: evictTrash([...entries, ...s.trash.filter((e) => !incoming.has(trashEntryId(e)))], now),
+      }));
     },
 
     restoreFromTrash: async (entryId) => {
@@ -323,6 +352,6 @@ export function removeReportWithTrash(get: SliceGet, set: SliceSet, id: string):
 
 export function removeFigureDocWithTrash(get: SliceGet, set: SliceSet, id: string): void {
   const doc = get().figureDocs.find((f) => f.id === id);
-  if (doc) get().sendEntriesToTrash([{ kind: "figureDoc", at: Date.now(), bytes: byteSize(doc), doc }]);
+  if (doc) get().sendEntriesToTrash([{ kind: "figureDoc", at: Date.now(), bytes: figureDocByteEstimate(doc), doc }]);
   set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) }));
 }

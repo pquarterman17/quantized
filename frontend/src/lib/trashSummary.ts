@@ -11,7 +11,6 @@ export interface TrashSummary {
   bytes: number;
   byKind: Record<TrashEntry["kind"], number>;
   oldestAt: number | null;
-  newestAt: number | null;
   /** `now - oldestAt`, for a "oldest 3d ago" purge-preview line. Null when
    *  the trash is empty. */
   oldestAgeMs: number | null;
@@ -26,14 +25,12 @@ export function trashSummary(entries: readonly TrashEntry[], now: number): Trash
   };
   let bytes = 0;
   let oldestAt: number | null = null;
-  let newestAt: number | null = null;
   for (const entry of entries) {
     byKind[entry.kind] += 1;
     bytes += entry.bytes;
     if (oldestAt === null || entry.at < oldestAt) oldestAt = entry.at;
-    if (newestAt === null || entry.at > newestAt) newestAt = entry.at;
   }
-  return { count: entries.length, bytes, byKind, oldestAt, newestAt, oldestAgeMs: oldestAt === null ? null : now - oldestAt };
+  return { count: entries.length, bytes, byKind, oldestAt, oldestAgeMs: oldestAt === null ? null : now - oldestAt };
 }
 
 /** A short human size — no existing formatter in `lib/` to reuse (checked:
@@ -57,7 +54,7 @@ const KIND_LABELS: Record<TrashEntry["kind"], [string, string]> = {
   report: ["report", "reports"],
   folder: ["folder", "folders"],
 };
-export const TRASH_KIND_ORDER: readonly TrashEntry["kind"][] = [
+const TRASH_KIND_ORDER: readonly TrashEntry["kind"][] = [
   "dataset", "editableFigure", "figureDoc", "page", "report", "folder",
 ];
 
