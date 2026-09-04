@@ -115,9 +115,9 @@ export function buildDataCommands(s: StoreGet): Action[] {
       section: "Combine & split",
       label: "Merge selected datasets",
       description: "Concatenate the currently selected datasets into one new dataset.",
-      run: () => void s().mergeSelected(),
+      run: () => s().mergeSelected(),
     },
-    { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", description: "Create an independent copy of the active dataset in the current folder.", run: () => { const id = s().activeId; if (id) void s().duplicateDataset(id); } },
+    { id: "duplicate", group: "Data", section: "Combine & split", label: "Duplicate active dataset", description: "Create an independent copy of the active dataset in the current folder.", run: () => { const id = s().activeId; if (id) return s().duplicateDataset(id); } },
     { id: "reimport", group: "Data", section: "Recalculation", label: "Re-import active dataset", description: "Reload the active dataset from its recorded source using the saved import settings.", run: () => { const id = s().activeId; if (id) void s().reimportDataset(id); } },
     { id: "split", group: "Data", section: "Combine & split", label: "Split by column value…", description: "Create one derived dataset for each distinct value in a selected column.", keywords: "jmp by group split factor level separate", run: () => { const id = s().activeId; if (id) s().openSplitDialog(id); } },
   ];
