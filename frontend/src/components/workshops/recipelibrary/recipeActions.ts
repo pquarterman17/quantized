@@ -245,7 +245,7 @@ export function importRecipe(kind: RecipeKind, scope: RecipeRef["scope"], text: 
     // four (`RECIPE_CAPABILITIES[kind].scopes`), and the id is the name the
     // dedupe actually used, not whatever the imported file happened to say.
     return r.ok
-      ? { ok: true, message: `imported as "${r.name}"`, ref: { kind, scope: "global", id: r.name } }
+      ? { ok: true, message: `imported "${r.name}"`, ref: { kind, scope: "global", id: r.name } }
       : r;
   }
   try {
@@ -253,7 +253,13 @@ export function importRecipe(kind: RecipeKind, scope: RecipeRef["scope"], text: 
     // library-level import UI — can focus the row it just created without a
     // second lookup racing whatever else touched the store meanwhile.
     const id = plotOps.importRecipeToScope(scope, text); // throws its own message verbatim
-    return { ok: true, message: "imported", ref: { kind: "plot", scope, id } };
+    // The message names the landed recipe and, for plot recipes (the one kind
+    // with two scopes), where it landed — so the panel can show `message` as
+    // is and never has to read the store itself to learn the name.
+    const ref: RecipeRef = { kind: "plot", scope, id };
+    const name = plotRecipeFor(ref)?.name ?? id;
+    const where = scope === "project" ? "this project" : "global";
+    return { ok: true, message: `imported "${name}" into ${where}`, ref };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "not a valid recipe file" };
   }

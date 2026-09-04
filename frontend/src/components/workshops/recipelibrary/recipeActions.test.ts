@@ -231,7 +231,7 @@ describe("name-keyed operations route through the safe layer", () => {
       outputs: [],
     }))).toEqual({
       ok: true,
-      message: 'imported as "Shared (2)"',
+      message: 'imported "Shared (2)"',
       ref: { kind: "analysis", scope: "global", id: "Shared (2)" },
     });
     expect(loadTemplates()).toHaveLength(2); // an import never overwrites
@@ -376,6 +376,9 @@ describe("importAnyRecipe — the library-level import button's one entry point"
     expect(result.ref.scope).toBe("project");
     const landed = useApp.getState().plotRecipes.find((r) => r.id === result.ref!.id);
     expect(landed?.name).toBe("X (2)");
+    // The message carries the LANDED name and scope so the panel can show it
+    // verbatim without reading the store (getState()-in-render ratchet).
+    expect(result.message).toBe('imported "X (2)" into this project');
   });
 
   it("sniffs each name-keyed kind and dedupes its name on collision", () => {
@@ -389,7 +392,7 @@ describe("importAnyRecipe — the library-level import button's one entry point"
       if (!exported.ok) throw new Error(`export failed for ${kind}`);
       expect(importAnyRecipe(exported.text, "project")).toEqual({
         ok: true,
-        message: 'imported as "X (2)"',
+        message: 'imported "X (2)"',
         ref: { kind, scope: "global", id: "X (2)" },
       });
     }
