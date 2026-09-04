@@ -132,6 +132,7 @@ export function hasDesktopShell(): boolean {
 
 export const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
 export const bool = (v: unknown): boolean => v === true;
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const shellKind = (v: unknown): DesktopShellKind | null =>
   v === "pywebview" || v === "tauri" || v === "browser" ? v : null;
 
@@ -283,48 +284,83 @@ export async function readProject(path: string): Promise<OpenProjectResult | nul
  *  `write_project_file` to exist — the latter is what the caller will use
  *  next — so a caller is never handed a destination it then has no bridge
  *  method to write to. */
+/** The save dialog REFUSED the pick (or failed) and said why — distinct from
+ *  the user cancelling. P1.2 box 4 made this reachable on purpose:
+ *  `save_file_dialog` now returns `{path: null, error}` when the chosen
+ *  destination is the open project's own declared raw source, and mapping
+ *  that onto `CANCELLED` (as this function did for every `path: null`) made
+ *  the refusal SILENT — the user picked their raw file, nothing happened, no
+ *  message. The caller shows `refused` as the save's status. */
+export interface SaveRefused {
+  readonly refused: string;
+}
+
+/** Narrow a save-path outcome to the refusal object (the only object shape
+ *  besides `{path}` these calls return). */
+export function isSaveRefused(v: unknown): v is SaveRefused {
+  return typeof v === "object" && v !== null && "refused" in v;
+}
+
+/** Every refusal the backend can voice on a save path starts with one of
+ *  these (desktop_bridge.py / desktop_bridge_dialogs.py); anything else in
+ *  an `error` is a FAILURE (dialog crash, no window) and is reported as one. */
+const REFUSAL_PREFIXES = ["refusing to save — ", "refusing to write — "] as const;
+
+/** Turn a backend `error` string into the status a caller shows: a refusal
+ *  becomes "save refused — <reason>" (the prefix is not doubled), a failure
+ *  "save failed — <error>" (self-review on #291). */
+export function saveErrorStatus(error: string): string {
+  for (const prefix of REFUSAL_PREFIXES) {
+    if (error.startsWith(prefix)) return `save refused — ${error.slice(prefix.length)}`;
+  }
+  return `save failed — ${error}`;
+}
+
+function isRefusal(error: string): boolean {
+  return REFUSAL_PREFIXES.some((prefix) => error.startsWith(prefix));
+}
+
 // `string` already subsumes the `Cancelled` literal (a `qz/desktop-bridge/
 // cancelled`-valued string) at the type level — the return type keeps just
 // `string` (callers still narrow with `=== CANCELLED`); the eliminated
 // literal added no-redundant-type-constituents noise without adding a
-// distinguishable case for tsc.
-export async function pickSaveDestination(suggestedName: string): Promise<string | null> {
+// distinguishable case for tsc. `SaveRefused` IS a distinguishable case (an
+// object), so it stays.
+export async function pickSaveDestination(suggestedName: string): Promise<string | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
   try {
     const dialogOut = await bridge.save_file_dialog(suggestedName);
-    return str(dialogOut.path) ?? CANCELLED;
+    const path = str(dialogOut.path);
+    if (path !== null) return path;
+    const error = str(dialogOut.error);
+    return error === null ? CANCELLED : { refused: error };
   } catch {
     return null;
   }
 }
 
 /** Native "Save As" dialog, then an in-process write of `contents` to the
- *  chosen path (quantized/desktop_bridge.py's `save_file_dialog` +
- *  `write_project_file`). `null` = no usable bridge OR the write itself
- *  failed after a real pick (fall back to the browser download — the
- *  content is not lost, just not landed at a native path); `CANCELLED` = the
- *  user backed out of the save dialog — do nothing, never fall back to a
- *  download the user did not ask for. A plain "dialog then write" combo for
- *  a caller with no reason to check anything between the two steps; a
- *  caller that DOES (store/workspaceIO.ts's lock-aware Save As) uses
- *  `pickSaveDestination` + `saveProjectTo` instead. */
+ *  chosen path — `pickSaveDestination` followed by `saveProjectTo`, so the
+ *  two refusal shapes those voice (the dialog refusing the pick, the write
+ *  refusing the path) reach this caller too, never collapsed into a cancel
+ *  (self-review on #291: this combo used to map every `path: null` onto
+ *  `CANCELLED`, the exact defect `pickSaveDestination` had already fixed).
+ *  `null` = no usable bridge OR the write itself failed after a real pick
+ *  (fall back to the browser download — the content is not lost, just not
+ *  landed at a native path); `CANCELLED` = the user backed out of the save
+ *  dialog — do nothing, never fall back to a download the user did not ask
+ *  for; `SaveRefused` = say why, and do not fall back either. A caller that
+ *  needs a lock check BETWEEN the pick and the write (store/workspaceIO.ts's
+ *  Save As) uses the two halves directly. */
 export async function saveProjectAs(
   suggestedName: string,
   contents: string,
-): Promise<SaveProjectResult | Cancelled | null> {
-  const bridge = api();
-  if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
-  try {
-    const dialogOut = await bridge.save_file_dialog(suggestedName);
-    const path = str(dialogOut.path);
-    if (path === null) return CANCELLED;
-    const writeOut = await bridge.write_project_file(path, contents);
-    if (!bool(writeOut.ok)) return null;
-    return { path: str(writeOut.path) ?? path };
-  } catch {
-    return null;
-  }
+): Promise<SaveProjectResult | Cancelled | SaveRefused | null> {
+  const destination = await pickSaveDestination(suggestedName);
+  if (destination === null || destination === CANCELLED || isSaveRefused(destination)) return destination;
+  const written = await saveProjectTo(destination, contents);
+  return written === LOCK_LOST ? null : written; // no token was supplied, so LOCK_LOST cannot occur
 }
 
 /** Write `contents` directly to an already-known project `path` — no dialog.
@@ -337,151 +373,31 @@ export async function saveProjectAs(
  *  `LOCK_LOST` (never `null`) when it was refused — see that constant's
  *  doc for why the two must stay distinguishable to the caller. Omitting
  *  `lockToken` (or passing `""`) skips the check entirely, byte-identical
- *  to this function's pre-I2 behavior. */
+ *  to this function's pre-I2 behavior. A `SaveRefused` is the backend
+ *  declining the destination itself (a declared raw source) — distinct from
+ *  both `null` and `LOCK_LOST`, since the caller must say why and must not
+ *  fall back to a download. */
 export async function saveProjectTo(
   path: string,
   contents: string,
   lockToken?: string,
-): Promise<SaveProjectResult | LockLost | null> {
+): Promise<SaveProjectResult | LockLost | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.write_project_file) return null;
   try {
     const out = await bridge.write_project_file(path, contents, lockToken ?? "");
-    if (str(out.error) === "lock lost") return LOCK_LOST;
+    const error = str(out.error);
+    if (error === "lock lost") return LOCK_LOST;
+    // P1.2 box 4, self-review on #291: the WRITE can refuse too — the
+    // destination is one of the payload's own declared sources (a spelling
+    // the frontend pre-check and the dialog's cached set never matched).
+    // A refusal must reach the caller as one, never as a generic `null`
+    // that Save As would turn into a browser download with an OK toast.
+    if (error !== null && isRefusal(error)) return { refused: error };
     if (!bool(out.ok)) return null;
     return { path: str(out.path) ?? path };
   } catch {
     return null;
-  }
-}
-
-// -- P1.7: source probing + relink --------------------------------------
-
-/** A source path's reachability + optional fingerprint
- *  (quantized/desktop_bridge.py's `probe_source` — see that module's doc
- *  for the full missing/offline/changed/permission-denied consent story).
- *  `checksum` is `null` whenever the backend didn't compute one — either
- *  because the path wasn't read-consented this session, or the file was
- *  reachable by stat but not by content read — never a stand-in for "the
- *  checksum is empty". */
-export interface SourceProbe {
-  state: PathState | "permission_denied";
-  path: string | null;
-  size: number | null;
-  mtime: number | null;
-  checksum: string | null;
-}
-
-const SOURCE_PROBE_STATES: readonly SourceProbe["state"][] = [
-  "ok",
-  "missing",
-  "offline",
-  "invalid",
-  "permission_denied",
-];
-
-export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-
-/** Probe one source path. `null` = no usable bridge (relink degrades to
- *  "source checks unavailable" in a browser — never guesses a state). Never
- *  throws — a bridge error is reported the same as no bridge, matching
- *  `pathState`'s convention. */
-export async function probeSource(path: string): Promise<SourceProbe | null> {
-  const bridge = api();
-  if (!bridge?.probe_source) return null;
-  try {
-    const out = await bridge.probe_source(path);
-    const state = str(out.state);
-    if (state === null || !(SOURCE_PROBE_STATES as readonly string[]).includes(state)) return null;
-    return {
-      state: state as SourceProbe["state"],
-      path: str(out.path),
-      size: num(out.size),
-      mtime: num(out.mtime),
-      checksum: str(out.checksum),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** Extend read consent to paths ALREADY recorded as a project's own
- *  `Dataset.source.path` values (quantized/desktop_bridge.py's
- *  `grant_source_paths` — see its doc for the consent ruling: opening the
- *  project itself already required a real dialog, and this extends that
- *  same trust to the sources IT declares, never to an arbitrary list).
- *  Returns the subset actually granted (files that exist), `[]` when there
- *  is no usable bridge — callers proceed with checksum-less probing rather
- *  than treating this as fatal, matching `openFiles`'s "no bridge = degrade,
- *  don't fail" convention. */
-export async function grantSourceReadPaths(paths: string[]): Promise<string[]> {
-  const bridge = api();
-  if (!bridge?.grant_source_paths) return [];
-  try {
-    const out = await bridge.grant_source_paths(paths);
-    const granted = out.paths;
-    return Array.isArray(granted) ? granted.filter((p): p is string => typeof p === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-/** A real dialog failure AFTER the bridge was reached — distinct from both
- *  `CANCELLED` (the user backed out; nothing to report) and `null` (no
- *  usable bridge; fall back to typing), because the user DID act and
- *  deserves to hear why nothing happened (the same error-vs-cancel split
- *  `openProject`'s doc above rules on for its own post-pick failures). */
-export interface PickDirError {
-  error: string;
-}
-
-/** C1 (relink consent): native folder dialog for the relink panel's
- *  "Browse..." control (quantized/desktop_bridge_dialogs.py's
- *  `pick_relink_directory`) — UNLIKE `pickNativeDirectory` above, a real
- *  return from THIS dialog mints a read-only, session-scoped grant on the
- *  backend covering the chosen folder and its descendants, which is what
- *  lets `probeSource` compute a checksum for a candidate under it. `null` =
- *  no usable bridge (the caller falls back to a typed path, which can be
- *  Previewed but never gets a grant — see `probeSource`'s doc); `CANCELLED`
- *  = the user backed out of the dialog — do nothing, and specifically do
- *  NOT fall back to treating whatever was already typed as consented; a
- *  `PickDirError` = the dialog or the grant itself failed after a real
- *  attempt (backend `{path: null, error}` response, or the bridge call
- *  throwing) — the caller should SAY so, never silently swallow it as a
- *  cancel or misreport it as a missing bridge. */
-// Same redundant-constituent trim as `pickSaveDestination` above: `Cancelled`
-// is a `string` literal, so folding it into the plain `string` member here
-// changes nothing tsc can observe (callers still narrow with `=== CANCELLED`
-// before the `typeof !== "string"` check that isolates `PickDirError`).
-export async function pickRelinkDirectory(
-  directory?: string,
-): Promise<string | PickDirError | null> {
-  const bridge = api();
-  if (!bridge?.pick_relink_directory) return null;
-  try {
-    const out = await bridge.pick_relink_directory(directory ?? "");
-    const path = str(out.path);
-    if (path !== null) return path;
-    const error = str((out as { error?: unknown }).error);
-    return error === null ? CANCELLED : { error };
-  } catch (exc) {
-    return { error: String(exc) };
-  }
-}
-
-/** Revoke every grant `pickRelinkDirectory` minted this session
- *  (quantized/desktop_bridge_dialogs.py's `revoke_relink_dir`) — called when
- *  the relink panel closes (Cancel, the window's own close, or a completed
- *  commit) so the read-only grant never outlives the session that asked for
- *  it. Best-effort and silent: there is nothing a caller can usefully do
- *  with a failure here, and no bridge at all is simply a no-op. */
-export async function revokeRelinkDir(): Promise<void> {
-  const bridge = api();
-  if (!bridge?.revoke_relink_dir) return;
-  try {
-    await bridge.revoke_relink_dir();
-  } catch {
-    // best-effort — nothing more a caller can do with a revoke failure
   }
 }
 
@@ -490,3 +406,13 @@ export async function revokeRelinkDir(): Promise<void> {
 // repo's general 500-line `.ts` ceiling (architecture.test.ts's
 // RSM_CUTS_PLAN #20 guard). It reuses `api`/`str`/`bool`/`num` exported
 // above rather than duplicating them.
+
+// -- P1.7 / C1: source probing + relink ----------------------------------
+// `probeSource` / `grantSourceReadPaths` / `pickRelinkDirectory` /
+// `revokeRelinkDir` (and the `SourceProbe` / `PickDirError` shapes) live in
+// the sibling lib/desktopRelinkBridge.ts — split out when this file crossed
+// the repo's general 500-line `.ts` ceiling (architecture.test.ts's
+// RSM_CUTS_PLAN #20 guard) as the P1.2 save-refusal path landed. Re-exported
+// here, exactly as lib/workspace.ts re-exports its own extractions, so every
+// existing importer and test mock of "lib/desktopBridge" keeps working.
+export * from "./desktopRelinkBridge";

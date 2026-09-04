@@ -264,6 +264,14 @@ class DesktopDialogBridge:
         desktop_consent's module doc): picking where to save never authorizes
         reading anything.
 
+        P1.2 box 4: if the chosen destination is a path the OPEN project's
+        own payload declared as a dataset's ``source.path``
+        (``is_declared_source``), NOTHING is granted — the user picked their
+        own raw source file in the save dialog, which ``write_project_file``
+        would refuse anyway, but refusing here means a stray write-consent
+        grant for that path is never even minted, and the frontend gets a
+        distinguishable error instead of a generic "could not grant" one.
+
         Cancelling returns ``{"path": None}``, same non-error convention as
         every other dialog method here."""
         if self._window is None:
@@ -283,6 +291,11 @@ class DesktopDialogBridge:
             resolved = os.path.realpath(str(first))
         except (OSError, ValueError) as exc:
             return {"path": None, "error": str(exc)}
+        if is_declared_source(resolved):
+            return {
+                "path": None,
+                "error": "refusing to save — that path is a data source of the open project",
+            }
         granted = grant_write_path(resolved)
         if granted is None:
             return {"path": None, "error": "could not grant write consent"}

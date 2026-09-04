@@ -1,0 +1,101 @@
+{
+  "format": "quantized-workspace",
+  "version": 2,
+  "savedAt": "2026-09-02T00:00:00.000Z",
+  "datasets": [
+    {
+      "id": "a",
+      "name": "run-a.csv",
+      "data": {
+        "time": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "values": [
+          [
+            10,
+            100
+          ],
+          [
+            20,
+            200
+          ],
+          [
+            30,
+            300
+          ],
+          [
+            40,
+            400
+          ]
+        ],
+        "labels": [
+          "Field",
+          "Moment"
+        ],
+        "units": [
+          "Oe",
+          "emu"
+        ],
+        "metadata": {
+          "technique": "magnetometry.mvsh"
+        }
+      },
+      "folderId": "f1"
+    },
+    {
+      "id": "b",
+      "name": "run-b.xy",
+      "data": {
+        "time": [
+          0,
+          1,
+          2
+        ],
+        "values": [
+          [
+            5,
+            50
+          ],
+          [
+            15,
+            150
+          ],
+          [
+            25,
+            250
+          ]
+        ],
+        "labels": [
+          "2theta",
+          "Intensity"
+        ],
+        "units": [
+          "deg",
+          "cps"
+        ],
+        "metadata": {
+          "technique": "xrd.powder"
+        }
+      }
+    }
+  ],
+  "folders": [
+    {
+      "id": "f1",
+      "name": "Magnetometry",
+      "parentId": null,
+      "order": 0
+    }
+  ],
+  "activeId": "a",
+  "selectedIds": [
+    "a",
+    "b"
+  ],
+  "expandedFolders": [
+    "f1"
+  ]
+}

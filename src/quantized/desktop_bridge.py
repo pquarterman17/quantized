@@ -146,11 +146,12 @@ from typing import Any
 from quantized import desktop_project_lock as lockmod
 from quantized import desktop_project_lock_write as lockwrite
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
-from quantized.desktop_consent import consented_write_path
+from quantized.desktop_consent import consented_write_path, is_declared_source
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
-    validate_workspace_payload,
+    parse_workspace_payload,
+    payload_declares_source,
 )
 
 __all__ = ["DesktopApi"]
@@ -217,11 +218,25 @@ class DesktopApi(DesktopDialogBridge):
         (or spends) consent" boundary intact for writes too.
 
         Refuses any path that was not returned by ``save_file_dialog`` this
-        process. The write itself is temp-file-plus-``os.replace`` (same
-        directory, so the replace is atomic on a normal filesystem) so a
-        crash mid-write cannot leave a half-written ``.dwk`` at the real
-        path. ``content`` must pass ``validate_workspace_payload`` or the
-        write is refused before a temp file is even opened.
+        process. Also refuses (P1.2 box 4) any path the OPEN project's own
+        payload declared as a dataset's ``source.path`` — see
+        ``desktop_consent.is_declared_source`` — so a save/autosave/quick-
+        save can never overwrite the raw file the project was built from,
+        even if that path also happens to hold write consent. The write
+        itself is temp-file-plus-``os.replace`` (same directory, so the
+        replace is atomic on a normal filesystem) so a crash mid-write
+        cannot leave a half-written ``.dwk`` at the real path — **and**,
+        since P1.2 box 3's hardening, the temp file is ``flush``ed and
+        ``fsync``ed BEFORE that replace, so a crash or power loss right
+        after ``os.replace`` returns finds the new bytes durable on disk
+        rather than whatever the filesystem's delayed allocation had
+        buffered. Not guaranteed: durability of the containing directory's
+        own metadata beyond a best-effort directory ``fsync`` (POSIX-only,
+        swallowed on failure — see ``_fsync_directory_best_effort``), which
+        only narrows that window further; it is never load-bearing for the
+        prior file's survival, which the temp-file-only failure mode above
+        already covers. ``content`` must pass ``parse_workspace_payload``
+        or the write is refused before a temp file is even opened.
 
         **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
         non-empty, the token is verified AND the temp-write-plus-`os.replace`
@@ -248,12 +263,31 @@ class DesktopApi(DesktopDialogBridge):
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
             return {"ok": False, "error": str(exc)}
+        if is_declared_source(resolved):
+            # Box 4: refuse BEFORE any temp file exists, and before even
+            # checking write consent — a path can hold write consent (a
+            # user can pick their own raw source in the Save As dialog) and
+            # still never be a legal write target while it is the open
+            # project's own declared source. See `save_file_dialog`'s
+            # matching refusal on the other bridge method that can reach
+            # this same path.
+            return {
+                "ok": False,
+                "error": "refusing to write — that path is a data source of the open project",
+            }
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        invalid = validate_workspace_payload(content)
-        if invalid is not None:
+        payload, invalid = parse_workspace_payload(content)
+        if payload is None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
+        # The cached set above only knows natively OPENED projects; the payload's
+        # own sources are refused too (`payload_declares_source`, #291 review).
+        if payload_declares_source(payload, resolved):
+            return {
+                "ok": False,
+                "error": "refusing to write — that path is a data source of this workspace",
+            }
         directory = os.path.dirname(granted) or "."
 
         def _replace() -> None:
@@ -272,8 +306,11 @@ class DesktopApi(DesktopDialogBridge):
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
                     f.write(content)
+                    f.flush()
+                    os.fsync(f.fileno())
                 os.replace(tmp_path, granted)
                 tmp_path = None  # replaced — nothing left to clean up
+                _fsync_directory_best_effort(directory)
             finally:
                 if tmp_path is not None:
                     try:
@@ -404,6 +441,28 @@ class DesktopApi(DesktopDialogBridge):
         A no-op for a refusal, `UnverifiableLock`, or `Contended`."""
         if ok and isinstance(record, lockmod.LockRecord):
             self._last_known_lock_record[granted] = record
+
+
+def _fsync_directory_best_effort(directory: str) -> None:
+    """After ``os.replace`` lands the new file, best-effort ``fsync`` the
+    CONTAINING directory so the renamed directory entry itself is durable
+    sooner too — POSIX only; there is no directory file descriptor to open
+    on Windows, and NFS/some filesystems reject it regardless. Swallowed on
+    purpose: the file's own ``fsync`` (before the replace, in ``_replace``
+    above) is what makes the *content* durable-ordered — this call only
+    narrows the window in which the rename itself could still be lost to a
+    crash, and a save must never be reported as failed over a step that is
+    inherently unsupported on part of the fleet."""
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except (OSError, AttributeError):
+        return
+    try:
+        os.fsync(fd)
+    except (OSError, AttributeError):
+        pass
+    finally:
+        os.close(fd)
 
 
 def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None) -> dict[str, Any]:

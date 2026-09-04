@@ -20,7 +20,9 @@ import pytest
 from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
+    declared_source_count,
     dir_grant_count,
+    grant_write_path,
     is_consented,
     is_declared_source,
     is_dir_consented,
@@ -905,6 +907,183 @@ def test_write_project_file_preserves_the_prior_file_when_the_disk_is_full(
     assert leftovers == []
 
 
+# --- P1.2 box 3: fsync durability (kill-process / power-loss half) ---------
+#
+# Prior to this, `_replace` did `os.fdopen -> f.write -> os.replace` with NO
+# `flush`+`fsync` on the temp file before the rename -- on a delayed-
+# allocation filesystem a crash or power loss right after `os.replace`
+# returns can leave a zero-length/partial `.dwk` AT THE REAL PATH, exactly
+# the "half-written file" the module's docstring claimed could not happen.
+
+
+def test_write_project_file_fsyncs_the_temp_file_before_os_replace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """RED-FIRST: `os.fsync` must be called (on the temp file's fd) BEFORE
+    `os.replace` runs the atomic rename -- order recorded via two wrapped
+    real calls, not merely "both happened somewhere". A best-effort
+    directory `fsync` runs too (see the sibling tests below), so this only
+    asserts the FIRST `fsync` precedes the rename -- that first one is the
+    temp file's, since the directory can only be fsynced after the replace
+    it is meant to make durable has already happened."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+
+    calls: list[str] = []
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def _fsync(fd: int) -> None:
+        calls.append("fsync")
+        real_fsync(fd)
+
+    def _replace(src: str, dst: str) -> None:
+        calls.append("replace")
+        real_replace(src, dst)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.fsync", _fsync)
+    monkeypatch.setattr("quantized.desktop_bridge.os.replace", _replace)
+
+    out = api.write_project_file(save_out["path"], _workspace_json("good"))
+
+    assert out["ok"] is True
+    assert "fsync" in calls and "replace" in calls
+    assert calls.index("fsync") < calls.index("replace"), calls
+
+
+def test_write_project_file_preserves_the_prior_file_when_fsync_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mocked OS failure mode #3: the temp file's `fsync` itself fails
+    (`EIO` -- a realistic stand-in for a failing disk). Same preservation
+    guarantee as the `os.replace`/disk-full failures above: the prior good
+    generation survives byte-for-byte, `ok` is False with the error text
+    reported, and no `.qz-write-*` stray is left behind (the failure is
+    inside the `with os.fdopen(...)` block, before `os.replace`, so the
+    `finally` cleanup still runs)."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+    good = _workspace_json("good")
+    api.write_project_file(save_out["path"], good)
+
+    def _boom(_fd: int) -> None:
+        raise OSError("Input/output error")
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.fsync", _boom)
+    out = api.write_project_file(save_out["path"], _workspace_json("new"))
+
+    assert out["ok"] is False
+    assert "Input/output error" in out["error"]
+    assert dest.read_text(encoding="utf-8") == good
+    leftovers = [p for p in tmp_path.iterdir() if p.name != dest.name]
+    assert leftovers == []
+
+
+def test_write_project_file_directory_fsync_failure_does_not_fail_the_save(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The best-effort directory `fsync` (POSIX-only, `_fsync_directory_
+    best_effort`) is opened read-only -- the ONLY `os.open` call this module
+    makes with `O_RDONLY` (the temp file goes through `tempfile.mkstemp`,
+    not a bare `os.open`). Forcing exactly that call to fail (as Windows'
+    "no directory fd" AttributeError, or a filesystem that rejects it,
+    would in practice) must NOT turn an otherwise-successful save into a
+    reported failure -- the file fsync before the replace is what is
+    load-bearing; the directory fsync only narrows a smaller window
+    further."""
+    dest = tmp_path / "workspace.dwk"
+    api = DesktopApi()
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("workspace.dwk")
+
+    real_open = os.open
+
+    def _open_raising_for_readonly(path: str, flags: int, *a: Any, **kw: Any) -> int:
+        if flags == os.O_RDONLY:
+            raise OSError("directory fsync not supported here")
+        return real_open(path, flags, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_bridge.os.open", _open_raising_for_readonly)
+
+    good = _workspace_json("good")
+    out = api.write_project_file(save_out["path"], good)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == good
+
+
+# --- P1.2 box 4: never save a project over one of its own raw sources ------
+#
+# `write_project_file`/`save_file_dialog` must refuse a path the OPEN
+# project's own payload declared as a dataset `source.path`
+# (`desktop_consent.is_declared_source`), even when that same path also
+# holds (or could hold) write consent -- a raw instrument file is never a
+# legal save target, full stop.
+
+
+def test_write_project_file_refuses_to_overwrite_a_declared_source(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw_bytes = "T,M\n1,10\n2,20\n"
+    raw.write_text(raw_bytes, encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+    resolved = os.path.realpath(str(raw))
+    assert is_declared_source(resolved)
+
+    # Simulate a stale/legitimate write grant for the same path existing
+    # (e.g. the user saved onto it once via some other route) -- the
+    # declared-source refusal must fire regardless, not merely because
+    # consent happens to be absent.
+    grant_write_path(str(raw))
+    assert is_write_consented(resolved)
+
+    out = api.write_project_file(str(raw), _workspace_json("malicious"))
+
+    assert out["ok"] is False
+    assert "data source of the open project" in out["error"]
+    assert raw.read_text(encoding="utf-8") == raw_bytes
+    leftovers = [p for p in tmp_path.iterdir() if p.name not in ("raw.csv", "workspace.dwk")]
+    assert leftovers == []
+
+
+def test_save_file_dialog_refuses_a_declared_source_and_grants_nothing(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n1,10\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+    resolved = os.path.realpath(str(raw))
+
+    api.attach(FakeWindow([str(raw)]))
+    save_out = api.save_file_dialog("raw.csv")
+
+    assert save_out["path"] is None
+    assert "error" in save_out
+    assert not is_write_consented(resolved)
+
+
+def test_write_project_file_still_saves_a_non_source_path_in_the_same_directory(
+    tmp_path: Path,
+) -> None:
+    """Positive control: the refusal is scoped to the declared source path
+    itself, not to the whole project directory."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n1,10\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(raw))
+
+    dest = tmp_path / "elsewhere.dwk"
+    api.attach(FakeWindow([str(dest)]))
+    save_out = api.save_file_dialog("elsewhere.dwk")
+    assert save_out["path"] is not None
+
+    good = _workspace_json("good")
+    out = api.write_project_file(save_out["path"], good)
+
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == good
+
+
 # --- stray .qz-write-* cleanup (P2-2, adversarial review) -------------------
 #
 # A crash between the successful temp write and `os.replace` (killed process,
@@ -1059,3 +1238,89 @@ def test_write_project_file_a_concurrent_save_never_deletes_the_others_in_flight
     assert one["ok"] is True, one
     # Save 1 replaced LAST (it was paused, then released) — its content wins.
     assert dest.read_text(encoding="utf-8") == _workspace_json("from-save-one")
+
+
+# --- P1.2 box 4, review round on #291: the PAYLOAD describes the workspace ----
+#
+# The cached declared-source set is populated only by a native project open.
+# A workspace built from fresh imports (never opened from a .dwk), a relinked
+# source, or a project opened some other way is not in it -- and it may still
+# describe the PREVIOUS project. The payload being written is the authoritative
+# description of the current workspace, so `write_project_file` refuses its own
+# declared sources too, realpath-resolved.
+
+
+def _grant_write(api: DesktopApi, dest: Path) -> str:
+    api.attach(FakeWindow([str(dest)]))
+    out = api.save_file_dialog(dest.name)
+    assert out["path"] is not None, out
+    return out["path"]
+
+
+def test_write_refuses_a_payload_declared_source_with_no_project_open(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw_bytes = "T,M\n1,10\n"
+    raw.write_text(raw_bytes, encoding="utf-8")
+    api = DesktopApi()
+    assert declared_source_count() == 0  # nothing was ever opened natively
+    path = _grant_write(api, raw)  # the dialog cannot know yet -- it grants
+    out = api.write_project_file(path, _workspace_json_declaring(str(raw)))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_text(encoding="utf-8") == raw_bytes
+    assert [p.name for p in tmp_path.iterdir()] == ["raw.csv"]  # no temp, no stray
+
+
+def test_write_refuses_an_alias_spelling_of_a_payload_declared_source(tmp_path: Path) -> None:
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    api = DesktopApi()
+    path = _grant_write(api, raw)
+    alias = str(sub / ".." / "raw.csv")  # same file, different spelling
+    out = api.write_project_file(path, _workspace_json_declaring(alias))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_text(encoding="utf-8") == "T,M\n"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink creation needs privileges on Windows")
+def test_write_refuses_a_symlinked_payload_declared_source(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    link = tmp_path / "link.csv"
+    link.symlink_to(raw)
+    api = DesktopApi()
+    path = _grant_write(api, raw)
+    out = api.write_project_file(path, _workspace_json_declaring(str(link)))
+    assert out["ok"] is False
+    assert raw.read_text(encoding="utf-8") == "T,M\n"
+
+
+def test_write_refuses_a_relinked_source_the_cached_set_does_not_know(tmp_path: Path) -> None:
+    old = tmp_path / "old.csv"
+    new = tmp_path / "new.csv"
+    old.write_text("old\n", encoding="utf-8")
+    new.write_text("new\n", encoding="utf-8")
+    api = _open_project_declaring(tmp_path, str(old))  # cached set = {old}
+    assert is_declared_source(os.path.realpath(str(old)))
+    assert not is_declared_source(os.path.realpath(str(new)))
+    path = _grant_write(api, new)
+    # The user relinked the dataset to new.csv; the payload says so, the cache does not.
+    out = api.write_project_file(path, _workspace_json_declaring(str(new)))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert new.read_text(encoding="utf-8") == "new\n"
+
+
+def test_write_project_file_payload_check_leaves_an_ordinary_save_alone(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n", encoding="utf-8")
+    api = DesktopApi()
+    dest = tmp_path / "workspace.dwk"
+    path = _grant_write(api, dest)
+    content = _workspace_json_declaring(str(raw))  # declares raw.csv, saves ELSEWHERE
+    out = api.write_project_file(path, content)
+    assert out["ok"] is True
+    assert dest.read_text(encoding="utf-8") == content

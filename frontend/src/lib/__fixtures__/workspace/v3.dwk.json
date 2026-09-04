@@ -1,0 +1,346 @@
+{
+  "format": "quantized-workspace",
+  "version": 3,
+  "savedAt": "2026-09-02T00:00:00.000Z",
+  "folders": [
+    {
+      "id": "f1",
+      "name": "Magnetometry",
+      "parentId": null,
+      "order": 0
+    }
+  ],
+  "activeId": "a",
+  "selectedIds": [
+    "a",
+    "b"
+  ],
+  "expandedFolders": [
+    "f1"
+  ],
+  "originFigures": [],
+  "originFidelity": [],
+  "smartFolders": [],
+  "reports": [],
+  "pipeline": [
+    {
+      "id": "step-1",
+      "kind": "expression",
+      "label": "Add column ratio",
+      "code": "qz.addColumn(\"ratio\", \"A / B\")",
+      "params": {
+        "name": "ratio",
+        "expr": "A / B"
+      },
+      "enabled": true
+    }
+  ],
+  "recalcMode": "manual",
+  "figureDocs": [],
+  "editableFigures": [
+    {
+      "schema": "quantized.figure",
+      "version": 2,
+      "id": "figure-1",
+      "name": "MvsH loop figure",
+      "bindings": {
+        "datasetId": "a",
+        "xKey": null,
+        "yKeys": null,
+        "y2Keys": null,
+        "groupKey": null,
+        "facetKey": null,
+        "errors": []
+      },
+      "data": {
+        "mode": "live"
+      },
+      "plot": {
+        "mark": "line",
+        "view": {
+          "yScale": "linear",
+          "xScale": "linear",
+          "showGrid": true,
+          "showLegend": true,
+          "legendPos": "ne",
+          "legendXY": null,
+          "legendFrameXY": null,
+          "legendStatic": false,
+          "legendTitle": null,
+          "axisLabelOffsets": {},
+          "axisLabelStyles": {},
+          "plotTemplate": "screen",
+          "showAxisBox": false,
+          "stackMode": false,
+          "insetMode": false,
+          "polarMode": false,
+          "statMode": false,
+          "xLim": null,
+          "yLim": null,
+          "xStep": null,
+          "yStep": null,
+          "xFmt": {
+            "mode": "auto",
+            "digits": 2
+          },
+          "yFmt": {
+            "mode": "auto",
+            "digits": 2
+          },
+          "y2Fmt": null,
+          "plotTitle": "MvsH loop",
+          "xAxisLabel": "",
+          "yAxisLabel": "",
+          "y2Lim": null,
+          "y2Scale": null,
+          "y2Step": null,
+          "y2AxisLabel": "",
+          "refLines": [],
+          "annotations": [],
+          "regionShades": [],
+          "shapes": [],
+          "seriesStyles": {},
+          "seriesLabels": {},
+          "seriesOrder": null,
+          "hiddenChannels": [],
+          "waterfall": 0,
+          "panelFit": "frames",
+          "pageSetup": null
+        },
+        "axisBreaks": {
+          "x": [],
+          "y": [],
+          "y2": []
+        }
+      },
+      "output": {
+        "format": "pdf",
+        "stylePreset": "default",
+        "dpi": 300,
+        "transparent": false,
+        "filename": null
+      }
+    }
+  ],
+  "pages": [],
+  "plotWindows": [],
+  "focusedWindowId": null,
+  "toolWindowLayout": {},
+  "savedPlotSpecs": [],
+  "quickPlotTemplates": [
+    {
+      "id": "qpt-1",
+      "name": "MvsH standard",
+      "createdAt": "2026-08-17T00:00:00.000Z",
+      "modifiedAt": "2026-08-17T00:00:00.000Z",
+      "scope": {
+        "kind": "schema"
+      },
+      "technique": "magnetometry.mvsh",
+      "signature": {
+        "channels": [
+          {
+            "label": "Field",
+            "unit": "Oe",
+            "errorRole": "value"
+          },
+          {
+            "label": "Moment",
+            "unit": "emu",
+            "errorRole": "value"
+          }
+        ]
+      },
+      "mapping": {
+        "xKey": 0,
+        "yKeys": [
+          1
+        ],
+        "errorBindings": [],
+        "ignoredKeys": []
+      },
+      "style": "line",
+      "labels": {
+        "0": "Field",
+        "1": "Moment"
+      }
+    }
+  ],
+  "techniqueViewMemory": {},
+  "savedRois": [],
+  "librarySelection": null,
+  "workbookLastChild": {},
+  "expandedWorkbookIds": [],
+  "collections": [],
+  "visibleDetailsColumns": [],
+  "plotRecipes": [
+    {
+      "id": "recipe-1",
+      "name": "MvsH loop",
+      "description": "",
+      "createdAt": "2026-08-22T00:00:00.000Z",
+      "modifiedAt": "2026-08-22T00:00:00.000Z",
+      "schemaVersion": 1,
+      "provenance": {
+        "sourceDatasetLabel": "run-a.csv",
+        "appVersion": "0"
+      },
+      "technique": "magnetometry.mvsh",
+      "signature": [
+        {
+          "id": "x0",
+          "role": "x",
+          "label": "Field",
+          "unit": "Oe",
+          "errorRole": "value",
+          "aliases": []
+        },
+        {
+          "id": "y0",
+          "role": "y",
+          "label": "Moment",
+          "unit": "emu",
+          "errorRole": "value",
+          "aliases": []
+        }
+      ],
+      "mapping": {
+        "xId": "x0",
+        "yIds": [
+          "y0"
+        ],
+        "y2Ids": [],
+        "groupId": null,
+        "facetId": null,
+        "errors": []
+      },
+      "visual": {
+        "mark": "line",
+        "xScale": "linear",
+        "yScale": "linear",
+        "y2Scale": null,
+        "xRange": {
+          "mode": "auto"
+        },
+        "yRange": {
+          "mode": "auto"
+        },
+        "y2Range": {
+          "mode": "auto"
+        },
+        "xFmt": {
+          "mode": "auto",
+          "digits": 2
+        },
+        "yFmt": {
+          "mode": "auto",
+          "digits": 2
+        },
+        "y2Fmt": null,
+        "axisBreaks": {
+          "x": [],
+          "y": [],
+          "y2": []
+        },
+        "showLegend": true,
+        "legendPos": "ne",
+        "legendXY": null,
+        "legendTitle": null,
+        "legendStatic": false,
+        "stackMode": false,
+        "waterfall": 0,
+        "plotTemplate": "screen",
+        "seriesStyles": {},
+        "seriesLabels": {},
+        "seriesOrder": null,
+        "hiddenChannels": [],
+        "decorations": {
+          "annotations": [],
+          "shapes": [],
+          "regionShades": []
+        },
+        "compositionKind": null
+      }
+    }
+  ],
+  "datasets": [
+    {
+      "id": "a",
+      "name": "run-a.csv",
+      "data": {
+        "time": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "values": [
+          [
+            10,
+            100
+          ],
+          [
+            20,
+            200
+          ],
+          [
+            30,
+            300
+          ],
+          [
+            40,
+            400
+          ]
+        ],
+        "labels": [
+          "Field",
+          "Moment"
+        ],
+        "units": [
+          "Oe",
+          "emu"
+        ],
+        "metadata": {
+          "technique": "magnetometry.mvsh"
+        }
+      },
+      "folderId": "f1"
+    },
+    {
+      "id": "b",
+      "name": "run-b.xy",
+      "data": {
+        "time": [
+          0,
+          1,
+          2
+        ],
+        "values": [
+          [
+            5,
+            50
+          ],
+          [
+            15,
+            150
+          ],
+          [
+            25,
+            250
+          ]
+        ],
+        "labels": [
+          "2theta",
+          "Intensity"
+        ],
+        "units": [
+          "deg",
+          "cps"
+        ],
+        "metadata": {
+          "technique": "xrd.powder"
+        }
+      }
+    }
+  ]
+}
