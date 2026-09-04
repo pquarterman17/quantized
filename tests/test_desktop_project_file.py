@@ -19,6 +19,8 @@ from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
     extract_declared_source_paths,
+    parse_workspace_payload,
+    payload_declares_source,
     validate_workspace_payload,
 )
 
@@ -206,3 +208,70 @@ def test_cleanup_stray_write_temps_ignores_files_without_the_prefix(tmp_path: Pa
     os.utime(other, (old, old))
     cleanup_stray_write_temps(str(tmp_path), min_age_seconds=0.0)
     assert other.exists()
+
+
+# --- payload_declares_source (P1.2 box 4, #291 self-review) -------------------
+
+
+def _payload_with_sources(*paths: str) -> dict[str, object]:
+    return {"datasets": [{"source": {"path": p}} for p in paths]}
+
+
+def test_payload_declares_source_matches_the_identical_and_alias_spellings(tmp_path) -> None:
+    raw = tmp_path / "sub" / "raw.csv"
+    raw.parent.mkdir()
+    raw.write_text("x")
+    dest = os.path.realpath(str(raw))
+    assert payload_declares_source(_payload_with_sources(str(raw)), dest)
+    # `sub/../sub/raw.csv` is caught by the pure-string pass, no realpath needed
+    alias = str(tmp_path / "sub" / ".." / "sub" / "raw.csv")
+    assert payload_declares_source(_payload_with_sources(alias), dest)
+    assert not payload_declares_source(_payload_with_sources(str(tmp_path / "other.csv")), dest)
+    assert not payload_declares_source(_payload_with_sources(), dest)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink creation needs a privilege on Windows")
+def test_payload_declares_source_resolves_a_symlink_on_the_same_root(tmp_path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("x")
+    link = tmp_path / "link.csv"
+    link.symlink_to(raw)
+    dest = os.path.realpath(str(raw))
+    assert payload_declares_source(_payload_with_sources(str(link)), dest)
+
+
+def test_payload_declares_source_never_resolves_a_source_on_another_root(
+    tmp_path, monkeypatch
+) -> None:
+    # The cost rule: a source on a different drive/UNC root than the
+    # destination is compared as a string only -- `os.path.realpath` (which
+    # can stall on an unreachable share) must not be called for it.
+    dest = os.path.realpath(str(tmp_path / "w.dwk"))
+    calls: list[str] = []
+    real_realpath = os.path.realpath
+
+    def spy(path: str, **kw: object) -> str:
+        calls.append(path)
+        return real_realpath(path, **kw)
+
+    def fake_splitdrive(p: str) -> tuple[str, str]:
+        return ("//server/share", p[14:]) if p.startswith("//server/share") else ("", p)
+
+    monkeypatch.setattr(os.path, "splitdrive", fake_splitdrive)
+    monkeypatch.setattr(os.path, "realpath", spy)
+    assert not payload_declares_source(_payload_with_sources("//server/share/raw.csv"), dest)
+    assert calls == []
+
+
+def test_payload_declares_source_tolerates_an_unresolvable_string(tmp_path) -> None:
+    dest = os.path.realpath(str(tmp_path / "w.dwk"))
+    assert not payload_declares_source(_payload_with_sources("\x00bad"), dest)
+
+
+def test_parse_workspace_payload_returns_the_document_once_for_both_checks() -> None:
+    payload, reason = parse_workspace_payload(_workspace_json())
+    assert reason is None
+    assert isinstance(payload, dict)
+    bad_payload, bad_reason = parse_workspace_payload("not json")
+    assert bad_payload is None
+    assert bad_reason is not None and bad_reason.startswith("not valid JSON")

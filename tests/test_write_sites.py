@@ -16,8 +16,13 @@ drift detection, not just a one-way ratchet.
 so this is a syntactic approximation -- see the false-positive note below):
 
   * `open(...)` whose mode argument is a STRING LITERAL containing `w`,
-    `a`, `x`, or `+` (a non-literal/computed mode is not seen -- none exist
-    in this codebase today, checked by hand).
+    `a`, `x`, or `+`. A computed/non-literal MODE STRING is not seen (the
+    `open`-family calls in this codebase all use literals).
+  * `os.open(...)` whose flags expression names `O_WRONLY`, `O_RDWR`,
+    `O_CREAT`, `O_APPEND` or `O_TRUNC` anywhere in it (self-review on #291:
+    `desktop_project_lock.py` creates its lock sidecar with
+    `os.open(path, O_CREAT | O_EXCL | O_WRONLY)`, a writer the mode-literal
+    rule above cannot see). A flags value held in a variable is not seen.
   * `os.replace`, `os.rename`, `os.remove`, `os.unlink`, `shutil.rmtree`,
     `shutil.copy`, `shutil.copy2`, `shutil.copyfile`, `shutil.move`,
     `tempfile.mkstemp`, `os.fdopen` -- MODULE-QUALIFIED only (`os.`/
@@ -88,6 +93,9 @@ _WRITE_MODULES = frozenset({"os", "shutil", "tempfile"})
 # file mode: the builtin, `Path.open`, `os.fdopen`-style wrappers, and
 # `h5py.File` (the one third-party writer this codebase drives with a mode).
 _OPEN_LIKE_CALLABLES = frozenset({"open", "File", "fdopen"})
+# `os.open` takes FLAGS, not a mode string: any of these names in its flags
+# expression makes it a write (or create) site.
+_OS_OPEN_WRITE_FLAGS = frozenset({"O_WRONLY", "O_RDWR", "O_CREAT", "O_APPEND", "O_TRUNC"})
 
 # Relative-to-SRC path -> one-line justification: what it writes, and why
 # that is never a user's raw imported/opened source file. Verified by
@@ -110,9 +118,10 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "directory -- never the project file itself, never a source."
     ),
     "desktop_project_lock.py": (
-        "os.remove releases this module's own filesystem lock sidecar file "
-        "(the `<project>.qzlock`-shaped lock record) it created, not the "
-        "project or any dataset source."
+        "os.open(O_CREAT|O_EXCL|O_WRONLY) creates, and os.remove releases, "
+        "this module's own filesystem lock sidecar file (the "
+        "`<project>.qzlock`-shaped lock record), never the project or any "
+        "dataset source."
     ),
     "io/hdf5.py": (
         "write_hdf5: writes only to the explicit `output_path` argument its "
@@ -179,12 +188,35 @@ def _open_mode_is_a_write(call: ast.Call) -> bool:
     )
 
 
+def _os_open_flags_write(call: ast.Call) -> bool:
+    flags: ast.expr | None = call.args[1] if len(call.args) >= 2 else None
+    for kw in call.keywords:
+        if kw.arg == "flags":
+            flags = kw.value
+    if flags is None:
+        return False
+    for sub in ast.walk(flags):
+        name: str | None = None
+        if isinstance(sub, ast.Attribute):
+            name = sub.attr
+        elif isinstance(sub, ast.Name):
+            name = sub.id
+        if name in _OS_OPEN_WRITE_FLAGS:
+            return True
+    return False
+
+
 def _write_call_sites(tree: ast.AST) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
+        is_os_open = isinstance(func, ast.Attribute) and func.attr == "open"
+        if is_os_open and _base_name(func.value) == "os":
+            if _os_open_flags_write(node):
+                found.append((node.lineno, "os.open(O_WRONLY|O_RDWR|O_CREAT...)"))
+            continue
         if isinstance(func, ast.Name) and func.id in _OPEN_LIKE_CALLABLES:
             if _open_mode_is_a_write(node):
                 found.append((node.lineno, f"{func.id}(...)"))
@@ -261,3 +293,16 @@ def test_allowlisted_paths_actually_exist() -> None:
     silently never match anything the scan finds."""
     missing = [name for name in WRITE_SITE_ALLOWLIST if not (SRC / name).is_file()]
     assert not missing, f"WRITE_SITE_ALLOWLIST path(s) not under src/quantized: {missing}"
+
+
+def test_scan_sees_an_os_open_with_write_flags_but_not_a_read_only_one() -> None:
+    # Self-review on #291: `os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)`
+    # (desktop_project_lock.py's sidecar creation) is a write site the
+    # mode-literal rule cannot see; the flags expression is the discriminant.
+    write_tree = ast.parse("import os\nfd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY)\n")
+    sites = [site for _, site in _write_call_sites(write_tree)]
+    assert sites == ["os.open(O_WRONLY|O_RDWR|O_CREAT...)"]
+    read_tree = ast.parse("import os\nfd = os.open(p, os.O_RDONLY)\n")
+    assert _write_call_sites(read_tree) == []
+    kw_tree = ast.parse("import os\nfd = os.open(p, flags=os.O_RDWR)\n")
+    assert len(_write_call_sites(kw_tree)) == 1
