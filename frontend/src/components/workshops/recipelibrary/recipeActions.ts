@@ -58,8 +58,9 @@ export type ActionResult =
   /** `ref` is where the row ENDED UP. For the four name-keyed kinds the id is
    *  the name, so a rename moves the row to a new identity and the caller
    *  cannot derive it from the input ref -- the panel needs it to put keyboard
-   *  focus back on the row it just renamed. Absent when the operation did not
-   *  produce a row (import, export). */
+   *  focus back on the row it just renamed. Set by every operation that lands
+   *  a row (rename, import — the panel focuses the imported row through it);
+   *  absent for the ones that do not (export, copy, delete). */
   | { readonly ok: true; readonly message: string; readonly ref?: RecipeRef }
   | { readonly ok: false; readonly pending?: false; readonly reason: string }
   | { readonly ok: false; readonly pending: true; readonly reason: string };

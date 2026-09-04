@@ -16,14 +16,18 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections.abc import Mapping
+from typing import Any
 
 __all__ = [
     "WORKSPACE_FORMAT",
     "WORKSPACE_VERSIONS",
     "WRITE_TEMP_PREFIX",
     "cleanup_stray_write_temps",
+    "declared_source_paths_of",
     "extract_declared_source_paths",
-    "payload_declared_sources",
+    "parse_workspace_payload",
+    "payload_declares_source",
     "validate_workspace_payload",
 ]
 
@@ -69,6 +73,12 @@ def extract_declared_source_paths(content: str) -> list[str]:
         return []
     if not isinstance(payload, dict):
         return []
+    return declared_source_paths_of(payload)
+
+
+def declared_source_paths_of(payload: Mapping[str, Any]) -> list[str]:
+    """``extract_declared_source_paths`` for an ALREADY-parsed document —
+    the half that walks ``datasets[].source.path``; same tolerance."""
     datasets = payload.get("datasets")
     if not isinstance(datasets, list):
         return []
@@ -85,46 +95,82 @@ def extract_declared_source_paths(content: str) -> list[str]:
     return paths
 
 
-def payload_declared_sources(content: str) -> set[str]:
-    """Every dataset source path the payload itself declares, realpath-
-    resolved — the set ``write_project_file`` refuses as a save destination
-    (P1.2 box 4, review round on #291).
+def payload_declares_source(payload: Mapping[str, Any], resolved_dest: str) -> bool:
+    """Is ``resolved_dest`` (already ``os.path.realpath``-ed by the caller)
+    one of the dataset source paths ``payload`` itself declares? The check
+    ``write_project_file`` refuses a save destination on (P1.2 box 4,
+    review round on #291).
 
     Why the payload and not only the cached ``desktop_consent`` set: that
     set is populated ONLY by a native project open (``_read_granted``), so a
     workspace built from fresh imports, a relinked source, or a project
     opened any other way is not described by it — it may even still describe
     the PREVIOUS project. The payload being written is the authoritative
-    description of the workspace it describes. Resolving through
-    ``os.path.realpath`` is what makes a symlink or a ``sub/../raw.csv``
-    spelling of the same file match; a string that cannot be resolved at all
-    is skipped (same tolerance as ``desktop_consent._normalize``) rather than
-    turning a save into a crash."""
-    out: set[str] = set()
-    for raw in extract_declared_source_paths(content):
+    description of the workspace it describes.
+
+    Cost discipline (self-review on #291): this runs on EVERY quick save and
+    Save As, under the exclusive OS lock, and ``os.path.realpath`` on
+    Windows opens each path (``_getfinalpathname``) — on a source that lives
+    on an unreachable network share that is the SMB timeout, per source, per
+    save, in the exact "offline" state the relink workflow models as
+    first-class. So: a pure-string comparison first (``normcase(abspath)``,
+    no I/O — catches the identical and the ``sub/../raw.csv`` spellings),
+    and ``realpath`` (the symlink/junction/case-folded spellings) only for a
+    source on the SAME drive/UNC root as the destination — a source on
+    another root cannot be the destination file (a cross-root link from the
+    destination's side is already folded into ``resolved_dest``). A string
+    that cannot be normalised at all is skipped (same tolerance as
+    ``desktop_consent._normalize``) rather than turning a save into a
+    crash."""
+    dest_norm = os.path.normcase(os.path.normpath(resolved_dest))
+    dest_root = os.path.normcase(os.path.splitdrive(dest_norm)[0])
+    for raw in declared_source_paths_of(payload):
         try:
-            out.add(os.path.realpath(raw))
+            candidate = os.path.normcase(os.path.abspath(raw))
         except (OSError, ValueError):
             continue
-    return out
+        if candidate == dest_norm:
+            return True
+        if os.path.normcase(os.path.splitdrive(candidate)[0]) != dest_root:
+            continue
+        try:
+            real = os.path.realpath(raw)
+        except (OSError, ValueError):
+            continue
+        if real == resolved_dest or os.path.normcase(os.path.normpath(real)) == dest_norm:
+            return True
+    return False
 
 
-def validate_workspace_payload(content: str) -> str | None:
-    """``None`` when ``content`` is acceptable to write; else a human-readable
-    reason, safe to report straight back to the frontend as ``error``."""
+def parse_workspace_payload(content: str) -> tuple[dict[str, Any] | None, str | None]:
+    """``(payload, None)`` when ``content`` is acceptable to write, else
+    ``(None, reason)`` with a human-readable reason safe to report straight
+    back to the frontend as ``error``. One ``json.loads`` serves both the
+    validation and the declared-source check ``write_project_file`` runs
+    next (``payload_declares_source``) — an embedded-mode workspace carries
+    every dataset's data, so parsing a multi-megabyte document twice per
+    Ctrl+S, under the exclusive OS lock, was measurable (self-review on
+    #291)."""
     try:
         payload = json.loads(content)
     except (json.JSONDecodeError, ValueError) as exc:
-        return f"not valid JSON: {exc}"
+        return None, f"not valid JSON: {exc}"
     if not isinstance(payload, dict):
-        return "not a JSON object"
+        return None, "not a JSON object"
     if payload.get("format") != WORKSPACE_FORMAT:
-        return "missing or unexpected 'format' field"
+        return None, "missing or unexpected 'format' field"
     if payload.get("version") not in WORKSPACE_VERSIONS:
-        return f"unsupported workspace version: {payload.get('version')!r}"
+        return None, f"unsupported workspace version: {payload.get('version')!r}"
     if not isinstance(payload.get("datasets"), list):
-        return "missing or non-array 'datasets' field"
-    return None
+        return None, "missing or non-array 'datasets' field"
+    return payload, None
+
+
+def validate_workspace_payload(content: str) -> str | None:
+    """``None`` when ``content`` is acceptable to write; else the reason.
+    ``parse_workspace_payload`` is the same check that also hands back the
+    parsed document."""
+    return parse_workspace_payload(content)[1]
 
 
 # The exact prefix `write_project_file` gives every temp file it creates —

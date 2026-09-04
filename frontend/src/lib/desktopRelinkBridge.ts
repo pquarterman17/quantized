@@ -81,14 +81,15 @@ export async function grantSourceReadPaths(paths: string[]): Promise<string[]> {
  *  `CANCELLED` (the user backed out; nothing to report) and `null` (no
  *  usable bridge; fall back to typing), because the user DID act and
  *  deserves to hear why nothing happened (the same error-vs-cancel split
- *  `openProject`'s doc above rules on for its own post-pick failures). */
+ *  desktopBridge.ts's `openProject` doc rules on for its own post-pick
+ *  failures). */
 export interface PickDirError {
   error: string;
 }
 
 /** C1 (relink consent): native folder dialog for the relink panel's
  *  "Browse..." control (quantized/desktop_bridge_dialogs.py's
- *  `pick_relink_directory`) — UNLIKE `pickNativeDirectory` above, a real
+ *  `pick_relink_directory`) — UNLIKE desktopBridge.ts's `pickNativeDirectory`, a real
  *  return from THIS dialog mints a read-only, session-scoped grant on the
  *  backend covering the chosen folder and its descendants, which is what
  *  lets `probeSource` compute a checksum for a candidate under it. `null` =
@@ -100,7 +101,7 @@ export interface PickDirError {
  *  attempt (backend `{path: null, error}` response, or the bridge call
  *  throwing) — the caller should SAY so, never silently swallow it as a
  *  cancel or misreport it as a missing bridge. */
-// Same redundant-constituent trim as `pickSaveDestination` above: `Cancelled`
+// Same redundant-constituent trim as desktopBridge.ts's `pickSaveDestination`: `Cancelled`
 // is a `string` literal, so folding it into the plain `string` member here
 // changes nothing tsc can observe (callers still narrow with `=== CANCELLED`
 // before the `typeof !== "string"` check that isolates `PickDirError`).

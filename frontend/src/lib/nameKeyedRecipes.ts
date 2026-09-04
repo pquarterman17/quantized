@@ -38,7 +38,7 @@
 import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate, type GraphTemplate } from "./figuredoc";
 import { sanitizeFigureOverrides } from "./figureOverrides";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
-import { isCustomFitModel, loadCustomModels, saveCustomModel, deleteCustomModel } from "./fitmodels";
+import { isCustomFitModel, loadCustomModels, saveCustomModel, deleteCustomModel, type CustomFitModel } from "./fitmodels";
 import {
   deleteRecipe as deletePeakRecipe,
   isPeakRecipe,
@@ -147,22 +147,24 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *  Unknown extra keys are dropped rather than persisted.
  *
  *  SEMANTIC bounds too (review round 3 on #290): a well-typed value the
- *  wizard could never produce -- it rounds `order`/`max_peaks`/`bgDegree`
- *  and clamps `max_peaks >= 1`, `bgDegree >= 0`; the backend declares the
- *  counts/orders as `int` and refuses unknown shapes/link modes at fit time
- *  -- would import "successfully" and then fail the moment it is used. The
- *  rules mirror the owning UI/domain constraints, no tighter:
+ *  wizard could never produce would import "successfully" and then fail the
+ *  moment it is used. The rules are EXACTLY the wizard's own edit rules
+ *  (`peakClamp`, lib/peakwizard.ts — which steps.tsx applies to every typed
+ *  value), so a recipe this app saved always re-imports, and they apply only
+ *  to the fields the recipe's `baseline.method` / `report.mode` actually
+ *  read (self-review on #290): a recipe saved after switching from rolling
+ *  ball to ALS still carries whatever radius was typed, and ALS never looks
+ *  at it. Every field is still type-checked (finite number) regardless.
  *    range          lo <= hi when both are set
- *    baseline       lam > 0 (ALS smoothness); 0 < p < 1 (ALS asymmetry —
- *                   calc/baseline.py's baseline_als raises outside the OPEN
- *                   interval, so 0 and 1 are refused here too);
- *                   radius integer >= 1 (rolling-ball points);
- *                   order integer >= 0 (modpoly)
+ *    baseline       als: lam > 0, 0 < p < 1 (calc/baseline.py's
+ *                   baseline_als raises outside the OPEN interval);
+ *                   rollingball: radius integer >= 1; modpoly: order
+ *                   integer >= 0
  *    find           snr_threshold >= 0; min_prominence >= 0;
  *                   max_peaks integer >= 1
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
- *    report         regionWidth > 0 (a width in x FWHM) */
+ *    report         integrate: regionWidth > 0 (a width in x FWHM) */
 function parsePeakRecipeFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "peak recipe");
   if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
@@ -175,10 +177,13 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (range.lo !== null && range.hi !== null && (range.lo as number) > (range.hi as number)) bad("range: lo > hi");
   const baseline = o.baseline as Record<string, unknown>;
   if (!oneOf(baseline.method, PEAK_BASELINE_METHODS)) bad("baseline.method");
-  if (!positive(baseline.lam)) bad("baseline.lam");
-  if (!positive(baseline.p) || baseline.p >= 1) bad("baseline.p");
-  if (!posInt(baseline.radius)) bad("baseline.radius");
-  if (!nonnegInt(baseline.order)) bad("baseline.order");
+  for (const k of ["lam", "p", "radius", "order"] as const) if (!finite(baseline[k])) bad(`baseline.${k}`);
+  if (baseline.method === "als") {
+    if (!positive(baseline.lam)) bad("baseline.lam");
+    if (!positive(baseline.p) || baseline.p >= 1) bad("baseline.p");
+  }
+  if (baseline.method === "rollingball" && !posInt(baseline.radius)) bad("baseline.radius");
+  if (baseline.method === "modpoly" && !nonnegInt(baseline.order)) bad("baseline.order");
   const find = o.find as Record<string, unknown>;
   if (!nonneg(find.snr_threshold)) bad("find.snr_threshold");
   if (!nonneg(find.min_prominence)) bad("find.min_prominence");
@@ -190,7 +195,8 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (typeof model.constrain !== "boolean") bad("model.constrain");
   const report = o.report as Record<string, unknown>;
   if (!oneOf(report.mode, PEAK_REPORT_MODES)) bad("report.mode");
-  if (!positive(report.regionWidth)) bad("report.regionWidth");
+  if (!finite(report.regionWidth)) bad("report.regionWidth");
+  if (report.mode === "integrate" && !positive(report.regionWidth)) bad("report.regionWidth");
   const record: PeakRecipe = {
     version: 1,
     name: o.name as string,
@@ -218,11 +224,43 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   return record;
 }
 
+/** Same file-boundary discipline as the peak parser (self-review on #290):
+ *  `isCustomFitModel` proves the SHAPE (aligned arrays, finite guesses), but
+ *  a file can still be well-typed and unusable — a bound pair with
+ *  lower > upper, a starting guess outside its own bounds (scipy refuses an
+ *  infeasible x0 at fit time), a blank or duplicated parameter name. Those
+ *  are refused here, naming the parameter; and the record is REBUILT from
+ *  its known fields so unknown extra keys never reach `qz.customFitModels`,
+ *  matching what the peak and graph parsers already guarantee. */
 function parseFitModelFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "fit model");
   if (!isCustomFitModel(o)) throw new Error("not a valid fit model file");
   requireName(o, "fit model");
-  return o;
+  const bad = (field: string): never => {
+    throw new Error(`not a valid fit model file (${field})`);
+  };
+  const seen = new Set<string>();
+  o.params.forEach((name, i) => {
+    if (!name.trim()) bad(`params[${i}]: empty name`);
+    if (seen.has(name)) bad(`params[${i}]: duplicate "${name}"`);
+    seen.add(name);
+    const lo = o.lower[i];
+    const hi = o.upper[i];
+    if ((lo !== null && !Number.isFinite(lo)) || (hi !== null && !Number.isFinite(hi))) bad(`bounds[${name}]`);
+    if (lo !== null && hi !== null && lo > hi) bad(`bounds[${name}]: lower > upper`);
+    const g = o.guesses[i];
+    if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
+  });
+  const record: CustomFitModel = {
+    version: 1,
+    name: o.name,
+    equation: o.equation,
+    params: [...o.params],
+    guesses: [...o.guesses],
+    lower: [...o.lower],
+    upper: [...o.upper],
+  };
+  return record;
 }
 
 /** FIELD-LEVEL validation at the file boundary (review finding on #290).

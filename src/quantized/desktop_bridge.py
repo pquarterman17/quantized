@@ -150,8 +150,8 @@ from quantized.desktop_consent import consented_write_path, is_declared_source
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
-    payload_declared_sources,
-    validate_workspace_payload,
+    parse_workspace_payload,
+    payload_declares_source,
 )
 
 __all__ = ["DesktopApi"]
@@ -235,7 +235,7 @@ class DesktopApi(DesktopDialogBridge):
         swallowed on failure — see ``_fsync_directory_best_effort``), which
         only narrows that window further; it is never load-bearing for the
         prior file's survival, which the temp-file-only failure mode above
-        already covers. ``content`` must pass ``validate_workspace_payload``
+        already covers. ``content`` must pass ``parse_workspace_payload``
         or the write is refused before a temp file is even opened.
 
         **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
@@ -278,12 +278,12 @@ class DesktopApi(DesktopDialogBridge):
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        invalid = validate_workspace_payload(content)
-        if invalid is not None:
+        payload, invalid = parse_workspace_payload(content)
+        if payload is None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
         # The cached set above only knows natively OPENED projects; the payload's
-        # own sources are refused too (`payload_declared_sources`, #291 review).
-        if resolved in payload_declared_sources(content):
+        # own sources are refused too (`payload_declares_source`, #291 review).
+        if payload_declares_source(payload, resolved):
             return {
                 "ok": False,
                 "error": "refusing to write — that path is a data source of this workspace",

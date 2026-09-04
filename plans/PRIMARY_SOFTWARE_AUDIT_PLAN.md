@@ -1574,12 +1574,24 @@ Original acceptance criteria (unchanged):
   safe delete actions. Unsupported operations are omitted rather than shown
   disabled. Secondary actions use a keyboard-accessible overflow menu so long
   recipe names remain readable; one busy state prevents conflicting edits.
-- [ ] Add a selected-recipe details/preview surface, including visible schema
+- [x] ~~Add a selected-recipe details/preview surface, including visible schema
   version and useful kind-specific metadata. Do not imply that a recipe can be
-  edited or applied when its kind does not support that operation.
-- [ ] Add a library-level import entry point and finish import/export parity
+  edited or applied when its kind does not support that operation.~~ SHIPPED
+  2026-09-04 (#290): per-row Details disclosure built by `lib/recipeDetails.ts`
+  — schema version shown even when "unversioned", kind-specific facts, and an
+  "Available actions" line derived only from `supportsOperation`, so a row
+  never lists an operation its kind lacks. Quick-plot channel usage is derived
+  from the mapping, not from the label snapshot (self-review finding).
+- [x] ~~Add a library-level import entry point and finish import/export parity
   for recipe kinds with safe, portable formats. Keep capability gating for
-  kinds that cannot yet round-trip without loss.
+  kinds that cannot yet round-trip without loss.~~ SHIPPED 2026-09-04 (#290):
+  "Import recipe…" sniffs the kind from the file (`lib/recipeFile.ts`); peak,
+  graph and fit-model recipes gained serializers and file-boundary parsers
+  that check every field (type, enum, and the semantic bounds the owning
+  wizard/backend enforce — mirrored exactly, via `peakClamp`, so a recipe the
+  app saved always re-imports) and drop unknown keys. quickPlot stays
+  non-importable by capability gate: bound to a workbook/schema signature, no
+  portable form.
 - [ ] Search comes later if real use proves navigation insufficient.
 - [ ] Revisit organization after usage; do not freeze it prematurely.
 

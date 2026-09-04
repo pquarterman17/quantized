@@ -6,7 +6,7 @@
 import { useState } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { PEAK_LINK_MODES, PEAK_SHAPES } from "../../../lib/peakwizard";
+import { PEAK_LINK_MODES, PEAK_SHAPES, peakClamp } from "../../../lib/peakwizard";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
@@ -17,6 +17,17 @@ const faint = { color: "var(--text-faint)" } as const;
 
 /** A labelled numeric field: local text echo, commits parsed finite values
  *  (or null when cleared) upward on change. */
+/** Route a `Num` edit through one of `peakClamp`'s rules: a null (empty)
+ *  field or a rejected value leaves the recipe as it was, so every value that
+ *  reaches `patchRecipe` is one the recipe-file importer will accept back. */
+function clamped(rule: (v: number) => number | null, apply: (v: number) => void): (v: number | null) => void {
+  return (v) => {
+    if (v === null) return;
+    const c = rule(v);
+    if (c !== null) apply(c);
+  };
+}
+
 function Num({
   label,
   value,
@@ -93,22 +104,22 @@ export function StepRangeBaseline({ w }: { w: PeakWizardState }) {
       <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
         {b.method === "als" && (
           <>
-            <Num label="λ" value={b.lam} onValue={(v) => v !== null && w.patchRecipe({ baseline: { lam: v } })} />
-            <Num label="p" value={b.p} onValue={(v) => v !== null && w.patchRecipe({ baseline: { p: v } })} />
+            <Num label="λ" value={b.lam} onValue={clamped(peakClamp.lam, (lam) => w.patchRecipe({ baseline: { lam } }))} />
+            <Num label="p" value={b.p} onValue={clamped(peakClamp.p, (p) => w.patchRecipe({ baseline: { p } }))} />
           </>
         )}
         {b.method === "rollingball" && (
           <Num
             label="radius (pts)"
             value={b.radius}
-            onValue={(v) => v !== null && w.patchRecipe({ baseline: { radius: v } })}
+            onValue={clamped(peakClamp.radius, (radius) => w.patchRecipe({ baseline: { radius } }))}
           />
         )}
         {b.method === "modpoly" && (
           <Num
             label="order"
             value={b.order}
-            onValue={(v) => v !== null && w.patchRecipe({ baseline: { order: Math.round(v) } })}
+            onValue={clamped(peakClamp.order, (order) => w.patchRecipe({ baseline: { order } }))}
           />
         )}
       </div>
@@ -142,12 +153,12 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
         <Num
           label="SNR ≥"
           value={w.recipe.find.snr_threshold}
-          onValue={(v) => v !== null && w.patchRecipe({ find: { snr_threshold: v } })}
+          onValue={clamped(peakClamp.snrThreshold, (snr_threshold) => w.patchRecipe({ find: { snr_threshold } }))}
         />
         <Num
           label="max peaks"
           value={w.recipe.find.max_peaks}
-          onValue={(v) => v !== null && w.patchRecipe({ find: { max_peaks: Math.max(1, Math.round(v)) } })}
+          onValue={clamped(peakClamp.maxPeaks, (max_peaks) => w.patchRecipe({ find: { max_peaks } }))}
         />
         <Button size="sm" variant="primary" disabled={w.findBusy} onClick={() => void w.runFind()}>
           {w.findBusy ? "Finding…" : "Find peaks"}
@@ -234,7 +245,7 @@ export function StepModel({ w }: { w: PeakWizardState }) {
         <Num
           label="background degree"
           value={m.bgDegree}
-          onValue={(v) => v !== null && w.patchRecipe({ model: { bgDegree: Math.max(0, Math.round(v)) } })}
+          onValue={clamped(peakClamp.bgDegree, (bgDegree) => w.patchRecipe({ model: { bgDegree } }))}
         />
         <Checkbox checked={m.constrain} onChange={(v) => w.patchRecipe({ model: { constrain: v } })}>
           constrain to window
@@ -309,7 +320,7 @@ export function StepReport({ w }: { w: PeakWizardState }) {
           <Num
             label="region width (×FWHM)"
             value={w.recipe.report.regionWidth}
-            onValue={(v) => v !== null && w.patchRecipe({ report: { regionWidth: v } })}
+            onValue={clamped(peakClamp.regionWidth, (regionWidth) => w.patchRecipe({ report: { regionWidth } }))}
           />
           <Button size="sm" disabled={w.fitBusy} onClick={() => void w.runIntegrate()}>
             Integrate

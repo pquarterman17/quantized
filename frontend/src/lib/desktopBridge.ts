@@ -295,6 +295,31 @@ export interface SaveRefused {
   readonly refused: string;
 }
 
+/** Narrow a save-path outcome to the refusal object (the only object shape
+ *  besides `{path}` these calls return). */
+export function isSaveRefused(v: unknown): v is SaveRefused {
+  return typeof v === "object" && v !== null && "refused" in v;
+}
+
+/** Every refusal the backend can voice on a save path starts with one of
+ *  these (desktop_bridge.py / desktop_bridge_dialogs.py); anything else in
+ *  an `error` is a FAILURE (dialog crash, no window) and is reported as one. */
+const REFUSAL_PREFIXES = ["refusing to save — ", "refusing to write — "] as const;
+
+/** Turn a backend `error` string into the status a caller shows: a refusal
+ *  becomes "save refused — <reason>" (the prefix is not doubled), a failure
+ *  "save failed — <error>" (self-review on #291). */
+export function saveErrorStatus(error: string): string {
+  for (const prefix of REFUSAL_PREFIXES) {
+    if (error.startsWith(prefix)) return `save refused — ${error.slice(prefix.length)}`;
+  }
+  return `save failed — ${error}`;
+}
+
+function isRefusal(error: string): boolean {
+  return REFUSAL_PREFIXES.some((prefix) => error.startsWith(prefix));
+}
+
 // `string` already subsumes the `Cancelled` literal (a `qz/desktop-bridge/
 // cancelled`-valued string) at the type level — the return type keeps just
 // `string` (callers still narrow with `=== CANCELLED`); the eliminated
@@ -316,31 +341,26 @@ export async function pickSaveDestination(suggestedName: string): Promise<string
 }
 
 /** Native "Save As" dialog, then an in-process write of `contents` to the
- *  chosen path (quantized/desktop_bridge.py's `save_file_dialog` +
- *  `write_project_file`). `null` = no usable bridge OR the write itself
- *  failed after a real pick (fall back to the browser download — the
- *  content is not lost, just not landed at a native path); `CANCELLED` = the
- *  user backed out of the save dialog — do nothing, never fall back to a
- *  download the user did not ask for. A plain "dialog then write" combo for
- *  a caller with no reason to check anything between the two steps; a
- *  caller that DOES (store/workspaceIO.ts's lock-aware Save As) uses
- *  `pickSaveDestination` + `saveProjectTo` instead. */
+ *  chosen path — `pickSaveDestination` followed by `saveProjectTo`, so the
+ *  two refusal shapes those voice (the dialog refusing the pick, the write
+ *  refusing the path) reach this caller too, never collapsed into a cancel
+ *  (self-review on #291: this combo used to map every `path: null` onto
+ *  `CANCELLED`, the exact defect `pickSaveDestination` had already fixed).
+ *  `null` = no usable bridge OR the write itself failed after a real pick
+ *  (fall back to the browser download — the content is not lost, just not
+ *  landed at a native path); `CANCELLED` = the user backed out of the save
+ *  dialog — do nothing, never fall back to a download the user did not ask
+ *  for; `SaveRefused` = say why, and do not fall back either. A caller that
+ *  needs a lock check BETWEEN the pick and the write (store/workspaceIO.ts's
+ *  Save As) uses the two halves directly. */
 export async function saveProjectAs(
   suggestedName: string,
   contents: string,
-): Promise<SaveProjectResult | Cancelled | null> {
-  const bridge = api();
-  if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
-  try {
-    const dialogOut = await bridge.save_file_dialog(suggestedName);
-    const path = str(dialogOut.path);
-    if (path === null) return CANCELLED;
-    const writeOut = await bridge.write_project_file(path, contents);
-    if (!bool(writeOut.ok)) return null;
-    return { path: str(writeOut.path) ?? path };
-  } catch {
-    return null;
-  }
+): Promise<SaveProjectResult | Cancelled | SaveRefused | null> {
+  const destination = await pickSaveDestination(suggestedName);
+  if (destination === null || destination === CANCELLED || isSaveRefused(destination)) return destination;
+  const written = await saveProjectTo(destination, contents);
+  return written === LOCK_LOST ? null : written; // no token was supplied, so LOCK_LOST cannot occur
 }
 
 /** Write `contents` directly to an already-known project `path` — no dialog.
@@ -353,17 +373,27 @@ export async function saveProjectAs(
  *  `LOCK_LOST` (never `null`) when it was refused — see that constant's
  *  doc for why the two must stay distinguishable to the caller. Omitting
  *  `lockToken` (or passing `""`) skips the check entirely, byte-identical
- *  to this function's pre-I2 behavior. */
+ *  to this function's pre-I2 behavior. A `SaveRefused` is the backend
+ *  declining the destination itself (a declared raw source) — distinct from
+ *  both `null` and `LOCK_LOST`, since the caller must say why and must not
+ *  fall back to a download. */
 export async function saveProjectTo(
   path: string,
   contents: string,
   lockToken?: string,
-): Promise<SaveProjectResult | LockLost | null> {
+): Promise<SaveProjectResult | LockLost | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.write_project_file) return null;
   try {
     const out = await bridge.write_project_file(path, contents, lockToken ?? "");
-    if (str(out.error) === "lock lost") return LOCK_LOST;
+    const error = str(out.error);
+    if (error === "lock lost") return LOCK_LOST;
+    // P1.2 box 4, self-review on #291: the WRITE can refuse too — the
+    // destination is one of the payload's own declared sources (a spelling
+    // the frontend pre-check and the dialog's cached set never matched).
+    // A refusal must reach the caller as one, never as a generic `null`
+    // that Save As would turn into a browser download with an OK toast.
+    if (error !== null && isRefusal(error)) return { refused: error };
     if (!bool(out.ok)) return null;
     return { path: str(out.path) ?? path };
   } catch {

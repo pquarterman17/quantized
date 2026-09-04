@@ -20,6 +20,7 @@ import {
   revokeRelinkDir,
   saveProjectAs,
   saveProjectTo,
+  saveErrorStatus,
 } from "./desktopBridge";
 
 interface FakeApi {
@@ -220,6 +221,23 @@ describe("saveProjectAs", () => {
     expect(await saveProjectAs("w.dwk", "{}")).toBeNull();
   });
 
+  it("surfaces a dialog refusal and a write refusal as {refused} — never as a cancel or a plain failure (self-review on #291)", async () => {
+    setShell({
+      save_file_dialog: async () => ({ path: null, error: "refusing to save — that path is a data source of the open project" }),
+      write_project_file: async () => ({ ok: true }),
+    });
+    expect(await saveProjectAs("w.dwk", "{}")).toEqual({
+      refused: "refusing to save — that path is a data source of the open project",
+    });
+    setShell({
+      save_file_dialog: async () => ({ path: "/p/raw.csv" }),
+      write_project_file: async () => ({ ok: false, error: "refusing to write — that path is a data source of this workspace" }),
+    });
+    expect(await saveProjectAs("w.dwk", "{}")).toEqual({
+      refused: "refusing to write — that path is a data source of this workspace",
+    });
+  });
+
   it("returns null when the shell exposes only one of the two required methods", async () => {
     setShell({ save_file_dialog: async () => ({ path: "/p/w.dwk" }) });
     expect(await saveProjectAs("w.dwk", "{}")).toBeNull();
@@ -240,6 +258,19 @@ describe("saveProjectTo", () => {
   it("returns null when the write is refused (e.g. an unconsented path)", async () => {
     setShell({ write_project_file: async () => ({ ok: false, error: "not consented" }) });
     expect(await saveProjectTo("/p/w.dwk", "{}")).toBeNull();
+  });
+
+  it("returns {refused} when the backend declines the destination as a declared source (self-review on #291)", async () => {
+    setShell({
+      write_project_file: async () => ({ ok: false, error: "refusing to write — that path is a data source of this workspace" }),
+    });
+    expect(await saveProjectTo("/p/raw.csv", "{}")).toEqual({
+      refused: "refusing to write — that path is a data source of this workspace",
+    });
+    expect(saveErrorStatus("refusing to write — that path is a data source of this workspace")).toBe(
+      "save refused — that path is a data source of this workspace",
+    );
+    expect(saveErrorStatus("no window attached")).toBe("save failed — no window attached");
   });
 
   // I2 (P0-3/P1-1): the lock-token binding — LOCK_LOST must be

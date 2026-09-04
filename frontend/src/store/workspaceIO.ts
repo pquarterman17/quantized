@@ -24,14 +24,7 @@
 // Recent Projects entry — see lib/recentProjects.ts's module doc for why a
 // browser download, which has no path, never does.
 
-import {
-  CANCELLED,
-  LOCK_LOST,
-  hasDesktopShell,
-  pickSaveDestination,
-  saveProjectTo,
-  type SaveProjectResult,
-} from "../lib/desktopBridge";
+import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
@@ -168,7 +161,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     // destination is the open project's own declared raw source — see
     // desktop_bridge_dialogs.py's `save_file_dialog`). A refusal, not a
     // cancel: say so, and never fall back to a download either.
-    const msg = `save refused — ${destination.refused}`;
+    const msg = saveErrorStatus(destination.refused);
     get().setStatus(msg);
     toast(msg, "danger");
     return;
@@ -209,7 +202,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       return; // a deliberate refusal, not a failure — no download fallback either
     }
     const write = await saveProjectTo(destination, content, acquired.record.token);
-    if (write !== null && write !== LOCK_LOST) {
+    if (write !== null && write !== LOCK_LOST && !isSaveRefused(write)) {
       native = write;
       // Success: release the OLD lock — a DIFFERENT path this instance
       // actually held — now that the NEW path is the project's identity.
@@ -237,6 +230,17 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       // leave the OLD lock completely untouched: the user is still
       // working in the prior project, this Save As simply didn't happen.
       await lock.provider.release(destination, acquired.record.token ?? "").catch(() => false);
+      if (isSaveRefused(write)) {
+        // The WRITE refused the destination (P1.2 box 4's payload-derived
+        // check: a declared source under a spelling neither the pre-check
+        // above nor the dialog's cached set matched). A refusal, not a
+        // failure — say why, and never fall back to a download that would
+        // announce success (self-review on #291).
+        const msg = saveErrorStatus(write.refused);
+        get().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
     }
   }
   if (native !== null) {
@@ -348,6 +352,17 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     const status = current === null ? "held-by-other-live" : classifyLock(current, lock.instanceId, Date.now());
     useProjectLock.setState({ status, record: current, unverifiableHeartbeats: 0 });
     const msg = "save refused — the project lock was lost (another instance may hold it now)";
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  if (isSaveRefused(result)) {
+    // The named project's own path is now one of its declared sources (a
+    // relink pointed a dataset at the .dwk itself, or an alias spelling the
+    // open-time cache never saw) — the backend refused before touching
+    // disk; say exactly that rather than "could not write" (self-review on
+    // #291). The dirty marker stays set.
+    const msg = saveErrorStatus(result.refused);
     get().setStatus(msg);
     toast(msg, "danger");
     return;

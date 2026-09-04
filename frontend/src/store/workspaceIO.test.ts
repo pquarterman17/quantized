@@ -263,10 +263,37 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     expect(write).not.toHaveBeenCalled();
     expect(saveBlob).not.toHaveBeenCalled();
     expect(useApp.getState().status).toBe(
-      "save refused — refusing to save — that path is a data source of the open project",
+      "save refused — that path is a data source of the open project",
     );
     expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  it("a WRITE-time declared-source refusal is a refusal too — no download, no OK toast, the new lock released (self-review on #291)", async () => {
+    // The payload-derived check in desktop_bridge.py's `write_project_file`
+    // fires when the destination is a source under a spelling neither the
+    // frontend pre-check (exact string) nor the dialog's cached set knew.
+    // Before this, `saveProjectTo` mapped that onto `null`, and Save As
+    // fell through to a browser download announced with an OK toast.
+    const write = vi.fn(async () => ({
+      ok: false,
+      error: "refusing to write — that path is a data source of this workspace",
+    }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/data/sub/../raw.csv" }),
+      write_project_file: write,
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("save refused — that path is a data source of this workspace");
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(useApp.getState().currentProject).toBeNull();
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+    const provider = useProjectLock.getState().provider as ReturnType<typeof freshLockProvider>;
+    expect(provider.store.has("/data/sub/../raw.csv")).toBe(false); // the just-acquired lock was released
   });
 
   it("Save As onto a DIFFERENT, unheld destination still works normally", async () => {
@@ -453,6 +480,24 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
 // gates directly against the lock's last-known status for that exact path.
 // Save As always goes through a NEW native dialog (a deliberate destination
 // pick) and is left ungated — see store/workspaceIO.ts's comment.
+describe("saveWorkspace — a write-time declared-source refusal is reported as one (self-review on #291)", () => {
+  it("says the backend's reason, leaves the project dirty, never downloads", async () => {
+    setShell({
+      write_project_file: async () => ({
+        ok: false,
+        error: "refusing to write — that path is a data source of this workspace",
+      }),
+    });
+    useApp.setState({ currentProject: { name: "workspace.dwk", path: "/proj/workspace.dwk" } });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("save refused — that path is a data source of this workspace");
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+  });
+});
+
 describe("saveWorkspace — refuses when this instance does not hold the write lock (PR I2)", () => {
   it("refuses and leaves the project dirty when the lock is held read-only for this exact path", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
