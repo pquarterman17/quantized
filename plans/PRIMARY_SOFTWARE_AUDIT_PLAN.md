@@ -1604,6 +1604,13 @@ import and round-trip parity; the prior single unchecked line obscured that
 split. New eager UI work must respect the bundle ratchet (the 2026-08-31
 verification had about 4.0 kB of headroom).
 
+**Status update — 2026-09-04:** #290 closed both of the boxes Sol's update
+above left open — details/preview/version and library-level import with
+round-trip parity. The only boxes still open in P3.5 are the two
+usage-gated ones (search, revisit organization). Bundle headroom after the
+stack (through #292) is about 3.0 kB, measured locally at #292; the pin
+was not raised.
+
 ### P3.6 — Office/report export acceptance
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
@@ -1620,7 +1627,7 @@ verification had about 4.0 kB of headroom).
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
 - [x] ~~**Extend to folders, figures, reports, and durable objects.**~~ SHIPPED
-  2026-09-02 (`frontend/src/store/trash.ts`): `TrashEntry` is now a
+  2026-09-04 (#292) (`frontend/src/store/trash.ts`): `TrashEntry` is now a
   discriminated union (`dataset`/`editableFigure`/`figureDoc`/`page`/
   `report`/`folder`); every delete path (`deleteEditableFigure`,
   `removeFigureDoc`, `deletePageDocument`, `removeReport`,
@@ -1631,7 +1638,7 @@ verification had about 4.0 kB of headroom).
   dataset/workbook members lost their `folderId`, so both delete modes
   restore. Tests: `store/trash.test.ts`, `store/folderDelete.test.ts`.
 - [x] ~~**Coherent dependency restore or clear limitation.**~~ SHIPPED
-  2026-09-02: `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
+  2026-09-04 (#292): `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
   `dataset` restore is unchanged (workbook self-heal). A live
   `editableFigure`/`figureDoc` whose bound dataset is gone restores the
   dataset too when it is ALSO in trash (same transaction, noted), else
@@ -1651,17 +1658,20 @@ verification had about 4.0 kB of headroom).
   so an undoable restore would let Ctrl+Z remove the object again with its
   entry already consumed (`store/trash.test.ts` pins it).
 - [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
-  2026-09-02: `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
+  2026-09-04 (#292): `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
   P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
   newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
   `bytes` computed once at trash time, never per render — a dimension ESTIMATE
   for datasets (`datasetByteEstimate`; the exact `JSON.stringify` measured
   1.2 s on P0.4's 1M-row dataset, a stall this would have added to every
-  delete), exact for every other kind. `lib/trashSummary.ts`
+  delete). An `editableFigure`/`figureDoc` entry whose document carries a
+  FROZEN data snapshot also uses the dimension estimate for that snapshot
+  (`editableFigureByteEstimate` / `figureDocByteEstimate`, same cost reason);
+  exact for the rest. `lib/trashSummary.ts`
   (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
   `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
   naming exactly what would be lost, destructive-styled, before `purgeTrash()`.
-- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-02:
+- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-04 (#292):
   `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
   the Library dataset menu's new "Delete permanently…" action
   (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
@@ -1675,6 +1685,20 @@ verification had about 4.0 kB of headroom).
   controls carry row-naming accessible labels. Tests:
   `lib/datasetDeletePermanently.test.ts`, `store/trash.test.ts`,
   `components/workshops/trash/TrashPanel.test.tsx`.
+
+**Status update — 2026-09-04 (#292 self-review round):** permanent delete now
+does a full snapshot scrub — `scrubDatasetsFromHistory` maps every retained
+history and future snapshot through `removeDatasetsPatch`, not just the
+`datasets` array, so a stray `activeId`/binding/Origin ref naming the deleted
+id can't survive an undo. Trash is one entry per object: re-trashing the same
+id (e.g. delete → Undo → delete again) drops the older copy instead of
+double-counting it. A restored FROZEN `editableFigure`/`figureDoc` clamps a
+dangling dataset binding to null without attempting dependency restore — a
+frozen document renders from its own snapshot and needs none. The eager-
+bundle growth this round was funded by deferring
+`components/Library/folderOps.ts` to the click: its two eager importers
+(`lib/contextActions.ts`'s six folder actions and `MultiSelectBar.tsx`'s
+Export) now reach it through a dynamic `import()` inside the handler.
 
 ---
 

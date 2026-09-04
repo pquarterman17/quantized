@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { spatialPanelsOf } from "./lib/composition";
-import { installErrLog } from "./lib/errlog";
 import { connectLifecycle } from "./lib/lifecycle";
 import { defaultPlotView } from "./lib/plotview";
 import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotview";
@@ -12,7 +11,6 @@ import { isCalcOnlyView } from "./lib/viewMode";
 import { useApp } from "./store/useApp";
 import "./styles/index.css";
 
-installErrLog();
 connectLifecycle();
 
 // ── Visual-verification seam (tools/visual) ─────────────────────────────────

@@ -34,6 +34,7 @@ interface Found {
   file: string;
   line: number;
   literal: string;
+  text: string;
 }
 
 /** Walk `src/`, collecting every non-test `.ts`/`.tsx` file's (path, text). */
@@ -91,7 +92,7 @@ function findLiterals(): Found[] {
         re.lastIndex = 0;
         let m: RegExpExecArray | null;
         while ((m = re.exec(text)) !== null) {
-          found.push({ file, line, literal: normalize(m[1]) });
+          found.push({ file, line, literal: normalize(m[1]), text });
         }
       }
     }
@@ -125,15 +126,6 @@ const ALLOWLIST: Record<string, string> = {
   // `recommend.endpoint.replace("/api/stats/", "")` — stripping a prefix off
   // a label the backend already returned, for display only.
   "/api/stats/": "display-string prefix strip, not a fetch target",
-  // Ported verbatim from fermiviewer's errlog.ts (shared platform code, per
-  // that file's own header); fermiviewer's backend has a matching route,
-  // quantized's never got one. `downloadBugReport` awaits the fetch, but a
-  // 404 leaves `r.ok` false, so the whole branch no-ops and `server` stays
-  // `null` — silently dropping the server half of every bug report generated
-  // in this app. Genuine dead frontend call, reported to the user rather
-  // than papered over; not fixed here (out of scope for this change, and
-  // adding a backend route is a product decision, not a typing exercise).
-  "/api/debug/report": "dead call: no such backend route exists (see this test's header comment) — reported, not fixed here",
 };
 
 describe("every /api/ literal in src names a real backend path (openapi.json)", () => {
@@ -164,5 +156,30 @@ describe("every /api/ literal in src names a real backend path (openapi.json)", 
     expect(stale, "remove from ALLOWLIST: no longer present in src, or now matches a real backend path").toEqual(
       [],
     );
+  });
+
+  it("no allowlisted literal is a request target", () => {
+    // The allowlist above may only excuse a literal that is genuinely NOT a
+    // fetch target (a prefix test, a display-string strip). If an
+    // allowlisted literal's line is itself a request call, that's not an
+    // excused non-call — it's a dead fetch (or worse, a live one drifted
+    // from the backend) that must be fixed, not papered over here.
+    // Anchored on the literal itself (not just "a request call somewhere on
+    // the line"), so a line that passes an allowlisted prefix as a body field
+    // of an unrelated request is not a false positive.
+    const requestOf = (literal: string): RegExp =>
+      new RegExp(
+        String.raw`\b(fetch|getJSON|postJSON|deleteJSON|postForm|postBlob|postDownload|postApi)\s*\(\s*["'\x60]` +
+          literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      );
+    const offenders = findLiterals()
+      .filter((f) => ALLOWLIST[f.literal])
+      .filter((f) => requestOf(f.literal).test(f.text))
+      .map((f) => `${f.file}:${f.line}: ${f.literal}`);
+    expect(
+      offenders,
+      "an allowlisted literal is the path argument of a request call — the allowlist may only " +
+        "excuse non-fetch uses (prefix tests, display strings); a dead fetch must be fixed, not listed",
+    ).toEqual([]);
   });
 });
