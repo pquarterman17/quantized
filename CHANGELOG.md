@@ -6,6 +6,10 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
+  `/api/debug/report` fetch had no backend route, so the server half of
+  every report silently dropped. The P3.4 diagnostics bundle is the
+  supported path.
 - Route every 422 calc adapter through a shared `CALC_ERRORS` mapping
   instead of one bespoke `except ValueError` per route (`routes/`).
 - Share delimited-file parsing helpers across `io/` parsers and apply the

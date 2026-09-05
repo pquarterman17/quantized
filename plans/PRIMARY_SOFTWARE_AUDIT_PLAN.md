@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-19 latest (Day-5 sprint reconciliation, QA lane): P1.1,
+**Updated:** 2026-09-04 (#294): **P1.2 is COMPLETE** — its `[~]` tag is
+dropped, the P0.4-conditional compressed/chunked-container box is DECIDED NOT
+REQUIRED (see the box), and Gate B step 2 is ticked; the 2026-08-19 note
+below that added P1.2's `[~]` is superseded for P1.2 (still current for
+P1.1/P1.5). Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): P1.1,
 P1.2, and P1.5 had shipped partial slices (2026-08-17/18) with no `[~]`
 status tag in their section headers, unlike P1.4/P1.6/P1.7 — added the tag
 to all three for consistency; flipped two stale P1.2 boxes to `[x]`
@@ -108,8 +112,9 @@ Primary-software readiness is **not yet proven**. The largest risks are:
    slices — the shipped bridge uses pywebview (`desktop_bridge.py`,
    matching CLAUDE.md's actual stack), not Tauri, and named Save/Save As,
    recents, atomic write-validate-replace, bounded autosave generations, and
-   a consent-gated recovery dialog are now real (see P1.1 `[~]`/P1.2 `[~]`
-   below for the itemized, still-partial state). Packaged Windows/macOS E2E
+   a consent-gated recovery dialog are now real (see P1.1 `[~]` below for
+   its itemized, still-partial state; P1.2 is COMPLETE as of 2026-09-04 —
+   `#291` plus the decided container box). Packaged Windows/macOS E2E
    and long-Unicode/network-path behavior remain unverified — that part of
    this risk item still stands.
 3. Saved graph templates capture style, not a complete reusable plot recipe.
@@ -495,7 +500,7 @@ the existing remote-IPC security boundary must remain.
   `desktop_bridge.py`'s docstring (different consent story, cross-process
   IPC rather than in-process js_api).
 
-### P1.2 — Named project lifecycle, atomic recovery, scalable workspace [~]
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -577,7 +582,13 @@ weigh chunked/binary arrays for large members with that number in hand.
   the version tier that introduced each, confirms `deriveWorkbooks`
   derives exactly one workbook per dataset-group for v1-v3, and a
   `version: 5` copy throws `/unsupported workspace version/`.
-- [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
+- [x] ~~Use compressed containers/chunked binary arrays only if P0.4 requires
+  it.~~ DECIDED NOT REQUIRED 2026-09-04: P0.4's own measurement (above)
+  answered the condition at the 50-dataset/20-window scale, and the one
+  large-member cost it flagged — the 5.8 s synchronous `JSON.parse` on a
+  188 MB `.dwk` reopen — was closed by P3.4 slice 3's worker parse
+  (`481e0ea`), so no format change is owed. Reopen only on new evidence
+  (a measured member the worker parse cannot hold).
 - [x] Kill-process/interrupted-write and old-version round trips pass.
   **(2026-09-02.)** Backend: `desktop_bridge.py`'s `write_project_file` now
   `flush`+`fsync`s the temp file BEFORE `os.replace`, and best-effort
@@ -618,9 +629,9 @@ weigh chunked/binary arrays for large members with that number in hand.
   justification that no route feeds them user input. Frontend:
   `store/workspaceIO.ts`'s `runSaveWorkspaceToFile` gains a fast, friendly
   pre-check refusing a Save As destination equal to a live dataset's
-  `source.path`, tested in `store/workspaceIO.test.ts`. (The compressed-
-  containers box above stays open — P0.4 answered "not required" — so
-  this section is not all-checked.)
+  `source.path`, tested in `store/workspaceIO.test.ts`. (P1.2 is
+  all-checked as of 2026-09-04: the compressed-containers box above,
+  the last one open, is DECIDED NOT REQUIRED on P0.4's evidence — #294.)
 
 ### P1.3 — Complete reusable plot-recipe templates [~]
 
@@ -1604,6 +1615,13 @@ import and round-trip parity; the prior single unchecked line obscured that
 split. New eager UI work must respect the bundle ratchet (the 2026-08-31
 verification had about 4.0 kB of headroom).
 
+**Status update — 2026-09-04:** #290 closed both of the boxes Sol's update
+above left open — details/preview/version and library-level import with
+round-trip parity. The only boxes still open in P3.5 are the two
+usage-gated ones (search, revisit organization). Bundle headroom after the
+stack (through #292) is about 3.0 kB, measured locally at #292; the pin
+was not raised.
+
 ### P3.6 — Office/report export acceptance
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
@@ -1620,7 +1638,7 @@ verification had about 4.0 kB of headroom).
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
 - [x] ~~**Extend to folders, figures, reports, and durable objects.**~~ SHIPPED
-  2026-09-02 (`frontend/src/store/trash.ts`): `TrashEntry` is now a
+  2026-09-04 (#292) (`frontend/src/store/trash.ts`): `TrashEntry` is now a
   discriminated union (`dataset`/`editableFigure`/`figureDoc`/`page`/
   `report`/`folder`); every delete path (`deleteEditableFigure`,
   `removeFigureDoc`, `deletePageDocument`, `removeReport`,
@@ -1631,7 +1649,7 @@ verification had about 4.0 kB of headroom).
   dataset/workbook members lost their `folderId`, so both delete modes
   restore. Tests: `store/trash.test.ts`, `store/folderDelete.test.ts`.
 - [x] ~~**Coherent dependency restore or clear limitation.**~~ SHIPPED
-  2026-09-02: `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
+  2026-09-04 (#292): `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
   `dataset` restore is unchanged (workbook self-heal). A live
   `editableFigure`/`figureDoc` whose bound dataset is gone restores the
   dataset too when it is ALSO in trash (same transaction, noted), else
@@ -1651,17 +1669,20 @@ verification had about 4.0 kB of headroom).
   so an undoable restore would let Ctrl+Z remove the object again with its
   entry already consumed (`store/trash.test.ts` pins it).
 - [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
-  2026-09-02: `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
+  2026-09-04 (#292): `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
   P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
   newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
   `bytes` computed once at trash time, never per render — a dimension ESTIMATE
   for datasets (`datasetByteEstimate`; the exact `JSON.stringify` measured
   1.2 s on P0.4's 1M-row dataset, a stall this would have added to every
-  delete), exact for every other kind. `lib/trashSummary.ts`
+  delete). An `editableFigure`/`figureDoc` entry whose document carries a
+  FROZEN data snapshot also uses the dimension estimate for that snapshot
+  (`editableFigureByteEstimate` / `figureDocByteEstimate`, same cost reason);
+  exact for the rest. `lib/trashSummary.ts`
   (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
   `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
   naming exactly what would be lost, destructive-styled, before `purgeTrash()`.
-- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-02:
+- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-04 (#292):
   `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
   the Library dataset menu's new "Delete permanently…" action
   (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
@@ -1675,6 +1696,20 @@ verification had about 4.0 kB of headroom).
   controls carry row-naming accessible labels. Tests:
   `lib/datasetDeletePermanently.test.ts`, `store/trash.test.ts`,
   `components/workshops/trash/TrashPanel.test.tsx`.
+
+**Status update — 2026-09-04 (#292 self-review round):** permanent delete now
+does a full snapshot scrub — `scrubDatasetsFromHistory` maps every retained
+history and future snapshot through `removeDatasetsPatch`, not just the
+`datasets` array, so a stray `activeId`/binding/Origin ref naming the deleted
+id can't survive an undo. Trash is one entry per object: re-trashing the same
+id (e.g. delete → Undo → delete again) drops the older copy instead of
+double-counting it. A restored FROZEN `editableFigure`/`figureDoc` clamps a
+dangling dataset binding to null without attempting dependency restore — a
+frozen document renders from its own snapshot and needs none. The eager-
+bundle growth this round was funded by deferring
+`components/Library/folderOps.ts` to the click: its two eager importers
+(`lib/contextActions.ts`'s six folder actions and `MultiSelectBar.tsx`'s
+Export) now reach it through a dynamic `import()` inside the handler.
 
 ---
 
@@ -1785,7 +1820,9 @@ identifiers, the gates are the order.
 ### Gate B — Trustworthy daily project
 
 1. [ ] P1.1 native bridge.
-2. [ ] P1.2 project lifecycle.
+2. [x] ~~P1.2 project lifecycle.~~ COMPLETE 2026-09-04 — lifecycle slices
+   `#180`, recovery hardening `#291`, and the P0.4-conditional container box
+   decided NOT REQUIRED (`#294`). Gate B itself stays open for steps 1, 3, 4.
 3. [ ] P1.7 portability/relink.
 4. [ ] Repeat P0.1 and compare friction.
 
@@ -2133,7 +2170,8 @@ work (its BACKLOG row).
 - Findings booked as P0.4 follow-ups (plot-path point reduction; import-path
   efficiency incl. whole-file sniffer reads); WebGL/workers/chunked-arrays
   deliberately NOT booked (no evidence). P1.2's container question annotated
-  "not required at measured scale".
+  "not required at measured scale" (recorded as DECIDED NOT REQUIRED and the
+  P1.2 box closed 2026-09-04, #294).
 - Frontend agent's harness caught a real race in its own methodology (UI
   `clearAutosave()` is fire-and-forget; navigating away immediately lets
   autosave-restore repopulate silently) and one self-reporting bug it fixed
