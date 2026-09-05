@@ -6,6 +6,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Extend the dataset-handle cache (`routes/_datasetcache.py`) to
+  `/api/plot/series`: a committed zoom/pan on an already server-decimated
+  series used to re-POST the whole dataset on every step. Measured on a
+  1M x 7 dataset: ~11.8s server wall time resending the full payload on a
+  windowed re-fetch vs ~0.3s reusing the handle (~38x). `PlotRequest` now
+  extends `CachedDatasetRequest`; the frontend allowlist
+  (`lib/api/datasetCache.ts`) adds `/api/plot/series`.
 - Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
   `/api/debug/report` fetch had no backend route, so the server half of
   every report silently dropped. The P3.4 diagnostics bundle is the

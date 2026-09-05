@@ -5,12 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
 from quantized.calc.decimate import decimate_columns, is_ascending, window_columns
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
-from quantized.datastruct import DataStruct
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import jsonify, to_jsonable
@@ -18,8 +17,17 @@ from quantized.routes._payload import jsonify, to_jsonable
 router = APIRouter(prefix="/api/plot", tags=["plot"])
 
 
-class PlotRequest(BaseModel):
-    dataset: dict[str, Any]
+class PlotRequest(CachedDatasetRequest):
+    """``dataset``/``dataset_handle`` (P3.5 dataset-handle-cache parity with
+    ``/api/plot/map`` + every ``/api/rsm/*`` endpoint): a zoom/pan commit on
+    an already-decimated series re-POSTs the full DataStruct on every step
+    (measured 1M x 7 rows -> ~80 MB/request) even though the underlying
+    dataset never changed -- see ``CachedDatasetRequest``'s own doc. The
+    ``dataset`` field name is unchanged (inherited from the mixin), so every
+    existing caller (which only ever sent ``dataset``) keeps working with no
+    request-shape change.
+    """
+
     x_key: int | str | None = None
     y_keys: list[int | str] | None = None
     y2_keys: list[int | str] | None = None
@@ -60,10 +68,10 @@ class PlotRequest(BaseModel):
 
 
 @router.post("/series")
-def plot_series(req: PlotRequest) -> dict[str, Any]:
+def plot_series(req: PlotRequest, response: Response) -> dict[str, Any]:
     """Build uPlot-ready series from a posted DataStruct."""
     try:
-        ds = DataStruct.from_dict(req.dataset)
+        ds, handle = resolve_or_409(req)
         state = PlotState(
             x_key=req.x_key,
             y_keys=tuple(req.y_keys) if req.y_keys is not None else None,
@@ -101,6 +109,7 @@ def plot_series(req: PlotRequest) -> dict[str, Any]:
 
     # uPlot wants column-oriented data: [xValues, series1Values, series2Values, ...]
     data = [jsonify(x)] + [jsonify(v) for v in values]
+    response.headers["X-Dataset-Handle"] = handle
     return {
         "data": data,
         "series": [{"label": s.label, "unit": s.unit, "axis": s.axis} for s in plot.series],

@@ -196,6 +196,7 @@ CACHE_ELIGIBLE = [
     ("/api/rsm/projection", {}),
     ("/api/rsm/box", _BOX_BOUNDS),
     ("/api/rsm/box-stats", _BOX_BOUNDS),
+    ("/api/plot/series", {}),
 ]
 
 

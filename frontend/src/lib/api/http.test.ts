@@ -44,23 +44,27 @@ describe("postJSON dataset-cache dispatch", () => {
     expect(secondBody.dataset_handle).toBe("abc123");
   });
 
-  it("does not intercept /api/plot/series (out of scope) even though it carries a dataset field", async () => {
+  it("intercepts /api/plot/series (P3.5): sends the full dataset once, then only the handle", async () => {
     const dataset = { time: [1], values: [[1]], labels: ["a"], units: [""], metadata: {} };
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(fakeResponse({ ok: true }, { handle: "should-be-ignored" }));
+      .mockResolvedValueOnce(fakeResponse({ result: "first" }, { handle: "abc123" }))
+      .mockResolvedValueOnce(fakeResponse({ result: "second" }, { handle: "abc123" }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await postJSON("/api/plot/series", { dataset });
-    await postJSON("/api/plot/series", { dataset }); // repeat call
+    await postJSON("/api/plot/series", { dataset, decimate_width: 800 });
+    const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(firstBody.dataset).toEqual(dataset);
+    expect(firstBody.dataset_handle).toBeUndefined();
 
-    // Both calls still send the FULL dataset -- no handle substitution for
-    // an out-of-scope path, even though the (fake) server sent a header.
-    for (const call of fetchMock.mock.calls) {
-      const body = JSON.parse(call[1].body as string);
-      expect(body.dataset).toEqual(dataset);
-      expect(body.dataset_handle).toBeUndefined();
-    }
+    // A windowed re-fetch (the committed-zoom follow-up) reuses the SAME
+    // `dataset` object -- the handle it got back on the first call is sent
+    // in its place, not the full payload again.
+    await postJSON("/api/plot/series", { dataset, decimate_width: 800, x_min: 1, x_max: 2 });
+    const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(secondBody.dataset).toBeUndefined();
+    expect(secondBody.dataset_handle).toBe("abc123");
+    expect(secondBody.x_min).toBe(1); // other fields still forwarded
   });
 
   it("transparently recovers from a 409 unknown-handle response", async () => {

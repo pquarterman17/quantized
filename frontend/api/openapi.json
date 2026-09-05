@@ -6783,11 +6783,30 @@
         "type": "object"
       },
       "PlotRequest": {
+        "description": "``dataset``/``dataset_handle`` (P3.5 dataset-handle-cache parity with\n``/api/plot/map`` + every ``/api/rsm/*`` endpoint): a zoom/pan commit on\nan already-decimated series re-POSTs the full DataStruct on every step\n(measured 1M x 7 rows -> ~80 MB/request) even though the underlying\ndataset never changed -- see ``CachedDatasetRequest``'s own doc. The\n``dataset`` field name is unchanged (inherited from the mixin), so every\nexisting caller (which only ever sent ``dataset``) keeps working with no\nrequest-shape change.",
         "properties": {
           "dataset": {
-            "additionalProperties": true,
-            "title": "Dataset",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset"
+          },
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
           },
           "decimate_width": {
             "anyOf": [
@@ -6896,9 +6915,6 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "dataset"
-        ],
         "title": "PlotRequest",
         "type": "object"
       },
