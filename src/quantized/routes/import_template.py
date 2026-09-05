@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from quantized.io.origin_project.templates import read_origin_template
 from quantized.routes._errors import CALC_ERRORS
@@ -90,13 +91,20 @@ async def upload_template(file: UploadFile) -> dict[str, Any]:
     Streamed to disk in bounded chunks rather than read whole into memory
     (ROBUSTNESS_PLAN #3); an upload past
     ``_uploadstream.MAX_UPLOAD_BYTES`` is rejected with HTTP 413.
+
+    ``read_origin_template`` is a synchronous, CPU-bound parse over a plain
+    path, so it runs via ``run_in_threadpool`` (see ``routes/parsers.py``'s
+    ``upload_file`` for the full rationale -- this handler mirrors it) rather
+    than inline on the event loop. The temp directory is cleaned up only
+    after that call is awaited, so the file is never removed while the parse
+    is still reading it in the worker thread.
     """
     name = Path(file.filename or "template.otp").name or "template.otp"
     try:
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
             await stream_to_path(file, dest, filename=name)
-            return read_origin_template(dest)
+            return await run_in_threadpool(read_origin_template, dest)
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except CALC_ERRORS as exc:

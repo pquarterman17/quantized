@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from quantized.datastruct import DataStruct
@@ -36,7 +38,7 @@ from quantized.io.origin_project.graph_preview import (
 from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._errors import CALC_ERRORS_IO
-from quantized.routes._payload import datastruct_payload, jsonify
+from quantized.routes._payload import datastruct_payload, dumps_payload, jsonify
 from quantized.routes._uploadcache import stage_upload_stream
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
@@ -262,6 +264,46 @@ def _import_with_books(
     return datastruct_payload(ds)
 
 
+def _import_response(
+    path: Path, *, full_books: bool = False, upload_token: str | None = None
+) -> Response:
+    """``_import_with_books`` plus its OWN JSON encoding, so both run off the
+    event loop together.
+
+    FastAPI's default response path for a plain ``dict`` return (no
+    ``response_model`` -> ``fastapi.routing.serialize_response``'s
+    ``jsonable_encoder`` branch, then ``JSONResponse.render``'s
+    ``json.dumps``) runs on the EVENT LOOP regardless of which thread built
+    the dict -- measured on the 300k-row CSV fixture in
+    ``tests/test_upload_concurrency.py``: ``jsonable_encoder`` ~3.0s and
+    ``json.dumps`` ~1.7s, versus ~3.3s for the parse itself. Wrapping only
+    ``_import_with_books`` in ``run_in_threadpool`` (``upload_file``'s first
+    revision) left this larger, un-offloaded-by-that-fix half of the
+    blocking in place -- concurrent ``GET /api/health`` still stalled well
+    past this module's latency budget. Building the ``Response`` HERE,
+    inside the same ``run_in_threadpool`` call as the parse, makes FastAPI
+    skip ``serialize_response`` entirely: it only runs when the returned
+    value is not already a ``Response`` (``fastapi.routing``'s
+    ``isinstance(raw_response, Response)`` check short-circuits it), so the
+    whole path from bytes-on-disk to response-bytes-in-hand happens on the
+    worker thread.
+
+    ``dumps_payload`` (not a plain ``json.dumps`` call) for the encoding
+    itself: a single ``json.dumps``/``.tolist()`` over the whole "time"/
+    "values" arrays is ALSO one uninterruptible C call, so it can hold the
+    GIL -- and so still stall a concurrent request -- for its own multi-
+    hundred-millisecond-plus duration regardless of which thread runs it.
+    ``dumps_payload``/``jsonify`` (``routes/_payload.py``) chunk exactly
+    those two calls; see their docstrings for the profiled numbers. Their
+    combined output is byte-for-byte what
+    ``json.dumps(datastruct_payload(ds), ensure_ascii=False,
+    allow_nan=False, separators=(",", ":"))`` (``starlette.responses.
+    JSONResponse.render``'s exact kwargs) would produce.
+    """
+    payload = _import_with_books(path, full_books=full_books, upload_token=upload_token)
+    return Response(content=dumps_payload(payload), media_type="application/json")
+
+
 @router.post("/import")
 def import_file(req: ImportRequest) -> dict[str, Any]:
     """Auto-detect format and import a local file path into a DataStruct.
@@ -311,9 +353,18 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/upload")
-async def upload_file(file: UploadFile, full_books: bool = False) -> dict[str, Any]:
+@router.post("/upload", response_model=dict[str, Any])
+async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     """Import an uploaded data file (browser file-picker / drag-drop).
+
+    ``response_model=dict[str, Any]`` is DOCUMENTATION ONLY here: the actual
+    return value is a pre-serialized ``Response`` (see below), which FastAPI
+    passes straight through with no validation against this model at
+    runtime -- it exists purely so the OpenAPI schema (and the frontend's
+    generated types, ``frontend/api/openapi.json`` / ``schema.d.ts``) still
+    describes this endpoint's real body shape (the same import payload
+    ``import_file``/``/import`` returns) instead of the empty schema a bare
+    ``Response`` return type would otherwise produce.
 
     The bytes are streamed to disk in bounded chunks (``_uploadstream``,
     ROBUSTNESS_PLAN #3) rather than read whole into memory, under the
@@ -328,17 +379,42 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> dict[str, A
     temp dir: it's deleted before this handler returns, since nothing needs
     it afterwards. An upload past ``_uploadstream.MAX_UPLOAD_BYTES`` is
     rejected with HTTP 413 before it fully lands on disk.
+
+    The parse (``_import_with_books``) AND its JSON encoding (see
+    ``_import_response``) are both synchronous, CPU-bound work over a plain
+    path -- neither touches any event-loop-only state -- so both run via a
+    single ``run_in_threadpool`` call rather than inline on the event loop.
+    A plain ``def`` route (e.g. ``import_file`` above) already gets its OWN
+    body run this way for free from Starlette's own dispatch (every sync
+    path function is itself run through ``run_in_threadpool``), but its
+    response is still encoded on the loop afterwards -- not this handler's
+    concern, since the fix here only targets the two ``async def`` upload
+    handlers where the encoding step was newly discovered to matter (see
+    ``_import_response``'s docstring for the profiled numbers). This handler
+    must stay ``async def`` for the streaming ``await``s above, so the
+    threadpool call is made explicit. Skipping either half of it -- the
+    parse OR the encoding -- leaves a large upload (measured: 16.8s parse
+    for a 1M-row CSV, 15.5s of that spent blocking a concurrent GET
+    /api/health) starving every other request on the event loop, including
+    job-queue polling and other windows' plot requests, for effectively the
+    whole upload. The temp directory's cleanup (the ephemeral ``with``
+    block's ``__exit__``) is ordered strictly after the threadpool call
+    finishes because that call is awaited before the ``with`` block exits,
+    so the file is never unlinked out from under a parse still reading it in
+    the worker thread.
     """
     name = Path(file.filename or "upload.dat").name or "upload.dat"
     suffix = Path(name).suffix.lower()
     try:
         if suffix in (".opj", ".opju"):
             dest, token = await stage_upload_stream(name, file)
-            return _import_with_books(dest, full_books=full_books, upload_token=token)
+            return await run_in_threadpool(
+                _import_response, dest, full_books=full_books, upload_token=token
+            )
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
             await stream_to_path(file, dest, filename=name)
-            return _import_with_books(dest, full_books=full_books)
+            return await run_in_threadpool(_import_response, dest, full_books=full_books)
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except CALC_ERRORS_IO as exc:

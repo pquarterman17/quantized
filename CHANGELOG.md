@@ -6,6 +6,22 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Fix a large `/api/parsers/upload`/`/api/import/template/upload` (Origin
+  template) CSV/file import blocking every other request (job-queue
+  polling, `GET /api/health`, other windows' plot fetches) for the whole
+  parse: the synchronous, CPU-bound parse ran directly on the event loop
+  inside these `async def` handlers instead of via `run_in_threadpool`.
+  Also found and fixed two related GIL-monopolizing single-call bottlenecks
+  uncovered while writing the regression test (FastAPI's default
+  `jsonable_encoder`/`json.dumps` response encoding, and whole-array
+  `ndarray.tolist()`/bulk `zip()` transpose calls in `io/delimited.py`) that
+  each independently held the GIL long enough to stall a concurrent request
+  even after the parse itself moved off the event loop; all three are now
+  chunked or bypassed (`routes/parsers.py`, `routes/_payload.py`,
+  `io/delimited.py`). Regression coverage in
+  `tests/test_upload_concurrency.py` drives the real app under a live
+  uvicorn socket and asserts `GET /api/health` stays responsive while a
+  large upload is parsing.
 - Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
   `/api/debug/report` fetch had no backend route, so the server half of
   every report silently dropped. The P3.4 diagnostics bundle is the
