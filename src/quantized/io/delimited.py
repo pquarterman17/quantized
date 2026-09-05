@@ -8,7 +8,6 @@ the stdlib ``csv`` module.
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -28,14 +27,6 @@ from quantized.io.base import resolve_column
 __all__ = ["import_csv"]
 
 _COMMENT_CHARS = "#%"
-
-# Internal test-only escape hatch (P0.4-perf4 parity tests force the slow
-# tokenize/transpose/convert path to compare it, cell-for-cell, against the
-# `_delimited_fast` bulk path on the same file). Never set by production
-# code -- `import_csv`'s own `_force_slow` parameter is the one to use;
-# the env var exists only for the rare test/tool that can't thread a kwarg
-# through (e.g. a subprocess-based benchmark).
-_FORCE_SLOW_ENV = "QUANTIZED_DELIMITED_FORCE_SLOW"
 
 
 def _read_raw_lines(text: str) -> list[str]:
@@ -214,7 +205,8 @@ def import_csv(
     original tokenize/transpose/convert path, so parity tests can assert
     the fast and slow paths agree bit-for-bit on the same file. Production
     callers never need it -- `try_fast_parse_matrix` already falls back on
-    its own for any file it isn't confident about.
+    its own for any file it isn't confident about. This is the ONLY switch;
+    there is no environment-variable equivalent.
     """
     path = Path(filepath)
     raw_lines, comment_lines = _split_lines(path.read_text(encoding="latin-1"))
@@ -222,10 +214,12 @@ def import_csv(
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = layout._detect_delimiter(raw_lines)
 
-    # P0.4-perf4: layout detection needs only a handful of leading rows in
-    # the near-universal case (the header/preamble, then the first
-    # numeric-majority data row) before it stops -- `LazyTokenRows`
-    # tokenizes on demand instead of the old eager
+    # P0.4-perf4: layout detection scores rows in fixed-size chunks
+    # (`_delimited_layout._SCORE_CHUNK_ROWS`, 4096) and stops at the first
+    # numeric-majority row, so in the near-universal case (the
+    # header/preamble, then a numeric-majority data row within the first
+    # chunk) it tokenizes at most one scoring chunk of leading rows --
+    # `LazyTokenRows` tokenizes on demand instead of the old eager
     # `[line.split(delim) for line in raw_lines]` over the WHOLE file
     # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
     # where the header ends.
@@ -251,9 +245,8 @@ def import_csv(
             row_units.append(re.sub(r"^\s*[(\[](.*?)[)\]]\s*$", r"\1", cell))
 
     n_rows = len(raw_lines) - data_start
-    force_slow = _force_slow or os.environ.get(_FORCE_SLOW_ENV) == "1"
     fast_matrix = (
-        None if force_slow else try_fast_parse_matrix(raw_lines, data_start, n_cols, delim)
+        None if _force_slow else try_fast_parse_matrix(raw_lines, data_start, n_cols, delim)
     )
     data_tokens: Sequence[Sequence[str]]
     if fast_matrix is not None:
@@ -272,7 +265,10 @@ def import_csv(
         matrix = np.empty((n_rows, n_cols), dtype=np.float64)
         for c in range(n_cols):
             matrix[:, c] = _convert_column(columns_str[c])
-        data_tokens = _DeferredDataTokens(raw_lines, data_start, delim, rows=data_tokens_list)
+        # Already the exact row-token list `_DeferredDataTokens` would have
+        # built lazily -- assign it directly rather than wrapping it, since
+        # it is already a `Sequence[Sequence[str]]`.
+        data_tokens = data_tokens_list
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1

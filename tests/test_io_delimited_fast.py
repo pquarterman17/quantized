@@ -10,9 +10,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from quantized.datastruct import DataStruct
-from quantized.io._delimited_fast import try_fast_parse_matrix
+from quantized.io import _delimited_fast
+from quantized.io._delimited_fast import LazyTokenRows, try_fast_parse_matrix
 from quantized.io.delimited import import_csv
 from quantized.io.registry import resolve_parser
 
@@ -159,3 +161,83 @@ def test_forced_slow_flag_actually_changes_nothing_observable(tmp_path: Path) ->
     path.write_text("T,M\n1,10\n2,20\n3,30\n", encoding="utf-8")
     ds = import_csv(path, _force_slow=True)
     assert "_force_slow" not in ds.metadata
+
+
+# --- (c) LazyTokenRows indexing correctness ---------------------------------
+
+
+def test_lazy_token_rows_negative_index_matches_list_semantics() -> None:
+    raw = ["a,b", "1,2", "3,4"]
+    lz = LazyTokenRows(raw, ",")
+    ref = [line.split(",") for line in raw]
+    assert lz[-1] == ref[-1]
+    assert lz[-len(raw)] == ref[-len(raw)]
+
+
+def test_lazy_token_rows_out_of_range_negative_index_raises() -> None:
+    raw = ["a,b", "1,2", "3,4"]
+    lz = LazyTokenRows(raw, ",")
+    with pytest.raises(IndexError):
+        lz[-len(raw) - 1]
+
+
+def test_lazy_token_rows_out_of_range_positive_index_raises() -> None:
+    raw = ["a,b", "1,2", "3,4"]
+    lz = LazyTokenRows(raw, ",")
+    with pytest.raises(IndexError):
+        lz[len(raw)]
+
+
+def test_lazy_token_rows_negative_index_caches_under_normalized_key() -> None:
+    """The old bare `index += len(self)` cached an out-of-range negative
+    index under its ORIGINAL (still-negative) value; a subsequent in-range
+    access could then read a stale/foreign cache entry. The normalized
+    `range(len(self))[index]` key must be the only key ever written."""
+    raw = ["a,b", "1,2", "3,4"]
+    lz = LazyTokenRows(raw, ",")
+    row = lz[-1]
+    assert lz._cache == {2: row}
+
+
+def test_lazy_token_rows_slice_semantics_match_list() -> None:
+    raw = ["a,b", "1,2", "3,4", "5,6"]
+    lz = LazyTokenRows(raw, ",")
+    ref = [line.split(",") for line in raw]
+    assert lz[1:3] == ref[1:3]
+    assert lz[:-1] == ref[:-1]
+    assert lz[::-1] == ref[::-1]
+    assert lz[10:20] == ref[10:20]  # out-of-range slice bounds: empty, no error
+
+
+# --- (d) tail-failure probe: start/middle/end sampling (item 5) -------------
+
+
+def test_tail_only_na_cell_skips_full_loadtxt_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stray NA cell on the LAST row of a block far bigger than the probe
+    window must be caught by the cheap start/middle/end probe -- the
+    expensive whole-block ``np.loadtxt`` parse must never even be attempted
+    (previously: a prefix-only probe missed it, so the full ~100 MB-at-scale
+    join and parse ran anyway before falling back)."""
+    n_rows = 5000
+    rows = [f"{i}.0,{i}.5" for i in range(n_rows)]
+    rows[-1] = "n/a,1.0"
+    calls: list[int] = []
+    real_loadtxt = _delimited_fast.np.loadtxt
+
+    def spy_loadtxt(*args: object, **kwargs: object) -> object:
+        calls.append(1)
+        return real_loadtxt(*args, **kwargs)  # type: ignore[no-any-return]
+
+    monkeypatch.setattr(_delimited_fast.np, "loadtxt", spy_loadtxt)
+    matrix = try_fast_parse_matrix(rows, 0, 2, ",")
+    assert matrix is None
+    assert calls == [], "np.loadtxt must not be attempted once the probe catches the tail cell"
+
+
+def test_tail_only_na_cell_fast_and_slow_agree(tmp_path: Path) -> None:
+    n_rows = 5000
+    lines = [f"{i}.0,{i}.5" for i in range(n_rows)]
+    lines[-1] = "n/a,1.0"
+    path = tmp_path / "tail_na.csv"
+    path.write_text("T,M\n" + "\n".join(lines) + "\n", encoding="utf-8")
+    _assert_fast_and_slow_agree(path)

@@ -31,7 +31,7 @@ from typing import overload
 
 import numpy as np
 
-__all__ = ["LazyTokenRows", "_DeferredDataTokens", "try_fast_parse_matrix"]
+__all__ = ["LazyTokenRows", "try_fast_parse_matrix"]
 
 
 class LazyTokenRows(Sequence[Sequence[str]]):
@@ -81,8 +81,17 @@ class LazyTokenRows(Sequence[Sequence[str]]):
     def __getitem__(self, index: int | slice) -> list[str] | list[list[str]]:
         if isinstance(index, slice):
             return [self._row(i) for i in range(*index.indices(len(self)))]
-        if index < 0:
-            index += len(self)
+        # `range(len(self))[index]` reproduces exactly the semantics a real
+        # `list` gives a single integer index -- negative indices counted
+        # from the end, an out-of-range index (positive OR negative) raises
+        # `IndexError` -- rather than the bare `index += len(self)` this
+        # replaced, which left an out-of-range negative index still negative
+        # (e.g. `lz[-4]` on a 3-row sequence silently wrapped to `lz[-1]`,
+        # the last row, instead of raising) and, worse, cached the row under
+        # that un-normalized key, so a later in-range access could collide
+        # with it. Normalizing here means `_row` is only ever called with a
+        # canonical `0 <= index < len(self)` cache key.
+        index = range(len(self))[index]
         return self._row(index)
 
 
@@ -99,29 +108,22 @@ class _DeferredDataTokens(Sequence[Sequence[str]]):
     while any of those rare branches still gets the exact same rows the
     original eager tokenize would have produced.
 
-    ``rows`` lets a caller that already built the list (the fallback
-    tokenize/transpose/convert path) hand it over directly instead of
-    tokenizing a second time.
+    The fallback tokenize/transpose/convert path already builds this exact
+    row list itself (``data_tokens_list``), so it is assigned to
+    ``data_tokens`` directly there instead of being handed to this class --
+    this wrapper exists only for the fast-parse branch, where no such list
+    has been built.
     """
 
-    __slots__ = ("_raw_lines", "_start", "_delim", "_rows")
+    __slots__ = ("_raw_lines", "_start", "_delim")
 
-    def __init__(
-        self,
-        raw_lines: Sequence[str],
-        start: int,
-        delim: str,
-        rows: list[list[str]] | None = None,
-    ) -> None:
+    def __init__(self, raw_lines: Sequence[str], start: int, delim: str) -> None:
         self._raw_lines = raw_lines
         self._start = start
         self._delim = delim
-        self._rows = rows
 
     def _materialize(self) -> list[list[str]]:
-        if self._rows is None:
-            self._rows = [line.split(self._delim) for line in self._raw_lines[self._start :]]
-        return self._rows
+        return [line.split(self._delim) for line in self._raw_lines[self._start :]]
 
     def __len__(self) -> int:
         return len(self._raw_lines) - self._start
@@ -138,12 +140,38 @@ class _DeferredDataTokens(Sequence[Sequence[str]]):
         return iter(self._materialize())
 
 
-# Rows sampled from the START of the data block to decide whether the real
-# (whole-file) bulk parse is even worth attempting. Cheap relative to a
-# million-row file, generous enough to catch the common failure shapes
-# (a ragged preamble leftover, a stray text/NA column) near the top of a
-# file, which is where they overwhelmingly occur in practice.
+# Total rows sampled to decide whether the real (whole-file) bulk parse is
+# even worth attempting. Cheap relative to a million-row file, generous
+# enough to catch the common failure shapes (a ragged preamble leftover, a
+# stray text/NA column).
 _PROBE_ROWS = 2000
+
+
+def _probe_sample(raw_lines: Sequence[str], data_start: int, n_rows: int) -> list[str]:
+    """Up to `_PROBE_ROWS` lines drawn from the START, MIDDLE, and END of the
+    data block (roughly a third each) instead of only the start.
+
+    A prefix-only probe never sees an ineligible cell placed past
+    `_PROBE_ROWS` from the top -- a lone "n/a" on the very last row of an
+    otherwise-clean million-row block, say -- so it would pass every time
+    and the expensive path would run anyway: join the whole block into one
+    ~100 MB string and run `np.loadtxt` over it, only to have that fail on
+    the very last row and fall back regardless, having paid for the full
+    join and parse first. Splitting the same `_PROBE_ROWS` budget across the
+    start, middle, and end catches that shape too, while staying the same
+    O(`_PROBE_ROWS`) total cost regardless of how large the block is.
+    """
+    if n_rows <= _PROBE_ROWS:
+        return list(raw_lines[data_start : data_start + n_rows])
+    third = _PROBE_ROWS // 3
+    start = data_start
+    middle = data_start + n_rows // 2 - third // 2
+    end = data_start + n_rows - third
+    return [
+        *raw_lines[start : start + third],
+        *raw_lines[middle : middle + third],
+        *raw_lines[end : end + (_PROBE_ROWS - 2 * third)],
+    ]
 
 
 def _probe_all_numeric(sample_lines: Sequence[str], delim: str, n_cols: int) -> bool:
@@ -182,10 +210,10 @@ def try_fast_parse_matrix(
 
     Returns ``None`` (never a partial or altered result) when:
     * the block is empty or ``n_cols <= 0``;
-    * the cheap `_probe_all_numeric` prefix check fails (a ragged row or a
-      text/NA cell within the first `_PROBE_ROWS` data lines) -- skips even
-      attempting the expensive whole-file parse on an obviously-ineligible
-      file;
+    * the cheap `_probe_all_numeric` check fails on the `_probe_sample`
+      (a ragged row or a text/NA cell anywhere in the sampled start/middle/end
+      of the data block) -- skips even attempting the expensive whole-file
+      parse on an obviously-ineligible file;
     * the real ``np.loadtxt`` call raises for ANY reason -- a stray NA
       spelling ("na", "-", "n/a", ...) or text cell past the probe window,
       a ragged row past it, a blank cell (double delimiter), an encoding
@@ -199,7 +227,7 @@ def try_fast_parse_matrix(
     n_rows = len(raw_lines) - data_start
     if n_rows <= 0 or n_cols <= 0:
         return None
-    sample = raw_lines[data_start : data_start + _PROBE_ROWS]
+    sample = _probe_sample(raw_lines, data_start, n_rows)
     if not _probe_all_numeric(sample, delim, n_cols):
         return None
     block = "\n".join(raw_lines[data_start:])
