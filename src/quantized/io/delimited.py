@@ -17,6 +17,11 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io import _delimited_layout as layout
+from quantized.io._delimited_fast import (
+    LazyTokenRows,
+    _DeferredDataTokens,
+    try_fast_parse_matrix,
+)
 from quantized.io.base import resolve_column
 
 __all__ = ["import_csv"]
@@ -191,19 +196,38 @@ def import_csv(
     *,
     time_column: int | str = 0,
     data_columns: Sequence[int | str] | None = None,
+    _force_slow: bool = False,
 ) -> DataStruct:
-    """Import a generic delimited text file (first column = x-axis by default)."""
+    """Import a generic delimited text file (first column = x-axis by default).
+
+    ``_force_slow`` is an internal, test-only escape hatch (P0.4-perf4):
+    skips the `_delimited_fast` bulk-parse attempt and always takes the
+    original tokenize/transpose/convert path, so parity tests can assert
+    the fast and slow paths agree bit-for-bit on the same file. Production
+    callers never need it -- `try_fast_parse_matrix` already falls back on
+    its own for any file it isn't confident about. This is the ONLY switch;
+    there is no environment-variable equivalent.
+    """
     path = Path(filepath)
     raw_lines, comment_lines = _split_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = layout._detect_delimiter(raw_lines)
-    tokens = [line.split(delim) for line in raw_lines]
 
-    header_row, data_start, units_row = layout._detect_layout(tokens)
-    n_data_cols = len(tokens[data_start])
+    # P0.4-perf4: layout detection scores rows in fixed-size chunks
+    # (`_delimited_layout._SCORE_CHUNK_ROWS`, 4096) and stops at the first
+    # numeric-majority row, so in the near-universal case (the
+    # header/preamble, then a numeric-majority data row within the first
+    # chunk) it tokenizes at most one scoring chunk of leading rows --
+    # `LazyTokenRows` tokenizes on demand instead of the old eager
+    # `[line.split(delim) for line in raw_lines]` over the WHOLE file
+    # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
+    # where the header ends.
+    lazy_tokens = LazyTokenRows(raw_lines, delim)
+    header_row, data_start, units_row = layout._detect_layout(lazy_tokens)
+    n_data_cols = len(lazy_tokens[data_start])
     if header_row >= 0:
-        col_headers = [c.strip() for c in tokens[header_row]]
+        col_headers = [c.strip() for c in lazy_tokens[header_row]]
     else:
         col_headers = [f"Col{k + 1}" for k in range(n_data_cols)]
     if len(col_headers) < n_data_cols:
@@ -215,17 +239,36 @@ def import_csv(
 
     row_units: list[str] = []
     if units_row >= 0:
-        utok = [u.strip() for u in tokens[units_row]]
+        utok = [u.strip() for u in lazy_tokens[units_row]]
         for k in range(n_cols):
             cell = utok[k] if k < len(utok) else ""
             row_units.append(re.sub(r"^\s*[(\[](.*?)[)\]]\s*$", r"\1", cell))
 
-    data_tokens = tokens[data_start:]
-    n_rows = len(data_tokens)
-    columns_str = _tokens_to_columns(data_tokens, n_cols)
-    matrix = np.empty((n_rows, n_cols), dtype=np.float64)
-    for c in range(n_cols):
-        matrix[:, c] = _convert_column(columns_str[c])
+    n_rows = len(raw_lines) - data_start
+    fast_matrix = (
+        None if _force_slow else try_fast_parse_matrix(raw_lines, data_start, n_cols, delim)
+    )
+    data_tokens: Sequence[Sequence[str]]
+    if fast_matrix is not None:
+        # The whole data block parsed cleanly straight from text -- no
+        # per-row token list was ever built. Every downstream use of
+        # `data_tokens` below is a RARE-branch fallback (a near-all-NaN
+        # time column needing a datetime re-parse, an all-text data set,
+        # a `text_columns`/label-row sidecar) that a fully-numeric bulk
+        # parse essentially never reaches, so tokenizing is deferred to
+        # the first (if any) access instead of paid unconditionally.
+        matrix = fast_matrix
+        data_tokens = _DeferredDataTokens(raw_lines, data_start, delim)
+    else:
+        data_tokens_list = [line.split(delim) for line in raw_lines[data_start:]]
+        columns_str = _tokens_to_columns(data_tokens_list, n_cols)
+        matrix = np.empty((n_rows, n_cols), dtype=np.float64)
+        for c in range(n_cols):
+            matrix[:, c] = _convert_column(columns_str[c])
+        # Already the exact row-token list `_DeferredDataTokens` would have
+        # built lazily -- assign it directly rather than wrapping it, since
+        # it is already a `Sequence[Sequence[str]]`.
+        data_tokens = data_tokens_list
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1
@@ -357,7 +400,7 @@ def import_csv(
     label_rows: list[dict[str, Any]] = []
     if data_start >= 2:  # only a real choice is worth recording
         for i in range(data_start):
-            raw_cells = [c.strip() for c in tokens[i]]
+            raw_cells = [c.strip() for c in lazy_tokens[i]]
             if not any(raw_cells):
                 continue
 

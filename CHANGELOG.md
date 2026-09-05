@@ -6,6 +6,17 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Perf: `io/delimited.py` (`import_csv`) gets a bulk-numeric fast path
+  (`io/_delimited_fast.py`) for regular files — a lazy, on-demand
+  tokenizer for layout detection plus a straight-to-`np.loadtxt` parse of
+  the data block, bypassing the Python-level tokenize/transpose/convert
+  stages entirely when a cheap prefix probe and the real parse both
+  succeed. Any ragged row, text/NA cell, or parse failure anywhere falls
+  back to the original path unchanged (verified bit-identical on every
+  delimited fixture plus targeted ragged/text/NA/datetime/CRLF/semicolon
+  cases). Measured on a 1M x 7 numeric CSV: `import_auto` 10.25s -> 1.88s
+  wall time, 989MB -> 546MB peak memory (tracemalloc); a 100k-row file:
+  0.56s -> 0.16s.
 - Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
   `/api/debug/report` fetch had no backend route, so the server half of
   every report silently dropped. The P3.4 diagnostics bundle is the
