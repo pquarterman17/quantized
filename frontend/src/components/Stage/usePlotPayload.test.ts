@@ -280,12 +280,23 @@ describe("usePlotPayload — dataset-handle cache identity across zoom (P3.5)", 
       .mockResolvedValueOnce(fakeSeriesResponse("windowed", true, [1, 2], "h1"));
     vi.stubGlobal("fetch", fetchMock);
 
+    // A FRESH dataset object, not the file-shared `DATASET` const -- this
+    // test is the only one in the file that bypasses the `fetchPlot` mock
+    // and drives the REAL lib/api/datasetCache.ts module, whose handle
+    // WeakMap is keyed on object identity and lives at MODULE scope (it
+    // persists across `it()`s and across a `--repeats`/`--retry` re-run of
+    // this same test). Reusing `DATASET.data` here would let a prior run
+    // seed the WeakMap with a handle for that exact object, so a repeat's
+    // "base fetch: full dataset, no handle yet" assertion below would fail
+    // even though nothing in the test itself is wrong.
+    const dataset = makeDataset(20_000);
+
     const { result, rerender } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
-      initialProps: baseParams(),
+      initialProps: baseParams({ active: dataset }),
     });
     await waitFor(() => expect(result.current.payload?.series[0].label).toBe("base"));
 
-    rerender(baseParams({ xLim: [1, 2] }));
+    rerender(baseParams({ active: dataset, xLim: [1, 2] }));
     await waitFor(() => expect(result.current.payload?.series[0].label).toBe("windowed"));
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

@@ -55,10 +55,26 @@ def test_hash_distinguishes_relabelled_data() -> None:
     assert dc.hash_dataset(a) != dc.hash_dataset(relabelled)
 
 
-def test_hash_ignores_metadata() -> None:
+def test_hash_agrees_on_identical_metadata_built_in_a_different_order() -> None:
+    a = _ds(seed=1)
+    same_content_a = DataStruct.create(
+        a.time, a.values, labels=a.labels, units=a.units, metadata={"x": 1, "y": 2}
+    )
+    same_content_b = DataStruct.create(
+        a.time, a.values, labels=a.labels, units=a.units, metadata={"y": 2, "x": 1}
+    )
+    assert dc.hash_dataset(same_content_a) == dc.hash_dataset(same_content_b)
+
+
+def test_hash_distinguishes_metadata() -> None:
+    """Reproduces the collision: build_series reads x_column_long/
+    x_column_name/x_column_unit from ds.metadata (map/rsm read
+    map_shape/is2D) -- two datasets identical everywhere else but differing
+    only in metadata must NOT collide, or a held handle for one would
+    silently return the other's x label/unit forever."""
     a = _ds(seed=1)
     b = DataStruct.create(a.time, a.values, labels=a.labels, units=a.units, metadata={"k": "v"})
-    assert dc.hash_dataset(a) == dc.hash_dataset(b)
+    assert dc.hash_dataset(a) != dc.hash_dataset(b)
 
 
 # ── cache / resolve round trip ──────────────────────────────────────────
@@ -83,6 +99,19 @@ def test_recaching_identical_content_is_idempotent() -> None:
 def test_resolve_unknown_handle_raises_miss() -> None:
     with pytest.raises(dc.DatasetHandleMiss):
         dc.resolve_dataset("not-a-real-handle")
+
+
+def test_cache_dataset_returns_none_when_evicted_by_its_own_insertion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A single dataset larger than the total budget gets evicted in the
+    SAME call that inserted it -- cache_dataset must not hand back a handle
+    for an entry that is no longer resident (a "doomed" handle: the client
+    would store it, and every later reference to it would 409 forever)."""
+    monkeypatch.setattr(dc, "_MAX_TOTAL_BYTES", 100)  # smaller than any real dataset
+    handle = dc.cache_dataset(_ds(n=1000, seed=0))
+    assert handle is None
+    assert dc.cache_stats() == {"entries": 0, "bytes": 0}
 
 
 def test_clear_cache_empties_it() -> None:
@@ -250,16 +279,16 @@ def test_plot_map_round_trip() -> None:
     assert second.json() == first.json()
 
 
-def test_unknown_handle_is_409_not_500_or_422() -> None:
-    resp = client.post(
-        "/api/rsm/box-stats", json={"dataset_handle": "0" * 32, **_BOX_BOUNDS}
-    )
+@pytest.mark.parametrize(("path", "extra"), CACHE_ELIGIBLE, ids=[p for p, _ in CACHE_ELIGIBLE])
+def test_unknown_handle_is_409_not_500_or_422(path: str, extra: dict) -> None:
+    resp = client.post(path, json={"dataset_handle": "0" * 32, **extra})
     assert resp.status_code == 409
     assert resp.json()["detail"] == "unknown_dataset_handle"
 
 
-def test_neither_dataset_nor_handle_is_422() -> None:
-    resp = client.post("/api/rsm/box-stats", json=_BOX_BOUNDS)
+@pytest.mark.parametrize(("path", "extra"), CACHE_ELIGIBLE, ids=[p for p, _ in CACHE_ELIGIBLE])
+def test_neither_dataset_nor_handle_is_422(path: str, extra: dict) -> None:
+    resp = client.post(path, json=extra)
     assert resp.status_code == 422
 
 
@@ -300,6 +329,54 @@ def test_miss_after_eviction_is_409_the_client_can_recover_from(
     # The client's transparent recovery: resend the full payload once.
     recovered = client.post("/api/rsm/box-stats", json={"dataset": ds_a, **_BOX_BOUNDS})
     assert recovered.status_code == 200
+
+
+def test_oversize_dataset_gets_no_handle_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route-level doomed-handle reproduction: a dataset larger than the
+    total budget must come back with NO X-Dataset-Handle header (never a
+    handle the client would store and then 409 on forever), and the cache
+    must be left empty -- the entry was evicted in the same call."""
+    monkeypatch.setattr(dc, "_MAX_TOTAL_BYTES", 100)  # smaller than any real dataset
+    ds = _rsm_dataset()
+    resp = client.post("/api/rsm/box-stats", json={"dataset": ds, **_BOX_BOUNDS})
+    assert resp.status_code == 200, resp.text
+    assert "X-Dataset-Handle" not in resp.headers
+    assert dc.cache_stats() == {"entries": 0, "bytes": 0}
+
+
+def test_metadata_only_difference_gets_a_distinct_handle_and_own_x_label() -> None:
+    """Route-level reproduction of the metadata-collision bug: two /api/plot/
+    series datasets identical in time/values/labels/units but differing
+    only in the x-column metadata build_series reads must get DIFFERENT
+    handles, and each handle's own follow-up call must still return that
+    dataset's own x label/unit -- never the other one's (which is exactly
+    what happened when the hash excluded metadata and the second cache_dataset
+    call silently overwrote the first entry under a colliding handle)."""
+    base = {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[10.0], [20.0], [30.0], [40.0]],
+        "labels": ["Counts"],
+        "units": ["cps"],
+    }
+    ds_a = {**base, "metadata": {"x_column_long": "Theta", "x_column_unit": "deg"}}
+    ds_b = {**base, "metadata": {"x_column_long": "Omega", "x_column_unit": "arcsec"}}
+
+    resp_a = client.post("/api/plot/series", json={"dataset": ds_a})
+    resp_b = client.post("/api/plot/series", json={"dataset": ds_b})
+    assert resp_a.status_code == 200 and resp_b.status_code == 200
+
+    handle_a = resp_a.headers["X-Dataset-Handle"]
+    handle_b = resp_b.headers["X-Dataset-Handle"]
+    assert handle_a != handle_b
+
+    # Each handle must still resolve to ITS OWN dataset's x label -- a
+    # collision would make one of these come back as the other's.
+    replay_a = client.post("/api/plot/series", json={"dataset_handle": handle_a})
+    replay_b = client.post("/api/plot/series", json={"dataset_handle": handle_b})
+    assert replay_a.json()["x"]["label"] == "Theta"
+    assert replay_a.json()["x"]["unit"] == "deg"
+    assert replay_b.json()["x"]["label"] == "Omega"
+    assert replay_b.json()["x"]["unit"] == "arcsec"
 
 
 def test_concurrent_requests_on_the_same_handle_all_succeed() -> None:

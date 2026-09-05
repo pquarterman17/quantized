@@ -1,10 +1,10 @@
 // Client half of the server-side dataset-handle cache (RSM_CUTS_PLAN item
-// 18). Every call to /api/plot/map or /api/rsm/* normally re-sends the WHOLE
-// DataStruct as JSON -- measured on the real corpus: m3learning_rsm.xrdml is
-// 465,885 points / 45.5 MB, costing a main-thread JSON.stringify on the way
-// out plus 1.9s server-side encode / 1.15s decode PER CALL, paid again on
-// every channel change and every 2theta/omega <-> Q toggle even though the
-// dataset in memory never changed.
+// 18). Every call to /api/plot/map, /api/plot/series, or /api/rsm/* normally
+// re-sends the WHOLE DataStruct as JSON -- measured on the real corpus:
+// m3learning_rsm.xrdml is 465,885 points / 45.5 MB, costing a main-thread
+// JSON.stringify on the way out plus 1.9s server-side encode / 1.15s decode
+// PER CALL, paid again on every channel change and every 2theta/omega <->
+// Q toggle even though the dataset in memory never changed.
 //
 // The backend (routes/_datasetcache.py) now accepts EITHER the full
 // `dataset` OR a `dataset_handle` string, and always echoes back whatever

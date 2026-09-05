@@ -456,12 +456,8 @@ def test_plot_series_handle_round_trip_reproduces_identical_result() -> None:
     assert second.headers.get("X-Dataset-Handle") == handle
 
 
-def test_plot_series_unknown_handle_is_409_not_500_or_422() -> None:
-    resp = client.post("/api/plot/series", json={"dataset_handle": "0" * 32})
-    assert resp.status_code == 409
-    assert resp.json()["detail"] == "unknown_dataset_handle"
-
-
-def test_plot_series_neither_dataset_nor_handle_is_422() -> None:
-    resp = client.post("/api/plot/series", json={"x_log": True})
-    assert resp.status_code == 422
+# The unknown-handle-409 and neither-field-422 cases are generic
+# CachedDatasetRequest mixin behaviour, not anything specific to
+# /api/plot/series -- see test_dataset_cache.py's CACHE_ELIGIBLE-
+# parametrized versions of both, which cover this route (and every other
+# cache-eligible one) instead of duplicating the assertions here.

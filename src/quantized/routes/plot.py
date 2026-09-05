@@ -109,7 +109,8 @@ def plot_series(req: PlotRequest, response: Response) -> dict[str, Any]:
 
     # uPlot wants column-oriented data: [xValues, series1Values, series2Values, ...]
     data = [jsonify(x)] + [jsonify(v) for v in values]
-    response.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        response.headers["X-Dataset-Handle"] = handle
     return {
         "data": data,
         "series": [{"label": s.label, "unit": s.unit, "axis": s.axis} for s in plot.series],
@@ -165,7 +166,8 @@ def plot_map(req: MapRequest, response: Response) -> dict[str, Any]:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    response.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        response.headers["X-Dataset-Handle"] = handle
     # x_axis/y_axis are regular (finite by construction); z_grid has NaN gaps
     # outside the convex hull -> jsonify maps those to null (a heatmap gap).
     return {

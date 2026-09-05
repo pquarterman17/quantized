@@ -6,7 +6,9 @@ points / 45.5 MB, costing 1.9s server-side encode and 1.15s decode PER CALL,
 paid again on every channel change and every 2theta/omega <-> Q toggle even
 though the underlying dataset never changed. This module lets a client send
 the full payload ONCE, then reference it by a short handle on every later
-call to ``/api/plot/map`` or any ``/api/rsm/*`` endpoint.
+call to ``/api/plot/map``, ``/api/plot/series`` (P3.5 -- a committed zoom/pan
+on an already server-decimated series re-POSTs the full dataset on every
+step), or any ``/api/rsm/*`` endpoint.
 
 Follows the ``_bookcache.py`` precedent (an in-memory, bounded, LRU
 ``OrderedDict[str, DataStruct]``), not ``_uploadcache.py``'s disk-staged
@@ -43,11 +45,19 @@ guard, which forbids fastapi/pydantic imports in calc/io/plugins).
 
 Bounded by BOTH entry count and total bytes (local-server-hardening: an
 unbounded cache of multi-hundred-MB arrays is a memory leak with extra
-steps), LRU-evicting whichever bound is hit first. 256 MiB / 16 entries
-holds roughly a dozen of the largest real map (~22 MB decoded) at once --
-generous for a single browser session's worth of open maps while still
-capping worst-case RSS to a small, known fraction of a typical machine's
-memory. Teardown is wired to the FastAPI lifespan shutdown hook
+steps), LRU-evicting whichever bound is hit first. 256 MiB / 16 entries was
+originally sized for the map/RSM-cut workload alone (roughly a dozen of the
+largest real map, ~22 MB decoded, at once). P3.5 added ``/api/plot/series``
+to the same cache, and a large series decodes far bigger than any map --
+1M rows x 7 columns is ~64 MB -- so the two workloads now share one budget,
+and a couple of big open series CAN evict a still-live map (or vice versa)
+under the existing bound. That is an accepted, known trade-off for now, not
+a redesign: a single caller-agnostic LRU is simpler than partitioning the
+budget per route, and eviction degrades to a 409 + one transparent resend
+(never wrong data -- see ``DatasetHandleMiss``), not data loss. Revisit the
+bound (or split it) if real usage shows frequent thrashing; this docstring
+should keep saying so honestly rather than pretend the cache still serves
+only maps. Teardown is wired to the FastAPI lifespan shutdown hook
 (``app.py``'s ``_app_lifespan``), never ``atexit`` (same rule -- atexit does
 not reliably run for this run model).
 
@@ -61,6 +71,7 @@ mutation and every read-with-LRU-touch below holds ``_lock``.
 from __future__ import annotations
 
 import hashlib
+import json
 import threading
 from collections import OrderedDict
 from typing import Any
@@ -109,15 +120,30 @@ def hash_dataset(ds: DataStruct) -> str:
     Hashes the raw ndarray buffers directly (not a JSON re-encode) -- see
     the module docstring for the measurement that motivated this. Labels and
     units are folded in too (so a relabelled column doesn't collide with
-    different data); ``metadata`` is deliberately excluded -- two calls for
-    literally the same map differing only in incidental metadata (e.g. an
-    import timestamp) should still land on one cache entry.
+    different data), and so is ``metadata``: ``calc/plotting.py``'s
+    ``build_series`` reads ``x_column_long``/``x_column_name``/
+    ``x_column_unit`` from ``ds.metadata`` for the x-axis label/unit, and
+    ``calc/rsm_analyze.py`` reads ``map_shape``/``is2D`` -- two datasets
+    identical everywhere else but differing only in metadata are a
+    DIFFERENT cache entry, not the same one, or a held handle for one would
+    silently return the other's x label/unit (or map shape) forever. The
+    metadata dict is folded in via a canonical JSON encoding (sorted keys at
+    every level, ``default=str`` for anything JSON can't natively represent)
+    so that two equal-content dicts built in a different insertion order
+    still hash identically.
     """
     hasher = hashlib.blake2b(digest_size=16)
     hasher.update(ds.time.tobytes())
     hasher.update(ds.values.tobytes())
     hasher.update("\x1f".join(ds.labels).encode())
     hasher.update("\x1f".join(ds.units).encode())
+    # `ds.metadata` is a `MappingProxyType` (see datastruct.py), not a plain
+    # `dict` -- `json.dumps` only recognizes an actual `dict` as a JSON
+    # object and otherwise falls through to `default=str` on the WHOLE
+    # value, which stringifies the proxy's underlying dict in its original
+    # (unsorted) insertion order and defeats `sort_keys` entirely. `dict(..)`
+    # first makes it a real dict so `sort_keys` actually canonicalizes it.
+    hasher.update(json.dumps(dict(ds.metadata), sort_keys=True, default=str).encode())
     return hasher.hexdigest()
 
 
@@ -130,11 +156,23 @@ def _evict_locked() -> None:
         total -= _sizes.pop(oldest, 0)
 
 
-def cache_dataset(ds: DataStruct) -> str:
-    """Cache ``ds`` under its content hash and return the handle.
+def cache_dataset(ds: DataStruct) -> str | None:
+    """Cache ``ds`` under its content hash and return the handle, or
+    ``None`` if ``ds`` alone is too large to be resident afterward.
 
-    Idempotent: re-caching identical content just refreshes its LRU
-    position rather than duplicating an entry.
+    A single dataset larger than ``_MAX_TOTAL_BYTES`` gets inserted and then
+    immediately evicted by its own call to ``_evict_locked`` (the bound is
+    enforced unconditionally, with no "at least one entry" carve-out) --
+    handing back that handle anyway would be a DOOMED handle: the client
+    stores it, and every later call referencing it 409s (unknown handle),
+    forcing a full resend + a server-side hash on EVERY call forever, with
+    none of the caching benefit this module exists to provide. Callers
+    (``CachedDatasetRequest.resolve`` / the routes) must treat ``None`` as
+    "do not advertise a handle for this response" -- omit the
+    ``X-Dataset-Handle`` header rather than send a value that can't resolve.
+
+    Idempotent for content that DOES fit: re-caching identical content just
+    refreshes its LRU position rather than duplicating an entry.
     """
     handle = hash_dataset(ds)
     size = _estimate_bytes(ds)
@@ -143,7 +181,7 @@ def cache_dataset(ds: DataStruct) -> str:
         _cache.move_to_end(handle)
         _sizes[handle] = size
         _evict_locked()
-    return handle
+        return handle if handle in _cache else None
 
 
 def resolve_dataset(handle: str) -> DataStruct:
@@ -176,9 +214,10 @@ def cache_stats() -> dict[str, int]:
 
 class CachedDatasetRequest(BaseModel):
     """Shared ``dataset`` / ``dataset_handle`` contract for every cache-
-    eligible route (``/api/plot/map`` + every ``/api/rsm/*`` endpoint that
-    carries a dataset) -- ONE mixin instead of duplicating both fields (and
-    the "at least one of them" rule) across nine request models by hand.
+    eligible route (``/api/plot/map``, ``/api/plot/series``, and every
+    ``/api/rsm/*`` endpoint that carries a dataset) -- ONE mixin instead of
+    duplicating both fields (and the "at least one of them" rule) across
+    nine request models by hand.
 
     Callers supply EITHER the full ``dataset`` payload (always accepted,
     always (re)cached under its content hash) OR a ``dataset_handle`` from a
@@ -189,7 +228,9 @@ class CachedDatasetRequest(BaseModel):
     body field -- every existing response shape (DataStruct payload, stats
     dict, analysis result) stays byte-identical; only ``routes/rsm.py`` and
     ``routes/plot.py`` need touch the header, via ``resolve_or_409``'s
-    return value.
+    return value -- and only when that value is not ``None`` (see
+    ``cache_dataset``'s doc: a dataset too large to be resident after its
+    own insertion gets no handle at all, never a doomed one).
     """
 
     dataset: dict[str, Any] | None = None
@@ -201,13 +242,17 @@ class CachedDatasetRequest(BaseModel):
             raise ValueError("either dataset or dataset_handle is required")
         return self
 
-    def resolve(self) -> tuple[DataStruct, str]:
+    def resolve(self) -> tuple[DataStruct, str | None]:
         """``(DataStruct, handle)`` -- caches ``dataset`` when given, else
-        looks up ``dataset_handle``. Raises :class:`DatasetHandleMiss` on an
-        unknown/evicted handle; raises ``ValueError``/``KeyError`` (via
-        ``DataStruct.from_dict``) on a malformed ``dataset`` exactly as
-        before this cache existed -- routes keep catching those the same
-        way (see ``resolve_or_409``, which only intercepts the miss case)."""
+        looks up ``dataset_handle``. ``handle`` is ``None`` only when
+        ``dataset`` was given and turned out too large to be resident after
+        caching (see ``cache_dataset``); a resolved ``dataset_handle`` is
+        never ``None`` (it was already resident to resolve at all). Raises
+        :class:`DatasetHandleMiss` on an unknown/evicted handle; raises
+        ``ValueError``/``KeyError`` (via ``DataStruct.from_dict``) on a
+        malformed ``dataset`` exactly as before this cache existed -- routes
+        keep catching those the same way (see ``resolve_or_409``, which only
+        intercepts the miss case)."""
         if self.dataset is not None:
             ds = DataStruct.from_dict(self.dataset)
             return ds, cache_dataset(ds)
@@ -215,7 +260,7 @@ class CachedDatasetRequest(BaseModel):
         return resolve_dataset(self.dataset_handle), self.dataset_handle
 
 
-def resolve_or_409(req: CachedDatasetRequest) -> tuple[DataStruct, str]:
+def resolve_or_409(req: CachedDatasetRequest) -> tuple[DataStruct, str | None]:
     """``req.resolve()``, translating an unknown/evicted handle to HTTP 409.
 
     Call this INSIDE a route's existing
@@ -225,6 +270,11 @@ def resolve_or_409(req: CachedDatasetRequest) -> tuple[DataStruct, str]:
     still raises ``ValueError``/``KeyError`` from ``resolve()`` unchanged and
     is still caught (and turned into a 422) by the route's own except
     clause, exactly as before this cache existed.
+
+    The returned handle is ``None`` exactly when the posted ``dataset`` was
+    too large to remain resident after caching -- routes MUST check for
+    that and omit the ``X-Dataset-Handle`` response header rather than send
+    a handle that can never be resolved again (see ``cache_dataset``).
     """
     try:
         return req.resolve()
