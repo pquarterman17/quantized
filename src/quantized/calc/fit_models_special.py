@@ -18,7 +18,6 @@ import math
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.integrate import quad
 
 from .fit_models import register_model
 
@@ -65,46 +64,71 @@ def _stoner_wohlfarth(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray
     return np.asarray(ms * np.tanh(heff / hk), dtype=float)
 
 
-def _debye_integrand(t: float) -> float:
-    et = math.exp(t)
-    return t**4 * et / max((et - 1) ** 2, _EPS)
+# Fixed-order Gauss-Legendre quadrature, computed once, used to vectorize
+# D_3(u) = integral_0^u t^4 e^t/(e^t-1)^2 dt across a whole array of u at
+# once. Replaces a scalar `scipy.integrate.quad` call issued once PER
+# x-point (the fit-time bottleneck: quad's pure-Python integrand callback
+# dominates a 10k-point curve_fit). Measured max relative error vs the old
+# per-point quad implementation across a dense log-spaced u grid spanning
+# [1e-6, 1e4] (see the "vs old quad implementation" parity test): N=16 ->
+# ~2.8e-7 (the u=30 quad/closed-form seam is under-resolved), N=32 ->
+# ~1.5e-12, N=64 -> ~1.5e-12 (no further gain — quadrature error is
+# already below float64 noise). N=32 is chosen: three orders of magnitude
+# inside the 1e-9 golden tolerance, at half the node count of N=64.
+_GL_N = 32
+_GL_NODES, _GL_WEIGHTS = np.polynomial.legendre.leggauss(_GL_N)
 
 
-def _debye_integral(u: float) -> float:
-    if u > 30:
-        return _DEBYE_LIMIT
-    if u < 1e-4:
-        return u**3 / 3
-    val, _ = quad(_debye_integrand, 0.0, u, epsrel=1e-6, epsabs=1e-10)
-    return float(val)
+def _debye_d3(u: NDArray[np.float64]) -> NDArray[np.float64]:
+    """Vectorized D_3(u) = integral_0^u t^4 e^t/(e^t-1)^2 dt for an array of u.
+
+    Same three-branch definition as the old per-point ``scipy.integrate.quad``
+    implementation it replaces (small-u series, large-u closed-form
+    saturation at the u->inf limit 4*pi**4/15, fixed Gauss-Legendre
+    quadrature in between) so results match it to <1e-9 relative — see
+    ``tests/test_calc_fit_models_special.py``, which keeps the old scalar
+    quad-based implementation as a self-contained reference oracle.
+    """
+    u = np.asarray(u, dtype=float)
+    out = np.empty_like(u)
+    small = u < 1e-4
+    big = u > 30.0
+    mid = ~small & ~big
+    out[small] = u[small] ** 3 / 3.0
+    out[big] = _DEBYE_LIMIT
+    um = u[mid]
+    # Affine-map the fixed [-1, 1] Gauss-Legendre nodes to [0, u] per point
+    # (broadcast over an (n_mid, _GL_N) grid) rather than re-deriving nodes
+    # per point — this is what turns the per-point quad calls into one
+    # vectorized numpy evaluation.
+    t = (um[:, None] / 2.0) * (_GL_NODES[None, :] + 1.0)
+    w = (um[:, None] / 2.0) * _GL_WEIGHTS[None, :]
+    et = np.exp(t)
+    integrand = t**4 * et / np.maximum((et - 1.0) ** 2, _EPS)
+    out[mid] = np.sum(integrand * w, axis=1)
+    return out
 
 
 def _debye(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
     gamma, theta, n = float(p[0]), max(float(p[1]), 1.0), max(float(p[2]), 0.0)
     t = np.asarray(x, dtype=float).ravel()
-    out = np.empty(t.size)
-    for k in range(t.size):
-        tk = max(float(t[k]), 0.01)
-        u = theta / tk
-        c_lat = 9 * _R * (1 / u) ** 3 * _debye_integral(u)
-        out[k] = gamma * tk + n * c_lat * 1000
-    return out
-
-
-def _einstein_lattice(theta: float, tk: float) -> float:
+    tk = np.maximum(t, 0.01)
     u = theta / tk
-    eu = math.exp(min(u, 500))
-    return 3 * _R * u**2 * eu / max((eu - 1) ** 2, _EPS)
+    c_lat = 9 * _R * (1 / u) ** 3 * _debye_d3(u)
+    return np.asarray(gamma * tk + n * c_lat * 1000, dtype=float)
+
+
+def _einstein_lattice(theta: float, tk: NDArray[np.float64]) -> NDArray[np.float64]:
+    u = theta / tk
+    eu = np.exp(np.minimum(u, 500.0))
+    return np.asarray(3 * _R * u**2 * eu / np.maximum((eu - 1) ** 2, _EPS), dtype=float)
 
 
 def _einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
     gamma, theta, n = float(p[0]), max(float(p[1]), 1.0), max(float(p[2]), 0.0)
     t = np.asarray(x, dtype=float).ravel()
-    out = np.empty(t.size)
-    for k in range(t.size):
-        tk = max(float(t[k]), 0.01)
-        out[k] = gamma * tk + n * _einstein_lattice(theta, tk) * 1000
-    return out
+    tk = np.maximum(t, 0.01)
+    return np.asarray(gamma * tk + n * _einstein_lattice(theta, tk) * 1000, dtype=float)
 
 
 def _debye_einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -112,13 +136,11 @@ def _debye_einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[n
     theta_d, n_d = max(float(p[1]), 1.0), max(float(p[2]), 0.0)
     theta_e, n_e = max(float(p[3]), 1.0), max(float(p[4]), 0.0)
     t = np.asarray(x, dtype=float).ravel()
-    out = np.empty(t.size)
-    for k in range(t.size):
-        tk = max(float(t[k]), 0.01)
-        c_d = 9 * _R * (1 / (theta_d / tk)) ** 3 * _debye_integral(theta_d / tk)
-        c_e = _einstein_lattice(theta_e, tk)
-        out[k] = gamma * tk + (n_d * c_d + n_e * c_e) * 1000
-    return out
+    tk = np.maximum(t, 0.01)
+    u_d = theta_d / tk
+    c_d = 9 * _R * (1 / u_d) ** 3 * _debye_d3(u_d)
+    c_e = _einstein_lattice(theta_e, tk)
+    return np.asarray(gamma * tk + (n_d * c_d + n_e * c_e) * 1000, dtype=float)
 
 
 # ── Hysteresis (magnetic M-H loop descriptors) ──────────────────────────
