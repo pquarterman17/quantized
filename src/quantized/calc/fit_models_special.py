@@ -18,6 +18,7 @@ import math
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.integrate import quad
 
 from .fit_models import register_model
 
@@ -74,8 +75,6 @@ def _debye_integral(u: float) -> float:
         return _DEBYE_LIMIT
     if u < 1e-4:
         return u**3 / 3
-    from scipy.integrate import quad  # deferred: ~4.5 s cold import, only needed here
-
     val, _ = quad(_debye_integrand, 0.0, u, epsrel=1e-6, epsabs=1e-10)
     return float(val)
 

@@ -75,7 +75,10 @@ def sld_from_formula(
         Empty formula, non-positive density/wavelength, an unparseable
         formula, or a formula whose elements lack neutron data.
     """
-    import periodictable as pt  # deferred: ~heavy import, only needed here
+    # Deferred: periodictable measures ~0.03 s to import, so this buys no
+    # meaningful startup speedup — it's deferred to keep this optional
+    # feature's dependency out of create_app() startup at all.
+    import periodictable as pt
     from periodictable import formula as _formula
 
     if not compound.strip():

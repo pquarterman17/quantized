@@ -78,12 +78,21 @@ def _accept_any(_path: Path) -> bool:
 
 
 def _import_excel_lazy(path: Path) -> DataStruct:
-    """Deferred ``import_excel`` — ``openpyxl`` (~1.1 s import) loads only when
+    """Deferred ``import_excel`` — ``openpyxl`` (~0.2 s import, measured) loads only when
     an ``.xlsx``/``.xlsm`` file is actually parsed, not at registry import time
     (which runs at every app startup)."""
     from quantized.io.excel import import_excel
 
     return import_excel(path)
+
+
+# Name-keyed consumers (the parser matrix test's ids, technique.stamp_technique's
+# fallback) key off Parser.__name__ — copy import_excel's identity onto the lazy
+# wrapper (functools.wraps would require importing quantized.io.excel eagerly,
+# defeating the deferral) so the wrapper is transparent to them.
+_import_excel_lazy.__name__ = "import_excel"
+_import_excel_lazy.__qualname__ = "import_excel"
+_import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
 
 
 # Ambiguous extensions resolve by content sniffing — first match wins.

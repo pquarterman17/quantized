@@ -67,6 +67,7 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.stats import binned_statistic
 
 from quantized.calc._rsm_grid import (
     SPACES,
@@ -257,8 +258,6 @@ def _cloud_box(
     ``Phi``/``Psi`` for a pole figure, never a hardcoded ``"2Theta"``
     (RSM_CUTS_PLAN item 19).
     """
-    from scipy.stats import binned_statistic  # deferred: only this cloud path needs it
-
     xs, ys, intensity, axis_unit, intensity_unit, col_x_name, col_y_name = scatter_columns(
         ds, space
     )

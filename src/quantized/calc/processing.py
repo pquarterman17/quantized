@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy import integrate
 
 __all__ = [
     "cumulative_integral",
@@ -117,8 +118,6 @@ def cumulative_integral(
 
     NaNs are treated as 0 during integration and restored as NaN in the output.
     """
-    from scipy import integrate  # deferred: ~4.5 s cold import, only needed here
-
     xv = np.asarray(x, dtype=float).ravel()
     mat, was_1d = _as_columns(y)
     if xv.size != mat.shape[0]:
