@@ -64,3 +64,22 @@ export function insertBlanks(column: readonly number[], at: number, count: numbe
 export function dropRows<T>(column: readonly T[], deleted: ReadonlySet<number>): T[] {
   return column.filter((_, i) => !deleted.has(i));
 }
+
+/** Copy-on-write patch of one cell in a `values` grid: one new outer array,
+ *  one new row array for `row` — not a full `.map` over every row. Shared by
+ *  store/cellEdit.ts's setCellValue and setCategoricalCell (both used to
+ *  duplicate this same four-line block). Callers own the row-range check —
+ *  this indexes `values[row]` unconditionally, so `row` must already be
+ *  known in bounds. */
+export function patchCell(
+  values: readonly (readonly number[])[],
+  row: number,
+  col: number,
+  value: number,
+): number[][] {
+  const next = values.slice() as number[][];
+  const patched = next[row].slice();
+  patched[col] = value;
+  next[row] = patched;
+  return next;
+}

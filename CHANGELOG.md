@@ -6,6 +6,16 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Frontend: `setCellValue`/`setCategoricalCell` (worksheet single-cell edits)
+  now recompute formula columns incrementally — only the edited row — via a
+  new `lib/formulaIncremental.ts`, instead of an unconditional full
+  `recompute` over every row for every formula (~4.2s -> ~18ms per edit on a
+  1M-row, 2-formula dataset). Falls back to the full recompute whenever a
+  formula isn't provably row-local (an aggregate, `lag()`/`diff()`, a
+  recode, or one already carrying an error) so correctness never depends on
+  the fast path. Both cell-write actions also now patch the edited row via
+  the same outer-array `.slice()` pattern `setCellBlock` uses, rather than
+  a full-array `.map`.
 - Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
   `/api/debug/report` fetch had no backend route, so the server half of
   every report silently dropped. The P3.4 diagnostics bundle is the

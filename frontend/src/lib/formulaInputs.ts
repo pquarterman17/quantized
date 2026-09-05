@@ -17,8 +17,11 @@
 // existing `DataStruct` value can ever satisfy structurally. The ONLY way
 // to produce one is `asAlreadyComputed`, an explicit, named, deliberately
 // unchecked assertion — call it exclusively where the caller can actually
-// vouch for the provenance (today: store/useApp.ts's `recompute` helper,
-// which only ever receives a Dataset's OWN `.data`).
+// vouch for the provenance. Today that's two call sites, both of which only
+// ever receive a Dataset's OWN `.data` (never a bare/fresh base table):
+// store/useApp.ts's `recompute` helper (the full, every-row path), and
+// store/cellEdit.ts's `recomputeAfterCellEdit` (the row-local incremental
+// fast path, lib/formulaIncremental.ts's `computeFormulasIncremental`).
 //
 // A caller with base-only data should reach for `recomputeFromBase` below
 // (or `applyFormulas` directly, if it doesn't need the per-column error
