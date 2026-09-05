@@ -429,3 +429,35 @@ def test_realdata_plot_series_x_label_uses_origin_long_name(corpus_dir: Path) ->
     resp = client.post("/api/plot/series", json={"dataset": dataset})
     assert resp.status_code == 200, resp.text
     assert resp.json()["x"]["label"] == "Theta"
+
+
+# ── dataset-handle cache (P3.5: parity with /api/plot/map + /api/rsm/*) ───
+# /api/plot/series is the single largest repeat-payload offender in practice
+# (a zoom/pan commit re-posts the full DataStruct on every step once the base
+# payload was server-decimated) -- see routes/_datasetcache.py + P3.5's task
+# brief. These mirror test_dataset_cache.py's route-level round-trip/miss
+# coverage for the other cache-eligible endpoints.
+
+
+def test_plot_series_handle_round_trip_reproduces_identical_result() -> None:
+    dataset = _dense_dataset(20_000)
+    first = client.post("/api/plot/series", json={"dataset": dataset, "decimate_width": 100})
+    assert first.status_code == 200, first.text
+    handle = first.headers.get("X-Dataset-Handle")
+    assert handle
+
+    second = client.post(
+        "/api/plot/series", json={"dataset_handle": handle, "decimate_width": 100}
+    )
+    assert second.status_code == 200, second.text
+    assert second.json() == first.json()
+    # Content-addressed: the server echoes the SAME handle back, not a fresh
+    # random token per call.
+    assert second.headers.get("X-Dataset-Handle") == handle
+
+
+# The unknown-handle-409 and neither-field-422 cases are generic
+# CachedDatasetRequest mixin behaviour, not anything specific to
+# /api/plot/series -- see test_dataset_cache.py's CACHE_ELIGIBLE-
+# parametrized versions of both, which cover this route (and every other
+# cache-eligible one) instead of duplicating the assertions here.

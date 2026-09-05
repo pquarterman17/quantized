@@ -7,11 +7,11 @@
 // real; only the network boundary is faked.
 
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
 import type { PlotPayload } from "../../lib/plotdata";
-import type { Dataset } from "../../lib/types";
+import type { Dataset, PlotSeriesResponse } from "../../lib/types";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
 
 const fetchPlotMock = vi.fn();
@@ -218,6 +218,97 @@ describe("usePlotPayload — P3.4 zoom-refetch residual", () => {
       resolveFirstWindow?.(payloadFor("stale-first-window", true, [1, 2]));
     });
     expect(result.current.payload?.series[0].label).toBe("second-window");
+  });
+});
+
+// P3.5: usePlotPayload always fetches `active.data` (the SAME DataStruct
+// object across a base fetch and its windowed follow-up — see useApp.ts's
+// `useActiveDataset`, a plain `Array.find` that returns the same object
+// reference until the dataset itself is replaced by an edit, which a
+// zoom/pan never does). `/api/plot/series` now opts into the server-side
+// dataset-handle cache (routes/_datasetcache.py + lib/api/datasetCache.ts)
+// the same way /api/plot/map and /api/rsm/* already did, so that object-
+// identity guarantee should mean the windowed re-fetch sends only the
+// handle, never the full dataset again. Unlike every other test in this
+// file, this one does NOT stub out `fetchPlot` itself -- it delegates the
+// mock straight through to the REAL implementation (via `vi.importActual`,
+// bypassing this file's top-level `vi.mock`) so the real
+// fetchPlot -> plotSeries -> postJSON -> datasetCache chain runs, with only
+// the network boundary (`global.fetch`) faked. Red-first: this failed before
+// `isDatasetCachePath` included "/api/plot/series" (the second body still
+// carried the full `dataset`).
+describe("usePlotPayload — dataset-handle cache identity across zoom (P3.5)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function fakeSeriesResponse(
+    label: string,
+    decimated: boolean,
+    window: [number, number] | null,
+    handle: string,
+  ): Response {
+    const body: PlotSeriesResponse = {
+      data: [
+        [0, 1, 2],
+        [1, 2, 3],
+      ],
+      series: [{ label, unit: "", axis: 0 }],
+      x: { label: "x", unit: "", log: false },
+      y: { log: false },
+      decimated,
+      window: window ? { x_min: window[0], x_max: window[1] } : null,
+    };
+    return {
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      json: () => Promise.resolve(body),
+      headers: { get: (name: string) => (name === "X-Dataset-Handle" ? handle : null) },
+    } as unknown as Response;
+  }
+
+  it("sends the full dataset on the base fetch, then only the handle on the windowed re-fetch", async () => {
+    const real = await vi.importActual<typeof import("../../lib/plotdata")>("../../lib/plotdata");
+    fetchPlotMock.mockImplementation((...args: unknown[]) =>
+      (real.fetchPlot as (...a: unknown[]) => unknown)(...args),
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(fakeSeriesResponse("base", true, null, "h1"))
+      .mockResolvedValueOnce(fakeSeriesResponse("windowed", true, [1, 2], "h1"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // A FRESH dataset object, not the file-shared `DATASET` const -- this
+    // test is the only one in the file that bypasses the `fetchPlot` mock
+    // and drives the REAL lib/api/datasetCache.ts module, whose handle
+    // WeakMap is keyed on object identity and lives at MODULE scope (it
+    // persists across `it()`s and across a `--repeats`/`--retry` re-run of
+    // this same test). Reusing `DATASET.data` here would let a prior run
+    // seed the WeakMap with a handle for that exact object, so a repeat's
+    // "base fetch: full dataset, no handle yet" assertion below would fail
+    // even though nothing in the test itself is wrong.
+    const dataset = makeDataset(20_000);
+
+    const { result, rerender } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: baseParams({ active: dataset }),
+    });
+    await waitFor(() => expect(result.current.payload?.series[0].label).toBe("base"));
+
+    rerender(baseParams({ active: dataset, xLim: [1, 2] }));
+    await waitFor(() => expect(result.current.payload?.series[0].label).toBe("windowed"));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(firstBody.dataset).toBeDefined(); // base fetch: full dataset, no handle yet
+    expect(firstBody.dataset_handle).toBeUndefined();
+
+    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(secondBody.dataset).toBeUndefined(); // windowed re-fetch: NOT resent
+    expect(secondBody.dataset_handle).toBe("h1"); // reused via the SAME `active.data` object
+    expect(secondBody.x_min).toBe(1);
+    expect(secondBody.x_max).toBe(2);
   });
 });
 

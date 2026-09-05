@@ -1,10 +1,10 @@
 // Client half of the server-side dataset-handle cache (RSM_CUTS_PLAN item
-// 18). Every call to /api/plot/map or /api/rsm/* normally re-sends the WHOLE
-// DataStruct as JSON -- measured on the real corpus: m3learning_rsm.xrdml is
-// 465,885 points / 45.5 MB, costing a main-thread JSON.stringify on the way
-// out plus 1.9s server-side encode / 1.15s decode PER CALL, paid again on
-// every channel change and every 2theta/omega <-> Q toggle even though the
-// dataset in memory never changed.
+// 18). Every call to /api/plot/map, /api/plot/series, or /api/rsm/* normally
+// re-sends the WHOLE DataStruct as JSON -- measured on the real corpus:
+// m3learning_rsm.xrdml is 465,885 points / 45.5 MB, costing a main-thread
+// JSON.stringify on the way out plus 1.9s server-side encode / 1.15s decode
+// PER CALL, paid again on every channel change and every 2theta/omega <->
+// Q toggle even though the dataset in memory never changed.
 //
 // The backend (routes/_datasetcache.py) now accepts EITHER the full
 // `dataset` OR a `dataset_handle` string, and always echoes back whatever
@@ -68,14 +68,25 @@ export type RawFetchJSON = <T>(
 const handles = new WeakMap<object, string>();
 
 /** Paths that opt into the handle cache -- a narrow allowlist, not "any
- *  body with a `dataset` field": /api/corrections/apply, /api/export/*,
- *  /api/plot/series and others also carry a `dataset` field for unrelated
- *  reasons and must not be silently rewritten. /api/rsm/strain matches the
- *  prefix but never carries a `dataset` field (it takes q_sub/q_film
- *  directly), so it falls through `postJSONDatasetAware` unchanged below --
- *  no explicit exclusion needed. */
+ *  body with a `dataset` field": /api/corrections/apply, /api/export/* and
+ *  others also carry a `dataset` field for unrelated reasons (one-shot
+ *  operations, not a repeat-fetch loop) and must not be silently rewritten
+ *  -- rewriting THEM would mean their `dataset` field never round-trips
+ *  through this cache's storage at all, so a stale/evicted handle could
+ *  never even arise, but it would also mean a legitimate one-off caller
+ *  starts depending on cache state it has no business depending on.
+ *  /api/plot/series (P3.5) now DOES belong here: `routes/plot.py`'s
+ *  `PlotRequest` extends `CachedDatasetRequest` (same `dataset`/
+ *  `dataset_handle` contract as map/rsm), because a committed zoom/pan on
+ *  an already server-decimated series re-POSTs the full dataset on every
+ *  step -- measured 1M x 7 rows costing ~80 MB/request, 2.25s json.loads +
+ *  0.5s DataStruct.from_dict server-side, plus a main-thread
+ *  JSON.stringify client-side, for a dataset that never actually changed.
+ *  /api/rsm/strain matches the prefix but never carries a `dataset` field
+ *  (it takes q_sub/q_film directly), so it falls through
+ *  `postJSONDatasetAware` unchanged below -- no explicit exclusion needed. */
 export function isDatasetCachePath(path: string): boolean {
-  return path === "/api/plot/map" || path.startsWith("/api/rsm/");
+  return path === "/api/plot/map" || path === "/api/plot/series" || path.startsWith("/api/rsm/");
 }
 
 function datasetKey(body: unknown): object | undefined {
