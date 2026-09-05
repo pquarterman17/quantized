@@ -2129,6 +2129,11 @@ export interface paths {
          * Book Data
          * @description One book's full DataStruct payload, by the id + source reference an
          *     import response's ``book_source``/lazy inventory entry gave the caller.
+         *
+         *     Returns a ``DataStructResponse`` (see ``routes/parsers.py``'s
+         *     ``_import_response``) instead of a plain dict -- a book's data can be as
+         *     large as any other import payload, so it gets the same chunk-encoding
+         *     treatment rather than one monolithic ``json.dumps``.
          */
         post: operations["book_data_api_parsers_books_data_post"];
         delete?: never;
@@ -2156,6 +2161,16 @@ export interface paths {
          *     ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API
          *     cannot be used to read system files (e.g. ``/etc/passwd``) through path
          *     traversal.
+         *
+         *     Returns a pre-built ``DataStructResponse`` (see ``_import_response``'s
+         *     docstring on ``upload_file`` for why: a plain ``dict`` return goes
+         *     through FastAPI's own encoding on the event loop even for a route whose
+         *     OWN body Starlette already runs in a threadpool). ``response_model``
+         *     documents the real body shape for OpenAPI (this function's return
+         *     annotation, a bare ``Response``, would otherwise produce an empty
+         *     schema); ``response_class`` is set to the same type for consistency,
+         *     though it has no runtime effect once a ``Response`` instance is
+         *     returned directly.
          */
         post: operations["import_file_api_parsers_import_post"];
         delete?: never;

@@ -283,3 +283,45 @@ def test_uploadcache_evicts_oldest_beyond_bound() -> None:
         tokens.append(token)
     assert resolve_upload_token(tokens[0]) is None
     assert resolve_upload_token(tokens[-1]) is not None
+
+
+def test_uploadcache_pins_in_flight_token_against_eviction() -> None:
+    """A token whose parse is still running (marked in-flight) must survive
+    an eviction sweep even though it's the oldest -- otherwise a concurrent
+    upload's staging commit can unlink the file out from under a valid,
+    still-in-progress parse (see routes/parsers.py's upload_file and
+    _uploadcache._commit). 9 concurrent .opj uploads against the default
+    ``_MAX_STAGED`` of 8 reproduced exactly this before the pin existed."""
+    from quantized.routes import _uploadcache as cache_mod
+    from quantized.routes._uploadcache import (
+        clear_in_flight,
+        mark_in_flight,
+        resolve_upload_token,
+        stage_upload,
+    )
+
+    # Deterministic regardless of what earlier tests left staged.
+    cache_mod._tokens.clear()
+
+    _, oldest_token = stage_upload("f0.opj", b"content0")
+    mark_in_flight(oldest_token)
+    try:
+        tokens = [oldest_token]
+        for i in range(1, 9):  # 9 total uploads > _MAX_STAGED (8)
+            _, token = stage_upload(f"f{i}.opj", f"content{i}".encode())
+            tokens.append(token)
+
+        # The pinned oldest token survives even though it would ordinarily
+        # be the eviction candidate; the next-oldest (unpinned) entry is
+        # evicted in its place instead, so the bound is (briefly) exceeded.
+        assert resolve_upload_token(oldest_token) is not None, (
+            "the in-flight token was evicted despite being pinned"
+        )
+        assert resolve_upload_token(tokens[1]) is None
+        assert resolve_upload_token(tokens[-1]) is not None
+    finally:
+        clear_in_flight(oldest_token)
+
+    # Once unpinned, the next commit past the bound is free to evict it.
+    stage_upload("f9.opj", b"content9")
+    assert resolve_upload_token(oldest_token) is None

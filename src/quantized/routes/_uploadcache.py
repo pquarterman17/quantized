@@ -18,16 +18,46 @@ from __future__ import annotations
 
 import secrets
 import tempfile
+import threading
 from collections import OrderedDict
 from pathlib import Path
 
 from quantized.routes._uploadstream import AsyncChunkReader, UploadTooLargeError, stream_to_path
 
-__all__ = ["stage_upload", "stage_upload_stream", "resolve_upload_token"]
+__all__ = [
+    "stage_upload",
+    "stage_upload_stream",
+    "resolve_upload_token",
+    "mark_in_flight",
+    "clear_in_flight",
+]
 
 _MAX_STAGED = 8
 _root = Path(tempfile.gettempdir()) / "qz_origin_uploads"
 _tokens: OrderedDict[str, Path] = OrderedDict()
+
+# Tokens whose parse (routes/parsers.py's run_in_threadpool(_import_response,
+# ...)) is still queued or running. Guarded by its own lock since it's read
+# from `_commit` (on the event loop thread, synchronously with staging) and
+# written from the route handler around the threadpool call.
+_in_flight: set[str] = set()
+_in_flight_lock = threading.Lock()
+
+
+def mark_in_flight(token: str) -> None:
+    """Pin ``token`` against eviction: its staged file may still be read by
+    an in-progress parse (running off the event loop, in a threadpool
+    worker). Call right after staging succeeds, before handing the path to
+    that parse."""
+    with _in_flight_lock:
+        _in_flight.add(token)
+
+
+def clear_in_flight(token: str) -> None:
+    """Unpin ``token`` once its parse has finished (success or failure) --
+    it becomes evictable like any other staged upload again."""
+    with _in_flight_lock:
+        _in_flight.discard(token)
 
 
 def _reserve(name: str) -> tuple[Path, str]:
@@ -41,12 +71,32 @@ def _reserve(name: str) -> tuple[Path, str]:
 
 
 def _commit(token: str, dest: Path) -> None:
-    """Register a successfully-staged upload and evict the oldest once more
-    than ``_MAX_STAGED`` are held."""
+    """Register a successfully-staged upload and evict the oldest EVICTABLE
+    entry once more than ``_MAX_STAGED`` are held.
+
+    Skips any token in ``_in_flight``: now that the Origin parse runs off
+    the event loop (routes/parsers.py's ``run_in_threadpool``), several
+    uploads can be staged -- and evict each other -- while an earlier
+    upload's own parse is still reading its staged file, so unlinking the
+    oldest unconditionally could pull the file out from under a still-
+    running parse and fail a perfectly valid upload with a spurious
+    FileNotFoundError (reproduced with 9 concurrent .opj uploads against
+    the default ``_MAX_STAGED`` of 8). The count can briefly exceed
+    ``_MAX_STAGED`` while the oldest entries are all pinned; the next
+    ``_commit`` after any of them clears retries eviction.
+    """
     _tokens[token] = dest
     _tokens.move_to_end(token)
-    while len(_tokens) > _MAX_STAGED:
-        _, old_path = _tokens.popitem(last=False)
+    if len(_tokens) <= _MAX_STAGED:
+        return
+    with _in_flight_lock:
+        pinned = frozenset(_in_flight)
+    for old_token in list(_tokens):
+        if len(_tokens) <= _MAX_STAGED:
+            break
+        if old_token in pinned:
+            continue
+        old_path = _tokens.pop(old_token)
         old_path.unlink(missing_ok=True)
         try:
             old_path.parent.rmdir()

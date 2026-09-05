@@ -38,8 +38,8 @@ from quantized.io.origin_project.graph_preview import (
 from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._errors import CALC_ERRORS_IO
-from quantized.routes._payload import datastruct_payload, dumps_payload, jsonify
-from quantized.routes._uploadcache import stage_upload_stream
+from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
+from quantized.routes._uploadcache import clear_in_flight, mark_in_flight, stage_upload_stream
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -288,24 +288,24 @@ def _import_response(
     whole path from bytes-on-disk to response-bytes-in-hand happens on the
     worker thread.
 
-    ``dumps_payload`` (not a plain ``json.dumps`` call) for the encoding
-    itself: a single ``json.dumps``/``.tolist()`` over the whole "time"/
-    "values" arrays is ALSO one uninterruptible C call, so it can hold the
-    GIL -- and so still stall a concurrent request -- for its own multi-
-    hundred-millisecond-plus duration regardless of which thread runs it.
-    ``dumps_payload``/``jsonify`` (``routes/_payload.py``) chunk exactly
-    those two calls; see their docstrings for the profiled numbers. Their
-    combined output is byte-for-byte what
-    ``json.dumps(datastruct_payload(ds), ensure_ascii=False,
+    ``DataStructResponse`` (not a plain ``Response(content=json.dumps(...))``)
+    for the encoding itself: a single ``json.dumps``/``.tolist()`` over the
+    whole "time"/"values" arrays is ALSO one uninterruptible C call, so it
+    can hold the GIL -- and so still stall a concurrent request -- for its
+    own multi-hundred-millisecond-plus duration regardless of which thread
+    runs it. ``DataStructResponse.render`` (``dumps_payload``, in turn
+    ``jsonify`` -- ``routes/_payload.py``) chunk exactly those two calls;
+    see their docstrings for the profiled numbers. Its output is byte-for-
+    byte what ``json.dumps(datastruct_payload(ds), ensure_ascii=False,
     allow_nan=False, separators=(",", ":"))`` (``starlette.responses.
     JSONResponse.render``'s exact kwargs) would produce.
     """
     payload = _import_with_books(path, full_books=full_books, upload_token=upload_token)
-    return Response(content=dumps_payload(payload), media_type="application/json")
+    return DataStructResponse(payload)
 
 
-@router.post("/import")
-def import_file(req: ImportRequest) -> dict[str, Any]:
+@router.post("/import", response_model=dict[str, Any], response_class=DataStructResponse)
+def import_file(req: ImportRequest) -> Response:
     """Auto-detect format and import a local file path into a DataStruct.
 
     ``/import`` reads a path the server can already see (local desktop / CLI
@@ -314,6 +314,16 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API
     cannot be used to read system files (e.g. ``/etc/passwd``) through path
     traversal.
+
+    Returns a pre-built ``DataStructResponse`` (see ``_import_response``'s
+    docstring on ``upload_file`` for why: a plain ``dict`` return goes
+    through FastAPI's own encoding on the event loop even for a route whose
+    OWN body Starlette already runs in a threadpool). ``response_model``
+    documents the real body shape for OpenAPI (this function's return
+    annotation, a bare ``Response``, would otherwise produce an empty
+    schema); ``response_class`` is set to the same type for consistency,
+    though it has no runtime effect once a ``Response`` instance is
+    returned directly.
     """
     try:
         resolved = os.path.realpath(req.path)
@@ -348,12 +358,13 @@ def import_file(req: ImportRequest) -> dict[str, Any]:
     if not os.path.isfile(safe_path):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
-        return _import_with_books(Path(safe_path), full_books=req.full_books)
+        payload = _import_with_books(Path(safe_path), full_books=req.full_books)
     except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DataStructResponse(payload)
 
 
-@router.post("/upload", response_model=dict[str, Any])
+@router.post("/upload", response_model=dict[str, Any], response_class=DataStructResponse)
 async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     """Import an uploaded data file (browser file-picker / drag-drop).
 
@@ -408,9 +419,17 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     try:
         if suffix in (".opj", ".opju"):
             dest, token = await stage_upload_stream(name, file)
-            return await run_in_threadpool(
-                _import_response, dest, full_books=full_books, upload_token=token
-            )
+            # Pin the token so a concurrent upload's staging commit can't
+            # evict this file out from under the parse below, which reads
+            # it from a threadpool worker while this coroutine is suspended
+            # on the await (see _uploadcache._commit's docstring).
+            mark_in_flight(token)
+            try:
+                return await run_in_threadpool(
+                    _import_response, dest, full_books=full_books, upload_token=token
+                )
+            finally:
+                clear_in_flight(token)
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / name
             await stream_to_path(file, dest, filename=name)

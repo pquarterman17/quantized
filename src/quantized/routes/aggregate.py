@@ -8,13 +8,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from quantized.calc.aggregate import dataset_algebra
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
-from quantized.routes._payload import datastruct_payload
+from quantized.routes._payload import DataStructResponse, datastruct_payload
 
 router = APIRouter(prefix="/api/aggregate", tags=["aggregate"])
 
@@ -28,8 +28,8 @@ class AlgebraRequest(BaseModel):
     channel_b: int = 0
 
 
-@router.post("/algebra")
-def algebra(req: AlgebraRequest) -> dict[str, Any]:
+@router.post("/algebra", response_model=dict[str, Any], response_class=DataStructResponse)
+def algebra(req: AlgebraRequest) -> Response:
     """Combine two datasets via A+B / A-B / A*B / A/B / (A-B)/(A+B)."""
     try:
         a = DataStruct.from_dict(req.dataset_a)
@@ -44,4 +44,4 @@ def algebra(req: AlgebraRequest) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return datastruct_payload(out)
+    return DataStructResponse(datastruct_payload(out))

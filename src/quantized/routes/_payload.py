@@ -13,11 +13,18 @@ import math
 from typing import Any
 
 import numpy as np
+from fastapi.responses import JSONResponse
 from numpy.typing import NDArray
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["jsonify", "datastruct_payload", "to_jsonable", "dumps_payload"]
+__all__ = [
+    "jsonify",
+    "datastruct_payload",
+    "to_jsonable",
+    "dumps_payload",
+    "DataStructResponse",
+]
 
 # Row-chunk size for both `jsonify`'s ndarray->list conversion and
 # `dumps_payload`'s JSON encoding of the (potentially huge) "time"/"values"
@@ -100,9 +107,11 @@ def datastruct_payload(ds: DataStruct) -> dict[str, Any]:
     return payload
 
 
-# Keys `dumps_payload` chunk-encodes -- the only fields an import payload
-# carries that can be genuinely huge (one row per data point); everything
-# else (labels/units/metadata/books/...) is small regardless of dataset size.
+# Keys `dumps_payload` chunk-encodes, WHEREVER they occur in the payload
+# (top level, or nested under e.g. "books"/"preview") -- the only fields an
+# import payload carries that can be genuinely huge (one row per data
+# point); everything else (labels/units/metadata/book ids/...) is small
+# regardless of dataset size.
 _CHUNKED_JSON_KEYS = ("time", "values")
 
 # Mirrors starlette.responses.JSONResponse.render's json.dumps kwargs exactly,
@@ -135,28 +144,91 @@ def _encode_array_chunked(values: list[Any], chunk_size: int = _ARRAY_CHUNK_ROWS
     return "[" + ",".join(parts) + "]"
 
 
+def _encode_json(value: Any) -> str:
+    """Recursively JSON-encode ``value``, chunk-encoding any list found
+    under a ``"time"``/``"values"`` key AT ANY NESTING DEPTH, and encoding
+    everything else with an ordinary ``json.dumps`` call.
+
+    A ``full_books=true`` import payload nests every book's own ``time``/
+    ``values`` arrays under ``payload["books"][i]`` -- a top-level-only
+    check (the original shape of this function) would miss them entirely
+    and fall through to one monolithic ``json.dumps`` over the whole
+    ``"books"`` list, reintroducing the exact GIL-holding call this module
+    exists to avoid. Recursing through every dict/list finds them wherever
+    they occur, with no per-shape special-casing, at the cost of one
+    Python-level function call per nested container (never per element --
+    still O(n) overall, dominated by the same chunked ``json.dumps`` calls
+    ``_encode_array_chunked`` already made).
+    """
+    if isinstance(value, dict):
+        pieces: list[str] = []
+        for key, sub in value.items():
+            key_json = json.dumps(key, ensure_ascii=_JSON_KWARGS["ensure_ascii"])
+            if key in _CHUNKED_JSON_KEYS and isinstance(sub, list):
+                sub_json = _encode_array_chunked(sub)
+            elif isinstance(sub, (dict, list)):
+                sub_json = _encode_json(sub)
+            else:
+                sub_json = json.dumps(sub, **_JSON_KWARGS)
+            pieces.append(f"{key_json}:{sub_json}")
+        return "{" + ",".join(pieces) + "}"
+    if isinstance(value, list):
+        # A list itself is never a chunk-target here (the dict branch above
+        # already intercepts "time"/"values" before recursing into their
+        # value) -- this handles a list of dicts (e.g. "books": [...]) that
+        # may carry their OWN "time"/"values" one level down, or a plain
+        # small list (labels/units/...) with nothing to chunk.
+        if not value:
+            return "[]"
+        return "[" + ",".join(_encode_json(item) for item in value) + "]"
+    return json.dumps(value, **_JSON_KWARGS)
+
+
 def dumps_payload(payload: dict[str, Any]) -> bytes:
     """``json.dumps(payload, **_JSON_KWARGS).encode("utf-8")``'s exact bytes,
-    built so that encoding ``payload["time"]``/``["values"]`` -- the only
-    fields large enough to matter -- never spends more than one
-    ``_ARRAY_CHUNK_ROWS``-row chunk inside a single uninterruptible C call
-    (see ``_encode_array_chunked``). Every other field is encoded normally
-    (small regardless of dataset size). Top-level key order is preserved
-    (``payload``'s own iteration order), matching plain ``dict`` JSON
-    encoding exactly.
+    built so that encoding a ``"time"``/``"values"`` array -- wherever it
+    occurs, including nested under ``"books"`` (the ``full_books=true``
+    shape) -- never spends more than one ``_ARRAY_CHUNK_ROWS``-row chunk
+    inside a single uninterruptible C call (see ``_encode_array_chunked``).
+    Every other field is encoded normally (small regardless of dataset
+    size). Key order is preserved at every nesting level, matching plain
+    ``dict``/``list`` JSON encoding exactly.
 
-    Used by ``routes/parsers.py``'s ``_import_response`` to build the whole
-    upload response -- parse, array conversion, AND encoding -- inside one
+    Used by ``routes/parsers.py``'s ``_import_response`` (and
+    :class:`DataStructResponse`, below) to build the whole response --
+    parse, array conversion, AND encoding -- inside one
     ``run_in_threadpool`` call with no single step left able to starve a
     concurrent request for the fraction of a second a monolithic
     ``.tolist()``/``json.dumps`` pair otherwise would.
     """
-    pieces: list[str] = []
-    for key, value in payload.items():
-        key_json = json.dumps(key, ensure_ascii=_JSON_KWARGS["ensure_ascii"])
-        if key in _CHUNKED_JSON_KEYS and isinstance(value, list):
-            value_json = _encode_array_chunked(value)
-        else:
-            value_json = json.dumps(value, **_JSON_KWARGS)
-        pieces.append(f"{key_json}:{value_json}")
-    return ("{" + ",".join(pieces) + "}").encode("utf-8")
+    return _encode_json(payload).encode("utf-8")
+
+
+class DataStructResponse(JSONResponse):
+    """A ``JSONResponse`` whose body is ``dumps_payload(content)`` -- set as
+    a route's ``response_class`` (or constructed directly and returned, as
+    ``routes/parsers.py``'s ``_import_response`` does) for any endpoint
+    whose body is a ``datastruct_payload``-shaped dict that can be large.
+
+    Byte-identical to a plain ``JSONResponse`` for the same content (same
+    media type, same ``json.dumps`` kwargs) -- the only difference is HOW
+    the bytes are produced: in ``_ARRAY_CHUNK_ROWS``-row chunks for any
+    nested ``"time"``/``"values"`` array instead of one whole-payload
+    ``json.dumps`` call, so a large body never holds the GIL for the
+    hundreds-of-milliseconds-plus span a single call over it would (see
+    ``dumps_payload``/``jsonify`` for the profiled numbers). A route can
+    just ``return`` the payload dict (with ``response_model`` documenting
+    the shape) -- FastAPI calls ``render`` exactly once on it, so nothing
+    double-serializes. Subclassing ``JSONResponse`` (not the bare
+    ``Response``) rather than reimplementing it also keeps OpenAPI schema
+    generation intact: FastAPI's docs builder only pulls the real
+    ``response_model`` schema for a ``JSONResponse`` subclass, else it
+    falls back to an opaque ``{"type": "string"}``.
+    """
+
+    def render(self, content: Any) -> bytes:
+        if content is None:
+            return b""
+        if isinstance(content, (bytes, memoryview)):
+            return bytes(content)
+        return dumps_payload(content)

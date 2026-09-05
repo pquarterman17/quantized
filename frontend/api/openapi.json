@@ -13866,7 +13866,7 @@
     },
     "/api/parsers/books/data": {
       "post": {
-        "description": "One book's full DataStruct payload, by the id + source reference an\nimport response's ``book_source``/lazy inventory entry gave the caller.",
+        "description": "One book's full DataStruct payload, by the id + source reference an\nimport response's ``book_source``/lazy inventory entry gave the caller.\n\nReturns a ``DataStructResponse`` (see ``routes/parsers.py``'s\n``_import_response``) instead of a plain dict -- a book's data can be as\nlarge as any other import payload, so it gets the same chunk-encoding\ntreatment rather than one monolithic ``json.dumps``.",
         "operationId": "book_data_api_parsers_books_data_post",
         "requestBody": {
           "content": {
@@ -13910,7 +13910,7 @@
     },
     "/api/parsers/import": {
       "post": {
-        "description": "Auto-detect format and import a local file path into a DataStruct.\n\n``/import`` reads a path the server can already see (local desktop / CLI\nuse). The path is ``os.path.realpath``-normalized (collapsing ``..`` and\nsymlinks) and confined to an allowed root (home / cwd / temp, widen via\n``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API\ncannot be used to read system files (e.g. ``/etc/passwd``) through path\ntraversal.",
+        "description": "Auto-detect format and import a local file path into a DataStruct.\n\n``/import`` reads a path the server can already see (local desktop / CLI\nuse). The path is ``os.path.realpath``-normalized (collapsing ``..`` and\nsymlinks) and confined to an allowed root (home / cwd / temp, widen via\n``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API\ncannot be used to read system files (e.g. ``/etc/passwd``) through path\ntraversal.\n\nReturns a pre-built ``DataStructResponse`` (see ``_import_response``'s\ndocstring on ``upload_file`` for why: a plain ``dict`` return goes\nthrough FastAPI's own encoding on the event loop even for a route whose\nOWN body Starlette already runs in a threadpool). ``response_model``\ndocuments the real body shape for OpenAPI (this function's return\nannotation, a bare ``Response``, would otherwise produce an empty\nschema); ``response_class`` is set to the same type for consistency,\nthough it has no runtime effect once a ``Response`` instance is\nreturned directly.",
         "operationId": "import_file_api_parsers_import_post",
         "requestBody": {
           "content": {
