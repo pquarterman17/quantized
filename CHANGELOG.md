@@ -44,6 +44,23 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   their per-file `client = TestClient(app)` boilerplate.
 - This item (9) — the gate/version-bump tooling, the `tools/` lint pass,
   the shared test fixtures, and this changelog — passes its own gate.
+- Speed audit (final): defer `openpyxl` (`io/registry.py`'s `.xlsx`
+  dispatch) and `periodictable` (`calc/sld_formula.py`) to inside the
+  functions that actually use them instead of importing them eagerly at
+  `create_app()` time, matching the existing matplotlib deferral. Measured:
+  `openpyxl` costs ~0.2 s cold, `periodictable` ~0.03 s — the latter is
+  deferred to keep an optional feature's dependency out of startup, not for
+  its own speed. (`scipy.integrate`/`scipy.stats` deferrals considered for
+  `calc/processing.py`, `calc/boxcut.py`, and `calc/fit_models_special.py`
+  were reverted: `scipy.stats` is already imported eagerly by the
+  statistics calc modules reachable from `create_app()`, so those three
+  would have added a per-call import statement — one inside a hot
+  per-point loop — for zero startup benefit.) Frontend: `PanelOverlayWindow`
+  no longer rebuilds a full dropped-row set for every dataset on every
+  render before its `useMemo` gate — the gate itself was also being
+  defeated by a fresh `datasets` array reference every render; it now keys
+  off a cheap, identity-only signature via a new
+  `lib/rowstate.rowStateIdentity`.
 
 ## [0.24.0] - 2026-09-01
 
