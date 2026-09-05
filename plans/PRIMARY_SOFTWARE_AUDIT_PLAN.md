@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-19 latest (Day-5 sprint reconciliation, QA lane): P1.1,
+**Updated:** 2026-09-04 (#294): **P1.2 is COMPLETE** — its `[~]` tag is
+dropped, the P0.4-conditional compressed/chunked-container box is DECIDED NOT
+REQUIRED (see the box), and Gate B step 2 is ticked; the 2026-08-19 note
+below that added P1.2's `[~]` is superseded for P1.2 (still current for
+P1.1/P1.5). Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): P1.1,
 P1.2, and P1.5 had shipped partial slices (2026-08-17/18) with no `[~]`
 status tag in their section headers, unlike P1.4/P1.6/P1.7 — added the tag
 to all three for consistency; flipped two stale P1.2 boxes to `[x]`
@@ -108,8 +112,9 @@ Primary-software readiness is **not yet proven**. The largest risks are:
    slices — the shipped bridge uses pywebview (`desktop_bridge.py`,
    matching CLAUDE.md's actual stack), not Tauri, and named Save/Save As,
    recents, atomic write-validate-replace, bounded autosave generations, and
-   a consent-gated recovery dialog are now real (see P1.1 `[~]`/P1.2 `[~]`
-   below for the itemized, still-partial state). Packaged Windows/macOS E2E
+   a consent-gated recovery dialog are now real (see P1.1 `[~]` below for
+   its itemized, still-partial state; P1.2 is COMPLETE as of 2026-09-04 —
+   `#291` plus the decided container box). Packaged Windows/macOS E2E
    and long-Unicode/network-path behavior remain unverified — that part of
    this risk item still stands.
 3. Saved graph templates capture style, not a complete reusable plot recipe.
@@ -624,9 +629,9 @@ weigh chunked/binary arrays for large members with that number in hand.
   justification that no route feeds them user input. Frontend:
   `store/workspaceIO.ts`'s `runSaveWorkspaceToFile` gains a fast, friendly
   pre-check refusing a Save As destination equal to a live dataset's
-  `source.path`, tested in `store/workspaceIO.test.ts`. (The compressed-
-  containers box above stays open — P0.4 answered "not required" — so
-  this section is not all-checked.)
+  `source.path`, tested in `store/workspaceIO.test.ts`. (P1.2 is
+  all-checked as of 2026-09-04: the compressed-containers box above,
+  the last one open, is DECIDED NOT REQUIRED on P0.4's evidence — #294.)
 
 ### P1.3 — Complete reusable plot-recipe templates [~]
 
@@ -1815,7 +1820,9 @@ identifiers, the gates are the order.
 ### Gate B — Trustworthy daily project
 
 1. [ ] P1.1 native bridge.
-2. [ ] P1.2 project lifecycle.
+2. [x] ~~P1.2 project lifecycle.~~ COMPLETE 2026-09-04 — lifecycle slices
+   `#180`, recovery hardening `#291`, and the P0.4-conditional container box
+   decided NOT REQUIRED (`#294`). Gate B itself stays open for steps 1, 3, 4.
 3. [ ] P1.7 portability/relink.
 4. [ ] Repeat P0.1 and compare friction.
 
@@ -2163,7 +2170,8 @@ work (its BACKLOG row).
 - Findings booked as P0.4 follow-ups (plot-path point reduction; import-path
   efficiency incl. whole-file sniffer reads); WebGL/workers/chunked-arrays
   deliberately NOT booked (no evidence). P1.2's container question annotated
-  "not required at measured scale".
+  "not required at measured scale" (recorded as DECIDED NOT REQUIRED and the
+  P1.2 box closed 2026-09-04, #294).
 - Frontend agent's harness caught a real race in its own methodology (UI
   `clearAutosave()` is fire-and-forget; navigating away immediately lets
   autosave-restore repopulate silently) and one self-reporting bug it fixed
