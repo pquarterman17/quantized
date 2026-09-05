@@ -8,14 +8,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 - Perf: vectorize the Debye D_3(u) heat-capacity integral in
   `calc/fit_models_special.py` (`_debye`, `_debye_einstein`) — replace the
-  per-x-point `scipy.integrate.quad` loop with one fixed-order (N=64)
+  per-x-point `scipy.integrate.quad` loop with one fixed-order (N=32)
   Gauss-Legendre quadrature evaluated across the whole array (closed-form
   saturation above u=30, series below u=1e-4, same as before). Matches the
   old per-point quad implementation to ~1.5e-12 max relative error. A
-  10k-point `curve_fit(Debye)` at a matched iteration count drops from
-  57.7s to 11.7s (~5x); the default-registry AICc `scan_models` at 10k
-  points drops from ~107s to ~88s. Golden parity (`calc_fit_models.json`)
-  unchanged at rtol=1e-9.
+  10k-point `evaluate()` call drops from 116ms to 17.5ms; `curve_fit(Debye)`
+  at a matched 229 iterations drops from 57.7s to 7.4s (~7.8x); the
+  default-registry AICc `scan_models` at 10k points drops from ~107s to
+  ~88s. Golden parity (`calc_fit_models.json`) unchanged at rtol=1e-9.
 - Remove the never-wired bug-report downloader (`lib/errlog.ts`): its
   `/api/debug/report` fetch had no backend route, so the server half of
   every report silently dropped. The P3.4 diagnostics bundle is the

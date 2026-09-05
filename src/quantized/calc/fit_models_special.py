@@ -109,19 +109,33 @@ def _debye_d3(u: NDArray[np.float64]) -> NDArray[np.float64]:
     return out
 
 
+def _debye_lattice(theta: float, tk: NDArray[np.float64]) -> NDArray[np.float64]:
+    u = theta / tk
+    c_lat = 9 * _R * (1 / u) ** 3 * _debye_d3(u)
+    return np.asarray(c_lat, dtype=float)
+
+
 def _debye(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
     gamma, theta, n = float(p[0]), max(float(p[1]), 1.0), max(float(p[2]), 0.0)
     t = np.asarray(x, dtype=float).ravel()
     tk = np.maximum(t, 0.01)
-    u = theta / tk
-    c_lat = 9 * _R * (1 / u) ** 3 * _debye_d3(u)
+    c_lat = _debye_lattice(theta, tk)
     return np.asarray(gamma * tk + n * c_lat * 1000, dtype=float)
 
 
 def _einstein_lattice(theta: float, tk: NDArray[np.float64]) -> NDArray[np.float64]:
+    # exp(-u) form: mathematically u**2 * eu / (eu - 1)**2 with eu = exp(u),
+    # rewritten as u**2 * e^-u / (1 - e^-u)**2 so the exponential itself never
+    # overflows (e^-u -> 0 as u -> inf, the correct u**2 e^-u -> 0 limit)
+    # instead of relying on a `min(u, 500)` cap that still overflows on
+    # squaring a ~1e217 `eu` in plain Python (see the old scalar
+    # implementation kept as an oracle in the test file) and, in the
+    # vectorized numpy form, raises `RuntimeWarning: overflow encountered in
+    # square` on the fit hot path (`routes/fitting.py` calls `curve_fit`
+    # with no `np.errstate` guard).
     u = theta / tk
-    eu = np.exp(np.minimum(u, 500.0))
-    return np.asarray(3 * _R * u**2 * eu / np.maximum((eu - 1) ** 2, _EPS), dtype=float)
+    eu = np.exp(-u)
+    return np.asarray(3 * _R * u**2 * eu / np.maximum((1 - eu) ** 2, _EPS), dtype=float)
 
 
 def _einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -137,8 +151,7 @@ def _debye_einstein(x: NDArray[np.float64], p: NDArray[np.float64]) -> NDArray[n
     theta_e, n_e = max(float(p[3]), 1.0), max(float(p[4]), 0.0)
     t = np.asarray(x, dtype=float).ravel()
     tk = np.maximum(t, 0.01)
-    u_d = theta_d / tk
-    c_d = 9 * _R * (1 / u_d) ** 3 * _debye_d3(u_d)
+    c_d = _debye_lattice(theta_d, tk)
     c_e = _einstein_lattice(theta_e, tk)
     return np.asarray(gamma * tk + (n_d * c_d + n_e * c_e) * 1000, dtype=float)
 

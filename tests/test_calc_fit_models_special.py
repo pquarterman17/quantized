@@ -12,6 +12,7 @@ the source tree.
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -19,7 +20,7 @@ from numpy.testing import assert_allclose
 from scipy.integrate import quad
 
 from quantized.calc.fit_models import evaluate
-from quantized.calc.fit_models_special import _debye_d3
+from quantized.calc.fit_models_special import _debye_d3, _einstein_lattice
 
 _EPS = float(np.finfo(float).eps)
 _R = 8.314
@@ -109,9 +110,13 @@ def test_debye_model_matches_old_per_point_quad_loop(theta: float, n: float) -> 
 # t=30, so it is safe over the full ``_T`` sweep above), the Einstein term's
 # OLD scalar implementation (``_old_einstein_lattice``, reproduced verbatim
 # above) genuinely overflows Python's float range whenever theta_E/T hits
-# the pre-existing 500-cap on its exponent — a latent bug in the code being
-# replaced, unrelated to this fix, so it is avoided here rather than
-# "fixed" as a drive-by.
+# the pre-existing 500-cap on its exponent — a latent bug in the code that
+# was being replaced. The NEW ``_einstein_lattice`` fixes this (an
+# overflow-free exp(-u) form, see its docstring/comment), but the OLD
+# per-point loop kept here as an oracle still overflows past that cap, so
+# this parity sweep is kept narrow enough to stay clear of it; the u >= 500
+# regime is covered directly against the fixed limit by
+# ``test_einstein_lattice_large_u_is_finite_and_silent`` below.
 _T_DE = np.logspace(0, 5, 200)
 
 
@@ -121,3 +126,51 @@ def test_debye_einstein_model_matches_old_per_point_quad_loop(theta_d: float) ->
     old = _old_debye_einstein(_T_DE, np.asarray(p, dtype=float))
     new = evaluate("Debye+Einstein", _T_DE, p)
     assert_allclose(new, old, rtol=1e-9, atol=1e-12)
+
+
+@pytest.mark.parametrize("theta_e", [1.0, 50.0, 200.0, 5000.0])
+def test_einstein_model_matches_old_per_point_loop(theta_e: float) -> None:
+    """Parity oracle for the ``Einstein`` model, mirroring the Debye one above.
+
+    Sweeps the full ``_T`` range (so u = theta_E/T runs up to and beyond the
+    500 threshold where the OLD scalar oracle overflows — now that item 2's
+    fix makes the NEW vectorized ``_einstein_lattice`` overflow-free, that
+    range is no longer something to avoid). The OLD per-point loop still
+    genuinely raises ``OverflowError`` past u ~ 355 (squaring its ~1e217+
+    ``eu``), so those points are excluded from the OLD-vs-NEW comparison
+    but the NEW result there is still asserted finite — covering u >= 500
+    directly is ``test_einstein_lattice_large_u_is_finite_and_silent`` below.
+    """
+    n = 1.0
+    p = [5.0, theta_e, n]
+    tk = np.maximum(_T, 0.01)
+    new = evaluate("Einstein", _T, p)
+    assert np.all(np.isfinite(new))
+    old_vals = []
+    new_at_old = []
+    for tk_k, new_k in zip(tk, new, strict=True):
+        try:
+            old_k = 5.0 * float(tk_k) + n * _old_einstein_lattice(theta_e, float(tk_k)) * 1000
+        except OverflowError:
+            continue
+        old_vals.append(old_k)
+        new_at_old.append(new_k)
+    assert len(old_vals) > 0
+    assert_allclose(np.asarray(new_at_old), np.asarray(old_vals), rtol=1e-9, atol=1e-12)
+
+
+def test_einstein_lattice_large_u_is_finite_and_silent() -> None:
+    """u = theta_E/T >= 500 must return the correct u**2 e**-u -> 0 limit with
+    no RuntimeWarning — the numpy-vectorized ``_einstein_lattice`` used to
+    hit ``RuntimeWarning: overflow encountered in square`` here (silently
+    returning 0 with a warning) since ``routes/fitting.py``'s ``curve_fit``
+    call has no ``np.errstate`` guard; the fixed exp(-u) form is
+    overflow-free so this must pass with warnings promoted to errors.
+    """
+    theta_e = 150.0
+    t = np.array([0.3])  # u = 150 / 0.3 = 500
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = _einstein_lattice(theta_e, t)
+    assert np.all(np.isfinite(result))
+    assert_allclose(result, 0.0, atol=1e-9)
