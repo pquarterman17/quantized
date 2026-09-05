@@ -40,7 +40,7 @@
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
 import { lit } from "../lib/macro";
-import { dropRows, insertBlanks, shiftForDelete, shiftForInsert } from "../lib/rowShift";
+import { dropRows, insertBlanks, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
@@ -163,6 +163,14 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    // Out-of-range/negative row guard (P1.6b self-review finding): must run
+    // BEFORE recordHistory, and before any patch — a `.slice()`-based patch
+    // (below) throws on an out-of-range row rather than silently no-op'ing
+    // the way the old `.map` patch did, and the time-column branch would
+    // otherwise grow `time` into a sparse array via `time[row] = value` for
+    // row >= time.length. Mirrors setCellBlock's own `e.row >= 0 && e.row <
+    // ds.data.time.length` filter below.
+    if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) return; // computed column — read-only
     if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
@@ -186,11 +194,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
           time[row] = value;
           data = { ...d.data, time };
         } else {
-          const values = d.data.values.slice();
-          const patched = values[row].slice();
-          patched[col] = value;
-          values[row] = patched;
-          data = { ...d.data, values };
+          data = { ...d.data, values: patchCell(d.data.values, row, col, value) };
         }
         return recomputeAfterCellEdit({ ...d, data }, row);
       }),
@@ -269,6 +273,10 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    // Same out-of-range/negative row guard as setCellValue above, and for
+    // the same reason — BEFORE recordHistory, before the `.slice()`-based
+    // patch that would otherwise throw on `values[row]`.
+    if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col < 0 || col >= baseCount) return; // x column and computed columns aren't categorical cells
     const levels = categoricalLevels(ds.data, col);
@@ -299,10 +307,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         if (d.id !== id) return d;
         const extending = code === levels.length;
         // Same row-indexed patch as setCellValue above.
-        const values = d.data.values.slice();
-        const patched = values[row].slice();
-        patched[col] = code;
-        values[row] = patched;
+        const values = patchCell(d.data.values, row, col, code);
         const data = extending
           ? { ...d.data, values, cat_levels: { ...d.data.cat_levels, [col]: [...levels, text] } }
           : { ...d.data, values };

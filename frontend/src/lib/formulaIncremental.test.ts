@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { recomputeWithErrors } from "./formula";
 import { asAlreadyComputed, recomputeFromBase } from "./formulaInputs";
-import { computeFormulasIncremental, formulaEvalCounter, isRowLocalFormula } from "./formulaIncremental";
+import { computeFormulasIncremental, isRowLocalFormula } from "./formulaIncremental";
 import type { ComputedColumn, DataStruct } from "./types";
 
 /** A base+formulas dataset's `.data`, ALREADY carrying its (stale, pre-edit)
@@ -169,7 +169,29 @@ describe("computeFormulasIncremental — fallback to the full path", () => {
   });
 });
 
-describe("formulaEvalCounter — load-invariant evaluation count", () => {
+describe("computeFormulasIncremental — out-of-range row guard (library backstop)", () => {
+  it("returns prevFull unchanged (no crash) when every changed row is out of range", () => {
+    const formulas: ComputedColumn[] = [{ name: "D", expr: "A + B" }];
+    const data = seed(10, formulas);
+    const branded = asAlreadyComputed(data);
+    expect(computeFormulasIncremental(branded, formulas, [10, -1], undefined)).toEqual({
+      data: branded,
+      errors: {},
+    });
+  });
+
+  it("processes only the in-range rows when changedRows mixes valid and out-of-range", () => {
+    const formulas: ComputedColumn[] = [{ name: "D", expr: "A + B" }];
+    const before = seed(10, formulas);
+    const edited = editCell(before, 3, 0, 100);
+    const full = recomputeWithErrors(asAlreadyComputed(edited), formulas);
+    const incremental = computeFormulasIncremental(asAlreadyComputed(edited), formulas, [3, 99, -5], undefined);
+    expect(incremental).not.toBeNull();
+    expect(incremental!.data).toEqual(full.data);
+  });
+});
+
+describe("injectable counters — load-invariant compile/evaluation counts", () => {
   it("evaluates exactly formulas.length times for one changed row, regardless of row count", () => {
     const formulas: ComputedColumn[] = [
       { name: "D", expr: "A + B" },
@@ -178,9 +200,28 @@ describe("formulaEvalCounter — load-invariant evaluation count", () => {
     const data = seed(10_000, formulas);
     const edited = editCell(data, 4321, 0, 7);
 
-    formulaEvalCounter.reset();
-    const result = computeFormulasIncremental(asAlreadyComputed(edited), formulas, [4321], undefined);
+    let evalCount = 0;
+    const result = computeFormulasIncremental(asAlreadyComputed(edited), formulas, [4321], undefined, {
+      onEval: () => evalCount++,
+    });
     expect(result).not.toBeNull();
-    expect(formulaEvalCounter.n).toBe(formulas.length); // NOT rows * formulas.length
+    expect(evalCount).toBe(formulas.length); // NOT rows * formulas.length
+  });
+
+  it("compiles each formula exactly once per edit, not twice (isRowLocalFormula check + separate compileFormula pass)", () => {
+    const formulas: ComputedColumn[] = [
+      { name: "D", expr: "A + B" },
+      { name: "E", expr: "D * 2" },
+      { name: "F", expr: "if(D > 0, D, E)" },
+    ];
+    const data = seed(50, formulas);
+    const edited = editCell(data, 7, 0, 3);
+
+    let compileCount = 0;
+    const result = computeFormulasIncremental(asAlreadyComputed(edited), formulas, [7], undefined, {
+      onCompile: () => compileCount++,
+    });
+    expect(result).not.toBeNull();
+    expect(compileCount).toBe(formulas.length); // one compile per formula, not two
   });
 });
