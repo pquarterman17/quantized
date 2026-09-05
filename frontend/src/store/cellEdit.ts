@@ -41,10 +41,34 @@
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, shiftForDelete, shiftForInsert } from "../lib/rowShift";
+import { computeFormulasIncremental } from "../lib/formulaIncremental";
+import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
+
+/** setCellValue/setCategoricalCell's fast path (PERF item, 2026-09): try the
+ *  row-local INCREMENTAL recompute (lib/formulaIncremental.ts) — evaluating
+ *  only `row` — before paying for a full, every-row `recompute`. `d` must
+ *  already carry the edit in its BASE columns (both call sites patch those
+ *  before calling this), the same shape `recompute`'s own
+ *  `asAlreadyComputed` assertion requires. Falls back to the full
+ *  `recompute` whenever the incremental path declines (an aggregate/lag/
+ *  diff/recode formula, or one that already has an error — see
+ *  formulaIncremental.ts's header) so correctness never depends on this
+ *  fast path; setCellBlock (a multi-row paste) does not use this at all and
+ *  always takes the full `recompute`. */
+function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
+  if (!d.formulas?.length) return d;
+  const incremental = computeFormulasIncremental(asAlreadyComputed(d.data), d.formulas, [row], d.formulaErrors);
+  if (!incremental) return recompute(d);
+  return {
+    ...d,
+    data: incremental.data,
+    formulaErrors: Object.keys(incremental.errors).length ? incremental.errors : undefined,
+  };
+}
 
 /** Is `value` a code the categorical level table at `col` already has an
  *  entry for? NaN (missing) is handled by the CALLER, not here — this only
@@ -153,16 +177,22 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     set((s) => ({
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
-        const data =
-          col < 0
-            ? { ...d.data, time: d.data.time.map((t, i) => (i === row ? value : t)) }
-            : {
-                ...d.data,
-                values: d.data.values.map((r, i) =>
-                  i === row ? r.map((v, c) => (c === col ? value : v)) : r,
-                ),
-              };
-        return recompute({ ...d, data });
+        // Row-indexed patch (matches setCellBlock's shape below): one new
+        // outer array, one new row array — not a full-array `.map` over
+        // every row to change the one that's touched.
+        let data;
+        if (col < 0) {
+          const time = d.data.time.slice();
+          time[row] = value;
+          data = { ...d.data, time };
+        } else {
+          const values = d.data.values.slice();
+          const patched = values[row].slice();
+          patched[col] = value;
+          values[row] = patched;
+          data = { ...d.data, values };
+        }
+        return recomputeAfterCellEdit({ ...d, data }, row);
       }),
     }));
     get().recordMacro(
@@ -268,11 +298,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       datasets: s.datasets.map((d) => {
         if (d.id !== id) return d;
         const extending = code === levels.length;
-        const values = d.data.values.map((r, i) => (i === row ? r.map((v, c) => (c === col ? code : v)) : r));
+        // Same row-indexed patch as setCellValue above.
+        const values = d.data.values.slice();
+        const patched = values[row].slice();
+        patched[col] = code;
+        values[row] = patched;
         const data = extending
           ? { ...d.data, values, cat_levels: { ...d.data.cat_levels, [col]: [...levels, text] } }
           : { ...d.data, values };
-        return recompute({ ...d, data });
+        return recomputeAfterCellEdit({ ...d, data }, row);
       }),
     }));
     get().recordMacro(

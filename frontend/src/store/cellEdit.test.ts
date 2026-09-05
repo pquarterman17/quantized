@@ -5,7 +5,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
-import type { Dataset } from "../lib/types";
+import { recomputeFromBase } from "../lib/formulaInputs";
+import { formulaEvalCounter } from "../lib/formulaIncremental";
+import type { ComputedColumn, Dataset } from "../lib/types";
 
 const ds = (): Dataset => ({
   id: "d1",
@@ -101,6 +103,98 @@ describe("setCellBlock", () => {
     expect(() =>
       useApp.getState().setCellBlock("nope", [{ row: 0, col: 0, value: 1 }], "paste cells"),
     ).not.toThrow();
+  });
+});
+
+// PERF item (2026-09): setCellValue/setCategoricalCell's incremental
+// recompute fast path (lib/formulaIncremental.ts), exercised through the
+// real store actions rather than the pure function directly.
+function dsWithFormulas(formulas: ComputedColumn[]): Dataset {
+  const base = ds();
+  return { ...base, data: recomputeFromBase(base.data, formulas).data, formulas };
+}
+
+describe("setCellValue — formula recompute (incremental fast path)", () => {
+  it("recomputes a dependent formula column for the edited row only", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A + B" }])],
+      activeId: "d1",
+    });
+    expect(active().data.values[0][2]).toBe(110); // 10 + 100, pre-edit
+    useApp.getState().setCellValue("d1", 0, 0, 500);
+    expect(active().data.values[0][2]).toBe(600); // 500 + 100 — recomputed
+    expect(active().data.values[1][2]).toBe(220); // 20 + 200 — untouched row unaffected
+  });
+
+  it("is ONE undo entry that restores the previous computed value too", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A + B" }])],
+      activeId: "d1",
+    });
+    const beforeData = active().data;
+    useApp.getState().setCellValue("d1", 0, 0, 500);
+    expect(active().data.values[0][2]).toBe(600);
+    useApp.getState().undo();
+    expect(active().data).toEqual(beforeData);
+    expect(active().data.values[0][2]).toBe(110); // computed column restored, not just the base cell
+  });
+
+  it("falls back to a full recompute for an aggregate formula (still correct, just not incremental)", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A - mean(A)" }])],
+      activeId: "d1",
+    });
+    // mean(A) over [10, 20, 30] = 20, so C = A - 20.
+    useApp.getState().setCellValue("d1", 0, 0, 100);
+    // mean(A) is now (100+20+30)/3 = 50 — every row's C must reflect the NEW
+    // mean, which only a full recompute (not a row-local patch) can do.
+    expect(active().data.values[0][2]).toBeCloseTo(50, 10); // 100 - 50
+    expect(active().data.values[1][2]).toBeCloseTo(-30, 10); // 20 - 50, untouched row RE-evaluated
+  });
+
+  it("evaluates the formula exactly once per edit (load-invariant, not rows x formulas)", () => {
+    const rows = 5000;
+    const time = Array.from({ length: rows }, (_, i) => i);
+    const values = Array.from({ length: rows }, (_, i) => [i, i * 2]);
+    const big: Dataset = {
+      id: "big",
+      name: "big.dat",
+      data: { time, values, labels: ["A", "B"], units: ["", ""], metadata: {} },
+    };
+    const formulas: ComputedColumn[] = [{ name: "C", expr: "A + B" }];
+    useApp.setState({
+      datasets: [{ ...big, data: recomputeFromBase(big.data, formulas).data, formulas }],
+      activeId: "big",
+    });
+    formulaEvalCounter.reset();
+    useApp.getState().setCellValue("big", 2500, 0, 999);
+    expect(formulaEvalCounter.n).toBe(1); // one formula, one changed row — NOT rows * formulas
+  });
+});
+
+describe("setCategoricalCell — formula recompute (incremental fast path)", () => {
+  it("recomputes a dependent formula column for the edited row only", () => {
+    const base: Dataset = {
+      id: "d1",
+      name: "grades.dat",
+      data: {
+        time: [0, 1, 2],
+        values: [[0], [1], [2]],
+        labels: ["Grade"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["Pass", "OK", "Fail"] },
+      },
+    };
+    const formulas: ComputedColumn[] = [{ name: "Code", expr: "A * 10" }];
+    useApp.setState({
+      datasets: [{ ...base, data: recomputeFromBase(base.data, formulas).data, formulas }],
+      activeId: "d1",
+    });
+    expect(active().data.values[0][1]).toBe(0);
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Fail"); // code 2
+    expect(active().data.values[0][1]).toBe(20);
+    expect(active().data.values[1][1]).toBe(10); // untouched row unaffected
   });
 });
 

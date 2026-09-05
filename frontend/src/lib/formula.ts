@@ -169,8 +169,9 @@ export function tokenize(src: string): Tok[] {
  *  `tokenize(src)` — the single collection point `referencedColumns` below
  *  (and `lib/formulaRename.ts`'s column-shift rewrite) reuses so none can
  *  ever disagree (LIBRARY_WORKBOOK_UX_PLAN PR K, K1). Ordinary callers pass
- *  nothing and pay no cost beyond one no-op call per reference. */
-export function compileFormula(src: string, onRef?: (name: string, tokenIndex: number) => void): FormulaFn {
+ *  nothing and pay no cost beyond one no-op call per reference. `onNonLocal`
+ *  is the same idea for a non-row-local special form (formulaRowFns.ts's ParserOps.nonLocal; lib/formulaIncremental.ts's one caller). */
+export function compileFormula(src: string, onRef?: (name: string, tokenIndex: number) => void, onNonLocal?: (kind: "lag" | "diff" | "aggregate") => void): FormulaFn {
   const toks = tokenize(src);
   let pos = 0;
   const peek = (): Tok | undefined => toks[pos];
@@ -267,9 +268,8 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
 
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
   // ParserOps capability interface, so the row-aware special forms (if /
-  // row / lag / diff / the aggregates) parse against this SAME token stream
-  // without formulaRowFns.ts touching `toks`/`pos` directly.
-  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr(), ref };
+  // row / lag / diff / the aggregates) parse against this SAME token stream.
+  const rowFnOps: ParserOps = { peek, peekAt, eat, expectOp, parseExpr: () => parseOr(), ref, nonLocal: onNonLocal ?? (() => {}) };
 
   function parseAtom(): FormulaFn {
     const t = eat();

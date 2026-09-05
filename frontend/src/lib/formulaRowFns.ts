@@ -33,6 +33,15 @@ export interface ParserOps {
    *  the two can never disagree about what a formula references. A no-op
    *  when the caller isn't collecting (ordinary compilation). */
   ref(name: string): void;
+  /** PERF item (2026-09): report a special form whose per-row value can
+   *  depend on a row OTHER than the one being evaluated — an aggregate (the
+   *  whole column) or lag()/diff() (a neighbour row) — so a caller doing a
+   *  single-row incremental recompute (lib/formulaIncremental.ts) knows this
+   *  formula is NOT safely row-local and must fall back to a full recompute.
+   *  Not called for `if`/`row()` (both stay a pure function of the row being
+   *  evaluated — `row()` never changes for a cell edit). A no-op when the
+   *  caller isn't collecting. */
+  nonLocal(kind: "lag" | "diff" | "aggregate"): void;
 }
 
 function parseBareColumnArg(fnName: string, ops: ParserOps, consts: Record<string, number>): string {
@@ -89,6 +98,7 @@ export function tryParseRowAwareCall(
     return { fn };
   }
   if (fname === "lag") {
+    ops.nonLocal("lag");
     const col = parseBareColumnArg("lag", ops, consts);
     ops.expectOp(",");
     const kFn = ops.parseExpr();
@@ -104,6 +114,7 @@ export function tryParseRowAwareCall(
     return { fn };
   }
   if (fname === "diff") {
+    ops.nonLocal("diff");
     const col = parseBareColumnArg("diff", ops, consts);
     ops.expectOp(")");
     const fn: FormulaFn = (_c, ex) => {
@@ -123,6 +134,7 @@ export function tryParseRowAwareCall(
     const isBareSingle =
       !!first && first.t === "name" && !(first.v in consts) && !!second && second.t === "op" && second.v === ")";
     if (isBareSingle) {
+      ops.nonLocal("aggregate");
       const col = (ops.eat() as Extract<Tok, { t: "name" }>).v;
       ops.ref(col);
       ops.expectOp(")");
