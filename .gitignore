@@ -59,6 +59,10 @@ Thumbs.db
 .claude/
 CLAUDE.local.md
 
+# ── Local agent definitions and skills (per-machine, not shared) ──────
+.agents/skills/
+.codex/agents/
+
 # NOTE: plans/ is TRACKED in this repo for now (founding design docs).
 # Once active development starts we may adopt the sibling-repo convention
 # (gitignore plans/, track a BACKLOG.md dashboard) — see CLAUDE.md.
