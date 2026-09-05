@@ -495,7 +495,7 @@ the existing remote-IPC security boundary must remain.
   `desktop_bridge.py`'s docstring (different consent story, cross-process
   IPC rather than in-process js_api).
 
-### P1.2 — Named project lifecycle, atomic recovery, scalable workspace [~]
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -577,7 +577,13 @@ weigh chunked/binary arrays for large members with that number in hand.
   the version tier that introduced each, confirms `deriveWorkbooks`
   derives exactly one workbook per dataset-group for v1-v3, and a
   `version: 5` copy throws `/unsupported workspace version/`.
-- [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
+- [x] ~~Use compressed containers/chunked binary arrays only if P0.4 requires
+  it.~~ DECIDED NOT REQUIRED 2026-09-04: P0.4's own measurement (above)
+  answered the condition at the 50-dataset/20-window scale, and the one
+  large-member cost it flagged — the 5.8 s synchronous `JSON.parse` on a
+  188 MB `.dwk` reopen — was closed by P3.4 slice 3's worker parse
+  (`481e0ea`), so no format change is owed. Reopen only on new evidence
+  (a measured member the worker parse cannot hold).
 - [x] Kill-process/interrupted-write and old-version round trips pass.
   **(2026-09-02.)** Backend: `desktop_bridge.py`'s `write_project_file` now
   `flush`+`fsync`s the temp file BEFORE `os.replace`, and best-effort
