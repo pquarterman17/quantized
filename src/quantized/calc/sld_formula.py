@@ -19,9 +19,6 @@ from __future__ import annotations
 import math
 from typing import Any
 
-import periodictable as pt
-from periodictable import formula as _formula
-
 #: Thermal-neutron wavelength (2200 m/s) — the NCNR calculator default (Å).
 NEUTRON_WAVELENGTH = 1.798
 #: Cu Kα — the conventional laboratory X-ray wavelength (Å).
@@ -78,6 +75,9 @@ def sld_from_formula(
         Empty formula, non-positive density/wavelength, an unparseable
         formula, or a formula whose elements lack neutron data.
     """
+    import periodictable as pt  # deferred: ~heavy import, only needed here
+    from periodictable import formula as _formula
+
     if not compound.strip():
         raise ValueError("formula is empty")
     if not (density > 0):

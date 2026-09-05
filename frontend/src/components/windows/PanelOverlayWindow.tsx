@@ -14,7 +14,7 @@ import type uPlot from "uplot";
 import { buildOverlayPayload } from "../../lib/panelwindow";
 import { defaultPlotView } from "../../lib/plotview";
 import { resolveTemplate } from "../../lib/plotTemplates";
-import { droppedRows } from "../../lib/rowstate";
+import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { toast } from "../../store/toasts";
@@ -23,21 +23,49 @@ import PlotViewport from "../Stage/PlotViewport";
 
 const OVERLAY_VIEW = defaultPlotView();
 
+// Cheap re-render gate for the overlay merge. The PREVIOUS version built
+// `datasets.map((d) => [...droppedRows(d)].join(","))` — an O(datasets x
+// rows) full-row-set string, materialized on EVERY render before the
+// `useMemo` below even ran. Worse, `PanelPlotWindow`'s `resolved` array
+// (this component's `datasets` prop) is a fresh `.map().filter()` result on
+// every one of ITS renders, so listing `datasets` itself as a memo
+// dependency defeated the memo entirely — `buildOverlayPayload` (and the
+// `droppedRows` calls inside its `analysisData`) reran unconditionally.
+//
+// Fixed by comparing only object IDENTITY (no row iteration) of the exact
+// fields `buildOverlayPayload` reads per dataset: `name` (the series label)
+// plus `lib/rowstate.rowStateIdentity` — the sanctioned accessor for the
+// data/exclusion-list/filter references `droppedRows` derives from (the #50
+// architecture guard forbids reading the dataset's raw exclusion field
+// anywhere but the row-state model itself). The store's immutable-update
+// convention (every mutation spreads `{...d, field: newRef}`) means any of
+// these actually changing always produces a new reference, so this never
+// misses a real change — it only skips recompute when every dataset is byte-for-byte
+// the same object it was last render.
+function useOverlaySignature(datasets: Dataset[]): number {
+  const versionRef = useRef(0);
+  const prevRef = useRef<readonly unknown[]>([]);
+  const next = datasets.flatMap((d) => [...rowStateIdentity(d), d.name]);
+  const prev = prevRef.current;
+  const changed = next.length !== prev.length || next.some((v, i) => v !== prev[i]);
+  if (changed) {
+    versionRef.current += 1;
+    prevRef.current = next;
+  }
+  return versionRef.current;
+}
+
 export default function PanelOverlayWindow({ datasets }: { datasets: Dataset[] }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const defaultTrace = useApp((s) => s.defaultTrace);
   const defaultLineWidth = useApp((s) => s.defaultLineWidth);
   const plotRef = useRef<uPlot | null>(null);
-  // Row-state (#50/#53 exclusion + local filter, folded together by the
-  // sanctioned `lib/rowstate.droppedRows` chokepoint) can change live after
-  // the window opens, so re-merge whenever any dataset's dropped-row set
-  // changes — not just on the dataset identity list.
-  const rowStateKey = datasets.map((d) => [...droppedRows(d)].join(",")).join("|");
+  const overlaySignature = useOverlaySignature(datasets);
   const { payload, overflow } = useMemo(
     () => buildOverlayPayload(datasets),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [datasets, rowStateKey],
+    [overlaySignature],
   );
 
   // Fire the "3+ unit families" warning once per false->true edge, never on
