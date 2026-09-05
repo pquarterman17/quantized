@@ -5,13 +5,19 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.datastruct import DataStruct
 from quantized.routes import parsers as parsers_mod
 
 client = TestClient(app)
+# raise_server_exceptions=False (see tests/test_routes_malformed_dataset.py's
+# same setup): an unhandled exception must come back as a real HTTP 500
+# response to inspect, not be re-raised into the test itself.
+no_raise_client = TestClient(app, raise_server_exceptions=False)
 FIXTURE = Path(__file__).parent / "fixtures" / "qd_edp124.dat"
 
 
@@ -49,6 +55,53 @@ def test_upload_qd_returns_datastruct() -> None:
     assert body["labels"] == ["Moment"]
     assert len(body["time"]) == 401
     assert body["metadata"]["parser_name"] == "import_qd_vsm"
+
+
+def test_upload_metadata_encoding_failure_is_500_not_422(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A parser that leaves a non-JSON-native value in metadata (here, a
+    numpy uint8 -- ``json.dumps`` raises ``TypeError`` on it) is a parser BUG,
+    not bad input: it must surface as HTTP 500 with a server traceback, not
+    get caught by the ``CALC_ERRORS_IO`` adapter (which includes
+    ``TypeError``) and misreported as a 422 blaming the uploaded file (second
+    review-pass item 2). The failure happens during ``DataStructResponse``
+    construction -- AFTER ``_import_with_books`` (the parse) has already
+    succeeded -- so this only regresses if encoding is wrongly covered by the
+    same adapter as the parse."""
+    bad = DataStruct(
+        time=np.array([0.0, 1.0]),
+        values=np.array([[1.0], [2.0]]),
+        labels=["x"],
+        units=[""],
+        metadata={"bad": np.uint8(5)},
+    )
+    monkeypatch.setattr(parsers_mod, "import_auto", lambda path: bad)
+    resp = no_raise_client.post(
+        "/api/parsers/upload",
+        files={"file": ("data.csv", b"x,y\n1,2\n", "text/csv")},
+    )
+    assert resp.status_code == 500
+
+
+def test_import_metadata_encoding_failure_is_500_not_422(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same as above for ``/api/parsers/import`` -- ``NaN`` under
+    ``allow_nan=False`` this time, covering the other non-JSON-native
+    failure mode named in the review item."""
+    bad = DataStruct(
+        time=np.array([0.0, 1.0]),
+        values=np.array([[1.0], [2.0]]),
+        labels=["x"],
+        units=[""],
+        metadata={"bad": float("nan")},
+    )
+    monkeypatch.setattr(parsers_mod, "import_auto", lambda path: bad)
+    target = tmp_path / "data.csv"
+    target.write_text("x,y\n1,2\n")
+    resp = no_raise_client.post("/api/parsers/import", json={"path": str(target)})
+    assert resp.status_code == 500
 
 
 def test_upload_unknown_format_422() -> None:

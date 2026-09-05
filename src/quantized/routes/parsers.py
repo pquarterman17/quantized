@@ -299,8 +299,23 @@ def _import_response(
     byte what ``json.dumps(datastruct_payload(ds), ensure_ascii=False,
     allow_nan=False, separators=(",", ":"))`` (``starlette.responses.
     JSONResponse.render``'s exact kwargs) would produce.
+
+    The ``CALC_ERRORS_IO`` -> 422 adapter wraps ONLY ``_import_with_books``
+    (the parse), mirroring ``import_file``'s own adapter -- NOT the
+    ``DataStructResponse(payload)`` construction below it. ``CALC_ERRORS_IO``
+    includes ``TypeError``/``ValueError``, so a parser that leaves a
+    non-JSON-native value in metadata (a numpy scalar, raw ``bytes``, a NaN
+    hitting ``allow_nan=False``) would otherwise have its encoding failure
+    caught by the very same adapter meant for bad INPUT, and misreported as
+    HTTP 422 "invalid input" with no server traceback -- indistinguishable
+    from a bad file, when it's actually a parser bug. Left uncaught here (and
+    not re-wrapped by ``upload_file``'s own streaming-only adapter, see its
+    docstring), it surfaces as the 500 it actually is.
     """
-    payload = _import_with_books(path, full_books=full_books, upload_token=upload_token)
+    try:
+        payload = _import_with_books(path, full_books=full_books, upload_token=upload_token)
+    except CALC_ERRORS_IO as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return DataStructResponse(payload)
 
 
@@ -413,28 +428,44 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     finishes because that call is awaited before the ``with`` block exits,
     so the file is never unlinked out from under a parse still reading it in
     the worker thread.
+
+    The ``CALC_ERRORS_IO``/``UploadTooLargeError`` adapter below covers only
+    the STREAMING step (writing the uploaded bytes to disk) -- it deliberately
+    does NOT wrap the ``run_in_threadpool(_import_response, ...)`` call.
+    ``_import_response`` runs its own, narrower ``CALC_ERRORS_IO`` adapter
+    around just the parse (see its docstring); if this handler's adapter also
+    covered the threadpool call, a raw ``TypeError``/``ValueError`` escaping
+    the ``DataStructResponse`` construction (a non-JSON-native metadata value)
+    would be caught HERE instead and still misreported as a 422, defeating
+    that narrower adapter entirely. Left unwrapped here, an encoding failure
+    surfaces as the 500 it actually is.
     """
     name = Path(file.filename or "upload.dat").name or "upload.dat"
     suffix = Path(name).suffix.lower()
-    try:
-        if suffix in (".opj", ".opju"):
+    if suffix in (".opj", ".opju"):
+        try:
             dest, token = await stage_upload_stream(name, file)
-            # Pin the token so a concurrent upload's staging commit can't
-            # evict this file out from under the parse below, which reads
-            # it from a threadpool worker while this coroutine is suspended
-            # on the await (see _uploadcache._commit's docstring).
-            mark_in_flight(token)
-            try:
-                return await run_in_threadpool(
-                    _import_response, dest, full_books=full_books, upload_token=token
-                )
-            finally:
-                clear_in_flight(token)
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / name
+        except UploadTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except CALC_ERRORS_IO as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Pin the token so a concurrent upload's staging commit can't
+        # evict this file out from under the parse below, which reads
+        # it from a threadpool worker while this coroutine is suspended
+        # on the await (see _uploadcache._commit's docstring).
+        mark_in_flight(token)
+        try:
+            return await run_in_threadpool(
+                _import_response, dest, full_books=full_books, upload_token=token
+            )
+        finally:
+            clear_in_flight(token)
+    with tempfile.TemporaryDirectory() as tmp:
+        dest = Path(tmp) / name
+        try:
             await stream_to_path(file, dest, filename=name)
-            return await run_in_threadpool(_import_response, dest, full_books=full_books)
-    except UploadTooLargeError as exc:
-        raise HTTPException(status_code=413, detail=str(exc)) from exc
-    except CALC_ERRORS_IO as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except UploadTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+        except CALC_ERRORS_IO as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return await run_in_threadpool(_import_response, dest, full_books=full_books)

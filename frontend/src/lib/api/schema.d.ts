@@ -2237,6 +2237,17 @@ export interface paths {
          *     finishes because that call is awaited before the ``with`` block exits,
          *     so the file is never unlinked out from under a parse still reading it in
          *     the worker thread.
+         *
+         *     The ``CALC_ERRORS_IO``/``UploadTooLargeError`` adapter below covers only
+         *     the STREAMING step (writing the uploaded bytes to disk) -- it deliberately
+         *     does NOT wrap the ``run_in_threadpool(_import_response, ...)`` call.
+         *     ``_import_response`` runs its own, narrower ``CALC_ERRORS_IO`` adapter
+         *     around just the parse (see its docstring); if this handler's adapter also
+         *     covered the threadpool call, a raw ``TypeError``/``ValueError`` escaping
+         *     the ``DataStructResponse`` construction (a non-JSON-native metadata value)
+         *     would be caught HERE instead and still misreported as a 422, defeating
+         *     that narrower adapter entirely. Left unwrapped here, an encoding failure
+         *     surfaces as the 500 it actually is.
          */
         post: operations["upload_file_api_parsers_upload_post"];
         delete?: never;

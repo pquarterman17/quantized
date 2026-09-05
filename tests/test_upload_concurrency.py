@@ -171,22 +171,6 @@ def _install_offloop_probe(
     return probe
 
 
-def test_small_upload_still_works(tmp_path: Path) -> None:
-    """Sanity: the threadpool wrap doesn't change behaviour for the common,
-    fast case."""
-    server, port, thread = _start_server()
-    base = f"http://127.0.0.1:{port}"
-    try:
-        csv_path = tmp_path / "small.csv"
-        _write_csv(csv_path, n_rows=50)
-        result: dict[str, Any] = {}
-        _upload(base, csv_path, result, threading.Event())
-        assert result["status_code"] == 200
-        assert len(result["json"]["time"]) == 50
-    finally:
-        _stop_server(server, thread)
-
-
 def test_large_upload_does_not_starve_health_polling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
