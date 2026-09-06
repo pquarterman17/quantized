@@ -296,6 +296,145 @@ def test_pack_project_refuses_an_existing_destination(tmp_path: Path) -> None:
         assert str(tmp_path) not in json.dumps(error)
 
 
+def test_pack_project_refuses_an_existing_destination_before_staging_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding #5: the existing-destination refusal must happen
+    BEFORE any staging directory is created — every source is copied and
+    checksummed into staging first otherwise, only to be thrown away by a
+    check this cheap. Pinned by making `create_staging_dir` itself fail the
+    test if it is ever called."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination_dir = _bundle_parent(tmp_path) / "bundle"
+    destination_dir.mkdir()
+
+    def _must_not_be_called(_parent_dir: str) -> str:
+        pytest.fail("create_staging_dir was called after an existing destination should refuse")
+
+    monkeypatch.setattr("quantized.portable.pack.create_staging_dir", _must_not_be_called)
+
+    result = pack_project(
+        payload, "proj", str(destination_dir), probe=_probe, packed_at=_PACKED_AT
+    )
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "destination_exists"
+    # nothing at all appeared beside the pre-existing (empty) destination
+    assert list(_bundle_parent(tmp_path).iterdir()) == [destination_dir]
+
+
+# ── staging-directory creation failures (review finding #3) ──────────────
+
+
+def test_pack_project_staging_dir_oserror_is_a_structured_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tempfile.mkdtemp` (inside `create_staging_dir`) can raise `OSError`
+    for reasons that have nothing to do with an invalid `parent_dir` (a
+    read-only parent, a full disk) — `create_staging_dir` only ever raises
+    `ValueError` of its own accord, so this is a genuinely different
+    failure class that must not escape `pack_project` uncaught."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+
+    def _boom(*_args: object, **_kwargs: object) -> str:
+        raise PermissionError(13, "Permission denied", "/some/secret/parent/path")
+
+    monkeypatch.setattr("quantized.portable.staging.tempfile.mkdtemp", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "staging_failed"
+    # the message is `strerror` only -- never the path PermissionError's
+    # own `str()` would include.
+    assert "Permission denied" in result.errors[0]["message"]
+    assert "/some/secret/parent/path" not in result.errors[0]["message"]
+    assert not os.path.exists(destination)
+
+
+# ── payload/manifest serialization failures (review finding #3) ──────────
+#
+# A payload with a literally non-JSON-serializable value (raw `bytes`)
+# fails EARLIER, inside `rewrite_payload_for_bundle`'s own re-validation
+# `json.dumps` call (a separate, pre-existing `ValueError`-only guard in
+# `pack_project` — out of scope for this finding, which is specifically
+# about `write_bundle_files`'s own `json.dumps`/`manifest_json` calls), so
+# these two tests monkeypatch each of THOSE call sites directly to pin the
+# guard this finding actually adds.
+
+
+def test_pack_project_payload_serialization_failure_is_a_structured_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_dumps(rewritten_payload)` (evaluated as part of the call to
+    `write_bundle_files`) raising `TypeError`/`ValueError` must come back
+    as a structured `PackResult`, not an uncaught exception -- and the
+    staging directory it got partway through must be cleaned up, never
+    left behind."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+
+    def _boom(_payload: dict[str, Any]) -> str:
+        raise TypeError("Object of type bytes is not JSON serializable")
+
+    monkeypatch.setattr("quantized.portable.pack._dumps", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "serialize_failed"
+    assert not os.path.exists(destination)
+    # staging cleaned up -- nothing left in the bundle's parent directory
+    assert list(_bundle_parent(tmp_path).iterdir()) == []
+
+
+def test_pack_project_manifest_serialization_failure_is_a_structured_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other call site the same guard covers:
+    `write_bundle_files`'s own `manifest_json(manifest)` call, deep inside
+    `quantized.portable.publish`."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+
+    def _boom(_manifest: dict[str, Any]) -> str:
+        raise TypeError("manifest contains a non-serializable value")
+
+    monkeypatch.setattr("quantized.portable.publish.manifest_json", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "serialize_failed"
+    assert not os.path.exists(destination)
+    assert list(_bundle_parent(tmp_path).iterdir()) == []
+
+
 # ── resolve_bundle_source: Windows and POSIX resolution ──────────────────
 
 

@@ -1622,9 +1622,15 @@ below — the packer's own implementation work starts fresh here:
     (or no `kind` at all, every pre-existing fixture's shape) is
     unaffected. `desktop_bridge_dialogs._read_granted` passes
     `base_dir=os.path.dirname(granted)` so a reopened packed project's
-    bundle copies become declared sources (`grant_source_paths`/relink then
-    work on the moved bundle's own files, not the original machine's
-    now-possibly-gone paths); `desktop_bridge.write_project_file` passes
+    bundle copies become declared sources under their RESOLVED, ABSOLUTE
+    paths (not the original machine's now-possibly-gone paths) — this
+    backend half declares those absolute copies; it does not itself
+    resolve a bundle-relative path anywhere `grant_source_paths`/relink
+    act on it (`grant_source_paths` realpaths the caller's argument
+    against the process cwd, not the bundle directory), so a caller must
+    always pass an absolute path. The separate frontend half of PR 3
+    is what guarantees that in practice, resolving every `kind: "bundle"`
+    source to an absolute path at parse time; `desktop_bridge.write_project_file` passes
     the same so a save can never land on a packed project's own bundle
     copy either. The cross-package call is deliberately function-local
     (not a module-level import) on the `desktop_project_file` side to

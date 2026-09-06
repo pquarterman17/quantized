@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -331,6 +332,59 @@ def test_extract_declared_source_paths_resolves_a_bundle_source_with_base_dir(
     assert resolved == [os.path.join(str(tmp_path), "sources", "raw.csv")]
     # without base_dir, the bundle source is invisible
     assert extract_declared_source_paths(content) == []
+
+
+def test_declared_source_paths_of_resolves_multiple_bundle_sources_with_one_base_dir(
+    tmp_path: Path,
+) -> None:
+    """Review finding #7 (PR 3 backend round): the lazy
+    ``quantized.portable.project_rewrite`` import in
+    ``declared_source_paths_of`` was hoisted out of the per-dataset loop
+    to run at most once per call rather than once per matching row — this
+    pins that the loop still resolves EVERY matching row correctly
+    afterward (not just the first, e.g. from a stale/shadowed binding a
+    careless hoist could introduce)."""
+    payload = {
+        "datasets": [
+            {"source": {"kind": "bundle", "path": "sources/a.csv"}},
+            {"source": {"kind": "path", "path": "/abs/untouched.csv"}},
+            {"source": {"kind": "bundle", "path": "sources/b.csv"}},
+        ]
+    }
+    resolved = declared_source_paths_of(payload, base_dir=str(tmp_path))
+    assert resolved == [
+        os.path.join(str(tmp_path), "sources", "a.csv"),
+        "/abs/untouched.csv",
+        os.path.join(str(tmp_path), "sources", "b.csv"),
+    ]
+
+
+def test_desktop_project_file_and_portable_import_cleanly_in_both_orders() -> None:
+    """Review finding #7: ``quantized.portable.project_rewrite`` now
+    imports ``parse_workspace_payload`` at MODULE level (the previous
+    function-local import was justified by a circular-import claim that
+    does not actually hold — see that module's own doc). The one real
+    cycle risk runs the OTHER way: ``quantized.portable.publish`` needs
+    ``quantized.desktop_project_file.WRITE_TEMP_PREFIX`` at module-load
+    time, so ``desktop_project_file``'s own cross-package call stays
+    function-local. Each import order is run in a FRESH subprocess so a
+    previous test's ``sys.modules`` caching can never hide a regression
+    (a module that already finished importing earlier in THIS process
+    would silently mask a real ordering bug)."""
+    import subprocess
+
+    for statement in (
+        "import quantized.desktop_project_file; import quantized.portable",
+        "import quantized.portable; import quantized.desktop_project_file",
+    ):
+        proc = subprocess.run(
+            [sys.executable, "-c", statement],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (
+            f"import order {statement!r} failed:\n{proc.stdout}\n{proc.stderr}"
+        )
 
 
 def test_payload_declares_source_resolves_a_bundle_copy_only_with_base_dir(

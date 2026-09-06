@@ -65,6 +65,7 @@ from .layout import (
     SUPPORTED_MANIFEST_VERSIONS,
     is_bundle_relative,
     join_bundle_path,
+    sanitize_component,
 )
 from .manifest import manifest_json
 from .staging import cleanup_staging_dir
@@ -115,7 +116,16 @@ def atomic_replace_file(directory: str, dest_path: str, content: str, *, temp_pr
     tmp_path: str | None
     fd, tmp_path = tempfile.mkstemp(prefix=temp_prefix, dir=directory)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        # `newline="\n"`: on Windows, Python's default text-mode newline
+        # translation would rewrite every "\n" the caller supplies to
+        # "\r\n" on write, breaking the canonical (LF-only) manifest bytes
+        # `manifest_json`/`_dumps` produce -- a bundle packed on Windows
+        # would then fail a byte-exact re-serialization check on any
+        # platform. Universal-newline translation is for TEXT a human
+        # might edit with a platform-native editor; this is a machine-
+        # written, machine-read JSON document, so it always gets exactly
+        # the bytes it was given.
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
             f.flush()
             os.fsync(f.fileno())
@@ -271,6 +281,27 @@ class BundleCheck:
     problems: list[dict[str, str]]
 
 
+def _is_valid_bundle_filename(name: str) -> bool:
+    """Is ``name`` safe to join onto ``bundle_dir`` as the packed project
+    file? Must be a SINGLE path component — no ``/`` or ``\\`` (a manifest
+    is untrusted input; a hand-edited or malicious
+    ``manifest["project"]["project_file"]`` of ``"/etc/passwd"`` or
+    ``"../../x.dwk"`` must never be joined onto ``bundle_dir`` and reported
+    ``complete=True``, nor a missing OUTSIDE path echoed back in
+    ``project_file_missing``'s detail) — not ``"."``/``".."``, already a
+    portable name in :func:`quantized.portable.layout.sanitize_component`'s
+    own sense (rejects illegal characters, a reserved device name, a
+    trailing dot/space, or an over-long name), and ending in ``.dwk``
+    (case-insensitive)."""
+    if "/" in name or "\\" in name:
+        return False
+    if name in (".", ".."):
+        return False
+    if sanitize_component(name) != (name, None):
+        return False
+    return name.lower().endswith(".dwk")
+
+
 def _hash_file(path: str) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -292,7 +323,8 @@ def validate_bundle(bundle_dir: str, *, verify_checksums: bool = False) -> Bundl
     ``unsupported_manifest_version`` finding is terminal (returned
     immediately, since nothing further can be checked meaningfully);
     every other finding (``incomplete``, ``project_file_missing``,
-    ``escape_rejected``, ``source_missing``, ``source_size_mismatch``,
+    ``project_file_invalid``, ``escape_rejected``, ``source_missing``,
+    ``source_unreadable``, ``source_size_mismatch``,
     ``source_checksum_mismatch``) accumulates in ``problems`` so a caller
     sees the whole picture at once. ``complete`` is ``True`` only when
     ``problems`` is empty."""
@@ -327,8 +359,12 @@ def validate_bundle(bundle_dir: str, *, verify_checksums: bool = False) -> Bundl
 
     project = manifest.get("project")
     project_file = project.get("project_file") if isinstance(project, dict) else None
-    if isinstance(project_file, str) and project_file:
-        if not os.path.isfile(os.path.join(bundle_dir, project_file)):
+    if isinstance(project_file, str):
+        if not _is_valid_bundle_filename(project_file):
+            # Never echo the value that failed the check -- it may be an
+            # absolute path or a traversal outside the bundle.
+            problems.append({"code": "project_file_invalid", "detail": "<invalid>"})
+        elif not os.path.isfile(os.path.join(bundle_dir, project_file)):
             problems.append({"code": "project_file_missing", "detail": project_file})
     else:
         problems.append({"code": "project_file_missing", "detail": "<unnamed>"})
@@ -353,15 +389,27 @@ def validate_bundle(bundle_dir: str, *, verify_checksums: bool = False) -> Bundl
         if not os.path.isfile(real_path):
             problems.append({"code": "source_missing", "detail": bundle_path})
             continue
-        expected_bytes = packed.get("bytes")
-        actual_bytes = os.path.getsize(real_path)
-        if isinstance(expected_bytes, (int, float)) and int(expected_bytes) != actual_bytes:
-            problems.append({"code": "source_size_mismatch", "detail": bundle_path})
-            continue
-        if verify_checksums:
-            expected_checksum = packed.get("checksum")
-            if isinstance(expected_checksum, str) and expected_checksum:
-                if _hash_file(real_path) != expected_checksum:
-                    problems.append({"code": "source_checksum_mismatch", "detail": bundle_path})
+        # "Never raises" (the docstring's promise) covers this whole block:
+        # a `NaN`/non-finite `"bytes"` value makes `int(expected_bytes)`
+        # raise `ValueError`, and `os.path.getsize`/`_hash_file` can raise
+        # `OSError` on a race (removed between the `isfile` check above and
+        # here) or a permission/I-O error reading the file's bytes for the
+        # checksum -- either way this is a real, reportable problem
+        # (`source_unreadable`), never an uncaught exception.
+        try:
+            expected_bytes = packed.get("bytes")
+            actual_bytes = os.path.getsize(real_path)
+            if isinstance(expected_bytes, (int, float)) and int(expected_bytes) != actual_bytes:
+                problems.append({"code": "source_size_mismatch", "detail": bundle_path})
+                continue
+            if verify_checksums:
+                expected_checksum = packed.get("checksum")
+                if isinstance(expected_checksum, str) and expected_checksum:
+                    if _hash_file(real_path) != expected_checksum:
+                        problems.append(
+                            {"code": "source_checksum_mismatch", "detail": bundle_path}
+                        )
+        except (OSError, ValueError):
+            problems.append({"code": "source_unreadable", "detail": bundle_path})
 
     return BundleCheck(complete=not problems, manifest=manifest, problems=problems)
