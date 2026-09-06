@@ -116,7 +116,7 @@ from quantized.desktop_consent import (
     revoke_paths,
 )
 from quantized.desktop_project_file import parse_workspace_payload
-from quantized.portable.copy_stream import StageProgress
+from quantized.portable.copy_stream import StageProgress, safe_os_error
 from quantized.portable.grouping import Consented, Probe
 from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 from quantized.portable.pack import PackResult, pack_project
@@ -182,8 +182,13 @@ class DesktopPackBridge:
                 dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
-        except Exception as exc:  # noqa: BLE001 - reported to JS, never raised into it
-            return {"path": None, "error": str(exc)}
+        except OSError as exc:
+            # Never `str(exc)`: an OSError from the native picker can carry
+            # `filename` -- an absolute path -- and this module promises every
+            # surfaced error is path-free (re-review finding on PR #308).
+            return {"path": None, "error": safe_os_error(exc)}
+        except Exception:  # noqa: BLE001 - reported to JS, never raised into it
+            return {"path": None, "error": "folder dialog failed"}
         if not chosen:
             return {"path": None}  # cancelled
         first = chosen[0] if isinstance(chosen, (list, tuple)) else chosen
