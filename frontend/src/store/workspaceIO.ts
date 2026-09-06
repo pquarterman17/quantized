@@ -26,7 +26,7 @@
 
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
-import { parentDirectory } from "../lib/importEntry";
+import { baseName, parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
@@ -39,14 +39,6 @@ import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-/** Basename of a native path, tolerant of either separator (the same "either
- *  slash, Windows paths included" handling lib/importEntry.ts's
- *  `parentDirectory` uses for the complementary half of a path). */
-function baseName(path: string): string {
-  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
-  return cut >= 0 ? path.slice(cut + 1) : path;
-}
 
 /** Shared "saved workspace [to PATH] — N dataset(s)" status/toast text —
  *  used by every successful save branch below (native Save As, quick Save,
@@ -157,13 +149,15 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // session from Save-As-ing back onto the very path another LIVE instance
   // holds the write lock for and silently overwriting it.
   //
-  // P1.1: the dialog opens in the current working path (the same hint the
-  // import and Open Project dialogs use) and suggests the open project's
-  // own name when there is one, so Save As of "run3.dwk" does not start
-  // from "workspace.dwk" in an unrelated folder.
+  // P1.1: the dialog opens NEXT TO the open project when there is one (its
+  // own folder, its own name pre-filled — so Enter re-saves in place, never
+  // a same-named fork in whatever folder the last import came from), and
+  // otherwise in the current working path, the same hint the import and
+  // Open Project dialogs use.
+  const project = get().currentProject;
   const destination = await pickSaveDestination(
-    get().currentProject?.name || "workspace.dwk",
-    useWorkingPaths.getState().current || undefined,
+    project?.name || "workspace.dwk",
+    (project ? parentDirectory(project.path) : "") || useWorkingPaths.getState().current || undefined,
   );
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
   if (typeof destination === "object" && destination !== null) {
@@ -259,7 +253,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     // the live workspace and disk agree.
     get().setCurrentProject({ name: baseName(native.path), path: native.path });
     useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
-    const dir = parentDirectory(native.path); // P1.1: the folder picked floats to the top
+    const dir = parentDirectory(native.path); // P1.1: the folder saved into floats to the top
     if (dir) useWorkingPaths.getState().use(dir);
     const msg = savedMsg(all.length, native.path);
     get().setStatus(msg);

@@ -17,6 +17,7 @@ import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
+  recordNativeOpen,
   replaceConfirmMessage,
   replaceWorkspace,
   replaceWorkspaceSafely,
@@ -26,7 +27,6 @@ import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
-import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
@@ -218,7 +218,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // its own push at its own commit point instead.
       run: openWorkspaceCommand(s, "append", (ws, native) => {
         s().appendWorkspace(ws);
-        if (native) useRecentProjects.getState().pushRecentProject(native.name, native.path);
+        recordNativeOpen(native);
       }),
     },
     {

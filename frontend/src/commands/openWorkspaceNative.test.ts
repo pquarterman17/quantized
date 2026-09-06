@@ -126,6 +126,17 @@ describe("open-workspace — native branch", () => {
     expect(useWorkingPaths.getState().current).toBe("/p/sub");
   });
 
+  it("remembers nothing when the replace confirm is declined (DEFECT A rule, applied to the working path)", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    useApp.setState({ datasets: [{ id: "a", name: "a.dat", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }] });
+    setShell({ open_project_file: async () => ({ path: "/other/x.dwk", content: WS }) });
+    run("open-workspace");
+    await settle();
+    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(useWorkingPaths.getState().current).toBe("");
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
   it("remembers nothing when the user cancels", async () => {
     setShell({ open_project_file: async () => ({ path: null }) });
     run("open-workspace");

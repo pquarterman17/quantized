@@ -143,13 +143,24 @@ describe("saveWorkspaceToFile — desktop shell", () => {
 
   // P1.1: "working-directory selection affects the next chooser" — Save As
   // opens where the user works and suggests the open project's own name.
-  it("opens the save dialog at the current working path, suggesting the open project's name", async () => {
+  it("with a project open, opens the save dialog NEXT TO it with its own name — never in the last import folder", async () => {
+    // Self-review: seeding at the import folder with the project's name
+    // pre-filled made a same-named fork one Enter away, and that fork then
+    // became currentProject for every later quick save.
     const dialog = vi.fn(async () => ({ path: "/proj/run3.dwk" }));
     setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/run3.dwk" }) });
     useWorkingPaths.getState().use("/data/runs");
-    useApp.getState().setCurrentProject({ name: "run3.dwk", path: "/elsewhere/run3.dwk" });
+    useApp.getState().setCurrentProject({ name: "run3.dwk", path: "/proj/run3.dwk" });
     await useApp.getState().saveWorkspaceToFile();
-    expect(dialog).toHaveBeenCalledWith("run3.dwk", "/data/runs");
+    expect(dialog).toHaveBeenCalledWith("run3.dwk", "/proj");
+  });
+
+  it("with no project open, opens the save dialog at the current working path", async () => {
+    const dialog = vi.fn(async () => ({ path: "/data/runs/workspace.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/data/runs/workspace.dwk" }) });
+    useWorkingPaths.getState().use("/data/runs");
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "/data/runs");
   });
 
   it("suggests workspace.dwk and no directory when nothing is known yet", async () => {

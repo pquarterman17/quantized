@@ -250,6 +250,17 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
       expect(useToasts.getState().toasts.some((t) => /could not be reopened/.test(t.msg))).toBe(false);
     });
 
+    it("a DIFFERENT file picked in that dialog opens it but keeps the original (present, fine) entry", async () => {
+      vi.mocked(pathState).mockResolvedValue("ok");
+      vi.mocked(readProject).mockResolvedValue(null);
+      vi.mocked(openProject).mockResolvedValue({ path: "/p/b.dwk", content: WS });
+      useRecentProjects.getState().pushRecentProject("a.dwk", "/p/a.dwk");
+      renderHook(() => useRecentProjectsCommands());
+      await act(async () => { action("recent-project-/p/a.dwk").run(); });
+      expect(useApp.getState().currentProject).toEqual({ name: "b.dwk", path: "/p/b.dwk" });
+      expect(useRecentProjects.getState().recentProjects.map((r) => r.path).sort()).toEqual(["/p/a.dwk", "/p/b.dwk"]);
+    });
+
     it("cancelling that dialog is silent", async () => {
       vi.mocked(pathState).mockResolvedValue("ok");
       vi.mocked(readProject).mockResolvedValue(null);

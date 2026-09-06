@@ -61,6 +61,14 @@ export async function chooseAndImport(
   openFilePicker((files) => void store.importFiles(files), accept);
 }
 
+/** Basename of a native path, tolerant of either separator — the
+ *  complementary half of `parentDirectory`; shared by the open, save, and
+ *  reopen flows (was three private copies until the P1.1 self-review). */
+export function baseName(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
+
 /** Directory holding `path`, or "" when it has no separator. Kept here rather
  *  than reaching for a node path module — this runs in the browser. */
 export function parentDirectory(path: string): string {
