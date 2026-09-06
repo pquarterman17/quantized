@@ -6,6 +6,33 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Extend the dataset-handle cache (`routes/_datasetcache.py`) to
+  `/api/plot/series`: a committed zoom/pan on an already server-decimated
+  series used to re-POST the whole dataset on every step. Measured on a
+  1M x 7 dataset: ~11.8s server wall time resending the full payload on a
+  windowed re-fetch vs ~0.3s reusing the handle (~38x). `PlotRequest` now
+  extends `CachedDatasetRequest`; the frontend allowlist
+  (`lib/api/datasetCache.ts`) adds `/api/plot/series`.
+- Perf: vectorize the Debye D_3(u) heat-capacity integral in
+  `calc/fit_models_special.py` (`_debye`, `_debye_einstein`) — replace the
+  per-x-point `scipy.integrate.quad` loop with one fixed-order (N=32)
+  Gauss-Legendre quadrature evaluated across the whole array (closed-form
+  saturation above u=30, series below u=1e-4, same as before). Matches the
+  old per-point quad implementation to ~1.5e-12 max relative error. A
+  10k-point `evaluate()` call drops from 116ms to 17.5ms; `curve_fit(Debye)`
+  at a matched 229 iterations drops from 57.7s to 7.4s (~7.8x); the
+  default-registry AICc `scan_models` at 10k points drops from ~107s to
+  ~88s. Golden parity (`calc_fit_models.json`) unchanged at rtol=1e-9.
+- Frontend: `setCellValue`/`setCategoricalCell` (worksheet single-cell edits)
+  now recompute formula columns incrementally — only the edited row — via a
+  new `lib/formulaIncremental.ts`, instead of an unconditional full
+  `recompute` over every row for every formula (~4.2s -> ~18ms per edit on a
+  1M-row, 2-formula dataset). Falls back to the full recompute whenever a
+  formula isn't provably row-local (an aggregate, `lag()`/`diff()`, a
+  recode, or one already carrying an error) so correctness never depends on
+  the fast path. Both cell-write actions also now patch the edited row via
+  the same outer-array `.slice()` pattern `setCellBlock` uses, rather than
+  a full-array `.map`.
 - Fix a large `/api/parsers/upload`/`/api/import/template/upload` (Origin
   template) CSV/file import blocking every other request (job-queue
   polling, `GET /api/health`, other windows' plot fetches) for the whole
@@ -60,6 +87,23 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   their per-file `client = TestClient(app)` boilerplate.
 - This item (9) — the gate/version-bump tooling, the `tools/` lint pass,
   the shared test fixtures, and this changelog — passes its own gate.
+- Speed audit (final): defer `openpyxl` (`io/registry.py`'s `.xlsx`
+  dispatch) and `periodictable` (`calc/sld_formula.py`) to inside the
+  functions that actually use them instead of importing them eagerly at
+  `create_app()` time, matching the existing matplotlib deferral. Measured:
+  `openpyxl` costs ~0.2 s cold, `periodictable` ~0.03 s — the latter is
+  deferred to keep an optional feature's dependency out of startup, not for
+  its own speed. (`scipy.integrate`/`scipy.stats` deferrals considered for
+  `calc/processing.py`, `calc/boxcut.py`, and `calc/fit_models_special.py`
+  were reverted: `scipy.stats` is already imported eagerly by the
+  statistics calc modules reachable from `create_app()`, so those three
+  would have added a per-call import statement — one inside a hot
+  per-point loop — for zero startup benefit.) Frontend: `PanelOverlayWindow`
+  no longer rebuilds a full dropped-row set for every dataset on every
+  render before its `useMemo` gate — the gate itself was also being
+  defeated by a fresh `datasets` array reference every render; it now keys
+  off a cheap, identity-only signature via a new
+  `lib/rowstate.rowStateIdentity`.
 
 ## [0.24.0] - 2026-09-01
 

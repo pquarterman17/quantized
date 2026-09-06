@@ -68,7 +68,8 @@ def analyze(req: AnalyzeRequest, response: Response) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        response.headers["X-Dataset-Handle"] = handle
     return to_jsonable(result)  # type: ignore[no-any-return]
 
 
@@ -92,7 +93,8 @@ def linecut(req: LineCutRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -115,7 +117,8 @@ def cut_segment_route(req: CutSegmentRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -135,7 +138,8 @@ def projection_route(req: ProjectionRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -223,7 +227,8 @@ def sector(req: SectorRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -252,7 +257,8 @@ def chi_profile_route(req: ChiProfileRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -292,7 +298,8 @@ def box(req: BoxCutRequest) -> Response:
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     resp = DataStructResponse(datastruct_payload(out))
-    resp.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        resp.headers["X-Dataset-Handle"] = handle
     return resp
 
 
@@ -325,5 +332,6 @@ def box_stats_route(req: BoxStatsRequest, response: Response) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
+    if handle is not None:
+        response.headers["X-Dataset-Handle"] = handle
     return to_jsonable(result)  # type: ignore[no-any-return]
