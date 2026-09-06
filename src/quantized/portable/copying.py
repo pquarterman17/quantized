@@ -6,9 +6,13 @@ one function that actually touches a source file's bytes, and it earns
 its own module. See ``staging.py``'s module docstring for the whole
 staging pipeline's contract (failure model, cancellation, the
 ``originals_modified`` guarantee); this module has no policy of its own
-beyond what one file's verified copy requires.
+beyond what one file's verified copy requires. The shared result/error
+types and the actual chunked read-hash-write loop live one layer further
+down, in :mod:`quantized.portable.copy_stream` (split out for the same
+500-line reason) and are re-exported here as part of this module's public
+surface.
 
-## The nine-step verified copy (mirrors ``staging.py``'s per-file ruling)
+## The ten-step verified copy (mirrors ``staging.py``'s per-file ruling)
 
 1. Re-probe the original path RIGHT NOW (never trust the manifest's
    snapshot) -- anything but ``state == "ok"`` is ``read_failed``.
@@ -19,9 +23,10 @@ beyond what one file's verified copy requires.
 3. Compute the destination path and confirm its parent directory resolves
    (symlink-aware, via ``os.path.realpath`` + ``os.path.commonpath``)
    inside the staging root -- otherwise ``escape_rejected``.
-4. Open the destination with ``O_CREAT | O_EXCL | O_NOFOLLOW`` -- it must
-   not already exist and must not be a symlink -- otherwise
-   ``destination_exists``.
+4. Reject a destination that is already a symlink (portably, before ever
+   calling ``os.open`` -- see the inline comment at that check), then open
+   the destination with ``O_CREAT | O_EXCL | O_NOFOLLOW`` -- it must not
+   already exist -- otherwise ``destination_exists``.
 5. Open the source strictly ``"rb"``, fstat it, and confirm that size
    matches the fresh probe -- otherwise ``changed_during_copy``.
 6. Stream ``chunk_bytes`` at a time, hashing and writing each chunk,
@@ -31,11 +36,24 @@ beyond what one file's verified copy requires.
 7. fsync + close the destination, then re-stat the SOURCE -- any
    size/mtime drift since step 5's fstat is ``changed_during_copy`` (the
    file was edited while being copied).
-8. If the fresh probe carried a checksum, it must equal the hash computed
-   while streaming -- otherwise ``checksum_mismatch``.
-9. Re-read the WRITTEN file from disk and hash it a second time -- it must
-   equal the same computed hash, catching a short write that fsync alone
-   would not -- otherwise ``write_failed``.
+8. The MANIFEST's recorded checksum (``row["checksum"]``, taken at dry-run
+   preview time), when it is a non-empty string, must equal the hash
+   computed while streaming -- otherwise ``changed_since_preview``. This is
+   the check that catches a same-length, same-mtime rewrite that a
+   ``compute_checksum=False`` probe's size/mtime-only re-probe (step 2)
+   cannot see: without it, a rewritten file whose mtime was restored to its
+   original value would sail through as an unmodified source.
+9. The FRESH PROBE's own checksum (when the probe computed one), a
+   completely separate signal from step 8, must also equal the hash
+   computed while streaming -- otherwise ``checksum_mismatch``. Because
+   step 8 already gives ``stage_sources`` a full content check against the
+   manifest, callers SHOULD pass a probe with ``compute_checksum=False`` to
+   ``stage_sources`` (see its docstring) -- this step then simply never
+   fires (no probed checksum to compare), and every source is read once
+   during streaming instead of twice.
+10. Re-read the WRITTEN file from disk and hash it a second time -- it must
+    equal the same computed hash, catching a short write that fsync alone
+    would not -- otherwise ``write_failed``.
 
 Any failure at any step removes the partial destination file (the whole
 staging directory is then torn down by the caller in ``staging.py`` --
@@ -48,10 +66,22 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any, Literal
 
+from .copy_stream import (
+    ErrorCode,
+    Probe,
+    ProgressCallback,
+    ShouldCancel,
+    StagedFile,
+    StageError,
+    StageProgress,
+    coerce_size,
+    copy_stream,
+    remove_partial,
+    safe_os_error,
+)
 from .layout import join_bundle_path
 
 __all__ = [
@@ -62,138 +92,9 @@ __all__ = [
     "StageProgress",
     "StagedFile",
     "StageError",
+    "coerce_size",
     "stage_one_file",
 ]
-
-Probe = Callable[[str], Mapping[str, Any]]
-
-ErrorCode = Literal[
-    "changed_since_preview",
-    "changed_during_copy",
-    "read_failed",
-    "write_failed",
-    "checksum_mismatch",
-    "destination_exists",
-    "escape_rejected",
-    "invalid_manifest",
-    "cancelled",
-]
-
-
-@dataclass(slots=True)
-class StageProgress:
-    """One progress tick, emitted at most once per chunk (``phase=
-    "copying"``) plus once per file when its post-copy verification starts
-    (``phase="verifying"``). ``file_index`` is 1-based."""
-
-    phase: Literal["copying", "verifying"]
-    source_id: str
-    bundle_path: str
-    file_index: int
-    file_count: int
-    file_bytes_done: int
-    file_bytes_total: int
-    bytes_done: int
-    bytes_total: int
-
-
-ProgressCallback = Callable[[StageProgress], None]
-ShouldCancel = Callable[[], bool]
-
-
-@dataclass(slots=True)
-class StagedFile:
-    """One successfully copied-and-verified source. ``checksum`` is the
-    ``"sha256:<hex>"`` of the bytes actually written (and re-read back),
-    not merely the bytes read from the source -- computed once during the
-    copy and confirmed again by the write-verification re-read."""
-
-    source_id: str
-    bundle_path: str
-    bytes: int
-    checksum: str
-    original_path: str
-
-
-@dataclass(slots=True)
-class StageError:
-    """One failure. ``message`` never includes an absolute path (original
-    or staging) -- ``source_id``/``bundle_path`` are what identify which
-    row failed; a message names states/reasons only."""
-
-    source_id: str | None
-    bundle_path: str | None
-    code: ErrorCode
-    message: str
-
-
-def _remove_partial(path: str) -> None:
-    try:
-        os.remove(path)
-    except OSError:
-        pass
-
-
-def _write_all(fd: int, data: bytes) -> None:
-    """``os.write`` is not guaranteed to write the whole buffer in one
-    call -- loop until every byte is accepted, or raise."""
-    view = memoryview(data)
-    total = 0
-    while total < len(view):
-        n = os.write(fd, view[total:])
-        if n <= 0:
-            raise OSError("short write: os.write accepted 0 bytes")
-        total += n
-
-
-def _copy_stream(
-    fd: int,
-    src: Any,
-    *,
-    chunk_bytes: int,
-    should_cancel: ShouldCancel | None,
-    source_id: str,
-    bundle_path: str,
-    emit: Callable[[int], None],
-) -> tuple[int, str] | StageError:
-    """Stream ``src`` into the already-open destination fd ``fd``,
-    hashing as it goes. Always closes ``fd`` before returning (success or
-    failure) -- the destination file is never left open by this helper.
-    """
-    digest = hashlib.sha256()
-    bytes_copied = 0
-    while True:
-        if should_cancel is not None and should_cancel():
-            os.close(fd)
-            return StageError(
-                source_id, bundle_path, "cancelled", "staging cancelled mid-copy"
-            )
-        try:
-            chunk = src.read(chunk_bytes)
-        except OSError as exc:
-            os.close(fd)
-            return StageError(
-                source_id, bundle_path, "read_failed", f"source read failed: {exc}"
-            )
-        if not chunk:
-            break
-        try:
-            _write_all(fd, chunk)
-        except OSError as exc:
-            os.close(fd)
-            return StageError(
-                source_id, bundle_path, "write_failed", f"destination write failed: {exc}"
-            )
-        digest.update(chunk)
-        bytes_copied += len(chunk)
-        emit(bytes_copied)
-    try:
-        os.fsync(fd)
-    except OSError as exc:
-        os.close(fd)
-        return StageError(source_id, bundle_path, "write_failed", f"fsync failed: {exc}")
-    os.close(fd)
-    return bytes_copied, digest.hexdigest()
 
 
 def stage_one_file(
@@ -210,13 +111,19 @@ def stage_one_file(
     bytes_done_before: int,
 ) -> tuple[StagedFile, int] | StageError:
     """Copy and verify one manifest row. See the module docstring's
-    nine-step pipeline. Returns ``(StagedFile, new_bytes_done)`` on
-    success, a :class:`StageError` otherwise. Never raises."""
+    ten-step pipeline. Returns ``(StagedFile, new_bytes_done)`` on success,
+    a :class:`StageError` otherwise for every failure mode that pipeline
+    enumerates. Not exception-free, though: ``row`` is trusted to carry
+    ``source_id``/``bundle_path``/``original_path`` (a missing key raises
+    ``KeyError``), and ``os.makedirs`` on step 3's destination parent can
+    raise (e.g. a regular file already occupying that path) -- callers
+    (:func:`quantized.portable.staging.stage_sources`) are the ones that
+    catch and translate those into a structured failure plus a cleaned-up
+    staging directory (review finding #2)."""
     source_id = row["source_id"]
     bundle_path = row["bundle_path"]
     original_path = row["original_path"]
-    row_size = row.get("size")
-    file_bytes_total = int(row_size) if isinstance(row_size, (int, float)) else 0
+    file_bytes_total = coerce_size(row.get("size"))
 
     def emit(phase: Literal["copying", "verifying"], file_bytes_done: int) -> None:
         if progress is None:
@@ -284,6 +191,17 @@ def stage_one_file(
     os.makedirs(parent, exist_ok=True)
 
     # 4. create the destination, refusing to overwrite or follow a symlink.
+    # `os.path.islink` is checked FIRST, portably (review finding #4):
+    # `O_NOFOLLOW` (below) does not stop `O_CREAT | O_EXCL` from following a
+    # DANGLING symlink on Windows, where it would silently create the file
+    # at the link's target instead of refusing -- `islink` catches a
+    # dangling or live symlink at `dest` on every platform, before `os.open`
+    # ever runs. `O_NOFOLLOW` is kept too, where available, as defense in
+    # depth against a symlink planted in the TOCTOU window between the two.
+    if os.path.islink(dest):
+        return StageError(
+            source_id, bundle_path, "destination_exists", "destination already exists in staging"
+        )
     open_flags = (
         os.O_WRONLY
         | os.O_CREAT
@@ -306,7 +224,10 @@ def stage_one_file(
                 "destination already exists in staging",
             )
         return StageError(
-            source_id, bundle_path, "write_failed", f"could not create destination: {exc}"
+            source_id,
+            bundle_path,
+            "write_failed",
+            f"could not create destination: {safe_os_error(exc)}",
         )
 
     # 5. open the source read-only and confirm its size against the probe.
@@ -314,21 +235,26 @@ def stage_one_file(
         src = open(original_path, "rb")
     except OSError as exc:
         os.close(fd)
-        _remove_partial(dest)
-        return StageError(source_id, bundle_path, "read_failed", f"could not open source: {exc}")
+        remove_partial(dest)
+        return StageError(
+            source_id, bundle_path, "read_failed", f"could not open source: {safe_os_error(exc)}"
+        )
 
     with src:
         try:
             pre_stat = os.fstat(src.fileno())
         except OSError as exc:
             os.close(fd)
-            _remove_partial(dest)
+            remove_partial(dest)
             return StageError(
-                source_id, bundle_path, "read_failed", f"could not stat source: {exc}"
+                source_id,
+                bundle_path,
+                "read_failed",
+                f"could not stat source: {safe_os_error(exc)}",
             )
         if probed_size is not None and pre_stat.st_size != probed_size:
             os.close(fd)
-            _remove_partial(dest)
+            remove_partial(dest)
             return StageError(
                 source_id,
                 bundle_path,
@@ -337,7 +263,7 @@ def stage_one_file(
             )
 
         # 6. stream + hash.
-        outcome = _copy_stream(
+        outcome = copy_stream(
             fd,
             src,
             chunk_bytes=chunk_bytes,
@@ -347,11 +273,11 @@ def stage_one_file(
             emit=lambda done: emit("copying", done),
         )
         if isinstance(outcome, StageError):
-            _remove_partial(dest)
+            remove_partial(dest)
             return outcome
         bytes_copied, digest_hex = outcome
         if bytes_copied != pre_stat.st_size:
-            _remove_partial(dest)
+            remove_partial(dest)
             return StageError(
                 source_id,
                 bundle_path,
@@ -363,12 +289,15 @@ def stage_one_file(
         try:
             post_stat = os.stat(original_path)
         except OSError as exc:
-            _remove_partial(dest)
+            remove_partial(dest)
             return StageError(
-                source_id, bundle_path, "read_failed", f"could not re-stat source: {exc}"
+                source_id,
+                bundle_path,
+                "read_failed",
+                f"could not re-stat source: {safe_os_error(exc)}",
             )
         if post_stat.st_size != pre_stat.st_size or post_stat.st_mtime != pre_stat.st_mtime:
-            _remove_partial(dest)
+            remove_partial(dest)
             return StageError(
                 source_id,
                 bundle_path,
@@ -378,10 +307,37 @@ def stage_one_file(
 
     emit("verifying", bytes_copied)
 
-    # 8. checksum agreement with the fresh probe (when it has one).
     computed_checksum = f"sha256:{digest_hex}"
+
+    # 8. checksum agreement with the MANIFEST's recorded provenance (review
+    # finding #1). This is the check that actually verifies content against
+    # what the dry-run preview recorded -- step 2 above only compared the
+    # FRESH PROBE's checksum (which a `compute_checksum=False` probe never
+    # even supplies) against the manifest's, so without this a same-length
+    # rewrite with its mtime restored would sail through undetected all the
+    # way to a "successfully staged" result.
+    manifest_checksum = row.get("checksum")
+    if (
+        isinstance(manifest_checksum, str)
+        and manifest_checksum
+        and manifest_checksum != computed_checksum
+    ):
+        remove_partial(dest)
+        return StageError(
+            source_id,
+            bundle_path,
+            "changed_since_preview",
+            "source checksum differs from the manifest's recorded checksum",
+        )
+
+    # 9. checksum agreement with the fresh probe (when it has one) -- a
+    # SEPARATE signal from step 8's manifest checksum. See the module
+    # docstring: passing a `compute_checksum=False` probe to `stage_sources`
+    # skips this check entirely (there is no probed checksum to compare),
+    # relying on step 8 alone for content verification and reading every
+    # source only once.
     if probed_checksum and probed_checksum != computed_checksum:
-        _remove_partial(dest)
+        remove_partial(dest)
         return StageError(
             source_id,
             bundle_path,
@@ -389,7 +345,7 @@ def stage_one_file(
             "computed checksum does not match the probed checksum",
         )
 
-    # 9. re-read the WRITTEN file and hash it again.
+    # 10. re-read the WRITTEN file and hash it again.
     try:
         rehash = hashlib.sha256()
         with open(dest, "rb") as verify_f:
@@ -399,12 +355,15 @@ def stage_one_file(
                     break
                 rehash.update(chunk)
     except OSError as exc:
-        _remove_partial(dest)
+        remove_partial(dest)
         return StageError(
-            source_id, bundle_path, "write_failed", f"could not re-read staged file: {exc}"
+            source_id,
+            bundle_path,
+            "write_failed",
+            f"could not re-read staged file: {safe_os_error(exc)}",
         )
     if rehash.hexdigest() != digest_hex:
-        _remove_partial(dest)
+        remove_partial(dest)
         return StageError(
             source_id, bundle_path, "write_failed", "staged file failed its verification re-read"
         )

@@ -69,6 +69,26 @@ def test_create_staging_dir_rejects_missing_parent(tmp_path: Path) -> None:
         create_staging_dir(str(tmp_path / "does-not-exist"))
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission bits only")
+def test_create_staging_dir_is_not_owner_only_under_a_permissive_umask(tmp_path: Path) -> None:
+    """``tempfile.mkdtemp`` always creates its directory ``0o700`` regardless
+    of the process umask -- PR 3 renames this directory into its FINAL
+    bundle location, which would otherwise silently inherit an owner-only
+    mode no matter how permissive the user's own umask is (review finding
+    #6)."""
+    parent = tmp_path / "bundle_parent"
+    parent.mkdir()
+    old_umask = os.umask(0o022)
+    try:
+        staging_root = create_staging_dir(str(parent))
+    finally:
+        os.umask(old_umask)
+
+    mode = os.stat(staging_root).st_mode & 0o777
+    assert mode != 0o700
+    assert mode == 0o755  # 0o777 & ~0o022
+
+
 def test_cleanup_refuses_dir_without_prefix(tmp_path: Path) -> None:
     d = tmp_path / "not-a-staging-dir"
     d.mkdir()
@@ -118,6 +138,13 @@ def test_happy_path_stages_three_files_with_verified_checksums(tmp_path: Path) -
     staging_root = _new_staging_root(tmp_path)
 
     events: list[StageProgress] = []
+    # Deliberately the checksum-computing probe here (review finding #8):
+    # `stage_sources` docs say callers SHOULD prefer `compute_checksum=False`
+    # (the manifest's recorded checksum plus the streamed hash is already a
+    # full content check -- see `test_default_...` tests below that use
+    # `_probe_no_checksum`), but this is the one test kept on the full
+    # checksum-computing probe end to end, proving the independent fresh-
+    # probe-vs-streamed comparison still agrees on the happy path.
     result = stage_sources(manifest, staging_root, probe=_probe, progress=events.append)
 
     assert result.ok is True
@@ -142,6 +169,36 @@ def test_happy_path_stages_three_files_with_verified_checksums(tmp_path: Path) -
 
     assert any(e.phase == "verifying" for e in events)
     assert result.bytes_copied == sum(len(d) for d in contents.values())
+
+
+# ── partial-failure reporting ────────────────────────────────────────────
+
+
+def test_failure_after_partial_progress_reports_nothing_staged(tmp_path: Path) -> None:
+    """A failure after N files were already staged must report `staged=[]`
+    and `bytes_copied=0` -- every already-staged file is deleted along with
+    the rest of the staging directory by the same failure, so a caller
+    reading these fields on a failed result must see what SURVIVES on disk
+    (nothing), not the pre-rollback counts (review finding #5)."""
+    paths = [tmp_path / f"f{i}.csv" for i in range(3)]
+    for p in paths:
+        p.write_bytes(b"x" * 1000)
+    manifest = manifest_for([str(p) for p in paths])
+    staging_root = _new_staging_root(tmp_path)
+
+    # The third source vanishes before staging begins -- its own re-probe
+    # reports "missing", failing only that one file after the first two
+    # have already been copied and verified.
+    paths[2].unlink()
+
+    result = stage_sources(manifest, staging_root, probe=_probe)
+
+    assert result.ok is False
+    assert result.errors[0].code == "read_failed"
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.cleanup_ok is True
+    assert not os.path.exists(staging_root)
 
 
 # ── large-file streaming ─────────────────────────────────────────────────
@@ -217,10 +274,16 @@ def test_mid_copy_cancel_leaves_no_partial_file(tmp_path: Path) -> None:
     def should_cancel() -> bool:
         return len(events) >= cancel_after
 
+    # `_probe_no_checksum` -- a cancelled copy never reaches the checksum
+    # steps, and this is the re-probe passed to `stage_sources`, not the
+    # (still checksum-computing) probe `manifest_for` used to build the
+    # manifest above (review finding #8: `stage_sources` docs recommend
+    # `compute_checksum=False` since the manifest checksum already verifies
+    # content).
     result = stage_sources(
         manifest,
         staging_root,
-        probe=_probe,
+        probe=_probe_no_checksum,
         progress=events.append,
         should_cancel=should_cancel,
         chunk_bytes=64 * 1024,
@@ -253,7 +316,7 @@ def test_shared_source_produces_exactly_one_staged_file(tmp_path: Path) -> None:
     assert manifest["summary"]["sources"] == 1
     staging_root = _new_staging_root(tmp_path)
 
-    result = stage_sources(manifest, staging_root, probe=_probe)
+    result = stage_sources(manifest, staging_root, probe=_probe_no_checksum)
     assert result.ok is True
     assert len(result.staged) == 1
 
@@ -288,7 +351,7 @@ def test_source_is_only_ever_opened_read_only(
     monkeypatch.setattr(builtins, "open", spy_open)
     monkeypatch.setattr(os, "open", spy_os_open)
 
-    result = stage_sources(manifest, staging_root, probe=_probe)
+    result = stage_sources(manifest, staging_root, probe=_probe_no_checksum)
 
     assert result.ok is True
     assert modes_for_source and all(m == "rb" for m in modes_for_source)

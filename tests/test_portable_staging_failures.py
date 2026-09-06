@@ -16,11 +16,15 @@ import pytest
 from quantized.desktop_source_probe import probe_source_path
 from quantized.portable.copying import StageError, stage_one_file
 from quantized.portable.manifest import build_dry_run_manifest
-from quantized.portable.staging import create_staging_dir, stage_sources
+from quantized.portable.staging import StageResult, create_staging_dir, stage_sources
 
 
 def _probe(path: str) -> dict[str, Any]:
     return dict(probe_source_path(path, compute_checksum=True))
+
+
+def _probe_no_checksum(path: str) -> dict[str, Any]:
+    return dict(probe_source_path(path, compute_checksum=False))
 
 
 def manifest_for(paths: list[str], project_name: str = "proj") -> dict[str, Any]:
@@ -63,6 +67,40 @@ def test_changed_since_preview_detected(tmp_path: Path) -> None:
     assert not os.path.exists(staging_root)
 
 
+def test_same_length_rewrite_with_restored_mtime_caught_by_manifest_checksum(
+    tmp_path: Path,
+) -> None:
+    """A same-length rewrite with its mtime restored defeats size/mtime
+    comparisons entirely -- only comparing the MANIFEST's own recorded
+    checksum (populated here by a checksum-computing probe at manifest-build
+    time) against the hash actually computed while streaming catches it
+    (review finding #1). Staging itself uses a `compute_checksum=False`
+    probe -- the probe's own checksum plays no part in this detection, so a
+    probe run without one must still catch the change."""
+    src = tmp_path / "f.csv"
+    original = b"a" * 1000
+    src.write_bytes(original)
+    manifest = manifest_for([str(src)])
+    mtime_before = src.stat().st_mtime
+
+    rewritten = b"b" * 1000  # same length, different bytes
+    src.write_bytes(rewritten)
+    os.utime(src, (mtime_before, mtime_before))
+    assert src.stat().st_mtime == mtime_before
+    assert src.stat().st_size == len(original)
+
+    staging_root = _new_staging_root(tmp_path)
+    result = stage_sources(manifest, staging_root, probe=_probe_no_checksum)
+
+    assert result.ok is False
+    assert result.errors[0].code == "changed_since_preview"
+    _no_tmp_path_leak(result.errors[0].message, tmp_path)
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.cleanup_ok is True
+    assert not os.path.exists(staging_root)
+
+
 # ── read failure after preview ───────────────────────────────────────────
 
 
@@ -84,6 +122,41 @@ def test_read_failure_after_preview(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.errors[0].code == "read_failed"
     _no_tmp_path_leak(result.errors[0].message, tmp_path)
+    assert result.cleanup_ok is True
+
+
+def test_os_error_message_never_embeds_the_source_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``str(OSError)`` on an error raised by a path-taking call (``open``,
+    ``os.stat``, ...) embeds ``exc.filename`` -- an absolute path -- so a
+    ``StageError`` message built by interpolating the exception directly
+    leaks it. This monkeypatches ``open`` to raise exactly such an OSError
+    (platform-independent, unlike the permission-bits test above) and
+    checks the resulting message names only the OS error text, never the
+    path (review finding #3)."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data")
+    manifest = manifest_for([str(src)])
+    staging_root = _new_staging_root(tmp_path)
+
+    real_open = open
+
+    def fake_open(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if str(file) == str(src) and "rb" in mode:
+            raise OSError(errno.EACCES, "Permission denied", str(file))
+        return real_open(file, mode, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.open", fake_open)
+
+    result = stage_sources(manifest, staging_root, probe=_probe_no_checksum)
+
+    assert result.ok is False
+    assert result.errors[0].code == "read_failed"
+    message = result.errors[0].message
+    assert str(tmp_path) not in message
+    assert str(src) not in message
+    assert "Permission denied" in message
     assert result.cleanup_ok is True
 
 
@@ -149,11 +222,23 @@ def test_checksum_mismatch_from_fake_probe(tmp_path: Path) -> None:
     stale_mtime = row["mtime"]
 
     # Same length, different bytes -- so size/mtime cross-checks all agree
-    # and only step 8's independent "computed vs probed checksum" catches
-    # the fact that the probe's checksum doesn't match what actually gets
-    # streamed.
-    src.write_bytes(b"HELLO WORLD")
+    # and only an independent "computed vs probed checksum" comparison
+    # catches the fact that the probe's checksum doesn't match what
+    # actually gets streamed.
+    new_content = b"HELLO WORLD"
+    src.write_bytes(new_content)
     os.utime(src, (stale_mtime, stale_mtime))
+
+    # The MANIFEST's own recorded checksum is cleared here, deliberately
+    # isolating the fresh-probe-vs-streamed comparison (this test's actual
+    # target) from the separate manifest-checksum-vs-streamed comparison
+    # (`changed_since_preview`, covered by
+    # `test_manifest_checksum_mismatch_detected_even_without_probe_checksum`
+    # below): with a recorded checksum present, the pre-copy provenance
+    # check just above (recorded vs the fresh probe's checksum) would
+    # already reject a probe/manifest disagreement before a single byte is
+    # streamed, before this test's target check ever runs.
+    row["checksum"] = None
 
     def fake_probe(_path: str) -> dict[str, Any]:
         return {"state": "ok", "size": stale_size, "mtime": stale_mtime, "checksum": stale_checksum}
@@ -296,6 +381,47 @@ def test_symlink_at_destination_path_rejected(tmp_path: Path) -> None:
     assert outside_file.read_bytes() == b"outside-data"
 
 
+def test_dangling_symlink_at_destination_rejected_without_following_it(tmp_path: Path) -> None:
+    """A DANGLING symlink at the destination path must be rejected the same
+    way a live one is -- portably. ``O_CREAT | O_EXCL`` alone does not
+    guarantee that on every platform (on Windows it follows a dangling
+    symlink and creates the file at the link's target instead of refusing),
+    so `stage_one_file` checks `os.path.islink` up front rather than relying
+    on `O_NOFOLLOW` alone (review finding #4)."""
+    if not hasattr(os, "symlink"):
+        pytest.skip("platform has no symlink support")
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"content")
+    manifest = manifest_for([str(src)])
+    row = manifest["sources"][0]
+    staging_root = _new_staging_root(tmp_path)
+    dest = Path(staging_root) / row["bundle_path"]
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    link_target = tmp_path / "does-not-exist-target.csv"
+    try:
+        os.symlink(link_target, dest)
+    except OSError:
+        pytest.skip("symlink creation not permitted in this environment")
+    assert not link_target.exists()
+
+    outcome = stage_one_file(
+        row,
+        staging_root,
+        probe=_probe,
+        progress=None,
+        should_cancel=None,
+        chunk_bytes=65536,
+        file_index=1,
+        file_count=1,
+        bytes_total=int(row["size"]),
+        bytes_done_before=0,
+    )
+
+    assert isinstance(outcome, StageError)
+    assert outcome.code == "destination_exists"
+    assert not link_target.exists()  # nothing was ever created at the target
+
+
 # ── invalid manifest ───────────────────────────────────────────────────────
 
 
@@ -322,6 +448,28 @@ def test_unsupported_manifest_version_creates_nothing(
     assert result.errors[0].code == "invalid_manifest"
     _no_tmp_path_leak(result.errors[0].message, tmp_path)
     assert makedirs_calls == []
+    assert result.cleanup_ok is True
+    assert not os.path.exists(staging_root)
+
+
+def test_non_numeric_size_does_not_raise_computing_bytes_total(tmp_path: Path) -> None:
+    """A malformed/hand-edited manifest row with a non-numeric ``size``
+    (e.g. ``"n/a"``) must not crash ``stage_sources`` while summing
+    ``bytes_total`` -- ``int(row.get("size") or 0)`` raises ``ValueError`` on
+    a string that isn't a valid integer literal, and that would happen
+    BEFORE the per-file loop even starts, leaking the staging directory with
+    no cleanup at all. The shared `coerce_size` helper (also used by
+    `copying.stage_one_file`) treats it as `0` instead (review finding #7)."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data")
+    manifest = manifest_for([str(src)])
+    manifest["sources"][0]["size"] = "n/a"
+    staging_root = _new_staging_root(tmp_path)
+
+    result = stage_sources(manifest, staging_root, probe=_probe)  # must not raise
+
+    assert isinstance(result, StageResult)  # no exception escaped
+    assert result.ok is False  # the doctored row now disagrees with the real probe
     assert result.cleanup_ok is True
     assert not os.path.exists(staging_root)
 
@@ -394,6 +542,117 @@ def test_cleanup_after_every_failure_class(
     assert result.ok is False
     assert result.errors[0].code == expected_code
     _no_tmp_path_leak(result.errors[0].message, tmp_path)
+    assert result.cleanup_ok is True
+    assert result.staging_root is None
+    assert not os.path.exists(staging_root)
+
+
+# ── exceptions escaping the per-file loop never leak the staging dir ────
+
+
+def test_regular_file_blocking_sources_dir_does_not_leak_staging_dir(tmp_path: Path) -> None:
+    """A regular FILE occupying the ``sources/`` path every packable
+    destination lives under makes ``os.makedirs`` on the destination's
+    parent raise (a plain file, not a directory, blocking the path) from
+    deep inside ``stage_one_file`` -- an exception with no try/except
+    around the per-file loop to catch it before this fix (review finding
+    #2)."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data")
+    manifest = manifest_for([str(src)])
+    staging_root = _new_staging_root(tmp_path)
+    (Path(staging_root) / "sources").write_bytes(b"not a directory")
+
+    result = stage_sources(manifest, staging_root, probe=_probe)  # must not raise
+
+    assert isinstance(result, StageResult)
+    assert result.ok is False
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.errors[0].code in ("write_failed", "invalid_manifest")
+    assert result.cleanup_ok is True
+    assert result.staging_root is None
+    assert not os.path.exists(staging_root)
+
+
+def test_raising_progress_callback_closes_the_destination_fd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows CI regression (#306): the raising callback unwound past the
+    OPEN destination descriptor, and Windows cannot delete an open file, so
+    `cleanup_staging_dir` reported False. POSIX unlinks open files, which
+    hid it locally -- so this pins the fd itself: it must be closed by the
+    time `stage_sources` returns, on every platform."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data" * 500)
+    manifest = manifest_for([str(src)])
+    staging_root = _new_staging_root(tmp_path)
+    opened: list[int] = []
+    real_open = os.open
+
+    def spy_open(path: Any, flags: int, mode: int = 0o777, *a: Any, **kw: Any) -> int:
+        fd = real_open(path, flags, mode, *a, **kw)
+        if flags & os.O_CREAT:
+            opened.append(fd)
+        return fd
+
+    monkeypatch.setattr(os, "open", spy_open)
+
+    def bad_progress(_event: Any) -> None:
+        raise RuntimeError("progress callback exploded")
+
+    result = stage_sources(manifest, staging_root, probe=_probe, progress=bad_progress)
+
+    assert result.ok is False
+    assert opened, "the destination was never opened"
+    for fd in opened:
+        with pytest.raises(OSError):
+            os.fstat(fd)  # EBADF: closed before cleanup ran
+    assert result.cleanup_ok is True
+    assert not os.path.exists(staging_root)
+
+
+def test_raising_progress_callback_does_not_leak_staging_dir(tmp_path: Path) -> None:
+    """A caller-supplied ``progress`` callback that raises must still tear
+    down the staging directory rather than leaking it (review finding #2)."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data" * 500)
+    manifest = manifest_for([str(src)])
+    staging_root = _new_staging_root(tmp_path)
+
+    def bad_progress(_event: Any) -> None:
+        raise RuntimeError("progress callback exploded")
+
+    result = stage_sources(manifest, staging_root, probe=_probe, progress=bad_progress)
+
+    assert isinstance(result, StageResult)
+    assert result.ok is False
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.errors[0].code == "write_failed"
+    assert result.cleanup_ok is True
+    assert result.staging_root is None
+    assert not os.path.exists(staging_root)
+
+
+def test_packable_row_missing_original_path_does_not_leak_staging_dir(tmp_path: Path) -> None:
+    """A malformed packable row missing a required key (``original_path``)
+    raises ``KeyError`` deep inside ``stage_one_file`` -- classified
+    ``invalid_manifest`` (a manifest-shape problem, not an OS-level one) and
+    must still tear down the staging directory (review finding #2)."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data")
+    manifest = manifest_for([str(src)])
+    del manifest["sources"][0]["original_path"]
+    staging_root = _new_staging_root(tmp_path)
+
+    result = stage_sources(manifest, staging_root, probe=_probe)  # must not raise
+
+    assert isinstance(result, StageResult)
+    assert result.ok is False
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.errors[0].code == "invalid_manifest"
     assert result.cleanup_ok is True
     assert result.staging_root is None
     assert not os.path.exists(staging_root)
