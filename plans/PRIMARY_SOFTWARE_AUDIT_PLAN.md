@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06: **P1.1's two uncontracted boxes closed** (working-
+**Updated:** 2026-09-06 (later): **P1.7 slice 2 — collision-safe relinking**
+shipped (the P3 residual booked on slice 1); the Pack Project stack
+continues with the portable-bundle packer. Earlier the same day: **P1.1's
+two uncontracted boxes closed** (working-
 directory hint for Open Project / Save As; project reopen with per-state
 remedies incl. `permission_denied` and the lapsed-consent dialog degrade) —
 only the owner-gated long-path and packaged-E2E boxes remain. Prior:
@@ -1340,6 +1343,18 @@ alongside the original rather than refreshing it in place.
 - [x] Changed source warns and can import as a new version.
 - [x] Cross-platform folder-tree relinking passes.
 - [x] Raw originals are never replaced.
+- [x] Collision-safe relinking (**slice 2, 2026-09-06**): Preview flags
+  every row whose candidate names ONE file (`lib/relink.pathKey` — the same
+  tolerant either-separator, case-insensitive identity the root matcher
+  uses) from DIFFERENT recorded old paths (`findCandidateCollisions`; byte-
+  identical old paths are a shared source, not a collision). Contested rows
+  are excluded from `commit()` until the user picks exactly ONE keeper per
+  file (`resolveCollision`; the rest are marked skip and stay as recorded —
+  never a default winner), and a write-side guard in `commit()` fails the
+  whole group closed even if the per-row flags were edited underneath it.
+  The panel labels contested/kept/skipped rows distinctly and offers "Keep
+  this one" per row. Red-first in `store/relink.test.ts` (both rows
+  committed before the slice).
 
 **Explicitly booked, NOT shipped this slice — named home "P1.7 Pack
 Project" (no owner/slice assigned yet):** the full portable-bundle packer
@@ -1353,9 +1368,10 @@ has no dedup when two DIFFERENT old paths case-collide onto the SAME new
 candidate (e.g. two old sources differing only by case, or by a segment
 that normalizes identically under `lib/relink.ts`'s case-insensitive
 matching) — both would relink onto one path with no collision warning.
-Named home: same "P1.7 Pack Project" follow-up (a natural fit alongside
-the packer's own name-collision handling, L0.34's precedent for resolving
-duplicate names on import).
+CLOSED 2026-09-06 by slice 2 (the collision-safe relinking box above),
+the first PR of the "P1.7 Pack Project" stack; the packer's own
+name-collision handling (L0.34's precedent) will reuse `pathKey`/
+`findCandidateCollisions`.
 
 ---
 

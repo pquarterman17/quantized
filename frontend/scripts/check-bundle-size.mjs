@@ -45,6 +45,22 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-06 — pin UNCHANGED at 910,711; one split funds P1.7 slice 2's
+ *  eager growth. Collision-safe relinking (lib/relink.ts's `pathKey`/
+ *  `findCandidateCollisions`, store/relink.ts's `resolveCollision` + the
+ *  commit-time collision guard) measured +1,127 B locally (889.0 -> 890.1 kB
+ *  as a same-environment delta), 0.8 kB over the pin. THE SPLIT (-3.8 kB
+ *  local, 890.1 -> 886.3 kB after): store/relink.ts is eager only for its
+ *  `open` flag and `openPanel`/`closePanel` (store/reimport.ts,
+ *  lib/openWorkspaceReplace.ts, AppOverlays), yet it statically pulled the
+ *  whole relink core — lib/relink.ts, whose ONLY importers were the store
+ *  and the preview builder — into the entry. The `commit()` body now lives
+ *  in store/relinkCommit.ts and the row builder in store/relinkPreview.ts,
+ *  both `import()`ed on the click (the folderOps precedent), which lands
+ *  lib/relink.ts in a lazy chunk with them (relink / relinkPreview /
+ *  relinkCommit chunks: 1.7 + 1.1 + 2.3 kB; 886.4 kB after the self-review pass). The R3 identity snapshot is
+ *  still taken synchronously at the click, before the chunk is awaited.
+ *
  *  2026-09-04 — pin UNCHANGED at 910,711; one split funds P3.7's eager
  *  growth. The trash capture paths (store/trash.ts estimates + dedupe,
  *  removeDatasets' permanent scrub, folderDelete's capture) are store code

@@ -163,6 +163,61 @@ describe("RelinkPanel", () => {
   });
 
   // C1: the required one-sentence explanation the contract quotes verbatim.
+  // P1.7 slice 2: a contested destination renders as such, is excluded from
+  // the Relink count until resolved, and "Keep this one" dispatches the
+  // store's single-keep resolution for exactly that row.
+  it("renders a collision row as contested, excludes it from the Relink count, and 'Keep this one' resolves it", () => {
+    const row = (id: string, name: string, others: string[], otherIds: string[]) => ({
+      datasetId: id,
+      datasetName: name,
+      oldPath: `/old/${name}`,
+      candidatePath: `/new/${name}`,
+      status: "resolved" as const,
+      changeVerdict: "unchanged" as const,
+      candidateChecksum: "sha256:x",
+      candidateMtime: 1,
+      candidateSize: 1,
+      collision: { others, otherIds },
+    });
+    useRelink.setState({ preview: [row("a", "A.csv", ["a.csv"], ["b"]), row("b", "a.csv", ["A.csv"], ["a"])] });
+    render(<RelinkPanel />);
+    expect(screen.getAllByText(/Same destination as .* — choose one/)).toHaveLength(2);
+    expect(screen.getByText(/would relink onto a file another dataset also claims/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Relink\s*$/ })).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Keep this one" })[1]);
+    const after = useRelink.getState().preview;
+    expect(after[1].collision?.resolution).toBe("keep");
+    expect(after[0].collision?.resolution).toBe("skip");
+  });
+
+  it("a kept row that is 'changed' keeps its blocking verdict label and Import button — being chosen never makes it committable", () => {
+    useRelink.setState({
+      preview: [
+        { datasetId: "a", datasetName: "A.csv", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", status: "resolved", changeVerdict: "changed", candidateChecksum: "sha256:2", candidateMtime: 2, candidateSize: 2, collision: { others: ["a.csv"], otherIds: ["b"], resolution: "keep" } },
+        { datasetId: "b", datasetName: "a.csv", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", status: "resolved", changeVerdict: "unchanged", candidateChecksum: null, candidateMtime: null, candidateSize: null, collision: { others: ["A.csv"], otherIds: ["a"], resolution: "skip" } },
+      ],
+    });
+    render(<RelinkPanel />);
+    expect(screen.getByText("Changed — content differs")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import as new version" })).toBeInTheDocument();
+    expect(screen.queryByText(/Keeps this file/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Relink\s*$/ })).toBeDisabled();
+  });
+
+  it("a resolved collision counts only the keeper toward Relink and labels the loser as skipped", () => {
+    useRelink.setState({
+      preview: [
+        { datasetId: "a", datasetName: "A.csv", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", status: "resolved", changeVerdict: "unchanged", candidateChecksum: null, candidateMtime: null, candidateSize: null, collision: { others: ["a.csv"], otherIds: ["b"], resolution: "skip" } },
+        { datasetId: "b", datasetName: "a.csv", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", status: "resolved", changeVerdict: "unchanged", candidateChecksum: null, candidateMtime: null, candidateSize: null, collision: { others: ["A.csv"], otherIds: ["a"], resolution: "keep" } },
+      ],
+    });
+    render(<RelinkPanel />);
+    expect(screen.getByText(/Skipped — another dataset keeps this file/)).toBeInTheDocument();
+    expect(screen.getByText("Verified identical")).toBeInTheDocument(); // the keeper reads as its ordinary verdict
+    expect(screen.getAllByRole("button", { name: /^Relink 1$/ })[0]).toBeEnabled();
+  });
+
   it("shows the old/new-root explanation sentence", () => {
     render(<RelinkPanel />);
     expect(
