@@ -138,7 +138,6 @@ not actually hold — the exact defect described above.
 from __future__ import annotations
 
 import os
-import tempfile
 import time
 import uuid
 from typing import Any
@@ -153,6 +152,7 @@ from quantized.desktop_project_file import (
     parse_workspace_payload,
     payload_declares_source,
 )
+from quantized.portable.publish import atomic_replace_file
 
 __all__ = ["DesktopApi"]
 
@@ -232,7 +232,8 @@ class DesktopApi(DesktopDialogBridge):
         rather than whatever the filesystem's delayed allocation had
         buffered. Not guaranteed: durability of the containing directory's
         own metadata beyond a best-effort directory ``fsync`` (POSIX-only,
-        swallowed on failure — see ``_fsync_directory_best_effort``), which
+        swallowed on failure — see ``quantized.portable.publish``'s
+        ``_fsync_directory_best_effort``), which
         only narrows that window further; it is never load-bearing for the
         prior file's survival, which the temp-file-only failure mode above
         already covers. ``content`` must pass ``parse_workspace_payload``
@@ -283,7 +284,9 @@ class DesktopApi(DesktopDialogBridge):
             return {"ok": False, "error": f"refusing to write — {invalid}"}
         # The cached set above only knows natively OPENED projects; the payload's
         # own sources are refused too (`payload_declares_source`, #291 review).
-        if payload_declares_source(payload, resolved):
+        # `base_dir` (P1.7 PR 3) makes a packed project's `kind: "bundle"`
+        # sources declared too, not just `kind: "path"` ones.
+        if payload_declares_source(payload, resolved, base_dir=os.path.dirname(resolved)):
             return {
                 "ok": False,
                 "error": "refusing to write — that path is a data source of this workspace",
@@ -300,23 +303,15 @@ class DesktopApi(DesktopDialogBridge):
             # temp file. `cleanup_stray_write_temps`'s own age floor is the
             # belt-and-braces protection for the unlocked, no-token legacy
             # path directly below, which has no such serialization at all.
+            #
+            # The actual atomic write sequence (mkstemp/write/fsync/replace/
+            # directory-fsync) is `quantized.portable.publish.
+            # atomic_replace_file` (P1.7 PR 3) — extracted there once the
+            # bundle publisher needed the exact same sequence for its own
+            # project-file and manifest writes, so neither module duplicates
+            # it and this one stays under the 500-line ceiling.
             cleanup_stray_write_temps(directory)
-            tmp_path: str | None
-            fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    f.write(content)
-                    f.flush()
-                    os.fsync(f.fileno())
-                os.replace(tmp_path, granted)
-                tmp_path = None  # replaced — nothing left to clean up
-                _fsync_directory_best_effort(directory)
-            finally:
-                if tmp_path is not None:
-                    try:
-                        os.remove(tmp_path)
-                    except OSError:
-                        pass
+            atomic_replace_file(directory, granted, content, temp_prefix=WRITE_TEMP_PREFIX)
 
         try:
             if lock_token:
@@ -441,28 +436,6 @@ class DesktopApi(DesktopDialogBridge):
         A no-op for a refusal, `UnverifiableLock`, or `Contended`."""
         if ok and isinstance(record, lockmod.LockRecord):
             self._last_known_lock_record[granted] = record
-
-
-def _fsync_directory_best_effort(directory: str) -> None:
-    """After ``os.replace`` lands the new file, best-effort ``fsync`` the
-    CONTAINING directory so the renamed directory entry itself is durable
-    sooner too — POSIX only; there is no directory file descriptor to open
-    on Windows, and NFS/some filesystems reject it regardless. Swallowed on
-    purpose: the file's own ``fsync`` (before the replace, in ``_replace``
-    above) is what makes the *content* durable-ordered — this call only
-    narrows the window in which the rename itself could still be lost to a
-    crash, and a save must never be reported as failed over a step that is
-    inherently unsupported on part of the fleet."""
-    try:
-        fd = os.open(directory, os.O_RDONLY)
-    except (OSError, AttributeError):
-        return
-    try:
-        os.fsync(fd)
-    except (OSError, AttributeError):
-        pass
-    finally:
-        os.close(fd)
 
 
 def _lock_result(record: object, *, outcome_key: str, outcome_value: bool | None) -> dict[str, Any]:

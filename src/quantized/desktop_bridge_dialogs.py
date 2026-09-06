@@ -325,6 +325,13 @@ class DesktopDialogBridge:
         can't retroactively "declare" a dataset list before it's ever
         reopened.
 
+        P1.7 PR 3 ("Pack Project"): `base_dir=os.path.dirname(granted)` is
+        passed through so a packed project's `kind: "bundle"` sources
+        resolve to their bundle copies and become declared sources too —
+        `grant_source_paths`/relink then work on the moved-and-reopened
+        bundle's own files, not the (possibly long-gone) original machine's
+        paths.
+
         C1: the SAME "project change" moment also revokes every relink
         directory grant (`clear_dir_grants`) — a folder grant minted for
         project A's relink session must not silently keep covering project
@@ -341,7 +348,9 @@ class DesktopDialogBridge:
                 content = f.read()
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
-        set_declared_sources(extract_declared_source_paths(content))
+        set_declared_sources(
+            extract_declared_source_paths(content, base_dir=os.path.dirname(granted))
+        )
         clear_dir_grants()
         return {"path": granted, "content": content}
 

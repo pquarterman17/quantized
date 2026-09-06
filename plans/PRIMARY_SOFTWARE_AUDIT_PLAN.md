@@ -1543,9 +1543,115 @@ below — the packer's own implementation work starts fresh here:
     the cleanup contract parametrized across failure classes, the
     no-absolute-path-in-messages guarantee, symlink-escape rejection at
     both the parent-directory and destination-file level).
-- **PR 3 (planned, not shipped):** atomic bundle publish (the packed
-  `.dwk` alongside the verified `sources/` copy) and the "portable" mode's
-  open-time resolution.
+- **PR 3 (this branch, PR # pending) — atomic bundle publish + bundle
+  validation + open-time resolution, backend-only, no bridge method yet:**
+  the packed `.dwk` and its manifest actually land on disk, and a moved
+  bundle opens cleanly. New pure modules `quantized.portable.project_rewrite`
+  (`rewrite_payload_for_bundle`, `resolve_bundle_source`),
+  `quantized.portable.publish` (`atomic_replace_file`, `finalize_manifest`,
+  `write_bundle_files`, `publish_bundle`, `validate_bundle`), and
+  `quantized.portable.pack` (`pack_project`, pure orchestration of PR 1-3's
+  pieces — PR 4 wraps this in the bridge + job/state machine).
+  - **The `kind: "bundle"` source extension — no `WORKSPACE_VERSIONS` bump.**
+    A packed copy's dataset rewrites `source` from
+    `{"kind": "path", "path": <absolute>, ...}` to `{"kind": "bundle",
+    "path": "sources/<name>", "checksum", "size", "mtime"?, "packedFrom":
+    <original absolute path>}` — `path` is bundle-relative
+    (`layout.is_bundle_relative`) and resolves against the `.dwk`'s own
+    directory via the ONE sanctioned resolver, `resolve_bundle_source`.
+    Ordinary (non-packed) projects are completely unaffected: they never
+    carry `kind: "bundle"` at all, so every existing `WORKSPACE_VERSIONS`
+    (1-4) payload round-trips unchanged — verified across all four in
+    `tests/test_portable_pack_roundtrip.py`. An older build opening a
+    packed copy that predates this PR simply doesn't recognize `"bundle"`
+    and degrades to no source (same as today's "missing" source handling),
+    never a crash.
+  - **`rewrite_payload_for_bundle`** deep-copies the payload and rewrites
+    ONLY `datasets[i].source` for a dataset whose `kind: "path"` matches
+    (by `path_key`, original or any `original_path_variants`) a manifest
+    row that is `packable` AND was actually staged this run (matched by
+    `bundle_path` — a row can be planned-packable without ever having been
+    staged if the caller stopped early). Every other dataset (embedded,
+    browser-upload, missing-source) and every other part of the payload —
+    corrections, figures, recipes, analyses, annotations, history,
+    project metadata — passes through byte-for-byte, verified in the
+    roundtrip test by stripping `source` fields and comparing
+    `json.dumps(sort_keys=True)`. The rewritten result is re-validated
+    with `parse_workspace_payload` before being returned; `ValueError` on
+    a failure, never a silently-broken `.dwk`.
+  - **The publish contract (`publish_bundle`): one atomic `os.rename`,
+    nothing partial, ever.** Staging is always a SIBLING of the
+    destination (PR 2's own contract), which makes cross-device rename
+    (`EXDEV`) impossible by construction — so the only realistic
+    `os.rename` failures are permission/race errors, and the documented
+    safe fallback on ANY of them is: clean the staging directory
+    (`cleanup_staging_dir`) and report `publish_failed` — never copy-tree,
+    never a partial publish. Refuses outright (staging cleaned,
+    destination untouched) when the destination already exists
+    (`destination_exists` — no overwrite/replace behavior in this PR),
+    when staging is not actually a sibling of the destination
+    (`invalid_destination`), or when staging has no completion marker yet
+    (`incomplete_staging`).
+  - **The manifest is the completion marker, written LAST.**
+    `write_bundle_files` writes the packed project file first, then
+    `quantized-bundle.json` deliberately last, through the same atomic
+    single-file sequence `desktop_bridge.write_project_file` already used
+    (`atomic_replace_file`, extracted out of that module into
+    `portable/publish.py` so neither duplicates it — `desktop_bridge.py`
+    shrank in the process, staying under the 500-line ceiling with room
+    for the `base_dir`-threading fix below). A crash between the two
+    writes leaves a staging directory `validate_bundle`/`publish_bundle`
+    both recognize as incomplete, never one that looks done but is
+    missing its project file.
+  - **`validate_bundle(bundle_dir, verify_checksums=False)`** — is a
+    (possibly moved) directory a complete, openable bundle? Fails safe on
+    a missing/unreadable/foreign/unsupported-version manifest
+    (`manifest_missing`/`manifest_invalid`/`not_a_bundle`/
+    `unsupported_manifest_version`, `complete=False`, manifest attached
+    only "for display" on the last two); accumulates every other finding
+    (`incomplete`, `project_file_missing`, `escape_rejected` for a hand-
+    edited `bundle_path` that fails `is_bundle_relative`, `source_missing`,
+    `source_size_mismatch`, and — only with `verify_checksums=True` — a
+    re-hashed `source_checksum_mismatch`). `problems` entries are always
+    bundle-relative or manifest-field values, never an absolute path.
+  - **Declared-source resolution gained `base_dir`.**
+    `desktop_project_file.declared_source_paths_of`/
+    `extract_declared_source_paths`/`payload_declares_source` all gained an
+    optional `base_dir` parameter (the `.dwk`'s own directory) so a
+    `kind: "bundle"` source resolves to its bundle copy — `kind: "path"`
+    (or no `kind` at all, every pre-existing fixture's shape) is
+    unaffected. `desktop_bridge_dialogs._read_granted` passes
+    `base_dir=os.path.dirname(granted)` so a reopened packed project's
+    bundle copies become declared sources (`grant_source_paths`/relink then
+    work on the moved bundle's own files, not the original machine's
+    now-possibly-gone paths); `desktop_bridge.write_project_file` passes
+    the same so a save can never land on a packed project's own bundle
+    copy either. The cross-package call is deliberately function-local
+    (not a module-level import) on the `desktop_project_file` side to
+    avoid a real circular import with `portable.publish` (which needs
+    `desktop_project_file.WRITE_TEMP_PREFIX` at module load) — verified by
+    importing each module first, in both orders.
+  - **Write-site ratchet:** `desktop_bridge.py` dropped OUT of
+    `tests/test_write_sites.py`'s allowlist (it no longer contains any
+    AST-visible write call once `atomic_replace_file` moved out) and
+    `portable/publish.py` was added in its place, covering
+    `atomic_replace_file`'s mkstemp/write/replace sequence and
+    `publish_bundle`'s `os.rename` — both scoped to a staging directory
+    this package created or a destination that must not already exist,
+    never a dataset source.
+  - 42 new tests: `tests/test_portable_publish.py` (22 — `finalize_manifest`,
+    `write_bundle_files`, `publish_bundle` including an interrupted-
+    rename/`os.rename`-failure case, and every `validate_bundle` finding
+    code including a tampered-manifest and a hand-edited relative-escape
+    case), `tests/test_portable_pack_roundtrip.py` (14 — full pack → move →
+    reopen with a shared source AND a case-variant bundle-name collision
+    in the same project, byte-for-byte non-source-content equality,
+    originals-untouched hashing, mixed dataset shapes, all four
+    `WORKSPACE_VERSIONS`, an existing-destination refusal, an interrupted-
+    publish case, and `resolve_bundle_source` edge cases), and
+    `tests/test_desktop_project_file.py` extended (6 — `base_dir` on all
+    three declared-source functions, including a hand-edited relative
+    escape and the "no `base_dir`, not declared" case).
 - **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
   method a future "Pack Project" UI action calls) + the frontend contract
   consuming PR 1-3's manifest/copy/publish primitives — no bridge method

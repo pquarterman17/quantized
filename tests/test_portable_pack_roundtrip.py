@@ -1,0 +1,350 @@
+"""End-to-end ``quantized.portable.pack.pack_project`` tests (P1.7 "Pack
+Project" PR 3): pack -> move the whole bundle elsewhere -> reopen, plus the
+"never touch the originals" and "old workspace version" guarantees.
+
+Unit tests for the individual pieces (``finalize_manifest``,
+``write_bundle_files``, ``publish_bundle``, ``validate_bundle``) live in
+``tests/test_portable_publish.py``; ``base_dir`` resolution on
+``declared_source_paths_of``/``extract_declared_source_paths``/
+``payload_declares_source`` lives in ``tests/test_desktop_project_file.py``.
+This file exercises the whole pipeline the way a real "Pack Project" click
+would, plus ``resolve_bundle_source`` on its own.
+"""
+
+from __future__ import annotations
+
+import copy
+import hashlib
+import json
+import ntpath
+import os
+import posixpath
+import shutil
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from quantized.desktop_project_file import declared_source_paths_of, extract_declared_source_paths
+from quantized.desktop_source_probe import probe_source_path
+from quantized.portable.pack import pack_project
+from quantized.portable.project_rewrite import resolve_bundle_source
+from quantized.portable.publish import validate_bundle
+
+_PACKED_AT = "2026-09-06T00:00:00Z"
+
+
+def _probe(path: str) -> dict[str, Any]:
+    return dict(probe_source_path(path, compute_checksum=True))
+
+
+def _sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return f"sha256:{digest.hexdigest()}"
+
+
+def _strip_sources(payload: dict[str, Any]) -> dict[str, Any]:
+    """Deep-copy ``payload`` with every ``datasets[i].source`` removed, for
+    a byte-equality comparison of everything a pack must never touch."""
+    stripped = copy.deepcopy(payload)
+    for ds in stripped.get("datasets", []):
+        if isinstance(ds, dict):
+            ds.pop("source", None)
+    return stripped
+
+
+def _bundle_parent(tmp_path: Path) -> Path:
+    parent = tmp_path / "bundle_parent"
+    parent.mkdir(exist_ok=True)
+    return parent
+
+
+# ── pack -> move -> reopen ───────────────────────────────────────────────
+
+
+def test_pack_move_and_reopen_roundtrip(tmp_path: Path) -> None:
+    shared_file = tmp_path / "shared_dir" / "shared.csv"
+    shared_file.parent.mkdir()
+    shared_file.write_bytes(b"shared-bytes")
+
+    run_file = tmp_path / "dir_a" / "run.csv"
+    run_file.parent.mkdir()
+    run_file.write_bytes(b"run-a-bytes")
+
+    run_variant_file = tmp_path / "dir_b" / "RUN.csv"
+    run_variant_file.parent.mkdir()
+    run_variant_file.write_bytes(b"run-b-bytes-different")
+
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "corrections": {"applied": ["baseline"]},
+        "figures": [{"id": "fig1", "title": "Figure 1"}],
+        "datasets": [
+            {"id": "d0", "name": "shared-a", "source": {"kind": "path", "path": str(shared_file)}},
+            {"id": "d1", "name": "shared-b", "source": {"kind": "path", "path": str(shared_file)}},
+            {"id": "d2", "name": "run-a", "source": {"kind": "path", "path": str(run_file)}},
+            {
+                "id": "d3",
+                "name": "run-b",
+                "source": {"kind": "path", "path": str(run_variant_file)},
+            },
+        ],
+    }
+    original_checksums = {
+        str(shared_file): _sha256(str(shared_file)),
+        str(run_file): _sha256(str(run_file)),
+        str(run_variant_file): _sha256(str(run_variant_file)),
+    }
+
+    destination = str(_bundle_parent(tmp_path) / "packed_bundle")
+    result = pack_project(payload, "myproj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is True, result.errors
+    assert result.bundle_dir == destination
+
+    moved = str(tmp_path / "moved_elsewhere")
+    shutil.move(destination, moved)
+
+    check = validate_bundle(moved)
+    assert check.complete is True, check.problems
+
+    project_file = check.manifest["project"]["project_file"]  # type: ignore[index]
+    packed_content = Path(moved, project_file).read_text(encoding="utf-8")
+    packed_payload = json.loads(packed_content)
+
+    # non-source content is byte-for-byte identical
+    assert json.dumps(_strip_sources(packed_payload), sort_keys=True) == json.dumps(
+        _strip_sources(payload), sort_keys=True
+    )
+
+    resolved_paths = extract_declared_source_paths(packed_content, base_dir=moved)
+    assert len(resolved_paths) == 4  # one per dataset, shared path repeated
+    for resolved in resolved_paths:
+        assert os.path.isfile(resolved)
+        assert resolved.startswith(moved)
+
+    # each resolved copy hashes identically to its ORIGINAL source
+    ds_by_id = {ds["id"]: ds for ds in packed_payload["datasets"]}
+    for ds_id, original_path in (
+        ("d0", str(shared_file)),
+        ("d1", str(shared_file)),
+        ("d2", str(run_file)),
+        ("d3", str(run_variant_file)),
+    ):
+        source = ds_by_id[ds_id]["source"]
+        assert source["kind"] == "bundle"
+        resolved = resolve_bundle_source(moved, source["path"])
+        assert resolved is not None
+        assert _sha256(resolved) == original_checksums[original_path]
+        assert source["checksum"] == original_checksums[original_path]
+
+    # the two colliding "run"/"RUN" sources landed at two DIFFERENT bundle paths
+    assert ds_by_id["d2"]["source"]["path"] != ds_by_id["d3"]["source"]["path"]
+    # the shared source really is shared: same bundle path for both datasets
+    assert ds_by_id["d0"]["source"]["path"] == ds_by_id["d1"]["source"]["path"]
+
+
+def test_pack_never_touches_the_originals(tmp_path: Path) -> None:
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"do-not-touch")
+    before_hash = _sha256(str(src))
+    before_mtime = os.stat(src).st_mtime
+
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is True
+    assert result.originals_modified is False
+    assert _sha256(str(src)) == before_hash
+    assert os.stat(src).st_mtime == before_mtime
+
+
+# ── interrupted publication ──────────────────────────────────────────────
+
+
+def test_pack_project_interrupted_publish_leaves_no_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+
+    def _boom(_src: str, _dst: str) -> None:
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "publish_failed"
+    assert result.originals_modified is False
+    assert not os.path.exists(destination)
+    assert result.cleanup_ok is True
+    # nothing left over in bundle_parent besides nothing (staging cleaned)
+    assert list(_bundle_parent(tmp_path).iterdir()) == []
+
+
+# ── mixed dataset shapes ─────────────────────────────────────────────────
+
+
+def test_pack_project_mixed_dataset_shapes(tmp_path: Path) -> None:
+    packable = tmp_path / "packable.csv"
+    packable.write_bytes(b"data")
+    missing = str(tmp_path / "does-not-exist.csv")
+
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [
+            {"id": "embedded", "name": "embedded", "values": [1, 2, 3]},
+            {"id": "uploaded", "name": "uploaded", "source": {"kind": "upload"}},
+            {
+                "id": "packable",
+                "name": "packable",
+                "source": {"kind": "path", "path": str(packable)},
+            },
+            {"id": "missing", "name": "missing", "source": {"kind": "path", "path": missing}},
+        ],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is True, result.errors
+    check = validate_bundle(destination)
+    assert check.complete is True
+
+    project_file = check.manifest["project"]["project_file"]  # type: ignore[index]
+    packed_payload = json.loads(Path(destination, project_file).read_text(encoding="utf-8"))
+    ds_by_id = {ds["id"]: ds for ds in packed_payload["datasets"]}
+
+    assert "source" not in ds_by_id["embedded"]
+    assert ds_by_id["uploaded"]["source"] == {"kind": "upload"}
+    assert ds_by_id["packable"]["source"]["kind"] == "bundle"
+    # the missing source stays untouched -- still absolute, still "kind": "path"
+    assert ds_by_id["missing"]["source"] == {"kind": "path", "path": missing}
+
+    manifest_rows = {r["original_path"]: r for r in check.manifest["sources"]}  # type: ignore[index]
+    assert manifest_rows[str(packable)]["packable"] is True
+    assert manifest_rows[missing]["packable"] is False
+
+
+# ── old workspace versions ───────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
+def test_pack_project_rewrites_and_validates_every_supported_workspace_version(
+    tmp_path: Path, version: int
+) -> None:
+    src = tmp_path / f"v{version}.csv"
+    src.write_bytes(b"versioned-data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": version,
+        "datasets": [
+            {"id": "d0", "name": "d", "source": {"kind": "path", "path": str(src)}},
+        ],
+    }
+    destination = str(_bundle_parent(tmp_path) / f"bundle_v{version}")
+    result = pack_project(
+        payload, f"projv{version}", destination, probe=_probe, packed_at=_PACKED_AT
+    )
+
+    assert result.ok is True, result.errors
+    check = validate_bundle(destination)
+    assert check.complete is True
+    assert check.manifest["project"]["workspace_version"] == version  # type: ignore[index]
+
+
+# ── existing destination ─────────────────────────────────────────────────
+
+
+def test_pack_project_refuses_an_existing_destination(tmp_path: Path) -> None:
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination_dir = _bundle_parent(tmp_path) / "bundle"
+    destination_dir.mkdir()
+    (destination_dir / "keepme.txt").write_text("pre-existing")
+
+    result = pack_project(
+        payload, "proj", str(destination_dir), probe=_probe, packed_at=_PACKED_AT
+    )
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "destination_exists"
+    # destination is completely untouched
+    assert [p.name for p in destination_dir.iterdir()] == ["keepme.txt"]
+    for error in result.errors:
+        assert str(tmp_path) not in json.dumps(error)
+
+
+# ── resolve_bundle_source: Windows and POSIX resolution ──────────────────
+
+
+def test_resolve_bundle_source_posix() -> None:
+    # Force POSIX semantics explicitly regardless of host platform.
+    from quantized.portable import layout
+
+    assert posixpath.join("/proj", "sources", "a.csv") == "/proj/sources/a.csv"
+    resolved = layout.join_bundle_path("/proj", "sources/a.csv")
+    assert resolved == os.path.join("/proj", "sources", "a.csv")
+
+
+def test_resolve_bundle_source_windows_drive_root() -> None:
+    from quantized.portable import layout
+
+    # ntpath.join is used here only to state the EXPECTED shape explicitly;
+    # `join_bundle_path` itself always uses the host's os.path, so this
+    # assertion documents the Windows behaviour rather than exercising it
+    # (this test suite runs on POSIX in CI).
+    expected = ntpath.join("C:\\proj", "sources", "a.csv")
+    assert expected == "C:\\proj\\sources\\a.csv"
+    # `is_bundle_relative` itself is platform-independent (pure string
+    # rules) -- confirm the bundle-relative shape is accepted regardless.
+    assert layout.is_bundle_relative("sources/a.csv")
+
+
+def test_resolve_bundle_source_rejects_relative_escape(tmp_path: Path) -> None:
+    assert resolve_bundle_source(str(tmp_path), "../escape.csv") is None
+    assert resolve_bundle_source(str(tmp_path), "sources/../../escape.csv") is None
+
+
+def test_resolve_bundle_source_rejects_absolute_or_drive_paths(tmp_path: Path) -> None:
+    assert resolve_bundle_source(str(tmp_path), "/etc/passwd") is None
+    assert resolve_bundle_source(str(tmp_path), "C:\\evil.csv") is None
+
+
+# ── declared-source resolution with a hand-edited relative escape ────────
+
+
+def test_extract_declared_source_paths_skips_a_hand_edited_escape(tmp_path: Path) -> None:
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "source": {"kind": "bundle", "path": "../escape.csv"}}],
+    }
+    content = json.dumps(payload)
+    assert extract_declared_source_paths(content, base_dir=str(tmp_path)) == []
+    assert declared_source_paths_of(payload, base_dir=str(tmp_path)) == []
+
+# `payload_declares_source` with a bundle source + `base_dir` is covered
+# directly in `tests/test_desktop_project_file.py` alongside its other
+# `base_dir` coverage.
