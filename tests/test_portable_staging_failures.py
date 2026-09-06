@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from quantized.desktop_source_probe import probe_source_path
+from quantized.portable.copy_stream import identity_changed
 from quantized.portable.copying import StageError, stage_one_file
 from quantized.portable.manifest import build_dry_run_manifest
 from quantized.portable.staging import StageResult, create_staging_dir, stage_sources
@@ -207,6 +208,87 @@ def test_source_mutated_during_copy_is_detected(
     assert result.errors[0].code == "changed_during_copy"
     _no_tmp_path_leak(result.errors[0].message, tmp_path)
     assert result.cleanup_ok is True
+
+
+def test_source_replaced_under_open_descriptor_detected_by_identity(
+    tmp_path: Path,
+) -> None:
+    """A pathname atomically replaced (``os.replace``) mid-copy by a
+    DIFFERENT, same-size file whose mtime is then restored to match defeats
+    every size/mtime comparison in the pipeline -- and, for a checksum-less
+    (legacy/unverified) source, there is no manifest checksum (step 8) to
+    fall back on either, since those sources are explicitly packable. Only
+    comparing the open descriptor's ``os.fstat`` identity (``st_dev``,
+    ``st_ino``), captured before a single byte is streamed, against the
+    post-copy ``os.stat`` of the pathname tells the two apart (review
+    finding on PR #306): the open descriptor still yields the OLD file's
+    bytes throughout, while the pathname now names a new file."""
+    src = tmp_path / "swap.csv"
+    original = b"a" * 1000
+    src.write_bytes(original)
+    mtime_before = src.stat().st_mtime
+    manifest = manifest_for([str(src)])
+    # Checksum-less/unverified source: clear the manifest's recorded
+    # checksum so step 8 cannot be what catches this -- this test targets
+    # the gap that exists precisely when there is no checksum to fall back
+    # on.
+    manifest["sources"][0]["checksum"] = None
+    staging_root = _new_staging_root(tmp_path)
+
+    replacement = tmp_path / "swap_replacement.csv"
+    replacement.write_bytes(b"b" * 1000)  # same size, different bytes/inode
+
+    state = {"replaced": False}
+
+    def on_progress(event: Any) -> None:
+        if not state["replaced"] and event.phase == "copying":
+            state["replaced"] = True
+            os.replace(replacement, src)
+            os.utime(src, (mtime_before, mtime_before))
+
+    result = stage_sources(
+        manifest,
+        staging_root,
+        probe=_probe_no_checksum,
+        progress=on_progress,
+        chunk_bytes=100,
+    )
+
+    assert result.ok is False
+    assert result.errors[0].code == "changed_during_copy"
+    assert "identity" in result.errors[0].message
+    _no_tmp_path_leak(result.errors[0].message, tmp_path)
+    assert result.staged == []
+    assert result.bytes_copied == 0
+    assert result.cleanup_ok is True
+    assert result.staging_root is None
+    assert not os.path.exists(staging_root)
+    # The replacement's bytes were never disturbed by the rejected copy.
+    assert src.read_bytes() == b"b" * 1000
+
+
+def test_identity_changed_treats_a_zero_axis_as_unknown_with_no_false_mismatch() -> None:
+    """:func:`identity_changed` is the documented conservative fallback the
+    #306 review required: a `0` on either identity's `st_dev`/`st_ino` axis
+    (a platform/filesystem that never populates it) must never register as
+    a mismatch -- callers then fall back to size/mtime alone, exactly as
+    before this check existed."""
+    # Genuine disagreements, both fully known.
+    assert identity_changed((1, 2), (1, 3)) is True
+    assert identity_changed((1, 2), (2, 2)) is True
+    assert identity_changed((1, 2), (2, 3)) is True
+    # Identical known identities.
+    assert identity_changed((4, 8), (4, 8)) is False
+    # Either identity fully unknown (a fake `(0, 0)`, as an untyped/partial
+    # probe dict would supply).
+    assert identity_changed((0, 0), (1, 2)) is False
+    assert identity_changed((1, 2), (0, 0)) is False
+    assert identity_changed((0, 0), (0, 0)) is False
+    # A single unknown axis on either side is unknown too.
+    assert identity_changed((0, 5), (1, 5)) is False
+    assert identity_changed((1, 0), (1, 1)) is False
+    assert identity_changed((1, 5), (0, 5)) is False
+    assert identity_changed((1, 5), (1, 0)) is False
 
 
 # ── checksum mismatch ─────────────────────────────────────────────────────

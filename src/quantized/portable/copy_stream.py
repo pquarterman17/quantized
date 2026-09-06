@@ -29,11 +29,16 @@ __all__ = [
     "StageProgress",
     "StagedFile",
     "StageError",
+    "FileIdentity",
     "coerce_size",
     "safe_os_error",
     "remove_partial",
+    "file_identity",
+    "identity_changed",
     "copy_stream",
 ]
+
+FileIdentity = tuple[int, int]
 
 Probe = Callable[[str], Mapping[str, Any]]
 
@@ -130,6 +135,40 @@ def remove_partial(path: str) -> None:
         os.remove(path)
     except OSError:
         pass
+
+
+def file_identity(st: os.stat_result) -> FileIdentity:
+    """``(st_dev, st_ino)`` from a ``stat``/``fstat`` result -- a source's
+    identity fingerprint, stable across an already-open descriptor and a
+    later re-``stat`` of its pathname, that a pathname's size and mtime
+    alone cannot provide: an atomic replace (``os.replace``) of the
+    pathname with a same-size file whose mtime is then restored to match
+    is invisible to size/mtime but changes this pair.
+
+    Python populates both fields on every major platform for a regular
+    file, Windows included (``st_dev`` is the volume serial number,
+    ``st_ino`` the file index) -- but a ``0`` on either axis means this
+    platform/filesystem left the field unpopulated. See
+    :func:`identity_changed` for how that case is handled."""
+    return (st.st_dev, st.st_ino)
+
+
+def identity_changed(before: FileIdentity, after: FileIdentity) -> bool:
+    """``True`` only when ``before`` and ``after`` are BOTH fully known
+    (neither axis of either pair is ``0``) and they disagree.
+
+    Documented conservative fallback: when either identity carries a ``0``
+    on any axis (the platform/filesystem never populated ``st_dev``/
+    ``st_ino`` for that stat), identity is treated as UNKNOWN and this
+    always returns ``False`` -- never a false mismatch. In that case
+    identity contributes nothing and callers fall back to size/mtime (plus,
+    when present, a manifest checksum) as their only guard, exactly as
+    before this check existed."""
+    before_dev, before_ino = before
+    after_dev, after_ino = after
+    if before_dev == 0 or before_ino == 0 or after_dev == 0 or after_ino == 0:
+        return False
+    return before != after
 
 
 def _write_all(fd: int, data: bytes) -> None:
