@@ -210,6 +210,15 @@ def test_source_mutated_during_copy_is_detected(
     assert result.cleanup_ok is True
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason=(
+        "Windows refuses os.replace over a file another descriptor holds open "
+        "for reading (no FILE_SHARE_DELETE), so the mid-copy swap cannot be "
+        "staged there; the identity check itself is exercised by the "
+        "identity_changed unit test below"
+    ),
+)
 def test_source_replaced_under_open_descriptor_detected_by_identity(
     tmp_path: Path,
 ) -> None:
