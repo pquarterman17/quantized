@@ -57,6 +57,24 @@ function deriveProjectName(): string {
   return name.replace(/\.(dwk|json)$/i, "") || "workspace";
 }
 
+/** A comparable fingerprint of serialized workspace content that ignores
+ *  `serializeWorkspace`'s own `savedAt` stamp — `savedAt` is a FRESH
+ *  timestamp on every single call, so a raw string compare between two
+ *  serializations of the IDENTICAL workspace would always read as
+ *  "changed" purely from the clock, never actually detecting a real edit.
+ *  Never throws: malformed input (never produced by our own serializer,
+ *  but defensive regardless) falls back to the raw string, which still
+ *  degrades safely to "treat as different" rather than crashing. */
+function contentFingerprint(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as Record<string, unknown>;
+    delete parsed.savedAt;
+    return JSON.stringify(parsed);
+  } catch {
+    return content;
+  }
+}
+
 // -- preview ----------------------------------------------------------
 
 export async function runPreviewPackProject(set: Set, destination?: string): Promise<void> {
@@ -91,7 +109,7 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
     destination: { bundleDir: result.destination.bundle_dir, exists: result.destination.exists },
     warnings: result.warnings,
     blockers: result.blockers,
-    contentHash: content,
+    content,
     destinationParent,
     projectName,
   };
@@ -103,18 +121,27 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingApply: (() => void) | null = null;
-let lastAppliedAt = 0;
+let lastAppliedAt = -Infinity; // sentinel: no update has landed yet
 let lastAppliedKey: string | null = null;
 
-function resetThrottle(): void {
+/** Exported for test use only (the module-level throttle bookkeeping has
+ *  no other reset hook): clears any pending trailing-edge apply and the
+ *  "last applied" watermark, so a test driving `scheduleStatusApply`
+ *  directly starts from the same clean state a real `startPolling` call
+ *  always establishes before the first tick of a new operation. */
+export function resetThrottle(): void {
   if (pendingTimer !== null) clearTimeout(pendingTimer);
   pendingTimer = null;
   pendingApply = null;
-  lastAppliedAt = 0;
+  lastAppliedAt = -Infinity;
   lastAppliedKey = null;
 }
 
-function stopPolling(): void {
+/** Exported for test use only: stop the 250ms poll interval without going
+ *  through a terminal status — lets a test drive ticks manually
+ *  (`scheduleStatusApply`) without a concurrent real interval also
+ *  calling `packStatus`. */
+export function stopPolling(): void {
   if (pollTimer !== null) clearInterval(pollTimer);
   pollTimer = null;
 }
@@ -162,7 +189,7 @@ function applyStatus(get: Get, set: Set, status: PackStatus): void {
 export function scheduleStatusApply(get: Get, set: Set, status: PackStatus, now: number): void {
   const key = statusKey(status);
   if (key === lastAppliedKey) return;
-  const elapsed = lastAppliedAt === 0 ? THROTTLE_MS : now - lastAppliedAt;
+  const elapsed = now - lastAppliedAt; // +Infinity before the first apply -> always immediate
   const apply = (appliedAt: number): void => {
     lastAppliedAt = appliedAt;
     lastAppliedKey = key;
@@ -209,11 +236,16 @@ function startPolling(get: Get, set: Set): void {
  *  a fresh preview (a re-preview, or one against a different destination)
  *  always creates a brand-new manifest object, so identity is exactly
  *  "is this still the plan the store currently holds", with no separate
- *  hash to keep in sync. Re-serializing and comparing against
- *  `preview.contentHash` catches the OTHER staleness case: the project
- *  itself changed since preview, even though the manifest reference is
- *  still the current one. Either mismatch rejects LOCALLY — the bridge is
- *  never called with data the store itself already knows is stale. */
+ *  hash to keep in sync. A fresh re-serialization compared via
+ *  `contentFingerprint` (never a raw string compare — see that function's
+ *  doc) catches the OTHER staleness case: the project itself changed
+ *  since preview, even though the manifest reference is still current.
+ *  Either mismatch rejects LOCALLY — the bridge is never called with data
+ *  the store itself already knows is stale. When nothing changed, the
+ *  EXACT `preview.content` string (not a fresh re-serialization) is what
+ *  goes to `pack_start` — byte-identical to what `pack_preview` sent,
+ *  which is what lets the backend's own `sha256(content)` check pass
+ *  trivially rather than racing a live `savedAt` stamp. */
 export async function runStartPackProject(get: Get, set: Set, approvedManifest: PortableManifest): Promise<void> {
   const preview = get().preview;
   if (preview === null || approvedManifest !== preview.manifest) {
@@ -223,8 +255,8 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
     });
     return;
   }
-  const content = serializeCurrentWorkspaceForPack();
-  if (content !== preview.contentHash) {
+  const fresh = serializeCurrentWorkspaceForPack();
+  if (contentFingerprint(fresh) !== contentFingerprint(preview.content)) {
     set({
       phase: "failed",
       errors: [packError("stale_preview", "the project changed since preview — preview again")],
@@ -233,7 +265,7 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
   }
 
   set({ phase: "packing" });
-  const result = await packStart(preview.token, content);
+  const result = await packStart(preview.token, preview.content);
   if (result === null) {
     set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
     return;

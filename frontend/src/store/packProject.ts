@@ -73,10 +73,16 @@ export interface PackProjectPreview {
   destination: { bundleDir: string; exists: boolean };
   warnings: PortableManifestWarning[];
   blockers: PortableSourceRow[];
-  /** The exact serialized workspace content this preview was computed
-   *  against — re-serializing and comparing by EQUALITY (not a hash
-   *  algorithm) is the "did the project change since preview" check. */
-  contentHash: string;
+  /** The EXACT serialized workspace content sent to `pack_preview` — kept
+   *  verbatim (never re-derived) so `startPackProject` can resend this
+   *  SAME string to `pack_start`, byte-for-byte, satisfying the backend's
+   *  own `sha256(content)` staleness check trivially whenever the content
+   *  is otherwise unchanged. `packProjectRun.ts`'s `contentFingerprint`
+   *  is the "did the project meaningfully change since preview" check —
+   *  never a raw string compare against this field directly, because
+   *  `serializeWorkspace` stamps a fresh `savedAt` on every call and a
+   *  raw compare would treat that alone as a change. */
+  content: string;
   destinationParent: string;
   projectName: string;
 }

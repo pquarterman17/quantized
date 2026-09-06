@@ -29,7 +29,6 @@ import { canRenderMap } from "../../lib/mapdata";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
 import { useRelinkCommands } from "../../commands/relinkCommands";
-import { usePackProjectCommands } from "../../commands/packProjectCommands";
 import { useProjectLockCommands } from "../../commands/projectLockCommands";
 import { useWorkbookTransferCommands } from "../../commands/workbookTransferCommands";
 import { useHistoryCommands } from "../history/useHistoryCommands";
@@ -53,7 +52,6 @@ export default function Stage() {
   useHistoryCommands();
   useRecentProjectsCommands();
   useRelinkCommands();
-  usePackProjectCommands();
   useWorkbookTransferCommands();
   useProjectLockCommands();
 

@@ -1,8 +1,11 @@
 // "Pack Project" — command palette entry (P1.7 PR 4). A minimal harness to
 // exercise the store/desktopPackBridge contract this PR ships — NOT the
-// real dialog (assigned to Sol; see PRIMARY_SOFTWARE_AUDIT_PLAN.md's P1.7
-// entry). Mirrors commands/relinkCommands.ts's own registry-publish
-// pattern; the store's run module loads lazily on the click.
+// real dialog (assigned to Sol). Mirrors commands/relinkCommands.ts's own
+// registry-publish pattern; the store's run module loads lazily on click.
+//
+// NOT mounted in Stage.tsx yet: wiring it pushed the eager bundle 0.4 kB
+// over check-bundle-size.mjs's ratchet with no headroom left. A later PR
+// mounts it once the budget allows or the real dialog supersedes it.
 
 import { useEffect } from "react";
 
