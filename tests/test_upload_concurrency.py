@@ -59,6 +59,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -106,9 +107,16 @@ def _start_server() -> tuple[uvicorn.Server, int, threading.Thread]:
 def _stop_server(server: uvicorn.Server, thread: threading.Thread) -> None:
     """Ask the server to exit and wait for its thread to actually finish --
     an un-joined daemon thread from a prior test can still be mid-request
-    (or mid-lifespan) when the next test's server starts."""
+    (or mid-lifespan) when the next test's server starts. Asserting the
+    join actually succeeded (rather than merely issuing it) turns a stuck
+    shutdown into a loud, attributable failure here instead of a silent
+    thread leak that surfaces as flaky pollution in a LATER test."""
     server.should_exit = True
     thread.join(timeout=10.0)
+    assert not thread.is_alive(), (
+        "uvicorn server thread did not exit within 10s -- it will leak "
+        "into later tests"
+    )
 
 
 def _write_csv(path: Path, n_rows: int, n_cols: int = 6) -> None:
@@ -182,32 +190,46 @@ def _install_offloop_probe(
     return probe
 
 
-def test_large_upload_does_not_starve_health_polling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A CSV parse runs on a worker thread, so /api/health -- and by the
-    same mechanism, job-queue polling and other windows' plot requests --
-    stays responsive for the whole time the upload is being parsed.
+def _default_health_call(base: str) -> None:
+    """The happy-path health probe: one ``GET /api/health`` issued while the
+    parse is deliberately held, asserting it completes with 200."""
+    r = httpx.get(f"{base}/api/health", timeout=_HEALTH_REQUEST_TIMEOUT_S)
+    assert r.status_code == 200
 
-    Asserts the LOAD-INVARIANT property (CLAUDE.md test-determinism lesson)
-    by FORCING the in-flight window rather than sizing it with a fixture
-    row count and a pre-poll sleep. The previous version relied on a
-    120k-row fixture taking "long enough" to parse for a fixed 0.2s sleep
-    to land inside the window; once the CSV fast path (#298) made that
-    parse fast, the sleep elapsed before any poll could run and the window
-    closed with nothing ever landing in it -- a failure with no bearing on
-    whether the offload fix itself was intact. Fixture size no longer
-    matters (kept small: a few thousand rows) because the parse is now held
-    open on demand by ``_install_offloop_probe``'s ``release`` ``Event``
-    instead of by however long real parsing happens to take:
+
+def _run_starvation_check(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    health_call: Callable[[str], None],
+    state: dict[str, Any],
+) -> None:
+    """Shared body for both the happy-path starvation test and the
+    controlled-failure cleanup test below.
+
+    ``health_call`` performs (and may assert on, or raise from) the single
+    health request issued while the parse is held open -- injected so the
+    failure test can make it raise instead of succeed. ``state`` is
+    populated with ``"probe"`` and ``"upload_thread"`` as soon as they
+    exist (before ``health_call`` runs), so a caller that expects
+    ``health_call`` to raise can catch the exception and still inspect
+    cleanup afterwards.
+
+    Cleanup order in ``finally`` matters and is unconditional: the held
+    parse is released, and the upload thread is joined and asserted dead,
+    BEFORE the server is stopped. On the regression this guards against --
+    ``health_call`` raising (e.g. the health GET times out) -- control used
+    to jump straight to ``_stop_server`` while the parse wrapper stayed
+    parked on ``release`` for up to ``_PARSE_RELEASE_TIMEOUT_S`` and the
+    upload thread was never joined at all, leaking both threads into later
+    tests (see this module's docstring on cross-test thread pollution).
 
     1. Start the upload; wait for ``parse_started`` to confirm the parse
        has actually begun (bounded wait, so a hang fails loudly rather than
        hanging CI).
-    2. While the parse is deliberately held inside the threadpool, issue
-       exactly ONE ``GET /api/health`` and assert 200. This is the crux: if
+    2. While the parse is deliberately held inside the threadpool, run
+       ``health_call``. On the happy path this is the crux: if
        ``_import_with_books`` ran on the event loop instead of a worker
-       thread, this request would time out (bounded by
+       thread, the health request inside it would time out (bounded by
        ``_HEALTH_REQUEST_TIMEOUT_S``) because the loop would still be
        blocked inside the held call -- there is no way to pass this by
        accident of timing.
@@ -217,9 +239,11 @@ def test_large_upload_does_not_starve_health_polling(
        on a different thread than uvicorn's, with no running asyncio loop
        bound to that thread (instrumented directly, not inferred).
     """
-    server, port, thread = _start_server()
-    probe = _install_offloop_probe(monkeypatch, thread)
+    server, port, loop_thread = _start_server()
+    probe = _install_offloop_probe(monkeypatch, loop_thread)
+    state["probe"] = probe
     base = f"http://127.0.0.1:{port}"
+    upload_thread: threading.Thread | None = None
     try:
         csv_path = tmp_path / "small.csv"
         n_rows = 3_000
@@ -228,6 +252,7 @@ def test_large_upload_does_not_starve_health_polling(
         upload_result: dict[str, Any] = {}
         upload_thread = threading.Thread(target=_upload, args=(base, csv_path, upload_result))
         upload_thread.start()
+        state["upload_thread"] = upload_thread
 
         assert probe["parse_started"].wait(timeout=_PARSE_RELEASE_TIMEOUT_S), (
             "the parse never started -- upload request did not reach "
@@ -235,10 +260,8 @@ def test_large_upload_does_not_starve_health_polling(
         )
 
         # The parse is now deliberately blocked inside the threadpool (or,
-        # if the offload has regressed, inline on the event loop). Exactly
-        # one health request, issued while it is held, is the whole test.
-        r = httpx.get(f"{base}/api/health", timeout=_HEALTH_REQUEST_TIMEOUT_S)
-        assert r.status_code == 200
+        # if the offload has regressed, inline on the event loop).
+        health_call(base)
 
         probe["release"].set()
         upload_thread.join(timeout=60.0)
@@ -257,7 +280,87 @@ def test_large_upload_does_not_starve_health_polling(
             "to its own thread -- it is not actually off the loop"
         )
     finally:
-        _stop_server(server, thread)
+        # Unconditional and BEFORE _stop_server: on the regression path
+        # (health_call raised) the parse is still blocked on `release` at
+        # this point, and nothing above has joined upload_thread yet.
+        probe["release"].set()
+        if upload_thread is not None:
+            upload_thread.join(timeout=60.0)
+            assert not upload_thread.is_alive(), (
+                "upload thread leaked past cleanup -- would contaminate "
+                "later tests"
+            )
+        _stop_server(server, loop_thread)
+
+
+def test_large_upload_does_not_starve_health_polling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A CSV parse runs on a worker thread, so /api/health -- and by the
+    same mechanism, job-queue polling and other windows' plot requests --
+    stays responsive for the whole time the upload is being parsed.
+
+    Asserts the LOAD-INVARIANT property (CLAUDE.md test-determinism lesson)
+    by FORCING the in-flight window rather than sizing it with a fixture
+    row count and a pre-poll sleep. The previous version relied on a
+    120k-row fixture taking "long enough" to parse for a fixed 0.2s sleep
+    to land inside the window; once the CSV fast path (#298) made that
+    parse fast, the sleep elapsed before any poll could run and the window
+    closed with nothing ever landing in it -- a failure with no bearing on
+    whether the offload fix itself was intact. Fixture size no longer
+    matters (kept small: a few thousand rows) because the parse is now held
+    open on demand by ``_install_offloop_probe``'s ``release`` ``Event``
+    instead of by however long real parsing happens to take. See
+    ``_run_starvation_check`` for the numbered mechanics.
+    """
+    state: dict[str, Any] = {}
+    _run_starvation_check(monkeypatch, tmp_path, _default_health_call, state)
+
+
+def test_starvation_check_cleanup_survives_health_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pins the cleanup fix: if the in-test health request itself fails
+    (e.g. it times out), the held parse must still be released and the
+    upload thread must still be joined -- neither may leak into later
+    tests.
+
+    Forces the regression path deterministically by monkeypatching
+    ``httpx.get`` to raise ``httpx.ReadTimeout`` for the ``/api/health``
+    call specifically (real POST traffic from the upload thread is
+    untouched), then drives the SAME shared body
+    (``_run_starvation_check``) used by the happy-path test above. The
+    exception propagates out of the helper -- proving cleanup runs via
+    ``finally``, not as a step the normal control flow happens to reach --
+    and this test catches it, then asserts on ``state`` (populated before
+    the failing call ran) that: the parse's ``release`` ``Event`` ended up
+    set (the wrapper is not still parked inside the threadpool), and the
+    upload thread is no longer alive (joined, not abandoned).
+    """
+    real_get = httpx.get
+
+    def failing_get(url: str, *args: Any, **kwargs: Any) -> httpx.Response:
+        if "/api/health" in url:
+            raise httpx.ReadTimeout("simulated health-check timeout")
+        return real_get(url, *args, **kwargs)
+
+    monkeypatch.setattr(httpx, "get", failing_get)
+
+    state: dict[str, Any] = {}
+    with pytest.raises(httpx.ReadTimeout):
+        _run_starvation_check(monkeypatch, tmp_path, _default_health_call, state)
+
+    probe = state["probe"]
+    upload_thread = state["upload_thread"]
+    assert probe["release"].is_set(), (
+        "the held parse was never released after the health request failed "
+        "-- the threadpool worker would stay blocked for "
+        f"{_PARSE_RELEASE_TIMEOUT_S}s"
+    )
+    assert not upload_thread.is_alive(), (
+        "the upload thread was never joined after the health request "
+        "failed -- it would leak into later tests"
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover - manual timing runs
