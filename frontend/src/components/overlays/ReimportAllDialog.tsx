@@ -31,6 +31,7 @@ const OUTCOME_LABEL: Record<Exclude<ReimportAllOutcome, "staged">, string> = {
   no_source: "No source",
   missing: "Missing",
   offline: "Offline",
+  denied: "No access",
   parse_error: "Failed",
   removed: "Removed",
   changed: "Changed",
