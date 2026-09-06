@@ -379,12 +379,12 @@ class DesktopPackBridge:
             # failure, and report a structured refusal instead of letting
             # the exception escape into pywebview's JS bridge.
             with self._pack_lock:
+                revoke_paths(newly_granted)  # before the phase flips, as in _run
+                clear_write_dir_grants()
                 self._pack_phase = "failed"
                 self._pack_errors = [
                     self._error_row("thread_failed", "packing could not be started")
                 ]
-            revoke_paths(newly_granted)
-            clear_write_dir_grants()
             return _state.err("thread_failed", "packing could not be started")
         return {"ok": True}
 

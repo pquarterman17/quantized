@@ -302,11 +302,27 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
         # -- best-effort: if this itself fails there is nothing further to
         # do that would not risk deleting something a third party legitimately
         # created there since.
+        reservation_removed = False
         if reserved:
             try:
                 os.rmdir(destination_dir)
+                reservation_removed = True
             except OSError:
                 pass
+        if isinstance(exc, FileExistsError) and reservation_removed:
+            # The rename refused OUR OWN empty reservation, and removing it
+            # succeeded: a filesystem that does not absorb an empty
+            # directory (some network/FUSE mounts). The destination is now
+            # provably absent, and on exactly such a filesystem a plain
+            # rename is safe -- it refuses any target that appears
+            # meanwhile instead of merging into it.
+            try:
+                os.rename(staging_root, destination_dir)
+            except FileExistsError:
+                return _refuse(staging_root, "destination_exists", "destination already exists")
+            except OSError as retry_exc:
+                return _refuse(staging_root, "publish_failed", safe_os_error(retry_exc))
+            return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
         if isinstance(exc, FileExistsError):
             return _refuse(staging_root, "destination_exists", "destination already exists")
         # `safe_os_error`, never `str(exc)`: an `OSError` from `os.rename`

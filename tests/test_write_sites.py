@@ -61,6 +61,7 @@ plan's completed acceptance criterion is scoped to.
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterator
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -230,32 +231,57 @@ def _open_mode_is_a_write(call: ast.Call) -> bool:
     )
 
 
-def _simple_assignments(tree: ast.AST) -> dict[str, ast.expr]:
-    """``name -> its assigned expression``, for every simple ``name = expr``
-    assignment anywhere in the file (last assignment to a re-used name
-    wins — not a real static single-assignment guarantee, just enough to
-    resolve the ONE pattern this scan actually needs it for).
+_UNRESOLVABLE = ast.Name(id="__unresolvable_flags__", ctx=ast.Load())
+
+_Scope = ast.Module | ast.FunctionDef | ast.AsyncFunctionDef
+
+
+def _scope_nodes(scope: ast.AST) -> Iterator[ast.AST]:
+    """Every node inside ``scope`` EXCEPT the bodies of nested function
+    definitions (each of those is its own scope)."""
+    yield scope  # source order, so "last assignment wins" means textual order
+    for child in ast.iter_child_nodes(scope):
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        yield from _scope_nodes(child)
+
+
+def _simple_assignments(scope: ast.AST) -> dict[str, ast.expr]:
+    """``name -> its assigned expression`` for every simple ``name = expr``
+    assignment in ONE scope (a module or a function body, nested functions
+    excluded; last assignment to a re-used name within that scope wins --
+    not a real static single-assignment guarantee, just enough to resolve
+    the ONE pattern this scan actually needs it for).
 
     P1.7 PR 5 audit finding (item 4): ``portable/copying.py``'s
     ``stage_one_file`` builds its ``os.open`` flags into a local variable
     first (``open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | ...``)
-    a few lines above the call that uses it — exactly the "flags value
+    a few lines above the call that uses it -- exactly the "flags value
     held in a variable" case this module's own docstring already
-    disclosed as invisible to the scan, and it genuinely WAS: `_scan_write_sites`
-    reported zero write sites for that file (verified before this fix),
-    even though it demonstrably creates a file via ``os.open(dest,
-    open_flags, 0o644)``. Resolving a bare-``Name`` flags/mode expression
-    back to its assignment closes that specific blind spot without
-    changing anything else the scan's own docstring already governs (a
-    computed mode STRING passed to ``open()`` itself is still not
-    resolved — no code in this repo does that, so there is nothing to
-    verify the resolution against)."""
+    disclosed as invisible to the scan, and it genuinely WAS:
+    `_scan_write_sites` reported zero write sites for that file (verified
+    before this fix), even though it demonstrably creates a file via
+    ``os.open(dest, open_flags, 0o644)``. Resolving a bare-``Name`` flags
+    expression back to its assignment closes that blind spot.
+
+    Resolution is PER SCOPE (review finding on PR 5): a file-wide
+    last-assignment-wins map let a later read-only ``flags = os.O_RDONLY``
+    in another function hide an earlier function's write flags behind the
+    same name -- a silent false negative in exactly the direction this scan
+    exists to catch. A name assigned via ``|=``/``+=`` (``AugAssign``) or an
+    annotated assignment is recorded as ``_UNRESOLVABLE``, which
+    :func:`_os_open_flags_write` treats as a write -- erring loud rather
+    than silent."""
     out: dict[str, ast.expr] = {}
-    for node in ast.walk(tree):
+    for node in _scope_nodes(scope):
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
             target = node.targets[0]
-            if isinstance(target, ast.Name):
+            if isinstance(target, ast.Name) and out.get(target.id) is not _UNRESOLVABLE:
                 out[target.id] = node.value
+        elif isinstance(node, ast.AugAssign | ast.AnnAssign):
+            target = node.target
+            if isinstance(target, ast.Name):
+                out[target.id] = _UNRESOLVABLE  # sticky: once unresolvable, stays so
     return out
 
 
@@ -272,6 +298,8 @@ def _os_open_flags_write(call: ast.Call, name_to_expr: dict[str, ast.expr]) -> b
         # like `os.open(dest, open_flags, 0o644)` is not invisible to this
         # scan merely because its flags expression isn't written inline.
         flags = name_to_expr[flags.id]
+        if flags is _UNRESOLVABLE:
+            return True  # augmented/annotated assignment: err loud, treat as a write
     for sub in ast.walk(flags):
         name: str | None = None
         if isinstance(sub, ast.Attribute):
@@ -284,9 +312,17 @@ def _os_open_flags_write(call: ast.Call, name_to_expr: dict[str, ast.expr]) -> b
 
 
 def _write_call_sites(tree: ast.AST) -> list[tuple[int, str]]:
-    name_to_expr = _simple_assignments(tree)
     found: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
+    for scope in ast.walk(tree):
+        if isinstance(scope, _Scope):
+            found.extend(_scope_write_call_sites(scope))
+    return sorted(set(found))
+
+
+def _scope_write_call_sites(scope: ast.AST) -> list[tuple[int, str]]:
+    name_to_expr = _simple_assignments(scope)
+    found: list[tuple[int, str]] = []
+    for node in _scope_nodes(scope):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
@@ -410,3 +446,30 @@ def test_scan_resolves_os_open_flags_held_in_a_local_variable() -> None:
         "import os\nopen_flags = os.O_RDONLY\nfd = os.open(dest, open_flags)\n"
     )
     assert _write_call_sites(read_tree) == []
+
+
+def test_scan_resolves_flags_per_scope_and_errs_loud_on_augmented_assignment() -> None:
+    """Review finding on PR 5: a file-wide last-assignment-wins map let a
+    later read-only ``open_flags = os.O_RDONLY`` in ANOTHER function hide an
+    earlier function's write flags behind the same name. Resolution is now
+    per enclosing function, and a name built up with ``|=`` (unresolvable
+    here) is treated as a write rather than silently read-only."""
+    hidden = ast.parse(
+        "import os\n"
+        "def writer(p):\n"
+        "    open_flags = os.O_WRONLY | os.O_CREAT\n"
+        "    return os.open(p, open_flags)\n"
+        "def reader(p):\n"
+        "    open_flags = os.O_RDONLY\n"
+        "    return os.open(p, open_flags)\n"
+    )
+    assert [line for line, _ in _write_call_sites(hidden)] == [4]
+
+    augmented = ast.parse(
+        "import os\n"
+        "def f(p):\n"
+        "    flags = os.O_RDONLY\n"
+        "    flags |= os.O_CREAT\n"
+        "    return os.open(p, flags)\n"
+    )
+    assert len(_write_call_sites(augmented)) == 1

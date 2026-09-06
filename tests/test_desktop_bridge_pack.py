@@ -246,7 +246,10 @@ def test_pack_preview_cost_on_200_sources_stays_well_under_a_second(
     set_declared_sources(paths)
     content = _workspace_json(*paths)
 
-    def _fake_probe(_path: str) -> dict[str, Any]:
+    probe_calls: list[str] = []
+
+    def _fake_probe(path: str) -> dict[str, Any]:
+        probe_calls.append(path)
         return {
             "state": "ok",
             "size": 1024,
@@ -263,7 +266,12 @@ def test_pack_preview_cost_on_200_sources_stays_well_under_a_second(
     assert result["ok"] is True
     assert result["manifest"]["summary"]["sources"] == 200
     assert result["manifest"]["summary"]["packable"] == 200
-    assert elapsed < 1.0, (
+    # Load-invariant property (CLAUDE.md "Test determinism"): exactly one
+    # probe per distinct source -- linear, never once per folded key or
+    # per pairwise comparison. The clock below is only a loose backstop.
+    assert len(probe_calls) == 200
+    assert len(set(probe_calls)) == 200
+    assert elapsed < 5.0, (
         f"pack_preview took {elapsed:.3f}s for 200 sources with a faked probe "
         "-- this runs synchronously on the pywebview UI thread and would "
         "freeze the desktop window for that whole duration"
