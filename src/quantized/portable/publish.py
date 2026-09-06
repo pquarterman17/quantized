@@ -263,9 +263,44 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
         return _refuse(
             staging_root, "incomplete_staging", "staging directory has no completion marker"
         )
+    # Audit finding (P1.7 PR 5): the `lexists` check above and `os.rename`
+    # below are NOT one atomic operation -- on POSIX, `os.rename` onto an
+    # existing EMPTY directory silently succeeds and replaces it (unlike a
+    # non-empty one, which raises `ENOTEMPTY`). A directory created in the
+    # split second between the check and the rename (another process, a
+    # concurrent pack run racing for the same path, a user's own `mkdir`)
+    # would otherwise be silently absorbed -- contradicting this function's
+    # own "never overwrites" contract for the specific case of an empty
+    # directory. `os.mkdir` is a genuine atomic existence check (it raises
+    # `FileExistsError` for ANY pre-existing entry at that path, file or
+    # directory, empty or not) where a second `lexists` call would not be,
+    # so it is used here as a reservation: once it succeeds, nothing else
+    # can have raced ahead of it, and the immediately-following `os.rename`
+    # (replacing our own just-created empty directory) closes the window to
+    # the two syscalls between them -- as tight as pure Python's `os` module
+    # permits without a platform-specific syscall. On Windows this is a
+    # no-op hardening: `os.rename` there already refuses outright whenever
+    # `destination_dir` exists at all (file or directory, empty or not), so
+    # the POSIX-only empty-directory race described above cannot occur on
+    # that platform in the first place.
+    try:
+        os.mkdir(destination_dir)
+    except FileExistsError:
+        return _refuse(staging_root, "destination_exists", "destination already exists")
+    except OSError as exc:
+        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
     try:
         os.rename(staging_root, destination_dir)
     except OSError as exc:
+        # Undo our own reservation so a failed publish truly leaves the
+        # destination completely absent, matching the module doc's promise
+        # -- best-effort: if this itself fails there is nothing further to
+        # do that would not risk deleting something a third party legitimately
+        # created there since.
+        try:
+            os.rmdir(destination_dir)
+        except OSError:
+            pass
         # `str(exc)` on this `OSError` embeds both `staging_root` and
         # `destination_dir` (`exc.filename`/`exc.filename2`) -- absolute
         # paths that must never reach a structured, potentially-logged

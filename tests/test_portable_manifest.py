@@ -148,6 +148,39 @@ def test_case_variant_collision_still_suffixed() -> None:
     assert all(r["collision_group"] is not None for r in manifest["sources"])
 
 
+def test_nfc_nfd_unicode_variant_collision_still_suffixed() -> None:
+    """P1.7 PR 5 audit item 2: two DIFFERENT physical files (different
+    directories) whose basenames are NFC- vs NFD-composed spellings of the
+    same visual name (e.g. one path reported by a macOS/HFS+ volume, which
+    decomposes accented characters on the way out of the filesystem API,
+    the other typed on Windows/Linux in NFC form) must still be planned as
+    a visible collision, exactly like the ASCII-case-variant case above --
+    `naming.plan_bundle_names` groups by `layout.path_key`, which NFC-
+    normalizes before comparing, so this is the same mechanism as the
+    ASCII-case test, just exercised for the OTHER normalization rule that
+    function applies."""
+    composed = "\u00e9"  # 'e' + acute accent as one codepoint (NFC)
+    decomposed = "e\u0301"  # 'e' + a COMBINING acute accent (NFD) -- same glyph
+    payload = _payload(
+        [
+            _dataset("d1", "A", _path_source(f"/one/caf{composed}.csv")),
+            _dataset("d2", "B", _path_source(f"/two/caf{decomposed}.csv")),
+        ]
+    )
+    probe, _ = _counting_probe(
+        {
+            f"/one/caf{composed}.csv": {"state": "ok", "size": 1, "mtime": 1.0},
+            f"/two/caf{decomposed}.csv": {"state": "ok", "size": 2, "mtime": 2.0},
+        }
+    )
+    manifest = build_dry_run_manifest(payload, "proj", probe)
+    basenames = sorted(r["bundle_path"].split("/", 1)[1] for r in manifest["sources"])
+    assert len(basenames) == 2
+    assert basenames[0] != basenames[1]
+    assert any("(2)" in b for b in basenames)
+    assert all(r["collision_group"] is not None for r in manifest["sources"])
+
+
 def test_three_way_collision_gets_sequential_suffixes() -> None:
     payload = _payload(
         [

@@ -918,6 +918,65 @@ describe("workspace bundle-relative source (P1.7 PR 3, Pack Project)", () => {
     });
   });
 
+  // P1.7 PR 5 audit item 9: the test above ("carries packedFrom through
+  // resolve, round-trip, and elsewhere-save") proves `packedFrom` alone
+  // survives a full parseWorkspace -> serializeWorkspace round trip for a
+  // BUNDLE source; `datasetSource.test.ts` separately proves `checksum`/
+  // `mtime`/`size` survive `parseDatasetSource`'s bundle resolve in
+  // isolation. Neither exercises all four fields TOGETHER through the full
+  // parse -> serialize -> parse cycle a real packed-project save/reopen
+  // actually performs — this closes that gap directly.
+  it("carries checksum, mtime, size, AND packedFrom together through a full bundle-source round trip", () => {
+    const doc = {
+      ...PACKED_DOC,
+      datasets: [
+        {
+          ...PACKED_DOC.datasets[0],
+          source: {
+            kind: "bundle",
+            path: "sources/run1.csv",
+            checksum: "sha256:" + "a".repeat(64),
+            mtime: 1700000000,
+            size: 12345,
+            packedFrom: "/orig/run1.csv",
+          },
+        },
+      ],
+    };
+
+    const loaded = parseWorkspace(JSON.stringify(doc), undefined, { projectDir: "/proj" });
+    expect(loaded.datasets[0].source).toEqual({
+      kind: "path",
+      path: "/proj/sources/run1.csv",
+      checksum: "sha256:" + "a".repeat(64),
+      mtime: 1700000000,
+      size: 12345,
+      packedFrom: "/orig/run1.csv",
+    });
+
+    const reserialized = JSON.parse(
+      serializeWorkspace({ datasets: loaded.datasets }, { projectDir: "/proj" }),
+    ) as { datasets: Record<string, unknown>[] };
+    expect(reserialized.datasets[0].source).toEqual({
+      kind: "bundle",
+      path: "sources/run1.csv",
+      checksum: "sha256:" + "a".repeat(64),
+      mtime: 1700000000,
+      size: 12345,
+      packedFrom: "/orig/run1.csv",
+    });
+
+    // A second full parse of the RE-SERIALIZED document (a genuine reopen
+    // of the file just saved) still carries every field — not merely a
+    // single hop each direction.
+    const reloaded = parseWorkspace(
+      JSON.stringify(reserialized),
+      undefined,
+      { projectDir: "/proj" },
+    );
+    expect(reloaded.datasets[0].source).toEqual(loaded.datasets[0].source);
+  });
+
   it("an ordinary (unpacked) v1-v4 workspace with plain kind:path sources re-serializes identically, projectDir or not", () => {
     const ds = makeDataset("a", "x");
     ds.source = { kind: "path", path: "/data/sample.dat", checksum: "sha256:abc", mtime: 1700000000, size: 42 };

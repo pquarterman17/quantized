@@ -165,6 +165,47 @@ def test_publish_bundle_refuses_an_existing_destination(tmp_path: Path) -> None:
     assert os.listdir(destination) == []
 
 
+def test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forces the race rather than merely hoping to observe it (CLAUDE.md's
+    "force the race" evidence standard, P1.7 PR 5 audit item 3): the
+    `lexists` pre-check and the `os.rename` are two separate syscalls, not
+    one atomic operation. On POSIX, `os.rename` onto an EXISTING EMPTY
+    directory silently succeeds and replaces it (unlike a non-empty one,
+    which raises `ENOTEMPTY`) -- so a directory created in the split second
+    between the check and the rename (another process, a concurrent pack
+    run racing for the same path, a user's own `mkdir`) would otherwise be
+    silently absorbed, contradicting this module's own "never overwrites"
+    contract. `publish_bundle` must refuse instead of merging into it."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    real_lexists = os.path.lexists
+
+    def _lexists_then_plant_empty_dir(path: str) -> bool:
+        # Simulate the race: report the pre-check result honestly, then
+        # (as something ELSE running concurrently would) create an empty
+        # directory at the destination right after this function's own
+        # check looked and found nothing.
+        result = real_lexists(path)
+        if path == destination:
+            os.makedirs(destination, exist_ok=True)
+        return result
+
+    monkeypatch.setattr(
+        "quantized.portable.publish.os.path.lexists", _lexists_then_plant_empty_dir
+    )
+
+    result = publish_bundle(staging_root, destination)
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error["code"] == "destination_exists"
+    # untouched -- still exactly the empty directory the race planted, not
+    # silently replaced by the staged bundle
+    assert os.listdir(destination) == []
+    assert not os.path.exists(staging_root)
+
+
 def test_publish_bundle_refuses_a_non_sibling_destination(tmp_path: Path) -> None:
     staging_root, _ = _write_complete_staging(tmp_path)
     elsewhere = tmp_path / "elsewhere" / "proj_bundle"
@@ -234,6 +275,78 @@ def test_publish_bundle_rename_failure_message_never_leaks_a_path(
     assert destination not in message
     assert str(tmp_path) not in message
     assert message == "Permission denied"
+
+
+def test_write_bundle_files_killed_between_the_two_writes_leaves_an_incomplete_staging_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.7 PR 5 audit item 5: a "kill the worker between staging and
+    publish" scenario, exercised at the exact seam it can actually happen
+    at -- `write_bundle_files` writes the packed project file FIRST, then
+    (deliberately last -- see this module's own "the manifest is the
+    completion marker" doc) `quantized-bundle.json`. This forces a failure
+    IN BETWEEN those two writes (as a real process kill would leave things,
+    bypassing `pack_project`'s own cleanup-on-OSError path entirely, which
+    a genuine SIGKILL cannot run either) and asserts the resulting staging
+    directory -- exactly what would be left on disk -- is unambiguously
+    reported incomplete by `validate_bundle`, never mistaken for a
+    complete bundle."""
+    src = tmp_path / "a.csv"
+    src.write_bytes(b"hello")
+    manifest, staged, staging_root = _stage(tmp_path, [str(src)])
+    final = finalize_manifest(manifest, staged, packed_at="2026-01-01T00:00:00Z")
+    payload_json = json.dumps({"format": "quantized-workspace", "version": 4, "datasets": []})
+
+    calls = {"n": 0}
+    real_atomic_replace_file = atomic_replace_file
+
+    def _killed_on_second_write(*args: object, **kwargs: object) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:  # the manifest write -- the project file already landed
+            raise OSError("process killed")
+        real_atomic_replace_file(*args, **kwargs)
+
+    monkeypatch.setattr(
+        "quantized.portable.publish.atomic_replace_file", _killed_on_second_write
+    )
+    with pytest.raises(OSError, match="process killed"):
+        write_bundle_files(
+            staging_root,
+            project_file="proj.dwk",
+            packed_payload_json=payload_json,
+            manifest=final,
+        )
+
+    # Exactly what a real crash at this point leaves on disk: the project
+    # file made it, the manifest never did.
+    assert (Path(staging_root) / "proj.dwk").is_file()
+    assert not (Path(staging_root) / MANIFEST_FILENAME).exists()
+
+    check = validate_bundle(staging_root)
+    assert check.complete is False
+    assert check.manifest is None
+    assert check.problems == [{"code": "manifest_missing", "detail": MANIFEST_FILENAME}]
+
+
+def test_manifest_written_but_sources_dir_renamed_away_is_incomplete(tmp_path: Path) -> None:
+    """P1.7 PR 5 audit item 5, second scenario: a complete, published
+    bundle whose ``sources/`` directory is later moved out from under it
+    (a user's own mistake, a partial manual restore from backup, ...) must
+    never validate as complete merely because the manifest and project
+    file are both present and well-formed -- every ``packed`` source row
+    must actually resolve to a real file on disk."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    publish_bundle(staging_root, destination)
+    sources_dir = Path(destination) / "sources"
+    assert sources_dir.is_dir()
+    renamed_away = Path(destination).parent / "sources_moved_elsewhere"
+    sources_dir.rename(renamed_away)
+
+    check = validate_bundle(destination)
+
+    assert check.complete is False
+    assert check.manifest is not None  # manifest itself is still fine
+    assert any(p["code"] == "source_missing" for p in check.problems)
 
 
 # ── validate_bundle ──────────────────────────────────────────────────────

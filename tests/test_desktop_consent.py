@@ -554,6 +554,41 @@ def test_is_write_dir_consented_rejects_traversal_outside_the_root(tmp_path: Pat
     assert not is_write_dir_consented(traversal)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink semantics")
+def test_is_write_dir_consented_rejects_a_destination_symlinked_elsewhere(tmp_path: Path) -> None:
+    """P1.7 PR 5 audit item 1: a "Pack Project" destination folder that IS
+    (or contains) a symlink pointing somewhere else entirely must not
+    inherit the grant on the visible path — `is_write_dir_consented`
+    `realpath`-resolves the QUERIED path (same mechanism
+    `test_is_dir_consented_rejects_a_symlink_escape` already proves for the
+    read-only directory grant), so a symlinked destination's REAL target is
+    what actually gets checked, and a target outside the granted root fails
+    it precisely because its resolved form is not actually still under that
+    root."""
+    root = _tree(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    grant_write_dir(str(root))
+
+    # The granted root's NAME itself resolves elsewhere: a symlink chosen
+    # by the destination picker whose live target is a completely
+    # different directory than the one that was actually granted.
+    link = tmp_path / "picked_destination"
+    link.symlink_to(outside)
+    assert not is_write_dir_consented(str(link))
+    assert not is_write_dir_consented(str(link / "myproj"))
+
+    # A symlink planted INSIDE the granted root that points OUTSIDE it must
+    # not inherit the grant either.
+    escape = root / "escape"
+    escape.symlink_to(outside)
+    assert not is_write_dir_consented(str(escape))
+    assert not is_write_dir_consented(str(escape / "myproj"))
+
+    # The real granted root itself is unaffected by either symlink above.
+    assert is_write_dir_consented(str(root))
+
+
 def test_write_dir_grant_never_satisfies_a_read_or_write_file_check(tmp_path: Path) -> None:
     """The core P1.7 PR 4 ruling: a write-directory grant answers ONE
     question only — never a read or write check for a file under it."""

@@ -610,6 +610,47 @@ describe("cancel racing a pending preview continuation", () => {
   });
 });
 
+// -- no undo/history pollution in the open project (P1.7 PR 5 audit item 11) --
+
+describe("a full pack run never touches useApp history or dataset identity", () => {
+  it("history/future/datasets are byte-for-byte and reference-identical across preview -> start -> completed", async () => {
+    vi.useFakeTimers();
+    const datasetsBefore = [
+      {
+        id: "a",
+        name: "a.csv",
+        data: { time: [0], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} },
+      },
+    ];
+    useApp.setState({
+      datasets: datasetsBefore,
+      activeId: "a",
+      selectedIds: ["a"],
+      history: [],
+      future: [],
+      status: "",
+    });
+    const historyBefore = useApp.getState().history;
+    const futureBefore = useApp.getState().future;
+
+    const manifest = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest);
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(
+      statusOf({ phase: "completed", result: { bundle_dir: "/dest/proj" }, cleanup_ok: null }),
+    );
+    await vi.advanceTimersByTimeAsync(250);
+    expect(usePackProject.getState().phase).toBe("completed");
+
+    // Reference identity, not merely deep equality -- proves nothing ever
+    // called `useApp.setState` on these fields at all, whether or not the
+    // new value would have looked the same.
+    expect(useApp.getState().datasets).toBe(datasetsBefore);
+    expect(useApp.getState().history).toBe(historyBefore);
+    expect(useApp.getState().future).toBe(futureBefore);
+  });
+});
+
 // -- overlapping poll responses resolving out of order (review finding #4) --
 
 describe("overlapping poll responses resolving out of order", () => {

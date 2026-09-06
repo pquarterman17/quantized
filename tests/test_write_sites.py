@@ -142,6 +142,21 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "_write_disabled_sources: persists the enabled/disabled plugin list "
         "to this app's own config-dir `plugins.json`, not a dataset."
     ),
+    "portable/copying.py": (
+        "stage_one_file: os.open(dest, open_flags, 0o644) creates the ONE "
+        "destination file for a single manifest row, always computed via "
+        "join_bundle_path(staging_root, bundle_path) -- a fresh path INSIDE "
+        "a staging directory this same package created via "
+        "create_staging_dir (P1.7 Pack Project PR 2), refusing outright "
+        "(O_EXCL, plus an explicit os.path.islink pre-check) if anything "
+        "already exists there -- never an original dataset source path "
+        "(every source is opened \"rb\" only; see staging.py's module "
+        "docstring's `originals_modified` guarantee). P1.7 PR 5 audit "
+        "finding: this write site was previously INVISIBLE to this scan "
+        "because its os.open flags are built into a local variable "
+        "(`open_flags`) rather than written inline -- see "
+        "`_simple_assignments`'s doc below for the fix that resolves it."
+    ),
     "portable/copy_stream.py": (
         "remove_partial (os.remove): deletes only the ONE staging-directory "
         "destination file `stage_one_file` (in `copying.py`, one layer up) "
@@ -215,13 +230,48 @@ def _open_mode_is_a_write(call: ast.Call) -> bool:
     )
 
 
-def _os_open_flags_write(call: ast.Call) -> bool:
+def _simple_assignments(tree: ast.AST) -> dict[str, ast.expr]:
+    """``name -> its assigned expression``, for every simple ``name = expr``
+    assignment anywhere in the file (last assignment to a re-used name
+    wins — not a real static single-assignment guarantee, just enough to
+    resolve the ONE pattern this scan actually needs it for).
+
+    P1.7 PR 5 audit finding (item 4): ``portable/copying.py``'s
+    ``stage_one_file`` builds its ``os.open`` flags into a local variable
+    first (``open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | ...``)
+    a few lines above the call that uses it — exactly the "flags value
+    held in a variable" case this module's own docstring already
+    disclosed as invisible to the scan, and it genuinely WAS: `_scan_write_sites`
+    reported zero write sites for that file (verified before this fix),
+    even though it demonstrably creates a file via ``os.open(dest,
+    open_flags, 0o644)``. Resolving a bare-``Name`` flags/mode expression
+    back to its assignment closes that specific blind spot without
+    changing anything else the scan's own docstring already governs (a
+    computed mode STRING passed to ``open()`` itself is still not
+    resolved — no code in this repo does that, so there is nothing to
+    verify the resolution against)."""
+    out: dict[str, ast.expr] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+            if isinstance(target, ast.Name):
+                out[target.id] = node.value
+    return out
+
+
+def _os_open_flags_write(call: ast.Call, name_to_expr: dict[str, ast.expr]) -> bool:
     flags: ast.expr | None = call.args[1] if len(call.args) >= 2 else None
     for kw in call.keywords:
         if kw.arg == "flags":
             flags = kw.value
     if flags is None:
         return False
+    if isinstance(flags, ast.Name) and flags.id in name_to_expr:
+        # See `_simple_assignments`'s doc: resolve a flags value held in a
+        # local variable back to what it was actually assigned, so a call
+        # like `os.open(dest, open_flags, 0o644)` is not invisible to this
+        # scan merely because its flags expression isn't written inline.
+        flags = name_to_expr[flags.id]
     for sub in ast.walk(flags):
         name: str | None = None
         if isinstance(sub, ast.Attribute):
@@ -234,6 +284,7 @@ def _os_open_flags_write(call: ast.Call) -> bool:
 
 
 def _write_call_sites(tree: ast.AST) -> list[tuple[int, str]]:
+    name_to_expr = _simple_assignments(tree)
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -241,7 +292,7 @@ def _write_call_sites(tree: ast.AST) -> list[tuple[int, str]]:
         func = node.func
         is_os_open = isinstance(func, ast.Attribute) and func.attr == "open"
         if is_os_open and _base_name(func.value) == "os":
-            if _os_open_flags_write(node):
+            if _os_open_flags_write(node, name_to_expr):
                 found.append((node.lineno, "os.open(O_WRONLY|O_RDWR|O_CREAT...)"))
             continue
         if isinstance(func, ast.Name) and func.id in _OPEN_LIKE_CALLABLES:
@@ -333,3 +384,29 @@ def test_scan_sees_an_os_open_with_write_flags_but_not_a_read_only_one() -> None
     assert _write_call_sites(read_tree) == []
     kw_tree = ast.parse("import os\nfd = os.open(p, flags=os.O_RDWR)\n")
     assert len(_write_call_sites(kw_tree)) == 1
+
+
+def test_scan_resolves_os_open_flags_held_in_a_local_variable() -> None:
+    """P1.7 PR 5 audit finding (item 4): before `_simple_assignments` was
+    added, `portable/copying.py`'s real write site --
+    ``open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL; os.open(dest,
+    open_flags, 0o644)`` -- was silently invisible to this scan (verified:
+    `_scan_write_sites()` reported zero sites for that file beforehand),
+    even though it demonstrably creates a file. This is the regression
+    test for the fix, isolated from the real file so it keeps failing
+    correctly even if `copying.py`'s own code shape ever changes."""
+    tree = ast.parse(
+        "import os\n"
+        "open_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL\n"
+        "fd = os.open(dest, open_flags, 0o644)\n"
+    )
+    sites = [site for _, site in _write_call_sites(tree)]
+    assert sites == ["os.open(O_WRONLY|O_RDWR|O_CREAT...)"]
+
+    # A variable that never actually resolves to a write-flags expression
+    # must still read as read-only -- the resolution must not blanket-flag
+    # every bare-Name flags argument regardless of what it holds.
+    read_tree = ast.parse(
+        "import os\nopen_flags = os.O_RDONLY\nfd = os.open(dest, open_flags)\n"
+    )
+    assert _write_call_sites(read_tree) == []

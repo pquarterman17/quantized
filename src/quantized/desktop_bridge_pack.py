@@ -169,6 +169,22 @@ class DesktopPackBridge:
             dry_run_manifest = build_dry_run_manifest(payload, project_name, probe, consented)
         except ValueError as exc:
             return _state.err("invalid_project_name", str(exc))
+        except RuntimeError:
+            # P1.7 PR 5 audit item 13: `build_dry_run_manifest` can only
+            # raise `RuntimeError` from its own internal "this should be
+            # structurally impossible" assertions (manifest.py's doc: a
+            # duplicate planned bundle path, or one that somehow isn't
+            # bundle-relative) -- never real user input, and never
+            # something `ValueError` above already catches. That
+            # RuntimeError's own message embeds the offending bundle_path
+            # string. `pack_start`'s worker thread already has a blanket
+            # `except Exception` for exactly this "genuine bug, still
+            # reported, never raised" case (its own doc); this synchronous
+            # method had no equivalent, so a latent bug here would
+            # otherwise propagate the path-carrying message straight out
+            # of this js_api method into pywebview's own exception surface
+            # instead of a safe, structured refusal.
+            return _state.err("internal_error", "could not build a pack preview")
 
         project = dry_run_manifest["project"]
         sanitized_name = project["name"] if isinstance(project, dict) else project_name

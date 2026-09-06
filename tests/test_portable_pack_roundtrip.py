@@ -148,6 +148,47 @@ def test_pack_move_and_reopen_roundtrip(tmp_path: Path) -> None:
     assert ds_by_id["d0"]["source"]["path"] == ds_by_id["d1"]["source"]["path"]
 
 
+def test_rewritten_bundle_source_provenance_survives_parse_workspace_payload(
+    tmp_path: Path,
+) -> None:
+    """P1.7 PR 5 audit item 9 (backend half): `rewrite_payload_for_bundle`
+    writes `checksum`/`size`/`packedFrom` unconditionally and `mtime` when
+    resolvable (see that module's own source) onto every packed dataset's
+    rewritten `kind: "bundle"` source -- this proves all four actually
+    survive the REAL production path a reopen takes: read the published
+    `.dwk`'s bytes off disk, then `parse_workspace_payload` (not a bare
+    `json.loads`, which `test_pack_move_and_reopen_roundtrip` above already
+    uses for its own, narrower checksum-only check) -- the same function
+    `desktop_bridge_dialogs._read_granted` calls on every real project
+    open/reopen."""
+    from quantized.desktop_project_file import parse_workspace_payload
+
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"provenance-bytes")
+    original_mtime = os.stat(src).st_mtime
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+    assert result.ok is True, result.errors
+
+    project_file = result.manifest["project"]["project_file"]  # type: ignore[index]
+    packed_content = Path(destination, project_file).read_text(encoding="utf-8")
+
+    parsed, error = parse_workspace_payload(packed_content)
+    assert parsed is not None, error
+    source = parsed["datasets"][0]["source"]
+
+    assert source["kind"] == "bundle"
+    assert source["checksum"] == _sha256(str(src))
+    assert source["size"] == len(b"provenance-bytes")
+    assert source["packedFrom"] == str(src)
+    assert source["mtime"] == pytest.approx(original_mtime)
+
+
 def test_pack_never_touches_the_originals(tmp_path: Path) -> None:
     src = tmp_path / "raw.csv"
     src.write_bytes(b"do-not-touch")
