@@ -256,3 +256,49 @@ export function evaluateCommitProbe(
     ...(prov.size != null ? { size: prov.size } : {}),
   };
 }
+
+// ── destination collisions (P1.7 slice 2: collision-safe relinking) ─────
+
+/** The identity of a path for "do these two candidates name the SAME
+ *  file" purposes: the same tolerant rule `suffixUnderRoot` applies
+ *  (either separator, case-insensitive, empty segments dropped), so
+ *  `C:\\New\\A.csv` and `c:/new/a.csv` key identically. Used only to
+ *  DETECT a collision — never to rewrite a path. */
+export function pathKey(path: string): string {
+  return segments(path).map((s) => s.toLowerCase()).join("/");
+}
+
+/** Which preview rows would relink DIFFERENT recorded sources onto ONE
+ *  destination. Two rows collide when their candidates key identically
+ *  (`pathKey`) but their recorded old paths are not the SAME STRING — the
+ *  P3 case booked on P1.7 slice 1: two old sources differing only by case,
+ *  or by a segment the case-insensitive root matcher normalizes together
+ *  (`/old/a.csv` and `/OLD/a.csv` under old root `/old`), both landing on
+ *  one new path. On a case-sensitive volume those were two files, and a
+ *  plain relink would silently point both datasets at one of them. Rows
+ *  whose old paths are byte-identical are a shared source (one file
+ *  imported twice) and map to one candidate legitimately; a group is a
+ *  collision only if at least two distinct old-path strings meet at the
+ *  candidate — and then EVERY row in that group is reported, shared-source
+ *  members included, since the destination is contested for all of them.
+ *  Rows without a candidate are ignored. Returns, per colliding
+ *  `datasetId`, the ids of the OTHER rows in its group (in input order). */
+export function findCandidateCollisions(
+  rows: readonly { datasetId: string; oldPath: string; candidatePath: string | null }[],
+): Map<string, string[]> {
+  const groups = new Map<string, { ids: string[]; oldPaths: Set<string> }>();
+  for (const r of rows) {
+    if (r.candidatePath === null) continue;
+    const key = pathKey(r.candidatePath);
+    const g = groups.get(key) ?? { ids: [], oldPaths: new Set<string>() };
+    g.ids.push(r.datasetId);
+    g.oldPaths.add(r.oldPath);
+    groups.set(key, g);
+  }
+  const out = new Map<string, string[]>();
+  for (const g of groups.values()) {
+    if (g.oldPaths.size < 2) continue;
+    for (const id of g.ids) out.set(id, g.ids.filter((other) => other !== id));
+  }
+  return out;
+}

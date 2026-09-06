@@ -55,29 +55,11 @@
 
 import { create } from "zustand";
 
-import { grantSourceReadPaths, hasDesktopShell, probeSource, revokeRelinkDir } from "../lib/desktopBridge";
-import { evaluateCommitProbe, relinkedCandidate, sourceChangeVerdict } from "../lib/relink";
+import { grantSourceReadPaths, hasDesktopShell, revokeRelinkDir } from "../lib/desktopBridge";
 import type { Dataset } from "../lib/types";
 import { browseForNewRoot } from "./relinkBrowse";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
-
-// F6 (code-review): the ONE shape a committing row's async pipeline produces,
-// named once instead of written out three times (the per-row return type,
-// the results-filter type guard, and `pending`'s own declaration). Keyed by
-// datasetId via the Map itself (a `[id, write]` tuple), not a redundant
-// field inside the value.
-type PendingWrite = {
-  source: NonNullable<Dataset["source"]>;
-  /** F3 (code-review): the EXACT `Dataset.source` OBJECT the write was
-   *  computed against — not just its `.path` string. The final pre-write
-   *  re-check (`commit()`, below) requires referential equality against
-   *  this, not a path-string match: a same-path provenance swap (a project
-   *  reload, an undo landing between the probe and the write) replaces the
-   *  object even when the path text is identical, and a string compare
-   *  would miss that entirely. */
-  orig: NonNullable<Dataset["source"]>;
-};
 
 export type RelinkRowStatus =
   | "resolved" // candidate exists and is readable
@@ -110,9 +92,18 @@ export interface RelinkPreviewRow {
   candidateChecksum: string | null;
   candidateMtime: number | null;
   candidateSize: number | null;
+  /** P1.7 slice 2 (collision-safe relinking): set by `runPreview` when this
+   *  row's candidate names the SAME file as another row's, from a DIFFERENT
+   *  recorded source (`lib/relink.findCandidateCollisions`). Unresolved
+   *  (`resolution` undefined) and `"skip"` rows are EXCLUDED from
+   *  `commit()`; exactly one row per contested destination may be `"keep"`,
+   *  chosen only through `resolveCollision` — never a default winner.
+   *  `others` are the display names of the contending rows; `otherIds`
+   *  their dataset ids. Reset with every new preview. */
+  collision?: { others: string[]; otherIds: string[]; resolution?: "keep" | "skip" };
 }
 
-interface RelinkState {
+export interface RelinkState {
   open: boolean;
   oldRoot: string;
   newRoot: string;
@@ -135,6 +126,11 @@ interface RelinkState {
    *  commit ONE "unknown" row despite its unresolved checksum. Never a
    *  global bypass — every other unknown row stays excluded. */
   escalateUnknownRow: (datasetId: string) => void;
+  /** P1.7 slice 2: the ONE explicit resolution for a contested destination
+   *  — `datasetId` keeps the file, every other row in its collision group
+   *  is marked `"skip"` (left unchanged by commit). Choosing another row
+   *  later moves the `"keep"` to it; there is never more than one. */
+  resolveCollision: (datasetId: string) => void;
   importChangedAsNewVersion: (datasetId: string) => Promise<void>;
 }
 
@@ -204,62 +200,11 @@ export const useRelink = create<RelinkState>((set, get) => ({
       if (bridgeAvailable) {
         await grantSourceReadPaths(datasets.map((d) => d.source.path));
       }
-      const rows: RelinkPreviewRow[] = [];
-      for (const ds of datasets) {
-        const oldPath = ds.source.path;
-        const candidate = relinkedCandidate(oldRoot, newRoot, oldPath);
-        if (candidate === null) continue; // outside the moved tree entirely
-        if (!bridgeAvailable) {
-          rows.push({
-            datasetId: ds.id,
-            datasetName: ds.name,
-            oldPath,
-            candidatePath: candidate,
-            status: "unavailable",
-            changeVerdict: "unknown",
-            candidateChecksum: null,
-            candidateMtime: null,
-            candidateSize: null,
-          });
-          continue;
-        }
-        const probe = await probeSource(candidate);
-        if (probe === null || probe.state !== "ok") {
-          const status: RelinkRowStatus =
-            probe?.state === "permission_denied"
-              ? "permission_denied"
-              : probe?.state === "offline"
-                ? "offline"
-                : "missing";
-          rows.push({
-            datasetId: ds.id,
-            datasetName: ds.name,
-            oldPath,
-            candidatePath: candidate,
-            status,
-            changeVerdict: "unknown",
-            candidateChecksum: null,
-            candidateMtime: null,
-            candidateSize: null,
-          });
-          continue;
-        }
-        const verdict = sourceChangeVerdict(
-          { checksum: ds.source.checksum, mtime: ds.source.mtime, size: ds.source.size },
-          { checksum: probe.checksum, mtime: probe.mtime, size: probe.size },
-        );
-        rows.push({
-          datasetId: ds.id,
-          datasetName: ds.name,
-          oldPath,
-          candidatePath: candidate,
-          status: "resolved",
-          changeVerdict: verdict,
-          candidateChecksum: probe.checksum,
-          candidateMtime: probe.mtime,
-          candidateSize: probe.size,
-        });
-      }
+      // Row computation + collision annotation live in store/relinkPreview.ts
+      // (500-line ceiling), loaded on the click so the relink core stays out
+      // of the eager bundle (store/relinkCommit.ts's header).
+      const { buildPreviewRows } = await import("./relinkPreview");
+      const rows = await buildPreviewRows(datasets, oldRoot, newRoot, bridgeAvailable);
       set({ preview: rows });
       if (rows.length === 0) {
         toast("no datasets have a source under that folder", "info");
@@ -269,174 +214,34 @@ export const useRelink = create<RelinkState>((set, get) => ({
     }
   },
 
-  commit: async () => {
-    const { preview } = get();
-    const candidates = preview.filter(
-      (r) =>
-        r.status === "resolved" &&
-        r.candidatePath &&
-        r.changeVerdict !== "changed" &&
-        // P1-2 defect 2: an "unknown" row commits ONLY once explicitly
-        // escalated via `escalateUnknownRow` — a bulk commit never sweeps it in.
-        (r.changeVerdict !== "unknown" || r.escalated),
-    );
-    if (candidates.length === 0) {
-      toast("nothing to relink — no resolved, unchanged candidates", "danger");
-      return;
-    }
-    set({ busy: true });
-    // F4 (code-review): split apart — a fresh probe can conflict with what
-    // is RECORDED (the R3 recompute) or with what PREVIEW ITSELF showed the
-    // user (F1's consent guard) for two DIFFERENT reasons; naming them the
-    // same bucket claimed a "changed since Preview" verdict for rows Preview
-    // never even had an opinion about. `evaluateCommitProbe` (lib/relink.ts)
-    // is the pure per-row decision (R3 recompute, F1 guard, F2 backfill
-    // rule) shared with its own unit tests; this loop is the thin async
-    // orchestrator gathering its inputs and tallying the toast buckets.
-    let unreachableAtCommit = 0,
-      conflictAtCommit = 0,
-      mismatchAtCommit = 0,
-      unverifiedAtCommit = 0,
-      identityChangedAtCommit = 0;
-    let pending: Map<string, PendingWrite>;
-    try {
-      // R3 (POST_SPRINT_INDEPENDENT_REVIEW.md, class #196 — silent
-      // provenance overwrite): the preview can go stale between when it ran
-      // and when the user clicks Relink in more ways than "the file
-      // vanished" — the LIVE dataset backing a row can have been removed,
-      // reimported, or independently relinked in that same window. Snapshot
-      // it fresh right here (never the copy `preview` closed over) so every
-      // row's verdict is recomputed against what is ACTUALLY on record now,
-      // never against the preview row's own remembered fields alone.
-      const liveById = new Map(useApp.getState().datasets.map((d) => [d.id, d]));
-      const results = await Promise.all(
-        candidates.map(async (row): Promise<[string, PendingWrite] | null> => {
-          const liveDs = liveById.get(row.datasetId);
-          // Fail closed, zero mutation: the dataset this row named is gone,
-          // or its recorded source has moved on from what Preview saw (an
-          // independent relink/reimport landed in the gap) — "identity
-          // changed" is not this commit's call to make sense of.
-          if (liveDs?.source?.path !== row.oldPath) {
-            identityChangedAtCommit++;
-            return null;
-          }
-          // P2 (adversarial review, TOCTOU): a file deleted or overwritten
-          // in the Preview-to-commit window must never write a stale
-          // checksum silently. Re-probe every committing candidate right
-          // here, right before the write.
-          const probe = await probeSource(row.candidatePath!);
-          if (probe === null || probe.state !== "ok") {
-            unreachableAtCommit++;
-            return null;
-          }
-          const src = liveDs.source;
-          const outcome = evaluateCommitProbe(src, probe, row, row.escalated);
-          if (outcome === "conflict") {
-            conflictAtCommit++;
-            return null;
-          }
-          if (outcome === "mismatch") {
-            mismatchAtCommit++;
-            return null;
-          }
-          if (outcome === "gap") {
-            unverifiedAtCommit++;
-            return null;
-          }
-          return [row.datasetId, { source: { kind: "path" as const, path: row.candidatePath!, ...outcome }, orig: src }];
-        }),
-      );
-      pending = new Map(results.flatMap((r) => (r ? [r] : [])));
-    } finally {
-      set({ busy: false });
-    }
-    // F3 (code-review, residual TOCTOU + STRENGTHENED): `liveById` above was
-    // read BEFORE the awaited probes — a dataset's recorded source can
-    // still have been swapped out from under a row during that async gap (a
-    // reimport or a second relink landing mid-commit). Re-verify identity
-    // one more time, synchronously, immediately before the actual write —
-    // nothing async runs between this read and the `setState` below, so
-    // this check and the write are effectively atomic. Compares OBJECT
-    // IDENTITY against `orig` (the exact `source` the write was
-    // computed against), not a path string: a same-path swap — a project
-    // reload or an undo landing in the gap, reconstructing an
-    // equal-looking but structurally different `source` object — changes
-    // nothing a string comparison would ever see.
-    // F7 (code-review): one Map built once (the `liveById` pattern above),
-    // not a `.find()` scan of every live dataset per pending row.
-    const nowById = new Map(useApp.getState().datasets.map((d) => [d.id, d]));
-    for (const [id, entry] of pending) {
-      if (nowById.get(id)?.source !== entry.orig) {
-        pending.delete(id);
-        identityChangedAtCommit++;
-      }
-    }
-    // F5 (code-review, actionable-advice split): the panel's "Use anyway"
-    // escalate control (RelinkPanel.tsx) renders ONLY for a row Preview
-    // itself showed as `status === "resolved"` AND `changeVerdict ===
-    // "unknown"` — a row that never got that far (missing/offline/
-    // permission_denied/unavailable) never had a checksum question to
-    // escalate at all, and already has its own clear status label in the
-    // panel from Preview — commit()'s summary says nothing new about it
-    // rather than repeat wrong "escalate" advice for a button it never had.
-    // `escalatable` rows genuinely have the button now; `unverifiedAtCommit`
-    // rows looked "unchanged" at Preview (no button ever appeared) and would
-    // need a FRESH Preview pass before one could. One pass over `preview`
-    // computes both this and `skippedChanged`.
-    let skippedChanged = 0;
-    let escalatable = 0;
-    for (const r of preview) {
-      if (r.changeVerdict === "changed") skippedChanged++;
-      else if (r.status === "resolved" && r.changeVerdict === "unknown" && !r.escalated) escalatable++;
-    }
-    // F4 (code-review, honest wording) + F3 (final review pass, doc-promise
-    // audit): each bucket names the SPECIFIC thing that happened to it, in
-    // words a reader (not just the source) can follow — "unreachable"
-    // (probe failed) is not "changed" (content differs), and neither of
-    // those is "conflicts with recorded provenance" (the RECORDED
-    // checksum/mtime/size itself, `conflictAtCommit`) or "changed since
-    // Preview" (what PREVIEW showed, `mismatchAtCommit`) or "moved/
-    // reimported" (identity itself moved on, `identityChangedAtCommit`).
-    // These EXACT strings are the ones this module's header doc and the
-    // POST_SPRINT_INDEPENDENT_REVIEW.md closure log quote — keep them in
-    // sync if either changes. Built once and reused for BOTH the
-    // empty-commit and partial-commit toasts.
-    const notes = (
-      [
-        [skippedChanged, "changed (import as a new version instead)"],
-        [escalatable, "needs verification — use \"use anyway\" to include"],
-        [unverifiedAtCommit, "could not be re-verified"],
-        [conflictAtCommit, "conflicts with recorded provenance"],
-        [mismatchAtCommit, "changed since Preview"],
-        [identityChangedAtCommit, "moved/reimported"],
-        [unreachableAtCommit, "unreachable"],
-      ] as const
-    ).flatMap(([n, label]) => (n > 0 ? [`${n} ${label}`] : []));
-    const joined = notes.length > 0 ? ` — ${notes.join("; ")}` : "";
-    const n = pending.size;
-    if (n === 0) {
-      toast(`nothing to relink${joined || " — no resolved, unchanged candidates"}`, "danger");
-      return;
-    }
-    // ONE recordHistory call for the whole batch — undo restores every
-    // relinked dataset's old path in a single step (box 3).
-    useApp.getState().recordHistory(`relink ${n} source${n === 1 ? "" : "s"}`);
-    useApp.setState((state) => ({
-      datasets: state.datasets.map((d) => {
-        const source = pending.get(d.id)?.source;
-        if (!source || !d.source) return d;
-        return { ...d, source };
-      }),
-    }));
-    toast(`relinked ${n} dataset${n === 1 ? "" : "s"}${joined}`, "ok");
-    get().closePanel(); // also revokes the C1 directory grant, if any
-    set({ preview: [] });
+  // The commit machinery (and lib/relink.ts behind it) loads on the click —
+  // see store/relinkCommit.ts's header for the bundle reasoning. The live
+  // dataset snapshot the R3 identity guard compares against is taken HERE,
+  // synchronously, before the chunk is awaited: a swap landing while the
+  // module loads must be caught exactly like one landing during the probe.
+  commit: () => {
+    const liveById = new Map(useApp.getState().datasets.map((d) => [d.id, d]));
+    return import("./relinkCommit").then((m) => m.commitRelink(get, set, liveById));
   },
 
   escalateUnknownRow: (datasetId) =>
     set((s) => ({
       preview: s.preview.map((r) => (r.datasetId === datasetId ? { ...r, escalated: true } : r)),
     })),
+
+  resolveCollision: (datasetId) =>
+    set((s) => {
+      const chosen = s.preview.find((r) => r.datasetId === datasetId);
+      if (!chosen?.collision) return {};
+      const group = new Set([datasetId, ...chosen.collision.otherIds]);
+      return {
+        preview: s.preview.map((r) =>
+          r.collision && group.has(r.datasetId)
+            ? { ...r, collision: { ...r.collision, resolution: r.datasetId === datasetId ? "keep" : "skip" } }
+            : r,
+        ),
+      };
+    }),
 
   // Box 5: "changed source warns and can import as a NEW VERSION" — reuses
   // the EXISTING import path (never an in-place refresh, per L0.32), then

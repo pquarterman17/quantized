@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateCommitProbe,
+  findCandidateCollisions,
   guardVerdict,
+  pathKey,
   joinUnderRoot,
   relinkedCandidate,
   sourceChangeVerdict,
@@ -322,5 +324,79 @@ describe("guardVerdict", () => {
   it("is unknown only when NEITHER checksum nor any stat is comparable", () => {
     expect(guardVerdict({ checksum: "sha256:aa" }, { checksum: null })).toBe("unknown");
     expect(guardVerdict({}, {})).toBe("unknown");
+  });
+});
+
+// P1.7 slice 2 (collision-safe relinking): the P3 case booked on slice 1 —
+// two DIFFERENT recorded sources that the case-insensitive matcher lands on
+// ONE new path must be reported, never silently collapsed.
+describe("pathKey", () => {
+  it("keys case- and separator-variant spellings of one path identically", () => {
+    const B = String.fromCharCode(92);
+    expect(pathKey(`C:${B}New${B}A.csv`)).toBe(pathKey("c:/new/a.csv"));
+    expect(pathKey("/new//a.csv/")).toBe(pathKey("/new/a.csv"));
+  });
+
+  it("keeps genuinely different paths apart", () => {
+    expect(pathKey("/new/a.csv")).not.toBe(pathKey("/new/b.csv"));
+    expect(pathKey("/new/run1/a.csv")).not.toBe(pathKey("/new/run10/a.csv"));
+  });
+});
+
+describe("findCandidateCollisions", () => {
+  it("flags two distinct old sources whose candidates differ only by case", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv" },
+      { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+      { datasetId: "c", oldPath: "/old/c.csv", candidatePath: "/new/c.csv" },
+    ]);
+    expect(out.get("a")).toEqual(["b"]);
+    expect(out.get("b")).toEqual(["a"]);
+    expect(out.has("c")).toBe(false);
+  });
+
+  it("does NOT flag a shared source — the same old file imported twice maps to one candidate legitimately", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+      { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+    ]);
+    expect(out.size).toBe(0);
+  });
+
+  it("flags two old paths the case-insensitive root matcher folds together (/old vs /OLD) — two files on a case-sensitive volume", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+      { datasetId: "b", oldPath: "/OLD/a.csv", candidatePath: "/new/a.csv" },
+    ]);
+    expect(out.get("a")).toEqual(["b"]);
+    expect(out.get("b")).toEqual(["a"]);
+  });
+
+  it("reports every member of a contested group, shared-source members included", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+      { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv" },
+      { datasetId: "c", oldPath: "/old/A.CSV", candidatePath: "/new/A.CSV" },
+    ]);
+    expect(out.get("a")).toEqual(["b", "c"]);
+    expect(out.get("b")).toEqual(["a", "c"]);
+    expect(out.get("c")).toEqual(["a", "b"]);
+  });
+
+  it("ignores rows without a candidate", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/a.csv", candidatePath: null },
+      { datasetId: "b", oldPath: "/old/A.csv", candidatePath: null },
+    ]);
+    expect(out.size).toBe(0);
+  });
+
+  it("matches candidates across separator conventions (a Windows-recorded tree relinked onto a POSIX root)", () => {
+    const B = String.fromCharCode(92);
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: `C:${B}old${B}Run${B}a.csv`, candidatePath: "/new/Run/a.csv" },
+      { datasetId: "b", oldPath: `C:${B}old${B}run${B}a.csv`, candidatePath: "/new/run/a.csv" },
+    ]);
+    expect(out.get("a")).toEqual(["b"]);
   });
 });

@@ -1277,6 +1277,112 @@ describe("commit (box 3: atomic, one undo entry)", () => {
   });
 });
 
+// P1.7 slice 2 (collision-safe relinking) — the P3 case booked on slice 1:
+// `commit()` had no dedup when two DIFFERENT old paths case-collided onto
+// the SAME new candidate; both would relink onto one path silently, one
+// dataset losing its file. RED-FIRST: the first two tests below failed
+// against the pre-slice store (both rows committed).
+describe("collision-safe relinking (P1.7 slice 2)", () => {
+  function twoColliding() {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", name: "A.csv", source: { kind: "path", path: "/old/data/A.csv", checksum: "sha256:x", mtime: 1, size: 1 } }),
+        baseDataset({ id: "b", name: "a.csv", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:x", mtime: 1, size: 1 } }),
+        baseDataset({ id: "c", name: "c.csv", source: { kind: "path", path: "/old/data/c.csv", checksum: "sha256:c", mtime: 3, size: 3 } }),
+      ],
+    });
+    vi.mocked(desktopBridge.hasDesktopShell).mockReturnValue(true);
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) =>
+      /c\.csv$/.test(path)
+        ? { state: "ok", path, size: 3, mtime: 3, checksum: "sha256:c" }
+        : { state: "ok", path, size: 1, mtime: 1, checksum: "sha256:x" },
+    );
+    useRelink.getState().openPanel({ oldRoot: "/old/data", newRoot: "/new/place" });
+  }
+
+  it("Preview marks rows whose candidates name one file from different sources, naming the contenders", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    const rows = useRelink.getState().preview;
+    expect(rows.find((r) => r.datasetId === "a")?.collision).toEqual({ others: ["a.csv"], otherIds: ["b"] });
+    expect(rows.find((r) => r.datasetId === "b")?.collision).toEqual({ others: ["A.csv"], otherIds: ["a"] });
+    expect(rows.find((r) => r.datasetId === "c")?.collision).toBeUndefined();
+  });
+
+  it("commit excludes an unresolved collision group entirely, names it, and still relinks the uncontested row", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    await useRelink.getState().commit();
+    const [a, b, c] = useApp.getState().datasets;
+    expect(a.source?.path).toBe("/old/data/A.csv");
+    expect(b.source?.path).toBe("/old/data/a.csv");
+    expect(c.source?.path).toBe("/new/place/c.csv");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/relinked 1 dataset.*2 share a destination/), "ok");
+  });
+
+  it("resolveCollision marks exactly one keep and the rest skip; commit relinks only the keeper", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    useRelink.getState().resolveCollision("b");
+    const rows = useRelink.getState().preview;
+    expect(rows.find((r) => r.datasetId === "b")?.collision?.resolution).toBe("keep");
+    expect(rows.find((r) => r.datasetId === "a")?.collision?.resolution).toBe("skip");
+    await useRelink.getState().commit();
+    const [a, b] = useApp.getState().datasets;
+    expect(a.source?.path).toBe("/old/data/A.csv"); // untouched, exactly as recorded
+    expect(b.source?.path).toBe("/new/place/a.csv");
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("choosing another row moves the single keep — never two keeps in one group", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    useRelink.getState().resolveCollision("b");
+    useRelink.getState().resolveCollision("a");
+    const rows = useRelink.getState().preview;
+    expect(rows.find((r) => r.datasetId === "a")?.collision?.resolution).toBe("keep");
+    expect(rows.find((r) => r.datasetId === "b")?.collision?.resolution).toBe("skip");
+  });
+
+  it("resolveCollision on a row without a collision is a no-op", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    const before = useRelink.getState().preview;
+    useRelink.getState().resolveCollision("c");
+    expect(useRelink.getState().preview).toBe(before);
+  });
+
+  it("a shared source (one file imported twice) is not a collision and both rows relink", async () => {
+    useApp.setState({
+      datasets: [
+        baseDataset({ id: "a", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:x", mtime: 1, size: 1 } }),
+        baseDataset({ id: "b", source: { kind: "path", path: "/old/data/a.csv", checksum: "sha256:x", mtime: 1, size: 1 } }),
+      ],
+    });
+    vi.mocked(desktopBridge.hasDesktopShell).mockReturnValue(true);
+    vi.mocked(desktopBridge.probeSource).mockResolvedValue({ state: "ok", path: "/new/place/a.csv", size: 1, mtime: 1, checksum: "sha256:x" });
+    useRelink.getState().openPanel({ oldRoot: "/old/data", newRoot: "/new/place" });
+    await useRelink.getState().runPreview();
+    expect(useRelink.getState().preview.every((r) => !r.collision)).toBe(true);
+    await useRelink.getState().commit();
+    expect(useApp.getState().datasets.map((d) => d.source?.path)).toEqual(["/new/place/a.csv", "/new/place/a.csv"]);
+  });
+
+  it("the write-side guard fails closed for a whole group even when the preview flags were edited to two keeps", async () => {
+    twoColliding();
+    await useRelink.getState().runPreview();
+    useRelink.setState((s) => ({
+      preview: s.preview.map((r) => (r.collision ? { ...r, collision: { ...r.collision, resolution: "keep" } } : r)),
+    }));
+    await useRelink.getState().commit();
+    const [a, b, c] = useApp.getState().datasets;
+    expect(a.source?.path).toBe("/old/data/A.csv");
+    expect(b.source?.path).toBe("/old/data/a.csv");
+    expect(c.source?.path).toBe("/new/place/c.csv");
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/2 would collide on one destination/), "ok");
+  });
+});
+
 describe("importChangedAsNewVersion (box 5)", () => {
   it("imports the source and tags the NEW dataset with versionOf — never touches the original", async () => {
     vi.mocked(importFile).mockResolvedValue({

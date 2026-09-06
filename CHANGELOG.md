@@ -6,6 +6,11 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Relink Sources now detects when two datasets with different recorded
+  source paths would be pointed at the same file (for example `/old/a.csv`
+  and `/OLD/a.csv` after a folder move) and asks you to choose which
+  dataset keeps that file instead of silently relinking both. The other
+  dataset is left exactly as recorded.
 - Project files (P1.1 completion): Open Project and Save As now open in
   your current working folder (the one you last imported from, opened, or
   saved into), and Save As suggests the open project's own name. Reopening
