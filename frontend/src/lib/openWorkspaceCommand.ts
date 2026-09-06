@@ -6,7 +6,7 @@
 
 import { openFilePicker } from "./openFilePicker";
 import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
-import { baseName } from "./importEntry";
+import { baseName, parentDirectory } from "./importEntry";
 import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
@@ -99,7 +99,13 @@ export function openWorkspaceCommand(
         viaPicker();
         return;
       }
-      void withOp(label, () => Promise.resolve(parseWorkspace(native.content, currentViewport())))
+      void withOp(label, () =>
+        Promise.resolve(
+          parseWorkspace(native.content, currentViewport(), {
+            projectDir: parentDirectory(native.path) || undefined,
+          }),
+        ),
+      )
         .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),

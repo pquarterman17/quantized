@@ -3,10 +3,15 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 2** —
+**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 2 + PR 3** —
 atomic staging + verified source copying (`quantized.portable.staging`/
-`.copying`, still no `.dwk` write, no publish) — see the updated PR 2 entry
-under P1.7 below. Earlier: **P1.7 Pack Project PR 1** —
+`.copying`), then atomic bundle publication + bundle validation
+(`quantized.portable.publish`/`.pack`) and the `kind: "bundle"`
+dataset-source extension on both sides (backend resolution with
+`base_dir`; frontend parse with a known `projectDir`, written back at
+serialize time only when saving into that same directory) — see the PR 2
+and PR 3 entries under P1.7 below. Earlier the same day: **P1.7 Pack
+Project PR 1** —
 bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
 copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
 2 — collision-safe relinking**
@@ -1658,6 +1663,96 @@ below — the packer's own implementation work starts fresh here:
     `tests/test_desktop_project_file.py` extended (6 — `base_dir` on all
     three declared-source functions, including a hand-edited relative
     escape and the "no `base_dir`, not declared" case).
+- **PR 2 (planned, not shipped):** staged, checksum-VERIFIED copy of every
+  packable source into the bundle's `sources/` directory (still no `.dwk`
+  write) — the first PR that touches a filesystem for real.
+- **PR 3 (planned, not shipped):** atomic bundle publish (the packed
+  `.dwk` alongside the verified `sources/` copy) and the "portable" mode's
+  open-time resolution.
+  - **Frontend half (this branch, `claude/p17-pack-3-frontend`) — shipped
+    ahead of the backend publish/copy work, additive-optional, no
+    `WORKSPACE_VERSION` bump:** the frontend's read/write contract for a
+    dataset `source` that names a bundle-relative path, so the frontend is
+    ready the moment PR 2/3's backend copier lands. `lib/bundlePath.ts`'s
+    `isBundleRelativePath` is a rule-for-rule port of `layout.py`'s
+    `is_bundle_relative`; `resolveBundlePath` mirrors `join_bundle_path`'s
+    "validate, then join" shape (returning `null` instead of raising — this
+    side's documented malformed-field degrade, not an error) **plus that
+    function's own post-join containment re-check** (review round below) —
+    not the "line-for-line port" an earlier draft of this note claimed.
+    `Dataset.source` stays `kind: "path"` in memory always (every existing
+    consumer — reimport, relink, pathState — is untouched); a source
+    resolved from a packed project's `kind: "bundle"` manifest entry
+    carries only an optional `packedFrom` (the absolute path the packer
+    copied from — display-only provenance, never resolved) as extra
+    provenance — no separate bundle-relative field is kept on the
+    in-memory source (review round below). Resolution happens at PARSE
+    time only, and only when the caller actually knows the `.dwk`'s own
+    directory: `parseWorkspace(text, viewport, { projectDir })` threads
+    `projectDir` to `lib/workspaceDatasetParse.ts`'s per-dataset parse,
+    which threads it to `lib/datasetSource.ts`'s `parseDatasetSource` — a
+    `kind: "bundle"` entry with no `projectDir` (an EMPTY string counts as
+    none), or a non-conforming path, degrades to "no source" exactly like
+    any other malformed source (silent drop, no migration warning). The
+    two native-file callers that actually have a directory —
+    `lib/openWorkspaceCommand.ts`'s native-open branch and
+    `commands/recentProjectsCommands.ts`'s reopen — pass it (via
+    `parentDirectory(path) || undefined`, never a bare `parentDirectory(path)`
+    — its own "" no-separator sentinel must read as "unknown", not root);
+    the browser-picker/Worker path (`lib/parseWorkspaceFile.ts`) and every
+    autosave/browser-download round trip never do (no durable path to
+    derive one from), so a bundle source degrades there by design — noted
+    in `parseWorkspace`'s own doc comment. Serialization
+    (`lib/workspaceSerialize.ts`'s `serializeWorkspace(state, { projectDir })`)
+    writes a source back as `kind: "bundle"` ONLY when `projectDir` is
+    given AND `source.path` sits directly under `<projectDir>/sources/` —
+    an EXACT, case-sensitive prefix compare on the forward-slash-normalized
+    forms, derived FRESH from the live `path` at every save
+    (`lib/bundlePath.ts`'s `deriveBundleRelativePath`) rather than recalled
+    from a parse-time field. Any other case (Save As into a different
+    folder, no known directory, a relink that moved `path` since, a
+    case-different directory on the same volume) writes the ordinary
+    absolute `kind: "path"` shape instead — still fully valid, just no
+    longer relocatable as one portable unit. A workbook's own `source`
+    (import provenance) is routed through the identical
+    `serializeDatasetSource`/`parseDatasetSource` pair, so it gets the same
+    `kind: "bundle"` treatment rather than always leaking an absolute path
+    (review round below). `store/workspaceIO.ts` wires this: quick Save
+    (`runSaveWorkspace`) already knows its destination
+    (`currentProject.path`) before serializing, so it passes `projectDir`
+    straight through; Save As (`runSaveWorkspaceToFile`) splits the
+    existing "resolve pending books, fold the live view" preface
+    (`prepareWorkspaceState`) from the actual `JSON.stringify`, so the
+    stringify itself happens AFTER the native dialog returns a destination
+    — every existing Save/Save As test stayed green through that split.
+    Existing (unpacked) projects are completely unaffected: their sources
+    never sit under a `<projectDir>/sources/` prefix, so
+    `serializeDatasetSource` always takes the `kind: "path"` branch for
+    them, byte-for-byte as before this PR. Tests: `lib/bundlePath.test.ts`,
+    `lib/datasetSource.test.ts`, `lib/workbooks.test.ts`, the new
+    "workspace bundle-relative source" describe in `lib/workspace.test.ts`,
+    the native-open/reopen resolution tests in
+    `commands/openWorkspaceNative.test.ts` /
+    `commands/recentProjectsCommands.test.ts`, and the quick-save/Save-As
+    `kind` tests in `store/workspaceIO.test.ts`.
+  - **Review round (2026-09-06):** six defects found and fixed, each with a
+    regression test — see the commit fixing this PR for the full list;
+    highlights: the parse-time `bundlePath` field (and its case-folding
+    `bundlePathsMatch` save-time identity check) is gone entirely, replaced
+    by the fresh-derivation-at-save-time design above (the case-folding
+    check would have written a bundle reference against a case-DIFFERENT,
+    nonexistent directory on a case-sensitive volume); `parentDirectory`'s
+    `""` no-directory sentinel was flowing through as a truthy "known"
+    `projectDir` at three new call sites, resolving a bundle source against
+    a bogus root-anchored path — fixed both at the call sites
+    (`parentDirectory(p) || undefined`) and inside `resolveBundlePath`/
+    `deriveBundleRelativePath` themselves (empty `projectDir` treated as
+    unknown); `resolveBundlePath` now re-verifies containment on the
+    JOINED result, mirroring `join_bundle_path`'s own post-join check
+    rather than trusting pre-join validation alone; `WorkbookNode.source`
+    is now routed through the dataset-source serialize/parse pair instead
+    of being written/read verbatim; and a single module-level
+    `TextEncoder` replaced one constructed per path segment.
 - **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
   method a future "Pack Project" UI action calls) + the frontend contract
   consuming PR 1-3's manifest/copy/publish primitives — no bridge method
