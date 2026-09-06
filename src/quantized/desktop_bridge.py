@@ -145,6 +145,7 @@ from typing import Any
 from quantized import desktop_project_lock as lockmod
 from quantized import desktop_project_lock_write as lockwrite
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
+from quantized.desktop_bridge_pack import DesktopPackBridge
 from quantized.desktop_consent import consented_write_path, is_declared_source
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
@@ -168,16 +169,22 @@ __all__ = ["DesktopApi"]
 _MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES = 2
 
 
-class DesktopApi(DesktopDialogBridge):
+class DesktopApi(DesktopDialogBridge, DesktopPackBridge):
     """The object pywebview exposes at ``window.pywebview.api``.
 
     Every method is callable from the page, so each one is written as if the
     caller were hostile. The protection is not in this class: opening a modal
     OS dialog requires a human to choose a file, and nothing here can grant
     consent for a path the dialog did not return.
+
+    P1.7 PR 4 adds :class:`~quantized.desktop_bridge_pack.DesktopPackBridge`
+    to the base list, the same mixin shape as ``DesktopDialogBridge`` — see
+    that module's own doc for the "Pack Project" js_api methods and the
+    full consent ruling behind them.
     """
 
     def __init__(self) -> None:
+        DesktopPackBridge.__init__(self)
         self._window: Any = None
         # One id per running process, minted ONCE — see this module's "PR I2"
         # section for why the frontend can never supply or override this.

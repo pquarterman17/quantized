@@ -3,8 +3,13 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 2 + PR 3** —
-atomic staging + verified source copying (`quantized.portable.staging`/
+**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 4** — pack
+orchestration bridge (`quantized.desktop_bridge_pack`), the write-directory
+consent kind + `revoke_paths` (`desktop_consent.py`), and the frontend
+state machine (`store/packProject.ts`/`.packProjectRun.ts`) consuming PR
+1-3's manifest/copy/publish primitives — see the new PR 4 entry under P1.7
+below. Earlier the same day: **P1.7 Pack Project PR 2 + PR 3** — atomic
+staging + verified source copying (`quantized.portable.staging`/
 `.copying`), then atomic bundle publication + bundle validation
 (`quantized.portable.publish`/`.pack`) and the `kind: "bundle"`
 dataset-source extension on both sides (backend resolution with
@@ -1810,10 +1815,141 @@ below — the packer's own implementation work starts fresh here:
     is now routed through the dataset-source serialize/parse pair instead
     of being written/read verbatim; and a single module-level
     `TextEncoder` replaced one constructed per path segment.
-- **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
-  method a future "Pack Project" UI action calls) + the frontend contract
-  consuming PR 1-3's manifest/copy/publish primitives — no bridge method
-  exists yet.
+- **PR 4 (this branch, PR # pending) — pack orchestration bridge, consent
+  scoping, and the frontend state-machine contract; no visual dialog yet
+  (assigned to Sol):** the pywebview bridge method a "Pack Project" UI
+  action calls, wiring PR 1-3's manifest/copy/publish primitives into one
+  cancellable, pollable job, plus the frontend contract consuming it.
+  - **A fourth, orthogonal consent kind: the WRITE-DIRECTORY grant**
+    (`desktop_consent.grant_write_dir`/`is_write_dir_consented`, capped at
+    8 entries) — separate from the existing per-file write grant (that
+    names one file about to be overwritten) and the read-only directory
+    grant (that permits reading descendants of a relink root); this one
+    permits CREATING a bundle directory under a picked destination root,
+    and never satisfies a read or write file check. Minted only from
+    `pick_pack_destination`'s native folder dialog return (never a typed
+    path), which clears every prior write-dir grant first so a destination
+    picked but never started never accumulates. `revoke_paths(paths)` is
+    the new companion primitive — removes SPECIFIC entries from the
+    ordinary per-file READ grant store by exact resolved key, letting a
+    pack operation unwind precisely the read grants IT minted without
+    disturbing anything else live in the process.
+  - **`quantized.desktop_bridge_pack.DesktopPackBridge`** (a mixin added
+    to `DesktopApi`'s bases, the `DesktopDialogBridge` precedent) — six
+    js_api methods, none raising into JS, none leaking an absolute path
+    into a `message`/`error` string: `pick_pack_destination` (mints the
+    write-dir grant); `pack_preview` (dry-run plan, gated by an
+    `_eligible` predicate — already read-consented, covered by a
+    directory grant, or declared by the open project's own payload —
+    grants nothing itself); `pack_start` (re-verifies the stored preview's
+    token AND a fresh `sha256(content)` — either mismatch is
+    `stale_preview`, never a silent re-plan; mints real read consent for
+    the eligible-but-ungranted sources about to be copied, remembers
+    exactly which, spawns `portable.pack.pack_project` on a daemon
+    thread, and revokes exactly those grants plus the write-dir grant in
+    a `finally` on EVERY outcome — success, failure, or cancellation);
+    `pack_status`/`pack_cancel`/`pack_reset` (pure reads/mutations of one
+    in-memory job record behind a single `threading.Lock`, no filesystem,
+    no consent). `pack_start` passes the STORED preview's own manifest to
+    `pack_project` VERBATIM (`manifest=`, PR 4 review round 2's fix — see
+    the bug note below): `pack_project` never rebuilds a manifest from
+    current disk/consent state when one is supplied, so the operation
+    executes exactly the snapshot the user reviewed and approved, and
+    `portable.staging.stage_sources`'s own re-probe (unchanged) enforces it
+    — a source not `packable` in the approved manifest is never staged even
+    if it exists by start time, and a source whose bytes changed fails
+    closed with `changed_since_preview` against the manifest's PREVIEW-TIME
+    checksum. Separately, the approved manifest is a plan, not a read
+    grant: `pack_start` re-checks every `packable` row against `_eligible`
+    before minting anything, and refuses with `consent_changed` (preview
+    again) if any row's consent lapsed between preview and start — a lost
+    grant fails closed rather than copying. Progress's `"publishing"` stage is
+    INFERRED (the last
+    source's `"verifying"` tick, or immediately with nothing to stage) —
+    `pack_project` itself never emits a tick for the
+    rewrite/finalize/write/publish steps that follow the staged copy in
+    the same synchronous call.
+  - **The frontend state machine** (`store/packProject.ts` + the lazily-
+    imported `store/packProjectRun.ts`, the `store/relink.ts`/
+    `relinkCommit.ts` precedent): `idle → selecting_destination →
+    scanning → awaiting_confirmation → packing → completed`; any active
+    state → `cancelling` → `cancelled` (pre-`packing` active states go
+    straight to `cancelled` locally — nothing backend-side to cancel yet);
+    any active state → `failed`. Illegal calls record `lastRejected`
+    rather than mutating state. `startPackProject` requires its
+    `approvedManifest` to be REFERENCE-IDENTICAL to the stored preview's
+    manifest (a fresh preview always creates a new object, so identity IS
+    "is this still the current plan") and re-serializes the live workspace
+    to fingerprint-compare (a `contentFingerprint` helper that strips
+    `serializeWorkspace`'s own live `savedAt` stamp before comparing — a
+    raw string compare would treat the timestamp alone as a change) — on
+    a match it resends the EXACT `preview.content` string to `pack_start`,
+    byte-identical to what `pack_preview` saw, so the backend's own
+    `sha256` check passes trivially. The poll loop (250ms) lives in
+    MODULE scope, not a React effect — it survives regardless of mount and
+    stops itself on a terminal phase — and a trailing-edge throttle
+    (`scheduleStatusApply`, driven by an explicit `now` parameter rather
+    than `Date.now()`, for determinism) coalesces bursts of status changes
+    to at most one store update per 200ms, always carrying the LATEST
+    status. `bytesCopied`/`completedCount` are clamped (`Math.max` against
+    the current value) so an out-of-order/misbehaving status can never
+    regress the displayed progress. A minimal `pack-project` palette
+    command (`commands/packProjectCommands.ts`, under 40 lines) previews
+    and toasts a packable/blocked summary — exercising the contract, not
+    the real dialog.
+  - **Tests:** `tests/test_desktop_bridge_pack.py` (24 — destination pick
+    mints/clears the write-dir grant, preview refused without it, token
+    storage, wrong-token/changed-content/existing-destination refusals,
+    double-start `already_running`, a REAL end-to-end pack reaching
+    `completed` with a `validate_bundle`-checked bundle and every minted
+    grant revoked, cancel-mid-copy → `cancelled` with `cleanup_ok: true`,
+    a thrown exception → `failed` with no raw path in `message`, idempotent
+    `pack_cancel`, monotonic `pack_status` progress, `pack_reset` gating),
+    `tests/test_desktop_consent.py` extended (24 new — the write-dir grant
+    kind's full read-only-directory-grant-shaped suite plus `revoke_paths`),
+    `store/packProject.test.ts` (50 — a table-driven legality matrix over
+    every phase × action, double-start, cancel in every pre-packing state
+    and mid-packing via a scripted `cancelling`→`cancelled` status
+    sequence, both staleness cases, a bridge-null failure, a
+    `cleanup_ok: false` failure surfaced verbatim, retry-via-reset, the
+    progress clamp, and the throttle's coalescing proven by asserting a
+    middle status value never reaches a subscriber), `lib/
+    desktopPackBridge.test.ts` (21 — every wire call's null/ok/refusal/
+    malformed-response/throw paths).
+  - **A genuine bug found and fixed via a flaky-test investigation
+    (2026-09-06):** the FIRST content-staleness design compared raw
+    `serializeWorkspace` strings directly, which embeds a live `savedAt`
+    on every call — two serializations of the IDENTICAL workspace
+    routinely differed by nothing but that timestamp, making the
+    stale-preview check spuriously fire (or spuriously NOT fire, depending
+    on millisecond timing) independent of any real edit. Caught by running
+    the new test file back to back with `architecture.test.ts` (whose
+    slower module graph load widened the timing window) rather than by
+    inspection — see `docs/testing.md`'s evidence standard. Fixed by the
+    `contentFingerprint`/resend-the-original-string design above.
+  - **A blocking review finding on PR #308, fixed the same slice:**
+    `pack_start` validated the token and the workspace JSON, but the
+    worker called `pack.pack_project(payload, ...)` with no `manifest=`,
+    which REBUILT the manifest from CURRENT filesystem/consent state and
+    never compared it against the stored, user-approved preview manifest —
+    (1) a source `missing` (blocked) at preview time that appeared on disk
+    before start became packable and was copied, though the approved
+    preview excluded it; (2) a source whose content changed between
+    preview and start was staged against its NEW checksum (the rebuilt
+    manifest recorded whatever the file looked like right now), so the
+    approved snapshot was never actually enforced despite `stage_sources`'s
+    own `changed_since_preview` re-probe already existing — it was just
+    being compared against the wrong values. Fixed by giving
+    `pack_project` a `manifest: Mapping[str, Any] | None = None` keyword
+    that, when supplied, is used VERBATIM (no `build_dry_run_manifest`
+    call, rejecting anything that isn't itself a valid dry-run manifest as
+    `invalid_manifest`), and having `pack_start` pass
+    `self._pack_preview["manifest"]`. Because the executed manifest no
+    longer reflects current consent, `pack_start` now re-checks every
+    `packable` row against `_eligible` up front and refuses with
+    `consent_changed` if any lapsed (the prior round's finding #1 check in
+    `_grant_eligible_packable_sources` stays as defence in depth) — the
+    approved plan never becomes a substitute for a live read grant.
 - **PR 5 (planned, not shipped):** adversarial audit of the full stack,
   in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
 

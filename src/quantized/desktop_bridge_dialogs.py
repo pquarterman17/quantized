@@ -32,6 +32,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from quantized.desktop_bridge_common import (
+    FOLDER_DIALOG_DEFAULT,
+    OPEN_DIALOG_DEFAULT,
+    SAVE_DIALOG_DEFAULT,
+    dialog_kind,
+)
 from quantized.desktop_consent import (
     clear_dir_grants,
     consented_path,
@@ -70,26 +76,6 @@ PROJECT_FILE_TYPES: tuple[str, ...] = (
     "All files (*.*)",
 )
 
-# pywebview's documented dialog-kind constants. Resolved from the module when
-# it is importable, with these as the fallback, because `webview` is an OPTIONAL
-# extra (`pip install quantized[desktop]`): requiring it merely to name a
-# constant would make this whole module unimportable — and untestable — on a
-# plain install, even though the only part that genuinely needs pywebview is the
-# window object the launcher injects.
-_OPEN_DIALOG_DEFAULT = 10
-_FOLDER_DIALOG_DEFAULT = 20
-_SAVE_DIALOG_DEFAULT = 30
-
-
-def _dialog_kind(name: str, fallback: int) -> int:
-    try:
-        import webview
-
-        value = getattr(webview, name, fallback)
-        return int(value) if isinstance(value, int) else fallback
-    except ImportError:
-        return fallback
-
 
 class DesktopDialogBridge:
     """Mixin providing every native-dialog and project-READ js_api method.
@@ -116,7 +102,7 @@ class DesktopDialogBridge:
             return {"paths": [], "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("OPEN_DIALOG", _OPEN_DIALOG_DEFAULT),
+                dialog_kind("OPEN_DIALOG", OPEN_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
                 allow_multiple=multiple,
                 file_types=IMPORT_FILE_TYPES,
@@ -142,7 +128,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -174,7 +160,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -284,7 +270,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("SAVE_DIALOG", _SAVE_DIALOG_DEFAULT),
+                dialog_kind("SAVE_DIALOG", SAVE_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
                 save_filename=suggested_name or "workspace.dwk",
                 file_types=PROJECT_FILE_TYPES,
@@ -375,7 +361,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("OPEN_DIALOG", _OPEN_DIALOG_DEFAULT),
+                dialog_kind("OPEN_DIALOG", OPEN_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
                 allow_multiple=False,
                 file_types=PROJECT_FILE_TYPES,
