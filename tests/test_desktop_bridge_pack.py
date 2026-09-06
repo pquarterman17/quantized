@@ -719,6 +719,41 @@ def test_cancel_mid_copy_reaches_cancelled_with_cleanup_ok(
     assert write_dir_grant_count() == 0
 
 
+def test_terminal_phase_is_never_observable_before_grants_are_revoked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forces the race (docs/testing.md): `revoke_paths` is slowed by 50 ms,
+    and a status poller records whether it ever saw a terminal phase while
+    the minted read grant was still live. The worker must revoke under the
+    same lock `pack_status` reads through, BEFORE flipping the phase, so
+    the poller can never observe "completed" with the grant intact."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    resolved = os.path.realpath(str(files[0]))
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    real_revoke = pack_bridge_module.revoke_paths
+
+    def _slow_revoke(paths: list[str]) -> None:
+        time.sleep(0.05)
+        real_revoke(paths)
+
+    monkeypatch.setattr(pack_bridge_module, "revoke_paths", _slow_revoke)
+    assert api.pack_start(preview["token"], content)["ok"] is True
+
+    leaked = False
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        status = api.pack_status()
+        if status["phase"] not in ("packing", "cancelling"):
+            leaked = is_consented(resolved)
+            break
+        time.sleep(0.001)
+    assert status["phase"] == "completed"
+    assert leaked is False
+
+
 def test_cancel_during_publishing_cannot_corrupt_or_delete_the_finished_bundle(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -278,17 +278,22 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
     # can have raced ahead of it, and the immediately-following `os.rename`
     # (replacing our own just-created empty directory) closes the window to
     # the two syscalls between them -- as tight as pure Python's `os` module
-    # permits without a platform-specific syscall. On Windows this is a
-    # no-op hardening: `os.rename` there already refuses outright whenever
-    # `destination_dir` exists at all (file or directory, empty or not), so
-    # the POSIX-only empty-directory race described above cannot occur on
-    # that platform in the first place.
-    try:
-        os.mkdir(destination_dir)
-    except FileExistsError:
-        return _refuse(staging_root, "destination_exists", "destination already exists")
-    except OSError as exc:
-        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
+    # permits without a platform-specific syscall.
+    # The reservation is POSIX-only: on Windows `os.rename` refuses ANY
+    # existing destination -- including an empty directory we created
+    # ourselves a syscall earlier -- so reserving there would make every
+    # publish fail; the rename itself is the atomic existence check on that
+    # platform, and its `FileExistsError` is mapped to `destination_exists`
+    # below.
+    reserved = False
+    if os.name != "nt":
+        try:
+            os.mkdir(destination_dir)
+        except FileExistsError:
+            return _refuse(staging_root, "destination_exists", "destination already exists")
+        except OSError as exc:
+            return _refuse(staging_root, "publish_failed", safe_os_error(exc))
+        reserved = True
     try:
         os.rename(staging_root, destination_dir)
     except OSError as exc:
@@ -297,10 +302,13 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
         # -- best-effort: if this itself fails there is nothing further to
         # do that would not risk deleting something a third party legitimately
         # created there since.
-        try:
-            os.rmdir(destination_dir)
-        except OSError:
-            pass
+        if reserved:
+            try:
+                os.rmdir(destination_dir)
+            except OSError:
+                pass
+        if isinstance(exc, FileExistsError):
+            return _refuse(staging_root, "destination_exists", "destination already exists")
         # `safe_os_error`, never `str(exc)`: an `OSError` from `os.rename`
         # carries BOTH `filename` and `filename2` -- the absolute staging
         # and destination paths -- and this result is structured, possibly
