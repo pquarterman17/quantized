@@ -280,6 +280,32 @@ Findings:
     fix (`89499cc`), so current main is likely somewhat better; the
     <1.5 s target still waits on the payload-decimation item.
 
+## Perf sweep — 2026-09-06 (PRs #295–#301)
+
+A follow-on repo-evaluation session, outside the dated P0.4 runs above.
+Each row's numbers are as stated in that PR's own commit message; where none
+is stated the change is described qualitatively rather than invented. Not
+every row is a P0.4 fixture-list item — the Debye fit vectorization and the
+startup-import deferral are hot paths found in the same session, included
+here for one dated record rather than split across files.
+
+| PR | What changed | Before → after |
+|---|---|---|
+| #295 | `upload_file`/`upload_template` (`routes/parsers.py`) parsed synchronously on the event loop; moved to `run_in_threadpool`. Response encoding (`routes/_payload.py`'s `DataStructResponse`/`dumps_payload`) and the delimited-parser transpose (`io/delimited.py`) now chunk their C-level calls (~8k-element budget) so the GIL is released between chunks too. | `GET /api/health` during a 1M-row CSV upload: 15.5 s stalled (of a 16.8 s upload) → <0.5 s |
+| #296 | `/api/plot/series` accepts the existing dataset-handle cache (`routes/_datasetcache.py`, `X-Dataset-Handle`) the map/RSM routes already used, so a committed zoom/pan re-fetch sends a handle instead of the whole dataset. | 1M×7 windowed re-fetch: 11.76 s → 0.31 s server wall time; request body 154 MB → 112 bytes |
+| #297 | `_debye`/`_debye_einstein` (`calc/fit_models_special.py`) replaced a per-x-point `scipy.integrate.quad` loop (452k `quad` calls per default 10k-point model scan) with fixed 32-node Gauss-Legendre quadrature broadcast over the array; Einstein lattice term made overflow-safe. Max relative error vs. the old per-point implementation: 1.5e-12; golden parity unchanged. | `evaluate()` at 10k points: 116 ms → 17.5 ms; `curve_fit(Debye)` at a matched 229 iterations: 57.7 s → 7.4 s |
+| #298 | `io/delimited.py`'s numeric import gets a bulk `np.loadtxt` fast path (`io/_delimited_fast.py`) once a prefix probe confirms every data row is `n_cols` float-parseable tokens; falls back to the existing tokenize/transpose/convert path on any ragged row, text/NA cell, or datetime column. Layout detection tokenizes lazily. | 1M×7 CSV `import_auto`: 10.25 s → 1.88 s wall, 989 MB → 546 MB peak memory; 100k-row file: 0.56 s → 0.16 s |
+| #299 | `setCellValue`/`setCategoricalCell` (worksheet single-cell edits) recompute only the edited row's formula cells (`lib/formulaIncremental.ts`) instead of every formula column over every row, whenever every formula is provably row-local (falls back to a full recompute for aggregates, `lag`/`diff`, recodes, or a formula already carrying an error). | Per-edit cost at 1M rows: ~4.2 s → ~18 ms |
+| #300 | `create_app()` no longer imports `openpyxl` (Excel parser) or `periodictable` (SLD formula) eagerly — both move inside the functions that use them; the Excel sniffer checks the extension instead of importing openpyxl. `PanelOverlayWindow` keys its dropped-row memo on dataset identity (`lib/rowstate.rowStateIdentity`) instead of rebuilding a full set every render. | Warm `create_app()`: 1.9–3.3 s → 1.8–2.1 s (component costs removed from startup: openpyxl ~0.2 s cold, periodictable ~0.03 s) |
+| #301 | Test-only: `test_upload_concurrency.py`'s health/upload race is now forced via an `Event` gating the held parse instead of sized by a wall-clock sleep, after the 120k-row fixture parsed faster than the pre-poll sleep on a fast CI runner and the probe missed the window once. | No performance number — flake-elimination, not a re-measure |
+
+Of these, #296 and #299 extend the original envelope directly: #296 is the
+committed-zoom-refetch half of finding 1's point-reduction campaign above
+(decimation shrank points-on-the-wire; the handle cache now also shrinks the
+re-fetch itself for an unchanged dataset); #299 measures the worksheet's
+single-cell EDIT path at 1M rows, which the 2026-07-26 large-workspace run
+(`be40a69`, above) did not — that run covered mount/scroll only.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Network/offline source transitions — unmeasurable today: no offline-vs-

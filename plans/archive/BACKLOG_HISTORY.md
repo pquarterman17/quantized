@@ -14,6 +14,57 @@ paragraph.
 
 ---
 
+Prior (twenty-fifth pass, 2026-09-06 — the perf-PR reconciliation). What
+changed:
+
+1. **Seven performance PRs (`#295`–`#301`) reconciled against
+   `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P0.4 and `docs/performance_envelope.md`.**
+   `#298` (bulk CSV `np.loadtxt` parse), `#295` (moved the upload parse off
+   the event loop; chunked response encoding so a concurrent `GET
+   /api/health` no longer stalls), and `#296` (extended the existing
+   dataset-handle cache to `/api/plot/series`) are booked as new
+   evidence-backed P0.4 follow-ups, each citing its PR's own measured
+   before/after numbers. `#299` (incremental worksheet formula recompute,
+   ~4.2 s → ~18 ms per edit at 1M rows) closes the single-cell EDIT half of
+   the 1M-row-worksheet residual that bullet has carried since 2026-07-26 —
+   scroll/mount were already in-budget per that run; only the edit path was
+   untested at that scale. The import-profile-attribution acceptance box's
+   text is updated to name `#298` as the mechanism that closed the
+   post-`_detect_layout` residual. `#297` (Debye lattice Gauss-Legendre
+   vectorization) and `#300` (startup import deferral: `openpyxl`/
+   `periodictable` moved out of `create_app()`) are recorded in
+   `docs/performance_envelope.md`'s new 2026-09-06 section for one dated
+   record but are not P0.4 fixture-list items. `#301` is a test-determinism
+   fix (forces the health/upload race via an `Event` instead of a wall-clock
+   sleep) with no performance number to report.
+2. **`MAIN_PLAN.md` gets a new `## Completed` entry** for the whole
+   2026-09-06 pass, naming the follow-ups NOT shipped this pass:
+   `io/import_preview.py::guess_settings` eager tokenization; the slow
+   model-scan candidates (Poly4, bi-exponential, Bloch — the same per-point
+   `scipy` loop class `#297` fixed for Debye, not yet applied to these); the
+   still-eager `scipy.stats` import at startup (kept eager deliberately —
+   the always-on statistics routes already import it, so deferring it here
+   would only move the cost to first request); a thread-based job queue for
+   import/export (today only the DREAM/bumps fit uses `routes/jobs_api`);
+   `response_model` on the routes that still lack one; the 33
+   `test_api_*.py` files still building their own `TestClient()` instead of
+   the shared `app`/`client` fixtures `#293` added; and the seven ESLint
+   rules `#293`'s type-aware lint sweep left off with dated counts.
+3. **The dead `errlog.ts`/`/api/debug/report` row stays removed** —
+   re-verified this pass by grepping the tree for `debug/report`: the only
+   hits are `CHANGELOG.md` and this file's own text describing the
+   2026-09-04 (`#294`) deletion, no live reference remains.
+4. **A new Actionable dev work row books the deferred follow-ups from
+   item 2** for a future pass, pointing at `MAIN_PLAN.md`'s new Completed
+   entry as the source of truth.
+
+Verified: `tests/test_repo_integrity.py`'s plan-drift guard
+(`test_plan_items_claiming_completion_are_moved_to_completed`) passes on the
+reconciled tree; `ruff check src tests tools` clean. Docs-only change, no
+code touched.
+
+---
+
 **Last reconciled:** 2026-08-28 (twenty-fourth pass). What changed:
 
 1. **`v0.23.0` and `v0.23.1` released 2026-08-28** (both stable; `v0.23.1`

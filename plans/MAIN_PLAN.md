@@ -721,6 +721,42 @@ in git history @ `e4f6590`.)*
 
 ## Completed
 
+- **2026-09-06 performance pass (`#295`–`#301`)** — seven PRs continuing the
+  PRIMARY_SOFTWARE_AUDIT_PLAN P0.4 evidence-first performance work (full
+  per-PR before/after numbers in `docs/performance_envelope.md`'s
+  2026-09-06 section; checklist reconciliation in
+  `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P0.4): `#295` moved the CSV/Origin-
+  template upload parse off the event loop and chunked response encoding so
+  concurrent requests (e.g. `GET /api/health`) no longer stall for the
+  whole parse; `#296` extended the existing dataset-handle cache to
+  `/api/plot/series` so a committed zoom/pan re-fetch no longer re-uploads
+  the whole dataset; `#297` vectorized the Debye lattice heat-capacity
+  integral (Gauss-Legendre over the array instead of one `scipy.integrate.
+  quad` call per point); `#298` added a bulk `np.loadtxt` fast path for
+  regular delimited files with an unchanged fallback on any ragged/text/NA/
+  datetime data; `#299` made worksheet single-cell edits recompute only the
+  edited row's formula cells instead of a full recompute; `#300` deferred
+  `openpyxl`/`periodictable` imports out of `create_app()` and fixed a
+  defeated memo in `PanelOverlayWindow`; `#301` hardened the upload-
+  concurrency regression test against a flake introduced by `#298`'s own
+  speedup (forces the race via an `Event` instead of sizing it by wall
+  clock).
+  - **Deferred follow-ups booked, not shipped this pass:** eager
+    tokenization in `io/import_preview.py::guess_settings`; the slow
+    model-scan candidates (Poly4, bi-exponential, Bloch — same per-point
+    `scipy` loop class `#297` fixed for Debye, not yet applied to these);
+    the still-eager `scipy.stats` import at startup (kept eager in `#300`
+    because the always-on statistics routes already need it — deferring it
+    would only move the cost to first request, not remove it, so a real fix
+    needs those routes' own import graph narrowed first); a thread-based
+    job queue for import/export (today only the DREAM/bumps fit uses
+    `routes/jobs_api`); adding `response_model` to the routes that still
+    lack one; the 33 `test_api_*.py` files still building their own
+    `TestClient` instead of the shared `app`/`client` fixtures from `#293`;
+    and the seven ESLint rules `#293`'s type-aware lint sweep left off with
+    dated counts (`require-await`, `no-unnecessary-type-assertion`, the
+    four `no-unsafe-*` rules, `no-base-to-string`).
+
 - ~~**#41 Sector ROI state into the store**~~ (2026-08-10) — `5ad96db`
   moved the SECTOR tool's fields out of component-local state in
   `workshops/roicuts/useRoiCuts.ts` into `store/rois.ts` beside
