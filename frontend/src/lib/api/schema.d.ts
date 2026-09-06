@@ -1619,6 +1619,13 @@ export interface paths {
          *     Streamed to disk in bounded chunks rather than read whole into memory
          *     (ROBUSTNESS_PLAN #3); an upload past
          *     ``_uploadstream.MAX_UPLOAD_BYTES`` is rejected with HTTP 413.
+         *
+         *     ``read_origin_template`` is a synchronous, CPU-bound parse over a plain
+         *     path, so it runs via ``run_in_threadpool`` (see ``routes/parsers.py``'s
+         *     ``upload_file`` for the full rationale -- this handler mirrors it) rather
+         *     than inline on the event loop. The temp directory is cleaned up only
+         *     after that call is awaited, so the file is never removed while the parse
+         *     is still reading it in the worker thread.
          */
         post: operations["upload_template_api_import_template_upload_post"];
         delete?: never;
@@ -2122,6 +2129,11 @@ export interface paths {
          * Book Data
          * @description One book's full DataStruct payload, by the id + source reference an
          *     import response's ``book_source``/lazy inventory entry gave the caller.
+         *
+         *     Returns a ``DataStructResponse`` (see ``routes/parsers.py``'s
+         *     ``_import_response``) instead of a plain dict -- a book's data can be as
+         *     large as any other import payload, so it gets the same chunk-encoding
+         *     treatment rather than one monolithic ``json.dumps``.
          */
         post: operations["book_data_api_parsers_books_data_post"];
         delete?: never;
@@ -2149,6 +2161,16 @@ export interface paths {
          *     ``QZ_DATA_ROOTS``) before any filesystem access, so the localhost API
          *     cannot be used to read system files (e.g. ``/etc/passwd``) through path
          *     traversal.
+         *
+         *     Returns a pre-built ``DataStructResponse`` (see ``_import_response``'s
+         *     docstring on ``upload_file`` for why: a plain ``dict`` return goes
+         *     through FastAPI's own encoding on the event loop even for a route whose
+         *     OWN body Starlette already runs in a threadpool). ``response_model``
+         *     documents the real body shape for OpenAPI (this function's return
+         *     annotation, a bare ``Response``, would otherwise produce an empty
+         *     schema); ``response_class`` is set to the same type for consistency,
+         *     though it has no runtime effect once a ``Response`` instance is
+         *     returned directly.
          */
         post: operations["import_file_api_parsers_import_post"];
         delete?: never;
@@ -2170,6 +2192,15 @@ export interface paths {
          * Upload File
          * @description Import an uploaded data file (browser file-picker / drag-drop).
          *
+         *     ``response_model=dict[str, Any]`` is DOCUMENTATION ONLY here: the actual
+         *     return value is a pre-serialized ``Response`` (see below), which FastAPI
+         *     passes straight through with no validation against this model at
+         *     runtime -- it exists purely so the OpenAPI schema (and the frontend's
+         *     generated types, ``frontend/api/openapi.json`` / ``schema.d.ts``) still
+         *     describes this endpoint's real body shape (the same import payload
+         *     ``import_file``/``/import`` returns) instead of the empty schema a bare
+         *     ``Response`` return type would otherwise produce.
+         *
          *     The bytes are streamed to disk in bounded chunks (``_uploadstream``,
          *     ROBUSTNESS_PLAN #3) rather than read whole into memory, under the
          *     original *basename* (so the extension still drives format dispatch, and
@@ -2183,6 +2214,40 @@ export interface paths {
          *     temp dir: it's deleted before this handler returns, since nothing needs
          *     it afterwards. An upload past ``_uploadstream.MAX_UPLOAD_BYTES`` is
          *     rejected with HTTP 413 before it fully lands on disk.
+         *
+         *     The parse (``_import_with_books``) AND its JSON encoding (see
+         *     ``_import_response``) are both synchronous, CPU-bound work over a plain
+         *     path -- neither touches any event-loop-only state -- so both run via a
+         *     single ``run_in_threadpool`` call rather than inline on the event loop.
+         *     A plain ``def`` route (e.g. ``import_file`` above) already gets its OWN
+         *     body run this way for free from Starlette's own dispatch (every sync
+         *     path function is itself run through ``run_in_threadpool``), but its
+         *     response is still encoded on the loop afterwards -- not this handler's
+         *     concern, since the fix here only targets the two ``async def`` upload
+         *     handlers where the encoding step was newly discovered to matter (see
+         *     ``_import_response``'s docstring for the profiled numbers). This handler
+         *     must stay ``async def`` for the streaming ``await``s above, so the
+         *     threadpool call is made explicit. Skipping either half of it -- the
+         *     parse OR the encoding -- leaves a large upload (measured: 16.8s parse
+         *     for a 1M-row CSV, 15.5s of that spent blocking a concurrent GET
+         *     /api/health) starving every other request on the event loop, including
+         *     job-queue polling and other windows' plot requests, for effectively the
+         *     whole upload. The temp directory's cleanup (the ephemeral ``with``
+         *     block's ``__exit__``) is ordered strictly after the threadpool call
+         *     finishes because that call is awaited before the ``with`` block exits,
+         *     so the file is never unlinked out from under a parse still reading it in
+         *     the worker thread.
+         *
+         *     The ``CALC_ERRORS_IO``/``UploadTooLargeError`` adapter below covers only
+         *     the STREAMING step (writing the uploaded bytes to disk) -- it deliberately
+         *     does NOT wrap the ``run_in_threadpool(_import_response, ...)`` call.
+         *     ``_import_response`` runs its own, narrower ``CALC_ERRORS_IO`` adapter
+         *     around just the parse (see its docstring); if this handler's adapter also
+         *     covered the threadpool call, a raw ``TypeError``/``ValueError`` escaping
+         *     the ``DataStructResponse`` construction (a non-JSON-native metadata value)
+         *     would be caught HERE instead and still misreported as a 422, defeating
+         *     that narrower adapter entirely. Left unwrapped here, an encoding failure
+         *     surfaces as the 500 it actually is.
          */
         post: operations["upload_file_api_parsers_upload_post"];
         delete?: never;

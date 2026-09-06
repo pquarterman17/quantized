@@ -116,6 +116,12 @@ def _extract_units(header: str) -> tuple[str, str]:
     return "", header
 
 
+# Row-chunk size for `_tokens_to_columns`'s well-formed-file transpose --
+# see that function's docstring for why a large file is transposed in
+# chunks rather than with one `zip(*data_tokens)` call.
+_TRANSPOSE_CHUNK_ROWS = 1_000
+
+
 def _tokens_to_columns(
     data_tokens: Sequence[Sequence[str]], n_cols: int
 ) -> Sequence[Sequence[str]]:
@@ -129,9 +135,31 @@ def _tokens_to_columns(
     values in the same columns.
     """
     if all(len(row) == n_cols for row in data_tokens):
-        # Common case (a well-formed file): every row is already n_cols wide,
-        # so a plain transpose is enough -- no per-cell padding pass needed.
-        return list(zip(*data_tokens, strict=True)) if data_tokens else [[] for _ in range(n_cols)]
+        # Common case (a well-formed file): every row is already n_cols
+        # wide, so a plain transpose is enough -- no per-cell padding pass
+        # needed. Done in ROW CHUNKS rather than one `zip(*data_tokens)`
+        # call over the whole file: `zip()` consumed by `list()` is a single
+        # uninterruptible C loop (CPython only checks whether to drop the
+        # GIL from inside the bytecode eval loop, which a `list(zip(...))`
+        # call never returns to until it's fully done), so for a large file
+        # it can hold the GIL -- and so stall a concurrent request, e.g. a
+        # job-queue poll or another window's plot fetch -- for the WHOLE
+        # transpose regardless of which thread runs it (profiled: ~1.1s for
+        # a 300k-row x 6-column file; see
+        # tests/test_upload_concurrency.py). Chunking keeps each `zip()`
+        # call small and lets this outer Python `for` loop -- ordinary
+        # bytecode, checked by the eval breaker every switch interval --
+        # yield the GIL between chunks. Every row still lands in the same
+        # column, same order, as the single-call version: concatenating
+        # chunked transposes is exactly what one whole-file transpose does.
+        if not data_tokens:
+            return [[] for _ in range(n_cols)]
+        columns_fast: list[list[str]] = [[] for _ in range(n_cols)]
+        for start in range(0, len(data_tokens), _TRANSPOSE_CHUNK_ROWS):
+            block = data_tokens[start : start + _TRANSPOSE_CHUNK_ROWS]
+            for c, col in enumerate(zip(*block, strict=True)):
+                columns_fast[c].extend(col)
+        return columns_fast
     columns: list[list[str]] = [[] for _ in range(n_cols)]
     for row in data_tokens:
         width = min(len(row), n_cols)
