@@ -51,6 +51,31 @@ contract but are not implemented here.
   mangled — a project name must never smuggle a directory component into
   the bundle's own layout.
 
+## Grouping vs collapsing sources (PR #305 review fix)
+
+Two datasets share ONE source row only when their ``source.path`` strings
+are either (a) byte-identical, or (b) PROVEN to name the same physical file
+by filesystem identity — never merely because they FOLD to the same
+:func:`quantized.portable.layout.path_key` (case/Unicode-normalization-form/
+separator differences). ``probe``/``consented`` are invoked at most once
+per DISTINCT exact spelling — never once per folded key — and two spellings
+collapse into one row only after both classify as ``"ok"`` and report the
+identical, non-zero ``(dev, ino)`` pair :func:`quantized.desktop_source_probe
+.probe_source_path` returns. A group that is NOT provably one file stays
+its own row even when its ``path_key`` collides with another's; the
+existing collision-suffix machinery in :mod:`quantized.portable.naming`
+then gives the two rows visibly distinct bundle destinations instead of
+silently sharing one. See :mod:`quantized.portable.grouping` for the full
+mechanism and rationale — this is where the actual dedup/collapse logic
+lives, split out to keep this module under the repo's line ceiling.
+
+**Downstream note (for the future "PR 3" project-rewrite work):** anything
+that maps a dataset back onto a manifest row (e.g. a future
+``project_rewrite.rewrite_payload_for_bundle``) MUST match by exact
+``original_path`` OR membership in ``original_path_variants`` — never by
+folded ``path_key`` — for the identical reason: two case/separator variants
+sharing a folded key are not guaranteed to be the same file.
+
 ## Determinism
 
 No timestamps, no randomness, no reliance on dict/set iteration order that
@@ -60,12 +85,15 @@ isn't itself derived from a sort: the same ``payload`` plus the same
 the order datasets happen to appear in ``payload`` (aside from
 ``datasets``/``shared_by``, which intentionally preserve payload order —
 see their fields' own notes below) OR the spelling (case, Unicode
-normalization form) two datasets happen to use for what
-:func:`quantized.portable.layout.path_key` treats as the same original
-path — a row's ``original_path`` is always the CANONICAL spelling (the
-lexicographically-least member by ``(NFC-normalized string, raw string)``,
-never whichever spelling happened to appear first in payload order), with
-every other distinct spelling recorded in ``original_path_variants``. This
+normalization form) two datasets happen to use for what turns out — via
+filesystem identity, never a folded key alone — to be the same original
+path — a merged row's ``original_path`` is always the CANONICAL spelling
+(the lexicographically-least member by ``(NFC-normalized string, raw
+string)``, never whichever spelling happened to appear first in payload
+order), with every other distinct spelling recorded in
+``original_path_variants``. Source rows are sorted by
+``(path_key(original_path), original_path)`` — the exact-path tiebreak
+matters now that two rows can share a folded key without collapsing. This
 is what lets ``tools/freeze_portable_manifest.py`` commit a fixture that
 ``tests/test_portable_manifest_fixture.py`` can byte-compare forever.
 """
@@ -73,13 +101,18 @@ is what lets ``tools/freeze_portable_manifest.py`` commit a fixture that
 from __future__ import annotations
 
 import json
-import ntpath
-import posixpath
-import re
-import unicodedata
-from collections.abc import Callable, Mapping
+import ntpath  # noqa: F401 -- see comment below
+import posixpath  # noqa: F401 -- see comment below
+from collections.abc import Mapping
 from typing import Any
 
+from .grouping import (
+    Consented,
+    Probe,
+    _coerce_metadata,
+    _looks_absolute,  # noqa: F401
+    group_and_collapse_sources,
+)
 from .layout import (
     BUNDLE_FORMAT,
     MANIFEST_FILENAME,
@@ -94,63 +127,17 @@ from .naming import plan_bundle_names
 
 __all__ = ["build_dry_run_manifest", "manifest_json"]
 
-Probe = Callable[[str], Mapping[str, Any]]
-Consented = Callable[[str], bool]
-
-# The states `probe` is contractually allowed to report (mirrors
-# `desktop_source_probe.probe_source_path`'s own set). Anything else is a
-# caller bug -- degrade it to "invalid" rather than let an unrecognized
-# string silently become "packable" or otherwise misclassified.
-_KNOWN_PROBE_STATES = {"ok", "missing", "offline", "invalid", "permission_denied"}
-
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
-_DRIVE_OR_UNC_RE = re.compile(r"^[A-Za-z]:[\\/]")
+# `ntpath`/`posixpath` are unused directly in this module now (the
+# absolute-path shape check moved to `grouping._probe_row_status`), and
+# `_looks_absolute` above is imported only to re-export it -- all three are
+# kept here purely so `tests/test_portable_manifest.py`'s existing
+# `manifest_module.ntpath` / `manifest_module.posixpath` /
+# `manifest_module._looks_absolute` references keep resolving without
+# changing those tests.
 
 
 def _default_consented(_path: str) -> bool:
     return True
-
-
-def _has_control_chars(s: str) -> bool:
-    return bool(_CONTROL_CHAR_RE.search(s))
-
-
-def _looks_absolute(path: str) -> bool:
-    """Is ``path`` absolute under EITHER host convention?
-
-    Never ``os.path.isabs`` alone: that only recognizes the RUNNING
-    platform's own convention, and on Python 3.13 ``os.path`` is
-    ``ntpath`` on Windows -- where ``ntpath.isabs("/data/x.csv")`` is
-    FALSE (no drive, so ntpath does not consider a bare leading slash
-    absolute), which would misclassify an ordinary POSIX path as relative
-    on a Windows host. This checks ``posixpath.isabs`` and ``ntpath.isabs``
-    EXPLICITLY, regardless of the host platform, plus the drive-letter and
-    UNC shapes below as belt-and-suspenders -- a workspace payload can
-    legitimately declare a source recorded on a different OS than the one
-    validating it right now.
-    """
-    if posixpath.isabs(path) or ntpath.isabs(path):
-        return True
-    if _DRIVE_OR_UNC_RE.match(path):
-        return True
-    return path.startswith("\\\\") or path.startswith("//")
-
-
-def _coerce_metadata(source: Mapping[str, Any]) -> dict[str, Any]:
-    """Type-validate a size/mtime/checksum-shaped mapping the same way
-    regardless of whether it came from a recorded-provenance source object
-    or a live ``probe`` response: checksum must be ``str``, size/mtime must
-    be ``int``/``float``, anything else (a probe returning a stringified
-    size, say) is treated as absent rather than trusted or allowed to
-    crash a downstream arithmetic summary."""
-    raw_checksum = source.get("checksum")
-    raw_mtime = source.get("mtime")
-    raw_size = source.get("size")
-    return {
-        "checksum": raw_checksum if isinstance(raw_checksum, str) else None,
-        "mtime": raw_mtime if isinstance(raw_mtime, (int, float)) else None,
-        "size": raw_size if isinstance(raw_size, (int, float)) else None,
-    }
 
 
 def _stat_verdict(recorded: Mapping[str, Any], probed: Mapping[str, Any]) -> str:
@@ -258,13 +245,16 @@ def build_dry_run_manifest(
 
     ``payload`` is an already-parsed workspace document (see
     :func:`quantized.desktop_project_file.parse_workspace_payload`).
-    ``probe`` is called at most once per unique original path (identified by
-    :func:`quantized.portable.layout.path_key`), and never at all for a path
-    ``consented`` rejects — see the module docstring's security section for
-    exactly what each of ``probe``/``consented`` controls. See this module's
-    own docstring for the full contract; the exact per-row and top-level
-    field set is documented on ``plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md``
-    P1.7's Pack Project subsection.
+    ``probe`` is called at most once per DISTINCT exact original-path
+    spelling — never once per folded :func:`quantized.portable.layout
+    .path_key` (see this module's own docstring for why that distinction
+    is the whole point of the PR #305 review fix), and never at all for a
+    path ``consented`` rejects — see the module docstring's security
+    section for exactly what each of ``probe``/``consented`` controls. See
+    this module's own docstring for the full contract; the exact per-row
+    and top-level field set is documented on
+    ``plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`` P1.7's Pack Project
+    subsection.
 
     Raises ``ValueError`` for a ``project_name`` shaped like a path-
     traversal attempt or that sanitizes down to nothing.
@@ -275,9 +265,15 @@ def build_dry_run_manifest(
     datasets_list = datasets_raw if isinstance(datasets_raw, list) else []
 
     dataset_entries: list[dict[str, Any]] = []
-    groups: dict[str, dict[str, Any]] = {}
-    group_order: list[str] = []
-    pending_source_key: dict[int, str] = {}
+    # Grouped by the EXACT original-path string -- never a folded
+    # `path_key` -- so a case/separator/Unicode-normalization variant is
+    # its own group until proven (by filesystem identity, in
+    # `grouping.group_and_collapse_sources`) to name the same file as
+    # another spelling. See the module docstring's "Grouping vs collapsing
+    # sources" section.
+    spellings_in_order: list[str] = []
+    members_by_spelling: dict[str, list[dict[str, Any]]] = {}
+    pending_spelling: dict[int, str] = {}
 
     for i, ds in enumerate(datasets_list):
         dataset_id, name = _dataset_identity(ds, i)
@@ -289,64 +285,41 @@ def build_dry_run_manifest(
             )
             continue
         assert original_path is not None and recorded is not None
-        key = path_key(original_path)
-        if key not in groups:
-            groups[key] = {"spellings": set(), "members": []}
-            group_order.append(key)
-        groups[key]["spellings"].add(original_path)
-        groups[key]["members"].append(
-            {"dataset_id": dataset_id, "name": name, "recorded": recorded}
+        if original_path not in members_by_spelling:
+            members_by_spelling[original_path] = []
+            spellings_in_order.append(original_path)
+        # `_payload_index` is internal to the grouping step only -- it is
+        # what lets `group_and_collapse_sources` restore original payload
+        # order for `shared_by` after merging members from more than one
+        # spelling's group; it is never exposed in the manifest itself.
+        members_by_spelling[original_path].append(
+            {"dataset_id": dataset_id, "name": name, "recorded": recorded, "_payload_index": i}
         )
         entry_index = len(dataset_entries)
         dataset_entries.append({"dataset_id": dataset_id, "name": name, "source_id": None})
-        pending_source_key[entry_index] = key
+        pending_spelling[entry_index] = original_path
 
-    # Deterministic source order: `group_order` already holds each unique
-    # path_key exactly once (in first-seen order), so sorting by the key
-    # alone is fully deterministic -- no tiebreak needed.
-    sorted_keys = sorted(group_order)
-    source_id_of = {k: f"s{n + 1:03d}" for n, k in enumerate(sorted_keys)}
-    for idx, key in pending_source_key.items():
-        dataset_entries[idx]["source_id"] = source_id_of[key]
+    grouped = group_and_collapse_sources(
+        spellings_in_order, members_by_spelling, probe, consented_fn
+    )
+
+    # Deterministic source order: `(path_key(original_path), original_path)`
+    # -- two DIFFERENT spellings can now share a folded `path_key` without
+    # having collapsed into one row (that is the whole point of the fix),
+    # so the key alone is no longer a sufficient tiebreak.
+    grouped.sort(key=lambda r: (path_key(r["original_path"]), r["original_path"]))
 
     rows: list[dict[str, Any]] = []
-    for key in sorted_keys:
-        group = groups[key]
-        spellings: set[str] = group["spellings"]
-        # Canonical spelling: the lexicographically-least member by
-        # (NFC-normalized string, raw string) -- deterministic regardless
-        # of which spelling happened to appear first in payload order.
-        original_path = min(spellings, key=lambda p: (unicodedata.normalize("NFC", p), p))
-        variants = sorted(spellings) if len(spellings) > 1 else []
-        members = group["members"]
-        row: dict[str, Any] = {
-            "source_id": source_id_of[key],
-            "original_path": original_path,
-            "original_path_variants": variants,
-            "members": members,
-        }
-        if _has_control_chars(original_path) or not _looks_absolute(original_path):
-            row["status"] = "invalid"
-            row["size"] = row["mtime"] = row["checksum"] = None
-        elif not consented_fn(original_path):
-            # Checked BEFORE `probe` is called at all: an unconsented path
-            # is never handed to a probe implementation that may do real
-            # I/O (review finding #8).
-            row["status"] = "not_consented"
-            row["size"] = row["mtime"] = row["checksum"] = None
-        else:
-            probed = probe(original_path)
-            state = probed.get("state")
-            status = state if state in _KNOWN_PROBE_STATES else "invalid"
-            if status == "ok":
-                coerced = _coerce_metadata(probed)
-                row["size"] = coerced["size"]
-                row["mtime"] = coerced["mtime"]
-                row["checksum"] = coerced["checksum"]
-            else:
-                row["size"] = row["mtime"] = row["checksum"] = None
-            row["status"] = status
-        rows.append(row)
+    source_id_of_spelling: dict[str, str] = {}
+    for n, group_row in enumerate(grouped):
+        source_id = f"s{n + 1:03d}"
+        rows.append({"source_id": source_id, **group_row})
+        member_spellings = group_row["original_path_variants"] or [group_row["original_path"]]
+        for spelling in member_spellings:
+            source_id_of_spelling[spelling] = source_id
+
+    for idx, spelling in pending_spelling.items():
+        dataset_entries[idx]["source_id"] = source_id_of_spelling[spelling]
 
     for row in rows:
         probed_for_verdict = {

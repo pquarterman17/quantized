@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import copy
+import os
+from pathlib import Path
 from typing import Any
 
 import pytest
 
 import quantized.portable.manifest as manifest_module
+from quantized.desktop_source_probe import probe_source_path
 from quantized.portable.layout import is_bundle_relative, path_key
 from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 
@@ -74,23 +77,27 @@ def test_shared_source_deduped_to_one_row_with_two_verdicts() -> None:
     assert calls == ["/data/run1.csv"]  # probed exactly once
 
 
-def test_probe_called_exactly_once_per_unique_key_not_per_dataset() -> None:
+def test_probe_called_exactly_once_per_unique_spelling_not_per_dataset() -> None:
+    """PR #305 review fix: dedup is by EXACT path string, never by folded
+    `path_key` -- two spellings that only differ by case are TWO distinct
+    groups and get probed separately (two calls), while two datasets that
+    share the byte-identical path string are one group (one call)."""
     payload = _payload(
         [
             _dataset("d1", "A", _path_source("/data/run1.csv")),
-            _dataset("d2", "B", _path_source("/data/run1.csv")),
-            _dataset("d3", "C", _path_source("/DATA/RUN1.csv")),  # same key, case-variant
-            _dataset("d4", "D", _path_source("/data/run2.csv")),
+            _dataset("d2", "B", _path_source("/data/run1.csv")),  # byte-identical to d1
+            _dataset("d3", "C", _path_source("/DATA/RUN1.csv")),  # different spelling
         ]
     )
     probe, calls = _counting_probe(
         {
             "/data/run1.csv": {"state": "ok", "size": 1, "mtime": 1.0},
-            "/data/run2.csv": {"state": "ok", "size": 2, "mtime": 2.0},
+            "/DATA/RUN1.csv": {"state": "ok", "size": 1, "mtime": 1.0},
         }
     )
     build_dry_run_manifest(payload, "proj", probe)
-    assert len(calls) == 2  # one per unique path_key, not one per dataset
+    assert len(calls) == 2  # one per distinct spelling, not one per dataset
+    assert sorted(calls) == ["/DATA/RUN1.csv", "/data/run1.csv"]
 
 
 # ── destination collisions ────────────────────────────────────────────────
@@ -510,19 +517,75 @@ def test_looks_absolute_rejects_relative_path() -> None:
 
 
 def test_canonical_spelling_is_order_independent_with_variants_recorded() -> None:
+    """Two spellings collapse into ONE row only when both probe `ok` and
+    report the IDENTICAL non-zero (dev, ino) -- PR #305 review fix. This
+    fixed, matching identity is what makes the collapse legitimate here."""
+
     def _manifest_for(order: list[str]) -> dict[str, Any]:
         payload = _payload([_dataset(f"d{i}", "N", _path_source(p)) for i, p in enumerate(order)])
-        probe, _ = _counting_probe({p: {"state": "ok", "size": 1, "mtime": 1.0} for p in order})
+        fixed = {
+            p: {"state": "ok", "size": 1, "mtime": 1.0, "dev": 9, "ino": 42} for p in order
+        }
+        probe, _ = _counting_probe(fixed)
         return build_dry_run_manifest(payload, "proj", probe)
 
     m1 = _manifest_for(["/x/A.CSV", "/x/a.csv"])
     m2 = _manifest_for(["/x/a.csv", "/x/A.CSV"])
     assert m1["sources"] == m2["sources"]
 
+    assert len(m1["sources"]) == 1
     row = m1["sources"][0]
     # Canonical = min by (NFC-normalized, raw); 'A' (0x41) < 'a' (0x61).
     assert row["original_path"] == "/x/A.CSV"
     assert row["original_path_variants"] == ["/x/A.CSV", "/x/a.csv"]
+
+
+def test_different_identities_never_collapse_even_with_same_path_key() -> None:
+    """RED-FIRST regression for the PR #305 defect: two spellings that fold
+    to the same `path_key` but report DIFFERENT (dev, ino) must NOT
+    collapse -- two rows, two source_ids, two distinct (visibly-suffixed)
+    bundle paths, regardless of payload order."""
+
+    def _manifest_for(order: list[str]) -> dict[str, Any]:
+        payload = _payload([_dataset(f"d{i}", "N", _path_source(p)) for i, p in enumerate(order)])
+        fixed = {
+            "/x/A.CSV": {"state": "ok", "size": 1, "mtime": 1.0, "dev": 9, "ino": 1},
+            "/x/a.csv": {"state": "ok", "size": 2, "mtime": 2.0, "dev": 9, "ino": 2},
+        }
+        probe, _ = _counting_probe(fixed)
+        return build_dry_run_manifest(payload, "proj", probe)
+
+    for order in (["/x/A.CSV", "/x/a.csv"], ["/x/a.csv", "/x/A.CSV"]):
+        manifest = _manifest_for(order)
+        assert len(manifest["sources"]) == 2
+        source_ids = {r["source_id"] for r in manifest["sources"]}
+        assert len(source_ids) == 2
+        bundle_paths = {r["bundle_path"] for r in manifest["sources"]}
+        assert len(bundle_paths) == 2
+        assert any("(2)" in p for p in bundle_paths)
+        original_paths = {r["original_path"] for r in manifest["sources"]}
+        assert original_paths == {"/x/A.CSV", "/x/a.csv"}
+        for row in manifest["sources"]:
+            assert row["original_path_variants"] == []
+            assert row["collision_group"] is not None
+
+
+def test_unknown_identity_never_collapses() -> None:
+    """A probe that reports `ok` but omits (or zeros) dev/ino must never be
+    treated as a match -- "unknown identity" is not "same identity"."""
+    payload = _payload(
+        [
+            _dataset("d1", "A", _path_source("/x/A.CSV")),
+            _dataset("d2", "B", _path_source("/x/a.csv")),
+        ]
+    )
+    fixed = {
+        "/x/A.CSV": {"state": "ok", "size": 1, "mtime": 1.0},  # no dev/ino at all
+        "/x/a.csv": {"state": "ok", "size": 1, "mtime": 1.0, "dev": 0, "ino": 0},  # zeroed
+    }
+    probe, _ = _counting_probe(fixed)
+    manifest = build_dry_run_manifest(payload, "proj", probe)
+    assert len(manifest["sources"]) == 2
 
 
 def test_single_spelling_has_empty_variants_list() -> None:
@@ -623,3 +686,78 @@ def test_naming_module_reuses_layout_split_ext() -> None:
     from quantized.portable.layout import split_ext
 
     assert naming_module.split_ext is split_ext
+
+
+# ── PR #305 review round: real filesystem, real `probe_source_path` ───────
+
+
+def _is_case_sensitive_fs(tmp_path: Path) -> bool:
+    """Detect the ACTUAL case-sensitivity of ``tmp_path``'s filesystem by
+    creating a file and checking whether a differently-cased name resolves
+    to it -- never assume from the host OS (a case-insensitive volume can
+    be mounted on Linux, and vice versa)."""
+    marker = tmp_path / "X.tmp"
+    marker.write_text("x", encoding="utf-8")
+    return not os.path.exists(str(tmp_path / "x.tmp"))
+
+
+def _real_probe(path: str) -> dict[str, Any]:
+    return probe_source_path(path, compute_checksum=True)
+
+
+def test_real_filesystem_case_variants_are_two_distinct_files(tmp_path: Path) -> None:
+    """On a case-sensitive filesystem, `A.csv` and `a.csv` are two
+    DIFFERENT files with different content -- the manifest built from the
+    REAL `probe_source_path` must produce two rows with different
+    checksums and distinct (visibly-suffixed) bundle paths, never dedup
+    them onto one shared source."""
+    if not _is_case_sensitive_fs(tmp_path):
+        pytest.skip("filesystem is case-insensitive -- A.csv and a.csv are one file here")
+
+    upper = tmp_path / "A.csv"
+    lower = tmp_path / "a.csv"
+    upper.write_text("upper case contents\n", encoding="utf-8")
+    lower.write_text("lower case contents, different length\n", encoding="utf-8")
+
+    payload = _payload(
+        [
+            _dataset("d1", "Upper", _path_source(str(upper))),
+            _dataset("d2", "Lower", _path_source(str(lower))),
+        ]
+    )
+    manifest = build_dry_run_manifest(payload, "proj", _real_probe)
+
+    assert len(manifest["sources"]) == 2
+    checksums = {r["checksum"] for r in manifest["sources"]}
+    assert len(checksums) == 2
+    bundle_paths = {r["bundle_path"] for r in manifest["sources"]}
+    assert len(bundle_paths) == 2
+    assert any("(2)" in p for p in bundle_paths)
+
+
+def test_real_filesystem_two_spellings_of_one_file_collapse(tmp_path: Path) -> None:
+    """Two spellings that the REAL filesystem resolves to the SAME file
+    (here: a `dir/../dir/a.csv`-shaped detour back to the same path) must
+    collapse into one source row with the second spelling recorded in
+    ``original_path_variants`` -- proven by matching (dev, ino), not by a
+    folded string comparison."""
+    subdir = tmp_path / "dir"
+    subdir.mkdir()
+    target = subdir / "a.csv"
+    target.write_text("same file, two spellings\n", encoding="utf-8")
+
+    spelling_a = str(target)
+    spelling_b = str(subdir / ".." / "dir" / "a.csv")
+    assert spelling_a != spelling_b  # genuinely different strings
+
+    payload = _payload(
+        [
+            _dataset("d1", "A", _path_source(spelling_a)),
+            _dataset("d2", "B", _path_source(spelling_b)),
+        ]
+    )
+    manifest = build_dry_run_manifest(payload, "proj", _real_probe)
+
+    assert len(manifest["sources"]) == 1
+    row = manifest["sources"][0]
+    assert sorted(row["original_path_variants"]) == sorted({spelling_a, spelling_b})

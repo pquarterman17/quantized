@@ -10,8 +10,14 @@ atomic staging + verified source copying (`quantized.portable.staging`/
 dataset-source extension on both sides (backend resolution with
 `base_dir`; frontend parse with a known `projectDir`, written back at
 serialize time only when saving into that same directory) — see the PR 2
-and PR 3 entries under P1.7 below. Earlier the same day: **P1.7 Pack
-Project PR 1** —
+and PR 3 entries under P1.7 below. Then the **PR 1 review fix**: an
+eleventh defect found on PR #305 review — source dedup was by folded
+`path_key`, which silently merged two DIFFERENT files on a case-sensitive
+filesystem into one shared source; fixed by grouping on the exact
+`original_path` string and collapsing only on proven filesystem identity
+(`(dev, ino)`, new fields on `desktop_source_probe.probe_source_path`),
+with the dedup/collapse logic split into `portable/grouping.py`. Earlier
+the same day: **P1.7 Pack Project PR 1** —
 bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
 copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
 2 — collision-safe relinking**
@@ -1411,20 +1417,43 @@ below — the packer's own implementation work starts fresh here:
     probe, consented=None)` — takes an already-parsed workspace payload
     (`desktop_project_file.parse_workspace_payload`) and a probe callback
     shaped like `desktop_source_probe.probe_source_path`; reads no file
-    itself. Sources are deduped by `path_key(original_path)` (several
-    datasets naming one file share ONE row, each with its own recorded
-    provenance + a `sourceChangeVerdict`-equivalent verdict, ported field-
-    for-field from `lib/relink.ts`); probed exactly once per unique key,
-    and never at all for a path `consented` rejects; sorted by `path_key`
-    alone (each key already unique, so no tiebreak is needed) so the same
-    payload always yields byte-identical `manifest_json` (2-space,
-    sorted-key, `ensure_ascii=False` JSON) — including a row's
-    `original_path`, which is always the CANONICAL spelling among however
-    many case/Unicode-normalization-form variants named that path_key (the
-    lexicographically-least by `(NFC-normalized string, raw string)`,
-    never whichever spelling happened to appear first in payload order),
-    with every other distinct spelling recorded in
-    `original_path_variants` (empty list when there was only one).
+    itself. **Corrected 2026-09-06 (PR #305 review):** the original text
+    here said sources were "deduped by `path_key(original_path)`" — that
+    was the bug. Sources are deduped by the EXACT `original_path` STRING
+    (several datasets naming the byte-identical path share ONE row, each
+    with its own recorded provenance + a `sourceChangeVerdict`-equivalent
+    verdict, ported field-for-field from `lib/relink.ts`); every other
+    distinct spelling — including one that only differs by case, Unicode
+    normalization form, or separator style — gets its OWN row unless later
+    PROVEN to be the same physical file. `probe`/`consented` are invoked
+    exactly once per distinct exact spelling, never once per folded
+    `path_key`, and never at all for a path `consented` rejects. Two
+    spellings' rows COLLAPSE into one only when both probe `ok` and report
+    the identical, non-zero `(dev, ino)` filesystem-identity pair (new
+    fields on `desktop_source_probe.probe_source_path`'s `ok` result) — a
+    folded-key match alone is never sufficient (a case-sensitive
+    filesystem's `/data/A.csv` and `/data/a.csv` are two different files;
+    the prior fold-based dedup would have silently mapped both onto one
+    packed copy). The actual dedup/collapse logic lives in
+    `portable/grouping.py` (split out to keep `manifest.py` under the
+    500-line ceiling). Source rows are sorted by
+    `(path_key(original_path), original_path)` — the exact-path tiebreak
+    is now load-bearing, since two rows can share a folded `path_key`
+    without having collapsed — so the same payload always yields
+    byte-identical `manifest_json` (2-space, sorted-key,
+    `ensure_ascii=False` JSON) — including a merged row's `original_path`,
+    which is always the CANONICAL spelling among however many
+    case/Unicode-normalization-form variants were PROVEN to be one file
+    (the lexicographically-least by `(NFC-normalized string, raw
+    string)`, never whichever spelling happened to appear first in
+    payload order), with every other distinct spelling in that merged
+    group recorded in `original_path_variants` (empty list when there was
+    only one spelling, or when a same-`path_key` group never collapsed).
+    **Downstream note for the future "PR 3" project-rewrite work:**
+    anything that maps a dataset back onto a manifest row (e.g. a future
+    `project_rewrite.rewrite_payload_for_bundle`) MUST match by exact
+    `original_path` or membership in `original_path_variants` — never by
+    folded `path_key` — for the identical reason.
     Destination-name collisions get L0.34's visible-suffix treatment
     (`name.ext`, `name (2).ext`, `name (3).ext`, ... — never a silent
     overwrite, and never able to duplicate another group's own plain name:
@@ -1475,6 +1504,14 @@ below — the packer's own implementation work starts fresh here:
     `tests/test_portable_manifest_fixture.py` byte-compares against it
     forever (regenerate with `uv run python
     tools/freeze_portable_manifest.py` on a deliberate behavior change).
+    **Extended 2026-09-06 (PR #305 review)** with the two cases the fix
+    itself exists to distinguish, same folder, differing only by case:
+    `/data/case/A.csv` vs `/data/case/a.csv` with DIFFERENT fake `(dev,
+    ino)` identities and checksums (two rows, visible suffix — the
+    regression for the defect) and `/data/same/Run1.csv` vs
+    `/data/same/run1.csv` with the SAME fake identity and checksum (one
+    row, `original_path_variants` populated — the legitimate collapse
+    case).
   - **Review round (2026-09-06):** ten defects found and fixed, each with
     a regression test — see the commit fixing this PR for the full list;
     highlights: the keeper-suffix collision above (a silent-overwrite
@@ -1484,6 +1521,26 @@ below — the packer's own implementation work starts fresh here:
     name when the extension alone doesn't fit the budget, and its
     reserved-device-name check now keys off the part before the FIRST dot
     (Windows' own rule) rather than the last.
+  - **Follow-up review round (2026-09-06, PR #305 feedback):** an
+    eleventh defect — dedup was by folded `path_key`, not exact path
+    string, so two DIFFERENT files on a case-sensitive filesystem
+    (`/data/A.csv`/`/data/a.csv`) could be silently treated as one shared
+    source and mapped to a single packed copy. Fixed by grouping on the
+    exact `original_path` string and collapsing two groups into one row
+    only when both probe `ok` and report the identical, non-zero `(dev,
+    ino)` filesystem-identity pair — new fields on
+    `desktop_source_probe.probe_source_path`'s `ok` result — never on a
+    folded-key match alone. The dedup/collapse mechanism moved into its
+    own `portable/grouping.py` module (keeping `manifest.py` under the
+    500-line ceiling); see that module's docstring for the full rationale
+    and this section's corrected description above for the field-level
+    detail. Regression tests: two spellings with different `(dev, ino)`
+    never collapse even when their `path_key`s match (fake-probe and
+    real-filesystem-with-real-`probe_source_path` versions, in both
+    payload orders); two spellings with the same `(dev, ino)` do collapse
+    (fake-probe and a real-filesystem "two spellings resolve to one file"
+    version); a `(dev, ino)` of zero or absent ("unknown identity") never
+    collapses with anything.
 - **PR 2 (this branch, PR # pending) — atomic staging + verified source
   copying, backend-only, still no `.dwk` write, no publish:** the first
   PR that touches a filesystem for real. New pure modules
