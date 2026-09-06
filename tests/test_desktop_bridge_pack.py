@@ -112,6 +112,33 @@ def test_pick_pack_destination_mints_a_write_dir_grant(tmp_path: Path) -> None:
     assert write_dir_grant_count() == 1
 
 
+def test_pick_pack_destination_dialog_oserror_message_is_path_free(tmp_path: Path) -> None:
+    """Re-review finding on PR #308: a native-picker `OSError` carries
+    `filename` (an absolute path); `str(exc)` would have surfaced it,
+    contradicting this module's path-free error contract."""
+    secret = str(tmp_path / "secret-folder")
+    api = DesktopApi()
+    api.attach(FakeWindow(PermissionError(13, "Permission denied", secret)))
+    out = api.pick_pack_destination()
+    assert out["path"] is None
+    assert "Permission denied" in out["error"]
+    assert secret not in out["error"]
+    assert str(tmp_path) not in out["error"]
+    assert write_dir_grant_count() == 0
+
+
+def test_pick_pack_destination_dialog_generic_exception_message_is_path_free(
+    tmp_path: Path,
+) -> None:
+    secret = str(tmp_path / "secret-folder")
+    api = DesktopApi()
+    api.attach(FakeWindow(RuntimeError(f"picker exploded at {secret}")))
+    out = api.pick_pack_destination()
+    assert out["path"] is None
+    assert secret not in out["error"]
+    assert write_dir_grant_count() == 0
+
+
 def test_pick_pack_destination_cancel_returns_none(tmp_path: Path) -> None:
     api = DesktopApi()
     api.attach(FakeWindow(None))
