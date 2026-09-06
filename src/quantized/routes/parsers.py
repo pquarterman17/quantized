@@ -39,7 +39,7 @@ from quantized.io.origin_project.preview import decimate_datastruct
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
-from quantized.routes._uploadcache import clear_in_flight, mark_in_flight, stage_upload_stream
+from quantized.routes._uploadcache import clear_in_flight, stage_upload_stream
 from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
@@ -444,16 +444,17 @@ async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     suffix = Path(name).suffix.lower()
     if suffix in (".opj", ".opju"):
         try:
-            dest, token = await stage_upload_stream(name, file)
+            # pinned=True marks the token in-flight atomically with its own
+            # commit (see stage_upload_stream/_commit's docstrings) -- a
+            # separate mark_in_flight call made only after staging returns
+            # would leave a window where a concurrent upload's commit could
+            # evict this file (deterministically so once enough older
+            # tokens are already pinned) before it's ever protected.
+            dest, token = await stage_upload_stream(name, file, pinned=True)
         except UploadTooLargeError as exc:
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except CALC_ERRORS_IO as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        # Pin the token so a concurrent upload's staging commit can't
-        # evict this file out from under the parse below, which reads
-        # it from a threadpool worker while this coroutine is suspended
-        # on the await (see _uploadcache._commit's docstring).
-        mark_in_flight(token)
         try:
             return await run_in_threadpool(
                 _import_response, dest, full_books=full_books, upload_token=token

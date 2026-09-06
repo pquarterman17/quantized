@@ -181,6 +181,45 @@ def _encode_array_chunked(values: list[Any]) -> str:
     return "[" + ",".join(parts) + "]"
 
 
+def _json_key(key: Any) -> str:
+    """Encode a dict key exactly as stdlib ``json.dumps`` does.
+
+    ``json.dumps`` never calls ``dumps`` recursively on a key -- it coerces
+    non-str keys to ``str`` with its own rules (``encoder.py``'s
+    ``_make_iterencode``/C ``encoder.c``'s ``encoder_encode_key``) before
+    quoting: ``bool`` (checked before ``int`` -- ``bool`` is an ``int``
+    subclass) -> ``"true"``/``"false"``; ``None`` -> ``"null"``; ``int`` ->
+    ``str(key)``; ``float`` -> ``float.__repr__(key)`` (so ``1.0`` ->
+    ``"1.0"``, ``-0.0`` -> ``"-0.0"``, ``1e20`` -> ``"1e+20"``); a plain
+    ``str`` key is used as-is. Any other key type raises the same
+    ``TypeError`` stdlib raises. The previous code passed the key straight
+    to ``json.dumps(key, ...)``, which quotes a ``str`` correctly but
+    renders an ``int``/``float``/``bool``/``None`` key as a bare JSON
+    literal (e.g. ``{1: ...}``) -- not a JSON object key at all, so the
+    output fails to parse.
+    """
+    if isinstance(key, str):
+        text = key
+    elif key is True:
+        text = "true"
+    elif key is False:
+        text = "false"
+    elif key is None:
+        text = "null"
+    elif isinstance(key, int):
+        text = str(key)
+    elif isinstance(key, float):
+        if not math.isfinite(key):
+            if not _JSON_KWARGS["allow_nan"]:
+                raise ValueError("Out of range float values are not JSON compliant")
+            text = "NaN" if math.isnan(key) else ("Infinity" if key > 0 else "-Infinity")
+        else:
+            text = float.__repr__(key)
+    else:
+        raise TypeError(f"keys must be str, int, float, bool or None, not {type(key).__name__}")
+    return json.dumps(text, ensure_ascii=_JSON_KWARGS["ensure_ascii"])
+
+
 def _encode_json(value: Any) -> str:
     """Recursively JSON-encode ``value``, chunk-encoding any list found
     under a ``"time"``/``"values"`` key AT ANY NESTING DEPTH, and encoding
@@ -196,11 +235,15 @@ def _encode_json(value: Any) -> str:
     Python-level function call per nested container (never per element --
     still O(n) overall, dominated by the same chunked ``json.dumps`` calls
     ``_encode_array_chunked`` already made).
+
+    Dict keys go through :func:`_json_key`, which coerces non-``str`` keys
+    (``int``/``float``/``bool``/``None``) exactly as stdlib ``json.dumps``
+    does -- see its docstring.
     """
     if isinstance(value, dict):
         pieces: list[str] = []
         for key, sub in value.items():
-            key_json = json.dumps(key, ensure_ascii=_JSON_KWARGS["ensure_ascii"])
+            key_json = _json_key(key)
             if key in _CHUNKED_JSON_KEYS and isinstance(sub, list):
                 sub_json = _encode_array_chunked(sub)
             elif isinstance(sub, (dict, list)):

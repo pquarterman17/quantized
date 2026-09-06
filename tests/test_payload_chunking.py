@@ -210,3 +210,66 @@ def test_chunk_elems_constant_is_8000() -> None:
     changes, this test (not the formula/boundary-sensitive ones) is what
     should fail first."""
     assert _ARRAY_CHUNK_ELEMS == 8_000
+
+
+# --- Non-str dict-key coercion (merge-blocking bug: `_encode_json` used to
+# pass a dict key straight to `json.dumps(key, ...)`, which quotes a str key
+# correctly but renders int/float/bool/None keys as bare JSON literals --
+# `{1: ...}` -- not valid JSON at all. `_json_key` must coerce exactly like
+# stdlib `json.dumps` does. Reachable today via `io/ncnr.py`'s integer-keyed
+# `metadata["error_channels"]`, which `datastruct_payload` passes straight
+# through to the wire.
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {1: "a"},
+        {1: "a", 2: "b", 3: "c"},
+        {1.0: "a"},
+        {-0.0: "a"},
+        {1e20: "a"},
+        {0.1: "a", 2.5: "b"},
+        {True: "a", False: "b"},
+        {None: "a"},
+        {2: "int", 2.5: "float", None: "none", True: "bool"},
+        {"metadata": {"error_channels": {1: 2}}},
+        {"a": {"b": {1: {2.5: [1, 2, 3]}}}},
+        {"books": [{"time": [1, 2], "meta": {1: "x"}}, {"time": [3], "meta": {2: "y"}}]},
+    ],
+)
+def test_dumps_payload_dict_key_coercion_matches_stdlib(payload: dict) -> None:
+    """Byte-parity with stdlib ``json.dumps`` for non-``str`` dict keys at
+    every nesting depth, including inside a "books" list and alongside a
+    chunk-encoded "time" array."""
+    expected = json.dumps(payload, **_JSON_KWARGS).encode("utf-8")
+    got = dumps_payload(payload)
+    assert got == expected
+    # And the result must actually be parseable JSON, not merely equal to
+    # whatever (possibly also-invalid) bytes a naive port might produce.
+    assert json.loads(got) == json.loads(expected)
+
+
+def test_dumps_payload_ncnr_style_error_channels_round_trips() -> None:
+    """The exact shape ``io/ncnr.py`` produces: an integer-keyed
+    ``error_channels`` map nested under ``metadata``, as
+    ``datastruct_payload`` hands it to ``dumps_payload``/``DataStructResponse``."""
+    payload = {
+        "time": [1.0, 2.0],
+        "values": [[1.0], [2.0]],
+        "labels": ["Q", "R"],
+        "units": ["", ""],
+        "metadata": {"error_channels": {0: 1}},
+    }
+    body = dumps_payload(payload)
+    parsed = json.loads(body)
+    assert parsed["metadata"]["error_channels"] == {"0": 1}
+
+
+def test_dumps_payload_rejects_non_jsonable_key_like_stdlib() -> None:
+    """A key type stdlib itself can't serialize raises the same ``TypeError``,
+    rather than silently producing invalid JSON."""
+    with pytest.raises(TypeError):
+        json.dumps({(1, 2): "a"})
+    with pytest.raises(TypeError):
+        dumps_payload({(1, 2): "a"})

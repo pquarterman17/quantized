@@ -300,3 +300,21 @@ def test_every_origin_corpus_file_imports_without_crashing(corpus_dir: Path) -> 
         if resp.status_code != 200:
             failures.append(f"{p.name}: HTTP {resp.status_code} — {resp.text[:120]}")
     assert not failures, "Origin imports that did not return 200:\n" + "\n".join(failures)
+
+
+def test_upload_ncnr_error_channels_round_trips_as_json_object() -> None:
+    """Merge-blocking regression: ``io/ncnr.py`` stores
+    ``metadata["error_channels"]`` with INTEGER keys (``{1: 2}``), and
+    ``datastruct_payload`` passes ``ds.metadata`` straight through to the
+    wire. Before ``_encode_json`` coerced dict keys like stdlib
+    ``json.dumps``, this route returned a body ``resp.json()`` could not
+    parse -- a real NCNR import via ``DataStructResponse`` was broken end
+    to end, not just in the encoder's unit tests."""
+    fixture = Path(__file__).parent / "fixtures" / "ncnr_s3.datA"
+    resp = client.post(
+        "/api/parsers/upload",
+        files={"file": ("ncnr_s3.datA", fixture.read_bytes(), "text/plain")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()  # must parse at all -- this is the regression
+    assert body["metadata"]["error_channels"] == {"1": 2}
