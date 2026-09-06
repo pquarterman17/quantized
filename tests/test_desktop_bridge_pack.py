@@ -233,6 +233,35 @@ def test_pack_start_rejects_an_existing_destination(tmp_path: Path) -> None:
     assert out["error"]["code"] == "destination_exists"
 
 
+def test_pack_start_rechecks_destination_consent_after_a_second_pick(tmp_path: Path) -> None:
+    """Review finding #5: `pick_pack_destination` clears every PRIOR
+    write-dir grant before minting a new one (its own doc) — a second
+    folder pick between this preview and `pack_start` silently revokes the
+    grant `destination_parent` relied on. The stale token must be refused,
+    and nothing may be created under the first (no-longer-consented) root."""
+    api = DesktopApi()
+    first = tmp_path / "first"
+    first.mkdir()
+    api.attach(FakeWindow([str(first)]))
+    out_first = api.pick_pack_destination()
+    destination_parent = out_first["path"]
+
+    content, _ = _declare_and_content(tmp_path, "a.csv")
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["ok"] is True
+
+    second = tmp_path / "second"
+    second.mkdir()
+    api.attach(FakeWindow([str(second)]))
+    api.pick_pack_destination()  # revokes `first`'s grant, mints `second`'s
+
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is False
+    assert out["error"]["code"] == "destination_not_consented"
+    assert not os.path.exists(os.path.join(destination_parent, "myproj"))
+    assert api.pack_status()["phase"] == "idle"
+
+
 def test_pack_start_with_no_preview_is_stale(tmp_path: Path) -> None:
     api = DesktopApi()
     content, _ = _declare_and_content(tmp_path, "a.csv")
@@ -300,6 +329,51 @@ def test_real_pack_completes_and_revokes_its_own_grants(tmp_path: Path) -> None:
     assert status["progress"]["completed_files"] == status["progress"]["total_files"]
     assert status["cleanup_ok"] is None
     assert status["originals_modified"] is False
+
+
+def test_a_source_that_loses_eligibility_between_preview_and_start_is_not_granted_or_packed(
+    tmp_path: Path,
+) -> None:
+    """Review finding #1: the STORED preview's manifest still marks a
+    source ``packable`` even after the declared-source set that made it
+    eligible is wholesale-replaced (a project reopen — the same moment
+    `set_declared_sources` always wins). `pack_start` must re-derive
+    eligibility at GRANT time, not trust that stale flag: the source must
+    never be granted read consent, and the resulting bundle must omit it —
+    never widening "the manifest grants nothing" into "whatever was
+    eligible a moment ago still is"."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    baseline_consent = consent_count()
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["manifest"]["summary"]["packable"] == 1
+    resolved = os.path.realpath(str(files[0]))
+
+    # The declared set is wholesale-replaced -- e.g. a different project
+    # opened in between -- so `files[0]` is no longer eligible, even though
+    # `preview["manifest"]` (built before the replace) still says packable.
+    set_declared_sources([])
+
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+    status = _wait_for_terminal(api)
+    assert status["phase"] == "completed"
+
+    # Never granted -- consent count is exactly what it was before preview.
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+
+    # Never packed either: the bridge's own `pack_project` call passes the
+    # SAME `_eligible` predicate as `consented=`, so its own manifest
+    # rebuild marks the row `not_consented` and never stages it.
+    bundle_dir = status["result"]["bundle_dir"]
+    check = validate_bundle(bundle_dir, verify_checksums=True)
+    assert check.complete, check.problems
+    assert not os.path.exists(os.path.join(bundle_dir, "sources", "a.csv"))
+    row = check.manifest["sources"][0]
+    assert row["status"] == "not_consented"
+    assert row["packed"] is None
 
 
 def test_real_pack_with_nothing_packable_still_completes(tmp_path: Path) -> None:
@@ -397,6 +471,73 @@ def test_a_thrown_exception_is_reported_as_failed_without_a_raw_path(
     assert secret_path not in error["message"]
     assert error["originals_modified"] is False
     assert "No original files or project were modified." == error["note"]
+
+
+def test_a_thread_start_failure_reverts_phase_and_revokes_its_grants(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding #7: if `threading.Thread.start()` itself raises (a
+    starved OS thread limit, say), the phase must not be stuck at
+    "packing" forever with its just-minted grants never revoked -- it must
+    revert to "failed" with a structured error, and every grant `pack_start`
+    minted for this operation (plus the write-dir grant) must be gone."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    baseline_consent = consent_count()
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["manifest"]["summary"]["packable"] == 1
+
+    def _boom_start(self: threading.Thread) -> None:
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", _boom_start)
+    out = api.pack_start(preview["token"], content)
+
+    assert out["ok"] is False
+    assert out["error"]["code"] == "thread_failed"
+    status = api.pack_status()
+    assert status["phase"] == "failed"
+    assert status["errors"][0]["code"] == "thread_failed"
+    assert status["errors"][0]["originals_modified"] is False
+
+    resolved = os.path.realpath(str(files[0]))
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+    assert write_dir_grant_count() == 0
+    assert not os.path.exists(os.path.join(destination_parent, "myproj"))
+
+
+def test_publish_failure_message_reported_through_the_bridge_never_leaks_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding #6, exercised end to end through the bridge:
+    ``os.rename``'s own ``OSError`` embeds the absolute staging and
+    destination paths (``.filename``/``.filename2``) -- the status this
+    bridge surfaces must carry only the OS's own errno text, never either
+    absolute path nor the tmp_path root they live under."""
+    import quantized.portable.publish as publish_module
+
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, _ = _declare_and_content(tmp_path, "a.csv")
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    def _boom_rename(src: str, dst: str) -> None:
+        raise OSError(13, "Permission denied", src, None, dst)
+
+    monkeypatch.setattr(publish_module.os, "rename", _boom_rename)
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+
+    status = _wait_for_terminal(api)
+    assert status["phase"] == "failed"
+    error = status["errors"][0]
+    assert error["code"] == "publish_failed"
+    assert error["message"] == "Permission denied"
+    assert str(tmp_path) not in error["message"]
+    assert destination_parent not in error["message"]
+    assert not os.path.exists(os.path.join(destination_parent, "myproj"))
 
 
 # -- pack_status progress -------------------------------------------------

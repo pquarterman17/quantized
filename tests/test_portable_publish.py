@@ -210,6 +210,32 @@ def test_publish_bundle_interrupted_rename_cleans_up_and_never_partially_publish
     assert not os.path.exists(staging_root)
 
 
+def test_publish_bundle_rename_failure_message_never_leaks_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding #6: `os.rename`'s own `OSError` embeds BOTH paths it
+    was given (`.filename`/`.filename2`) -- `str(exc)` on it would put the
+    absolute staging dir and destination straight into a structured,
+    potentially-logged result. `publish_bundle` must report only the OS's
+    own errno text (`safe_os_error`), never those paths."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+
+    def _boom(src: str, dst: str) -> None:
+        raise OSError(13, "Permission denied", src, None, dst)
+
+    monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
+    result = publish_bundle(staging_root, destination)
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error["code"] == "publish_failed"
+    message = result.error["message"]
+    assert staging_root not in message
+    assert destination not in message
+    assert str(tmp_path) not in message
+    assert message == "Permission denied"
+
+
 # ── validate_bundle ──────────────────────────────────────────────────────
 
 

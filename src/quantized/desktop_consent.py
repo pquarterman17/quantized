@@ -135,6 +135,7 @@ __all__ = [
     "is_dir_consented",
     "is_write_consented",
     "is_write_dir_consented",
+    "normalize_path",
     "revoke_paths",
     "set_declared_sources",
     "write_consent_count",
@@ -165,7 +166,7 @@ _granted: OrderedDict[str, str] = OrderedDict()
 _write_granted: OrderedDict[str, str] = OrderedDict()
 
 
-def _normalize(path: str) -> str | None:
+def normalize_path(path: str) -> str | None:
     """Resolve to the same form the import guard compares against.
 
     Both sides must agree, or consent silently never matches: ``/import``
@@ -184,7 +185,7 @@ def grant_paths(paths: Iterable[str]) -> list[str]:
     exact string the guard will later recognize."""
     accepted: list[str] = []
     for raw in paths:
-        resolved = _normalize(raw)
+        resolved = normalize_path(raw)
         if resolved is None or not os.path.isfile(resolved):
             continue  # a directory or an unreadable entry grants nothing
         _granted.pop(resolved, None)  # re-picking refreshes recency
@@ -236,7 +237,7 @@ def revoke_paths(paths: Iterable[str]) -> int:
     held is silently ignored. Returns the number actually removed."""
     removed = 0
     for raw in paths:
-        resolved = _normalize(raw)
+        resolved = normalize_path(raw)
         if resolved is not None and _granted.pop(resolved, None) is not None:
             removed += 1
     return removed
@@ -251,7 +252,7 @@ def grant_write_path(path: str) -> str | None:
     As destination is normally new. Returns the normalized path (what the
     frontend should send back on the write call), or `None` when the path
     cannot even be resolved."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None:
         return None
     _write_granted.pop(resolved, None)  # re-picking refreshes recency
@@ -313,7 +314,7 @@ def set_declared_sources(paths: Iterable[str]) -> None:
     `_read_granted`, never from an HTTP route or a frontend-settable js_api
     — see this section's module doc for the full ruling."""
     global _declared_sources
-    _declared_sources = {r for p in paths if (r := _normalize(p)) is not None}
+    _declared_sources = {r for p in paths if (r := normalize_path(p)) is not None}
 
 
 def is_declared_source(resolved_path: str) -> bool:
@@ -347,7 +348,7 @@ def grant_read_dir(path: str) -> str | None:
     an actual directory — mirroring `grant_paths`' "a directory or an
     unreadable entry grants nothing" rule in the opposite direction (there,
     a directory is refused; here, only a directory is accepted)."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None or not os.path.isdir(resolved):
         return None
     _dir_granted.pop(resolved, None)  # re-picking refreshes recency
@@ -382,7 +383,7 @@ def is_dir_consented(path: str) -> bool:
     fail it, because neither one's resolved form is actually still under
     the root. Never true for a path that merely shares the root's text
     prefix (see `_is_within`)."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None:
         return False
     return any(_is_within(root, resolved) for root in _dir_granted)
@@ -436,7 +437,7 @@ def grant_write_dir(path: str) -> str | None:
     INSIDE it. Returns the canonicalized root, or `None` when `path` cannot
     be resolved or is not an actual existing directory (mirrors
     `grant_read_dir`'s "only a directory is accepted" rule)."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None or not os.path.isdir(resolved):
         return None
     _write_dir_granted.pop(resolved, None)  # re-picking refreshes recency
@@ -453,7 +454,7 @@ def is_write_dir_consented(path: str) -> bool:
     discipline as `is_dir_consented`. **Never satisfies a file read or
     write check** (see the module doc) — this is the ONE question this
     store answers."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None:
         return False
     return any(_is_within(root, resolved) for root in _write_dir_granted)

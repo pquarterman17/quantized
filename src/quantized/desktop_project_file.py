@@ -163,7 +163,7 @@ def payload_declares_source(
     another root cannot be the destination file (a cross-root link from the
     destination's side is already folded into ``resolved_dest``). A string
     that cannot be normalised at all is skipped (same tolerance as
-    ``desktop_consent._normalize``) rather than turning a save into a
+    ``desktop_consent.normalize_path``) rather than turning a save into a
     crash.
 
     ``base_dir`` (P1.7 PR 3): forwarded to :func:`declared_source_paths_of`

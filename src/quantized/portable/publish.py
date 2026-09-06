@@ -58,6 +58,7 @@ from typing import Any
 
 from quantized.desktop_project_file import WRITE_TEMP_PREFIX
 
+from .copy_stream import safe_os_error
 from .copying import StagedFile
 from .layout import (
     BUNDLE_FORMAT,
@@ -265,7 +266,13 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
     try:
         os.rename(staging_root, destination_dir)
     except OSError as exc:
-        return _refuse(staging_root, "publish_failed", str(exc))
+        # `str(exc)` on this `OSError` embeds both `staging_root` and
+        # `destination_dir` (`exc.filename`/`exc.filename2`) -- absolute
+        # paths that must never reach a structured, potentially-logged
+        # result (review finding #6). `safe_os_error` reports the OS's own
+        # errno text/name only, same as `copy_stream.py`'s `StageError`
+        # messages.
+        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
     return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
 
 

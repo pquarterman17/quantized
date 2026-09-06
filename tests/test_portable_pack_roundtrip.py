@@ -365,6 +365,41 @@ def test_pack_project_staging_dir_oserror_is_a_structured_result(
     assert not os.path.exists(destination)
 
 
+def test_pack_project_write_failure_message_never_leaks_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding #6: ``atomic_replace_file``'s own ``os.replace`` call
+    (inside ``write_bundle_files``) raises an ``OSError`` that embeds BOTH
+    the absolute staging temp path and the final bundle-file path it was
+    given (``.filename``/``.filename2``) -- ``write_failed`` must report
+    only the OS's own errno text (``safe_os_error``), never those paths."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+
+    def _boom(tmp: str, dest: str) -> None:
+        raise OSError(13, "Permission denied", tmp, None, dest)
+
+    monkeypatch.setattr("quantized.portable.publish.os.replace", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "write_failed"
+    message = result.errors[0]["message"]
+    assert message == "Permission denied"
+    assert str(tmp_path) not in message
+    assert destination not in message
+    assert not os.path.exists(destination)
+    # staging cleaned up -- nothing left in the bundle's parent directory
+    assert list(_bundle_parent(tmp_path).iterdir()) == []
+
+
 # ── payload/manifest serialization failures (review finding #3) ──────────
 #
 # A payload with a literally non-JSON-serializable value (raw `bytes`)

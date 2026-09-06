@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  CANCELLED,
   packCancel,
   packPreview,
   packReset,
@@ -45,9 +46,9 @@ describe("pickPackDestination", () => {
     expect(await pickPackDestination()).toBe("/data/dest");
   });
 
-  it("returns null on cancel (well-formed {path: null})", async () => {
+  it("returns CANCELLED on cancel (well-formed {path: null})", async () => {
     setShell({ pick_pack_destination: async () => ({ path: null }) });
-    expect(await pickPackDestination()).toBeNull();
+    expect(await pickPackDestination()).toBe(CANCELLED);
   });
 
   it("returns null when the bridge throws", async () => {
@@ -57,6 +58,18 @@ describe("pickPackDestination", () => {
       },
     });
     expect(await pickPackDestination()).toBeNull();
+  });
+
+  it("returns a named error (never a bare cancel) on a backend refusal — review finding #8", async () => {
+    setShell({
+      pick_pack_destination: async () => ({
+        path: null,
+        error: "selected path is not a writable directory",
+      }),
+    });
+    expect(await pickPackDestination()).toEqual({
+      error: "selected path is not a writable directory",
+    });
   });
 });
 

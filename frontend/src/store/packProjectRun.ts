@@ -11,6 +11,7 @@
 // mount to tie it to.
 
 import {
+  CANCELLED,
   packCancel,
   packPreview,
   packReset,
@@ -75,15 +76,66 @@ function contentFingerprint(content: string): string {
   }
 }
 
+// -- generation counter (review finding #3) --------------------------------
+//
+// `runPreviewPackProject` awaits two things in sequence — the native
+// folder-dialog promise (`pickPackDestination`) and the preview RPC
+// (`packPreview`) — and either one can resolve well after the user already
+// cancelled (or reset) from the phase this call started in. Without a
+// generation check, that late resolution would silently overwrite the
+// `cancelled`/`idle` phase the store already shows with whatever the
+// (now-stale) continuation worked out. Every entry point that STARTS a new
+// attempt (`runPreviewPackProject`) or explicitly ENDS the current one
+// (`runCancelPackProject`, `runResetPackProject`) bumps this counter; a
+// continuation that resumes after an `await` with a stale generation bails
+// out immediately, touching neither the store nor (for `packPreview`) ever
+// having called the bridge with data nobody asked for any more.
+let generation = 0;
+
+export function bumpGeneration(): number {
+  generation += 1;
+  return generation;
+}
+
+/** Exported for test use only: reset the counter to its initial value,
+ *  mirroring `resetThrottle`/`resetPollSequencing`'s own test-reset role. */
+export function resetGeneration(): void {
+  generation = 0;
+}
+
 // -- preview ----------------------------------------------------------
 
 export async function runPreviewPackProject(set: Set, destination?: string): Promise<void> {
+  const myGeneration = bumpGeneration();
+  // Review finding #2: a re-preview from a TERMINAL phase (retrying after
+  // a completed/cancelled/failed run) must not carry the PREVIOUS run's
+  // progress/result/cleanup/warnings/errors forward -- `applyStatus`'s own
+  // monotonic clamp (`Math.max(current.progress.*, ...)`) would otherwise
+  // pin this run's real (lower) numbers to the old run's, and a stale
+  // `resultPath` would make this run look already-completed before it is.
+  set({
+    progress: EMPTY_PACK_PROGRESS,
+    warnings: [],
+    errors: [],
+    resultPath: null,
+    cleanupOk: null,
+  });
   let destinationParent = destination;
   if (destinationParent === undefined) {
     set({ phase: "selecting_destination" });
     const picked = await pickPackDestination();
-    if (picked === null) {
-      set({ phase: "idle" }); // backed out of the dialog -- not a rejection
+    if (generation !== myGeneration) return; // cancelled/reset while the dialog was open
+    // `null` (no usable bridge) and `CANCELLED` (the user backed out of
+    // the native dialog) both degrade the same way this store always has —
+    // silently back to `idle`, never a rejection. A backend REFUSAL (review
+    // finding #8) is neither: it must surface as a failure, or a bad
+    // destination pick would look indistinguishable from an ordinary cancel.
+    if (picked === null || picked === CANCELLED) {
+      set({ phase: "idle" });
+      return;
+    }
+    if (typeof picked !== "string") {
+      set({ phase: "failed", errors: [packError("destination_pick_failed", picked.error)] });
       return;
     }
     destinationParent = picked;
@@ -93,6 +145,7 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
   const content = serializeCurrentWorkspaceForPack();
   const projectName = deriveProjectName();
   const result = await packPreview(content, projectName, destinationParent);
+  if (generation !== myGeneration) return; // cancelled/reset while packPreview was in flight
 
   if (result === null) {
     set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
@@ -213,20 +266,67 @@ export function scheduleStatusApply(get: Get, set: Set, status: PackStatus, now:
   }
 }
 
-async function pollOnce(get: Get, set: Set): Promise<void> {
+// -- overlapping-poll ordering (review finding #4) -------------------------
+//
+// `pollOnce` awaits `packStatus()` (a real IPC round trip), and the 250ms
+// interval can dispatch a NEXT tick before a slow one resolves — two
+// `packStatus()` calls in flight at once, with no guarantee they resolve in
+// dispatch order. Each dispatch gets a strictly increasing sequence number;
+// a response numbered lower than the last one actually APPLIED is a stale
+// straggler and is dropped outright, and once any response has reported a
+// TERMINAL phase, every later-resolving response (regardless of its own
+// sequence number — it raced the terminal one and lost) is dropped too, so
+// a `completed` the store already shows can never be overwritten by a
+// `packing` that merely happened to still be in flight.
+let pollSeq = 0;
+let lastAppliedSeq = -1;
+let terminalReached = false;
+
+/** Exported for test use only: reset the sequencing bookkeeping above,
+ *  mirroring `resetThrottle`/`stopPolling`'s own test-reset role. */
+export function resetPollSequencing(): void {
+  pollSeq = 0;
+  lastAppliedSeq = -1;
+  terminalReached = false;
+}
+
+/** Exported for test use only: drive one poll tick directly, without a real
+ *  250ms interval, so a test can control exactly when each `packStatus()`
+ *  call resolves relative to another. */
+export async function pollOnce(get: Get, set: Set): Promise<void> {
+  const seq = ++pollSeq;
   const status = await packStatus();
+  if (terminalReached) return; // a terminal phase already won this run
   if (status === null) {
     stopPolling();
+    terminalReached = true;
     set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
     return;
   }
+  if (seq < lastAppliedSeq) return; // an older in-flight response landed late
+  lastAppliedSeq = seq;
   scheduleStatusApply(get, set, status, Date.now());
-  if (isTerminal(status.phase)) stopPolling();
+  if (isTerminal(status.phase)) {
+    terminalReached = true;
+    stopPolling();
+  }
 }
 
 function startPolling(get: Get, set: Set): void {
   stopPolling();
   resetThrottle();
+  resetPollSequencing();
+  // Review finding #2: the same reset `runPreviewPackProject` already does
+  // (see its own doc), repeated here right before the first real poll tick
+  // so any future call path into `startPolling` that skips a fresh preview
+  // still starts this run's progress/result/cleanup/warnings/errors clean.
+  set({
+    progress: EMPTY_PACK_PROGRESS,
+    warnings: [],
+    errors: [],
+    resultPath: null,
+    cleanupOk: null,
+  });
   pollTimer = setInterval(() => {
     void pollOnce(get, set);
   }, POLL_INTERVAL_MS);
@@ -281,6 +381,10 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
 // -- cancel / reset -------------------------------------------------------
 
 export async function runCancelPackProject(set: Set, phase: PackProjectPhase): Promise<void> {
+  // Review finding #3: invalidate any `runPreviewPackProject` continuation
+  // still awaiting the folder dialog or `packPreview` — see the generation
+  // counter's own doc above.
+  bumpGeneration();
   if (phase === "selecting_destination" || phase === "scanning" || phase === "awaiting_confirmation") {
     set({ phase: "cancelled" });
     return;
@@ -299,8 +403,12 @@ export async function runCancelPackProject(set: Set, phase: PackProjectPhase): P
 }
 
 export async function runResetPackProject(set: Set): Promise<void> {
+  // Review finding #3: same invalidation as `runCancelPackProject` — a
+  // reset ends the current attempt just as definitively as a cancel does.
+  bumpGeneration();
   stopPolling();
   resetThrottle();
+  resetPollSequencing();
   await packReset(); // best-effort: a terminal LOCAL phase means nothing backend-side needs protecting
   set({
     phase: "idle",

@@ -13,7 +13,14 @@ import {
   type PackProjectPhase,
   type PackProjectState,
 } from "./packProject";
-import { resetThrottle, scheduleStatusApply, stopPolling } from "./packProjectRun";
+import {
+  pollOnce,
+  resetGeneration,
+  resetPollSequencing,
+  resetThrottle,
+  scheduleStatusApply,
+  stopPolling,
+} from "./packProjectRun";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/desktopPackBridge", async (orig) => ({
@@ -102,11 +109,15 @@ beforeEach(() => {
   resetStore("idle");
   stopPolling();
   resetThrottle();
+  resetPollSequencing();
+  resetGeneration();
 });
 
 afterEach(() => {
   stopPolling();
   resetThrottle();
+  resetPollSequencing();
+  resetGeneration();
   vi.useRealTimers();
 });
 
@@ -451,5 +462,189 @@ describe("update throttling", () => {
     const calls = vi.mocked(bridge.packStatus).mock.calls.length;
     await vi.advanceTimersByTimeAsync(5000);
     expect(vi.mocked(bridge.packStatus).mock.calls.length).toBe(calls);
+  });
+});
+
+// -- progress/result reset across runs (review finding #2) ------------------
+
+describe("progress/result reset across runs", () => {
+  it("a re-preview after a completed run does not let the old run's progress/result pin the new one", async () => {
+    vi.useFakeTimers();
+    // Run #1: completes at 3/3 with a resultPath.
+    const manifest1 = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest1);
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(
+      statusOf({
+        phase: "completed",
+        progress: {
+          current_file: null,
+          completed_files: 3,
+          total_files: 3,
+          bytes_copied: 300,
+          bytes_total: 300,
+          stage: null,
+        },
+        result: { bundle_dir: "/dest/proj" },
+        cleanup_ok: null,
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(250);
+    expect(usePackProject.getState().phase).toBe("completed");
+    expect(usePackProject.getState().resultPath).toBe("/dest/proj");
+
+    // Re-preview (legal from a terminal phase) for run #2, a fresh manifest.
+    vi.mocked(bridge.pickPackDestination).mockResolvedValue("/dest2");
+    const manifest2 = okManifest();
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-run2",
+      manifest: manifest2,
+      destination: { bundle_dir: "/dest2/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+    await usePackProject.getState().previewPackProject();
+    expect(usePackProject.getState().phase).toBe("awaiting_confirmation");
+    // The reset happens at the START of the preview call, before anything
+    // about run #2 is even known yet.
+    expect(usePackProject.getState().resultPath).toBeNull();
+    expect(usePackProject.getState().progress).toEqual(EMPTY_PACK_PROGRESS);
+
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest2);
+    expect(usePackProject.getState().phase).toBe("packing");
+    expect(usePackProject.getState().resultPath).toBeNull(); // never resurrected mid-pack
+
+    // Run #2's first real status reports 0/5 -- the monotonic clamp must
+    // not pin it to run #1's stale 3/3.
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(
+      statusOf({
+        phase: "packing",
+        progress: {
+          current_file: "sources/a.csv",
+          completed_files: 0,
+          total_files: 5,
+          bytes_copied: 0,
+          bytes_total: 500,
+          stage: "copying",
+        },
+      }),
+    );
+    await vi.advanceTimersByTimeAsync(250);
+    const s = usePackProject.getState();
+    expect(s.progress.completedCount).toBe(0);
+    expect(s.progress.bytesCopied).toBe(0);
+    expect(s.progress.totalCount).toBe(5);
+    expect(s.resultPath).toBeNull();
+  });
+});
+
+// -- cancel racing a pending preview continuation (review finding #3) ------
+
+/** `previewPackProject` reaches its bridge call through a lazy `import()`
+ *  (store/packProject.ts's own eager-bundle-cost doc), so a fixed number of
+ *  `Promise.resolve()` hops is fragile — flush a generous number of
+ *  microtask AND macrotask turns instead, enough to reach a promise this
+ *  test itself is deliberately leaving unresolved. */
+async function flushUntilSuspended(): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    await Promise.resolve();
+  }
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe("cancel racing a pending preview continuation", () => {
+  it("cancelling while the folder-dialog promise is pending is not overwritten when it resolves late", async () => {
+    let resolveDialog: (value: string) => void = () => {};
+    const dialogPromise = new Promise<string>((resolve) => {
+      resolveDialog = resolve;
+    });
+    vi.mocked(bridge.pickPackDestination).mockReturnValue(dialogPromise);
+
+    const previewCall = usePackProject.getState().previewPackProject();
+    // Let `previewPackProject` reach `await pickPackDestination()`.
+    await flushUntilSuspended();
+    expect(usePackProject.getState().phase).toBe("selecting_destination");
+
+    await usePackProject.getState().cancelPackProject();
+    expect(usePackProject.getState().phase).toBe("cancelled");
+
+    // The dialog resolves LATE, well after the cancel already landed.
+    resolveDialog("/dest");
+    await previewCall;
+
+    expect(usePackProject.getState().phase).toBe("cancelled"); // not overwritten
+    expect(usePackProject.getState().preview).toBeNull();
+    expect(bridge.packPreview).not.toHaveBeenCalled();
+  });
+
+  it("cancelling while packPreview is pending is not overwritten when it resolves late", async () => {
+    vi.mocked(bridge.pickPackDestination).mockResolvedValue("/dest");
+    let resolvePreview: (value: Awaited<ReturnType<typeof bridge.packPreview>>) => void = () => {};
+    const previewPromise = new Promise<Awaited<ReturnType<typeof bridge.packPreview>>>((resolve) => {
+      resolvePreview = resolve;
+    });
+    vi.mocked(bridge.packPreview).mockReturnValue(previewPromise);
+
+    const previewCall = usePackProject.getState().previewPackProject();
+    // Let the picker resolve and `previewPackProject` reach `scanning`.
+    await flushUntilSuspended();
+    expect(usePackProject.getState().phase).toBe("scanning");
+
+    await usePackProject.getState().cancelPackProject();
+    expect(usePackProject.getState().phase).toBe("cancelled");
+
+    resolvePreview({
+      ok: true,
+      token: "late-tok",
+      manifest: okManifest(),
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+    await previewCall;
+
+    expect(usePackProject.getState().phase).toBe("cancelled"); // not overwritten
+    expect(usePackProject.getState().preview).toBeNull();
+  });
+});
+
+// -- overlapping poll responses resolving out of order (review finding #4) --
+
+describe("overlapping poll responses resolving out of order", () => {
+  it("an older in-flight response that resolves AFTER a terminal one is dropped", async () => {
+    const get = () => usePackProject.getState();
+    const set = (partial: Partial<PackProjectState>) => usePackProject.setState(partial);
+    resetStore("packing");
+    resetPollSequencing();
+    resetThrottle();
+
+    let resolveFirst: (s: PackStatus) => void = () => {};
+    let resolveSecond: (s: PackStatus) => void = () => {};
+    const firstPromise = new Promise<PackStatus>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondPromise = new Promise<PackStatus>((resolve) => {
+      resolveSecond = resolve;
+    });
+
+    vi.mocked(bridge.packStatus).mockReturnValueOnce(firstPromise).mockReturnValueOnce(secondPromise);
+
+    // Two overlapping dispatches -- the second is dispatched before the
+    // first resolves at all (a slow first tick, a normal-speed second one).
+    const firstPoll = pollOnce(get, set);
+    const secondPoll = pollOnce(get, set);
+
+    // The SECOND dispatched poll resolves FIRST, with the terminal phase.
+    resolveSecond(statusOf({ phase: "completed", result: { bundle_dir: "/dest/proj" } }));
+    await secondPoll;
+    expect(get().phase).toBe("completed");
+
+    // The FIRST dispatched poll resolves LAST, with a stale "packing".
+    resolveFirst(statusOf({ phase: "packing" }));
+    await firstPoll;
+
+    expect(get().phase).toBe("completed"); // never overwritten by the straggler
   });
 });

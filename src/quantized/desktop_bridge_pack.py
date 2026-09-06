@@ -76,125 +76,23 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from quantized import desktop_bridge_pack_state as _state
+from quantized.desktop_bridge_common import FOLDER_DIALOG_DEFAULT, dialog_kind
 from quantized.desktop_consent import (
     clear_write_dir_grants,
     grant_paths,
     grant_write_dir,
     is_consented,
-    is_declared_source,
-    is_dir_consented,
     is_write_dir_consented,
+    normalize_path,
     revoke_paths,
 )
 from quantized.desktop_project_file import parse_workspace_payload
-from quantized.desktop_source_probe import probe_source_path
 from quantized.portable.copy_stream import StageProgress
 from quantized.portable.manifest import Consented, Probe, build_dry_run_manifest, manifest_json
 from quantized.portable.pack import PackResult, pack_project
 
 __all__ = ["DesktopPackBridge"]
-
-# The exact sentence every terminal `pack_status` error carries — see this
-# module's doc: a pack operation never touches an original file or the open
-# project until its own atomic publish rename, so this is true for every
-# failure/cancellation this module can ever report.
-_NOTHING_MODIFIED_NOTE = "No original files or project were modified."
-
-# pywebview's documented folder-dialog constant, resolved the same
-# best-effort way `desktop_bridge_dialogs._dialog_kind` already does —
-# duplicated here (rather than importing that module's underscore-prefixed
-# helper) because it is a tiny, self-contained lookup and this module
-# should not reach across a sibling's private surface for it.
-_FOLDER_DIALOG_DEFAULT = 20
-
-
-def _dialog_kind(name: str, fallback: int) -> int:
-    try:
-        import webview
-
-        value = getattr(webview, name, fallback)
-        return int(value) if isinstance(value, int) else fallback
-    except ImportError:
-        return fallback
-
-
-def _resolve_or_none(path: str) -> str | None:
-    try:
-        return os.path.realpath(path)
-    except (OSError, ValueError):
-        return None
-
-
-def _err(code: str, message: str) -> dict[str, Any]:
-    """Shared shape for every synchronous rejection below — never carries
-    ``originals_modified``/``note`` (those belong to ``pack_status``'s
-    terminal ``errors`` list, see ``_error_row``): a rejection here means
-    nothing ever started, so there is nothing to reassure the caller about."""
-    return {"ok": False, "error": {"code": code, "message": message}}
-
-
-def _eligible(path: str) -> bool:
-    """A source path is eligible to be probed/packed when it is already
-    read-consented, covered by a read-only directory grant, or declared by
-    the currently open project's own payload — see this module's doc."""
-    resolved = _resolve_or_none(path)
-    if resolved is None:
-        return False
-    return is_consented(resolved) or is_dir_consented(resolved) or is_declared_source(resolved)
-
-
-def _probe_checksummed(path: str) -> dict[str, Any]:
-    """The PREVIEW probe: computes a checksum only for an eligible source —
-    the same "a bigger ask than the reachability check" gating
-    ``desktop_source_probe``'s own module doc already applies to
-    ``probe_source``."""
-    resolved = _resolve_or_none(path)
-    if resolved is None:
-        return {"state": "invalid"}
-    return probe_source_path(resolved, compute_checksum=_eligible(path))
-
-
-def _probe_no_checksum(path: str) -> dict[str, Any]:
-    """The PACK-TIME probe (``pack_start``): never computes a checksum —
-    see ``portable.copying``'s own doc for why a caller SHOULD pass
-    ``compute_checksum=False`` to the staging pipeline (the copy itself
-    hashes every byte exactly once; a second, probe-side hash would read
-    each source twice for no extra safety)."""
-    resolved = _resolve_or_none(path)
-    if resolved is None:
-        return {"state": "invalid"}
-    return probe_source_path(resolved, compute_checksum=False)
-
-
-def _empty_progress() -> dict[str, Any]:
-    return {
-        "current_file": None,
-        "completed_files": 0,
-        "total_files": 0,
-        "bytes_copied": 0,
-        "bytes_total": 0,
-        "stage": None,
-    }
-
-
-def _initial_progress(manifest: Mapping[str, Any]) -> dict[str, Any]:
-    sources_raw = manifest.get("sources")
-    sources = sources_raw if isinstance(sources_raw, list) else []
-    packable = [r for r in sources if isinstance(r, dict) and r.get("packable")]
-    total_files = len(packable)
-    bytes_total = sum(int(r.get("size") or 0) for r in packable)
-    # Nothing to stage at all -- go straight to "publishing" (the
-    # rewrite/finalize/write/publish steps still run even with zero
-    # sources, e.g. an all-embedded project).
-    stage = "publishing" if total_files == 0 else "copying"
-    return {
-        "current_file": None,
-        "completed_files": total_files if total_files == 0 else 0,
-        "total_files": total_files,
-        "bytes_copied": 0,
-        "bytes_total": bytes_total,
-        "stage": stage,
-    }
 
 
 class DesktopPackBridge:
@@ -213,16 +111,12 @@ class DesktopPackBridge:
         self._pack_lock = threading.Lock()
         self._pack_phase: str = "idle"
         self._pack_preview: dict[str, Any] | None = None
-        self._pack_progress: dict[str, Any] = _empty_progress()
+        self._pack_progress: dict[str, Any] = _state.empty_progress()
         self._pack_warnings: list[Any] = []
         self._pack_errors: list[dict[str, Any]] = []
         self._pack_result: PackResult | None = None
         self._pack_cleanup_ok: bool | None = None
         self._pack_cancel_event: threading.Event | None = None
-        # Exactly the read-consent grants THIS operation minted (never a
-        # pre-existing grant) -- see `pack_start`'s doc for why only these
-        # are revoked when the operation ends.
-        self._pack_granted_paths: list[str] = []
 
     # -- destination pick (mints the ONE new consent kind) -------------------
 
@@ -238,7 +132,7 @@ class DesktopPackBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
         except Exception as exc:  # noqa: BLE001 - reported to JS, never raised into it
@@ -263,18 +157,18 @@ class DesktopPackBridge:
         ruling) — the actual read grant is minted only at ``pack_start``."""
         payload, err = parse_workspace_payload(content)
         if payload is None:
-            return _err("invalid_project", err or "invalid project")
-        destination_parent_resolved = _resolve_or_none(destination_parent)
+            return _state.err("invalid_project", err or "invalid project")
+        destination_parent_resolved = normalize_path(destination_parent)
         if destination_parent_resolved is None:
-            return _err("destination_not_consented", "destination is not consented")
+            return _state.err("destination_not_consented", "destination is not consented")
         if not is_write_dir_consented(destination_parent_resolved):
-            return _err("destination_not_consented", "destination is not consented")
-        probe: Probe = _probe_checksummed
-        consented: Consented = _eligible
+            return _state.err("destination_not_consented", "destination is not consented")
+        probe: Probe = _state.probe_checksummed
+        consented: Consented = _state.eligible
         try:
             dry_run_manifest = build_dry_run_manifest(payload, project_name, probe, consented)
         except ValueError as exc:
-            return _err("invalid_project_name", str(exc))
+            return _state.err("invalid_project_name", str(exc))
 
         project = dry_run_manifest["project"]
         sanitized_name = project["name"] if isinstance(project, dict) else project_name
@@ -318,16 +212,24 @@ class DesktopPackBridge:
                 return {"ok": False, "error": {"code": "already_running"}}
             preview = self._pack_preview
             if preview is None or preview["token"] != token:
-                return _err("stale_preview", "preview is missing or stale — preview again")
+                return _state.err("stale_preview", "preview is missing or stale — preview again")
             content_sha256 = hashlib.sha256(content.encode("utf-8")).hexdigest()
             if content_sha256 != preview["content_sha256"]:
-                return _err("stale_preview", "project content changed since preview")
+                return _state.err("stale_preview", "project content changed since preview")
+            # Review finding #5: `pick_pack_destination` clears every PRIOR
+            # write-dir grant before minting a new one (its own doc), so a
+            # second folder pick between this preview and this call silently
+            # revokes the grant this preview's `destination_parent` relied
+            # on -- the stale token must not be honored just because it
+            # still names the right bundle path.
+            if not is_write_dir_consented(preview["destination_parent"]):
+                return _state.err("destination_not_consented", "destination is not consented")
             bundle_dir = preview["bundle_dir"]
             if os.path.lexists(bundle_dir):
-                return _err("destination_exists", "destination already exists")
+                return _state.err("destination_exists", "destination already exists")
             payload, err = parse_workspace_payload(content)
             if payload is None:
-                return _err("invalid_project", err or "invalid project")
+                return _state.err("invalid_project", err or "invalid project")
             project_name = preview["project_name"]
             manifest = preview["manifest"]
 
@@ -335,9 +237,8 @@ class DesktopPackBridge:
 
             cancel_event = threading.Event()
             self._pack_cancel_event = cancel_event
-            self._pack_granted_paths = list(newly_granted)
             self._pack_phase = "packing"
-            self._pack_progress = _initial_progress(manifest)
+            self._pack_progress = _state.initial_progress(manifest)
             self._pack_warnings = list(manifest.get("warnings", []))
             self._pack_errors = []
             self._pack_result = None
@@ -353,8 +254,8 @@ class DesktopPackBridge:
                     payload,
                     project_name,
                     bundle_dir,
-                    probe=_probe_no_checksum,
-                    consented=_eligible,
+                    probe=_state.probe_no_checksum,
+                    consented=_state.eligible,
                     progress=_progress,
                     should_cancel=cancel_event.is_set,
                     packed_at=datetime.now(UTC).isoformat(),
@@ -390,17 +291,47 @@ class DesktopPackBridge:
                 revoke_paths(newly_granted)
                 clear_write_dir_grants()
 
-        threading.Thread(target=_run, daemon=True).start()
+        try:
+            threading.Thread(target=_run, daemon=True).start()
+        except Exception:  # noqa: BLE001 - a genuine bug, still reported, never raised
+            # Review finding #7: the phase was already set to "packing" and
+            # `newly_granted` already minted above, under the same lock --
+            # if the thread itself never actually started (a starved OS
+            # thread limit, e.g.), that phase would otherwise be stuck at
+            # "packing" forever with its grants never revoked. Unwind both,
+            # exactly as `_run`'s own `finally` would have on any other
+            # failure, and report a structured refusal instead of letting
+            # the exception escape into pywebview's JS bridge.
+            with self._pack_lock:
+                self._pack_phase = "failed"
+                self._pack_errors = [
+                    self._error_row("thread_failed", "packing could not be started")
+                ]
+            revoke_paths(newly_granted)
+            clear_write_dir_grants()
+            return _state.err("thread_failed", "packing could not be started")
         return {"ok": True}
 
     def _grant_eligible_packable_sources(self, manifest: Mapping[str, Any]) -> list[str]:
         """Mint real read consent for every ``packable`` row's
         ``original_path`` that is not ALREADY read-consented — i.e. the
         rows that reached ``packable`` only via a directory grant or a
-        declared source, never an arbitrary path (every packable row
-        already passed ``_eligible`` as the manifest's ``consented``
-        predicate at preview time). Returns exactly what was granted, for
-        ``pack_start``'s ``finally`` to revoke unconditionally."""
+        declared source, never an arbitrary path.
+
+        Review finding #1: a row's ``packable`` flag comes from the STORED
+        preview's manifest, computed against whatever was ``_eligible`` at
+        PREVIEW time — but consent is process-global mutable state, and it
+        can move between preview and this call (a project reopen replaces
+        the declared-source set, a relink panel closing revokes a directory
+        grant). Trusting that stale flag verbatim would mint a fresh read
+        grant for a path that is no longer eligible NOW. So every candidate
+        is re-checked against ``_eligible`` (the same predicate this call's
+        own ``pack_project`` invocation passes as ``consented=``) right
+        here, at grant time — a source that lost eligibility is silently
+        skipped, never granted, and (via that same ``consented=``) never
+        copied either. Returns exactly what was granted, for
+        ``pack_start``'s ``finally``/failure paths to revoke
+        unconditionally."""
         sources_raw = manifest.get("sources")
         sources = sources_raw if isinstance(sources_raw, list) else []
         to_grant: list[str] = []
@@ -410,7 +341,9 @@ class DesktopPackBridge:
             original_path = row.get("original_path")
             if not isinstance(original_path, str):
                 continue
-            resolved = _resolve_or_none(original_path)
+            if not _state.eligible(original_path):
+                continue
+            resolved = normalize_path(original_path)
             if resolved is not None and not is_consented(resolved):
                 to_grant.append(original_path)
         return grant_paths(to_grant)
@@ -438,7 +371,7 @@ class DesktopPackBridge:
             "code": code,
             "message": message,
             "originals_modified": False,
-            "note": _NOTHING_MODIFIED_NOTE,
+            "note": _state.NOTHING_MODIFIED_NOTE,
         }
         if source_id is not None:
             row["source_id"] = source_id
@@ -484,11 +417,10 @@ class DesktopPackBridge:
                 return {"ok": False, "error": {"code": "already_running"}}
             self._pack_phase = "idle"
             self._pack_preview = None
-            self._pack_progress = _empty_progress()
+            self._pack_progress = _state.empty_progress()
             self._pack_warnings = []
             self._pack_errors = []
             self._pack_result = None
             self._pack_cleanup_ok = None
             self._pack_cancel_event = None
-            self._pack_granted_paths = []
         return {"ok": True}

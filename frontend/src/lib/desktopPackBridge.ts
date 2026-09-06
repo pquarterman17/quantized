@@ -12,7 +12,10 @@
 // .build_dry_run_manifest` produces, byte-compared forever on the backend
 // side; keep the two in lock-step on any manifest schema change.
 
-import { api } from "./desktopBridge";
+import { api, CANCELLED, type Cancelled } from "./desktopBridge";
+
+export { CANCELLED };
+export type { Cancelled };
 
 // -- the dry-run manifest (P1.7 PR 1) --------------------------------------
 
@@ -177,17 +180,45 @@ export interface PackStatus {
 
 // -- wire calls ---------------------------------------------------------
 
-/** Same shape/pattern as `pickRelinkDirectory` (desktopRelinkBridge.ts):
- *  `null` = no usable bridge (fall back to typing a path, which never gets
- *  a grant — a "Pack Project" panel with no bridge has nothing to offer at
- *  all); a real return mints a WRITE-DIRECTORY grant on the backend for
- *  the chosen folder — the bundle is created INSIDE it. */
-export async function pickPackDestination(directory?: string): Promise<string | null> {
+/** A `pick_pack_destination` refusal — the backend named why (never a
+ *  path; see desktop_bridge_pack.py's own "report, don't leak a path into
+ *  text" rule). Distinct from `CANCELLED` (the user backed out of the
+ *  dialog, not an error) and from `null` (no usable bridge at all) — see
+ *  `pickPackDestination`'s own doc for why collapsing the three together
+ *  (review finding #8) made a real refusal look like an ordinary cancel. */
+export interface PickPackDestinationError {
+  error: string;
+}
+
+// `string` already subsumes the `Cancelled` literal at the type level (the
+// same `no-redundant-type-constituents` tradeoff `desktopBridge.ts`'s own
+// `pickSaveDestination` documents) — the return type keeps just `string`,
+// and callers narrow with `=== CANCELLED`. `PickPackDestinationError` IS a
+// distinguishable case (an object), so it stays in the union.
+//
+/** Same shape/pattern as `pickRelinkDirectory` (desktopRelinkBridge.ts),
+ *  widened into a discriminated result (review finding #8): `null` = no
+ *  usable bridge (fall back to typing a path, which never gets a grant —
+ *  a "Pack Project" panel with no bridge has nothing to offer at all);
+ *  `CANCELLED` = the user backed out of the native dialog, not an error;
+ *  a `PickPackDestinationError` = the backend REFUSED the pick (e.g. the
+ *  chosen folder is not writable) and named why — a caller must surface
+ *  this as a failure, never silently treat it as a cancel; any other
+ *  `string` = the chosen path, which also mints a WRITE-DIRECTORY grant on
+ *  the backend for it — the bundle is created INSIDE it. */
+export async function pickPackDestination(
+  directory?: string,
+): Promise<string | PickPackDestinationError | null> {
   const bridge = api();
   if (!bridge?.pick_pack_destination) return null;
   try {
-    const out = (await bridge.pick_pack_destination(directory ?? "")) as { path?: unknown };
-    return typeof out.path === "string" ? out.path : null;
+    const out = (await bridge.pick_pack_destination(directory ?? "")) as {
+      path?: unknown;
+      error?: unknown;
+    };
+    if (typeof out.path === "string") return out.path;
+    if (typeof out.error === "string") return { error: out.error };
+    return CANCELLED;
   } catch {
     return null;
   }
