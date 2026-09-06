@@ -575,6 +575,43 @@ def test_regular_file_blocking_sources_dir_does_not_leak_staging_dir(tmp_path: P
     assert not os.path.exists(staging_root)
 
 
+def test_raising_progress_callback_closes_the_destination_fd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows CI regression (#306): the raising callback unwound past the
+    OPEN destination descriptor, and Windows cannot delete an open file, so
+    `cleanup_staging_dir` reported False. POSIX unlinks open files, which
+    hid it locally -- so this pins the fd itself: it must be closed by the
+    time `stage_sources` returns, on every platform."""
+    src = tmp_path / "f.csv"
+    src.write_bytes(b"data" * 500)
+    manifest = manifest_for([str(src)])
+    staging_root = _new_staging_root(tmp_path)
+    opened: list[int] = []
+    real_open = os.open
+
+    def spy_open(path: Any, flags: int, mode: int = 0o777, *a: Any, **kw: Any) -> int:
+        fd = real_open(path, flags, mode, *a, **kw)
+        if flags & os.O_CREAT:
+            opened.append(fd)
+        return fd
+
+    monkeypatch.setattr(os, "open", spy_open)
+
+    def bad_progress(_event: Any) -> None:
+        raise RuntimeError("progress callback exploded")
+
+    result = stage_sources(manifest, staging_root, probe=_probe, progress=bad_progress)
+
+    assert result.ok is False
+    assert opened, "the destination was never opened"
+    for fd in opened:
+        with pytest.raises(OSError):
+            os.fstat(fd)  # EBADF: closed before cleanup ran
+    assert result.cleanup_ok is True
+    assert not os.path.exists(staging_root)
+
+
 def test_raising_progress_callback_does_not_leak_staging_dir(tmp_path: Path) -> None:
     """A caller-supplied ``progress`` callback that raises must still tear
     down the staging directory rather than leaking it (review finding #2)."""
