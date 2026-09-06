@@ -1802,12 +1802,11 @@ below — the packer's own implementation work starts fresh here:
     — a source not `packable` in the approved manifest is never staged even
     if it exists by start time, and a source whose bytes changed fails
     closed with `changed_since_preview` against the manifest's PREVIEW-TIME
-    checksum. Separately, `_grant_eligible_packable_sources` still
-    re-derives `_eligible` at grant time (unchanged) so a source that lost
-    eligibility between preview and start is never handed a NEW, durable
-    read-consent grant — it is still packed if unchanged, since nothing new
-    is disclosed beyond what the approved preview already showed; only the
-    grant footprint is scoped this way. Progress's `"publishing"` stage is
+    checksum. Separately, the approved manifest is a plan, not a read
+    grant: `pack_start` re-checks every `packable` row against `_eligible`
+    before minting anything, and refuses with `consent_changed` (preview
+    again) if any row's consent lapsed between preview and start — a lost
+    grant fails closed rather than copying. Progress's `"publishing"` stage is
     INFERRED (the last
     source's `"verifying"` tick, or immediately with nothing to stage) —
     `pack_project` itself never emits a tick for the
@@ -1888,12 +1887,12 @@ below — the packer's own implementation work starts fresh here:
     that, when supplied, is used VERBATIM (no `build_dry_run_manifest`
     call, rejecting anything that isn't itself a valid dry-run manifest as
     `invalid_manifest`), and having `pack_start` pass
-    `self._pack_preview["manifest"]`. `_grant_eligible_packable_sources`
-    (the prior review round's finding #1 fix) is unchanged — it still
-    re-derives eligibility at GRANT time so a source that lost eligibility
-    never gets a fresh read-consent grant — but it no longer also gates
-    whether the row is staged, since that is now the approved manifest's
-    call alone.
+    `self._pack_preview["manifest"]`. Because the executed manifest no
+    longer reflects current consent, `pack_start` now re-checks every
+    `packable` row against `_eligible` up front and refuses with
+    `consent_changed` if any lapsed (the prior round's finding #1 check in
+    `_grant_eligible_packable_sources` stays as defence in depth) — the
+    approved plan never becomes a substitute for a live read grant.
 - **PR 5 (planned, not shipped):** adversarial audit of the full stack,
   in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
 

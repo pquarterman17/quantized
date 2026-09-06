@@ -72,20 +72,20 @@ fails ``changed_since_preview`` on any drift, while a row the approved
 manifest never marked ``packable`` is never staged regardless of what the
 filesystem looks like at start time.
 
-**Why ``pack_start`` still re-derives ``_eligible`` for the GRANT step,
-even though the manifest itself now executes verbatim.** Content is
-verified byte-identical to preview (the ``sha256`` check on ``content``),
-but consent is process-global mutable state that can move between preview
-and start — a declared-source set can be replaced by a project reopen, a
-directory grant revoked by a relink panel closing. A row that lost
-eligibility this way is still packed if its content is unchanged (the
-manifest already approved it, and nothing new is disclosed beyond what the
-preview already showed); what must never happen is this call minting a
-NEW, durable read-consent grant for a path that is not eligible right now
-just because a stale manifest flag says ``packable`` — so
-``_grant_eligible_packable_sources`` below re-checks ``_eligible`` at
-grant time and skips minting for anything that fails it, independently of
-what gets staged.
+**Consent is re-checked at start, and a lost grant fails closed.** Content
+is verified byte-identical to preview (the ``sha256`` check on
+``content``), but consent is process-global mutable state that can move
+between preview and start — a declared-source set can be replaced by a
+project reopen, a directory grant revoked by a relink panel closing. The
+approved manifest names WHAT may be copied; it is not itself a read grant.
+So ``pack_start`` re-checks every ``packable`` row against ``_eligible``
+before minting anything or spawning the worker: if even one row is no
+longer eligible, the call is refused with ``consent_changed`` (preview
+again — the new preview will show the row as blocked) and nothing is
+granted, staged, or copied. Only when every approved row is still
+eligible does ``_grant_eligible_packable_sources`` mint the missing read
+grants — never widening the grant registry to a path that is not eligible
+right now.
 
 **Progress/stage modeling.** ``pack_project`` only ever calls its progress
 callback during PR 2's staged copy (``"copying"``/``"verifying"`` ticks) —
@@ -121,6 +121,24 @@ from quantized.portable.manifest import Consented, Probe, build_dry_run_manifest
 from quantized.portable.pack import PackResult, pack_project
 
 __all__ = ["DesktopPackBridge"]
+
+
+def _ineligible_packable_sources(manifest: Mapping[str, Any]) -> list[str]:
+    """``original_path`` of every ``packable`` row in the approved manifest
+    that is NOT eligible under the consent state in force right now. Empty
+    means every approved row may still be read; anything else means
+    ``pack_start`` must refuse rather than copy from a path whose consent
+    lapsed after the user approved the preview."""
+    sources_raw = manifest.get("sources")
+    sources = sources_raw if isinstance(sources_raw, list) else []
+    lost: list[str] = []
+    for row in sources:
+        if not isinstance(row, dict) or not row.get("packable"):
+            continue
+        original_path = row.get("original_path")
+        if isinstance(original_path, str) and not _state.eligible(original_path):
+            lost.append(original_path)
+    return lost
 
 
 class DesktopPackBridge:
@@ -261,6 +279,11 @@ class DesktopPackBridge:
             project_name = preview["project_name"]
             manifest = preview["manifest"]
 
+            if _ineligible_packable_sources(manifest):
+                return _state.err(
+                    "consent_changed",
+                    "a source lost read consent since preview — preview again",
+                )
             newly_granted = self._grant_eligible_packable_sources(manifest)
 
             cancel_event = threading.Event()
@@ -348,23 +371,13 @@ class DesktopPackBridge:
 
         Review finding #1: a row's ``packable`` flag comes from the STORED
         preview's manifest, computed against whatever was ``_eligible`` at
-        PREVIEW time — but consent is process-global mutable state, and it
-        can move between preview and this call (a project reopen replaces
-        the declared-source set, a relink panel closing revokes a directory
-        grant). Trusting that stale flag verbatim would mint a fresh read
-        grant for a path that is no longer eligible NOW. So every candidate
-        is re-checked against ``_eligible`` right here, at grant time — a
-        source that lost eligibility is silently skipped, never granted a
-        NEW consent record. This governs the grant footprint only: since a
-        later review round (PR 4 review round 2) made ``pack_start`` pass
-        the STORED preview manifest to ``pack_project`` VERBATIM (never
-        rebuilt from current consent state), a ``packable`` row that lost
-        eligibility here is still staged and copied if its content is
-        unchanged from the approved preview — nothing new is disclosed
-        beyond what that preview already showed and the user already
-        approved; only the never-widen-the-grant-registry guarantee below
-        is this function's job. Returns exactly what was granted, for
-        ``pack_start``'s ``finally``/failure paths to revoke
+        PREVIEW time — but consent can move between preview and this call.
+        ``pack_start`` already refuses (``consent_changed``) when any
+        packable row is no longer eligible, so by the time this runs every
+        candidate should pass ``_eligible``; the check is repeated here as
+        defence in depth so this function can never mint a grant for an
+        ineligible path whatever its caller did. Returns exactly what was
+        granted, for ``pack_start``'s ``finally``/failure paths to revoke
         unconditionally."""
         sources_raw = manifest.get("sources")
         sources = sources_raw if isinstance(sources_raw, list) else []

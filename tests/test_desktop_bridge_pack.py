@@ -331,23 +331,16 @@ def test_real_pack_completes_and_revokes_its_own_grants(tmp_path: Path) -> None:
     assert status["originals_modified"] is False
 
 
-def test_a_source_that_loses_eligibility_after_preview_is_never_freshly_granted_but_still_packs(
+def test_a_source_that_loses_eligibility_after_preview_refuses_to_start(
     tmp_path: Path,
 ) -> None:
-    """PR #308 round-2 review: `pack_start` now executes the STORED
-    preview's manifest VERBATIM (never a manifest rebuilt from current
-    filesystem/consent state — see `desktop_bridge_pack.py`'s module doc).
-    So a source that was `packable` when the user approved the preview
-    stays packable even after the declared-source set that made it
-    eligible is wholesale-replaced (a project reopen — the same moment
-    `set_declared_sources` always wins), so long as its content is
-    unchanged from what the preview showed (re-verified by staging's own
-    `changed_since_preview` check) — nothing new is disclosed beyond what
-    the user already reviewed and approved. `_grant_eligible_packable_
-    sources` still re-derives eligibility at GRANT time (unchanged from the
-    prior review round): no NEW, durable read-consent grant is minted for a
-    path that is not eligible right now, independently of whether the
-    already-approved copy proceeds."""
+    """`pack_start` executes the STORED preview's manifest verbatim (PR
+    #308 round-2 review), but the approved manifest is a plan, not a read
+    grant: if a `packable` row is no longer eligible when `pack_start`
+    runs (here the declared-source set is wholesale-replaced, as a project
+    reopen does), the call fails closed with `consent_changed` — nothing is
+    granted, staged, or copied, and the caller must preview again (which
+    would now show the row as blocked)."""
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
     content, files = _declare_and_content(tmp_path, "a.csv")
@@ -356,30 +349,19 @@ def test_a_source_that_loses_eligibility_after_preview_is_never_freshly_granted_
     assert preview["manifest"]["summary"]["packable"] == 1
     resolved = os.path.realpath(str(files[0]))
 
-    # The declared set is wholesale-replaced -- e.g. a different project
-    # opened in between -- so `files[0]` is no longer eligible for a FRESH
-    # grant, even though `preview["manifest"]` (built before the replace,
-    # and executed verbatim) still says packable.
     set_declared_sources([])
 
     out = api.pack_start(preview["token"], content)
-    assert out["ok"] is True
-    status = _wait_for_terminal(api)
-    assert status["phase"] == "completed"
+    assert out["ok"] is False
+    assert out["error"]["code"] == "consent_changed"
+    assert str(tmp_path) not in out["error"]["message"]
+    assert api.pack_status()["phase"] == "idle"
 
-    # No NEW grant was minted for it, and none survives the operation.
+    # No grant was minted, and nothing reached the destination.
     assert not is_consented(resolved)
     assert consent_count() == baseline_consent
-
-    # But it IS packed: the bridge passes the stored, user-approved preview
-    # manifest verbatim, never rebuilding it against current eligibility.
-    bundle_dir = status["result"]["bundle_dir"]
-    check = validate_bundle(bundle_dir, verify_checksums=True)
-    assert check.complete, check.problems
-    assert os.path.exists(os.path.join(bundle_dir, "sources", "a.csv"))
-    row = check.manifest["sources"][0]
-    assert row["status"] == "ok"
-    assert row["packed"] is not None
+    assert not os.path.lexists(preview["destination"]["bundle_dir"])
+    assert [p for p in os.listdir(destination_parent) if p.startswith(".qz-pack-")] == []
 
 
 def test_a_source_missing_at_preview_that_appears_before_start_is_never_packed(
@@ -727,9 +709,7 @@ def test_pack_status_infers_publishing_on_the_last_files_verifying_tick(tmp_path
 # -- pack_reset -------------------------------------------------------------
 
 
-def test_pack_reset_rejected_while_packing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_pack_reset_rejected_while_packing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
     content, _ = _declare_and_content(tmp_path, "a.csv")
