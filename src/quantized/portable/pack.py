@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from .copy_stream import safe_os_error
 from .copying import ProgressCallback, ShouldCancel
 from .manifest import Consented, Probe, build_dry_run_manifest
 from .project_rewrite import rewrite_payload_for_bundle
@@ -187,9 +188,13 @@ def pack_project(
             manifest=manifest,
         )
     except OSError as exc:
+        # `safe_os_error`, never `str(exc)`: an `OSError` from writing the
+        # bundle's project file or manifest embeds `exc.filename` -- the
+        # absolute staging path -- and this result is structured, possibly
+        # logged, output (review finding, PR #307).
         cleanup_ok = cleanup_staging_dir(staging_root)
         return PackResult(
-            False, False, None, manifest, [_error("write_failed", str(exc))], cleanup_ok
+            False, False, None, manifest, [_error("write_failed", safe_os_error(exc))], cleanup_ok
         )
     except (TypeError, ValueError) as exc:
         # `_dumps(rewritten_payload)` (this call, evaluated before

@@ -58,6 +58,7 @@ from typing import Any
 
 from quantized.desktop_project_file import WRITE_TEMP_PREFIX
 
+from .copy_stream import safe_os_error
 from .copying import StagedFile
 from .layout import (
     BUNDLE_FORMAT,
@@ -265,7 +266,11 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
     try:
         os.rename(staging_root, destination_dir)
     except OSError as exc:
-        return _refuse(staging_root, "publish_failed", str(exc))
+        # `safe_os_error`, never `str(exc)`: an `OSError` from `os.rename`
+        # carries BOTH `filename` and `filename2` -- the absolute staging
+        # and destination paths -- and this result is structured, possibly
+        # logged, output (review finding, PR #307).
+        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
     return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
 
 
@@ -335,7 +340,18 @@ def validate_bundle(bundle_dir: str, *, verify_checksums: bool = False) -> Bundl
         with open(manifest_path, encoding="utf-8") as f:
             raw = f.read()
         manifest = json.loads(raw)
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
+        # `safe_os_error`, never `str(exc)`: a permission/I-O error opening
+        # or reading the manifest embeds `exc.filename` -- the absolute
+        # bundle-relative-in-name-only path this function's own docstring
+        # promises never to leak (review finding, PR #307).
+        return BundleCheck(
+            False, None, [{"code": "manifest_invalid", "detail": safe_os_error(exc)}]
+        )
+    except ValueError as exc:
+        # `json.JSONDecodeError` (a `ValueError`) message is a line/column
+        # position and a snippet of the malformed JSON text itself -- never
+        # a filesystem path -- so `str(exc)` is safe here.
         return BundleCheck(False, None, [{"code": "manifest_invalid", "detail": str(exc)}])
     if not isinstance(manifest, dict):
         return BundleCheck(

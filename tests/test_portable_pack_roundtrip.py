@@ -14,6 +14,7 @@ would, plus ``resolve_bundle_source`` on its own.
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import json
 import ntpath
@@ -362,6 +363,45 @@ def test_pack_project_staging_dir_oserror_is_a_structured_result(
     # own `str()` would include.
     assert "Permission denied" in result.errors[0]["message"]
     assert "/some/secret/parent/path" not in result.errors[0]["message"]
+    assert not os.path.exists(destination)
+
+
+# ── write_bundle_files failures are path-free (PR #307 review) ───────────
+
+
+def test_pack_project_write_bundle_files_oserror_message_is_path_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding (PR #307): a real ``write_bundle_files`` failure (a
+    permission error, a full disk) raises an ``OSError`` whose ``str()``
+    embeds ``exc.filename`` -- the absolute staging path.
+    ``PackResult.errors[*]["message"]`` must contain neither that staging
+    path nor the destination path."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    staging_sibling = str(tmp_path / "bundle_parent" / ".qz-staging-oserror-secret")
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        secret_path = os.path.join(staging_sibling, "quantized-bundle.json")
+        raise OSError(errno.EACCES, "Permission denied", secret_path)
+
+    monkeypatch.setattr("quantized.portable.pack.write_bundle_files", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "write_failed"
+    message = result.errors[0]["message"]
+    assert staging_sibling not in message
+    assert destination not in message
+    assert str(tmp_path) not in message
+    assert "Permission denied" in message
     assert not os.path.exists(destination)
 
 
