@@ -115,15 +115,18 @@ class _DeferredDataTokens(Sequence[Sequence[str]]):
     has been built.
     """
 
-    __slots__ = ("_raw_lines", "_start", "_delim")
+    __slots__ = ("_raw_lines", "_start", "_delim", "_rows")
 
     def __init__(self, raw_lines: Sequence[str], start: int, delim: str) -> None:
         self._raw_lines = raw_lines
         self._start = start
         self._delim = delim
+        self._rows: list[list[str]] | None = None
 
     def _materialize(self) -> list[list[str]]:
-        return [line.split(self._delim) for line in self._raw_lines[self._start :]]
+        if self._rows is None:
+            self._rows = [line.split(self._delim) for line in self._raw_lines[self._start :]]
+        return self._rows
 
     def __len__(self) -> int:
         return len(self._raw_lines) - self._start

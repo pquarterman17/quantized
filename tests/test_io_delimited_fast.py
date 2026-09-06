@@ -14,7 +14,11 @@ import pytest
 
 from quantized.datastruct import DataStruct
 from quantized.io import _delimited_fast
-from quantized.io._delimited_fast import LazyTokenRows, try_fast_parse_matrix
+from quantized.io._delimited_fast import (
+    LazyTokenRows,
+    _DeferredDataTokens,
+    try_fast_parse_matrix,
+)
 from quantized.io.delimited import import_csv
 from quantized.io.registry import resolve_parser
 
@@ -241,3 +245,62 @@ def test_tail_only_na_cell_fast_and_slow_agree(tmp_path: Path) -> None:
     path = tmp_path / "tail_na.csv"
     path.write_text("T,M\n" + "\n".join(lines) + "\n", encoding="utf-8")
     _assert_fast_and_slow_agree(path)
+
+
+# --- (e) _DeferredDataTokens materializes exactly once ----------------------
+
+
+class _CountingSplitStr(str):
+    """A `str` subclass that counts real `.split()` calls made on it.
+
+    `str` is an immutable builtin type -- ``monkeypatch.setattr(str,
+    "split", ...)`` raises `TypeError` -- so counting tokenize calls means
+    wrapping the individual line objects instead of patching the type."""
+
+    calls: list[int] = []
+
+    def split(self, *args: object, **kwargs: object) -> list[str]:  # type: ignore[override]
+        _CountingSplitStr.calls.append(1)
+        return super().split(*args, **kwargs)  # type: ignore[arg-type]
+
+
+def test_deferred_data_tokens_materializes_only_once() -> None:
+    """The docstring promises the token matrix is built on first use and
+    cached; without a cache field every access rebuilt it from scratch
+    (an O(n^2) trap for repeated reads). Count real `.split()` calls on
+    the underlying lines and drive every accessor -- `__len__`, indexing,
+    slicing, and iteration -- to prove they tokenize exactly once."""
+    _CountingSplitStr.calls = []
+    raw = [_CountingSplitStr(s) for s in ("1,2", "3,4", "5,6", "7,8")]
+    tokens = _DeferredDataTokens(raw, 0, ",")
+
+    assert len(tokens) == 4  # __len__ alone must not tokenize anything
+    assert _CountingSplitStr.calls == []
+
+    first_row = tokens[0]
+    assert _CountingSplitStr.calls == [1, 1, 1, 1], (
+        "first access must tokenize every row exactly once"
+    )
+
+    # Every subsequent accessor must reuse the cached rows, not re-tokenize.
+    assert tokens[0] is first_row
+    assert tokens[1:3] == [["3", "4"], ["5", "6"]]
+    assert list(tokens) == [["1", "2"], ["3", "4"], ["5", "6"], ["7", "8"]]
+    assert _CountingSplitStr.calls == [1, 1, 1, 1], (
+        "repeated index/slice/iter access must not re-tokenize"
+    )
+
+
+def test_deferred_data_tokens_index_slice_iter_share_underlying_rows() -> None:
+    """Index, slice, and iteration access must all read the SAME cached
+    row objects, not independently rebuilt (and therefore merely
+    value-equal) ones."""
+    raw = ["a,b", "1,2", "3,4"]
+    tokens = _DeferredDataTokens(raw, 1, ",")
+
+    by_index = tokens[0]
+    by_slice = tokens[0:1][0]
+    by_iter = next(iter(tokens))
+
+    assert by_index is by_slice is by_iter
+    assert by_index == ["1", "2"]
