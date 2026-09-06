@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later): **P1.7 slice 2 — collision-safe relinking**
+**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 1** —
+bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
+copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
+2 — collision-safe relinking**
 shipped (the P3 residual booked on slice 1); the Pack Project stack
 continues with the portable-bundle packer. Earlier the same day: **P1.1's
 two uncontracted boxes closed** (working-
@@ -1372,6 +1375,81 @@ CLOSED 2026-09-06 by slice 2 (the collision-safe relinking box above),
 the first PR of the "P1.7 Pack Project" stack; the packer's own
 name-collision handling (L0.34's precedent) will reuse `pathKey`/
 `findCandidateCollisions`.
+
+**Pack Project stack (2026-09-06 →), backend numbering.** Slice 2 above
+(the frontend collision-safe relink fix) is the precedent the packer's own
+collision handling reuses, not itself one of the numbered backend PRs
+below — the packer's own implementation work starts fresh here:
+
+- **PR 1 (this branch, PR # pending) — bundle contract + dry-run
+  manifest, backend-only, copies nothing:** new pure package
+  `quantized.portable` (added to `tests/test_repo_integrity.py`'s
+  `PURE_LAYERS`).
+  - `portable/layout.py` — the bundle DIRECTORY layout
+    (`<bundle dir>/<project stem>.dwk` + `quantized-bundle.json` +
+    `sources/<bundle-relative name>`, bundle-relative paths always
+    forward-slash and rooted at `sources/`), `basename_of`/`path_key`
+    (mirroring `lib/importEntry.ts`'s `baseName` and `lib/relink.ts`'s
+    `pathKey`, the latter plus Unicode NFC normalization for a macOS
+    NFD-reporting volume), `sanitize_component` (cross-platform-safe
+    filenames: illegal/control characters, Windows reserved device names,
+    trailing dot/space, a `MAX_COMPONENT_BYTES=200` truncate+hash for an
+    over-long name — every change reports why), and the one containment
+    rule every future consumer must apply before turning a manifest path
+    into a real one: `is_bundle_relative` + `join_bundle_path` (raises on
+    `..`, an absolute path, a drive letter, a UNC prefix, a backslash, an
+    empty/NUL-bearing segment, or anything outside `sources/`).
+  - `portable/manifest.py`'s `build_dry_run_manifest(payload, project_name,
+    probe, consented=None)` — takes an already-parsed workspace payload
+    (`desktop_project_file.parse_workspace_payload`) and a probe callback
+    shaped like `desktop_source_probe.probe_source_path`; reads no file
+    itself. Sources are deduped by `path_key(original_path)` (several
+    datasets naming one file share ONE row, each with its own recorded
+    provenance + a `sourceChangeVerdict`-equivalent verdict, ported field-
+    for-field from `lib/relink.ts`); probed exactly once per unique key;
+    sorted by `(path_key, original_path)` (never payload/probe order) so
+    the same payload always yields byte-identical
+    `manifest_json` (2-space, sorted-key, `ensure_ascii=False` JSON).
+    Destination-name collisions get L0.34's visible-suffix treatment
+    (`name.ext`, `name (2).ext`, `name (3).ext`, ... — never a silent
+    overwrite), each renamed row carrying `collision_group` +
+    `renamed_from` and an entry in the manifest's own `warnings` list. Five
+    distinct, non-packable source states (`missing`/`offline`/
+    `permission_denied`/`invalid`/`not_consented`) plus `ok`; `changed`
+    (provenance mismatch) and `unverified` (verdict `unknown`) are
+    warnings, not blockers — still `packable`, per this PR's own scoping.
+  - **Security/trust boundary** (also the module's own docstring):
+    reachability/size/mtime/checksum come ONLY from `probe`; `consented`
+    is a second, backend-enforced gate that nulls every metadata field for
+    a path it rejects, even if `probe` had already returned data for it;
+    the manifest reads no file content itself and GRANTS NOTHING — a row's
+    presence is never authorization to read or copy anything; every bundle
+    destination is built from a sanitized BASENAME only, never from any
+    part of the original directory tree, so a bundle's own internal layout
+    can never leak a source's original location; `is_bundle_relative` +
+    `join_bundle_path` are the only sanctioned path-containment check for
+    every future consumer (PR 2's copier, PR 3's opener).
+  - Frozen schema fixture: `tools/freeze_portable_manifest.py` builds one
+    synthetic payload covering a shared source, a plain and a case-variant
+    destination collision, Windows/UNC/POSIX/`/Volumes` paths, missing/
+    offline/permission-denied sources, a Unicode name, a reserved name, an
+    over-long name, a no-source dataset, and a malformed source — writes
+    `tests/fixtures/portable/manifest_v1.json`;
+    `tests/test_portable_manifest_fixture.py` byte-compares against it
+    forever (regenerate with `uv run python
+    tools/freeze_portable_manifest.py` on a deliberate behavior change).
+- **PR 2 (planned, not shipped):** staged, checksum-VERIFIED copy of every
+  packable source into the bundle's `sources/` directory (still no `.dwk`
+  write) — the first PR that touches a filesystem for real.
+- **PR 3 (planned, not shipped):** atomic bundle publish (the packed
+  `.dwk` alongside the verified `sources/` copy) and the "portable" mode's
+  open-time resolution.
+- **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
+  method a future "Pack Project" UI action calls) + the frontend contract
+  consuming PR 1-3's manifest/copy/publish primitives — no bridge method
+  exists yet.
+- **PR 5 (planned, not shipped):** adversarial audit of the full stack,
+  in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
 
 ---
 
