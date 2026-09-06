@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -32,3 +34,31 @@ def test_excel_structure(fixtures_dir: Path) -> None:
 def test_registry_routes_xlsx(fixtures_dir: Path) -> None:
     ds = import_auto(fixtures_dir / "excel_synth.xlsx")
     assert ds.metadata["parser_name"] == "import_excel"
+
+
+def test_xlsx_parser_name_is_transparent(fixtures_dir: Path) -> None:
+    """The registry's lazy ``.xlsx`` wrapper must not leak its own identity to
+    name-keyed consumers (parser matrix ids, technique.stamp_technique's
+    fallback) -- see quantized.io.registry._import_excel_lazy."""
+    from quantized.io.registry import resolve_parser
+
+    parser = resolve_parser(fixtures_dir / "excel_synth.xlsx")
+    assert parser.__name__ == "import_excel"
+    assert parser.__qualname__ == "import_excel"
+
+
+def test_registry_import_alone_does_not_import_openpyxl() -> None:
+    """Importing the registry module must not eagerly pull in openpyxl -- that
+    would defeat the point of deferring it into ``_import_excel_lazy``."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import quantized.io.registry; "
+            "print('openpyxl' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False", result.stdout + result.stderr
