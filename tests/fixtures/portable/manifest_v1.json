@@ -3,31 +3,51 @@
     {
       "dataset_id": "ds-shared-a",
       "name": "ZFC run (first import)",
-      "source_id": "s013"
+      "source_id": "s016"
     },
     {
       "dataset_id": "ds-shared-b",
       "name": "ZFC run (reimported elsewhere)",
-      "source_id": "s013"
+      "source_id": "s016"
     },
     {
       "dataset_id": "ds-dup-one",
       "name": "Duplicate basename (folder one)",
-      "source_id": "s009"
+      "source_id": "s011"
     },
     {
       "dataset_id": "ds-dup-two",
       "name": "Duplicate basename (folder two)",
-      "source_id": "s014"
+      "source_id": "s017"
     },
     {
       "dataset_id": "ds-case-one",
       "name": "Case-variant collision (upper)",
-      "source_id": "s010"
+      "source_id": "s012"
     },
     {
       "dataset_id": "ds-case-two",
       "name": "Case-variant collision (lower)",
+      "source_id": "s018"
+    },
+    {
+      "dataset_id": "ds-case-identity-upper",
+      "name": "Same-folder case variant, DIFFERENT identity (upper)",
+      "source_id": "s006"
+    },
+    {
+      "dataset_id": "ds-case-identity-lower",
+      "name": "Same-folder case variant, DIFFERENT identity (lower)",
+      "source_id": "s007"
+    },
+    {
+      "dataset_id": "ds-same-identity-upper",
+      "name": "Same-folder case variant, SAME identity (upper)",
+      "source_id": "s015"
+    },
+    {
+      "dataset_id": "ds-same-identity-lower",
+      "name": "Same-folder case variant, SAME identity (lower)",
       "source_id": "s015"
     },
     {
@@ -38,42 +58,42 @@
     {
       "dataset_id": "ds-unc",
       "name": "UNC path",
-      "source_id": "s017"
+      "source_id": "s020"
     },
     {
       "dataset_id": "ds-macos-offline",
       "name": "macOS volume, now offline",
-      "source_id": "s018"
+      "source_id": "s021"
     },
     {
       "dataset_id": "ds-missing",
       "name": "Deleted source",
-      "source_id": "s006"
+      "source_id": "s008"
     },
     {
       "dataset_id": "ds-permission-denied",
       "name": "Permission-denied source",
-      "source_id": "s007"
+      "source_id": "s009"
     },
     {
       "dataset_id": "ds-unicode",
       "name": "Unicode filename",
-      "source_id": "s016"
+      "source_id": "s019"
     },
     {
       "dataset_id": "ds-reserved",
       "name": "Windows-reserved basename",
-      "source_id": "s011"
+      "source_id": "s013"
     },
     {
       "dataset_id": "ds-reserved-multi-dot",
       "name": "Windows-reserved basename, multi-dot extension",
-      "source_id": "s012"
+      "source_id": "s014"
     },
     {
       "dataset_id": "ds-long-name",
       "name": "Over-long basename",
-      "source_id": "s008"
+      "source_id": "s010"
     },
     {
       "dataset_id": "ds-collide-keep-a",
@@ -284,6 +304,71 @@
       ]
     },
     {
+      "blockers": [],
+      "bundle_path": "sources/A.csv",
+      "changed": false,
+      "checksum": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "collision_group": 3,
+      "mtime": 1700001500.0,
+      "original_path": "/data/case/A.csv",
+      "original_path_variants": [],
+      "packable": true,
+      "renamed_from": null,
+      "shared": false,
+      "shared_by": [
+        {
+          "dataset_id": "ds-case-identity-upper",
+          "name": "Same-folder case variant, DIFFERENT identity (upper)",
+          "recorded": {
+            "checksum": null,
+            "mtime": null,
+            "size": null
+          },
+          "verdict": "unknown"
+        }
+      ],
+      "size": 111,
+      "source_id": "s006",
+      "status": "ok",
+      "unverified": true,
+      "warnings": [
+        "unverified_provenance"
+      ]
+    },
+    {
+      "blockers": [],
+      "bundle_path": "sources/a (2).csv",
+      "changed": false,
+      "checksum": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "collision_group": 3,
+      "mtime": 1700001600.0,
+      "original_path": "/data/case/a.csv",
+      "original_path_variants": [],
+      "packable": true,
+      "renamed_from": "a.csv",
+      "shared": false,
+      "shared_by": [
+        {
+          "dataset_id": "ds-case-identity-lower",
+          "name": "Same-folder case variant, DIFFERENT identity (lower)",
+          "recorded": {
+            "checksum": null,
+            "mtime": null,
+            "size": null
+          },
+          "verdict": "unknown"
+        }
+      ],
+      "size": 222,
+      "source_id": "s007",
+      "status": "ok",
+      "unverified": true,
+      "warnings": [
+        "unverified_provenance",
+        "renamed_collision"
+      ]
+    },
+    {
       "blockers": [
         "missing"
       ],
@@ -310,7 +395,7 @@
         }
       ],
       "size": null,
-      "source_id": "s006",
+      "source_id": "s008",
       "status": "missing",
       "unverified": true,
       "warnings": [
@@ -344,7 +429,7 @@
         }
       ],
       "size": null,
-      "source_id": "s007",
+      "source_id": "s009",
       "status": "permission_denied",
       "unverified": true,
       "warnings": [
@@ -376,7 +461,7 @@
         }
       ],
       "size": 16384,
-      "source_id": "s008",
+      "source_id": "s010",
       "status": "ok",
       "unverified": false,
       "warnings": [
@@ -388,7 +473,7 @@
       "bundle_path": "sources/dup.csv",
       "changed": false,
       "checksum": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "collision_group": 3,
+      "collision_group": 4,
       "mtime": 1700000100.0,
       "original_path": "/data/one/dup.csv",
       "original_path_variants": [],
@@ -408,7 +493,7 @@
         }
       ],
       "size": 128,
-      "source_id": "s009",
+      "source_id": "s011",
       "status": "ok",
       "unverified": false,
       "warnings": []
@@ -418,7 +503,7 @@
       "bundle_path": "sources/Run1.CSV",
       "changed": false,
       "checksum": null,
-      "collision_group": 4,
+      "collision_group": 5,
       "mtime": 1700000300.0,
       "original_path": "/data/one/Run1.CSV",
       "original_path_variants": [],
@@ -438,7 +523,7 @@
         }
       ],
       "size": 64,
-      "source_id": "s010",
+      "source_id": "s012",
       "status": "ok",
       "unverified": true,
       "warnings": [
@@ -470,7 +555,7 @@
         }
       ],
       "size": 32,
-      "source_id": "s011",
+      "source_id": "s013",
       "status": "ok",
       "unverified": true,
       "warnings": [
@@ -503,7 +588,7 @@
         }
       ],
       "size": 48,
-      "source_id": "s012",
+      "source_id": "s014",
       "status": "ok",
       "unverified": true,
       "warnings": [
@@ -513,10 +598,56 @@
     },
     {
       "blockers": [],
-      "bundle_path": "sources/run1 (2).csv",
+      "bundle_path": "sources/Run1 (2).csv",
+      "changed": false,
+      "checksum": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "collision_group": 5,
+      "mtime": 1700001700.0,
+      "original_path": "/data/same/Run1.csv",
+      "original_path_variants": [
+        "/data/same/Run1.csv",
+        "/data/same/run1.csv"
+      ],
+      "packable": true,
+      "renamed_from": "Run1.csv",
+      "shared": true,
+      "shared_by": [
+        {
+          "dataset_id": "ds-same-identity-upper",
+          "name": "Same-folder case variant, SAME identity (upper)",
+          "recorded": {
+            "checksum": null,
+            "mtime": null,
+            "size": null
+          },
+          "verdict": "unknown"
+        },
+        {
+          "dataset_id": "ds-same-identity-lower",
+          "name": "Same-folder case variant, SAME identity (lower)",
+          "recorded": {
+            "checksum": null,
+            "mtime": null,
+            "size": null
+          },
+          "verdict": "unknown"
+        }
+      ],
+      "size": 333,
+      "source_id": "s015",
+      "status": "ok",
+      "unverified": true,
+      "warnings": [
+        "unverified_provenance",
+        "renamed_collision"
+      ]
+    },
+    {
+      "blockers": [],
+      "bundle_path": "sources/run1 (3).csv",
       "changed": true,
       "checksum": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "collision_group": 4,
+      "collision_group": 5,
       "mtime": 1700000000.0,
       "original_path": "/data/shared/run1.csv",
       "original_path_variants": [],
@@ -546,7 +677,7 @@
         }
       ],
       "size": 4096,
-      "source_id": "s013",
+      "source_id": "s016",
       "status": "ok",
       "unverified": false,
       "warnings": [
@@ -559,7 +690,7 @@
       "bundle_path": "sources/dup (2).csv",
       "changed": false,
       "checksum": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-      "collision_group": 3,
+      "collision_group": 4,
       "mtime": 1700000200.0,
       "original_path": "/data/two/dup.csv",
       "original_path_variants": [],
@@ -579,7 +710,7 @@
         }
       ],
       "size": 256,
-      "source_id": "s014",
+      "source_id": "s017",
       "status": "ok",
       "unverified": false,
       "warnings": [
@@ -588,10 +719,10 @@
     },
     {
       "blockers": [],
-      "bundle_path": "sources/run1 (3).csv",
+      "bundle_path": "sources/run1 (4).csv",
       "changed": false,
       "checksum": null,
-      "collision_group": 4,
+      "collision_group": 5,
       "mtime": 1700000400.0,
       "original_path": "/data/two/run1.csv",
       "original_path_variants": [],
@@ -611,7 +742,7 @@
         }
       ],
       "size": 96,
-      "source_id": "s015",
+      "source_id": "s018",
       "status": "ok",
       "unverified": true,
       "warnings": [
@@ -644,7 +775,7 @@
         }
       ],
       "size": 2048,
-      "source_id": "s016",
+      "source_id": "s019",
       "status": "ok",
       "unverified": false,
       "warnings": []
@@ -674,7 +805,7 @@
         }
       ],
       "size": 8192,
-      "source_id": "s017",
+      "source_id": "s020",
       "status": "ok",
       "unverified": false,
       "warnings": []
@@ -706,7 +837,7 @@
         }
       ],
       "size": null,
-      "source_id": "s018",
+      "source_id": "s021",
       "status": "offline",
       "unverified": true,
       "warnings": [
@@ -716,12 +847,12 @@
   ],
   "summary": {
     "blocked": 3,
-    "datasets": 21,
-    "packable": 15,
-    "shared": 1,
-    "sources": 18,
-    "total_bytes": 31906,
-    "warnings": 8
+    "datasets": 25,
+    "packable": 18,
+    "shared": 2,
+    "sources": 21,
+    "total_bytes": 32572,
+    "warnings": 10
   },
   "warnings": [
     {
@@ -735,34 +866,44 @@
       "source_id": "s005"
     },
     {
+      "code": "renamed_collision",
+      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'a.csv' -> 'a (2).csv'",
+      "source_id": "s007"
+    },
+    {
       "code": "renamed_unportable_name",
       "message": "source filename was not portable across platforms and was sanitized: 'mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_.dat' -> 'mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_zfc_run_mpms_~bfdd3b18.dat'",
-      "source_id": "s008"
+      "source_id": "s010"
     },
     {
       "code": "renamed_unportable_name",
       "message": "source filename was not portable across platforms and was sanitized: 'CON.csv' -> '_CON.csv'",
-      "source_id": "s011"
+      "source_id": "s013"
     },
     {
       "code": "renamed_unportable_name",
       "message": "source filename was not portable across platforms and was sanitized: 'CON.tar.gz' -> '_CON.tar.gz'",
-      "source_id": "s012"
-    },
-    {
-      "code": "renamed_collision",
-      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'run1.csv' -> 'run1 (2).csv'",
-      "source_id": "s013"
-    },
-    {
-      "code": "renamed_collision",
-      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'dup.csv' -> 'dup (2).csv'",
       "source_id": "s014"
     },
     {
       "code": "renamed_collision",
-      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'run1.csv' -> 'run1 (3).csv'",
+      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'Run1.csv' -> 'Run1 (2).csv'",
       "source_id": "s015"
+    },
+    {
+      "code": "renamed_collision",
+      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'run1.csv' -> 'run1 (3).csv'",
+      "source_id": "s016"
+    },
+    {
+      "code": "renamed_collision",
+      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'dup.csv' -> 'dup (2).csv'",
+      "source_id": "s017"
+    },
+    {
+      "code": "renamed_collision",
+      "message": "destination filename collided with another source and was renamed to avoid overwriting it: 'run1.csv' -> 'run1 (4).csv'",
+      "source_id": "s018"
     }
   ]
 }

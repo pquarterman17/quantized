@@ -117,7 +117,8 @@ from quantized.desktop_consent import (
 )
 from quantized.desktop_project_file import parse_workspace_payload
 from quantized.portable.copy_stream import StageProgress
-from quantized.portable.manifest import Consented, Probe, build_dry_run_manifest, manifest_json
+from quantized.portable.grouping import Consented, Probe
+from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 from quantized.portable.pack import PackResult, pack_project
 
 __all__ = ["DesktopPackBridge"]

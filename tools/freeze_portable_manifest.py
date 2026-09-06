@@ -18,7 +18,20 @@ implements in one document:
     with different recorded provenance (one checksum-matching, one not);
   - two different files with the same basename in different folders
     (a plain destination collision);
-  - a case-variant collision (``Run1.CSV`` vs ``run1.csv``);
+  - a case-variant NAMING collision (``Run1.CSV`` vs ``run1.csv`` in
+    DIFFERENT folders -- a destination-basename collision only, never a
+    shared-source dedup, since the full paths were never the same key);
+  - PR #305 review fix regression cases, same folder, differing only by
+    case -- proving dedup is by EXACT path string and collapse is by
+    filesystem identity alone, never by a folded key:
+    - ``/data/case/A.csv`` vs ``/data/case/a.csv`` with DIFFERENT fake
+      ``(dev, ino)`` identities and different checksums -- must stay TWO
+      rows with a visible destination suffix, never silently share one
+      packed copy;
+    - ``/data/same/Run1.csv`` vs ``/data/same/run1.csv`` with the SAME
+      fake ``(dev, ino)`` identity and checksum -- provably one physical
+      file, so it DOES collapse to one row with both spellings recorded
+      in ``original_path_variants``;
   - a Windows path, a UNC path, a POSIX path, and a macOS ``/Volumes/...``
     path reported ``offline``;
   - a ``missing`` file and a ``permission_denied`` file;
@@ -84,6 +97,42 @@ _FAKE_PROBE: dict[str, dict[str, Any]] = {
     },
     "/data/one/Run1.CSV": {"state": "ok", "size": 64, "mtime": 1_700_000_300.0},
     "/data/two/run1.csv": {"state": "ok", "size": 96, "mtime": 1_700_000_400.0},
+    # PR #305 review fix: same folder, differ only by case, DIFFERENT
+    # filesystem identities -- must never collapse into one shared source.
+    "/data/case/A.csv": {
+        "state": "ok",
+        "size": 111,
+        "mtime": 1_700_001_500.0,
+        "dev": 10,
+        "ino": 111,
+        "checksum": _cksum("1"),
+    },
+    "/data/case/a.csv": {
+        "state": "ok",
+        "size": 222,
+        "mtime": 1_700_001_600.0,
+        "dev": 10,
+        "ino": 222,
+        "checksum": _cksum("2"),
+    },
+    # Same folder, differ only by case, SAME filesystem identity -- provably
+    # one physical file, so this DOES collapse into one row.
+    "/data/same/Run1.csv": {
+        "state": "ok",
+        "size": 333,
+        "mtime": 1_700_001_700.0,
+        "dev": 20,
+        "ino": 333,
+        "checksum": _cksum("3"),
+    },
+    "/data/same/run1.csv": {
+        "state": "ok",
+        "size": 333,
+        "mtime": 1_700_001_700.0,
+        "dev": 20,
+        "ino": 333,
+        "checksum": _cksum("3"),
+    },
     "C:\\lab\\data\\ok.csv": {
         "state": "ok",
         "size": 512,
@@ -173,6 +222,26 @@ def build_fixture_payload() -> dict[str, Any]:
                 "id": "ds-case-two",
                 "name": "Case-variant collision (lower)",
                 "source": _path_source("/data/two/run1.csv"),
+            },
+            {
+                "id": "ds-case-identity-upper",
+                "name": "Same-folder case variant, DIFFERENT identity (upper)",
+                "source": _path_source("/data/case/A.csv"),
+            },
+            {
+                "id": "ds-case-identity-lower",
+                "name": "Same-folder case variant, DIFFERENT identity (lower)",
+                "source": _path_source("/data/case/a.csv"),
+            },
+            {
+                "id": "ds-same-identity-upper",
+                "name": "Same-folder case variant, SAME identity (upper)",
+                "source": _path_source("/data/same/Run1.csv"),
+            },
+            {
+                "id": "ds-same-identity-lower",
+                "name": "Same-folder case variant, SAME identity (lower)",
+                "source": _path_source("/data/same/run1.csv"),
             },
             {
                 "id": "ds-windows",

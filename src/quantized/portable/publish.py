@@ -301,12 +301,10 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
             os.rmdir(destination_dir)
         except OSError:
             pass
-        # `str(exc)` on this `OSError` embeds both `staging_root` and
-        # `destination_dir` (`exc.filename`/`exc.filename2`) -- absolute
-        # paths that must never reach a structured, potentially-logged
-        # result (review finding #6). `safe_os_error` reports the OS's own
-        # errno text/name only, same as `copy_stream.py`'s `StageError`
-        # messages.
+        # `safe_os_error`, never `str(exc)`: an `OSError` from `os.rename`
+        # carries BOTH `filename` and `filename2` -- the absolute staging
+        # and destination paths -- and this result is structured, possibly
+        # logged, output (review finding, PR #307).
         return _refuse(staging_root, "publish_failed", safe_os_error(exc))
     return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
 
@@ -377,7 +375,18 @@ def validate_bundle(bundle_dir: str, *, verify_checksums: bool = False) -> Bundl
         with open(manifest_path, encoding="utf-8") as f:
             raw = f.read()
         manifest = json.loads(raw)
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
+        # `safe_os_error`, never `str(exc)`: a permission/I-O error opening
+        # or reading the manifest embeds `exc.filename` -- the absolute
+        # bundle-relative-in-name-only path this function's own docstring
+        # promises never to leak (review finding, PR #307).
+        return BundleCheck(
+            False, None, [{"code": "manifest_invalid", "detail": safe_os_error(exc)}]
+        )
+    except ValueError as exc:
+        # `json.JSONDecodeError` (a `ValueError`) message is a line/column
+        # position and a snippet of the malformed JSON text itself -- never
+        # a filesystem path -- so `str(exc)` is safe here.
         return BundleCheck(False, None, [{"code": "manifest_invalid", "detail": str(exc)}])
     if not isinstance(manifest, dict):
         return BundleCheck(
