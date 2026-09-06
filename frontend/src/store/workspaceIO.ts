@@ -24,14 +24,16 @@
 // Recent Projects entry — see lib/recentProjects.ts's module doc for why a
 // browser download, which has no path, never does.
 
-import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
+import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
+import { parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
+import { useWorkingPaths } from "./workingPaths";
 import { nextDatasetId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
@@ -154,7 +156,15 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // automatically a SAFE one: nothing previously stopped a read-only
   // session from Save-As-ing back onto the very path another LIVE instance
   // holds the write lock for and silently overwriting it.
-  const destination = await pickSaveDestination("workspace.dwk");
+  //
+  // P1.1: the dialog opens in the current working path (the same hint the
+  // import and Open Project dialogs use) and suggests the open project's
+  // own name when there is one, so Save As of "run3.dwk" does not start
+  // from "workspace.dwk" in an unrelated folder.
+  const destination = await pickSaveDestination(
+    get().currentProject?.name || "workspace.dwk",
+    useWorkingPaths.getState().current || undefined,
+  );
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
   if (typeof destination === "object" && destination !== null) {
     // The dialog itself refused the pick and said why (P1.2 box 4: the
@@ -249,6 +259,8 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     // the live workspace and disk agree.
     get().setCurrentProject({ name: baseName(native.path), path: native.path });
     useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
+    const dir = parentDirectory(native.path); // P1.1: the folder picked floats to the top
+    if (dir) useWorkingPaths.getState().use(dir);
     const msg = savedMsg(all.length, native.path);
     get().setStatus(msg);
     toast(msg, "ok");
@@ -306,6 +318,19 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
       cachedLock.status === "held-by-other-stale"
         ? `read-only — another (unresponsive) instance has this project open; use Take Over Editing`
         : `read-only — another instance has this project open for editing`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  // P1.1: a project on an UNMOUNTED share is temporarily offline, not a
+  // write target — writing "through" an absent mount point would land a
+  // stray local file at the mount path (and a failed write reads as
+  // "the save is broken, use Save As", which quietly forks the project).
+  // Say what is actually wrong and leave the dirty marker set; a re-press
+  // after reconnecting is the retry. Only `offline` is gated: a deleted
+  // file on a live volume is legitimately recreated by the write.
+  if ((await pathState(project.path)) === "offline") {
+    const msg = `${project.name}: the drive or share holding this project is not available right now — reconnect and save again, or use Save As to save a copy elsewhere`;
     get().setStatus(msg);
     toast(msg, "danger");
     return;

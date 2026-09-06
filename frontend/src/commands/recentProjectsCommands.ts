@@ -29,7 +29,8 @@
 import { useEffect } from "react";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import { pathState, readProject } from "../lib/desktopBridge";
+import { CANCELLED, openProject, pathState, readProject, type OpenProjectResult } from "../lib/desktopBridge";
+import { parentDirectory } from "../lib/importEntry";
 import { hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace } from "../lib/openWorkspaceReplace";
 import { currentViewport } from "../lib/parseWorkspaceFile";
 import { parseWorkspace } from "../lib/workspace";
@@ -37,40 +38,102 @@ import { useCommands, type Action } from "../store/commands";
 import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { useWorkingPaths } from "../store/workingPaths";
+
+/** Basename of a native path, either separator — the same deliberately
+ *  local helper lib/openWorkspaceCommand.ts and store/workspaceIO.ts carry. */
+function baseName(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
+
+/** The native Open dialog seeded at the entry's own folder — the one
+ *  recovery every non-offline failure below degrades to. `null` here means
+ *  "nothing to load" (cancelled, no bridge, or an unreadable pick); the
+ *  cancel case is deliberately silent — the user just closed a dialog. */
+async function pickProjectNear(name: string, path: string): Promise<OpenProjectResult | null> {
+  const picked = await openProject(parentDirectory(path) || undefined);
+  if (picked === CANCELLED) return null;
+  if (picked === null) {
+    toast(`${name}: could not be reopened`, "danger");
+    return null;
+  }
+  return picked;
+}
 
 /** Reopen a Recent Projects entry — missing-vs-offline aware (see module
  *  doc). Exported (P1.2) so the crash-recovery chooser (useWorkspaceAutosave)
  *  can reuse the EXACT same reopen path for its "keep the last project"
- *  choice instead of a second implementation. */
+ *  choice instead of a second implementation.
+ *
+ *  P1.1 (project reopen completion) — the four non-ok states get four
+ *  different remedies, never one generic failure:
+ *  - `offline`: say so and STOP. Retry is clicking again once the share is
+ *    back; nothing is cleaned up or relocated.
+ *  - `permission_denied`: present but unreadable — STOP too; the remedy is
+ *    access, not a different path.
+ *  - `missing` / `invalid`: offer LOCATE (the native dialog, seeded at the
+ *    old folder). A located file replaces the stale entry — but only once
+ *    the workspace is actually applied (DEFECT A's rule), never on the pick.
+ *  - a read that fails on an `ok` path: consent is per-process
+ *    (desktop_consent), so this is the NORMAL first reopen after a
+ *    relaunch. Degrade to the same dialog, seeded at the file's own folder
+ *    — `read_project_file`'s documented contract — rather than a dead end. */
 export async function openRecentProject(name: string, path: string): Promise<void> {
   const state = await pathState(path);
   if (state === "offline") {
     toast(`${name}: the drive or share is not available right now — reconnect and try again`, "danger");
     return;
   }
+  if (state === "permission_denied") {
+    toast(`${name}: exists but cannot be read (permission denied)`, "danger");
+    return;
+  }
+  let result: OpenProjectResult | null;
   if (state === "missing" || state === "invalid") {
-    toast(`${name}: not found at its saved location`, "danger");
-    return;
+    const why =
+      state === "missing"
+        ? "The drive is reachable but the file is not there — it may have been moved, renamed, or deleted."
+        : "Its saved path is not usable on this machine.";
+    const locate = await askConfirm(
+      `${name}: not found at its saved location`,
+      `${path}\n\n${why} Locate it to update the Recent Projects entry.`,
+      "Locate…",
+    );
+    if (!locate) return;
+    result = await pickProjectNear(name, path);
+  } else {
+    // "ok", or "unknown" (no bridge to ask — but this whole command only
+    // exists because a bridge granted this path earlier, so a bridge that
+    // vanished mid-session is the only way to land here with "unknown").
+    result = await readProject(path);
+    if (result === null) {
+      useApp.getState().setStatus(`${name}: confirm the file to reopen it — file access is re-granted each launch`);
+      result = await pickProjectNear(name, path);
+    }
   }
-  // "ok", or "unknown" (no bridge to ask — but this whole command only
-  // exists because a bridge granted this path earlier, so a bridge that
-  // vanished mid-session is the only way to land here with "unknown").
-  const result = await readProject(path);
-  if (result === null) {
-    toast(`${name}: could not be reopened`, "danger");
-    return;
-  }
+  if (result === null) return;
+  const opened = result;
   let ws;
   try {
-    ws = parseWorkspace(result.content, currentViewport());
+    ws = parseWorkspace(opened.content, currentViewport());
   } catch (e) {
     toast(`${name}: ${e instanceof Error ? e.message : "invalid workspace file"}`, "danger");
     return;
   }
   const s = useApp.getState;
-  const identity = { name, path };
-  if (!hasWorkspaceContent(s)) {
+  const identity = opened.path === path ? { name, path } : { name: baseName(opened.path), path: opened.path };
+  const apply = () => {
+    // A relocated project supersedes its stale entry (replaceWorkspace
+    // pushes the new one); the folder it was found in becomes the working
+    // path, same as any other native pick.
+    if (opened.path !== path) useRecentProjects.getState().removeRecentProject(path);
+    const dir = parentDirectory(opened.path);
+    if (dir) useWorkingPaths.getState().use(dir);
     replaceWorkspace(s, ws, identity);
+  };
+  if (!hasWorkspaceContent(s)) {
+    apply();
     return;
   }
   const ok = await askConfirm(
@@ -79,7 +142,7 @@ export async function openRecentProject(name: string, path: string): Promise<voi
     "Replace",
     true,
   );
-  if (ok) replaceWorkspace(s, ws, identity);
+  if (ok) apply();
 }
 
 /** Publish one "Open recent project…" command per Recent Projects entry,

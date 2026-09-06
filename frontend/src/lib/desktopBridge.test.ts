@@ -170,6 +170,20 @@ describe("pickSaveDestination", () => {
     expect(await pickSaveDestination("w.dwk")).toBe(CANCELLED);
   });
 
+  it("forwards the starting directory (P1.1), empty when none is given", async () => {
+    const seen: unknown[][] = [];
+    setShell({
+      save_file_dialog: async (...a: unknown[]) => {
+        seen.push(a);
+        return { path: "/p/w.dwk" };
+      },
+      write_project_file: async () => ({ ok: true }),
+    });
+    await pickSaveDestination("w.dwk", "/data/runs");
+    await pickSaveDestination("w.dwk");
+    expect(seen).toEqual([["w.dwk", "/data/runs"], ["w.dwk", ""]]);
+  });
+
   it("returns null when the shell exposes only one of the two required methods", async () => {
     setShell({ save_file_dialog: async () => ({ path: "/p/w.dwk" }) });
     expect(await pickSaveDestination("w.dwk")).toBeNull();

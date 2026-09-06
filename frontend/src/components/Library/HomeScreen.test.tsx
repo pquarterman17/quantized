@@ -33,6 +33,11 @@ describe("stateBadge", () => {
     expect(stateBadge("unknown")).toBeNull();
   });
 
+  it("marks an unreadable (permission-denied) source as present, not missing (P1.1)", () => {
+    expect(stateBadge("permission_denied")?.text).toBe("no access");
+    expect(stateBadge("permission_denied")?.tone).not.toBe(stateBadge("missing")?.tone);
+  });
+
   it("distinguishes offline from missing", () => {
     expect(stateBadge("offline")?.text).toBe("offline");
     expect(stateBadge("missing")?.text).toBe("missing");

@@ -64,8 +64,11 @@ export const NO_DESKTOP: DesktopCapabilities = {
 
 /** A file's current reachability. `offline` is NOT `missing`: an unreachable
  *  network root means "cannot tell, probably fine", and only `missing` justifies
- *  telling the user their source is gone. */
-export type PathState = "ok" | "missing" | "offline" | "invalid" | "unknown";
+ *  telling the user their source is gone. `permission_denied` (P1.1) is a
+ *  file that is PRESENT but unreadable — also never "gone". */
+export type PathState = "ok" | "missing" | "offline" | "invalid" | "permission_denied" | "unknown";
+
+const PATH_STATES: readonly PathState[] = ["ok", "missing", "offline", "invalid", "permission_denied"];
 
 /** Returned by every single-RESULT native call below (never the list-
  *  returning `openFiles`, which keeps using `[]`) when the user cancels the
@@ -101,7 +104,7 @@ interface PyWebviewApi {
   pick_relink_directory?: (directory?: string) => Promise<Record<string, unknown>>;
   revoke_relink_dir?: () => Promise<Record<string, unknown>>;
   path_status?: (path: string) => Promise<Record<string, unknown>>;
-  save_file_dialog?: (suggestedName?: string) => Promise<Record<string, unknown>>;
+  save_file_dialog?: (suggestedName?: string, directory?: string) => Promise<Record<string, unknown>>;
   write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
   open_project_file?: (directory?: string) => Promise<Record<string, unknown>>;
   read_project_file?: (path: string) => Promise<Record<string, unknown>>;
@@ -212,9 +215,7 @@ export async function pathState(path: string): Promise<PathState> {
   if (!bridge?.path_status) return "unknown";
   try {
     const state = str((await bridge.path_status(path)).state);
-    return state === "ok" || state === "missing" || state === "offline" || state === "invalid"
-      ? state
-      : "unknown";
+    return PATH_STATES.find((s) => s === state) ?? "unknown";
   } catch {
     return "unknown";
   }
@@ -326,11 +327,17 @@ function isRefusal(error: string): boolean {
 // literal added no-redundant-type-constituents noise without adding a
 // distinguishable case for tsc. `SaveRefused` IS a distinguishable case (an
 // object), so it stays.
-export async function pickSaveDestination(suggestedName: string): Promise<string | SaveRefused | null> {
+//
+// `directory` (P1.1) seeds where the dialog opens — the caller's current
+// working path, the same hint `openFiles`/`openProject` already forward.
+export async function pickSaveDestination(
+  suggestedName: string,
+  directory?: string,
+): Promise<string | SaveRefused | null> {
   const bridge = api();
   if (!bridge?.save_file_dialog || !bridge.write_project_file) return null;
   try {
-    const dialogOut = await bridge.save_file_dialog(suggestedName);
+    const dialogOut = await bridge.save_file_dialog(suggestedName, directory ?? "");
     const path = str(dialogOut.path);
     if (path !== null) return path;
     const error = str(dialogOut.error);
@@ -356,8 +363,9 @@ export async function pickSaveDestination(suggestedName: string): Promise<string
 export async function saveProjectAs(
   suggestedName: string,
   contents: string,
+  directory?: string,
 ): Promise<SaveProjectResult | Cancelled | SaveRefused | null> {
-  const destination = await pickSaveDestination(suggestedName);
+  const destination = await pickSaveDestination(suggestedName, directory);
   if (destination === null || destination === CANCELLED || isSaveRefused(destination)) return destination;
   const written = await saveProjectTo(destination, contents);
   return written === LOCK_LOST ? null : written; // no token was supplied, so LOCK_LOST cannot occur

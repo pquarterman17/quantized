@@ -45,7 +45,7 @@ from quantized.desktop_consent import (
     set_declared_sources,
 )
 from quantized.desktop_project_file import extract_declared_source_paths
-from quantized.desktop_source_probe import probe_source_path, volume_present
+from quantized.desktop_source_probe import probe_source_path
 
 __all__ = ["DesktopDialogBridge", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
@@ -212,12 +212,13 @@ class DesktopDialogBridge:
             resolved = os.path.realpath(path)
         except (OSError, ValueError):
             return {"state": "invalid"}
-        if os.path.isfile(resolved):
-            return {"state": "ok", "path": resolved}
-        return {
-            "state": "missing" if volume_present(resolved) else "offline",
-            "path": resolved,
-        }
+        # P1.1 (project reopen): delegate to the SAME reachability decision
+        # relink's `probe_source` uses, so an ACL-blocked file reports
+        # ``permission_denied`` (it is present — "not found" would tell the
+        # user their project is gone) and a directory reports ``invalid``.
+        # No checksum: this is the consent-free reachability check only.
+        probed = probe_source_path(resolved, compute_checksum=False)
+        return {"state": probed["state"], "path": resolved}
 
     # -- source probing / relink (P1.7) --------------------------------------
 
@@ -258,7 +259,7 @@ class DesktopDialogBridge:
 
     # -- project save destination (write itself lives in DesktopApi) --------
 
-    def save_file_dialog(self, suggested_name: str = "") -> dict[str, Any]:
+    def save_file_dialog(self, suggested_name: str = "", directory: str = "") -> dict[str, Any]:
         """Open a native SAVE dialog and grant WRITE consent for the chosen
         destination — read consent is a separate, unaffected grant (see
         desktop_consent's module doc): picking where to save never authorizes
@@ -272,6 +273,11 @@ class DesktopDialogBridge:
         grant for that path is never even minted, and the frontend gets a
         distinguishable error instead of a generic "could not grant" one.
 
+        `directory` seeds where the dialog opens (P1.1 "working-directory
+        selection affects the next chooser") — the frontend passes its
+        current working path, exactly as it does for `pick_files` and
+        `open_project_file`; empty falls back to the process cwd.
+
         Cancelling returns ``{"path": None}``, same non-error convention as
         every other dialog method here."""
         if self._window is None:
@@ -279,6 +285,7 @@ class DesktopDialogBridge:
         try:
             chosen = self._window.create_file_dialog(
                 _dialog_kind("SAVE_DIALOG", _SAVE_DIALOG_DEFAULT),
+                directory=directory or os.getcwd(),
                 save_filename=suggested_name or "workspace.dwk",
                 file_types=PROJECT_FILE_TYPES,
             )

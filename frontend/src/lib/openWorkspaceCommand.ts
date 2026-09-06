@@ -6,6 +6,8 @@
 
 import { openFilePicker } from "./openFilePicker";
 import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
+import { parentDirectory } from "./importEntry";
+import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
 import { parseWorkspace, type LoadedWorkspace } from "./workspace";
@@ -94,12 +96,18 @@ export function openWorkspaceCommand(
       viaPicker();
       return;
     }
-    void openProject().then((native) => {
+    // P1.1: open where the user already works (the same working-path hint
+    // lib/importEntry.ts's `chooseAndImport` forwards for datasets), and
+    // remember the folder actually picked from so it floats to the top
+    // next time — for the next project dialog AND the next import.
+    void openProject(useWorkingPaths.getState().current || undefined).then((native) => {
       if (native === CANCELLED) return; // the user backed out — never fall back
       if (native === null) {
         viaPicker();
         return;
       }
+      const dir = parentDirectory(native.path);
+      if (dir) useWorkingPaths.getState().use(dir);
       void withOp(label, () => Promise.resolve(parseWorkspace(native.content, currentViewport())))
         .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
         .catch((e: unknown) =>

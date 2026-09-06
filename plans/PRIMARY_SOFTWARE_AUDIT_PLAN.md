@@ -3,7 +3,11 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-04 (#294): **P1.2 is COMPLETE** — its `[~]` tag is
+**Updated:** 2026-09-06: **P1.1's two uncontracted boxes closed** (working-
+directory hint for Open Project / Save As; project reopen with per-state
+remedies incl. `permission_denied` and the lapsed-consent dialog degrade) —
+only the owner-gated long-path and packaged-E2E boxes remain. Prior:
+2026-09-04 (#294): **P1.2 is COMPLETE** — its `[~]` tag is
 dropped, the P0.4-conditional compressed/chunked-container box is DECIDED NOT
 REQUIRED (see the box), and Gate B step 2 is ticked; the 2026-08-19 note
 below that added P1.2's `[~]` is superseded for P1.2 (still current for
@@ -462,12 +466,23 @@ the existing remote-IPC security boundary must remain.
   `store/workspaceIO.ts:138`) wires Ctrl/Cmd+S to it via `store/project.ts`'s
   identity+dirty slice, with no dialog on the known path. Verified with a
   grep of `frontend/src` for `saveProjectTo` call sites — flipped to `[x]`.
-- [ ] Re-import uses its path and distinguishes offline from deletion.
+- [x] Re-import uses its path and distinguishes offline from deletion.
   Datasets already had this (MAIN_PLAN #31, `pathState`/`path_status`).
   Projects get the same distinction this slice, reused verbatim
   (`recentProjectsCommands.ts` checks `pathState` before reopening a Recent
   Projects entry) — but full "re-import a project" semantics beyond reopen
-  are **P1.2's** (project identity again).
+  are **P1.2's** (project identity again). **Completed 2026-09-06:** the
+  reopen now has a distinct remedy per state — `offline` stops (retry is
+  clicking again; nothing is cleaned up), `permission_denied` (new in
+  `path_status`, which now delegates to `probe_source_path`) says the file
+  is present but unreadable, `missing`/`invalid` offer **Locate…** (the
+  native dialog seeded at the old folder; a located file supersedes the
+  stale entry only once the workspace is actually applied), and a failed
+  direct read on an `ok` path — the NORMAL first reopen after a relaunch,
+  since consent is per-process — degrades to the dialog seeded at the
+  file's own folder instead of a dead-end toast. Quick save refuses to
+  write to a project whose volume is `offline` (never through an absent
+  mount point) while a merely `missing` file is recreated by the write.
 - [x] Recent Files and Recent Projects are separate. (`qz.recentProjects`
   vs. `qz.recent`, separate storage keys, separate stores — `lib/
   recentProjects.ts` / `store/recentProjects.ts` vs. the pre-existing
@@ -475,10 +490,14 @@ the existing remote-IPC security boundary must remain.
   commands, not a MenuBar row — see `recentProjectsCommands.ts`'s header for
   why: `store/useApp.ts`, which the MenuBar's Recent Files row reads, was
   pinned for this contract slice.)
-- [ ] Working-directory selection affects the next chooser. Datasets already
-  had this (MAIN_PLAN #31, `useWorkingPaths`). NOT wired for projects this
-  slice — `openProject`/`saveProjectAs` don't thread a working-directory
-  hint yet. **Deferred, no owner assigned** — small, uncontracted follow-up.
+- [x] Working-directory selection affects the next chooser. Datasets already
+  had this (MAIN_PLAN #31, `useWorkingPaths`). **Completed 2026-09-06:**
+  Open Project and Save As open at `useWorkingPaths.current` (the SAVE
+  dialog gained the `directory` hint `pick_files`/`open_project_file`
+  always had), Save As suggests the open project's own name, and the
+  folder actually opened from / saved into / located in is recorded back
+  via `use()` — so a project picked on a share seeds the next import
+  dialog too, and vice versa.
 - [x] Drag/drop and browser inputs remain fallbacks. (Every native call
   degrades to the pre-existing `openFilePicker`/`saveBlob` path exactly —
   verified by the full existing jsdom suite passing untouched, plus new

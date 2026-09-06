@@ -41,6 +41,14 @@ describe("reopenRecent", () => {
     expect(openFilePicker).not.toHaveBeenCalled();
   });
 
+  it("permission denied: present but unreadable — says so, no picker, no import (P1.1)", async () => {
+    pathState.mockResolvedValue("permission_denied");
+    expect(await reopenRecent(store, withPath)).toBe("denied");
+    expect(openFilePicker).not.toHaveBeenCalled();
+    expect(store.importPaths).not.toHaveBeenCalled();
+    expect(store.setStatus).toHaveBeenCalledWith(expect.stringMatching(/permission denied/));
+  });
+
   it("offers to LOCATE a file whose volume is present but file is gone", async () => {
     pathState.mockResolvedValue("missing");
     expect(await reopenRecent(store, withPath)).toBe("located");

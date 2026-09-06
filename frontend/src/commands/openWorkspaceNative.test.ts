@@ -15,6 +15,7 @@ import { openFilePicker } from "../lib/openFilePicker";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { useRecentProjects } from "../store/recentProjects";
 import { useApp } from "../store/useApp";
+import { useWorkingPaths } from "../store/workingPaths";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../lib/openFilePicker", async (orig) => ({
@@ -64,6 +65,7 @@ beforeEach(() => {
   vi.mocked(openFilePicker).mockReset();
   setShell(null);
   localStorage.clear();
+  useWorkingPaths.setState({ paths: [], current: "" });
   useRecentProjects.setState({ recentProjects: [] });
   useApp.setState({
     datasets: [],
@@ -99,6 +101,36 @@ describe("open-workspace — native branch", () => {
     await settle();
     expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
     expect(useApp.getState().projectDirty).toBe(false);
+  });
+
+  // P1.1: "working-directory selection affects the next chooser" — for
+  // projects, not only imports (lib/importEntry.test.ts's identical pair).
+  it("opens the native dialog at the current working path", async () => {
+    const seen: (string | undefined)[] = [];
+    setShell({
+      open_project_file: async (dir?: string) => {
+        seen.push(dir);
+        return { path: null };
+      },
+    });
+    useWorkingPaths.getState().use("/data/runs");
+    run("open-workspace");
+    await settle();
+    expect(seen).toEqual(["/data/runs"]);
+  });
+
+  it("remembers the folder the project was actually opened from", async () => {
+    setShell({ open_project_file: async () => ({ path: "/p/sub/workspace.dwk", content: WS }) });
+    run("open-workspace");
+    await settle();
+    expect(useWorkingPaths.getState().current).toBe("/p/sub");
+  });
+
+  it("remembers nothing when the user cancels", async () => {
+    setShell({ open_project_file: async () => ({ path: null }) });
+    run("open-workspace");
+    await settle();
+    expect(useWorkingPaths.getState().current).toBe("");
   });
 
   it("does NOT fall back to the browser picker when the user cancels the native dialog", async () => {

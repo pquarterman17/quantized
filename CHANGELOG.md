@@ -6,6 +6,16 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Project files (P1.1 completion): Open Project and Save As now open in
+  your current working folder (the one you last imported from, opened, or
+  saved into), and Save As suggests the open project's own name. Reopening
+  a Recent Project after relaunching the app asks you to confirm the file
+  in its own folder instead of failing with "could not be reopened"; a
+  moved or deleted project offers **Locate…**; a project on a disconnected
+  drive says so and waits for you to reconnect (nothing is removed or
+  relinked); a project you lack permission to read is reported as such
+  rather than as "not found". Quick save no longer tries to write to a
+  project on a disconnected drive.
 - Extend the dataset-handle cache (`routes/_datasetcache.py`) to
   `/api/plot/series`: a committed zoom/pan on an already server-decimated
   series used to re-POST the whole dataset on every step. Measured on a
