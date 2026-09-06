@@ -61,11 +61,15 @@ describe("parseDatasetSource — kind: path (unchanged)", () => {
 });
 
 describe("parseDatasetSource — kind: bundle (P1.7 PR 3)", () => {
-  it("resolves to an absolute path and records bundlePath, given a POSIX projectDir", () => {
+  // PR 3 review finding #1/#2: `bundlePath` is no longer carried on the
+  // parsed in-memory source — only the resolved absolute `path` (plus
+  // provenance) survives. `serializeWorkspace` re-derives the
+  // bundle-relative form fresh from `path` at save time instead
+  // (lib/workspaceSerialize.test coverage lives in workspace.test.ts).
+  it("resolves to an absolute path, given a POSIX projectDir", () => {
     expect(parseDatasetSource({ kind: "bundle", path: "sources/run1.csv" }, "/proj")).toEqual({
       kind: "path",
       path: "/proj/sources/run1.csv",
-      bundlePath: "sources/run1.csv",
     });
   });
 
@@ -73,7 +77,6 @@ describe("parseDatasetSource — kind: bundle (P1.7 PR 3)", () => {
     expect(parseDatasetSource({ kind: "bundle", path: "sources/run1.csv" }, "C:\\proj")).toEqual({
       kind: "path",
       path: "C:\\proj\\sources\\run1.csv",
-      bundlePath: "sources/run1.csv",
     });
   });
 
@@ -89,7 +92,6 @@ describe("parseDatasetSource — kind: bundle (P1.7 PR 3)", () => {
     expect(parseDatasetSource(v, "/proj")).toEqual({
       kind: "path",
       path: "/proj/sources/run1.csv",
-      bundlePath: "sources/run1.csv",
       checksum: "sha256:abc",
       mtime: 1700000000,
       size: 42,
@@ -99,6 +101,13 @@ describe("parseDatasetSource — kind: bundle (P1.7 PR 3)", () => {
 
   it("returns null with no projectDir — the documented degrade", () => {
     expect(parseDatasetSource({ kind: "bundle", path: "sources/run1.csv" })).toBeNull();
+  });
+
+  // PR 3 review finding #3: `parentDirectory`'s own "no directory" sentinel
+  // is `""` — that must degrade exactly like `undefined`, never resolve
+  // against a bogus root-anchored path.
+  it("returns null with an EMPTY projectDir — the parentDirectory('no separator') sentinel", () => {
+    expect(parseDatasetSource({ kind: "bundle", path: "sources/run1.csv" }, "")).toBeNull();
   });
 
   it("returns null for a traversal path, even with a projectDir", () => {

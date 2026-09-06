@@ -115,16 +115,18 @@ beforeEach(() => {
 });
 
 // P1.7 PR 3 (Pack Project, frontend half): a dataset loaded from a packed
-// project carries `source.bundlePath` alongside its resolved absolute
-// `source.path` — the serializer decides per-save whether that round-trips
-// back to `kind: "bundle"` (saved to the SAME directory it was resolved
-// against) or falls back to an absolute `kind: "path"` (saved elsewhere, or
-// with no known directory at all — the browser-download fallback).
+// project keeps a plain absolute `source.path` — the serializer decides
+// per-save (PR 3 review finding #1/#2: derived FRESH from `source.path`,
+// never a recalled parse-time field) whether that path sits directly under
+// the SAME directory's own `sources/` folder and so round-trips back to
+// `kind: "bundle"`, or falls back to an absolute `kind: "path"` (saved
+// elsewhere, or with no known directory at all — the browser-download
+// fallback).
 const PACKED_DATASET = {
   id: "a",
   name: "a.dat",
   data,
-  source: { kind: "path" as const, path: "/proj/sources/run1.csv", bundlePath: "sources/run1.csv" },
+  source: { kind: "path" as const, path: "/proj/sources/run1.csv" },
 };
 
 function sourceFromWriteCall(write: ReturnType<typeof vi.fn>): unknown {
@@ -525,6 +527,22 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     await useApp.getState().saveWorkspace();
 
     expect(sourceFromWriteCall(write)).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
+  // PR 3 review finding #3: a current project path with NO directory
+  // separator (e.g. a bare "workspace.dwk", `parentDirectory`'s own "no
+  // directory" sentinel) must never be treated as a known projectDir —
+  // writes absolute, never attempts a bundle derivation against a bogus
+  // root-anchored prefix.
+  it("writes an absolute kind:path when the current project path has no directory separator", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "workspace.dwk" });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
   });
 
   // P1.1: an unmounted share is OFFLINE, not a write target — never write

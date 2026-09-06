@@ -204,7 +204,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // unchanged, always absolute.
   const content = serializeWorkspace(
     state,
-    destination !== null ? { projectDir: parentDirectory(destination) } : undefined,
+    destination !== null ? { projectDir: parentDirectory(destination) || undefined } : undefined,
   );
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
@@ -367,7 +367,7 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   }
   // P1.7 PR 3: a quick save's destination IS `project.path` — no dialog, no
   // uncertainty — so `projectDir` is knowable up front, unlike Save As.
-  const content = await serializeCurrentWorkspace(get, parentDirectory(project.path));
+  const content = await serializeCurrentWorkspace(get, parentDirectory(project.path) || undefined);
   if (content === null) return;
 
   // I2 (P0-3/P1-1): THE actual enforcement point — the CURRENTLY held

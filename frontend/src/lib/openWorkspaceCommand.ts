@@ -101,7 +101,9 @@ export function openWorkspaceCommand(
       }
       void withOp(label, () =>
         Promise.resolve(
-          parseWorkspace(native.content, currentViewport(), { projectDir: parentDirectory(native.path) }),
+          parseWorkspace(native.content, currentViewport(), {
+            projectDir: parentDirectory(native.path) || undefined,
+          }),
         ),
       )
         .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))

@@ -135,7 +135,7 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     renderHook(() => useRecentProjectsCommands());
     await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     const ds = useApp.getState().datasets.find((d) => d.id === "r1");
-    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat", bundlePath: "sources/r1.dat" });
+    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat" });
   });
 
   it("resolves a packed project's bundle-relative source under a Windows-style project directory", async () => {
@@ -151,8 +151,21 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     expect(ds?.source).toEqual({
       kind: "path",
       path: "C:\\Users\\me\\proj\\sources\\r1.dat",
-      bundlePath: "sources/r1.dat",
     });
+  });
+
+  // PR 3 review finding #3: an `opened.path` with NO directory separator
+  // (the `parentDirectory` "no directory" sentinel) must degrade a bundle
+  // source exactly like an unknown projectDir — never resolve against a
+  // bogus root-anchored path.
+  it("degrades a packed project's bundle-relative source when opened.path has no directory separator", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "workspace.dwk", content: WS_WITH_BUNDLE_SOURCE });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(async () => { action("recent-project-workspace.dwk").run(); });
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toBeUndefined();
   });
 
   it("ok + non-empty session: confirms before replacing, same as Open workspace", async () => {
