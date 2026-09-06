@@ -228,10 +228,27 @@ function slotFidelity(raw: unknown, loaded: number): boolean {
  *  v1 docs (datasets only) load with an empty folder tree (migration).
  *  `viewport` (GUI_INTERACTION_PLAN #10 item 3) is only for clamping a
  *  restored `toolWindowLayout` — defaults to the real browser window, so
- *  callers only pass it explicitly in tests. */
+ *  callers only pass it explicitly in tests.
+ *
+ *  `opts.projectDir` (P1.7 PR 3, Pack Project): the `.dwk`'s own directory
+ *  on disk, when the caller actually has one — threaded to every dataset's
+ *  `parseDatasetSource` so a packed project's bundle-relative sources
+ *  (`kind: "bundle"` manifest entries) resolve to real absolute paths. Only
+ *  a NATIVE open/reopen (a real file on a real disk) can supply this —
+ *  `lib/openWorkspaceCommand.ts`'s native branch and
+ *  `commands/recentProjectsCommands.ts`'s reopen both do. The browser-picker
+ *  path (`lib/parseWorkspaceFile.ts`, off-main-thread via a Worker) has no
+ *  durable path to derive a directory from — a `<input type=file>` pick
+ *  never reveals one — so it never passes this, and any `kind: "bundle"`
+ *  source in a workspace opened that way degrades to "no source" exactly
+ *  like any other unresolvable one (`parseDatasetSource`'s documented
+ *  fallback). Absent entirely for autosave/browser-download round trips,
+ *  which only ever carry absolute `kind: "path"` sources in the first
+ *  place. */
 export function parseWorkspace(
   text: string,
   viewport?: { width: number; height: number },
+  opts?: { projectDir?: string },
 ): LoadedWorkspace {
   let parsed: unknown;
   try {
@@ -255,7 +272,7 @@ export function parseWorkspace(
   // Per-entry parse/validate lives in lib/workspaceDatasetParse.ts (moved out
   // under the MODULE_PINS ratchet — see that file's header); it throws the
   // same per-index errors this inline callback used to.
-  const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i));
+  const datasetsRaw = o.datasets.map((d, i) => parseWorkspaceDataset(d, i, opts?.projectDir));
 
   // Folder tree (absent in v1 → empty). Prune datasets pointing at a folder that
   // didn't survive validation; clamp active/selection/expansion to live ids.

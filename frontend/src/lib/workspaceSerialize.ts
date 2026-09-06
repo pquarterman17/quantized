@@ -34,14 +34,64 @@ import { serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
+import { bundlePathsMatch, resolveBundlePath } from "./bundlePath";
+import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
+
+/** A persisted dataset source entry — `kind: "path"` (today's shape,
+ *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
+ *  `serializeDatasetSource`'s doc for when each is written). */
+type SerializedSource =
+  | { kind: "path"; path: string; checksum?: string; mtime?: number; size?: number; packedFrom?: string }
+  | { kind: "bundle"; path: string; checksum?: string; mtime?: number; size?: number; packedFrom?: string };
+
+/** Write a dataset's `source` — `kind: "bundle"` (bundle-relative, portable)
+ *  when `projectDir` is given AND this source was itself resolved from a
+ *  bundle entry rooted at exactly that same directory; `kind: "path"`
+ *  (absolute, today's shape) otherwise. This is what makes a packed project
+ *  saved BACK to its own folder stay portable, while the same project
+ *  "Saved As" into a different folder (or opened with no known directory at
+ *  all, e.g. after an autosave recovery) is written with plain absolute
+ *  paths to the bundle copies — still perfectly valid, just no longer
+ *  relocatable as a unit.
+ *
+ *  The identity check is `bundlePathsMatch` (case/separator-insensitive
+ *  path identity, `lib/bundlePath.ts`'s own duplicate of
+ *  `store/relink.ts`'s `pathKey` — see that module's doc for why it
+ *  duplicates rather than imports) applied to `source.path` vs.
+ *  re-deriving what `bundlePath` WOULD resolve to under THIS `projectDir`
+ *  — if a relink or a manual edit moved `source.path` since it was loaded,
+ *  the two diverge and this correctly falls back to writing the
+ *  (now-authoritative) absolute path instead of a stale bundle-relative
+ *  one. `bundlePath` itself is NEVER written back — it is parse-derived
+ *  provenance, not a persisted field. */
+function serializeDatasetSource(source: DatasetSource, projectDir: string | undefined): SerializedSource {
+  const provenance = {
+    ...(source.checksum ? { checksum: source.checksum } : {}),
+    ...(source.mtime !== undefined ? { mtime: source.mtime } : {}),
+    ...(source.size !== undefined ? { size: source.size } : {}),
+    ...(source.packedFrom ? { packedFrom: source.packedFrom } : {}),
+  };
+  if (projectDir !== undefined && source.bundlePath !== undefined) {
+    const resolved = resolveBundlePath(projectDir, source.bundlePath);
+    if (resolved !== null && bundlePathsMatch(source.path, resolved)) {
+      return { kind: "bundle", path: source.bundlePath, ...provenance };
+    }
+  }
+  return { kind: "path", path: source.path, ...provenance };
+}
+
+/** A serialized dataset entry — `Dataset` with its `source` field widened to
+ *  `SerializedSource` (the on-disk `kind: "path"` | `kind: "bundle"` union,
+ *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`. */
+type SerializedDataset = Omit<Dataset, "source"> & { source?: SerializedSource };
 
 interface WorkspaceDoc {
   format: string;
   version: number;
   savedAt: string;
-  datasets: Dataset[];
+  datasets: SerializedDataset[];
   folders: FolderNode[];
   workbooks: WorkbookNode[];
   activeId: string | null;
@@ -71,8 +121,17 @@ interface WorkspaceDoc {
   plotRecipes: PlotRecipe[];
 }
 
-/** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
-export function serializeWorkspace(ws: WorkspaceState): string {
+/** Serialize the library + folder tree to a pretty-printed .dwk JSON
+ *  document.
+ *
+ *  `opts.projectDir` (P1.7 PR 3): the directory this `.dwk` is ABOUT to be
+ *  written into (or is already saved in, for a quick save) — passed only by
+ *  a caller that actually knows one (`store/workspaceIO.ts`'s
+ *  `runSaveWorkspace`/`runSaveWorkspaceToFile`), never by autosave or a
+ *  browser download, which have no durable directory to reason about. See
+ *  `serializeDatasetSource` for the per-source rule this enables. */
+export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: string }): string {
+  const projectDir = opts?.projectDir;
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     version: WORKSPACE_VERSION,
@@ -146,7 +205,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       // carry it: the render-side ensureBookData hooks re-fetch it the next
       // time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
-      ...(d.source ? { source: d.source } : {}),
+      ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
       // dropped entirely before (not just narrowed like `source`), so a
       // saved-and-reopened new-version dataset lost its link to the

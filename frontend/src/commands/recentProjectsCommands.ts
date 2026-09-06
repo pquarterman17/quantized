@@ -123,7 +123,11 @@ export async function openRecentProject(name: string, path: string): Promise<Reo
   const opened = result;
   let ws;
   try {
-    ws = parseWorkspace(opened.content, currentViewport());
+    // P1.7 PR 3: a Recent Projects reopen is a native read of a real file at
+    // a real path, same as `lib/openWorkspaceCommand.ts`'s native branch —
+    // `opened.path` (NOT the stale `path` argument, which a relocated/
+    // renamed reopen may have superseded) is this workspace's own directory.
+    ws = parseWorkspace(opened.content, currentViewport(), { projectDir: parentDirectory(opened.path) });
   } catch (e) {
     toast(`${name}: ${e instanceof Error ? e.message : "invalid workspace file"}`, "danger");
     return "failed";
