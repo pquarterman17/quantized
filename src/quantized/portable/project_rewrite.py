@@ -7,10 +7,14 @@ a ``kind: "bundle"`` source back into a real filesystem path.
 
 :func:`rewrite_payload_for_bundle` deep-copies the workspace payload and
 touches EXACTLY ``datasets[i].source`` for a dataset whose original source
-(a) is ``kind: "path"`` and (b) matches — by
-:func:`quantized.portable.layout.path_key` on ``source.path`` OR any of
-its ``original_path_variants`` — a manifest source row that is
-``packable`` AND was actually staged this run (matched by
+(a) is ``kind: "path"`` and (b) matches — by EXACT string equality of
+``source.path`` against a row's ``original_path`` OR one of its
+``original_path_variants``, never by folded
+:func:`quantized.portable.layout.path_key` (PR #305 review: two spellings
+that fold to the same key are not guaranteed to be the same file, so the
+manifest only merges them when the probe proved identical ``(dev, ino)``;
+this rewrite must honour exactly that decision) — a manifest source row
+that is ``packable`` AND was actually staged this run (matched by
 ``bundle_path``; a row can be *planned* packable without ever having been
 staged, e.g. a caller that stopped early). Everything else in the payload
 — embedded data snapshots, corrections, provenance, figures, recipes,
@@ -48,7 +52,7 @@ from typing import Any
 from quantized.desktop_project_file import parse_workspace_payload
 
 from .copying import StagedFile
-from .layout import is_bundle_relative, join_bundle_path, path_key
+from .layout import is_bundle_relative, join_bundle_path
 
 __all__ = ["rewrite_payload_for_bundle", "resolve_bundle_source"]
 
@@ -70,15 +74,19 @@ def resolve_bundle_source(base_dir: str, rel: str) -> str | None:
 
 
 def _row_keys(row: Mapping[str, Any]) -> set[str]:
+    """The exact ``source.path`` strings this row stands for: its
+    ``original_path`` plus every ``original_path_variants`` entry (spellings
+    the manifest proved to be the same file). Never folded -- see the module
+    docstring."""
     keys: set[str] = set()
     original_path = row.get("original_path")
     if isinstance(original_path, str):
-        keys.add(path_key(original_path))
+        keys.add(original_path)
     variants = row.get("original_path_variants")
     if isinstance(variants, list):
         for v in variants:
             if isinstance(v, str):
-                keys.add(path_key(v))
+                keys.add(v)
     return keys
 
 
@@ -149,7 +157,7 @@ def rewrite_payload_for_bundle(
             path = source.get("path")
             if not isinstance(path, str) or not path:
                 continue
-            row = lookup.get(path_key(path))
+            row = lookup.get(path)  # exact spelling, never a folded key
             if row is None:
                 continue  # not packed this run -- leave the absolute source untouched
             bundle_path = row["bundle_path"]

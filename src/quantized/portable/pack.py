@@ -18,7 +18,8 @@ from typing import Any
 
 from .copy_stream import safe_os_error
 from .copying import ProgressCallback, ShouldCancel
-from .manifest import Consented, Probe, build_dry_run_manifest
+from .grouping import Consented, Probe
+from .manifest import build_dry_run_manifest
 from .project_rewrite import rewrite_payload_for_bundle
 from .publish import PublishResult, finalize_manifest, publish_bundle, write_bundle_files
 from .staging import cleanup_staging_dir, create_staging_dir, stage_sources

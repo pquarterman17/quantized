@@ -243,6 +243,59 @@ def test_pack_project_mixed_dataset_shapes(tmp_path: Path) -> None:
     assert manifest_rows[missing]["packable"] is False
 
 
+def _case_sensitive(directory: Path) -> bool:
+    probe_upper = directory / "CaseProbe.tmp"
+    probe_upper.write_bytes(b"")
+    try:
+        return not (directory / "caseprobe.tmp").exists()
+    finally:
+        probe_upper.unlink()
+
+
+def test_pack_project_keeps_case_variant_files_distinct(tmp_path: Path) -> None:
+    """PR #305 review, carried through to the rewrite: on a case-sensitive
+    filesystem ``A.csv`` and ``a.csv`` are two files. The manifest keeps
+    them as two rows (different ``(dev, ino)``), staging copies both under
+    visibly distinct bundle names, and the rewrite maps EACH dataset onto
+    ITS OWN row by exact path -- never onto whichever row shares its folded
+    ``path_key``."""
+    if not _case_sensitive(tmp_path):
+        pytest.skip("case-insensitive filesystem: A.csv and a.csv are one file")
+    upper = tmp_path / "A.csv"
+    lower = tmp_path / "a.csv"
+    upper.write_bytes(b"UPPER")
+    lower.write_bytes(b"lower")
+
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [
+            {"id": "u", "name": "u", "source": {"kind": "path", "path": str(upper)}},
+            {"id": "l", "name": "l", "source": {"kind": "path", "path": str(lower)}},
+        ],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is True, result.errors
+    check = validate_bundle(destination, verify_checksums=True)
+    assert check.complete is True, check.problems
+    rows = {r["original_path"]: r for r in check.manifest["sources"]}  # type: ignore[index]
+    assert set(rows) == {str(upper), str(lower)}
+    assert rows[str(upper)]["bundle_path"] != rows[str(lower)]["bundle_path"]
+
+    project_file = check.manifest["project"]["project_file"]  # type: ignore[index]
+    packed = json.loads(Path(destination, project_file).read_text(encoding="utf-8"))
+    ds_by_id = {ds["id"]: ds for ds in packed["datasets"]}
+    for ds_id, original in (("u", upper), ("l", lower)):
+        source = ds_by_id[ds_id]["source"]
+        assert source["kind"] == "bundle"
+        assert source["packedFrom"] == str(original)
+        assert source["path"] == rows[str(original)]["bundle_path"]
+        copied = Path(destination, *source["path"].split("/"))
+        assert copied.read_bytes() == original.read_bytes()
+
+
 # ── old workspace versions ───────────────────────────────────────────────
 
 
