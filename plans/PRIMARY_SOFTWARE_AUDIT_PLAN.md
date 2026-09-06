@@ -3,7 +3,10 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 1** —
+**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 2** —
+atomic staging + verified source copying (`quantized.portable.staging`/
+`.copying`, still no `.dwk` write, no publish) — see the updated PR 2 entry
+under P1.7 below. Earlier: **P1.7 Pack Project PR 1** —
 bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
 copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
 2 — collision-safe relinking**
@@ -1438,9 +1441,70 @@ below — the packer's own implementation work starts fresh here:
     `tests/test_portable_manifest_fixture.py` byte-compares against it
     forever (regenerate with `uv run python
     tools/freeze_portable_manifest.py` on a deliberate behavior change).
-- **PR 2 (planned, not shipped):** staged, checksum-VERIFIED copy of every
-  packable source into the bundle's `sources/` directory (still no `.dwk`
-  write) — the first PR that touches a filesystem for real.
+- **PR 2 (this branch, PR # pending) — atomic staging + verified source
+  copying, backend-only, still no `.dwk` write, no publish:** the first
+  PR that touches a filesystem for real. New pure modules
+  `quantized.portable.staging` (public API: `create_staging_dir`,
+  `cleanup_staging_dir`, `stage_sources`, and the `StageProgress`/
+  `StagedFile`/`StageError`/`StageResult` dataclasses) + `.copying` (split
+  out under the 500-line ceiling; the per-file verified-copy state
+  machine, `stage_one_file`).
+  - **Fresh SIBLING staging dir.** `create_staging_dir(parent_dir)` always
+    `tempfile.mkdtemp`s INSIDE the caller-supplied `parent_dir` (never a
+    system temp location) with a fixed `STAGING_PREFIX = ".qz-pack-"` —
+    PR 3's eventual `os.replace`/rename into the final bundle location is
+    only atomic when both live on the same filesystem, which requires the
+    caller to pick the bundle's own parent directory.
+  - **Verified per-file copy (9 steps, `stage_one_file`):** re-probe the
+    source right now (never trust the manifest's snapshot) → compare
+    against the manifest's recorded size/mtime/checksum (any field both
+    sides have) → resolve the destination and confirm its parent stays
+    inside the staging root (symlink-aware, `os.path.realpath` +
+    `os.path.commonpath`) → create the destination with
+    `O_CREAT|O_EXCL|O_NOFOLLOW` (never overwrites, never follows a
+    symlink) → open the source strictly `"rb"`, fstat it against the
+    fresh probe's size → stream `chunk_bytes` at a time (default
+    `desktop_source_probe._CHECKSUM_CHUNK_BYTES`, 1 MiB) hashing +
+    writing each chunk, polling `should_cancel` between chunks → fsync +
+    close, then re-stat the SOURCE and compare against the pre-copy fstat
+    → cross-check the fresh probe's checksum (when it has one) against
+    the hash computed while streaming → re-read the WRITTEN file and hash
+    it a SECOND time to catch a short write fsync alone would miss.
+  - **Nine distinct, non-overlapping failure codes** on `StageError.code`
+    (`changed_since_preview`, `changed_during_copy`, `read_failed`,
+    `write_failed`, `checksum_mismatch`, `destination_exists`,
+    `escape_rejected`, `invalid_manifest`, `cancelled`) — never a generic
+    failure, and `message` never contains an absolute path (original or
+    staging), only `source_id`/`bundle_path` plus a state/reason.
+  - **All-or-nothing.** Sources are copied in manifest order and the very
+    first problem of any kind stops the whole run — a partial destination
+    file is removed, then the ENTIRE staging directory is torn down via
+    `cleanup_staging_dir` (which itself refuses to touch anything whose
+    basename doesn't carry `STAGING_PREFIX`, and never follows a symlinked
+    subdirectory — it unlinks the link itself rather than descending) — a
+    staging directory missing even one packable source must never be
+    publishable. On success `staging_root` is retained for the caller
+    (PR 3) and `cleanup_ok` is `None` (nothing was cleaned up).
+  - **Cancellation is cooperative:** `should_cancel` is polled before each
+    file and between every chunk, so a cancel mid-copy leaves no partial
+    file on disk.
+  - **`originals_modified` is always `False`** — every original path is
+    opened `open(path, "rb")` only; nothing under an original path is
+    ever created, written, renamed, or deleted. `StageResult` carries the
+    field explicitly so every reporting path states the guarantee, not
+    just infers it.
+  - **Write-site ratchet:** `tests/test_write_sites.py`'s allowlist gained
+    `portable/copying.py` (`_remove_partial`'s `os.remove`, only ever a
+    staging-dir destination path) and `portable/staging.py`
+    (`cleanup_staging_dir`'s `os.remove`, gated on `STAGING_PREFIX`) —
+    both justified as never touching an original dataset source.
+  - 23 tests across `tests/test_portable_staging.py` (happy path,
+    12 MiB/64 KiB bounded-chunk streaming, mid-copy cancellation,
+    shared-source dedup, read-only-source enforcement) and
+    `tests/test_portable_staging_failures.py` (every `StageError.code`,
+    the cleanup contract parametrized across failure classes, the
+    no-absolute-path-in-messages guarantee, symlink-escape rejection at
+    both the parent-directory and destination-file level).
 - **PR 3 (planned, not shipped):** atomic bundle publish (the packed
   `.dwk` alongside the verified `sources/` copy) and the "portable" mode's
   open-time resolution.
