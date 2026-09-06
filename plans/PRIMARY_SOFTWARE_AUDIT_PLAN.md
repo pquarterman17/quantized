@@ -338,7 +338,10 @@ copy/export, and cleanup for:
 
 - [x] 1 million-row numeric worksheet (import/plot/interaction/memory
   measured 2026-07-26; worksheet-GRID interaction, save/reopen and
-  copy/export at 1M remain residuals);
+  copy/export at 1M remain residuals — the single-cell EDIT path of that
+  interaction residual is now CLOSED, 2026-09-06 (`#299`): incremental
+  formula recompute cut a 1M-row edit from ~4.2 s to ~18 ms; scroll/mount
+  were already in-budget per the 2026-07-26 run above);
 - [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured
   2026-07-26; browser-side measured 2026-07-27 (`2ea1f9a`): 12–13 s /
   52–59 s to map-visible at 500²/1000², mechanism = full-input
@@ -382,9 +385,13 @@ copy/export, and cleanup for:
   real-GPU zoom) are latency targets tracked on their own lines, not
   feedback gaps.
 - [ ] Failed thresholds have profiles (mechanism-level attribution exists:
-  import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
-  to be headless canvas draw. Capture formal profiles if the targeted fix or
-  real-GPU run disputes either attribution).
+  import wall time was `_detect_layout` scoring (fixed `9f12216`); the
+  residual then moved to the tokenize/transpose/convert stages, formally
+  profiled and closed 2026-09-06 (`#298`, bulk `np.loadtxt` fast path):
+  1M×7 CSV `import_auto` 10.25 → 1.88 s, 989 → 546 MB peak. F1's last 12 ms
+  appears to be headless canvas draw — that half is still open pending a
+  real-GPU run; capture a formal profile only if that run disputes the
+  attribution).
 - [x] WebGL/workers/downsampling/chunked arrays/format changes are booked only
   where evidence supports them (downsampling + import efficiency booked
   below; WebGL/workers/chunked arrays deliberately NOT booked — no evidence;
@@ -397,6 +404,14 @@ first dated run on the Ryzen 7800X3D machine. Raw records in
 `docs/envelope/`, synthesis + residuals in `docs/performance_envelope.md`.
 Three measured follow-ups shipped; P0.4 stays open for the residuals above
 and `_detect_layout` below.
+
+**Progress (2026-09-06):** three more evidence-backed follow-ups shipped in
+the same envelope-adjacent class (import path, plot-path re-fetch, worksheet
+edit path — see the Booked follow-ups list below for `#295`/`#296`/`#298`,
+and the bullet/box updates above for `#299`). Dated record in
+`docs/performance_envelope.md`. P0.4 still stays open for exactly the two
+owner-gated residuals: real-GPU zoom confirmation, and network/offline
+transitions blocked on P1.1.
 
 **Booked follow-ups (evidence-backed):**
 
@@ -433,6 +448,33 @@ and `_detect_layout` below.
   ~7→4.72 s. 36 new differential tests pin the fast path bit-identical to
   the old per-cell logic; full suite 3,197 passed / 3,209 collected (no
   corpus shrinkage).
+- [x] ~~**Import-path efficiency, continued: bulk numeric parse**~~ SHIPPED
+  2026-09-06 (`#298`): after the sniffer-read and layout-detection fixes
+  above, the remaining cost was Python-level `line.split`/`zip` transpose/
+  per-column conversion; a start/middle/end sample of the data block now
+  gates one `np.loadtxt` call over the whole block, and that full parse is
+  what validates it — any failure or shape mismatch falls back unchanged
+  (ragged row, text/NA cell, datetime column). 1M×7 CSV `import_auto`
+  10.25→1.88 s wall, 989→546 MB peak; 100k rows 0.56→0.16 s. Bit-identical
+  to the old path on every fixture plus targeted ragged/text/NA/datetime
+  cases.
+- [x] ~~**Upload/import responsiveness under concurrent load**~~ SHIPPED
+  2026-09-06 (`#295`): `upload_file`/`upload_template` ran the synchronous
+  parse directly on the event loop, so `GET /api/health` (and any other
+  concurrent request) stalled for the whole parse — measured 15.5 s of a
+  16.8 s 1M-row upload. Parse now runs via `run_in_threadpool`; response
+  encoding (`routes/_payload.py`'s `DataStructResponse`) and the delimited
+  transpose chunk their C-level calls (~8k-element budget) so the GIL is
+  released between chunks too. `tests/test_upload_concurrency.py` drives a
+  live uvicorn socket and asserts health answers in <0.5 s while a parse is
+  held in flight.
+- [x] ~~**Plot-path point reduction, continued: dataset-handle cache for
+  `/api/plot/series`**~~ SHIPPED 2026-09-06 (`#296`): a committed zoom/pan
+  on a series over 10k points re-posted the WHOLE dataset even though it
+  never changed; `/api/plot/series` now takes the same dataset-handle cache
+  (`routes/_datasetcache.py`, `X-Dataset-Handle`) the map/RSM routes already
+  used. Measured (1M×7): windowed re-fetch 11.76→0.31 s server wall time;
+  request body 154 MB→112 bytes.
 
 ---
 
