@@ -3,7 +3,18 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 4** — pack
+**Updated:** 2026-09-06 (latest): **P1.7 Pack Project PR 5** — adversarial
+audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
+found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
+rename silently absorb an empty directory created in its check-then-act
+window; `pack_preview` propagating a raw, path-carrying `RuntimeError`
+instead of a structured refusal), a shared cross-language fixture pinning
+`is_bundle_relative`/`isBundleRelativePath` parity, and a write-site-scan
+gap (`portable/copying.py`'s `os.open` flags held in a local variable) —
+see the new PR 5 entry under P1.7 below; backend `portable` mode is now
+marked complete (pack → move → reopen roundtrip-tested), the visual
+workflow remains unshipped. Earlier the same day: **P1.7 Pack Project PR
+4** — pack
 orchestration bridge (`quantized.desktop_bridge_pack`), the write-directory
 consent kind + `revoke_paths` (`desktop_consent.py`), and the frontend
 state machine (`store/packProject.ts`/`.packProjectRun.ts`) consuming PR
@@ -1224,14 +1235,26 @@ rationale in that module's doc):
   save-time UI decision and open-time "resolve every source first" flow, a
   materially different shape from what box 3 (relink) needed. Named home:
   a future P1.7 follow-up slice.
-- **portable** — NOT implemented: the raw-file-copying "Pack Project"
-  packer is explicitly booked to PR-N territory per this slice's own
-  scoping instruction. The relink machinery this slice ships (path
-  matching, dry-run preview, atomic commit) is exactly what a future packer
-  would reuse to repoint sources at its own bundle copies after unpacking
-  — this slice is that packer's future dependency, not a parallel
-  implementation. Named home: same P1.7 follow-up, tracked as "Pack
-  Project".
+- **portable** — **BACKEND COMPLETE (2026-09-06, PRs #305-#308 + this PR
+  5 audit); the visual workflow is NOT shipped.** The raw-file-copying
+  "Pack Project" packer (`quantized.portable` + `desktop_bridge_pack
+  .DesktopPackBridge`) builds a bundle, and the resulting bundle is
+  physically MOVED to a new location and reopened, proven in tests: the
+  pack → move → reopen roundtrip in
+  `tests/test_portable_pack_roundtrip.py::test_pack_move_and_reopen_roundtrip`
+  (backend) plus `lib/workspace.test.ts`'s "workspace bundle-relative
+  source" describe block, including a full `checksum`/`mtime`/`size`/
+  `packedFrom` provenance round trip (frontend parse side). What is NOT
+  shipped is the visual "Pack Project" workflow itself — the
+  destination-picker dialog and the preview/progress UI a user actually
+  clicks through; PR 4 (#308) ships a fully bridge-tested contract
+  (`desktopPackBridge.ts` + `store/packProject.ts`/`packProjectRun.ts`)
+  with no visible surface in the app yet beyond an exercise-only palette
+  command (`commands/packProjectCommands.ts`) — that visual layer is
+  assigned to ChatGPT/Sol against PR 4's already-shipped contract. See
+  the full PR 1-5 writeup and the PR 5 audit's own findings under the
+  "Pack Project stack" subsection below. Named home: same P1.7 follow-up,
+  tracked as "Pack Project".
 
 **Provenance (box 2).** `Dataset.source` (`lib/datasetSource.ts`) gained
 `checksum`/`mtime`/`size`, captured from the desktop bridge's new
@@ -1944,8 +1967,171 @@ below — the packer's own implementation work starts fresh here:
     `consent_changed` if any lapsed (the prior round's finding #1 check in
     `_grant_eligible_packable_sources` stays as defence in depth) — the
     approved plan never becomes a substitute for a live read grant.
-- **PR 5 (planned, not shipped):** adversarial audit of the full stack,
-  in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
+- **PR 5 (this branch, `claude/p17-pack-5-audit`) — adversarial audit of
+  the whole Pack Project stack (PR 1-4/#305-#308), in the same spirit as
+  P1.7 slice 1's P1-A/P1-B fix rounds above.** A 14-item checklist run
+  against `portable/` (layout, naming, grouping, manifest, staging,
+  copying, copy_stream, project_rewrite, publish, pack), `desktop_consent.py`,
+  `desktop_bridge_pack.py`/`_pack_state.py`/`_common.py`,
+  `desktop_project_file.py`, and the frontend's `lib/bundlePath.ts`/
+  `datasetSource.ts`/`workspaceSerialize.ts`/`workspaceDatasetParse.ts`/
+  `desktopPackBridge.ts` + `store/packProject.ts`/`packProjectRun.ts`.
+  Two real defects found and fixed, both with forcing regression tests;
+  every other item verified to already hold, each closed with a new
+  regression test proving it rather than answered from memory.
+  - **Defect 1 — `publish_bundle`'s check-then-rename was not atomic**
+    (item 3, TOCTOU). `os.path.lexists(destination_dir)` and the
+    following `os.rename` are two separate syscalls; on POSIX,
+    `os.rename` onto an EXISTING EMPTY directory silently succeeds and
+    replaces it (unlike a non-empty one, which raises `ENOTEMPTY`), so a
+    directory created in the split second between the check and the
+    rename — another process, a concurrent pack run racing the same
+    path, a user's own `mkdir` — was silently absorbed instead of
+    refused, contradicting the module's own "never overwrites" contract.
+    Fixed with an `os.mkdir` reservation immediately before the rename
+    (a genuine atomic existence check for ANY pre-existing entry, unlike
+    a second `lexists` call), rolling the reservation back with
+    `os.rmdir` on a subsequent rename failure so a failed publish still
+    leaves the destination completely absent. A no-op hardening on
+    Windows, where `os.rename` already refuses outright whenever the
+    destination exists at all. Forced (not merely observed) in
+    `test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_race`
+    (`tests/test_portable_publish.py`) by making `os.path.lexists`
+    itself plant the racing directory as a side effect of the very call
+    whose result it reports.
+  - **Defect 2 — `pack_preview` had no catch for its own internal
+    assertion failures** (item 13, path-leak). `build_dry_run_manifest`
+    (via `naming.plan_bundle_names`) can raise `RuntimeError` from a
+    "this should be structurally impossible" assertion (a duplicate
+    planned bundle path) whose own message embeds the offending
+    bundle-relative path; `pack_preview` caught only `ValueError`, so a
+    latent bug there would propagate the raw, path-carrying exception
+    straight out of the js_api method into pywebview's own exception
+    surface — unlike `pack_start`'s worker thread, which already has an
+    equivalent blanket catch for exactly this "genuine bug, still
+    reported, never raised" case. Fixed with a matching `except
+    RuntimeError` returning a generic `internal_error` refusal. Forced
+    in `test_pack_preview_reports_an_internal_manifest_bug_without_raising_or_leaking_a_path`
+    (`tests/test_desktop_bridge_pack.py`) by monkeypatching
+    `build_dry_run_manifest` to raise with a marker path embedded.
+  - **Checklist items verified to already hold, each with a new or
+    cited test** (see the PR 5 commits for the full per-item mapping):
+    (1) arbitrary read/write authorization — the backend never executes
+    a frontend-supplied manifest (`pack_start`/`packStart` carry only
+    `token`+`content`; the approved manifest PR 4's second review round
+    added is the backend's OWN stored preview, never anything the
+    frontend sends), `project_name` traversal is rejected before
+    planning, and a symlinked destination-parent fails
+    `is_write_dir_consented` (new test:
+    `test_is_write_dir_consented_rejects_a_destination_symlinked_elsewhere`,
+    `tests/test_desktop_consent.py`); (2) a new shared cross-language
+    fixture, `tests/fixtures/portable/bundle_paths.json`, consumed by
+    both `tests/test_portable_bundle_paths_fixture.py` and
+    `frontend/src/lib/bundlePath.fixture.test.ts`, pins
+    `is_bundle_relative`/`isBundleRelativePath` parity; an NFC/NFD
+    Unicode-normalization collision case was added alongside the
+    existing ASCII-case one
+    (`test_nfc_nfd_unicode_variant_collision_still_suffixed`,
+    `tests/test_portable_manifest.py`); a symlinked `sources/` and a
+    symlinked destination file were already covered
+    (`tests/test_portable_staging_failures.py`); Windows junctions are
+    NOT exercised by any test in this repo (only `os.symlink`, which
+    needs elevated privilege on Windows CI and is skipped there) — noted
+    as a real, currently-unclosed coverage gap rather than claimed
+    covered; (3) TOCTOU — see Defect 1 above; a source replaced under an
+    open descriptor, a manifest-grouping fold across case/Unicode
+    spellings, and every `str(exc)` path-leak were independently found
+    and fixed on PRs #305-#307 during this same audit window (`(dev,
+    ino)` filesystem-identity checks in `portable/grouping.py` and
+    `copying.py`, `safe_os_error` throughout); (4) a new whole-stack
+    hash-before/after test suite
+    (`test_a_completed_pack_never_touches_the_original_dwk_or_sources`,
+    `..._cancelled_...`, `..._failed_...`,
+    `tests/test_desktop_bridge_pack.py`) hashes the project `.dwk` and
+    every source before and after a real bridge-driven pack run on each
+    outcome; the write-site allowlist gained `portable/copying.py`
+    after a real gap was found — its `os.open` write flags are built
+    into a local variable, invisible to the AST scan's flags-expression
+    check, closed with a targeted resolver
+    (`_simple_assignments` in `tests/test_write_sites.py`); (5)
+    `write_bundle_files`'s "manifest written last" ordering was forced
+    directly (raising between the two writes) and `validate_bundle`
+    confirmed `manifest_missing`/incomplete on the result, plus a
+    published bundle's `sources/` directory renamed away independently
+    confirmed `source_missing`
+    (`tests/test_portable_publish.py`); (6) every content hash in
+    `portable/` streams in `chunk_bytes`-sized reads (cited:
+    `test_large_file_streams_in_bounded_chunks`,
+    `tests/test_portable_staging.py`) — the one bare `.read()` in
+    `publish.py`'s `validate_bundle` is the small `quantized-bundle.json`
+    manifest file, not a source, and is proportional to source COUNT,
+    never dataset size; `pack_status`'s warnings/errors lists are set
+    once per run (bounded by manifest size and, by `stage_sources`'s own
+    "stop at the first problem" model, `errors` is always ≤1 entry) and
+    never accumulate across polls; (7) `pack_preview`'s own
+    manifest-building/naming/serialization cost on a 200-source
+    synthetic payload with a faked probe stays under 1s
+    (`test_pack_preview_cost_on_200_sources_stays_well_under_a_second`),
+    and `pack_start` returning before its Event-gated fake worker
+    finishes was already proven
+    (`test_two_starts_report_already_running`); (8) a forced
+    cancel-during-publishing race
+    (`test_cancel_during_publishing_cannot_corrupt_or_delete_the_finished_bundle`)
+    confirms the already-committed rename survives intact and the
+    outcome reports an honest `completed`/`cleanup_ok: None`, never a
+    misleading `cancelled`; (9) a full `checksum`/`mtime`/`size`/
+    `packedFrom` round trip through
+    `parseWorkspace`→`serializeWorkspace`→`parseWorkspace` again
+    (`lib/workspace.test.ts`) and through
+    `rewrite_payload_for_bundle`→`parse_workspace_payload`
+    (`tests/test_portable_pack_roundtrip.py`) closes a gap where each
+    field alone had a test but never all four together through the real
+    production path; (10) both `open_project_file` and
+    `read_project_file` (Recent Projects) resolve `base_dir` from the
+    OPENED file's own resolved directory, never CWD
+    (`desktop_bridge_dialogs._read_granted`), and crash-recovery autosave
+    never even serializes a bundle-relative source in the first place
+    (`saveAutosave` calls `serializeWorkspace` with no `projectDir`,
+    proven by a new test in `lib/autosave.test.ts`); (11) a new test
+    (`store/packProject.test.ts`) proves `useApp`'s `history`/
+    `future`/`datasets` stay REFERENCE-identical across a full
+    preview→start→completed run; (12) consent/write-dir-grant counts
+    return to baseline after completed, cancelled, failed, AND
+    thread-start-failed outcomes (the last three closed with new
+    assertions on existing tests in `tests/test_desktop_bridge_pack.py`);
+    (13) see Defect 2 above, plus a new recursive scan of an entire
+    failing `pack_status()` snapshot for the tmp_path root
+    (`test_a_failing_pack_status_snapshot_never_contains_the_tmp_path_anywhere`).
+  - **Ratchet audit (item 14):** diffed `tests/test_repo_integrity.py`,
+    `tests/test_write_sites.py`, `frontend/scripts/check-bundle-size.mjs`,
+    and `frontend/src/architecture.test.ts` against `origin/main`. The
+    bundle-size and architecture ratchets are byte-for-byte UNCHANGED —
+    no pin was raised. `test_repo_integrity.py` gained exactly `portable`
+    in `PURE_LAYERS` (`MAX_MODULE_LINES` untouched). The write-site
+    allowlist gained `portable/{copying,copy_stream,publish,staging}.py`
+    (all justified — see PR 2/3's own writeups above and Defect-adjacent
+    item 4 above for `copying.py`'s late addition) and legitimately
+    DROPPED `desktop_bridge.py` once `write_project_file` stopped
+    containing any AST-visible write call of its own (PR 3 moved its
+    atomic-write sequence into the now-covered `portable/publish
+    .atomic_replace_file`) — every change accounted for, none an
+    unjustified weakening.
+  - **`portable` mode status.** Backend COMPLETE: a packed bundle is
+    built, physically MOVED to a new location, and reopened in tests —
+    the pack → move → reopen roundtrip in
+    `tests/test_portable_pack_roundtrip.py::test_pack_move_and_reopen_roundtrip`
+    plus the frontend's own parse-side proof
+    (`lib/workspace.test.ts`'s "workspace bundle-relative source"
+    describe block, including this PR's own full-provenance round trip).
+    The VISUAL "Pack Project" workflow — the destination-picker dialog,
+    the preview/progress UI a user actually clicks through — is NOT
+    shipped; it is assigned to ChatGPT/Sol against the bridge contract
+    PR 4 (#308) already ships (`desktopPackBridge.ts` + `store/
+    packProject.ts`/`packProjectRun.ts`), which is fully tested end to
+    end but has no visible surface in the app yet (only the
+    exercise-only `commands/packProjectCommands.ts` palette command
+    noted under PR 4 above). `linked` mode remains NOT implemented (per
+    the mode contract above).
 
 ---
 

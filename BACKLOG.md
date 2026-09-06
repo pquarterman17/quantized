@@ -6,29 +6,31 @@ The aggregated open-items dashboard, **derived from the plans in
 derived view — when they disagree, fix the plan first, then this file,
 in the same commit). Every edit here must have a matching plan edit.
 
-**Last reconciled:** 2026-09-06 (twenty-fifth pass). What changed:
-`PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P0.4 is reconciled against the seven perf
-PRs `#295`–`#301` — three new booked follow-ups (`#295` upload/event-loop
-responsiveness, `#296` dataset-handle cache for `/api/plot/series`, `#298`
-bulk CSV parse), the 1M-row-worksheet EDIT-path residual closed (`#299`),
-and the import-profile-attribution acceptance box's text updated to name
-`#298`; the real-GPU zoom and P1.1-blocked offline-transition boxes stay
-open (owner/dependency gated, untouched by this pass). `docs/
-performance_envelope.md` gets a dated 2026-09-06 section covering all seven
-PRs with before/after numbers where the PR itself states one. `MAIN_PLAN.md`
-gets a matching Completed entry naming the follow-ups deferred (not
-shipped) this pass — booked below as a new Actionable row. The dead
-`errlog.ts`/`/api/debug/report` row stays removed (re-verified by grep:
-`#294` already deleted it 2026-09-04; nothing live references
-`debug/report`). Full narrative: the twenty-fifth pass in
-`plans/archive/BACKLOG_HISTORY.md` (future passes append there, per the
-2026-09-03 split, not here). Current state carried forward: **`v0.24.0` is
-the current stable release**; Dependabot alert #24 (extract-zip) is open,
-upstream-blocked; alert #1 (glib) is dismissed as tolerable risk
-(re-evaluated 2026-09-02, decision unchanged). `#293` (`91583f9`,
-2026-09-04: API type drift detection, error-adapter sweep, parser dedup,
-CI/gate speed, type-aware lint, docs) and `#294` (`b5da222`, 2026-09-04:
-plan reconciliation + dead bug-report deletion) are both on main.
+**Last reconciled:** 2026-09-06 (twenty-sixth pass). What changed:
+`PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.7's "Pack Project stack" subsection is
+reconciled against PR 1-5 (#305-#308 + a PR 5 adversarial-audit pass on
+this same branch) into one coherent record — two stale "planned, not
+shipped" placeholder bullets for PR 2/PR 3 removed, "PR # pending" replaced
+with the actual PR numbers, and a new PR 5 entry documenting two real
+defects found and fixed (a POSIX TOCTOU race in `publish_bundle`'s atomic
+rename; a path-leaking uncaught `RuntimeError` in `pack_preview`) plus its
+14-item audit checklist's full test mapping. The `portable` mode box is now
+marked BACKEND COMPLETE (pack → move → reopen roundtrip-tested on both the
+Python and TypeScript sides); the visual "Pack Project" workflow stays NOT
+shipped, assigned to ChatGPT/Sol against PR 4 (#308)'s contract, and
+`linked` mode remains NOT implemented. The plans-dashboard row for
+`PRIMARY_SOFTWARE_AUDIT_PLAN.md` gained a matching clause. `RELEASE_BLOCKERS
+.md`/`POST_SPRINT_INDEPENDENT_REVIEW.md` untouched (neither tracks P1.7 at
+all); no `CHANGELOG.md` entry (no shipped user-facing surface yet). Full
+narrative: the twenty-sixth pass in `plans/archive/BACKLOG_HISTORY.md`
+(future passes append there, per the 2026-09-03 split, not here). Current
+state carried forward: **`v0.24.0` is the current stable release**;
+Dependabot alert #24 (extract-zip) is open, upstream-blocked; alert #1
+(glib) is dismissed as tolerable risk (re-evaluated 2026-09-02, decision
+unchanged). `#293` (`91583f9`, 2026-09-04: API type drift detection,
+error-adapter sweep, parser dedup, CI/gate speed, type-aware lint, docs)
+and `#294` (`b5da222`, 2026-09-04: plan reconciliation + dead bug-report
+deletion) are both on main.
 
 ---
 
@@ -363,7 +365,7 @@ the root; every active plan below is its declared sub-plan.
 | `plans/MAIN_PLAN.md` | Active (ROOT) | MAIN #9–#41 are ALL shipped (#39 = `quantized.client` slice 1, its in-app-console sub-item moved to the owner gates below; #40 = the Origin/Host request guard; **#41 shipped 2026-08-10** `5ad96db` — sector ROI state moved into `store/rois.ts`, struck 2026-08-11 after the parallel-worktree race described in the twenty-second pass above); the Apache-2.0 copyright-holder owner gate was REMOVED 2026-08-10 — resolved since the first commit, never actually open; remaining work is owner gates, evidence-gated deferrals, and the active sub-plans |
 | `plans/PORT_PLAN.md` (+ `PORT_CHECKLIST.md` appendix) | Active | #10+#15 (blocked), #12 (partial), #47 (owner cert), #48 (owner acceptance-run residual only — its Trusted Publisher claim was stale, corrected 2026-08-10), #49 (owner, gated on #47), #50 (continuous); **#1/#2/#5 (W0 repo scaffold/enforcement/CI) drift-fixed 2026-08-10** — shipped since 2026-06-21 with sub-boxes checked but never struck; **#54 SPC/JCAMP gaps CLOSED 2026-07-25 same-day booked** |
 | `plans/GOTO_PLAN.md` | Active | ALL numbered items #1–#11 SHIPPED (2026-07-11); Tier 3 pending gates **Q4/Q8/Q9 only** — Q6 (worksheet reshape) and Q7 (date-time axes) were DECIDED YES and shipped 2026-07-19. **Considered for fold-up 2026-08-10, rejected**: reads as the standing mission doc for the whole initiative (the switch-trigger acceptance protocol IS the go/no-go test), Tier 3 is deliberately empty pending these very gates, and Q9 is duplicate-tracked as PRIMARY SOFTWARE's own Gate A item — not finished residue |
-| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **P3.5 core SHIPPED via `#271`–`#282`; its details/preview + library-level import boxes also SHIPPED via `#290` (2026-09-04)** — the two usage-gated boxes (search, revisit organization) are all that's left open. **P3.7 project trash fully SHIPPED via `#292` (2026-09-04)**. **P1.2 COMPLETE** — recovery hardening SHIPPED via `#291` (2026-09-04); its last conditional box (compressed/chunked containers) DECIDED NOT REQUIRED 2026-09-04 on P0.4's evidence, with the large-member parse stall already closed by P3.4 slice 3. **P0.4 gained three more booked follow-ups 2026-09-06** (`#295` upload/event-loop responsiveness, `#296` dataset-handle cache for `/api/plot/series`, `#298` bulk CSV parse) and closed the 1M-row-worksheet EDIT-path residual (`#299`) — the section stays open for exactly two owner/dependency-gated boxes: real-GPU zoom confirmation and P1.1-blocked offline transitions. **Sequencing-gated, incomplete engineering:** the remaining P1.1/P1.3-P1.7 native lifecycle/portability/import/grouping/recipes (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. **Considered for fold-up 2026-08-10, rejected**: 188 open `- [ ]` items across P0–P4 and five acceptance gates (A–E) as of that pass — nowhere near the fold-up threshold |
+| `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` | Active | Gate A: owner switch-trigger trial, Origin visual review, timed workflows, and the real-GPU performance check. **P3.4 is fully SHIPPED** — server-side payload decimation 2026-07-31 (147.5→3.49 MB @1M×7) and the zoom-refetch residual 2026-08-01 (`232cf4f`); P2.8's regrid defect-class and both export-dialog defects also landed 2026-07-31. **P3.5 core SHIPPED via `#271`–`#282`; its details/preview + library-level import boxes also SHIPPED via `#290` (2026-09-04)** — the two usage-gated boxes (search, revisit organization) are all that's left open. **P3.7 project trash fully SHIPPED via `#292` (2026-09-04)**. **P1.2 COMPLETE** — recovery hardening SHIPPED via `#291` (2026-09-04); its last conditional box (compressed/chunked containers) DECIDED NOT REQUIRED 2026-09-04 on P0.4's evidence, with the large-member parse stall already closed by P3.4 slice 3. **P0.4 gained three more booked follow-ups 2026-09-06** (`#295` upload/event-loop responsiveness, `#296` dataset-handle cache for `/api/plot/series`, `#298` bulk CSV parse) and closed the 1M-row-worksheet EDIT-path residual (`#299`) — the section stays open for exactly two owner/dependency-gated boxes: real-GPU zoom confirmation and P1.1-blocked offline transitions. **P1.7 Pack Project's `portable` mode is now BACKEND COMPLETE (2026-09-06, PRs #305-#308 + a PR 5 adversarial audit)** — bundle contract, staging/copy, atomic publish, and the bridge/frontend orchestration all shipped and pack→move→reopen roundtrip-tested; the audit found and fixed two real defects (a POSIX TOCTOU race in `publish_bundle`'s atomic rename, a path-leaking uncaught `RuntimeError` in `pack_preview`) and closed a write-site-scanner blind spot, with everything else on its 14-item checklist verified already holding. The VISUAL "Pack Project" workflow (destination-picker dialog, preview/progress UI) remains unshipped, assigned to ChatGPT/Sol against PR 4's contract; `linked` mode remains NOT implemented. **Sequencing-gated, incomplete engineering:** the remaining P1.1/P1.3-P1.6 native lifecycle/import/grouping/recipes plus P1.7's own visual layer and `linked` mode (P1.3 recipes will key on the technique tag), followed by evidence-ranked P2/P3/P4 work. **Considered for fold-up 2026-08-10, rejected**: 188 open `- [ ]` items across P0–P4 and five acceptance gates (A–E) as of that pass — nowhere near the fold-up threshold |
 | `plans/TEST_DETERMINISM_PLAN.md` (+ `weak-waits-inventory.md` appendix) | Active | Created 2026-08-09; **worked-example backstop recalibrated 2026-08-11** (8→90 s — a five-for-five deterministic failure initially mistaken for a load flake; root cause was a mis-calibrated file-selection premise, verified NOT a product regression by timing the calibration commit; lesson recorded in the plan); **campaign essentially complete 2026-08-10** — #1 forced-race test (15/15 deterministic, red-on-revert verified), #2 Python wall-clock budgets (all four sites assert load-invariant properties; budgets never lowered after one corrected round), #3 GridViewport (time budgets dropped, DOM-node-count assertions kept), #4 triage (98-SUSPECT classification proved unreliable — its negative evidence redirected the campaign), and #6 the per-file weak-wait count ratchet in `architecture.test.ts` (33 files / 124 sites pinned) ALL shipped, plus the two 2026-08-09 worked examples. **#7 CLOSED 2026-08-12** — the substance already lived in `docs/testing.md`; what was missing was a contributor-facing home, so `CONTRIBUTING.md` was added (gate commands + flake-fix evidence + the wait-on-state and never-lower-a-budget corollaries) and linked from README. Open: **#5 only, and it is a STANDING RULE, never "done"** (fix weak waits opportunistically when editing an inventoried file; ratchet down in the same commit) |
 | `plans/ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md` (+ `POST_SPRINT_INDEPENDENT_REVIEW.md`, `RELEASE_BLOCKERS.md`, `RC_RELEASE_NOTES_DRAFT.md`, `CHATGPT_SOL_TO_CLAUDE_RELEASE_HANDOFF.md`) | Active | RC published and engineering sprint complete (Day 7 all three states tracked separately). R1/R3/R4/R6/R7/R9 fixed + independently reviewed (#207/#208/#210/#211/#212/#213); R5 (Apple-silicon-only) decided; R8 (bundle headroom) closed twice over (C2, then #218). **Stable promotion happened 2026-08-28** (`v0.23.0`/`v0.23.1`) ahead of R2's full owner-acceptance checklist — see the dated note under `POST_SPRINT_INDEPENDENT_REVIEW.md`'s Stable-promotion gate and the Owner actions row below. `RELEASE_BLOCKERS.md`: nothing at BLOCKER, owner-verification list unchanged. Next acceptance candidate: `v0.23.2-rc2` = `1264b2a4` (rc1/`cd68ad16` was published, then superseded by `#260`-`#264`) |
 | `plans/SILENT_STATE_CORRUPTION_PLAN.md` | Active | ALL of tasks #1–#10 SHIPPED (`#253`/`#254`/`#255`/`#259`, #10 via `#262`), plus the Completed-table backend D1–D8 rows (`#256`/`#257`). Standing owner call in Notes: eager-bundle headroom is ~0 after #259 — the `ContextMenu` lazy-split decision is due before the next eager-path change |
