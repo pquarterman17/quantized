@@ -23,8 +23,14 @@ implements in one document:
     path reported ``offline``;
   - a ``missing`` file and a ``permission_denied`` file;
   - a Unicode name (``mesures_\u00b50H_\u00e9lan.csv``);
-  - a Windows-reserved name (``CON.csv``);
+  - a Windows-reserved name (``CON.csv``) and one with a multi-dot extension
+    (``CON.tar.gz`` -- Windows reserves the part before the FIRST dot);
   - an over-long name (sanitized+hashed);
+  - a keeper-suffix collision (review finding #1): two files named
+    ``keep.csv`` in different folders, PLUS two files ALREADY named
+    ``keep (2).csv`` in two other folders -- the naive "keeper gets its
+    plain name unconditionally" ordering let the second pair's keeper
+    collide with the suffix the first pair's second member was assigned;
   - a dataset with no source at all, and one with a malformed source.
 
 Run::
@@ -100,12 +106,17 @@ _FAKE_PROBE: dict[str, dict[str, Any]] = {
         "checksum": _cksum("f"),
     },
     "/data/reserved/CON.csv": {"state": "ok", "size": 32, "mtime": 1_700_000_800.0},
+    "/data/reserved2/CON.tar.gz": {"state": "ok", "size": 48, "mtime": 1_700_001_000.0},
     f"/data/long/{_LONG_NAME}": {
         "state": "ok",
         "size": 16384,
         "mtime": 1_700_000_900.0,
         "checksum": _cksum("0"),
     },
+    "/collide/a/keep.csv": {"state": "ok", "size": 11, "mtime": 1_700_001_100.0},
+    "/collide/z/keep.csv": {"state": "ok", "size": 12, "mtime": 1_700_001_200.0},
+    "/collide/m/keep (2).csv": {"state": "ok", "size": 13, "mtime": 1_700_001_300.0},
+    "/collide/n/keep (2).csv": {"state": "ok", "size": 14, "mtime": 1_700_001_400.0},
 }
 
 
@@ -211,6 +222,11 @@ def build_fixture_payload() -> dict[str, Any]:
                 "source": _path_source("/data/reserved/CON.csv"),
             },
             {
+                "id": "ds-reserved-multi-dot",
+                "name": "Windows-reserved basename, multi-dot extension",
+                "source": _path_source("/data/reserved2/CON.tar.gz"),
+            },
+            {
                 "id": "ds-long-name",
                 "name": "Over-long basename",
                 "source": _path_source(
@@ -219,6 +235,26 @@ def build_fixture_payload() -> dict[str, Any]:
                     mtime=1_700_000_900.0,
                     size=16384,
                 ),
+            },
+            {
+                "id": "ds-collide-keep-a",
+                "name": "Keeper-suffix collision (folder a)",
+                "source": _path_source("/collide/a/keep.csv"),
+            },
+            {
+                "id": "ds-collide-keep-z",
+                "name": "Keeper-suffix collision (folder z)",
+                "source": _path_source("/collide/z/keep.csv"),
+            },
+            {
+                "id": "ds-collide-keep2-m",
+                "name": "Pre-existing 'keep (2).csv' (folder m)",
+                "source": _path_source("/collide/m/keep (2).csv"),
+            },
+            {
+                "id": "ds-collide-keep2-n",
+                "name": "Pre-existing 'keep (2).csv' (folder n)",
+                "source": _path_source("/collide/n/keep (2).csv"),
             },
             {
                 "id": "ds-embedded-only",

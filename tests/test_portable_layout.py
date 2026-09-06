@@ -14,6 +14,7 @@ from quantized.portable.layout import (
     join_bundle_path,
     path_key,
     sanitize_component,
+    split_ext,
 )
 
 # ── basename_of ──────────────────────────────────────────────────────────
@@ -164,6 +165,27 @@ def test_sanitize_component_too_long_unicode_no_mid_codepoint_break() -> None:
     name.encode("utf-8")  # does not raise
 
 
+def test_sanitize_component_too_long_extension_alone_truncates_whole_name() -> None:
+    # Regression for review finding #3: when the extension ALONE doesn't
+    # fit the byte budget, only truncating the stem left the extension
+    # intact and the whole name over MAX_COMPONENT_BYTES.
+    long_name = "a." + ("y" * 300)
+    name, reason = sanitize_component(long_name)
+    assert reason == "too_long"
+    assert len(name.encode("utf-8")) <= MAX_COMPONENT_BYTES
+    assert "~" in name  # still carries the content-hash marker
+
+
+def test_sanitize_component_reserved_name_multi_dot_extension() -> None:
+    # Regression for review finding #6: Windows reserves the name before
+    # the FIRST dot ("CON"), not the part before the LAST dot ("CON.tar",
+    # which `split_ext` -- extension-preserving truncation's own split --
+    # would return for "CON.tar.gz").
+    name, reason = sanitize_component("CON.tar.gz")
+    assert reason == "reserved_name"
+    assert name == "_CON.tar.gz"
+
+
 def test_sanitize_component_combines_reasons() -> None:
     # A single dot: illegal-char replacement fires on the extension side,
     # and the resulting stem ("CON") still matches a reserved device name.
@@ -172,6 +194,21 @@ def test_sanitize_component_combines_reasons() -> None:
     assert "illegal_characters" in reason
     assert "reserved_name" in reason
     assert name == "_CON.c_sv"
+
+
+# ── split_ext (review finding #10: the one shared implementation) ────────
+
+
+def test_split_ext_basic() -> None:
+    assert split_ext("run1.csv") == ("run1", ".csv")
+
+
+def test_split_ext_leading_dot_not_an_extension() -> None:
+    assert split_ext(".gitignore") == (".gitignore", "")
+
+
+def test_split_ext_last_dot_wins() -> None:
+    assert split_ext("archive.tar.gz") == ("archive.tar", ".gz")
 
 
 # ── is_bundle_relative / join_bundle_path ────────────────────────────────
@@ -237,6 +274,39 @@ def test_join_bundle_path_raises_on_every_rejected_form(rel: str) -> None:
 def test_join_bundle_path_builds_expected_path() -> None:
     result = join_bundle_path("/bundle", "sources/sub/a.csv")
     assert result == os.path.join("/bundle", "sources", "sub", "a.csv")
+
+
+# Regression for review finding #7: a segment can be a well-formed bare
+# path component yet Windows-illegal on its own merits (a colon, an
+# illegal character, a reserved device name, a trailing dot) --
+# `ntpath.join` would otherwise reinterpret some of these; `is_bundle_relative`
+# must reject them outright rather than let `join_bundle_path` build an
+# unsafe real path from them.
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "sources/D:evil",
+        "sources/a<b",
+        "sources/CON.csv",
+        "sources/x.",
+    ],
+)
+def test_is_bundle_relative_rejects_windows_illegal_segment(rel: str) -> None:
+    assert is_bundle_relative(rel) is False
+
+
+@pytest.mark.parametrize(
+    "rel",
+    [
+        "sources/D:evil",
+        "sources/a<b",
+        "sources/CON.csv",
+        "sources/x.",
+    ],
+)
+def test_join_bundle_path_raises_on_windows_illegal_segment(rel: str) -> None:
+    with pytest.raises(ValueError):
+        join_bundle_path("/bundle", rel)
 
 
 def test_join_bundle_path_raises_on_normpath_escape(tmp_path: object) -> None:

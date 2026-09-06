@@ -15,18 +15,20 @@ contract but are not implemented here.
   supplies and the responses ``probe`` and ``consented`` return for each
   unique original path — this module reads no file, follows no symlink, and
   makes no filesystem call of its own.
-- Reachability, size/mtime, and checksum all come from ``probe`` alone. The
-  real bridge implementation (a future PR) is expected to gate checksum
-  computation on read-consent the same way ``desktop_source_probe
-  .probe_source_path``'s caller already does for the existing relink flow —
-  this module has no opinion on that policy, it only reports whatever
-  ``probe`` hands back.
-- ``consented`` is a SEPARATE, per-source gate this module DOES enforce
-  directly: a source for which ``consented(original_path)`` is false is
-  always reported as ``status: "not_consented"`` with every metadata field
-  nulled out, regardless of what ``probe`` returned for it — the manifest
-  never surfaces size/mtime/checksum for a path the caller has not vouched
-  for, even if a probe result for it was available.
+- ``consented`` is checked BEFORE ``probe`` is ever called for a given
+  original path: a source for which ``consented(original_path)`` is false
+  is reported as ``status: "not_consented"`` with every metadata field
+  nulled out, and ``probe`` is skipped entirely — the manifest never even
+  asks a probe implementation (which may do real I/O) about a path the
+  caller has not vouched for.
+- Reachability, size/mtime, and checksum come from ``probe`` alone, for
+  every source ``consented`` allows through. The real bridge implementation
+  (a future PR) is expected to gate checksum computation on read-consent
+  the same way ``desktop_source_probe.probe_source_path``'s caller already
+  does for the existing relink flow — this module has no opinion on that
+  policy, it only reports whatever ``probe`` hands back (type-validated:
+  a non-``str`` checksum or non-numeric size/mtime is absent, not trusted
+  or allowed to crash the summary).
 - The manifest **grants nothing**: producing a dry-run manifest is not
   itself a consent decision, and nothing downstream may treat a manifest
   row's presence as authorization to read or copy the file it describes.
@@ -38,7 +40,16 @@ contract but are not implemented here.
   :func:`quantized.portable.layout.is_bundle_relative` (asserted on every
   planned path here) and :func:`quantized.portable.layout.join_bundle_path`
   are the only sanctioned way to turn a manifest path into a real
-  filesystem path; this module never does that turning itself.
+  filesystem path; this module never does that turning itself. The builder
+  also asserts every planned ``bundle_path`` is pairwise-unique (by
+  :func:`quantized.portable.layout.path_key`) before returning — a
+  ``RuntimeError``, never a silent duplicate, if that ever fails (see
+  :mod:`quantized.portable.naming` for how planning avoids it in the first
+  place).
+- A ``project_name`` that is a path-traversal shape (a path separator, or a
+  literal ``..``) is rejected with ``ValueError`` rather than silently
+  mangled — a project name must never smuggle a directory component into
+  the bundle's own layout.
 
 ## Determinism
 
@@ -48,16 +59,24 @@ isn't itself derived from a sort: the same ``payload`` plus the same
 :func:`manifest_json` output on every run, on every platform, regardless of
 the order datasets happen to appear in ``payload`` (aside from
 ``datasets``/``shared_by``, which intentionally preserve payload order —
-see their fields' own notes below). This is what lets
-``tools/freeze_portable_manifest.py`` commit a fixture that
+see their fields' own notes below) OR the spelling (case, Unicode
+normalization form) two datasets happen to use for what
+:func:`quantized.portable.layout.path_key` treats as the same original
+path — a row's ``original_path`` is always the CANONICAL spelling (the
+lexicographically-least member by ``(NFC-normalized string, raw string)``,
+never whichever spelling happened to appear first in payload order), with
+every other distinct spelling recorded in ``original_path_variants``. This
+is what lets ``tools/freeze_portable_manifest.py`` commit a fixture that
 ``tests/test_portable_manifest_fixture.py`` can byte-compare forever.
 """
 
 from __future__ import annotations
 
 import json
-import os
+import ntpath
+import posixpath
 import re
+import unicodedata
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -71,6 +90,7 @@ from .layout import (
     path_key,
     sanitize_component,
 )
+from .naming import plan_bundle_names
 
 __all__ = ["build_dry_run_manifest", "manifest_json"]
 
@@ -98,25 +118,39 @@ def _has_control_chars(s: str) -> bool:
 def _looks_absolute(path: str) -> bool:
     """Is ``path`` absolute under EITHER host convention?
 
-    ``os.path.isabs`` alone only recognizes the RUNNING platform's own
-    convention (a Windows ``C:\\...`` path is not "absolute" by
-    ``posixpath.isabs`` on a Linux CI runner) — a workspace payload can
+    Never ``os.path.isabs`` alone: that only recognizes the RUNNING
+    platform's own convention, and on Python 3.13 ``os.path`` is
+    ``ntpath`` on Windows -- where ``ntpath.isabs("/data/x.csv")`` is
+    FALSE (no drive, so ntpath does not consider a bare leading slash
+    absolute), which would misclassify an ordinary POSIX path as relative
+    on a Windows host. This checks ``posixpath.isabs`` and ``ntpath.isabs``
+    EXPLICITLY, regardless of the host platform, plus the drive-letter and
+    UNC shapes below as belt-and-suspenders -- a workspace payload can
     legitimately declare a source recorded on a different OS than the one
-    validating it right now, so this also accepts the Windows drive-letter
-    and UNC shapes explicitly regardless of host platform.
+    validating it right now.
     """
-    if os.path.isabs(path):
+    if posixpath.isabs(path) or ntpath.isabs(path):
         return True
     if _DRIVE_OR_UNC_RE.match(path):
         return True
     return path.startswith("\\\\") or path.startswith("//")
 
 
-def _split_ext(name: str) -> tuple[str, str]:
-    dot = name.rfind(".")
-    if dot > 0:
-        return name[:dot], name[dot:]
-    return name, ""
+def _coerce_metadata(source: Mapping[str, Any]) -> dict[str, Any]:
+    """Type-validate a size/mtime/checksum-shaped mapping the same way
+    regardless of whether it came from a recorded-provenance source object
+    or a live ``probe`` response: checksum must be ``str``, size/mtime must
+    be ``int``/``float``, anything else (a probe returning a stringified
+    size, say) is treated as absent rather than trusted or allowed to
+    crash a downstream arithmetic summary."""
+    raw_checksum = source.get("checksum")
+    raw_mtime = source.get("mtime")
+    raw_size = source.get("size")
+    return {
+        "checksum": raw_checksum if isinstance(raw_checksum, str) else None,
+        "mtime": raw_mtime if isinstance(raw_mtime, (int, float)) else None,
+        "size": raw_size if isinstance(raw_size, (int, float)) else None,
+    }
 
 
 def _stat_verdict(recorded: Mapping[str, Any], probed: Mapping[str, Any]) -> str:
@@ -171,15 +205,7 @@ def _classify_source(source_obj: Any) -> tuple[str | None, str | None, dict[str,
     path = source_obj.get("path")
     if not isinstance(path, str) or not path:
         return "malformed_source", None, None
-    raw_checksum = source_obj.get("checksum")
-    raw_mtime = source_obj.get("mtime")
-    raw_size = source_obj.get("size")
-    recorded = {
-        "checksum": raw_checksum if isinstance(raw_checksum, str) else None,
-        "mtime": raw_mtime if isinstance(raw_mtime, (int, float)) else None,
-        "size": raw_size if isinstance(raw_size, (int, float)) else None,
-    }
-    return None, path, recorded
+    return None, path, _coerce_metadata(source_obj)
 
 
 _ROW_WARNING_MESSAGES = {
@@ -190,6 +216,36 @@ _ROW_WARNING_MESSAGES = {
         "source filename was not portable across platforms and was sanitized"
     ),
 }
+
+
+def _validate_project_name(project_name: str) -> tuple[str, str | None]:
+    """Validate and sanitize ``project_name`` for use as ``<name>.dwk``.
+
+    Raises ``ValueError`` for a path-traversal-shaped name (a path
+    separator, or a literal ``..``) rather than silently mangling it — a
+    project name must never smuggle a directory component into the
+    bundle's own layout — and for a name that sanitizes down to nothing.
+    Returns ``(sanitized_name, renamed_from)`` where ``renamed_from`` is
+    the ORIGINAL name when sanitizing changed it, else ``None``.
+    """
+    if "/" in project_name or "\\" in project_name:
+        raise ValueError(f"project name must not contain a path separator: {project_name!r}")
+    if ".." in project_name:
+        raise ValueError(f"project name must not contain '..': {project_name!r}")
+    sanitized, reason = sanitize_component(project_name)
+    if reason is not None and "empty" in reason:
+        raise ValueError(f"project name is empty after sanitizing: {project_name!r}")
+    renamed_from = project_name if sanitized != project_name else None
+    return sanitized, renamed_from
+
+
+def _project_file_name(sanitized_name: str) -> str:
+    """``<sanitized_name>.dwk``, stripping a trailing ``.dwk`` (case-
+    insensitive) first so ``"x.dwk"`` yields ``"x.dwk"``, never
+    ``"x.dwk.dwk"``."""
+    if sanitized_name.lower().endswith(".dwk"):
+        sanitized_name = sanitized_name[: -len(".dwk")]
+    return f"{sanitized_name}.dwk"
 
 
 def build_dry_run_manifest(
@@ -203,12 +259,17 @@ def build_dry_run_manifest(
     ``payload`` is an already-parsed workspace document (see
     :func:`quantized.desktop_project_file.parse_workspace_payload`).
     ``probe`` is called at most once per unique original path (identified by
-    :func:`quantized.portable.layout.path_key`) — see the module docstring's
-    security section for exactly what each of ``probe``/``consented``
-    controls. See this module's own docstring for the full contract; the
-    exact per-row and top-level field set is documented on
-    ``plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`` P1.7's Pack Project subsection.
+    :func:`quantized.portable.layout.path_key`), and never at all for a path
+    ``consented`` rejects — see the module docstring's security section for
+    exactly what each of ``probe``/``consented`` controls. See this module's
+    own docstring for the full contract; the exact per-row and top-level
+    field set is documented on ``plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md``
+    P1.7's Pack Project subsection.
+
+    Raises ``ValueError`` for a ``project_name`` shaped like a path-
+    traversal attempt or that sanitizes down to nothing.
     """
+    project_name_sanitized, project_renamed_from = _validate_project_name(project_name)
     consented_fn = consented if consented is not None else _default_consented
     datasets_raw = payload.get("datasets")
     datasets_list = datasets_raw if isinstance(datasets_raw, list) else []
@@ -230,8 +291,9 @@ def build_dry_run_manifest(
         assert original_path is not None and recorded is not None
         key = path_key(original_path)
         if key not in groups:
-            groups[key] = {"original_path": original_path, "members": []}
+            groups[key] = {"spellings": set(), "members": []}
             group_order.append(key)
+        groups[key]["spellings"].add(original_path)
         groups[key]["members"].append(
             {"dataset_id": dataset_id, "name": name, "recorded": recorded}
         )
@@ -239,9 +301,10 @@ def build_dry_run_manifest(
         dataset_entries.append({"dataset_id": dataset_id, "name": name, "source_id": None})
         pending_source_key[entry_index] = key
 
-    # Deterministic source order: (path_key, original_path) — never payload
-    # order, so re-shuffling `payload["datasets"]` can't reorder `sources`.
-    sorted_keys = sorted(group_order, key=lambda k: (k, groups[k]["original_path"]))
+    # Deterministic source order: `group_order` already holds each unique
+    # path_key exactly once (in first-seen order), so sorting by the key
+    # alone is fully deterministic -- no tiebreak needed.
+    sorted_keys = sorted(group_order)
     source_id_of = {k: f"s{n + 1:03d}" for n, k in enumerate(sorted_keys)}
     for idx, key in pending_source_key.items():
         dataset_entries[idx]["source_id"] = source_id_of[key]
@@ -249,33 +312,40 @@ def build_dry_run_manifest(
     rows: list[dict[str, Any]] = []
     for key in sorted_keys:
         group = groups[key]
-        original_path = group["original_path"]
+        spellings: set[str] = group["spellings"]
+        # Canonical spelling: the lexicographically-least member by
+        # (NFC-normalized string, raw string) -- deterministic regardless
+        # of which spelling happened to appear first in payload order.
+        original_path = min(spellings, key=lambda p: (unicodedata.normalize("NFC", p), p))
+        variants = sorted(spellings) if len(spellings) > 1 else []
         members = group["members"]
         row: dict[str, Any] = {
             "source_id": source_id_of[key],
             "original_path": original_path,
+            "original_path_variants": variants,
             "members": members,
         }
         if _has_control_chars(original_path) or not _looks_absolute(original_path):
             row["status"] = "invalid"
             row["size"] = row["mtime"] = row["checksum"] = None
+        elif not consented_fn(original_path):
+            # Checked BEFORE `probe` is called at all: an unconsented path
+            # is never handed to a probe implementation that may do real
+            # I/O (review finding #8).
+            row["status"] = "not_consented"
+            row["size"] = row["mtime"] = row["checksum"] = None
         else:
             probed = probe(original_path)
             state = probed.get("state")
             status = state if state in _KNOWN_PROBE_STATES else "invalid"
-            if not consented_fn(original_path):
-                status = "not_consented"
-                size = mtime = checksum = None
-            elif status == "ok":
-                size = probed.get("size")
-                mtime = probed.get("mtime")
-                checksum = probed.get("checksum")
+            if status == "ok":
+                coerced = _coerce_metadata(probed)
+                row["size"] = coerced["size"]
+                row["mtime"] = coerced["mtime"]
+                row["checksum"] = coerced["checksum"]
             else:
-                size = mtime = checksum = None
+                row["size"] = row["mtime"] = row["checksum"] = None
             row["status"] = status
-            row["size"] = size
-            row["mtime"] = mtime
-            row["checksum"] = checksum
         rows.append(row)
 
     for row in rows:
@@ -310,49 +380,19 @@ def build_dry_run_manifest(
 
     # ── planned bundle path + visible collision suffixes (LIBRARY_WORKBOOK_
     # UX_PLAN L0.34's "visible collision suffixes; never overwrite silently"
-    # idiom -- `dedupeWindowTitle`'s "Name", "Name (2)", ... shape) ─────────
+    # idiom -- `dedupeWindowTitle`'s "Name", "Name (2)", ... shape; the
+    # collision-safe planning itself lives in `naming.plan_bundle_names`,
+    # see that module's docstring for why a naive one-group-at-a-time pass
+    # is unsafe) ────────────────────────────────────────────────────────
     for row in rows:
         base_name, base_reason = sanitize_component(basename_of(row["original_path"]))
         row["_base_name"] = base_name
         row["_base_reason"] = base_reason
 
-    key_groups: dict[str, list[int]] = {}
-    for idx, row in enumerate(rows):
-        key_groups.setdefault(path_key(row["_base_name"]), []).append(idx)
-
-    collision_group_of: dict[int, int] = {}
-    next_group_id = 0
-    for idxs in key_groups.values():
-        if len(idxs) > 1:
-            next_group_id += 1
-            for idx in idxs:
-                collision_group_of[idx] = next_group_id
-
-    used_keys: set[str] = set()
-    final_name: dict[int, str] = {}
-    for idx, row in enumerate(rows):
-        if idx not in collision_group_of:
-            final_name[idx] = row["_base_name"]
-            used_keys.add(path_key(row["_base_name"]))
-    for idxs in key_groups.values():
-        if len(idxs) <= 1:
-            continue
-        keeper = idxs[0]
-        final_name[keeper] = rows[keeper]["_base_name"]
-        used_keys.add(path_key(rows[keeper]["_base_name"]))
-        for idx in idxs[1:]:
-            stem, ext = _split_ext(rows[idx]["_base_name"])
-            n = 2
-            while True:
-                candidate, _reason = sanitize_component(f"{stem} ({n}){ext}")
-                candidate_key = path_key(candidate)
-                if candidate_key not in used_keys:
-                    final_name[idx] = candidate
-                    used_keys.add(candidate_key)
-                    break
-                n += 1
+    final_name, collision_group_of = plan_bundle_names([row["_base_name"] for row in rows])
 
     final_rows: list[dict[str, Any]] = []
+    seen_bundle_keys: set[str] = set()
     for idx, row in enumerate(rows):
         name = final_name[idx]
         bundle_path = f"{SOURCES_DIR}/{name}"
@@ -360,9 +400,15 @@ def build_dry_run_manifest(
             # A bug, not user input: `name` comes only from `sanitize_component`
             # on a basename that already has no separators in it.
             raise RuntimeError(f"planned bundle path is not bundle-relative: {bundle_path!r}")
+        bundle_key = path_key(bundle_path)
+        if bundle_key in seen_bundle_keys:
+            # A bug in `naming.plan_bundle_names`, not user input -- see
+            # that module's docstring; asserted here as the defense-in-
+            # depth outcome check (review finding #1).
+            raise RuntimeError(f"duplicate planned bundle_path: {bundle_path!r}")
+        seen_bundle_keys.add(bundle_key)
         original_basename = basename_of(row["original_path"])
-        base_key = path_key(row["_base_name"])
-        is_collision_rename = idx in collision_group_of and idx != key_groups[base_key][0]
+        is_collision_rename = idx in collision_group_of and name != row["_base_name"]
         warnings: list[str] = []
         if row["changed"]:
             warnings.append("changed_since_import")
@@ -376,6 +422,7 @@ def build_dry_run_manifest(
             {
                 "source_id": row["source_id"],
                 "original_path": row["original_path"],
+                "original_path_variants": row["original_path_variants"],
                 "bundle_path": bundle_path,
                 "status": row["status"],
                 "size": row["size"],
@@ -426,10 +473,11 @@ def build_dry_run_manifest(
         "manifest_version": MANIFEST_VERSION,
         "dry_run": True,
         "project": {
-            "name": project_name,
-            "project_file": f"{project_name}.dwk",
+            "name": project_name_sanitized,
+            "project_file": _project_file_name(project_name_sanitized),
             "workspace_format": payload.get("format"),
             "workspace_version": payload.get("version"),
+            "renamed_from": project_renamed_from,
         },
         "layout": {
             "manifest_file": MANIFEST_FILENAME,

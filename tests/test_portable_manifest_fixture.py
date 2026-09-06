@@ -78,6 +78,23 @@ def test_fixture_covers_every_documented_case() -> None:
     assert any(
         "\u00e9" in row["original_path"] or "\u00b5" in row["original_path"] for row in sources
     ), "no Unicode-named source in fixture"
+    assert any(
+        row["renamed_from"] == "CON.tar.gz" and row["bundle_path"] == "sources/_CON.tar.gz"
+        for row in sources
+    ), "no multi-dot reserved-name row in fixture (review finding #6)"
 
     notes = {entry.get("note") for entry in manifest["datasets"] if "note" in entry}
     assert notes == {"embedded_only", "malformed_source"}
+
+
+def test_fixture_keeper_suffix_collision_has_no_duplicate_bundle_paths() -> None:
+    """Regression for review finding #1 at the fixture level: the
+    ``/collide/...`` group (two ``keep.csv``s plus two pre-existing
+    ``keep (2).csv``s) must plan to four pairwise-distinct bundle paths."""
+    freeze = _load_freeze_script()
+    manifest = freeze.build_fixture_manifest()
+
+    collide_rows = [r for r in manifest["sources"] if "/collide/" in r["original_path"]]
+    assert len(collide_rows) == 4
+    bundle_paths = [r["bundle_path"] for r in collide_rows]
+    assert len(bundle_paths) == len(set(bundle_paths))
