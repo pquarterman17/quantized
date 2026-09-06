@@ -325,6 +325,25 @@ class DesktopDialogBridge:
         can't retroactively "declare" a dataset list before it's ever
         reopened.
 
+        P1.7 PR 3 ("Pack Project"): `base_dir=os.path.dirname(granted)` is
+        passed through so a packed project's `kind: "bundle"` sources
+        resolve to their RESOLVED, ABSOLUTE bundle copies and become
+        declared sources too — under those absolute paths, not the
+        (possibly long-gone) original machine's paths.
+
+        This backend half does not itself accept a bundle-RELATIVE path
+        anywhere `grant_source_paths` or relink can act on it:
+        `grant_source_paths` (below) `os.path.realpath`s whatever the
+        caller sends against the process's OWN cwd, which is not the
+        bundle directory, so a raw `"sources/raw.csv"` string is never
+        eligible here — only the absolute resolved copy this method
+        declares is. The frontend half of PR 3 (a separate branch/agent)
+        is what makes that work in practice: it resolves every `kind:
+        "bundle"` source to an absolute path AT PARSE TIME (using the
+        `.dwk`'s own directory as `projectDir`), so it never sends a
+        relative bundle path to the bridge in the first place. Callers of
+        `grant_source_paths` MUST pass absolute paths for this reason.
+
         C1: the SAME "project change" moment also revokes every relink
         directory grant (`clear_dir_grants`) — a folder grant minted for
         project A's relink session must not silently keep covering project
@@ -341,7 +360,9 @@ class DesktopDialogBridge:
                 content = f.read()
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
-        set_declared_sources(extract_declared_source_paths(content))
+        set_declared_sources(
+            extract_declared_source_paths(content, base_dir=os.path.dirname(granted))
+        )
         clear_dir_grants()
         return {"path": granted, "content": content}
 

@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 __all__ = [
@@ -49,7 +49,7 @@ WORKSPACE_FORMAT = "quantized-workspace"
 WORKSPACE_VERSIONS = (1, 2, 3, 4)
 
 
-def extract_declared_source_paths(content: str) -> list[str]:
+def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:
     """Every ``datasets[].source.path`` string a project payload itself
     names — for P1.7's server-side consent-enforcement fix (``desktop_bridge
     .py``'s ``_read_granted``, ``desktop_consent.set_declared_sources``): the
@@ -58,6 +58,11 @@ def extract_declared_source_paths(content: str) -> list[str]:
     caller-supplied list later (the frontend's argument becomes a request,
     never an authority — see ``desktop_consent.py``'s "declared sources"
     section for the full ruling).
+
+    ``base_dir`` (P1.7 PR 3, "Pack Project"): the ``.dwk``'s own directory,
+    needed to resolve a ``kind: "bundle"`` source (see
+    :func:`declared_source_paths_of` for the exact rule — a ``kind: "path"``
+    source is unaffected by this parameter).
 
     Best-effort and never raises: a malformed/foreign/non-workspace payload
     yields ``[]`` rather than an exception, since this runs on the SAME read
@@ -73,29 +78,67 @@ def extract_declared_source_paths(content: str) -> list[str]:
         return []
     if not isinstance(payload, dict):
         return []
-    return declared_source_paths_of(payload)
+    return declared_source_paths_of(payload, base_dir)
 
 
-def declared_source_paths_of(payload: Mapping[str, Any]) -> list[str]:
+def declared_source_paths_of(
+    payload: Mapping[str, Any], base_dir: str | None = None
+) -> list[str]:
     """``extract_declared_source_paths`` for an ALREADY-parsed document —
-    the half that walks ``datasets[].source.path``; same tolerance."""
+    the half that walks ``datasets[].source``.
+
+    For ``kind == "path"``, unchanged: the recorded (absolute) path itself.
+    For ``kind == "bundle"`` (P1.7 PR 3): resolved via
+    :func:`quantized.portable.project_rewrite.resolve_bundle_source` against
+    ``base_dir`` when ``base_dir`` is given AND the bundle-relative path
+    actually resolves — never a raw relative string, and never a traversal
+    (``resolve_bundle_source`` refuses both). Without ``base_dir``, a
+    ``kind: "bundle"`` source is skipped entirely: there is nothing to
+    resolve it against, and a bare bundle-relative string is never a
+    filesystem path on its own."""
     datasets = payload.get("datasets")
     if not isinstance(datasets, list):
         return []
     paths: list[str] = []
+    # Hoisted out of the loop below (review finding #7 on PR 3: it was
+    # previously re-imported inside the per-dataset loop, once per
+    # `kind: "bundle"` row rather than once per call). This import MUST
+    # stay function-local, not module-level: `quantized.portable.publish`
+    # needs `WRITE_TEMP_PREFIX` from THIS module at import time, so a
+    # module-level import here, in the other direction, would be a real
+    # circular import. Skipped entirely when `base_dir` is `None` — there
+    # would be nothing to resolve against anyway.
+    resolve_bundle_source: Callable[[str, str], str | None] | None = None
+    if base_dir is not None:
+        from quantized.portable.project_rewrite import resolve_bundle_source
     for ds in datasets:
         if not isinstance(ds, dict):
             continue
         source = ds.get("source")
         if not isinstance(source, dict):
             continue
+        kind = source.get("kind")
         path = source.get("path")
-        if isinstance(path, str) and path:
+        if not isinstance(path, str) or not path:
+            continue
+        if kind == "bundle":
+            if resolve_bundle_source is None or base_dir is None:
+                continue
+            resolved = resolve_bundle_source(base_dir, path)
+            if resolved is not None:
+                paths.append(resolved)
+        else:
+            # `kind == "path"`, unchanged -- and, same as before this
+            # parameter existed, a source dict with NO `kind` at all is
+            # treated the same way (every existing caller/fixture predates
+            # `kind` and never sets it).
             paths.append(path)
     return paths
 
 
-def payload_declares_source(payload: Mapping[str, Any], resolved_dest: str) -> bool:
+def payload_declares_source(
+    payload: Mapping[str, Any], resolved_dest: str, base_dir: str | None = None
+) -> bool:
     """Is ``resolved_dest`` (already ``os.path.realpath``-ed by the caller)
     one of the dataset source paths ``payload`` itself declares? The check
     ``write_project_file`` refuses a save destination on (P1.2 box 4,
@@ -121,10 +164,15 @@ def payload_declares_source(payload: Mapping[str, Any], resolved_dest: str) -> b
     destination's side is already folded into ``resolved_dest``). A string
     that cannot be normalised at all is skipped (same tolerance as
     ``desktop_consent._normalize``) rather than turning a save into a
-    crash."""
+    crash.
+
+    ``base_dir`` (P1.7 PR 3): forwarded to :func:`declared_source_paths_of`
+    so a packed project's ``kind: "bundle"`` sources are declared too —
+    without it, a bundle source is invisible here (see that function's own
+    doc)."""
     dest_norm = os.path.normcase(os.path.normpath(resolved_dest))
     dest_root = os.path.normcase(os.path.splitdrive(dest_norm)[0])
-    for raw in declared_source_paths_of(payload):
+    for raw in declared_source_paths_of(payload, base_dir):
         try:
             candidate = os.path.normcase(os.path.abspath(raw))
         except (OSError, ValueError):

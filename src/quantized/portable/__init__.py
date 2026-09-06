@@ -1,14 +1,14 @@
 """P1.7 "Pack Project" — the portable-bundle contract, dry-run manifest,
-and (PR 2) verified staging copy.
+verified staging copy, and (PR 3) atomic publish + bundle validation.
 
 Pure library (no fastapi/pydantic/starlette/``quantized.routes`` imports —
 enforced by ``tests/test_repo_integrity.py``'s ``PURE_LAYERS`` guard). See
 ``manifest.py``'s module docstring for the security/trust boundary,
-``layout.py``'s for the bundle-directory contract, and ``staging.py``'s
-for the staged-copy pipeline PR 2 adds. Nothing in this package publishes
-a bundle or reads a source's original directory tree; PR 3/4 of the "Pack
-Project" stack (atomic publish + open-time resolution, and the pywebview
-bridge method) build on it.
+``layout.py``'s for the bundle-directory contract, ``staging.py``'s for the
+staged-copy pipeline, and ``publish.py``'s for the atomic-rename publish
+contract + ``validate_bundle``. ``pack.py``'s ``pack_project`` is the pure
+orchestration entry point tying all of it together; PR 4 wraps that in the
+pywebview bridge method and a cancellable job/state machine.
 """
 
 from __future__ import annotations
@@ -29,6 +29,17 @@ from .layout import (
 )
 from .manifest import build_dry_run_manifest, manifest_json
 from .naming import plan_bundle_names
+from .pack import PackResult, pack_project
+from .project_rewrite import resolve_bundle_source, rewrite_payload_for_bundle
+from .publish import (
+    BundleCheck,
+    PublishResult,
+    atomic_replace_file,
+    finalize_manifest,
+    publish_bundle,
+    validate_bundle,
+    write_bundle_files,
+)
 from .staging import (
     STAGING_PREFIX,
     StagedFile,
@@ -64,4 +75,15 @@ __all__ = [
     "create_staging_dir",
     "cleanup_staging_dir",
     "stage_sources",
+    "resolve_bundle_source",
+    "rewrite_payload_for_bundle",
+    "BundleCheck",
+    "PublishResult",
+    "atomic_replace_file",
+    "finalize_manifest",
+    "publish_bundle",
+    "validate_bundle",
+    "write_bundle_files",
+    "PackResult",
+    "pack_project",
 ]

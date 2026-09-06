@@ -106,12 +106,6 @@ _OS_OPEN_WRITE_FLAGS = frozenset({"O_WRONLY", "O_RDWR", "O_CREAT", "O_APPEND", "
 # appear here (a grep-based pre-scan sees it; this `ast`-based one doesn't,
 # on purpose -- grep has no notion of "inside a string literal").
 WRITE_SITE_ALLOWLIST: dict[str, str] = {
-    "desktop_bridge.py": (
-        "write_project_file: the consented .dwk project file at the path the "
-        "user chose in the native Save/Save As dialog -- refuses (P1.2 box 4, "
-        "desktop_consent.is_declared_source) before touching disk when that "
-        "path is the open project's own declared dataset source."
-    ),
     "desktop_project_file.py": (
         "cleanup_stray_write_temps: removes this module's OWN "
         "`.qz-write-*` crash-leftover temp files from a project's save "
@@ -156,6 +150,22 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "always `join_bundle_path`'s output inside the staging dir, never an "
         "original/source path (every source is opened `\"rb\"` only; see "
         "staging.py's module docstring's `originals_modified` guarantee)."
+    ),
+    "portable/publish.py": (
+        "atomic_replace_file: the ONE atomic single-file write sequence "
+        "(mkstemp/write/fsync/os.replace/best-effort directory fsync), "
+        "shared by desktop_bridge.write_project_file (the consented .dwk "
+        "path from the native Save/Save As dialog -- refuses, before "
+        "reaching this helper, when that path is a declared dataset "
+        "source: P1.2 box 4) and this module's own write_bundle_files, "
+        "which only ever writes the packed project file and the "
+        "quantized-bundle.json manifest INSIDE a staging directory this "
+        "same package created via create_staging_dir (P1.7 Pack Project "
+        "PR 2/3) -- never a caller-supplied arbitrary path, never a "
+        "dataset source. publish_bundle's os.rename moves that same "
+        "staging directory onto a caller-supplied destination_dir that "
+        "must not already exist (refused otherwise) -- a fresh bundle "
+        "directory, never an existing file being overwritten."
     ),
     "portable/staging.py": (
         "cleanup_staging_dir (os.remove): tears down a whole staging "

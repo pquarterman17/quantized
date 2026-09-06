@@ -114,6 +114,26 @@ beforeEach(() => {
   });
 });
 
+// P1.7 PR 3 (Pack Project, frontend half): a dataset loaded from a packed
+// project keeps a plain absolute `source.path` — the serializer decides
+// per-save (PR 3 review finding #1/#2: derived FRESH from `source.path`,
+// never a recalled parse-time field) whether that path sits directly under
+// the SAME directory's own `sources/` folder and so round-trips back to
+// `kind: "bundle"`, or falls back to an absolute `kind: "path"` (saved
+// elsewhere, or with no known directory at all — the browser-download
+// fallback).
+const PACKED_DATASET = {
+  id: "a",
+  name: "a.dat",
+  data,
+  source: { kind: "path" as const, path: "/proj/sources/run1.csv" },
+};
+
+function sourceFromWriteCall(write: ReturnType<typeof vi.fn>): unknown {
+  const content = write.mock.calls[0][1] as string;
+  return (JSON.parse(content) as { datasets: { source?: unknown }[] }).datasets[0].source;
+}
+
 describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
   it("downloads a blob, byte-identical to the pre-P1.1 behavior", async () => {
     await useApp.getState().saveWorkspaceToFile();
@@ -123,6 +143,17 @@ describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
     expect(blob.type).toBe("application/json");
   });
 
+  // P1.7 PR 3: a browser download has no known directory at all — a
+  // bundle-sourced dataset falls back to its absolute path, unchanged.
+  it("writes an absolute kind:path source for a bundle-sourced dataset (no projectDir to round-trip against)", async () => {
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    await useApp.getState().saveWorkspaceToFile();
+    const [blob] = vi.mocked(saveBlob).mock.calls[0];
+    const content = await blob.text();
+    const source = (JSON.parse(content) as { datasets: { source?: unknown }[] }).datasets[0].source;
+    expect(source).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
   it("records no Recent Projects entry (no path was ever knowable)", async () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
@@ -130,6 +161,31 @@ describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
 });
 
 describe("saveWorkspaceToFile — desktop shell", () => {
+  // P1.7 PR 3: Save As onto a DIFFERENT directory than the one the bundle
+  // source was resolved against writes an absolute kind:path — still a
+  // valid, working save, just no longer relocatable as a portable bundle.
+  it("Save As into a different directory writes an absolute kind:path for a bundle-sourced dataset", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/other/workspace.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/other/workspace.dwk" }), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
+  // Saving BACK into the very directory the bundle source was resolved
+  // against is what earns the portable kind:bundle shape.
+  it("Save As back into the bundle's own directory writes kind:bundle", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/proj/workspace.dwk" }), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
   it("saves natively and never touches the browser download", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({
@@ -457,6 +513,36 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     expect(dialog).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String), expect.any(String));
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  // P1.7 PR 3: a quick save's destination IS the current project's known
+  // directory — a dataset whose bundle source was resolved against that
+  // same directory writes back as the portable kind:bundle shape.
+  it("writes kind:bundle to the bridge for a packed project quick-saved back into its own directory", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
+  // PR 3 review finding #3: a current project path with NO directory
+  // separator (e.g. a bare "workspace.dwk", `parentDirectory`'s own "no
+  // directory" sentinel) must never be treated as a known projectDir —
+  // writes absolute, never attempts a bundle derivation against a bogus
+  // root-anchored prefix.
+  it("writes an absolute kind:path when the current project path has no directory separator", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "workspace.dwk" });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
   });
 
   // P1.1: an unmounted share is OFFLINE, not a write target — never write

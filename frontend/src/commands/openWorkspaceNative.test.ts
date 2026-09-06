@@ -50,6 +50,23 @@ const WS_WITH_DATASET = JSON.stringify({
   folders: [],
 });
 
+// P1.7 PR 3 (Pack Project, frontend half): a packed project's dataset
+// carries a `kind: "bundle"` source, resolvable only once the native open
+// knows the `.dwk`'s own directory.
+const WS_WITH_BUNDLE_SOURCE = JSON.stringify({
+  format: WORKSPACE_FORMAT,
+  version: 4,
+  datasets: [
+    {
+      id: "r1",
+      name: "r1.dat",
+      data: { time: [0, 1], values: [[1], [2]], labels: ["y"], units: [""], metadata: {} },
+      source: { kind: "bundle", path: "sources/r1.dat" },
+    },
+  ],
+  folders: [],
+});
+
 function run(id: string) {
   const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);
   if (!cmd) throw new Error(`${id} command not registered`);
@@ -101,6 +118,41 @@ describe("open-workspace — native branch", () => {
     await settle();
     expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
     expect(useApp.getState().projectDirty).toBe(false);
+  });
+
+  // P1.7 PR 3: a native open knows the `.dwk`'s own directory, so a packed
+  // project's `kind: "bundle"` source resolves to a real absolute path
+  // (never left as an unresolvable relative string) and records where it
+  // came from.
+  it("resolves a packed project's bundle-relative source under the project's own directory", async () => {
+    setShell({ open_project_file: async () => ({ path: "/p/workspace.dwk", content: WS_WITH_BUNDLE_SOURCE }) });
+    run("open-workspace");
+    await settle();
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat" });
+  });
+
+  it("resolves a packed project's bundle-relative source under a Windows-style project directory", async () => {
+    setShell({ open_project_file: async () => ({ path: "C:\\Users\\me\\proj\\workspace.dwk", content: WS_WITH_BUNDLE_SOURCE }) });
+    run("open-workspace");
+    await settle();
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toEqual({
+      kind: "path",
+      path: "C:\\Users\\me\\proj\\sources\\r1.dat",
+    });
+  });
+
+  // PR 3 review finding #3: a native path with NO directory separator (the
+  // `parentDirectory` "no directory" sentinel) must degrade a bundle
+  // source exactly like an unknown projectDir — never resolve against a
+  // bogus root-anchored path.
+  it("degrades a packed project's bundle-relative source when the native path has no directory separator", async () => {
+    setShell({ open_project_file: async () => ({ path: "workspace.dwk", content: WS_WITH_BUNDLE_SOURCE }) });
+    run("open-workspace");
+    await settle();
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toBeUndefined();
   });
 
   // P1.1: "working-directory selection affects the next chooser" — for

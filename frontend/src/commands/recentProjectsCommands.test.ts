@@ -32,6 +32,23 @@ function action(id: string) {
 
 const WS = JSON.stringify({ format: WORKSPACE_FORMAT, version: 3, datasets: [], folders: [] });
 
+// P1.7 PR 3 (Pack Project, frontend half): a packed project's dataset
+// carries a `kind: "bundle"` source, resolvable only once the reopen knows
+// the `.dwk`'s own directory.
+const WS_WITH_BUNDLE_SOURCE = JSON.stringify({
+  format: WORKSPACE_FORMAT,
+  version: 4,
+  datasets: [
+    {
+      id: "r1",
+      name: "r1.dat",
+      data: { time: [0, 1], values: [[1], [2]], labels: ["y"], units: [""], metadata: {} },
+      source: { kind: "bundle", path: "sources/r1.dat" },
+    },
+  ],
+  folders: [],
+});
+
 beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(pathState).mockReset();
@@ -106,6 +123,49 @@ describe("useRecentProjectsCommands — reopening an entry", () => {
     await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
     expect(useApp.getState().currentProject).toEqual({ name: "workspace.dwk", path: "/p/workspace.dwk" });
     expect(useApp.getState().projectDirty).toBe(false);
+  });
+
+  // P1.7 PR 3: a reopen knows the `.dwk`'s own directory (`opened.path`), so
+  // a packed project's `kind: "bundle"` source resolves to a real absolute
+  // path under it, same as a fresh native open.
+  it("resolves a packed project's bundle-relative source under the project's own directory", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS_WITH_BUNDLE_SOURCE });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "/p/workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(async () => { action("recent-project-/p/workspace.dwk").run(); });
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat" });
+  });
+
+  it("resolves a packed project's bundle-relative source under a Windows-style project directory", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({
+      path: "C:\\Users\\me\\proj\\workspace.dwk",
+      content: WS_WITH_BUNDLE_SOURCE,
+    });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "C:\\Users\\me\\proj\\workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(async () => { action("recent-project-C:\\Users\\me\\proj\\workspace.dwk").run(); });
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toEqual({
+      kind: "path",
+      path: "C:\\Users\\me\\proj\\sources\\r1.dat",
+    });
+  });
+
+  // PR 3 review finding #3: an `opened.path` with NO directory separator
+  // (the `parentDirectory` "no directory" sentinel) must degrade a bundle
+  // source exactly like an unknown projectDir — never resolve against a
+  // bogus root-anchored path.
+  it("degrades a packed project's bundle-relative source when opened.path has no directory separator", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue({ path: "workspace.dwk", content: WS_WITH_BUNDLE_SOURCE });
+    useRecentProjects.getState().pushRecentProject("workspace.dwk", "workspace.dwk");
+    renderHook(() => useRecentProjectsCommands());
+    await act(async () => { action("recent-project-workspace.dwk").run(); });
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toBeUndefined();
   });
 
   it("ok + non-empty session: confirms before replacing, same as Open workspace", async () => {

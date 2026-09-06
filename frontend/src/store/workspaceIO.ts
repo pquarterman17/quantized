@@ -47,12 +47,20 @@ function savedMsg(n: number, path?: string): string {
   return `saved workspace${path ? ` to ${path}` : ""} — ${n} dataset${n === 1 ? "" : "s"}`;
 }
 
-/** Resolve pending books and serialize the live workspace — the shared
+/** Resolve pending books and gather the live workspace state — the shared
  *  preface both Save (`runSaveWorkspace`) and Save As (`runSaveWorkspaceToFile`)
  *  need before they can write anything. Returns null when there is nothing to
  *  save or resolving pending books failed; both cases already set status/toast
- *  themselves, so callers just bail out. */
-async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> {
+ *  themselves, so callers just bail out.
+ *
+ *  Returns the (structurally WorkspaceState-compatible) store slice rather
+ *  than an already-serialized string — P1.7 PR 3's Save As needs to pick its
+ *  destination BEFORE it knows the `projectDir` `serializeWorkspace` should
+ *  use for bundle-relative sources, so the actual `JSON.stringify` has to
+ *  happen after that pick, not here. Everything ABOVE that split (bailing
+ *  out on nothing-to-save, resolving pending books, folding in the focused
+ *  window's live view) still runs at exactly the same point it always did. */
+async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
   const all = get().datasets;
   if (all.length === 0) {
     get().setStatus("no datasets to save");
@@ -79,7 +87,19 @@ async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> 
     s,
     s.techniqueViewMemory,
   );
-  return serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
+}
+
+/** `prepareWorkspaceState` + serialize in one call, for the ONE caller that
+ *  already knows its `projectDir` before anything else happens: quick Save
+ *  (`runSaveWorkspace`, whose destination is the already-known current
+ *  project). Save As (`runSaveWorkspaceToFile`) calls `prepareWorkspaceState`
+ *  and `serializeWorkspace` separately instead — see that function's own
+ *  comment for why. */
+async function serializeCurrentWorkspace(get: SliceGet, projectDir?: string): Promise<string | null> {
+  const state = await prepareWorkspaceState(get);
+  if (state === null) return null;
+  return serializeWorkspace(state, projectDir !== undefined ? { projectDir } : undefined);
 }
 
 /** I2 (P0-3/P1-1): acquire the lock for a Save-As DESTINATION before ever
@@ -136,8 +156,14 @@ async function acquireDestinationLock(
 }
 
 export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
-  const content = await serializeCurrentWorkspace(get);
-  if (content === null) return;
+  // P1.7 PR 3: gather state (resolve pending books, fold the live view) at
+  // exactly the point the pre-existing flow always did — but hold off on the
+  // actual `JSON.stringify` until AFTER the destination below is picked, so
+  // `serializeWorkspace` can be told the right `projectDir` (a bundle source
+  // is only writable as `kind: "bundle"` relative to WHERE this save is
+  // actually landing, which isn't known yet at this line).
+  const state = await prepareWorkspaceState(get);
+  if (state === null) return;
   const all = get().datasets; // unaffected by serializing — safe to re-read for the count
 
   // P1.1 C3 + P2 (adversarial review, 2026-08-19): the dialog pick and the
@@ -170,6 +196,16 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     toast(msg, "danger");
     return;
   }
+  // P1.7 PR 3: NOW `projectDir` is knowable — a real native destination
+  // means datasets that were resolved from THIS SAME directory's bundle can
+  // round-trip as `kind: "bundle"` (`serializeDatasetSource`'s identity
+  // check decides per-dataset, not this call); no destination (no usable
+  // bridge — every browser tab) means the browser-download fallback below,
+  // unchanged, always absolute.
+  const content = serializeWorkspace(
+    state,
+    destination !== null ? { projectDir: parentDirectory(destination) || undefined } : undefined,
+  );
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
     // P1.2 box 4: a fast, friendly PRE-check — the desktop bridge itself
@@ -329,7 +365,9 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     toast(msg, "danger");
     return;
   }
-  const content = await serializeCurrentWorkspace(get);
+  // P1.7 PR 3: a quick save's destination IS `project.path` — no dialog, no
+  // uncertainty — so `projectDir` is knowable up front, unlike Save As.
+  const content = await serializeCurrentWorkspace(get, parentDirectory(project.path) || undefined);
   if (content === null) return;
 
   // I2 (P0-3/P1-1): THE actual enforcement point — the CURRENTLY held
