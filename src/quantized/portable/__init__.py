@@ -23,8 +23,10 @@ from .layout import (
     join_bundle_path,
     path_key,
     sanitize_component,
+    split_ext,
 )
 from .manifest import build_dry_run_manifest, manifest_json
+from .naming import plan_bundle_names
 
 __all__ = [
     "BUNDLE_FORMAT",
@@ -36,8 +38,10 @@ __all__ = [
     "basename_of",
     "path_key",
     "sanitize_component",
+    "split_ext",
     "is_bundle_relative",
     "join_bundle_path",
+    "plan_bundle_names",
     "build_dry_run_manifest",
     "manifest_json",
 ]

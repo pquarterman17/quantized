@@ -61,6 +61,7 @@ __all__ = [
     "basename_of",
     "path_key",
     "sanitize_component",
+    "split_ext",
     "is_bundle_relative",
     "join_bundle_path",
 ]
@@ -119,8 +120,10 @@ def path_key(path: str) -> str:
 _ILLEGAL_CHARS_RE = re.compile(r'[<>:"|?*\x00-\x1f\x7f]')
 
 # Windows reserved device names (case-insensitive), matched against the
-# component's stem (the part before its first "."), so both "CON" and
-# "CON.csv" are caught.
+# component's stem (the part before its FIRST "." -- this is Windows' own
+# rule: "NUL.tar.gz" is reserved because "NUL" precedes the first dot, even
+# though the part before the LAST dot -- what `split_ext` below returns for
+# extension-preserving truncation -- would be "NUL.tar").
 _RESERVED_STEMS = {"CON", "PRN", "AUX", "NUL"} | {f"COM{i}" for i in range(1, 10)} | {
     f"LPT{i}" for i in range(1, 10)
 }
@@ -137,7 +140,14 @@ _REASON_ORDER = (
 )
 
 
-def _split_ext(name: str) -> tuple[str, str]:
+def split_ext(name: str) -> tuple[str, str]:
+    """Split ``name`` into ``(stem, ext)`` on its LAST "." (extension-
+    preserving truncation wants the longest sane extension kept), except a
+    leading dot ("`.gitignore`") is never treated as an extension.
+
+    The single shared implementation -- :mod:`quantized.portable.manifest`
+    and :mod:`quantized.portable.naming` both import this rather than
+    keeping their own copy (review finding #10)."""
     dot = name.rfind(".")
     if dot > 0:  # a leading dot ("`.gitignore`") is not an extension
         return name[:dot], name[dot:]
@@ -173,23 +183,40 @@ def sanitize_component(name: str) -> tuple[str, str | None]:
         working = "_"
         reasons.add("empty")
 
-    stem_check = _split_ext(working)[0].upper()
+    # Windows reserves a device name by the part BEFORE ITS FIRST dot, not
+    # the part before its last -- `split(".", 1)` here, never `split_ext`
+    # (whose rfind-based split is for extension-preserving truncation
+    # below, a different job with a different answer on "NUL.tar.gz").
+    stem_check = working.split(".", 1)[0].upper()
     if stem_check in _RESERVED_STEMS:
         working = "_" + working
         reasons.add("reserved_name")
 
     if len(working.encode("utf-8")) > MAX_COMPONENT_BYTES:
-        stem, ext = _split_ext(working)
         # Hashed from the ORIGINAL name, not the working value, so the
         # truncated result is stable regardless of which earlier rules fired.
         digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:8]
         suffix = f"~{digest}"
-        budget = MAX_COMPONENT_BYTES - len(ext.encode("utf-8")) - len(suffix.encode("utf-8"))
-        stem_bytes = stem.encode("utf-8")[: max(budget, 0)]
-        # Decode leniently: a naive byte-slice can land mid-codepoint on a
-        # multi-byte UTF-8 character; drop the fragment rather than raise.
-        truncated_stem = stem_bytes.decode("utf-8", errors="ignore")
-        working = f"{truncated_stem}{suffix}{ext}"
+        suffix_bytes = suffix.encode("utf-8")
+        budget_for_name = MAX_COMPONENT_BYTES - len(suffix_bytes)
+        stem, ext = split_ext(working)
+        ext_bytes = ext.encode("utf-8")
+        if len(ext_bytes) <= budget_for_name:
+            # Normal case: the extension fits: only the stem shrinks.
+            stem_bytes = stem.encode("utf-8")[: max(budget_for_name - len(ext_bytes), 0)]
+            # Decode leniently: a naive byte-slice can land mid-codepoint on
+            # a multi-byte UTF-8 character; drop the fragment rather than raise.
+            truncated_stem = stem_bytes.decode("utf-8", errors="ignore")
+            working = f"{truncated_stem}{suffix}{ext}"
+        else:
+            # The extension ALONE doesn't fit the budget -- truncating only
+            # the stem would leave the extension intact and the whole name
+            # still over MAX_COMPONENT_BYTES. Treat the WHOLE name as
+            # truncatable instead, so the final length always respects the
+            # cap (review finding #3).
+            whole_bytes = working.encode("utf-8")[: max(budget_for_name, 0)]
+            truncated_whole = whole_bytes.decode("utf-8", errors="ignore")
+            working = f"{truncated_whole}{suffix}"
         reasons.add("too_long")
 
     if not reasons:
@@ -214,8 +241,16 @@ def is_bundle_relative(rel: str) -> bool:
     :func:`path_key`/``relink.ts`` use for comparing RECORDED paths), has no
     empty/``.``/``..`` segment, is not absolute in any platform's sense (no
     leading ``/``, no drive letter, no ``//``/``\\\\`` UNC prefix), carries
-    no NUL or control character, and its first segment is exactly
-    :data:`SOURCES_DIR`.
+    no NUL or control character, its first segment is exactly
+    :data:`SOURCES_DIR`, and EVERY segment is already a portable name in
+    :func:`sanitize_component`'s own sense (``sanitize_component(seg) ==
+    (seg, None)`` for each one) — this last check is what rejects a segment
+    that is well-formed as a bare path component but Windows-illegal on
+    its own merits, e.g. ``sources/D:evil`` (a colon), ``sources/a<b`` (an
+    illegal character), ``sources/CON.csv`` (a reserved device name), or
+    ``sources/x.`` (a trailing dot); ``ntpath.join`` would otherwise
+    reinterpret some of these in ways this function must refuse to accept
+    as bundle-relative in the first place.
 
     This is the one containment rule every consumer must apply before
     joining a manifest-supplied path onto a real bundle directory —
@@ -234,7 +269,9 @@ def is_bundle_relative(rel: str) -> bool:
     segments = rel.split("/")
     if any(seg in ("", ".", "..") for seg in segments):
         return False
-    return segments[0] == SOURCES_DIR
+    if segments[0] != SOURCES_DIR:
+        return False
+    return all(sanitize_component(seg) == (seg, None) for seg in segments)
 
 
 def join_bundle_path(bundle_root: str, rel: str) -> str:

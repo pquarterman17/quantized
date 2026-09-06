@@ -6,7 +6,10 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from quantized.portable.layout import is_bundle_relative
+import pytest
+
+import quantized.portable.manifest as manifest_module
+from quantized.portable.layout import is_bundle_relative, path_key
 from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 
 
@@ -430,3 +433,193 @@ def test_shared_by_preserves_payload_order() -> None:
     manifest = build_dry_run_manifest(payload, "proj", probe)
     row = manifest["sources"][0]
     assert [m["dataset_id"] for m in row["shared_by"]] == ["d2", "d1"]
+
+
+# ── review round: finding #1 -- keeper can duplicate an earlier group's
+# suffix ────────────────────────────────────────────────────────────────
+
+
+def test_keeper_never_collides_with_an_earlier_groups_suffix() -> None:
+    """Four sources whose sanitized basenames are `b.csv`, `b.csv`,
+    `b (2).csv`, `b (2).csv`: the naive "keeper gets its plain name
+    unconditionally" ordering let `/m/b (2).csv`'s keeper collide with the
+    suffix `/z/b.csv` was ALSO assigned -- both then shared one
+    `bundle_path`. Every bundle_path must be pairwise-unique."""
+    payload = _payload(
+        [
+            _dataset("d1", "A", _path_source("/a/b.csv")),
+            _dataset("d2", "B", _path_source("/z/b.csv")),
+            _dataset("d3", "C", _path_source("/m/b (2).csv")),
+            _dataset("d4", "D", _path_source("/n/b (2).csv")),
+        ]
+    )
+    ok = {"state": "ok", "size": 1, "mtime": 1.0}
+    manifest = build_dry_run_manifest(payload, "proj", lambda p: ok)  # noqa: ARG005
+    bundle_paths = [r["bundle_path"] for r in manifest["sources"]]
+    assert len(bundle_paths) == 4
+    assert len(bundle_paths) == len({path_key(p) for p in bundle_paths})
+
+
+def test_builder_raises_on_duplicate_bundle_path_as_defense_in_depth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The builder itself asserts uniqueness of the FINAL planned
+    bundle_paths (never trusting `naming.plan_bundle_names` blindly) --
+    simulate a broken planner to prove the assertion actually fires."""
+
+    def _broken_plan_bundle_names(base_names: list[str]) -> tuple[dict[int, str], dict[int, int]]:
+        return {i: "same_name.csv" for i in range(len(base_names))}, {}
+
+    monkeypatch.setattr(manifest_module, "plan_bundle_names", _broken_plan_bundle_names)
+
+    payload = _payload(
+        [
+            _dataset("d1", "A", _path_source("/a/one.csv")),
+            _dataset("d2", "B", _path_source("/b/two.csv")),
+        ]
+    )
+    ok = {"state": "ok", "size": 1, "mtime": 1.0}
+    with pytest.raises(RuntimeError, match="duplicate"):
+        build_dry_run_manifest(payload, "proj", lambda p: ok)  # noqa: ARG005
+
+
+# ── review round: finding #2 -- absolute-path check must not rely on the
+# host's own os.path.isabs ────────────────────────────────────────────────
+
+
+def test_looks_absolute_recognizes_posix_path_even_if_ntpath_disagrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manifest_module.ntpath, "isabs", lambda _p: False)
+    assert manifest_module._looks_absolute("/data/x.csv") is True
+
+
+def test_looks_absolute_recognizes_windows_path_even_if_posixpath_disagrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(manifest_module.posixpath, "isabs", lambda _p: False)
+    assert manifest_module._looks_absolute("C:\\lab\\data\\x.csv") is True
+
+
+def test_looks_absolute_rejects_relative_path() -> None:
+    assert manifest_module._looks_absolute("relative/run1.csv") is False
+
+
+# ── review round: finding #4 -- canonical spelling must be order-
+# independent, with every distinct spelling recorded ──────────────────────
+
+
+def test_canonical_spelling_is_order_independent_with_variants_recorded() -> None:
+    def _manifest_for(order: list[str]) -> dict[str, Any]:
+        payload = _payload([_dataset(f"d{i}", "N", _path_source(p)) for i, p in enumerate(order)])
+        probe, _ = _counting_probe({p: {"state": "ok", "size": 1, "mtime": 1.0} for p in order})
+        return build_dry_run_manifest(payload, "proj", probe)
+
+    m1 = _manifest_for(["/x/A.CSV", "/x/a.csv"])
+    m2 = _manifest_for(["/x/a.csv", "/x/A.CSV"])
+    assert m1["sources"] == m2["sources"]
+
+    row = m1["sources"][0]
+    # Canonical = min by (NFC-normalized, raw); 'A' (0x41) < 'a' (0x61).
+    assert row["original_path"] == "/x/A.CSV"
+    assert row["original_path_variants"] == ["/x/A.CSV", "/x/a.csv"]
+
+
+def test_single_spelling_has_empty_variants_list() -> None:
+    payload = _payload([_dataset("d1", "A", _path_source("/x/ok.csv"))])
+    probe, _ = _counting_probe({"/x/ok.csv": {"state": "ok", "size": 1, "mtime": 1.0}})
+    manifest = build_dry_run_manifest(payload, "proj", probe)
+    assert manifest["sources"][0]["original_path_variants"] == []
+
+
+# ── review round: finding #5 -- project_name must be sanitized/validated ──
+
+
+@pytest.mark.parametrize("bad_name", ["../evil", "a/b", "a\\b", "..", "."])
+def test_project_name_path_traversal_shapes_rejected(bad_name: str) -> None:
+    with pytest.raises(ValueError):
+        build_dry_run_manifest(_payload([]), bad_name, lambda p: {"state": "missing"})  # noqa: ARG005
+
+
+def test_project_name_illegal_characters_sanitized_and_recorded() -> None:
+    manifest = build_dry_run_manifest(_payload([]), "My:Run", lambda p: {"state": "missing"})  # noqa: ARG005
+    assert manifest["project"]["name"] == "My_Run"
+    assert manifest["project"]["renamed_from"] == "My:Run"
+    assert manifest["project"]["project_file"] == "My_Run.dwk"
+
+
+def test_project_name_trailing_dwk_is_not_doubled() -> None:
+    manifest = build_dry_run_manifest(_payload([]), "x.dwk", lambda p: {"state": "missing"})  # noqa: ARG005
+    assert manifest["project"]["project_file"] == "x.dwk"
+    assert manifest["project"]["name"] == "x.dwk"
+    assert manifest["project"]["renamed_from"] is None
+
+
+def test_project_name_unchanged_when_already_safe() -> None:
+    manifest = build_dry_run_manifest(_payload([]), "proj", lambda p: {"state": "missing"})  # noqa: ARG005
+    assert manifest["project"]["renamed_from"] is None
+    assert manifest["project"]["project_file"] == "proj.dwk"
+
+
+# ── review round: finding #8 -- probe must never run for an unconsented
+# source ────────────────────────────────────────────────────────────────
+
+
+def test_probe_never_called_for_unconsented_source() -> None:
+    payload = _payload([_dataset("d1", "A", _path_source("/x/unconsented.csv"))])
+    probe, calls = _counting_probe(
+        {"/x/unconsented.csv": {"state": "ok", "size": 1, "mtime": 1.0}}
+    )
+
+    def consented(_path: str) -> bool:
+        return False
+
+    manifest = build_dry_run_manifest(payload, "proj", probe, consented)
+    assert calls == []
+    assert manifest["sources"][0]["status"] == "not_consented"
+
+
+# ── review round: finding #9 -- probe-supplied metadata is type-validated ─
+
+
+def test_probe_non_numeric_size_is_coerced_to_none_not_crashed_on() -> None:
+    payload = _payload([_dataset("d1", "A", _path_source("/x/weird.csv"))])
+
+    def probe(_path: str) -> dict[str, Any]:
+        return {"state": "ok", "size": "4096", "mtime": 1.0, "checksum": "sha256:x"}
+
+    manifest = build_dry_run_manifest(payload, "proj", probe)
+    row = manifest["sources"][0]
+    assert row["size"] is None
+    assert row["mtime"] == 1.0
+    assert row["checksum"] == "sha256:x"
+    assert row["status"] == "ok"
+    assert row["packable"] is True
+    assert manifest["summary"]["total_bytes"] == 0
+
+
+def test_probe_non_string_checksum_and_non_numeric_mtime_coerced() -> None:
+    payload = _payload([_dataset("d1", "A", _path_source("/x/weird2.csv"))])
+
+    def probe(_path: str) -> dict[str, Any]:
+        return {"state": "ok", "size": 10, "mtime": "yesterday", "checksum": 12345}
+
+    manifest = build_dry_run_manifest(payload, "proj", probe)
+    row = manifest["sources"][0]
+    assert row["size"] == 10
+    assert row["mtime"] is None
+    assert row["checksum"] is None
+
+
+# ── review round: finding #10 -- one shared split_ext implementation ──────
+
+
+def test_manifest_module_has_no_private_split_ext_copy() -> None:
+    assert not hasattr(manifest_module, "_split_ext")
+
+
+def test_naming_module_reuses_layout_split_ext() -> None:
+    import quantized.portable.naming as naming_module
+    from quantized.portable.layout import split_ext
+
+    assert naming_module.split_ext is split_ext

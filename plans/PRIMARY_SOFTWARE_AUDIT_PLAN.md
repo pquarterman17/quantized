@@ -1406,38 +1406,76 @@ below — the packer's own implementation work starts fresh here:
     itself. Sources are deduped by `path_key(original_path)` (several
     datasets naming one file share ONE row, each with its own recorded
     provenance + a `sourceChangeVerdict`-equivalent verdict, ported field-
-    for-field from `lib/relink.ts`); probed exactly once per unique key;
-    sorted by `(path_key, original_path)` (never payload/probe order) so
-    the same payload always yields byte-identical
-    `manifest_json` (2-space, sorted-key, `ensure_ascii=False` JSON).
+    for-field from `lib/relink.ts`); probed exactly once per unique key,
+    and never at all for a path `consented` rejects; sorted by `path_key`
+    alone (each key already unique, so no tiebreak is needed) so the same
+    payload always yields byte-identical `manifest_json` (2-space,
+    sorted-key, `ensure_ascii=False` JSON) — including a row's
+    `original_path`, which is always the CANONICAL spelling among however
+    many case/Unicode-normalization-form variants named that path_key (the
+    lexicographically-least by `(NFC-normalized string, raw string)`,
+    never whichever spelling happened to appear first in payload order),
+    with every other distinct spelling recorded in
+    `original_path_variants` (empty list when there was only one).
     Destination-name collisions get L0.34's visible-suffix treatment
     (`name.ext`, `name (2).ext`, `name (3).ext`, ... — never a silent
-    overwrite), each renamed row carrying `collision_group` +
-    `renamed_from` and an entry in the manifest's own `warnings` list. Five
-    distinct, non-packable source states (`missing`/`offline`/
-    `permission_denied`/`invalid`/`not_consented`) plus `ok`; `changed`
-    (provenance mismatch) and `unverified` (verdict `unknown`) are
-    warnings, not blockers — still `packable`, per this PR's own scoping.
+    overwrite, and never able to duplicate another group's own plain name:
+    `portable/naming.py`'s `plan_bundle_names` reserves every group's
+    keeper name in one pass before any suffix is generated, split into its
+    own module to keep `manifest.py` under the 500-line ceiling), each
+    renamed row carrying `collision_group` + `renamed_from` and an entry
+    in the manifest's own `warnings` list. Five distinct, non-packable
+    source states (`missing`/`offline`/`permission_denied`/`invalid`/
+    `not_consented`) plus `ok`; `changed` (provenance mismatch) and
+    `unverified` (verdict `unknown`) are warnings, not blockers — still
+    `packable`, per this PR's own scoping. `project_name` is itself
+    sanitized and validated (`ValueError` for a path-traversal shape — a
+    separator or a literal `..` — or a name that sanitizes to nothing);
+    the manifest's `project` object carries the sanitized `name`, the
+    derived `project_file` (a trailing `.dwk` is stripped before one is
+    appended, so `"x.dwk"` never becomes `"x.dwk.dwk"`), and
+    `renamed_from` (the original name, or `null` if sanitizing changed
+    nothing).
   - **Security/trust boundary** (also the module's own docstring):
-    reachability/size/mtime/checksum come ONLY from `probe`; `consented`
-    is a second, backend-enforced gate that nulls every metadata field for
-    a path it rejects, even if `probe` had already returned data for it;
-    the manifest reads no file content itself and GRANTS NOTHING — a row's
-    presence is never authorization to read or copy anything; every bundle
-    destination is built from a sanitized BASENAME only, never from any
-    part of the original directory tree, so a bundle's own internal layout
-    can never leak a source's original location; `is_bundle_relative` +
-    `join_bundle_path` are the only sanctioned path-containment check for
-    every future consumer (PR 2's copier, PR 3's opener).
+    `consented` is checked BEFORE `probe` is ever called for a path —
+    `probe` (which may do real I/O) never even runs for a source the
+    caller hasn't vouched for; reachability/size/mtime/checksum otherwise
+    come ONLY from `probe`, type-validated (a non-`str` checksum or
+    non-numeric size/mtime is treated as absent, never trusted or allowed
+    to crash the summary); the manifest reads no file content itself and
+    GRANTS NOTHING — a row's presence is never authorization to read or
+    copy anything; every bundle destination is built from a sanitized
+    BASENAME only, never from any part of the original directory tree, so
+    a bundle's own internal layout can never leak a source's original
+    location; `is_bundle_relative` (which also rejects a segment that is
+    well-formed as a bare path component but Windows-illegal on its own
+    merits — a colon, an illegal character, a reserved device name, a
+    trailing dot) + `join_bundle_path` are the only sanctioned
+    path-containment check for every future consumer (PR 2's copier, PR
+    3's opener); the builder itself asserts every planned `bundle_path` is
+    pairwise-unique before returning (`RuntimeError`, never a silent
+    duplicate).
   - Frozen schema fixture: `tools/freeze_portable_manifest.py` builds one
     synthetic payload covering a shared source, a plain and a case-variant
-    destination collision, Windows/UNC/POSIX/`/Volumes` paths, missing/
-    offline/permission-denied sources, a Unicode name, a reserved name, an
-    over-long name, a no-source dataset, and a malformed source — writes
+    destination collision, a keeper-suffix collision (two `keep.csv`s plus
+    two pre-existing `keep (2).csv`s, proving the collision-safe planning
+    above), Windows/UNC/POSIX/`/Volumes` paths, missing/offline/
+    permission-denied sources, a Unicode name, a reserved name (plain and
+    multi-dot extension — `CON.tar.gz`), an over-long name, a no-source
+    dataset, and a malformed source — writes
     `tests/fixtures/portable/manifest_v1.json`;
     `tests/test_portable_manifest_fixture.py` byte-compares against it
     forever (regenerate with `uv run python
     tools/freeze_portable_manifest.py` on a deliberate behavior change).
+  - **Review round (2026-09-06):** ten defects found and fixed, each with
+    a regression test — see the commit fixing this PR for the full list;
+    highlights: the keeper-suffix collision above (a silent-overwrite
+    hazard), `_looks_absolute` no longer trusts the host's own
+    `os.path.isabs` (checks `posixpath.isabs`/`ntpath.isabs` explicitly),
+    `sanitize_component`'s over-long truncation now truncates the WHOLE
+    name when the extension alone doesn't fit the budget, and its
+    reserved-device-name check now keys off the part before the FIRST dot
+    (Windows' own rule) rather than the last.
 - **PR 2 (planned, not shipped):** staged, checksum-VERIFIED copy of every
   packable source into the bundle's `sources/` directory (still no `.dwk`
   write) — the first PR that touches a filesystem for real.
