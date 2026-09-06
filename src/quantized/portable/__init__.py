@@ -1,12 +1,14 @@
-"""P1.7 "Pack Project" — the portable-bundle contract and dry-run manifest.
+"""P1.7 "Pack Project" — the portable-bundle contract, dry-run manifest,
+and (PR 2) verified staging copy.
 
 Pure library (no fastapi/pydantic/starlette/``quantized.routes`` imports —
 enforced by ``tests/test_repo_integrity.py``'s ``PURE_LAYERS`` guard). See
-``manifest.py``'s module docstring for the security/trust boundary and
-``layout.py``'s for the bundle-directory contract this PR defines. Nothing
-in this package copies a file or reads file content; PR 2/3/4 of the "Pack
-Project" stack (staged verified copy, atomic publish + open-time
-resolution, and the pywebview bridge method) build on it.
+``manifest.py``'s module docstring for the security/trust boundary,
+``layout.py``'s for the bundle-directory contract, and ``staging.py``'s
+for the staged-copy pipeline PR 2 adds. Nothing in this package publishes
+a bundle or reads a source's original directory tree; PR 3/4 of the "Pack
+Project" stack (atomic publish + open-time resolution, and the pywebview
+bridge method) build on it.
 """
 
 from __future__ import annotations
@@ -27,6 +29,16 @@ from .layout import (
 )
 from .manifest import build_dry_run_manifest, manifest_json
 from .naming import plan_bundle_names
+from .staging import (
+    STAGING_PREFIX,
+    StagedFile,
+    StageError,
+    StageProgress,
+    StageResult,
+    cleanup_staging_dir,
+    create_staging_dir,
+    stage_sources,
+)
 
 __all__ = [
     "BUNDLE_FORMAT",
@@ -44,4 +56,12 @@ __all__ = [
     "plan_bundle_names",
     "build_dry_run_manifest",
     "manifest_json",
+    "STAGING_PREFIX",
+    "StagedFile",
+    "StageError",
+    "StageProgress",
+    "StageResult",
+    "create_staging_dir",
+    "cleanup_staging_dir",
+    "stage_sources",
 ]
