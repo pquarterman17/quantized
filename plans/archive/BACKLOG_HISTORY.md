@@ -39,9 +39,12 @@ changed:
    sleep) with no performance number to report.
 2. **`MAIN_PLAN.md` gets a new `## Completed` entry** for the whole
    2026-09-06 pass, naming the follow-ups NOT shipped this pass:
-   `io/import_preview.py::guess_settings` eager tokenization; the slow
-   model-scan candidates (Poly4, bi-exponential, Bloch — the same per-point
-   `scipy` loop class `#297` fixed for Debye, not yet applied to these); the
+   `io/import_preview.py::guess_settings` eager tokenization; a
+   separately profiled model-scan/optimizer follow-up (Poly4, bi-exponential,
+   and Bloch became the dominant scan cost only after `#297` sped Debye up;
+   their evaluators are already vectorized NumPy, and `#297` attributes the
+   time to optimizer behaviour and poor starting points, not a per-point
+   loop — improve starts/bounds/selection only with measurements); the
    still-eager `scipy.stats` import at startup (kept eager deliberately —
    the always-on statistics routes already import it, so deferring it here
    would only move the cost to first request); a thread-based job queue for

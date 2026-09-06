@@ -742,9 +742,14 @@ in git history @ `e4f6590`.)*
   speedup (forces the race via an `Event` instead of sizing it by wall
   clock).
   - **Deferred follow-ups booked, not shipped this pass:** eager
-    tokenization in `io/import_preview.py::guess_settings`; the slow
-    model-scan candidates (Poly4, bi-exponential, Bloch — same per-point
-    `scipy` loop class `#297` fixed for Debye, not yet applied to these);
+    tokenization in `io/import_preview.py::guess_settings`; a
+    separately profiled model-scan/optimizer follow-up — Poly4,
+    bi-exponential, and Bloch became the dominant scan cost only after
+    `#297` sped Debye up; their evaluators are already vectorized NumPy
+    expressions, and `#297` attributes the time to optimizer behaviour and
+    poor starting points, NOT to any per-point loop (there is none to
+    remove) — so: identify the slow candidates and improve starts/bounds/
+    selection only with measurements in hand;
     the still-eager `scipy.stats` import at startup (kept eager in `#300`
     because the always-on statistics routes already need it — deferring it
     would only move the cost to first request, not remove it, so a real fix

@@ -447,9 +447,10 @@ transitions blocked on P1.1.
 - [x] ~~**Import-path efficiency, continued: bulk numeric parse**~~ SHIPPED
   2026-09-06 (`#298`): after the sniffer-read and layout-detection fixes
   above, the remaining cost was Python-level `line.split`/`zip` transpose/
-  per-column conversion; a prefix probe now routes a regular delimited file
-  straight to one `np.loadtxt` call, falling back unchanged on any ragged
-  row, text/NA cell, or datetime column. 1M×7 CSV `import_auto`
+  per-column conversion; a start/middle/end sample of the data block now
+  gates one `np.loadtxt` call over the whole block, and that full parse is
+  what validates it — any failure or shape mismatch falls back unchanged
+  (ragged row, text/NA cell, datetime column). 1M×7 CSV `import_auto`
   10.25→1.88 s wall, 989→546 MB peak; 100k rows 0.56→0.16 s. Bit-identical
   to the old path on every fixture plus targeted ragged/text/NA/datetime
   cases.
