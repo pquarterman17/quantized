@@ -27,6 +27,7 @@ import pytest
 
 from quantized.desktop_project_file import declared_source_paths_of, extract_declared_source_paths
 from quantized.desktop_source_probe import probe_source_path
+from quantized.portable.manifest import build_dry_run_manifest
 from quantized.portable.pack import pack_project
 from quantized.portable.project_rewrite import resolve_bundle_source
 from quantized.portable.publish import validate_bundle
@@ -327,6 +328,76 @@ def test_pack_project_refuses_an_existing_destination_before_staging_anything(
     assert result.errors[0]["code"] == "destination_exists"
     # nothing at all appeared beside the pre-existing (empty) destination
     assert list(_bundle_parent(tmp_path).iterdir()) == [destination_dir]
+
+
+# ── an approved manifest executes verbatim (PR #308 review) ──────────────
+
+
+def test_pack_project_with_an_explicit_manifest_never_rebuilds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PR #308 review: when a caller supplies an already-approved dry-run
+    ``manifest=``, ``pack_project`` must execute it VERBATIM and never call
+    ``build_dry_run_manifest`` again -- pinned here by making that function
+    raise if it is ever called at all once the explicit manifest is
+    supplied. The bundle produced this way is identical (same rewritten
+    payload content, same packed checksum/size/bundle path) to the bundle
+    the ordinary rebuild path produces for the same inputs when nothing
+    changed in between."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"pack-me")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+
+    approved_manifest = build_dry_run_manifest(payload, "proj", _probe)
+    assert approved_manifest["summary"]["packable"] == 1
+
+    rebuilt_destination = str(_bundle_parent(tmp_path) / "rebuilt")
+    rebuilt = pack_project(payload, "proj", rebuilt_destination, probe=_probe, packed_at=_PACKED_AT)
+    assert rebuilt.ok is True, rebuilt.errors
+
+    def _must_not_be_called(*_args: Any, **_kw: Any) -> Any:
+        pytest.fail("build_dry_run_manifest was called despite an explicit manifest= being given")
+
+    monkeypatch.setattr("quantized.portable.pack.build_dry_run_manifest", _must_not_be_called)
+
+    explicit_destination = str(_bundle_parent(tmp_path) / "explicit")
+    explicit = pack_project(
+        payload,
+        "proj",
+        explicit_destination,
+        probe=_probe,
+        manifest=approved_manifest,
+        packed_at=_PACKED_AT,
+    )
+    assert explicit.ok is True, explicit.errors
+
+    rebuilt_check = validate_bundle(rebuilt_destination, verify_checksums=True)
+    explicit_check = validate_bundle(explicit_destination, verify_checksums=True)
+    assert rebuilt_check.complete, rebuilt_check.problems
+    assert explicit_check.complete, explicit_check.problems
+
+    rebuilt_project_file = rebuilt_check.manifest["project"]["project_file"]  # type: ignore[index]
+    explicit_project_file = explicit_check.manifest["project"]["project_file"]  # type: ignore[index]
+    assert rebuilt_project_file == explicit_project_file
+    rebuilt_payload = json.loads(
+        Path(rebuilt_destination, rebuilt_project_file).read_text(encoding="utf-8")
+    )
+    explicit_payload = json.loads(
+        Path(explicit_destination, explicit_project_file).read_text(encoding="utf-8")
+    )
+    assert json.dumps(_strip_sources(rebuilt_payload), sort_keys=True) == json.dumps(
+        _strip_sources(explicit_payload), sort_keys=True
+    )
+    rebuilt_source = rebuilt_payload["datasets"][0]["source"]
+    explicit_source = explicit_payload["datasets"][0]["source"]
+    assert rebuilt_source["kind"] == explicit_source["kind"] == "bundle"
+    assert rebuilt_source["path"] == explicit_source["path"]
+    assert rebuilt_source["checksum"] == explicit_source["checksum"]
+    assert rebuilt_source["size"] == explicit_source["size"]
 
 
 # ── staging-directory creation failures (review finding #3) ──────────────

@@ -1793,13 +1793,22 @@ below — the packer's own implementation work starts fresh here:
     a `finally` on EVERY outcome — success, failure, or cancellation);
     `pack_status`/`pack_cancel`/`pack_reset` (pure reads/mutations of one
     in-memory job record behind a single `threading.Lock`, no filesystem,
-    no consent). `pack_start` passes the SAME `_eligible` predicate as
-    `pack_project`'s own `consented=` (a deliberate strengthening beyond
-    the literal spec sketch): consent is process-global mutable state that
-    can move between preview and start, so re-deriving it is what
-    guarantees the real pack can never copy more than the preview ever
-    showed, never silently trusting "whatever was eligible a moment ago
-    still is." Progress's `"publishing"` stage is INFERRED (the last
+    no consent). `pack_start` passes the STORED preview's own manifest to
+    `pack_project` VERBATIM (`manifest=`, PR 4 review round 2's fix — see
+    the bug note below): `pack_project` never rebuilds a manifest from
+    current disk/consent state when one is supplied, so the operation
+    executes exactly the snapshot the user reviewed and approved, and
+    `portable.staging.stage_sources`'s own re-probe (unchanged) enforces it
+    — a source not `packable` in the approved manifest is never staged even
+    if it exists by start time, and a source whose bytes changed fails
+    closed with `changed_since_preview` against the manifest's PREVIEW-TIME
+    checksum. Separately, `_grant_eligible_packable_sources` still
+    re-derives `_eligible` at grant time (unchanged) so a source that lost
+    eligibility between preview and start is never handed a NEW, durable
+    read-consent grant — it is still packed if unchanged, since nothing new
+    is disclosed beyond what the approved preview already showed; only the
+    grant footprint is scoped this way. Progress's `"publishing"` stage is
+    INFERRED (the last
     source's `"verifying"` tick, or immediately with nothing to stage) —
     `pack_project` itself never emits a tick for the
     rewrite/finalize/write/publish steps that follow the staged copy in
@@ -1862,6 +1871,29 @@ below — the packer's own implementation work starts fresh here:
     slower module graph load widened the timing window) rather than by
     inspection — see `docs/testing.md`'s evidence standard. Fixed by the
     `contentFingerprint`/resend-the-original-string design above.
+  - **A blocking review finding on PR #308, fixed the same slice:**
+    `pack_start` validated the token and the workspace JSON, but the
+    worker called `pack.pack_project(payload, ...)` with no `manifest=`,
+    which REBUILT the manifest from CURRENT filesystem/consent state and
+    never compared it against the stored, user-approved preview manifest —
+    (1) a source `missing` (blocked) at preview time that appeared on disk
+    before start became packable and was copied, though the approved
+    preview excluded it; (2) a source whose content changed between
+    preview and start was staged against its NEW checksum (the rebuilt
+    manifest recorded whatever the file looked like right now), so the
+    approved snapshot was never actually enforced despite `stage_sources`'s
+    own `changed_since_preview` re-probe already existing — it was just
+    being compared against the wrong values. Fixed by giving
+    `pack_project` a `manifest: Mapping[str, Any] | None = None` keyword
+    that, when supplied, is used VERBATIM (no `build_dry_run_manifest`
+    call, rejecting anything that isn't itself a valid dry-run manifest as
+    `invalid_manifest`), and having `pack_start` pass
+    `self._pack_preview["manifest"]`. `_grant_eligible_packable_sources`
+    (the prior review round's finding #1 fix) is unchanged — it still
+    re-derives eligibility at GRANT time so a source that lost eligibility
+    never gets a fresh read-consent grant — but it no longer also gates
+    whether the row is staged, since that is now the approved manifest's
+    call alone.
 - **PR 5 (planned, not shipped):** adversarial audit of the full stack,
   in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
 
