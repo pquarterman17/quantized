@@ -27,7 +27,7 @@ from quantized.desktop_consent import (
     write_dir_grant_count,
 )
 from quantized.portable.copy_stream import StageProgress
-from quantized.portable.pack import PackResult
+from quantized.portable.pack import PackResult, pack_project
 from quantized.portable.publish import validate_bundle
 
 
@@ -403,17 +403,16 @@ def test_real_pack_completes_and_revokes_its_own_grants(tmp_path: Path) -> None:
     assert status["originals_modified"] is False
 
 
-def test_a_source_that_loses_eligibility_between_preview_and_start_is_not_granted_or_packed(
+def test_a_source_that_loses_eligibility_after_preview_refuses_to_start(
     tmp_path: Path,
 ) -> None:
-    """Review finding #1: the STORED preview's manifest still marks a
-    source ``packable`` even after the declared-source set that made it
-    eligible is wholesale-replaced (a project reopen — the same moment
-    `set_declared_sources` always wins). `pack_start` must re-derive
-    eligibility at GRANT time, not trust that stale flag: the source must
-    never be granted read consent, and the resulting bundle must omit it —
-    never widening "the manifest grants nothing" into "whatever was
-    eligible a moment ago still is"."""
+    """`pack_start` executes the STORED preview's manifest verbatim (PR
+    #308 round-2 review), but the approved manifest is a plan, not a read
+    grant: if a `packable` row is no longer eligible when `pack_start`
+    runs (here the declared-source set is wholesale-replaced, as a project
+    reopen does), the call fails closed with `consent_changed` — nothing is
+    granted, staged, or copied, and the caller must preview again (which
+    would now show the row as blocked)."""
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
     content, files = _declare_and_content(tmp_path, "a.csv")
@@ -422,30 +421,137 @@ def test_a_source_that_loses_eligibility_between_preview_and_start_is_not_grante
     assert preview["manifest"]["summary"]["packable"] == 1
     resolved = os.path.realpath(str(files[0]))
 
-    # The declared set is wholesale-replaced -- e.g. a different project
-    # opened in between -- so `files[0]` is no longer eligible, even though
-    # `preview["manifest"]` (built before the replace) still says packable.
     set_declared_sources([])
+
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is False
+    assert out["error"]["code"] == "consent_changed"
+    assert str(tmp_path) not in out["error"]["message"]
+    assert api.pack_status()["phase"] == "idle"
+
+    # No grant was minted, and nothing reached the destination.
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+    assert not os.path.lexists(preview["destination"]["bundle_dir"])
+    assert [p for p in os.listdir(destination_parent) if p.startswith(".qz-pack-")] == []
+
+
+def test_a_source_missing_at_preview_that_appears_before_start_is_never_packed(
+    tmp_path: Path,
+) -> None:
+    """PR #308 review: a source that was ``missing`` (blocked, not
+    ``packable``) at preview time must never become packable just because
+    it exists on disk by the time ``pack_start`` runs — the approved
+    manifest already decided it, and ``pack_start`` executes that manifest
+    verbatim rather than a manifest rebuilt from current filesystem
+    state."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    target = tmp_path / "later.csv"
+    set_declared_sources([str(target)])  # eligible, but the file doesn't exist yet
+    content = _workspace_json(str(target))
+
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["ok"] is True
+    assert preview["manifest"]["summary"]["packable"] == 0
+    assert preview["blockers"][0]["status"] == "missing"
+
+    # The source appears on disk AFTER the approved preview, before start.
+    target.write_text("T,M\n1,10\n", encoding="utf-8")
 
     out = api.pack_start(preview["token"], content)
     assert out["ok"] is True
     status = _wait_for_terminal(api)
     assert status["phase"] == "completed"
 
-    # Never granted -- consent count is exactly what it was before preview.
-    assert not is_consented(resolved)
-    assert consent_count() == baseline_consent
-
-    # Never packed either: the bridge's own `pack_project` call passes the
-    # SAME `_eligible` predicate as `consented=`, so its own manifest
-    # rebuild marks the row `not_consented` and never stages it.
     bundle_dir = status["result"]["bundle_dir"]
     check = validate_bundle(bundle_dir, verify_checksums=True)
     assert check.complete, check.problems
-    assert not os.path.exists(os.path.join(bundle_dir, "sources", "a.csv"))
+    assert not os.path.exists(os.path.join(bundle_dir, "sources", "later.csv"))
     row = check.manifest["sources"][0]
-    assert row["status"] == "not_consented"
     assert row["packed"] is None
+
+    # No read-consent grant was minted for a source the approved preview
+    # never marked packable.
+    assert not is_consented(os.path.realpath(str(target)))
+
+
+def test_a_source_rewritten_between_preview_and_start_fails_closed(
+    tmp_path: Path,
+) -> None:
+    """PR #308 review: a source whose bytes changed after the approved
+    preview must be caught against its PREVIEW-TIME checksum — not silently
+    re-approved by comparing it only against a freshly rebuilt manifest of
+    itself. Nothing is published, staging is cleaned up, and no read-
+    consent grant survives."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    baseline_consent = consent_count()
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["manifest"]["summary"]["packable"] == 1
+    resolved = os.path.realpath(str(files[0]))
+
+    # Rewrite the source's bytes after the (approved) preview -- same length
+    # is the stricter case, since a size/mtime-only re-probe could otherwise
+    # miss it; the manifest's own recorded checksum still must catch it.
+    original = files[0].read_bytes()
+    rewritten = bytes((b + 1) % 256 for b in original)
+    assert len(rewritten) == len(original)
+    files[0].write_bytes(rewritten)
+
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+    status = _wait_for_terminal(api)
+
+    assert status["phase"] == "failed"
+    assert len(status["errors"]) == 1
+    assert status["errors"][0]["code"] == "changed_since_preview"
+    assert status["originals_modified"] is False
+    bundle_dir = os.path.join(destination_parent, "myproj")
+    assert not os.path.exists(bundle_dir)
+    assert status["cleanup_ok"] is True
+
+    # No read-consent grant survives a failed run.
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+
+
+def test_pack_project_rejects_a_manifest_that_is_not_a_dry_run_manifest(tmp_path: Path) -> None:
+    """PR #308 review: ``pack_project(manifest=...)`` must refuse anything
+    that is not itself a valid dry-run manifest (right ``format``, a
+    supported ``manifest_version``, ``dry_run`` is ``True``) rather than
+    execute it -- e.g. an already-published (``dry_run: False``) manifest
+    replayed as if it were a fresh plan."""
+    src = tmp_path / "a.csv"
+    src.write_text("T,M\n1,10\n", encoding="utf-8")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "d0", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(tmp_path / "bundle")
+
+    def _probe(path: str) -> dict[str, Any]:
+        return {"state": "ok", "size": 1, "mtime": 1.0, "checksum": "sha256:x"}
+
+    for bad_manifest in (
+        {},
+        {"format": "quantized-portable-bundle", "manifest_version": 1, "dry_run": False},
+        {"format": "not-a-bundle", "manifest_version": 1, "dry_run": True},
+        {"format": "quantized-portable-bundle", "manifest_version": 999, "dry_run": True},
+    ):
+        result = pack_project(
+            payload,
+            "proj",
+            destination,
+            probe=_probe,
+            manifest=bad_manifest,
+            packed_at="2026-09-06T00:00:00Z",
+        )
+        assert result.ok is False
+        assert result.errors[0]["code"] == "invalid_manifest"
+        assert not os.path.exists(destination)
 
 
 def test_real_pack_with_nothing_packable_still_completes(tmp_path: Path) -> None:
@@ -898,9 +1004,7 @@ def test_pack_status_infers_publishing_on_the_last_files_verifying_tick(tmp_path
 # -- pack_reset -------------------------------------------------------------
 
 
-def test_pack_reset_rejected_while_packing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_pack_reset_rejected_while_packing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
     content, _ = _declare_and_content(tmp_path, "a.csv")

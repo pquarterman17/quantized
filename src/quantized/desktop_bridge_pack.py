@@ -40,24 +40,52 @@ caller-supplied path list.
   real read consent for the eligible-but-not-yet-granted sources it is
   about to copy, remembers exactly which paths it minted, then spawns the
   copy/publish pipeline (``pack.pack_project``, PR 3's pure orchestration)
-  on a daemon thread. Every outcome — success, failure, cancellation — the
-  thread's own ``finally`` revokes EXACTLY those minted grants
-  (``revoke_paths``) and clears the write-directory grant, so a pack
-  operation's read/write footprint never outlives it.
+  on a daemon thread — passing it the STORED preview's own manifest
+  verbatim (``manifest=``), never letting it rebuild one from whatever the
+  filesystem or consent state look like right now (PR 4 review round 2's
+  finding: a rebuild silently re-plans against different data even when the
+  token/content check above passes — see the next section). Every
+  outcome — success, failure, cancellation — the thread's own ``finally``
+  revokes EXACTLY those minted grants (``revoke_paths``) and clears the
+  write-directory grant, so a pack operation's read/write footprint never
+  outlives it.
 - ``pack_status``/``pack_cancel``/``pack_reset`` touch no filesystem and
   mint/spend no consent — pure reads/mutations of this instance's own
   in-memory job record, one ``threading.Lock`` guarding every access.
 
-**Why ``pack_start`` re-derives ``_eligible`` rather than trusting the
-preview's ``packable`` flags verbatim.** Content is verified
-byte-identical to preview (the ``sha256`` check), but consent is
-process-global mutable state that can move between the two calls — a
-declared-source set can be replaced by a project reopen, a directory grant
-revoked by a relink panel closing. Passing the SAME predicate as
-``consented=`` to ``pack_project`` (which rebuilds its own manifest from
-the payload) means the real pack can never copy more than preview showed —
-never widening "the manifest grants nothing" to "whatever was eligible a
-moment ago still is".
+**The approved manifest is what executes.** ``pack_start`` validates the
+token and the workspace JSON, but a copy/publish pipeline that then
+recomputed its own plan from current disk/consent state would never
+actually enforce what the user reviewed and approved in ``pack_preview``:
+(1) a source that was ``missing`` (blocked) at preview time and appears on
+disk before ``pack_start`` runs must stay unpacked — a rebuilt manifest
+would happily mark it ``packable`` now; (2) a source whose bytes changed
+between preview and start must fail closed against its PREVIEW-TIME
+checksum, not sail through by being re-verified only against itself. So
+the token binds three things together — the workspace ``content`` (hash-
+checked above), the approved ``manifest`` (passed to ``pack.pack_project``
+verbatim, never rebuilt), and the ``destination`` — and staging enforces
+the approved snapshot: :func:`quantized.portable.staging.stage_sources`
+re-probes every ``packable`` row against ITS RECORDED size/mtime/checksum
+(unchanged behaviour, now finally exercised against the right values) and
+fails ``changed_since_preview`` on any drift, while a row the approved
+manifest never marked ``packable`` is never staged regardless of what the
+filesystem looks like at start time.
+
+**Consent is re-checked at start, and a lost grant fails closed.** Content
+is verified byte-identical to preview (the ``sha256`` check on
+``content``), but consent is process-global mutable state that can move
+between preview and start — a declared-source set can be replaced by a
+project reopen, a directory grant revoked by a relink panel closing. The
+approved manifest names WHAT may be copied; it is not itself a read grant.
+So ``pack_start`` re-checks every ``packable`` row against ``_eligible``
+before minting anything or spawning the worker: if even one row is no
+longer eligible, the call is refused with ``consent_changed`` (preview
+again — the new preview will show the row as blocked) and nothing is
+granted, staged, or copied. Only when every approved row is still
+eligible does ``_grant_eligible_packable_sources`` mint the missing read
+grants — never widening the grant registry to a path that is not eligible
+right now.
 
 **Progress/stage modeling.** ``pack_project`` only ever calls its progress
 callback during PR 2's staged copy (``"copying"``/``"verifying"`` ticks) —
@@ -93,6 +121,24 @@ from quantized.portable.manifest import Consented, Probe, build_dry_run_manifest
 from quantized.portable.pack import PackResult, pack_project
 
 __all__ = ["DesktopPackBridge"]
+
+
+def _ineligible_packable_sources(manifest: Mapping[str, Any]) -> list[str]:
+    """``original_path`` of every ``packable`` row in the approved manifest
+    that is NOT eligible under the consent state in force right now. Empty
+    means every approved row may still be read; anything else means
+    ``pack_start`` must refuse rather than copy from a path whose consent
+    lapsed after the user approved the preview."""
+    sources_raw = manifest.get("sources")
+    sources = sources_raw if isinstance(sources_raw, list) else []
+    lost: list[str] = []
+    for row in sources:
+        if not isinstance(row, dict) or not row.get("packable"):
+            continue
+        original_path = row.get("original_path")
+        if isinstance(original_path, str) and not _state.eligible(original_path):
+            lost.append(original_path)
+    return lost
 
 
 class DesktopPackBridge:
@@ -249,6 +295,11 @@ class DesktopPackBridge:
             project_name = preview["project_name"]
             manifest = preview["manifest"]
 
+            if _ineligible_packable_sources(manifest):
+                return _state.err(
+                    "consent_changed",
+                    "a source lost read consent since preview — preview again",
+                )
             newly_granted = self._grant_eligible_packable_sources(manifest)
 
             cancel_event = threading.Event()
@@ -271,7 +322,7 @@ class DesktopPackBridge:
                     project_name,
                     bundle_dir,
                     probe=_state.probe_no_checksum,
-                    consented=_state.eligible,
+                    manifest=manifest,
                     progress=_progress,
                     should_cancel=cancel_event.is_set,
                     packed_at=datetime.now(UTC).isoformat(),
@@ -336,17 +387,13 @@ class DesktopPackBridge:
 
         Review finding #1: a row's ``packable`` flag comes from the STORED
         preview's manifest, computed against whatever was ``_eligible`` at
-        PREVIEW time — but consent is process-global mutable state, and it
-        can move between preview and this call (a project reopen replaces
-        the declared-source set, a relink panel closing revokes a directory
-        grant). Trusting that stale flag verbatim would mint a fresh read
-        grant for a path that is no longer eligible NOW. So every candidate
-        is re-checked against ``_eligible`` (the same predicate this call's
-        own ``pack_project`` invocation passes as ``consented=``) right
-        here, at grant time — a source that lost eligibility is silently
-        skipped, never granted, and (via that same ``consented=``) never
-        copied either. Returns exactly what was granted, for
-        ``pack_start``'s ``finally``/failure paths to revoke
+        PREVIEW time — but consent can move between preview and this call.
+        ``pack_start`` already refuses (``consent_changed``) when any
+        packable row is no longer eligible, so by the time this runs every
+        candidate should pass ``_eligible``; the check is repeated here as
+        defence in depth so this function can never mint a grant for an
+        ineligible path whatever its caller did. Returns exactly what was
+        granted, for ``pack_start``'s ``finally``/failure paths to revoke
         unconditionally."""
         sources_raw = manifest.get("sources")
         sources = sources_raw if isinstance(sources_raw, list) else []

@@ -18,6 +18,7 @@ from typing import Any
 
 from .copy_stream import safe_os_error
 from .copying import ProgressCallback, ShouldCancel
+from .layout import BUNDLE_FORMAT, SUPPORTED_MANIFEST_VERSIONS
 from .manifest import Consented, Probe, build_dry_run_manifest
 from .project_rewrite import rewrite_payload_for_bundle
 from .publish import PublishResult, finalize_manifest, publish_bundle, write_bundle_files
@@ -51,6 +52,23 @@ def _error(code: str, message: str) -> dict[str, Any]:
     return {"code": code, "message": message}
 
 
+def _is_valid_dry_run_manifest(manifest: Mapping[str, Any]) -> bool:
+    """Is ``manifest`` shaped like something :func:`build_dry_run_manifest`
+    itself could have produced -- the only three top-level fields cheap
+    enough, and load-bearing enough, to check before trusting a
+    caller-supplied manifest verbatim (see :func:`pack_project`'s own
+    ``manifest=`` doc): the right ``format``, a manifest version this
+    codebase still supports, and ``dry_run: True`` (a manifest ``pack_start``
+    could only otherwise have gotten from :func:`quantized.portable.publish
+    .finalize_manifest`, i.e. already packed once, must never be replayed as
+    a fresh plan)."""
+    return (
+        manifest.get("format") == BUNDLE_FORMAT
+        and manifest.get("manifest_version") in SUPPORTED_MANIFEST_VERSIONS
+        and manifest.get("dry_run") is True
+    )
+
+
 def pack_project(
     payload: Mapping[str, Any],
     project_name: str,
@@ -58,6 +76,7 @@ def pack_project(
     *,
     probe: Probe,
     consented: Consented | None = None,
+    manifest: Mapping[str, Any] | None = None,
     progress: ProgressCallback | None = None,
     should_cancel: ShouldCancel | None = None,
     packed_at: str,
@@ -78,15 +97,50 @@ def pack_project(
     an unvalidatable rewritten payload) escape uncaught; only a genuine
     programming bug would.
 
+    ``manifest``, when supplied, is used VERBATIM as the dry-run plan this
+    call executes — ``build_dry_run_manifest`` is never called, ``probe``/
+    ``consented`` play no part in deciding what is ``packable``, and
+    ``project_name`` is ignored for planning purposes (the manifest already
+    carries its own ``project.name``/``project_file``). This is the fix for
+    a "PR 4" review finding: a caller that already computed and had a user
+    APPROVE a dry-run manifest (a preview) must execute exactly that
+    snapshot, never a fresh one rebuilt from whatever the filesystem or
+    consent state look like right now — see ``desktop_bridge_pack.py``'s
+    module doc for the full security ruling this closes. ``probe`` is still
+    required and still used: :func:`quantized.portable.staging.stage_sources`
+    re-probes every ``packable`` row against the SUPPLIED manifest's own
+    recorded size/mtime/checksum before copying a single byte, so a source
+    that changed after the manifest was approved still fails closed with
+    ``changed_since_preview``, and a row the approved manifest never marked
+    ``packable`` (e.g. it was ``missing`` at preview time) is never staged
+    even if the file is present now. A ``manifest`` that is not itself a
+    dry-run manifest (wrong ``format``, an unsupported ``manifest_version``,
+    or ``dry_run`` is not ``True`` — e.g. an already-``finalize_manifest``d
+    one) is rejected with a structured ``invalid_manifest`` error rather
+    than executed.
+
     ``packed_at`` is threaded straight through to
     :func:`quantized.portable.publish.finalize_manifest` — the one
     non-deterministic field, supplied by the caller so this whole pipeline
     stays unit-testable end to end.
     """
-    try:
-        dry_run_manifest = build_dry_run_manifest(payload, project_name, probe, consented)
-    except ValueError as exc:
-        return PackResult(False, False, None, None, [_error("invalid_project_name", str(exc))])
+    if manifest is not None:
+        if not _is_valid_dry_run_manifest(manifest):
+            return PackResult(
+                False,
+                False,
+                None,
+                None,
+                [_error("invalid_manifest", "manifest is not a valid dry-run manifest")],
+            )
+        dry_run_manifest = dict(manifest)
+    else:
+        try:
+            dry_run_manifest = build_dry_run_manifest(payload, project_name, probe, consented)
+        except ValueError as exc:
+            return PackResult(
+                False, False, None, None, [_error("invalid_project_name", str(exc))]
+            )
 
     if os.path.lexists(destination_dir):
         # Checked BEFORE staging anything, at zero cost: `publish_bundle`'s
