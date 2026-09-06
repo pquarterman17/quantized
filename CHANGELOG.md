@@ -6,6 +6,9 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Pack Project (in progress, backend only): a dry-run manifest for the
+  upcoming portable-bundle packer now exists in the backend. Nothing is
+  copied yet — there is no "Pack Project" button and no bridge method.
 - Relink Sources now detects when two datasets with different recorded
   source paths would be pointed at the same file (for example `/old/a.csv`
   and `/OLD/a.csv` after a folder move) and asks you to choose which

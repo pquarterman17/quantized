@@ -3,7 +3,19 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later): **P1.7 slice 2 — collision-safe relinking**
+**Updated:** 2026-09-06 (later still still): **P1.7 Pack Project PR 1
+review fix** — an eleventh defect found on PR #305 review: source dedup
+was by folded `path_key`, which silently merged two DIFFERENT files on a
+case-sensitive filesystem into one shared source. Fixed by grouping on the
+exact `original_path` string and collapsing only on proven filesystem
+identity (`(dev, ino)`, new fields on `desktop_source_probe
+.probe_source_path`); dedup/collapse logic split into its own
+`portable/grouping.py`. See the P1.7 Pack Project PR 1 subsection below
+for the corrected field-level description. Earlier: **P1.7 Pack Project
+PR 1** —
+bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
+copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
+2 — collision-safe relinking**
 shipped (the P3 residual booked on slice 1); the Pack Project stack
 continues with the portable-bundle packer. Earlier the same day: **P1.1's
 two uncontracted boxes closed** (working-
@@ -1372,6 +1384,170 @@ CLOSED 2026-09-06 by slice 2 (the collision-safe relinking box above),
 the first PR of the "P1.7 Pack Project" stack; the packer's own
 name-collision handling (L0.34's precedent) will reuse `pathKey`/
 `findCandidateCollisions`.
+
+**Pack Project stack (2026-09-06 →), backend numbering.** Slice 2 above
+(the frontend collision-safe relink fix) is the precedent the packer's own
+collision handling reuses, not itself one of the numbered backend PRs
+below — the packer's own implementation work starts fresh here:
+
+- **PR 1 (this branch, PR # pending) — bundle contract + dry-run
+  manifest, backend-only, copies nothing:** new pure package
+  `quantized.portable` (added to `tests/test_repo_integrity.py`'s
+  `PURE_LAYERS`).
+  - `portable/layout.py` — the bundle DIRECTORY layout
+    (`<bundle dir>/<project stem>.dwk` + `quantized-bundle.json` +
+    `sources/<bundle-relative name>`, bundle-relative paths always
+    forward-slash and rooted at `sources/`), `basename_of`/`path_key`
+    (mirroring `lib/importEntry.ts`'s `baseName` and `lib/relink.ts`'s
+    `pathKey`, the latter plus Unicode NFC normalization for a macOS
+    NFD-reporting volume), `sanitize_component` (cross-platform-safe
+    filenames: illegal/control characters, Windows reserved device names,
+    trailing dot/space, a `MAX_COMPONENT_BYTES=200` truncate+hash for an
+    over-long name — every change reports why), and the one containment
+    rule every future consumer must apply before turning a manifest path
+    into a real one: `is_bundle_relative` + `join_bundle_path` (raises on
+    `..`, an absolute path, a drive letter, a UNC prefix, a backslash, an
+    empty/NUL-bearing segment, or anything outside `sources/`).
+  - `portable/manifest.py`'s `build_dry_run_manifest(payload, project_name,
+    probe, consented=None)` — takes an already-parsed workspace payload
+    (`desktop_project_file.parse_workspace_payload`) and a probe callback
+    shaped like `desktop_source_probe.probe_source_path`; reads no file
+    itself. **Corrected 2026-09-06 (PR #305 review):** the original text
+    here said sources were "deduped by `path_key(original_path)`" — that
+    was the bug. Sources are deduped by the EXACT `original_path` STRING
+    (several datasets naming the byte-identical path share ONE row, each
+    with its own recorded provenance + a `sourceChangeVerdict`-equivalent
+    verdict, ported field-for-field from `lib/relink.ts`); every other
+    distinct spelling — including one that only differs by case, Unicode
+    normalization form, or separator style — gets its OWN row unless later
+    PROVEN to be the same physical file. `probe`/`consented` are invoked
+    exactly once per distinct exact spelling, never once per folded
+    `path_key`, and never at all for a path `consented` rejects. Two
+    spellings' rows COLLAPSE into one only when both probe `ok` and report
+    the identical, non-zero `(dev, ino)` filesystem-identity pair (new
+    fields on `desktop_source_probe.probe_source_path`'s `ok` result) — a
+    folded-key match alone is never sufficient (a case-sensitive
+    filesystem's `/data/A.csv` and `/data/a.csv` are two different files;
+    the prior fold-based dedup would have silently mapped both onto one
+    packed copy). The actual dedup/collapse logic lives in
+    `portable/grouping.py` (split out to keep `manifest.py` under the
+    500-line ceiling). Source rows are sorted by
+    `(path_key(original_path), original_path)` — the exact-path tiebreak
+    is now load-bearing, since two rows can share a folded `path_key`
+    without having collapsed — so the same payload always yields
+    byte-identical `manifest_json` (2-space, sorted-key,
+    `ensure_ascii=False` JSON) — including a merged row's `original_path`,
+    which is always the CANONICAL spelling among however many
+    case/Unicode-normalization-form variants were PROVEN to be one file
+    (the lexicographically-least by `(NFC-normalized string, raw
+    string)`, never whichever spelling happened to appear first in
+    payload order), with every other distinct spelling in that merged
+    group recorded in `original_path_variants` (empty list when there was
+    only one spelling, or when a same-`path_key` group never collapsed).
+    **Downstream note for the future "PR 3" project-rewrite work:**
+    anything that maps a dataset back onto a manifest row (e.g. a future
+    `project_rewrite.rewrite_payload_for_bundle`) MUST match by exact
+    `original_path` or membership in `original_path_variants` — never by
+    folded `path_key` — for the identical reason.
+    Destination-name collisions get L0.34's visible-suffix treatment
+    (`name.ext`, `name (2).ext`, `name (3).ext`, ... — never a silent
+    overwrite, and never able to duplicate another group's own plain name:
+    `portable/naming.py`'s `plan_bundle_names` reserves every group's
+    keeper name in one pass before any suffix is generated, split into its
+    own module to keep `manifest.py` under the 500-line ceiling), each
+    renamed row carrying `collision_group` + `renamed_from` and an entry
+    in the manifest's own `warnings` list. Five distinct, non-packable
+    source states (`missing`/`offline`/`permission_denied`/`invalid`/
+    `not_consented`) plus `ok`; `changed` (provenance mismatch) and
+    `unverified` (verdict `unknown`) are warnings, not blockers — still
+    `packable`, per this PR's own scoping. `project_name` is itself
+    sanitized and validated (`ValueError` for a path-traversal shape — a
+    separator or a literal `..` — or a name that sanitizes to nothing);
+    the manifest's `project` object carries the sanitized `name`, the
+    derived `project_file` (a trailing `.dwk` is stripped before one is
+    appended, so `"x.dwk"` never becomes `"x.dwk.dwk"`), and
+    `renamed_from` (the original name, or `null` if sanitizing changed
+    nothing).
+  - **Security/trust boundary** (also the module's own docstring):
+    `consented` is checked BEFORE `probe` is ever called for a path —
+    `probe` (which may do real I/O) never even runs for a source the
+    caller hasn't vouched for; reachability/size/mtime/checksum otherwise
+    come ONLY from `probe`, type-validated (a non-`str` checksum or
+    non-numeric size/mtime is treated as absent, never trusted or allowed
+    to crash the summary); the manifest reads no file content itself and
+    GRANTS NOTHING — a row's presence is never authorization to read or
+    copy anything; every bundle destination is built from a sanitized
+    BASENAME only, never from any part of the original directory tree, so
+    a bundle's own internal layout can never leak a source's original
+    location; `is_bundle_relative` (which also rejects a segment that is
+    well-formed as a bare path component but Windows-illegal on its own
+    merits — a colon, an illegal character, a reserved device name, a
+    trailing dot) + `join_bundle_path` are the only sanctioned
+    path-containment check for every future consumer (PR 2's copier, PR
+    3's opener); the builder itself asserts every planned `bundle_path` is
+    pairwise-unique before returning (`RuntimeError`, never a silent
+    duplicate).
+  - Frozen schema fixture: `tools/freeze_portable_manifest.py` builds one
+    synthetic payload covering a shared source, a plain and a case-variant
+    destination collision, a keeper-suffix collision (two `keep.csv`s plus
+    two pre-existing `keep (2).csv`s, proving the collision-safe planning
+    above), Windows/UNC/POSIX/`/Volumes` paths, missing/offline/
+    permission-denied sources, a Unicode name, a reserved name (plain and
+    multi-dot extension — `CON.tar.gz`), an over-long name, a no-source
+    dataset, and a malformed source — writes
+    `tests/fixtures/portable/manifest_v1.json`;
+    `tests/test_portable_manifest_fixture.py` byte-compares against it
+    forever (regenerate with `uv run python
+    tools/freeze_portable_manifest.py` on a deliberate behavior change).
+    **Extended 2026-09-06 (PR #305 review)** with the two cases the fix
+    itself exists to distinguish, same folder, differing only by case:
+    `/data/case/A.csv` vs `/data/case/a.csv` with DIFFERENT fake `(dev,
+    ino)` identities and checksums (two rows, visible suffix — the
+    regression for the defect) and `/data/same/Run1.csv` vs
+    `/data/same/run1.csv` with the SAME fake identity and checksum (one
+    row, `original_path_variants` populated — the legitimate collapse
+    case).
+  - **Review round (2026-09-06):** ten defects found and fixed, each with
+    a regression test — see the commit fixing this PR for the full list;
+    highlights: the keeper-suffix collision above (a silent-overwrite
+    hazard), `_looks_absolute` no longer trusts the host's own
+    `os.path.isabs` (checks `posixpath.isabs`/`ntpath.isabs` explicitly),
+    `sanitize_component`'s over-long truncation now truncates the WHOLE
+    name when the extension alone doesn't fit the budget, and its
+    reserved-device-name check now keys off the part before the FIRST dot
+    (Windows' own rule) rather than the last.
+  - **Follow-up review round (2026-09-06, PR #305 feedback):** an
+    eleventh defect — dedup was by folded `path_key`, not exact path
+    string, so two DIFFERENT files on a case-sensitive filesystem
+    (`/data/A.csv`/`/data/a.csv`) could be silently treated as one shared
+    source and mapped to a single packed copy. Fixed by grouping on the
+    exact `original_path` string and collapsing two groups into one row
+    only when both probe `ok` and report the identical, non-zero `(dev,
+    ino)` filesystem-identity pair — new fields on
+    `desktop_source_probe.probe_source_path`'s `ok` result — never on a
+    folded-key match alone. The dedup/collapse mechanism moved into its
+    own `portable/grouping.py` module (keeping `manifest.py` under the
+    500-line ceiling); see that module's docstring for the full rationale
+    and this section's corrected description above for the field-level
+    detail. Regression tests: two spellings with different `(dev, ino)`
+    never collapse even when their `path_key`s match (fake-probe and
+    real-filesystem-with-real-`probe_source_path` versions, in both
+    payload orders); two spellings with the same `(dev, ino)` do collapse
+    (fake-probe and a real-filesystem "two spellings resolve to one file"
+    version); a `(dev, ino)` of zero or absent ("unknown identity") never
+    collapses with anything.
+- **PR 2 (planned, not shipped):** staged, checksum-VERIFIED copy of every
+  packable source into the bundle's `sources/` directory (still no `.dwk`
+  write) — the first PR that touches a filesystem for real.
+- **PR 3 (planned, not shipped):** atomic bundle publish (the packed
+  `.dwk` alongside the verified `sources/` copy) and the "portable" mode's
+  open-time resolution.
+- **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
+  method a future "Pack Project" UI action calls) + the frontend contract
+  consuming PR 1-3's manifest/copy/publish primitives — no bridge method
+  exists yet.
+- **PR 5 (planned, not shipped):** adversarial audit of the full stack,
+  in the same spirit as P1.7 slice 1's P1-A/P1-B fix rounds above.
 
 ---
 
