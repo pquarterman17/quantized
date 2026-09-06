@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from quantized.io.import_filters import (
@@ -32,7 +32,7 @@ from quantized.io.import_preview import (
     preview_import,
 )
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._payload import datastruct_payload
+from quantized.routes._payload import DataStructResponse, datastruct_payload
 
 router = APIRouter(prefix="/api/import", tags=["import"])
 
@@ -74,14 +74,14 @@ class ParseRequest(BaseModel):
     settings: dict[str, Any]
 
 
-@router.post("/parse")
-def parse_route(req: ParseRequest) -> dict[str, Any]:
+@router.post("/parse", response_model=dict[str, Any], response_class=DataStructResponse)
+def parse_route(req: ParseRequest) -> Response:
     """Import the full text under confirmed settings into a DataStruct."""
     try:
         ds = parse_import(req.text, ImportSettings.from_dict(req.settings))
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return datastruct_payload(ds)
+    return DataStructResponse(datastruct_payload(ds))
 
 
 # ── Saved import filters (gap #40 persistence) ───────────────────────────────
@@ -126,8 +126,10 @@ class ImportWithFilterRequest(BaseModel):
     filter_name: str | None = None  # or use one specific saved filter by name
 
 
-@router.post("/filters/parse")
-def parse_with_filter_route(req: ImportWithFilterRequest) -> dict[str, Any]:
+@router.post(
+    "/filters/parse", response_model=dict[str, Any], response_class=DataStructResponse
+)
+def parse_with_filter_route(req: ImportWithFilterRequest) -> Response:
     """Import ``text`` under a saved filter — by name, or the best glob match
     for ``filename`` — so a returning file imports with zero dialogs."""
     if req.filter_name is not None:
@@ -145,4 +147,4 @@ def parse_with_filter_route(req: ImportWithFilterRequest) -> dict[str, Any]:
     else:
         raise HTTPException(status_code=422, detail="filename or filter_name is required")
     ds = call_calc(parse_import, req.text, filt.settings)
-    return datastruct_payload(ds)
+    return DataStructResponse(datastruct_payload(ds))

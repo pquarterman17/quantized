@@ -14,7 +14,7 @@ from quantized.calc.rsm_analyze import rsm_analyze, rsm_grids_from_datastruct
 from quantized.calc.sectorcut import chi_profile, sector_profile
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS, call_calc
-from quantized.routes._payload import datastruct_payload, to_jsonable
+from quantized.routes._payload import DataStructResponse, datastruct_payload, to_jsonable
 
 router = APIRouter(prefix="/api/rsm", tags=["rsm"])
 
@@ -81,8 +81,8 @@ class LineCutRequest(CachedDatasetRequest):
     width: float = Field(default=0.0, ge=0.0)
 
 
-@router.post("/linecut")
-def linecut(req: LineCutRequest, response: Response) -> dict[str, Any]:
+@router.post("/linecut", response_model=dict[str, Any], response_class=DataStructResponse)
+def linecut(req: LineCutRequest) -> Response:
     """H/V line cut -> a 1-D DataStruct (width>0 averages a swath)."""
     try:
         ds, handle = resolve_or_409(req)
@@ -91,8 +91,9 @@ def linecut(req: LineCutRequest, response: Response) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class CutSegmentRequest(CachedDatasetRequest):
@@ -105,16 +106,17 @@ class CutSegmentRequest(CachedDatasetRequest):
     space: str = "angular"
 
 
-@router.post("/cut-segment")
-def cut_segment_route(req: CutSegmentRequest, response: Response) -> dict[str, Any]:
+@router.post("/cut-segment", response_model=dict[str, Any], response_class=DataStructResponse)
+def cut_segment_route(req: CutSegmentRequest) -> Response:
     """Arbitrary-angle segment cut -> a distance-parametrized 1-D DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
         out = cut_segment(ds, p0=req.p0, p1=req.p1, n=req.n, width=req.width, space=req.space)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class ProjectionRequest(CachedDatasetRequest):
@@ -124,16 +126,17 @@ class ProjectionRequest(CachedDatasetRequest):
     space: str = "angular"
 
 
-@router.post("/projection")
-def projection_route(req: ProjectionRequest, response: Response) -> dict[str, Any]:
+@router.post("/projection", response_model=dict[str, Any], response_class=DataStructResponse)
+def projection_route(req: ProjectionRequest) -> Response:
     """Full-map integrated profile -> a 1-D DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
         out = projection(ds, axis=req.axis, space=req.space)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class _SectorParams(CachedDatasetRequest):
@@ -202,8 +205,8 @@ class SectorRequest(_SectorParams):
     n_bins: int = Field(default=100, ge=2)
 
 
-@router.post("/sector")
-def sector(req: SectorRequest, response: Response) -> dict[str, Any]:
+@router.post("/sector", response_model=dict[str, Any], response_class=DataStructResponse)
+def sector(req: SectorRequest) -> Response:
     """Radial (|Q|) profile within an azimuthal sector -> a 2-column DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
@@ -219,8 +222,9 @@ def sector(req: SectorRequest, response: Response) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class ChiProfileRequest(_SectorParams):
@@ -230,8 +234,8 @@ class ChiProfileRequest(_SectorParams):
     mode: str = "mean"
 
 
-@router.post("/chi-profile")
-def chi_profile_route(req: ChiProfileRequest, response: Response) -> dict[str, Any]:
+@router.post("/chi-profile", response_model=dict[str, Any], response_class=DataStructResponse)
+def chi_profile_route(req: ChiProfileRequest) -> Response:
     """Azimuthal ("chi") profile within a |Q| annulus -> a 2-column DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
@@ -247,8 +251,9 @@ def chi_profile_route(req: ChiProfileRequest, response: Response) -> dict[str, A
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class BoxCutRequest(CachedDatasetRequest):
@@ -266,8 +271,8 @@ class BoxCutRequest(CachedDatasetRequest):
     wrap: str | None = None
 
 
-@router.post("/box")
-def box(req: BoxCutRequest, response: Response) -> dict[str, Any]:
+@router.post("/box", response_model=dict[str, Any], response_class=DataStructResponse)
+def box(req: BoxCutRequest) -> Response:
     """Bounded box (or rotated-ruler) integration -> a 2-column DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
@@ -286,8 +291,9 @@ def box(req: BoxCutRequest, response: Response) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    response.headers["X-Dataset-Handle"] = handle
-    return datastruct_payload(out)
+    resp = DataStructResponse(datastruct_payload(out))
+    resp.headers["X-Dataset-Handle"] = handle
+    return resp
 
 
 class BoxStatsRequest(CachedDatasetRequest):

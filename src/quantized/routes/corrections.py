@@ -10,13 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from quantized.calc.corrections import apply_corrections
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
-from quantized.routes._payload import datastruct_payload
+from quantized.routes._payload import DataStructResponse, datastruct_payload
 
 router = APIRouter(prefix="/api/corrections", tags=["corrections"])
 
@@ -72,8 +72,8 @@ class CorrectionsRequest(BaseModel):
     bg_interp: str = "linear"
 
 
-@router.post("/apply")
-def apply(req: CorrectionsRequest) -> dict[str, Any]:
+@router.post("/apply", response_model=dict[str, Any], response_class=DataStructResponse)
+def apply(req: CorrectionsRequest) -> Response:
     """Apply the correction pipeline to a posted DataStruct."""
     try:
         ds = DataStruct.from_dict(req.dataset)
@@ -82,4 +82,4 @@ def apply(req: CorrectionsRequest) -> dict[str, Any]:
         out = apply_corrections(ds, params, bg_dataset=bg, bg_interp=req.bg_interp)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return datastruct_payload(out)
+    return DataStructResponse(datastruct_payload(out))

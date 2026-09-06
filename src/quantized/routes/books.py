@@ -19,7 +19,7 @@ import struct
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
 from quantized.io.origin_project import (
@@ -28,6 +28,7 @@ from quantized.io.origin_project import (
 )
 from quantized.routes._bookcache import cache_project_books, get_cached_book
 from quantized.routes._errors import CALC_ERRORS_IO
+from quantized.routes._payload import DataStructResponse
 from quantized.routes._uploadcache import resolve_upload_token
 from quantized.routes.parsers import _allowed_prefixes, _book_payload
 
@@ -76,10 +77,16 @@ def _resolve_book_path(raw_path: str) -> Path:
     return Path(resolved)
 
 
-@router.post("/books/data")
-def book_data(req: BookDataRequest) -> dict[str, Any]:
+@router.post("/books/data", response_model=dict[str, Any], response_class=DataStructResponse)
+def book_data(req: BookDataRequest) -> Response:
     """One book's full DataStruct payload, by the id + source reference an
-    import response's ``book_source``/lazy inventory entry gave the caller."""
+    import response's ``book_source``/lazy inventory entry gave the caller.
+
+    Returns a ``DataStructResponse`` (see ``routes/parsers.py``'s
+    ``_import_response``) instead of a plain dict -- a book's data can be as
+    large as any other import payload, so it gets the same chunk-encoding
+    treatment rather than one monolithic ``json.dumps``.
+    """
     if not req.book_id:
         raise HTTPException(status_code=400, detail="book_id is required")
     if bool(req.path) == bool(req.token):
@@ -100,7 +107,7 @@ def book_data(req: BookDataRequest) -> dict[str, Any]:
 
     cached = get_cached_book(resolved, req.book_id)
     if cached is not None:
-        return _book_payload(cached)
+        return DataStructResponse(_book_payload(cached))
 
     # Cache miss: re-parse once and re-prime the cache for any sibling books
     # activated next.
@@ -117,4 +124,4 @@ def book_data(req: BookDataRequest) -> dict[str, Any]:
     )
     if match is None:
         raise HTTPException(status_code=404, detail=f"book not found: {req.book_id}")
-    return _book_payload(match)
+    return DataStructResponse(_book_payload(match))

@@ -283,3 +283,193 @@ def test_uploadcache_evicts_oldest_beyond_bound() -> None:
         tokens.append(token)
     assert resolve_upload_token(tokens[0]) is None
     assert resolve_upload_token(tokens[-1]) is not None
+
+
+def test_uploadcache_pins_in_flight_token_against_eviction() -> None:
+    """A token whose parse is still running (marked in-flight) must survive
+    an eviction sweep even though it's the oldest -- otherwise a concurrent
+    upload's staging commit can unlink the file out from under a valid,
+    still-in-progress parse (see routes/parsers.py's upload_file and
+    _uploadcache._commit). 9 concurrent .opj uploads against the default
+    ``_MAX_STAGED`` of 8 reproduced exactly this before the pin existed."""
+    from quantized.routes import _uploadcache as cache_mod
+    from quantized.routes._uploadcache import (
+        clear_in_flight,
+        mark_in_flight,
+        resolve_upload_token,
+        stage_upload,
+    )
+
+    # Deterministic regardless of what earlier tests left staged.
+    cache_mod._tokens.clear()
+
+    _, oldest_token = stage_upload("f0.opj", b"content0")
+    mark_in_flight(oldest_token)
+    try:
+        tokens = [oldest_token]
+        for i in range(1, 9):  # 9 total uploads > _MAX_STAGED (8)
+            _, token = stage_upload(f"f{i}.opj", f"content{i}".encode())
+            tokens.append(token)
+
+        # The pinned oldest token survives even though it would ordinarily
+        # be the eviction candidate; the next-oldest (unpinned) entry is
+        # evicted in its place instead, so the bound is (briefly) exceeded.
+        assert resolve_upload_token(oldest_token) is not None, (
+            "the in-flight token was evicted despite being pinned"
+        )
+        assert resolve_upload_token(tokens[1]) is None
+        assert resolve_upload_token(tokens[-1]) is not None
+    finally:
+        clear_in_flight(oldest_token)
+
+    # Once unpinned, the next commit past the bound is free to evict it.
+    stage_upload("f9.opj", b"content9")
+    assert resolve_upload_token(oldest_token) is None
+
+
+class _FakeReader:
+    """Minimal ``AsyncChunkReader`` (see ``test_upload_stream.py``): yields
+    one pre-chopped chunk, ignoring the requested size."""
+
+    def __init__(self, data: bytes) -> None:
+        self._data: bytes | None = data
+
+    async def read(self, size: int = -1) -> bytes:
+        data, self._data = self._data, None
+        return data or b""
+
+
+def test_uploadcache_ninth_pinned_commit_survives_its_own_eviction_sweep() -> None:
+    """Merge-blocking regression: ``stage_upload_stream`` used to call
+    ``_commit`` (which may evict) BEFORE ``routes/parsers.py::upload_file``
+    called ``mark_in_flight`` on the new token. With 8 older tokens already
+    pinned, that commit's eviction sweep has no unpinned candidate except
+    the token it just registered -- and evicted it, deterministically (no
+    concurrency needed to reproduce: this is a single-call ordering bug).
+    ``pinned=True`` closes the window by adding the token to ``_in_flight``
+    atomically with the cache insert, before eviction runs."""
+    import asyncio
+
+    from quantized.routes import _uploadcache as cache_mod
+    from quantized.routes._uploadcache import (
+        clear_in_flight,
+        mark_in_flight,
+        resolve_upload_token,
+        stage_upload,
+        stage_upload_stream,
+    )
+
+    cache_mod._tokens.clear()
+    older_tokens = []
+    new_token: str | None = None
+    try:
+        for i in range(8):  # fills the cache and pins every entry
+            _, token = stage_upload(f"older{i}.opj", f"content{i}".encode())
+            mark_in_flight(token)
+            older_tokens.append(token)
+
+        dest, new_token = asyncio.run(
+            stage_upload_stream("new.opj", _FakeReader(b"new-content"), pinned=True)
+        )
+
+        assert new_token in cache_mod._in_flight, "pinned=True must mark the token in-flight"
+        assert resolve_upload_token(new_token) == dest, (
+            "the just-committed, pinned token was evicted by its own commit"
+        )
+        assert dest.is_file(), "the staged file itself must survive on disk"
+    finally:
+        for t in older_tokens:
+            clear_in_flight(t)
+        if new_token is not None:
+            clear_in_flight(new_token)
+
+
+def test_uploadcache_concurrent_commit_cannot_evict_pinned_gap_token() -> None:
+    """Interleaving-gap variant of the ordering bug: stage token A pinned,
+    then commit another token B before A is cleared -- A must survive B's
+    commit (the eviction sweep B's own commit triggers instead falls back
+    to the one genuinely evictable, unpinned older entry)."""
+    from quantized.routes import _uploadcache as cache_mod
+    from quantized.routes._uploadcache import (
+        _commit,
+        clear_in_flight,
+        mark_in_flight,
+        resolve_upload_token,
+        stage_upload,
+    )
+
+    cache_mod._tokens.clear()
+    pinned_older = []
+    try:
+        for i in range(6):
+            _, token = stage_upload(f"gap-older{i}.opj", f"content{i}".encode())
+            mark_in_flight(token)
+            pinned_older.append(token)
+        # One older, genuinely evictable entry -- distinguishes "the sweep
+        # had a real candidate and used it" from "the sweep had none and
+        # fell back to a token it shouldn't touch".
+        evictable_dest, evictable_token = stage_upload("gap-evictable.opj", b"evictable")
+
+        dest_a, token_a = stage_upload("A.opj", b"content-a")
+        _commit(token_a, dest_a, pinned=True)  # what stage_upload_stream now does
+
+        # A second commit (B) runs while A is pinned and not yet cleared --
+        # exactly the "another commit runs in the gap" scenario reported.
+        # Total staged is now 6 + 1 + 1(A) + 1(B) = 9, over `_MAX_STAGED` (8).
+        dest_b, token_b = stage_upload("B.opj", b"content-b")
+
+        assert resolve_upload_token(token_a) == dest_a, "A was evicted while still pinned"
+        assert resolve_upload_token(token_b) == dest_b, "B's own commit evicted itself"
+        assert resolve_upload_token(evictable_token) is None, (
+            "the genuinely evictable older entry should have been evicted instead"
+        )
+        assert not evictable_dest.exists()
+    finally:
+        for t in pinned_older:
+            clear_in_flight(t)
+        clear_in_flight(token_a)
+
+
+def test_uploadcache_clearing_pins_reruns_eviction_to_bound() -> None:
+    """Unpinning a token that a burst left the cache oversized over must
+    itself retry eviction (skipping any still-pinned token), or a finished
+    burst of concurrent pinned parses permanently leaves more than
+    ``_MAX_STAGED`` files on disk -- oldest (unpinned) first."""
+    from quantized.routes import _uploadcache as cache_mod
+    from quantized.routes._uploadcache import (
+        _commit,
+        _reserve,
+        clear_in_flight,
+        resolve_upload_token,
+    )
+
+    cache_mod._tokens.clear()
+    tokens = []
+    for i in range(10):  # > _MAX_STAGED (8), every entry pinned atomically
+        dest, token = _reserve(f"burst{i}.opj")
+        dest.write_bytes(f"content{i}".encode())
+        _commit(token, dest, pinned=True)  # what stage_upload_stream(pinned=True) does
+        tokens.append(token)
+
+    # All 10 survive while every entry is pinned -- oversized, as documented.
+    assert all(resolve_upload_token(t) is not None for t in tokens)
+    assert len(cache_mod._tokens) == 10
+
+    try:
+        # Unpin everything but the two newest, which stay pinned throughout.
+        # Each clear() must re-sweep and never touch a still-pinned token.
+        for t in tokens[:-2]:
+            clear_in_flight(t)
+
+        assert len(cache_mod._tokens) <= cache_mod._MAX_STAGED, (
+            "unpinning did not re-run eviction back to bound"
+        )
+        # Oldest (unpinned) entries evicted first.
+        assert resolve_upload_token(tokens[0]) is None
+        assert resolve_upload_token(tokens[1]) is None
+        # The still-pinned newest two must never be touched by eviction.
+        assert resolve_upload_token(tokens[-1]) is not None
+        assert resolve_upload_token(tokens[-2]) is not None
+    finally:
+        clear_in_flight(tokens[-1])
+        clear_in_flight(tokens[-2])
