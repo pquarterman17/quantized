@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -210,18 +212,17 @@ def test_publish_bundle_interrupted_rename_cleans_up_and_never_partially_publish
     assert not os.path.exists(staging_root)
 
 
-def test_publish_bundle_rename_failure_message_never_leaks_a_path(
+def test_publish_bundle_rename_oserror_message_is_path_free(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Review finding #6: `os.rename`'s own `OSError` embeds BOTH paths it
-    was given (`.filename`/`.filename2`) -- `str(exc)` on it would put the
-    absolute staging dir and destination straight into a structured,
-    potentially-logged result. `publish_bundle` must report only the OS's
-    own errno text (`safe_os_error`), never those paths."""
+    """Review finding (PR #307): a real `os.rename` failure raises an
+    `OSError` carrying BOTH `filename` (the staging path) and `filename2`
+    (the destination path) -- `str(exc)` on that embeds both absolute
+    paths. `PublishResult.error["message"]` must contain neither."""
     staging_root, destination = _write_complete_staging(tmp_path)
 
     def _boom(src: str, dst: str) -> None:
-        raise OSError(13, "Permission denied", src, None, dst)
+        raise OSError(errno.EACCES, "Permission denied", src, None, dst)
 
     monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
     result = publish_bundle(staging_root, destination)
@@ -233,7 +234,7 @@ def test_publish_bundle_rename_failure_message_never_leaks_a_path(
     assert staging_root not in message
     assert destination not in message
     assert str(tmp_path) not in message
-    assert message == "Permission denied"
+    assert "Permission denied" in message
 
 
 # ── validate_bundle ──────────────────────────────────────────────────────
@@ -265,6 +266,40 @@ def test_validate_bundle_manifest_invalid_json(tmp_path: Path) -> None:
     assert check.complete is False
     assert check.manifest is None
     assert check.problems[0]["code"] == "manifest_invalid"
+
+
+def test_validate_bundle_manifest_read_oserror_message_is_path_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding (PR #307): a permission/I-O error opening or reading
+    the manifest raises an `OSError` carrying `exc.filename` -- the
+    absolute manifest path -- in `str(exc)`. `validate_bundle`'s own
+    docstring promises `problems` never carries an absolute path, so its
+    `manifest_invalid` detail must not either."""
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    manifest_path = bundle_dir / MANIFEST_FILENAME
+    manifest_path.write_text("{}", encoding="utf-8")
+
+    real_open = open
+    target = os.path.abspath(str(manifest_path))
+
+    def _boom(path: Any, *args: object, **kwargs: object) -> Any:
+        if os.path.abspath(os.fspath(path)) == target:
+            raise OSError(errno.EACCES, "Permission denied", str(manifest_path))
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr("quantized.portable.publish.open", _boom, raising=False)
+
+    check = validate_bundle(str(bundle_dir))
+
+    assert check.complete is False
+    assert check.manifest is None
+    assert check.problems[0]["code"] == "manifest_invalid"
+    detail = check.problems[0]["detail"]
+    assert str(tmp_path) not in detail
+    assert str(manifest_path) not in detail
+    assert "Permission denied" in detail
 
 
 def test_validate_bundle_unsupported_manifest_version(tmp_path: Path) -> None:
@@ -519,3 +554,51 @@ def test_validate_bundle_no_external_sources_at_all(tmp_path: Path) -> None:
     assert result.ok is True
     check = validate_bundle(destination)
     assert check.complete is True
+
+
+# ── repo-wide guard: no path-leaking str(exc) on an OSError (PR #307) ────
+
+
+def test_no_str_exc_on_an_oserror_anywhere_under_portable() -> None:
+    """Review finding (PR #307): ``str(exc)`` on an ``OSError`` embeds
+    ``exc.filename``/``exc.filename2`` -- an absolute source/staging/
+    destination path. This scans every module under
+    ``quantized.portable`` for an ``except OSError as <name>:`` /
+    ``except (OSError, ...) as <name>:`` block and fails if that block's
+    body ever calls ``str(<name>)`` -- the exact mistake this fix
+    corrects should never come back, in this module or a new one."""
+    portable_dir = Path(__file__).resolve().parent.parent / "src" / "quantized" / "portable"
+    assert portable_dir.is_dir()
+
+    except_re = re.compile(
+        r"^(?P<indent>[ \t]*)except\s+"
+        r"(?:OSError|\([^)]*\bOSError\b[^)]*\))\s+as\s+(?P<name>\w+)\s*:"
+    )
+    violations: list[str] = []
+    for path in sorted(portable_dir.glob("*.py")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for i, line in enumerate(lines):
+            match = except_re.match(line)
+            if not match:
+                continue
+            indent = len(match.group("indent"))
+            name = match.group("name")
+            str_call = re.compile(r"\bstr\(\s*" + re.escape(name) + r"\s*\)")
+            for j in range(i + 1, len(lines)):
+                body_line = lines[j]
+                if body_line.strip() == "":
+                    continue
+                body_indent = len(body_line) - len(body_line.lstrip(" \t"))
+                if body_indent <= indent:
+                    break  # dedented past the except block's body
+                # Only the CODE portion, never a trailing "#" comment --
+                # this fix's own explanatory comments name `str(exc)` as
+                # the mistake being corrected, which is not a violation.
+                code_part = body_line.split("#", 1)[0]
+                if str_call.search(code_part):
+                    violations.append(
+                        f"{path.name}:{j + 1}: str({name}) inside an 'except OSError' block "
+                        f"(leaks exc.filename/filename2 -- use safe_os_error({name}) instead)"
+                    )
+
+    assert violations == [], "\n".join(violations)

@@ -28,14 +28,29 @@ surface.
    the destination with ``O_CREAT | O_EXCL | O_NOFOLLOW`` -- it must not
    already exist -- otherwise ``destination_exists``.
 5. Open the source strictly ``"rb"``, fstat it, and confirm that size
-   matches the fresh probe -- otherwise ``changed_during_copy``.
+   matches the fresh probe -- otherwise ``changed_during_copy``. Also
+   compare this fstat's IDENTITY (``os.fstat``'s ``st_dev``/``st_ino``,
+   see :func:`quantized.portable.copy_stream.file_identity`) against the
+   fresh probe's, when the probe supplies one -- a separate signal from
+   the size comparison, catching a replace between the step-1 probe and
+   this ``open`` even when sizes happen to match; also ``changed_during_copy``.
 6. Stream ``chunk_bytes`` at a time, hashing and writing each chunk,
    polling ``should_cancel`` between chunks; a short/long read against the
    pre-copy fstat size is ``changed_during_copy``; a write failure (a full
    disk, say) is ``write_failed``.
 7. fsync + close the destination, then re-stat the SOURCE -- any
    size/mtime drift since step 5's fstat is ``changed_during_copy`` (the
-   file was edited while being copied).
+   file was edited while being copied). Also compare this re-stat's
+   IDENTITY against step 5's pre-copy fstat identity (review finding on
+   #306) -- catches the pathname being atomically replaced (``os.replace``)
+   mid-copy by a different, same-size file whose mtime was then restored to
+   match: invisible to the size/mtime comparison, and, for a checksum-less
+   (legacy/unverified, explicitly packable) source, invisible to steps 8-9
+   too, since there is no checksum to compare against. When either side's
+   identity is unknown (a platform/filesystem that leaves ``st_dev``/
+   ``st_ino`` as ``0`` -- see :func:`quantized.portable.copy_stream
+   .identity_changed`), this check never fires and size/mtime remain the
+   only guard, as they were before this check existed.
 8. The MANIFEST's recorded checksum (``row["checksum"]``, taken at dry-run
    preview time), when it is a non-empty string, must equal the hash
    computed while streaming -- otherwise ``changed_since_preview``. This is
@@ -79,6 +94,8 @@ from .copy_stream import (
     StageProgress,
     coerce_size,
     copy_stream,
+    file_identity,
+    identity_changed,
     remove_partial,
     safe_os_error,
 )
@@ -261,6 +278,29 @@ def stage_one_file(
                 "changed_during_copy",
                 "source size differs from its pre-copy probe",
             )
+        pre_identity = file_identity(pre_stat)
+
+        # 5b. when the fresh probe itself carries an identity (`dev`/`ino`
+        # -- optional, not every `Probe` populates them), compare it against
+        # this open descriptor's own fstat identity too: a separate signal
+        # from the size check just above, catching a replace that happened
+        # between the probe call (step 1) and this `open` (step 5) even when
+        # the replacement's size happens to match.
+        probed_dev = probed.get("dev")
+        probed_ino = probed.get("ino")
+        if (
+            isinstance(probed_dev, int)
+            and isinstance(probed_ino, int)
+            and identity_changed(pre_identity, (probed_dev, probed_ino))
+        ):
+            os.close(fd)
+            remove_partial(dest)
+            return StageError(
+                source_id,
+                bundle_path,
+                "changed_during_copy",
+                "source identity differs from its pre-copy probe",
+            )
 
         # 6. stream + hash.
         outcome = copy_stream(
@@ -303,6 +343,26 @@ def stage_one_file(
                 bundle_path,
                 "changed_during_copy",
                 "source was modified while being copied",
+            )
+
+        # 7b. identity (review finding on #306): a same-size rewrite with
+        # its mtime restored to match is invisible to the size/mtime check
+        # just above -- and, for a checksum-less (legacy/unverified) source,
+        # there is no manifest checksum (step 8) to fall back on either, so
+        # the open descriptor still streamed the OLD file's bytes while the
+        # pathname now names a different one. Comparing the pre-copy fstat
+        # identity (captured before a single byte was read) against this
+        # post-copy stat of the pathname is what catches that. See
+        # `identity_changed`'s docstring for the documented "unknown
+        # identity" fallback this deliberately never raises a false
+        # failure on.
+        if identity_changed(pre_identity, file_identity(post_stat)):
+            remove_partial(dest)
+            return StageError(
+                source_id,
+                bundle_path,
+                "changed_during_copy",
+                "source identity changed while being copied",
             )
 
     emit("verifying", bytes_copied)

@@ -18,8 +18,9 @@ from typing import Any
 
 from .copy_stream import safe_os_error
 from .copying import ProgressCallback, ShouldCancel
+from .grouping import Consented, Probe
 from .layout import BUNDLE_FORMAT, SUPPORTED_MANIFEST_VERSIONS
-from .manifest import Consented, Probe, build_dry_run_manifest
+from .manifest import build_dry_run_manifest
 from .project_rewrite import rewrite_payload_for_bundle
 from .publish import PublishResult, finalize_manifest, publish_bundle, write_bundle_files
 from .staging import cleanup_staging_dir, create_staging_dir, stage_sources
@@ -242,11 +243,10 @@ def pack_project(
             manifest=manifest,
         )
     except OSError as exc:
-        # `str(exc)` on an `OSError` raised by a path-taking call (`open`,
-        # `os.replace`, ...) embeds `exc.filename` -- an absolute staging
-        # or bundle path. `safe_os_error` (review finding #6) reports the
-        # OS's own errno text/name only, matching every `StageError`
-        # message's "never leaks a path" rule (`copy_stream.py`'s doc).
+        # `safe_os_error`, never `str(exc)`: an `OSError` from writing the
+        # bundle's project file or manifest embeds `exc.filename` -- the
+        # absolute staging path -- and this result is structured, possibly
+        # logged, output (review finding, PR #307).
         cleanup_ok = cleanup_staging_dir(staging_root)
         return PackResult(
             False, False, None, manifest, [_error("write_failed", safe_os_error(exc))], cleanup_ok

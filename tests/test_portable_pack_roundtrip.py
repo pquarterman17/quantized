@@ -14,6 +14,7 @@ would, plus ``resolve_bundle_source`` on its own.
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import json
 import ntpath
@@ -243,6 +244,59 @@ def test_pack_project_mixed_dataset_shapes(tmp_path: Path) -> None:
     assert manifest_rows[missing]["packable"] is False
 
 
+def _case_sensitive(directory: Path) -> bool:
+    probe_upper = directory / "CaseProbe.tmp"
+    probe_upper.write_bytes(b"")
+    try:
+        return not (directory / "caseprobe.tmp").exists()
+    finally:
+        probe_upper.unlink()
+
+
+def test_pack_project_keeps_case_variant_files_distinct(tmp_path: Path) -> None:
+    """PR #305 review, carried through to the rewrite: on a case-sensitive
+    filesystem ``A.csv`` and ``a.csv`` are two files. The manifest keeps
+    them as two rows (different ``(dev, ino)``), staging copies both under
+    visibly distinct bundle names, and the rewrite maps EACH dataset onto
+    ITS OWN row by exact path -- never onto whichever row shares its folded
+    ``path_key``."""
+    if not _case_sensitive(tmp_path):
+        pytest.skip("case-insensitive filesystem: A.csv and a.csv are one file")
+    upper = tmp_path / "A.csv"
+    lower = tmp_path / "a.csv"
+    upper.write_bytes(b"UPPER")
+    lower.write_bytes(b"lower")
+
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [
+            {"id": "u", "name": "u", "source": {"kind": "path", "path": str(upper)}},
+            {"id": "l", "name": "l", "source": {"kind": "path", "path": str(lower)}},
+        ],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is True, result.errors
+    check = validate_bundle(destination, verify_checksums=True)
+    assert check.complete is True, check.problems
+    rows = {r["original_path"]: r for r in check.manifest["sources"]}  # type: ignore[index]
+    assert set(rows) == {str(upper), str(lower)}
+    assert rows[str(upper)]["bundle_path"] != rows[str(lower)]["bundle_path"]
+
+    project_file = check.manifest["project"]["project_file"]  # type: ignore[index]
+    packed = json.loads(Path(destination, project_file).read_text(encoding="utf-8"))
+    ds_by_id = {ds["id"]: ds for ds in packed["datasets"]}
+    for ds_id, original in (("u", upper), ("l", lower)):
+        source = ds_by_id[ds_id]["source"]
+        assert source["kind"] == "bundle"
+        assert source["packedFrom"] == str(original)
+        assert source["path"] == rows[str(original)]["bundle_path"]
+        copied = Path(destination, *source["path"].split("/"))
+        assert copied.read_bytes() == original.read_bytes()
+
+
 # ── old workspace versions ───────────────────────────────────────────────
 
 
@@ -436,7 +490,46 @@ def test_pack_project_staging_dir_oserror_is_a_structured_result(
     assert not os.path.exists(destination)
 
 
-def test_pack_project_write_failure_message_never_leaks_a_path(
+# ── write_bundle_files failures are path-free (PR #307 review) ───────────
+
+
+def test_pack_project_write_bundle_files_oserror_message_is_path_free(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review finding (PR #307): a real ``write_bundle_files`` failure (a
+    permission error, a full disk) raises an ``OSError`` whose ``str()``
+    embeds ``exc.filename`` -- the absolute staging path.
+    ``PackResult.errors[*]["message"]`` must contain neither that staging
+    path nor the destination path."""
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"data")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(_bundle_parent(tmp_path) / "bundle")
+    staging_sibling = str(tmp_path / "bundle_parent" / ".qz-staging-oserror-secret")
+
+    def _boom(*_args: object, **_kwargs: object) -> None:
+        secret_path = os.path.join(staging_sibling, "quantized-bundle.json")
+        raise OSError(errno.EACCES, "Permission denied", secret_path)
+
+    monkeypatch.setattr("quantized.portable.pack.write_bundle_files", _boom)
+
+    result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
+
+    assert result.ok is False
+    assert result.errors[0]["code"] == "write_failed"
+    message = result.errors[0]["message"]
+    assert staging_sibling not in message
+    assert destination not in message
+    assert str(tmp_path) not in message
+    assert "Permission denied" in message
+    assert not os.path.exists(destination)
+
+
+def test_pack_project_atomic_replace_oserror_message_is_path_free(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Review finding #6: ``atomic_replace_file``'s own ``os.replace`` call
