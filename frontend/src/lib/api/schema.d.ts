@@ -7598,12 +7598,24 @@ export interface components {
             /** Wavelength */
             wavelength: number;
         };
-        /** PlotRequest */
+        /**
+         * PlotRequest
+         * @description ``dataset``/``dataset_handle`` (P3.5 dataset-handle-cache parity with
+         *     ``/api/plot/map`` + every ``/api/rsm/*`` endpoint): a zoom/pan commit on
+         *     an already-decimated series re-POSTs the full DataStruct on every step
+         *     (measured 1M x 7 rows -> ~80 MB/request) even though the underlying
+         *     dataset never changed -- see ``CachedDatasetRequest``'s own doc. The
+         *     ``dataset`` field name is unchanged (inherited from the mixin), so every
+         *     existing caller (which only ever sent ``dataset``) keeps working with no
+         *     request-shape change.
+         */
         PlotRequest: {
             /** Dataset */
-            dataset: {
+            dataset?: {
                 [key: string]: unknown;
-            };
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /** Decimate Width */
             decimate_width?: number | null;
             /**
