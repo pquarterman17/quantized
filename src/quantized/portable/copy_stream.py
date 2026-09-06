@@ -155,19 +155,59 @@ def copy_stream(
     emit: Callable[[int], None],
 ) -> tuple[int, str] | StageError:
     """Stream ``src`` into the already-open destination fd ``fd``,
-    hashing as it goes. Always closes ``fd`` before returning (success or
-    failure) -- the destination file is never left open by this helper.
+    hashing as it goes. Always closes ``fd`` before returning OR raising --
+    the destination file is never left open by this helper. The raising
+    case matters on Windows (CI, #306): a caller-supplied ``emit``/
+    ``should_cancel`` callback that raises used to unwind past the open
+    descriptor, and Windows refuses to delete an open file, so the
+    staging-directory cleanup that follows reported ``cleanup_ok=False``
+    and the partial copy was leaked. POSIX unlinks open files happily,
+    which is why the leak was invisible there.
     """
+    closed = False
+
+    def _close() -> None:
+        nonlocal closed
+        if not closed:
+            closed = True
+            os.close(fd)
+
+    try:
+        return _copy_stream_body(
+            fd,
+            src,
+            chunk_bytes=chunk_bytes,
+            should_cancel=should_cancel,
+            source_id=source_id,
+            bundle_path=bundle_path,
+            emit=emit,
+            close=_close,
+        )
+    finally:
+        _close()
+
+
+def _copy_stream_body(
+    fd: int,
+    src: Any,
+    *,
+    chunk_bytes: int,
+    should_cancel: ShouldCancel | None,
+    source_id: str,
+    bundle_path: str,
+    emit: Callable[[int], None],
+    close: Callable[[], None],
+) -> tuple[int, str] | StageError:
     digest = hashlib.sha256()
     bytes_copied = 0
     while True:
         if should_cancel is not None and should_cancel():
-            os.close(fd)
+            close()
             return StageError(source_id, bundle_path, "cancelled", "staging cancelled mid-copy")
         try:
             chunk = src.read(chunk_bytes)
         except OSError as exc:
-            os.close(fd)
+            close()
             return StageError(
                 source_id, bundle_path, "read_failed", f"source read failed: {safe_os_error(exc)}"
             )
@@ -176,7 +216,7 @@ def copy_stream(
         try:
             _write_all(fd, chunk)
         except OSError as exc:
-            os.close(fd)
+            close()
             return StageError(
                 source_id,
                 bundle_path,
@@ -189,9 +229,9 @@ def copy_stream(
     try:
         os.fsync(fd)
     except OSError as exc:
-        os.close(fd)
+        close()
         return StageError(
             source_id, bundle_path, "write_failed", f"fsync failed: {safe_os_error(exc)}"
         )
-    os.close(fd)
+    close()
     return bytes_copied, digest.hexdigest()
