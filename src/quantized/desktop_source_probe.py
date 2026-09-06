@@ -99,10 +99,26 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
 
     Returns a dict always carrying ``state`` — one of ``ok`` / ``missing`` /
     ``offline`` / ``invalid`` / ``permission_denied`` — plus, for ``ok``,
-    ``size`` and ``mtime`` (always populated: the same risk level as the
-    existing consent-free ``path_status``, just two more stat fields) and,
-    only when `compute_checksum` is true AND the read itself succeeds, a
-    ``"sha256:<hex>"`` ``checksum``. Never raises — every failure mode below
+    ``size``, ``mtime``, ``dev``, and ``ino`` (always populated: the same
+    risk level as the existing consent-free ``path_status``, just four more
+    stat fields) and, only when `compute_checksum` is true AND the read
+    itself succeeds, a ``"sha256:<hex>"`` ``checksum``.
+
+    ``dev``/``ino`` are ``st.st_dev``/``st.st_ino`` verbatim (``int``) — the
+    filesystem-identity pair a caller (e.g.
+    :mod:`quantized.portable.manifest`'s dry-run manifest builder) uses to
+    prove two DIFFERENT path spellings name the SAME physical file, never to
+    build a filesystem path itself. Python populates both on every platform
+    this project supports, Windows included: for a regular file, ``st_dev``
+    is the volume serial number and ``st_ino`` the file index, the same pair
+    ``fsutil file queryfileid``/NTFS itself uses as a file's identity. A
+    caller must treat ``0`` on EITHER field as "unknown identity" (never a
+    real device/inode 0) and refuse to collapse on it — some platforms or
+    edge-case filesystems report a zero rather than raising, and this
+    function does not raise for that case, it just passes the stat result
+    through as-is.
+
+    Never raises — every failure mode below
     (permission, a vanished volume, a race where the file disappears between
     the stat and the read) degrades to a reported state, matching every other
     bridge method's "report, don't raise into JS" rule.
@@ -147,6 +163,8 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
         "path": resolved,
         "size": st.st_size,
         "mtime": st.st_mtime,
+        "dev": st.st_dev,
+        "ino": st.st_ino,
     }
     if compute_checksum:
         try:
