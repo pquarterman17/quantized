@@ -77,8 +77,13 @@ function isDataStruct(v: unknown): v is DataStruct {
 /** Parse + validate one `.dwk` dataset entry (`o.datasets[i]`), throwing a
  *  clear error on anything malformed (not an object, or an invalid
  *  DataStruct) — `parseWorkspace` lets that error propagate to its own
- *  caller unchanged, same as when this was inline there. */
-export function parseWorkspaceDataset(d: unknown, i: number): Dataset {
+ *  caller unchanged, same as when this was inline there.
+ *
+ *  `projectDir` (P1.7 PR 3) is the `.dwk`'s own directory, when the caller
+ *  knows one — threaded straight through to `parseDatasetSource` so a
+ *  packed project's `kind: "bundle"` sources can resolve; see that
+ *  function's doc for what happens when it's absent. */
+export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string): Dataset {
   if (typeof d !== "object" || d === null) {
     throw new Error(`dataset ${i} is invalid`);
   }
@@ -223,7 +228,7 @@ export function parseWorkspaceDataset(d: unknown, i: number): Dataset {
   // validated the same defensive way as every other optional field here.
   const pending = parsePending(dd.pending);
   if (pending) ds.pending = pending;
-  const source = parseDatasetSource(dd.source);
+  const source = parseDatasetSource(dd.source, projectDir);
   if (source) ds.source = source;
   // P1.7 box 5: see the serializer's matching comment in workspace.ts.
   if (typeof dd.versionOf === "string" && dd.versionOf) ds.versionOf = dd.versionOf;

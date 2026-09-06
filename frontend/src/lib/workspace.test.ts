@@ -764,6 +764,126 @@ describe("workspace source reference (MAIN_PLAN #10, re-import from source)", ()
   });
 });
 
+// P1.7 PR 3 (Pack Project, frontend half): a packed project's dataset
+// sources are written `kind: "bundle"` (bundle-relative, see
+// lib/bundlePath.ts) rather than `kind: "path"` — but ONLY when the
+// serializer is told the SAME `projectDir` the source's `bundlePath` was
+// resolved against; anywhere else (a different Save As destination, no
+// known directory at all) it falls back to the ordinary absolute
+// `kind: "path"` shape. In memory, `Dataset.source.kind` is ALWAYS "path" —
+// this is a save/load-boundary-only distinction.
+describe("workspace bundle-relative source (P1.7 PR 3, Pack Project)", () => {
+  const PACKED_DOC = {
+    format: WORKSPACE_FORMAT,
+    version: 4,
+    datasets: [
+      {
+        ...makeDataset("a", "x"),
+        source: { kind: "bundle", path: "sources/run1.csv" },
+      },
+    ],
+    folders: [],
+  };
+
+  it("resolves a packed bundle source to an absolute path under projectDir, recording bundlePath", () => {
+    const restored = parseWorkspace(JSON.stringify(PACKED_DOC), undefined, { projectDir: "/proj" }).datasets[0];
+    expect(restored.source).toEqual({
+      kind: "path",
+      path: "/proj/sources/run1.csv",
+      bundlePath: "sources/run1.csv",
+    });
+  });
+
+  it("degrades to no source when parsed with no projectDir (browser-picker path)", () => {
+    const restored = parseWorkspace(JSON.stringify(PACKED_DOC)).datasets[0];
+    expect(restored.source).toBeUndefined();
+  });
+
+  it("degrades to no source for a traversal path even with a projectDir — no extra migration warning", () => {
+    const doc = {
+      ...PACKED_DOC,
+      datasets: [{ ...PACKED_DOC.datasets[0], source: { kind: "bundle", path: "sources/../escape.csv" } }],
+    };
+    const loaded = parseWorkspace(JSON.stringify(doc), undefined, { projectDir: "/proj" });
+    expect(loaded.datasets[0].source).toBeUndefined();
+    // Same silent-drop convention as every other malformed `source` case
+    // above (no `parseWorkspace` throw, no migrationWarnings entry).
+    expect(loaded.migrationWarnings).toEqual([]);
+  });
+
+  it("round-trips: parse with projectDir, then re-serialize with the SAME projectDir reproduces kind:bundle byte-for-byte", () => {
+    const loaded = parseWorkspace(JSON.stringify(PACKED_DOC), undefined, { projectDir: "/proj" });
+    const reserialized = JSON.parse(
+      serializeWorkspace({ datasets: loaded.datasets }, { projectDir: "/proj" }),
+    ) as { datasets: Record<string, unknown>[] };
+    expect(reserialized.datasets[0].source).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
+  it("Save As elsewhere: re-serializing with a DIFFERENT projectDir writes an absolute kind:path instead", () => {
+    const loaded = parseWorkspace(JSON.stringify(PACKED_DOC), undefined, { projectDir: "/proj" });
+    const reserialized = JSON.parse(
+      serializeWorkspace({ datasets: loaded.datasets }, { projectDir: "/elsewhere" }),
+    ) as { datasets: Record<string, unknown>[] };
+    expect(reserialized.datasets[0].source).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
+  it("no projectDir at serialize time writes an absolute kind:path (autosave/browser-download shape)", () => {
+    const loaded = parseWorkspace(JSON.stringify(PACKED_DOC), undefined, { projectDir: "/proj" });
+    const reserialized = JSON.parse(serializeWorkspace({ datasets: loaded.datasets })) as {
+      datasets: Record<string, unknown>[];
+    };
+    expect(reserialized.datasets[0].source).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
+  it("carries packedFrom through resolve, round-trip, and elsewhere-save", () => {
+    const doc = {
+      ...PACKED_DOC,
+      datasets: [
+        {
+          ...PACKED_DOC.datasets[0],
+          source: { kind: "bundle", path: "sources/run1.csv", packedFrom: "/orig/run1.csv" },
+        },
+      ],
+    };
+    const loaded = parseWorkspace(JSON.stringify(doc), undefined, { projectDir: "/proj" });
+    expect(loaded.datasets[0].source).toEqual({
+      kind: "path",
+      path: "/proj/sources/run1.csv",
+      bundlePath: "sources/run1.csv",
+      packedFrom: "/orig/run1.csv",
+    });
+    const sameDir = JSON.parse(
+      serializeWorkspace({ datasets: loaded.datasets }, { projectDir: "/proj" }),
+    ) as { datasets: Record<string, unknown>[] };
+    expect(sameDir.datasets[0].source).toEqual({
+      kind: "bundle",
+      path: "sources/run1.csv",
+      packedFrom: "/orig/run1.csv",
+    });
+    const otherDir = JSON.parse(
+      serializeWorkspace({ datasets: loaded.datasets }, { projectDir: "/elsewhere" }),
+    ) as { datasets: Record<string, unknown>[] };
+    expect(otherDir.datasets[0].source).toEqual({
+      kind: "path",
+      path: "/proj/sources/run1.csv",
+      packedFrom: "/orig/run1.csv",
+    });
+  });
+
+  it("an ordinary (unpacked) v1-v4 workspace with plain kind:path sources re-serializes identically, projectDir or not", () => {
+    const ds = makeDataset("a", "x");
+    ds.source = { kind: "path", path: "/data/sample.dat", checksum: "sha256:abc", mtime: 1700000000, size: 42 };
+    const withDir = JSON.parse(
+      serializeWorkspace({ datasets: [ds] }, { projectDir: "/proj" }),
+    ) as { datasets: Record<string, unknown>[] };
+    const withoutDir = JSON.parse(serializeWorkspace({ datasets: [ds] })) as {
+      datasets: Record<string, unknown>[];
+    };
+    expect(withDir.datasets[0].source).toEqual(ds.source);
+    expect(withoutDir.datasets[0].source).toEqual(ds.source);
+  });
+});
+
 describe("workspace versionOf (P1.7 box 5: import as new version)", () => {
   it("round-trips versionOf so a reopened project still knows a dataset's lineage", () => {
     const ds = makeDataset("copy", "x (new version)");

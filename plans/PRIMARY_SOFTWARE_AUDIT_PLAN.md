@@ -3,10 +3,17 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 2** —
-atomic staging + verified source copying (`quantized.portable.staging`/
-`.copying`, still no `.dwk` write, no publish) — see the updated PR 2 entry
-under P1.7 below. Earlier: **P1.7 Pack Project PR 1** —
+**Updated:** 2026-09-06 (later still): **P1.7 Pack Project PR 3** —
+atomic bundle publish + validation + open-time resolution
+(`quantized.portable.project_rewrite`/`.publish`/`.pack`, backend) AND its
+frontend half on `claude/p17-pack-3-frontend` — the `kind: "bundle"`
+dataset-source extension (read at parse time with a known `projectDir`,
+written back at serialize time only when saving into that same directory)
+— see the updated PR 3 entry under P1.7 below. Earlier the same day:
+**P1.7 Pack Project PR 2** — atomic staging + verified source copying
+(`quantized.portable.staging`/`.copying`, still no `.dwk` write, no
+publish) — see the updated PR 2 entry under P1.7 below. Earlier: **P1.7
+Pack Project PR 1** —
 bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
 copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
 2 — collision-safe relinking**
@@ -1652,6 +1659,60 @@ below — the packer's own implementation work starts fresh here:
     `tests/test_desktop_project_file.py` extended (6 — `base_dir` on all
     three declared-source functions, including a hand-edited relative
     escape and the "no `base_dir`, not declared" case).
+  - **Frontend half (this branch, `claude/p17-pack-3-frontend`) — shipped
+    ahead of the backend publish/copy work, additive-optional, no
+    `WORKSPACE_VERSION` bump:** the frontend's read/write contract for a
+    dataset `source` that names a bundle-relative path, so the frontend is
+    ready the moment PR 2/3's backend copier lands. `lib/bundlePath.ts` is
+    a line-for-line TypeScript port of `layout.py`'s `is_bundle_relative`
+    (`isBundleRelativePath`) + `join_bundle_path` (`resolveBundlePath`,
+    returning `null` instead of raising — this side's documented
+    malformed-field degrade, not an error). `Dataset.source` stays
+    `kind: "path"` in memory always (every existing consumer — reimport,
+    relink, pathState — is untouched); a source resolved from a packed
+    project's `kind: "bundle"` manifest entry additionally carries
+    `bundlePath` (the bundle-relative path it came from) and an optional
+    `packedFrom` (the absolute path the packer copied from — display-only
+    provenance, never resolved). Resolution happens at PARSE time only,
+    and only when the caller actually knows the `.dwk`'s own directory:
+    `parseWorkspace(text, viewport, { projectDir })` threads `projectDir`
+    to `lib/workspaceDatasetParse.ts`'s per-dataset parse, which threads
+    it to `lib/datasetSource.ts`'s `parseDatasetSource` — a `kind: "bundle"`
+    entry with no `projectDir`, or a non-conforming path, degrades to "no
+    source" exactly like any other malformed source (silent drop, no
+    migration warning). The two native-file callers that actually have a
+    directory — `lib/openWorkspaceCommand.ts`'s native-open branch and
+    `commands/recentProjectsCommands.ts`'s reopen — pass it; the
+    browser-picker/Worker path (`lib/parseWorkspaceFile.ts`) and every
+    autosave/browser-download round trip never do (no durable path to
+    derive one from), so a bundle source degrades there by design — noted
+    in `parseWorkspace`'s own doc comment. Serialization
+    (`lib/workspaceSerialize.ts`'s `serializeWorkspace(state, { projectDir })`)
+    writes a source back as `kind: "bundle"` ONLY when `projectDir` is
+    given AND the source's recorded `path` still keys identically
+    (`lib/relink.ts`'s `pathKey`) to what its own `bundlePath` would
+    resolve to under THAT `projectDir` — i.e. the project is being saved
+    back into the same directory its bundle was resolved from. Any other
+    case (Save As into a different folder, no known directory, a relink
+    that moved `path` since) writes the ordinary absolute `kind: "path"`
+    shape instead — still fully valid, just no longer relocatable as one
+    portable unit. `store/workspaceIO.ts` wires this: quick Save
+    (`runSaveWorkspace`) already knows its destination
+    (`currentProject.path`) before serializing, so it passes `projectDir`
+    straight through; Save As (`runSaveWorkspaceToFile`) splits the
+    existing "resolve pending books, fold the live view" preface
+    (`prepareWorkspaceState`) from the actual `JSON.stringify`, so the
+    stringify itself happens AFTER the native dialog returns a destination
+    — every existing Save/Save As test stayed green through that split.
+    Existing (unpacked) projects are completely unaffected: their sources
+    have no `bundlePath`, so `serializeDatasetSource` always takes the
+    `kind: "path"` branch for them, byte-for-byte as before this PR. Tests:
+    `lib/bundlePath.test.ts`, `lib/datasetSource.test.ts`, the new
+    "workspace bundle-relative source" describe in `lib/workspace.test.ts`,
+    the native-open/reopen resolution tests in
+    `commands/openWorkspaceNative.test.ts` /
+    `commands/recentProjectsCommands.test.ts`, and the quick-save/Save-As
+    `kind` tests in `store/workspaceIO.test.ts`.
 - **PR 4 (planned, not shipped):** orchestration (the pywebview bridge
   method a future "Pack Project" UI action calls) + the frontend contract
   consuming PR 1-3's manifest/copy/publish primitives — no bridge method
