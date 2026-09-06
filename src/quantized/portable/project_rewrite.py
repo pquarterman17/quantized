@@ -21,9 +21,20 @@ absolute path a future open may report missing/offline.
 
 The result is re-validated with
 :func:`quantized.desktop_project_file.parse_workspace_payload` before it is
-returned — imported lazily (function-local) to avoid a circular import,
-since that module in turn resolves a ``kind: "bundle"`` source through
-:func:`resolve_bundle_source` below.
+returned — imported at MODULE level here (review finding #7 on PR 3: the
+previous function-local import was justified by a circular-import claim
+that does not actually hold). ``quantized.desktop_project_file`` never
+imports anything from ``quantized.portable`` at ITS OWN module level — its
+one cross-package call, in ``declared_source_paths_of`` (which does resolve
+a ``kind: "bundle"`` source through :func:`resolve_bundle_source` below),
+stays function-local there for a real reason of its own:
+``quantized.portable.publish`` needs
+``quantized.desktop_project_file.WRITE_TEMP_PREFIX`` at module-LOAD time, so
+a module-level import in the other direction would be the genuine cycle.
+Since that direction is one-way, this module importing
+``quantized.desktop_project_file`` at the top has nothing to cycle against
+— verified by importing each module first, in both orders
+(``tests/test_desktop_project_file.py``).
 """
 
 from __future__ import annotations
@@ -33,6 +44,8 @@ import json
 import os
 from collections.abc import Mapping, Sequence
 from typing import Any
+
+from quantized.desktop_project_file import parse_workspace_payload
 
 from .copying import StagedFile
 from .layout import is_bundle_relative, join_bundle_path, path_key
@@ -152,8 +165,6 @@ def rewrite_payload_for_bundle(
             if mtime is not None:
                 new_source["mtime"] = mtime
             ds["source"] = new_source
-
-    from quantized.desktop_project_file import parse_workspace_payload
 
     validated, error = parse_workspace_payload(json.dumps(result))
     if validated is None:

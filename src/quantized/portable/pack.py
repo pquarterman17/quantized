@@ -87,12 +87,41 @@ def pack_project(
     except ValueError as exc:
         return PackResult(False, False, None, None, [_error("invalid_project_name", str(exc))])
 
+    if os.path.lexists(destination_dir):
+        # Checked BEFORE staging anything, at zero cost: `publish_bundle`'s
+        # own `destination_exists` refusal (its own module doc's "never
+        # overwrites" contract) still runs as a race-safe backstop right
+        # before the final rename, but there is no reason to stage every
+        # source into a temp directory -- copying and checksumming
+        # potentially large files -- only to throw the whole staging tree
+        # away on a check this cheap.
+        return PackResult(
+            False,
+            False,
+            None,
+            dry_run_manifest,
+            [_error("destination_exists", "destination already exists")],
+        )
+
     parent_dir = os.path.dirname(os.path.normpath(destination_dir)) or "."
     try:
         staging_root = create_staging_dir(parent_dir)
     except ValueError as exc:
         return PackResult(
             False, False, None, dry_run_manifest, [_error("invalid_destination", str(exc))]
+        )
+    except OSError as exc:
+        # `tempfile.mkdtemp` itself can raise OSError (a read-only parent,
+        # a full disk, a permission error) -- `create_staging_dir` only
+        # ever raises `ValueError` of its OWN accord (an invalid parent
+        # path), so this is a genuinely different failure class. The
+        # message is `strerror` only (never `str(exc)`, which for an
+        # OSError includes the offending path) so a permission/disk error
+        # never leaks the staging parent's filesystem layout into a
+        # structured, potentially-logged result.
+        message = exc.strerror or "staging directory could not be created"
+        return PackResult(
+            False, False, None, dry_run_manifest, [_error("staging_failed", message)]
         )
 
     stage_result = stage_sources(
@@ -161,6 +190,18 @@ def pack_project(
         cleanup_ok = cleanup_staging_dir(staging_root)
         return PackResult(
             False, False, None, manifest, [_error("write_failed", str(exc))], cleanup_ok
+        )
+    except (TypeError, ValueError) as exc:
+        # `_dumps(rewritten_payload)` (this call, evaluated before
+        # `write_bundle_files` itself runs) and `write_bundle_files`'s own
+        # `manifest_json(manifest)` are both a `json.dumps` underneath --
+        # a non-JSON-serializable value anywhere in the rewritten payload
+        # (e.g. a stray `bytes` field) raises `TypeError`, not `OSError`,
+        # and would otherwise escape this function entirely as an
+        # uncaught exception instead of a structured `PackResult`.
+        cleanup_ok = cleanup_staging_dir(staging_root)
+        return PackResult(
+            False, False, None, manifest, [_error("serialize_failed", str(exc))], cleanup_ok
         )
 
     publish_result: PublishResult = publish_bundle(staging_root, destination_dir)

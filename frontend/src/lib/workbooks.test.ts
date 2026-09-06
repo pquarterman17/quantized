@@ -297,6 +297,40 @@ describe("sanitizeWorkbooks", () => {
     expect(sanitizeWorkbooks(undefined, new Set())).toEqual([]);
     expect(sanitizeWorkbooks({ not: "an array" }, new Set())).toEqual([]);
   });
+
+  // PR 3 review finding #4: a workbook's `source` accepts the same
+  // `kind: "bundle"` | `kind: "path"` persisted shape a dataset's `source`
+  // does, resolved via the identical `parseDatasetSource` — only
+  // `kind`/`path` survive onto `WorkbookNode.source` (no
+  // checksum/mtime/size/packedFrom field exists there).
+  describe("source (kind: bundle, PR 3 review finding #4)", () => {
+    it("resolves a bundle-relative source under projectDir", () => {
+      const raw = [{ id: "w1", name: "Book1", source: { kind: "bundle", path: "sources/run1.csv" } }];
+      const result = sanitizeWorkbooks(raw, new Set(), "/proj");
+      expect(result).toEqual([
+        { id: "w1", name: "Book1", source: { kind: "path", path: "/proj/sources/run1.csv" } },
+      ]);
+    });
+
+    it("drops a bundle source with no projectDir", () => {
+      const raw = [{ id: "w1", name: "Book1", source: { kind: "bundle", path: "sources/run1.csv" } }];
+      const result = sanitizeWorkbooks(raw, new Set());
+      expect(result).toEqual([{ id: "w1", name: "Book1" }]);
+    });
+
+    it("drops a bundle source with an EMPTY projectDir (PR 3 review finding #3)", () => {
+      const raw = [{ id: "w1", name: "Book1", source: { kind: "bundle", path: "sources/run1.csv" } }];
+      const result = sanitizeWorkbooks(raw, new Set(), "");
+      expect(result).toEqual([{ id: "w1", name: "Book1" }]);
+    });
+
+    it("keeps an ordinary kind:path source unaffected by projectDir", () => {
+      const raw = [{ id: "w1", name: "Book1", source: { kind: "path", path: "/data/run1.csv" } }];
+      expect(sanitizeWorkbooks(raw, new Set(), "/proj")).toEqual([
+        { id: "w1", name: "Book1", source: { kind: "path", path: "/data/run1.csv" } },
+      ]);
+    });
+  });
 });
 
 describe("reconcileWorkbookRefs", () => {

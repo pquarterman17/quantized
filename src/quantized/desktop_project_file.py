@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 __all__ = [
@@ -100,6 +100,17 @@ def declared_source_paths_of(
     if not isinstance(datasets, list):
         return []
     paths: list[str] = []
+    # Hoisted out of the loop below (review finding #7 on PR 3: it was
+    # previously re-imported inside the per-dataset loop, once per
+    # `kind: "bundle"` row rather than once per call). This import MUST
+    # stay function-local, not module-level: `quantized.portable.publish`
+    # needs `WRITE_TEMP_PREFIX` from THIS module at import time, so a
+    # module-level import here, in the other direction, would be a real
+    # circular import. Skipped entirely when `base_dir` is `None` — there
+    # would be nothing to resolve against anyway.
+    resolve_bundle_source: Callable[[str, str], str | None] | None = None
+    if base_dir is not None:
+        from quantized.portable.project_rewrite import resolve_bundle_source
     for ds in datasets:
         if not isinstance(ds, dict):
             continue
@@ -111,10 +122,8 @@ def declared_source_paths_of(
         if not isinstance(path, str) or not path:
             continue
         if kind == "bundle":
-            if base_dir is None:
+            if resolve_bundle_source is None or base_dir is None:
                 continue
-            from quantized.portable.project_rewrite import resolve_bundle_source
-
             resolved = resolve_bundle_source(base_dir, path)
             if resolved is not None:
                 paths.append(resolved)

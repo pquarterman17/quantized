@@ -296,7 +296,7 @@ export function parseWorkspace(
   // doc's derived workbooks land at the Library root — still correct, just
   // unplaced; folder promotion happens later, in the STORE's
   // `loadWorkspace` -> `migrateGroupsToFolders`).
-  const workbooksSanitized = sanitizeWorkbooks(o.workbooks, folderIds);
+  const workbooksSanitized = sanitizeWorkbooks(o.workbooks, folderIds, opts?.projectDir);
   const migration = applyWorkbookMigration(datasets, folders, rawExpandedFolders, workbooksSanitized);
   const workbooks = migration.workbooks;
   migrationWarnings.push(...migration.warnings);

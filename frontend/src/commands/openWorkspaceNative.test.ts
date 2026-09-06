@@ -129,7 +129,7 @@ describe("open-workspace — native branch", () => {
     run("open-workspace");
     await settle();
     const ds = useApp.getState().datasets.find((d) => d.id === "r1");
-    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat", bundlePath: "sources/r1.dat" });
+    expect(ds?.source).toEqual({ kind: "path", path: "/p/sources/r1.dat" });
   });
 
   it("resolves a packed project's bundle-relative source under a Windows-style project directory", async () => {
@@ -140,8 +140,19 @@ describe("open-workspace — native branch", () => {
     expect(ds?.source).toEqual({
       kind: "path",
       path: "C:\\Users\\me\\proj\\sources\\r1.dat",
-      bundlePath: "sources/r1.dat",
     });
+  });
+
+  // PR 3 review finding #3: a native path with NO directory separator (the
+  // `parentDirectory` "no directory" sentinel) must degrade a bundle
+  // source exactly like an unknown projectDir — never resolve against a
+  // bogus root-anchored path.
+  it("degrades a packed project's bundle-relative source when the native path has no directory separator", async () => {
+    setShell({ open_project_file: async () => ({ path: "workspace.dwk", content: WS_WITH_BUNDLE_SOURCE }) });
+    run("open-workspace");
+    await settle();
+    const ds = useApp.getState().datasets.find((d) => d.id === "r1");
+    expect(ds?.source).toBeUndefined();
   });
 
   // P1.1: "working-directory selection affects the next chooser" — for

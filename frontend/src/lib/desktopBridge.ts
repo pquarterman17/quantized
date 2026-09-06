@@ -115,6 +115,12 @@ interface PyWebviewApi {
   project_lock_refresh?: (path: string, token: string) => Promise<Record<string, unknown>>;
   project_lock_takeover?: (path: string, expectedToken: string) => Promise<Record<string, unknown>>;
   project_lock_release?: (path: string, token: string) => Promise<Record<string, unknown>>;
+  pick_pack_destination?: (directory?: string) => Promise<Record<string, unknown>>;
+  pack_preview?: (content: string, projectName: string, destinationParent: string) => Promise<Record<string, unknown>>;
+  pack_start?: (token: string, content: string) => Promise<Record<string, unknown>>;
+  pack_status?: () => Promise<Record<string, unknown>>;
+  pack_cancel?: () => Promise<Record<string, unknown>>;
+  pack_reset?: () => Promise<Record<string, unknown>>;
 }
 
 /** Exported (alongside `str`/`bool`/`num` below) so `lib/desktopLockBridge.ts`
@@ -424,3 +430,11 @@ export async function saveProjectTo(
 // here, exactly as lib/workspace.ts re-exports its own extractions, so every
 // existing importer and test mock of "lib/desktopBridge" keeps working.
 export * from "./desktopRelinkBridge";
+
+// -- P1.7 PR 4: "Pack Project" -------------------------------------------
+// `pickPackDestination` / `packPreview` / `packStart` / `packStatus` /
+// `packCancel` / `packReset` (and the `PortableManifest`/`PackStatus`
+// shapes) live in the sibling lib/desktopPackBridge.ts, split out from the
+// start rather than grown here — same 500-line-ceiling reasoning as
+// desktopRelinkBridge.ts, re-exported the same way.
+export * from "./desktopPackBridge";

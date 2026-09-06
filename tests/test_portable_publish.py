@@ -15,8 +15,9 @@ import pytest
 
 from quantized.desktop_source_probe import probe_source_path
 from quantized.portable.layout import MANIFEST_FILENAME
-from quantized.portable.manifest import build_dry_run_manifest
+from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 from quantized.portable.publish import (
+    atomic_replace_file,
     finalize_manifest,
     publish_bundle,
     validate_bundle,
@@ -349,6 +350,121 @@ def test_validate_bundle_problems_never_contain_the_tmp_path(tmp_path: Path) -> 
     for problem in check.problems:
         assert str(tmp_path) not in problem["detail"]
         assert str(tmp_path) not in problem["code"]
+
+
+@pytest.mark.parametrize(
+    "bad_project_file",
+    [
+        pytest.param("/etc/passwd", id="absolute"),
+        pytest.param("../../x.dwk", id="traversal"),
+        pytest.param("sub/x.dwk", id="separator"),
+        pytest.param("sub\\x.dwk", id="backslash-separator"),
+        pytest.param("", id="empty"),
+    ],
+)
+def test_validate_bundle_rejects_a_project_file_that_escapes_the_bundle(
+    tmp_path: Path, bad_project_file: str
+) -> None:
+    """Review finding #1 (PR 3 backend round): `manifest["project"]
+    ["project_file"]` must be a single, bundle-local component -- an
+    absolute path or a `..`/separator traversal must never be joined onto
+    `bundle_dir` and reported `complete=True`, and the invalid value must
+    never be echoed back in `problems`."""
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    manifest = {
+        "format": "quantized-portable-bundle",
+        "manifest_version": 1,
+        "dry_run": False,
+        "project": {"project_file": bad_project_file},
+        "sources": [],
+    }
+    (bundle_dir / MANIFEST_FILENAME).write_text(json.dumps(manifest), encoding="utf-8")
+
+    check = validate_bundle(str(bundle_dir))
+
+    assert check.complete is False
+    assert {"code": "project_file_invalid", "detail": "<invalid>"} in check.problems
+    for problem in check.problems:
+        assert problem["detail"] != bad_project_file
+
+
+def test_validate_bundle_accepts_a_valid_plain_project_file_name(tmp_path: Path) -> None:
+    """The positive control for the same check: an ordinary bundle-local
+    ``.dwk`` name is unaffected."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    publish_bundle(staging_root, destination)
+    check = validate_bundle(destination)
+    assert check.complete is True
+    assert not any(p["code"] == "project_file_invalid" for p in check.problems)
+
+
+def test_validate_bundle_source_unreadable_on_a_nan_byte_count(tmp_path: Path) -> None:
+    """Review finding #2: `int(expected_bytes)` on a non-finite `"bytes"`
+    value (`NaN`, which Python's `json` module happily round-trips even
+    though it is not strict JSON) must never raise out of `validate_bundle`
+    -- it is a `source_unreadable` problem instead."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    publish_bundle(staging_root, destination)
+    manifest_path = Path(destination) / MANIFEST_FILENAME
+    manifest_text = manifest_path.read_text(encoding="utf-8")
+    manifest = json.loads(manifest_text)
+    manifest["sources"][0]["packed"]["bytes"] = float("nan")
+    # `json.dumps` also happily emits the literal `NaN` token by default.
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    check = validate_bundle(destination)
+
+    assert check.complete is False
+    assert any(p["code"] == "source_unreadable" for p in check.problems)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0,
+    reason="chmod-based unreadability needs a non-root, POSIX user",
+)
+def test_validate_bundle_source_unreadable_when_the_file_cannot_be_read(tmp_path: Path) -> None:
+    """Review finding #2: an `OSError` reading a staged source's bytes
+    (e.g. a permission change after packing) must never raise out of
+    `validate_bundle` -- `source_unreadable`, not an uncaught exception."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    publish_bundle(staging_root, destination)
+    sources_dir = Path(destination) / "sources"
+    files = list(sources_dir.iterdir())
+    assert files
+    target = files[0]
+    old_mode = target.stat().st_mode
+    target.chmod(0o000)
+    try:
+        check = validate_bundle(destination, verify_checksums=True)
+    finally:
+        target.chmod(old_mode)  # restore so pytest's own tmp_path cleanup can remove it
+
+    assert check.complete is False
+    assert any(p["code"] == "source_unreadable" for p in check.problems)
+
+
+# ── atomic_replace_file: LF-canonical writes ────────────────────────────
+
+
+def test_atomic_replace_file_writes_lf_only_bytes_even_with_crlf_in_content(
+    tmp_path: Path,
+) -> None:
+    """Review finding #6: `os.fdopen`'s default text-mode newline
+    translation would turn every "\\n" in ``content`` into "\\r\\n" on
+    Windows; ``atomic_replace_file`` must write the string's bytes exactly
+    as given, on every platform, since the caller (``manifest_json``) has
+    already decided the canonical (LF-only) serialization."""
+    directory = str(tmp_path)
+    dest = os.path.join(directory, "out.json")
+    content = manifest_json({"a": 1, "b": [1, 2, 3]})
+    assert "\r" not in content  # sanity: manifest_json is already LF-only
+
+    atomic_replace_file(directory, dest, content, temp_prefix=".qz-test-")
+
+    written = Path(dest).read_bytes()
+    assert b"\r" not in written
+    assert written == content.encode("utf-8")
 
 
 def test_validate_bundle_no_external_sources_at_all(tmp_path: Path) -> None:

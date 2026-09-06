@@ -28,13 +28,22 @@ import { resolveBundlePath } from "./bundlePath";
  *  even for a dataset loaded from a PACKED project — every downstream
  *  consumer (reimport, relink, pathState) keeps reading a real, absolute
  *  `path` exactly as before. What changes is provenance only: a source
- *  RESOLVED from a bundle-relative manifest entry (`lib/bundlePath.ts`)
- *  additionally carries `bundlePath` (the bundle-relative path it was
- *  resolved FROM) and, optionally, `packedFrom` (the absolute path the
- *  packer copied from — display-only provenance, never resolved back to a
- *  filesystem path). `lib/workspaceSerialize.ts`'s `serializeWorkspace` is
- *  what turns `bundlePath` back into an on-disk `kind: "bundle"` entry when
- *  it can prove the project is still saved next to its own bundle. */
+ *  resolved from a bundle-relative manifest entry (`lib/bundlePath.ts`)
+ *  carries, optionally, `packedFrom` (the absolute path the packer copied
+ *  from — display-only provenance, never resolved back to a filesystem
+ *  path). `lib/workspaceSerialize.ts`'s `serializeWorkspace` decides
+ *  whether to write a source back as `kind: "bundle"` by re-deriving the
+ *  bundle-relative form fresh from the live `path` at SERIALIZE time
+ *  (`lib/bundlePath.ts`'s `deriveBundleRelativePath`) — PR 3 review round
+ *  #1/#2: there used to be a parse-time `bundlePath` field recording where a
+ *  source was resolved FROM, compared by a case-folding path-identity check
+ *  at save time; both are gone. A case-folding identity check meant two
+ *  differently-cased spellings of the same directory on a case-sensitive
+ *  volume (`/data/Proj` vs `/data/proj`) would have been treated as the
+ *  same project and written a bundle reference to a file that does not
+ *  exist there — deriving fresh from `path` + the ACTUAL save destination,
+ *  with an exact case-sensitive compare, makes that bug structurally
+ *  impossible: there is no stale field left to compare against. */
 export interface DatasetSource {
   kind: "path";
   path: string;
@@ -49,13 +58,6 @@ export interface DatasetSource {
   mtime?: number;
   /** Observed size in bytes at the same moment. */
   size?: number;
-  /** The bundle-relative path (e.g. "sources/run1.csv") this source was
-   *  resolved FROM, present only when this dataset was loaded from a
-   *  packed project (`parseDatasetSource` with a `projectDir` and a
-   *  `kind: "bundle"` manifest entry). Never written directly by a caller
-   *  — `serializeWorkspace` reads it back to decide whether the on-disk
-   *  entry can round-trip as `kind: "bundle"` again (see its own doc). */
-  bundlePath?: string;
   /** Provenance only: the absolute path the packer copied this source
    *  FROM, on whatever machine did the packing. Display-only — never
    *  resolved against the current filesystem (that machine may not even
@@ -81,14 +83,16 @@ export interface DatasetSource {
  *  P1.7 PR 3: also accepts a persisted `kind: "bundle"` entry — but ONLY
  *  when `projectDir` is given (the caller knows where the `.dwk` itself
  *  lives — see lib/workspace.ts's `parseWorkspace` doc for who has one and
- *  who doesn't) AND the entry's `path` passes `isBundleRelativePath`.
- *  Either gap degrades exactly like any other malformed source — `null`,
- *  never a guess — which is the documented fallback: the dataset keeps its
- *  embedded data snapshot and offers "Re-import from file…". A conforming
- *  bundle entry resolves to an ordinary `kind: "path"` result carrying the
- *  resolved absolute path plus `bundlePath` (so `serializeWorkspace` can
- *  round-trip it back to `kind: "bundle"` later) and `packedFrom` when
- *  present. */
+ *  who doesn't; an EMPTY `projectDir` counts as not given, PR 3 review
+ *  finding #3 — `resolveBundlePath` itself also refuses one) AND the
+ *  entry's `path` passes `isBundleRelativePath`. Either gap degrades
+ *  exactly like any other malformed source — `null`, never a guess — which
+ *  is the documented fallback: the dataset keeps its embedded data snapshot
+ *  and offers "Re-import from file…". A conforming bundle entry resolves to
+ *  an ordinary `kind: "path"` result carrying the resolved absolute path
+ *  (no separate `bundlePath` field is kept — PR 3 review finding #1/#2:
+ *  `serializeWorkspace` re-derives the bundle-relative form fresh from this
+ *  `path` at save time instead) and `packedFrom` when present. */
 export function parseDatasetSource(v: unknown, projectDir?: string): DatasetSource | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -97,7 +101,7 @@ export function parseDatasetSource(v: unknown, projectDir?: string): DatasetSour
     if (projectDir === undefined || typeof o.path !== "string") return null;
     const resolved = resolveBundlePath(projectDir, o.path);
     if (resolved === null) return null;
-    const source: DatasetSource = { kind: "path", path: resolved, bundlePath: o.path };
+    const source: DatasetSource = { kind: "path", path: resolved };
     if (typeof o.checksum === "string" && o.checksum) source.checksum = o.checksum;
     if (typeof o.mtime === "number" && Number.isFinite(o.mtime)) source.mtime = o.mtime;
     if (typeof o.size === "number" && Number.isFinite(o.size)) source.size = o.size;

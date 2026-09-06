@@ -8,6 +8,7 @@ cancellation) and how it classifies a path's status.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 import threading
@@ -28,6 +29,9 @@ from quantized.desktop_consent import (
     is_dir_consented,
     is_write_consented,
 )
+from quantized.desktop_source_probe import probe_source_path
+from quantized.portable.pack import pack_project
+from quantized.portable.project_rewrite import resolve_bundle_source
 
 
 class FakeWindow:
@@ -571,6 +575,63 @@ def test_grant_source_paths_declared_set_replaces_wholesale_on_reopen(tmp_path: 
 
     assert out["paths"] == [os.path.realpath(str(b_source))]
     assert not is_consented(os.path.realpath(str(a_source)))
+
+
+# --- P1.7 PR 3 backend review (finding #4): grant_source_paths realpaths
+# its argument against the process's OWN cwd, not the bundle directory --
+# so a raw bundle-RELATIVE string must never be eligible, even for a
+# genuinely-open packed project whose bundle copy IS declared under its
+# absolute path. Only the frontend's own parse-time resolution (a separate
+# PR/branch) is what turns a `kind: "bundle"` source into something this
+# method can ever grant.
+
+
+def test_grant_source_paths_relative_bundle_path_never_eligible_but_absolute_copy_is(
+    tmp_path: Path,
+) -> None:
+    def _probe(path: str) -> dict[str, Any]:
+        return dict(probe_source_path(path, compute_checksum=True))
+
+    src = tmp_path / "raw.csv"
+    src.write_bytes(b"hello")
+    payload = {
+        "format": "quantized-workspace",
+        "version": 4,
+        "datasets": [{"id": "d0", "name": "raw", "source": {"kind": "path", "path": str(src)}}],
+    }
+    destination = str(tmp_path / "bundle")
+    result = pack_project(
+        payload, "proj", destination, probe=_probe, packed_at="2026-09-06T00:00:00Z"
+    )
+    assert result.ok is True, result.errors
+    assert result.manifest is not None
+    project_file = result.manifest["project"]["project_file"]
+    project_path = str(Path(destination, project_file))
+
+    api = DesktopApi()
+    api.attach(FakeWindow([project_path]))
+    opened = api.open_project_file()
+    assert opened.get("error") is None
+
+    packed_payload = json.loads(Path(project_path).read_text(encoding="utf-8"))
+    bundle_rel_path = packed_payload["datasets"][0]["source"]["path"]
+    assert bundle_rel_path.startswith("sources/")
+
+    # The raw bundle-relative string realpaths against THIS PROCESS's cwd
+    # (almost certainly not `destination`), so it is never declared and
+    # must be dropped, not granted.
+    out_relative = api.grant_source_paths([bundle_rel_path])
+    assert out_relative["paths"] == []
+    assert not is_declared_source(os.path.realpath(bundle_rel_path))
+
+    # The RESOLVED absolute copy -- what `_read_granted` actually declared,
+    # and what the frontend's own parse-time resolution would send -- IS
+    # eligible.
+    resolved_abs = resolve_bundle_source(destination, bundle_rel_path)
+    assert resolved_abs is not None
+    out_abs = api.grant_source_paths([resolved_abs])
+    assert out_abs["paths"] == [os.path.realpath(resolved_abs)]
+    assert is_consented(os.path.realpath(resolved_abs))
 
 
 def test_opening_a_project_revokes_a_prior_relink_directory_grant(tmp_path: Path) -> None:
