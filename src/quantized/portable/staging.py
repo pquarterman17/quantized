@@ -82,14 +82,19 @@ from quantized.desktop_source_probe import _CHECKSUM_CHUNK_BYTES
 # module that actually constructs them, one layer down, alongside the
 # per-file copy logic) and re-exported here as this package's public
 # surface -- keeping them there avoids a circular import (`.copying` needs
-# them; `stage_sources` here only ever passes them through).
+# them; `stage_sources` here only ever passes them through). `coerce_size`
+# is the same shared size-coercion helper `.copying` uses internally
+# (review finding #7): both modules must treat a malformed manifest row's
+# non-numeric ``size`` as ``0`` rather than raising.
 from .copying import (
+    ErrorCode,
     Probe,
     ProgressCallback,
     ShouldCancel,
     StagedFile,
     StageError,
     StageProgress,
+    coerce_size,
     stage_one_file,
 )
 from .layout import BUNDLE_FORMAT, SUPPORTED_MANIFEST_VERSIONS, is_bundle_relative, path_key
@@ -121,6 +126,14 @@ class StageResult:
     i.e. ``ok=True`` -- because the caller (PR 3) owns the staging
     directory from that point on and must not have it deleted out from
     under it. On any failure ``cleanup_ok`` is always a concrete bool.
+
+    On any failure (``ok=False``) ``staged`` is always ``[]`` and
+    ``bytes_copied`` is always ``0`` -- even when some files were
+    successfully copied before the failing one -- because the whole staging
+    directory, every file in it included, is deleted as part of that same
+    failure (review finding #5). These fields report what SURVIVES on disk
+    once :func:`stage_sources` returns, not a running tally of what was
+    briefly true mid-run.
     """
 
     ok: bool
@@ -140,10 +153,33 @@ def create_staging_dir(parent_dir: str) -> str:
 
     Raises ``ValueError`` when ``parent_dir`` is not an existing real
     directory.
+
+    ``tempfile.mkdtemp`` always creates its directory ``0o700`` (owner-only)
+    regardless of the process umask. That is fine for a directory this
+    module only ever reads/writes/deletes itself, but PR 3 renames this
+    directory into its FINAL bundle location, which would then inherit the
+    owner-only mode -- surprising for a bundle the user just asked to be
+    written to disk (review finding #6). On POSIX, relax the mode to
+    whatever an ordinarily-created directory here would get (``0o777`` minus
+    the process umask); a no-op on Windows, where POSIX permission bits
+    don't apply the same way and ``os.chmod`` is far more limited.
     """
     if not os.path.isdir(os.path.realpath(parent_dir)):
         raise ValueError(f"parent_dir is not an existing directory: {parent_dir!r}")
-    return tempfile.mkdtemp(prefix=STAGING_PREFIX, dir=parent_dir)
+    path = tempfile.mkdtemp(prefix=STAGING_PREFIX, dir=parent_dir)
+    if os.name != "nt":
+        # Read the umask by setting it to 0 and immediately restoring it --
+        # `os.umask` has no read-only form, so this is the standard way to
+        # observe it; done once, with the smallest possible window between
+        # the two calls, since it briefly changes process-wide state shared
+        # with any other thread that creates files concurrently.
+        current_umask = os.umask(0)
+        os.umask(current_umask)
+        try:
+            os.chmod(path, 0o777 & ~current_umask)
+        except OSError:
+            pass  # best-effort -- the directory still works at 0o700
+    return path
 
 
 def cleanup_staging_dir(staging_root: str) -> bool:
@@ -210,6 +246,18 @@ def stage_sources(
     """Copy every ``packable`` row of ``manifest`` into ``staging_root``,
     verifying each copy. See the module docstring for the full failure
     model, cancellation contract, and the ``originals_modified`` guarantee.
+
+    ``probe`` SHOULD be built with ``compute_checksum=False`` (review
+    finding #8). Every copied file's content is already verified against
+    the MANIFEST's own recorded checksum (see
+    :func:`quantized.portable.copying.stage_one_file`'s step 8) using the
+    hash computed once while streaming -- a probe that also computes a
+    checksum only adds a second, redundant full read of every source (plus
+    a further destination re-read this function already performs) purely to
+    recompute a value this function does not need from it. Pass a
+    checksum-computing probe only when the extra, INDEPENDENT probe-vs-
+    streamed comparison (step 9, ``checksum_mismatch``) is deliberately
+    wanted.
 
     Behaviour, in order:
 
@@ -295,37 +343,72 @@ def stage_sources(
             )
         seen[key] = row.get("source_id")
 
-    bytes_total = sum(int(row.get("size") or 0) for row in selected)
+    bytes_total = sum(coerce_size(row.get("size")) for row in selected)
 
     staged: list[StagedFile] = []
     bytes_done = 0
     error: StageError | None = None
-    for index, row in enumerate(selected, start=1):
-        if should_cancel is not None and should_cancel():
-            error = StageError(
-                row.get("source_id"),
-                row.get("bundle_path"),
-                "cancelled",
-                "staging cancelled before this source was copied",
+    # The per-file loop below is wrapped in `except BaseException` (review
+    # finding #2): `stage_one_file` is not exception-free (a malformed row
+    # missing a required key raises `KeyError`; `os.makedirs` on its
+    # destination parent can raise for an OS-level reason, e.g. a regular
+    # FILE already occupying that path, or ENOSPC/EACCES), and a
+    # caller-supplied `progress`/`should_cancel` callback can raise too. Any
+    # of those must still tear down the staging directory -- an exception
+    # escaping uncaught here would leak it. `KeyboardInterrupt`/`SystemExit`
+    # are re-raised (after cleanup runs) rather than swallowed into a
+    # `StageResult`, since those signal the process itself is stopping.
+    try:
+        for index, row in enumerate(selected, start=1):
+            if should_cancel is not None and should_cancel():
+                error = StageError(
+                    row.get("source_id"),
+                    row.get("bundle_path"),
+                    "cancelled",
+                    "staging cancelled before this source was copied",
+                )
+                break
+            outcome = stage_one_file(
+                row,
+                staging_root,
+                probe=probe,
+                progress=progress,
+                should_cancel=should_cancel,
+                chunk_bytes=chunk_bytes,
+                file_index=index,
+                file_count=len(selected),
+                bytes_total=bytes_total,
+                bytes_done_before=bytes_done,
             )
-            break
-        outcome = stage_one_file(
-            row,
-            staging_root,
-            probe=probe,
-            progress=progress,
-            should_cancel=should_cancel,
-            chunk_bytes=chunk_bytes,
-            file_index=index,
-            file_count=len(selected),
-            bytes_total=bytes_total,
-            bytes_done_before=bytes_done,
+            if isinstance(outcome, StageError):
+                error = outcome
+                break
+            staged_file, bytes_done = outcome
+            staged.append(staged_file)
+    except BaseException as exc:
+        cleanup_ok = cleanup_staging_dir(staging_root)
+        if isinstance(exc, (KeyboardInterrupt, SystemExit)):
+            raise
+        code: ErrorCode = (
+            "invalid_manifest" if isinstance(exc, (KeyError, TypeError)) else "write_failed"
         )
-        if isinstance(outcome, StageError):
-            error = outcome
-            break
-        staged_file, bytes_done = outcome
-        staged.append(staged_file)
+        return StageResult(
+            ok=False,
+            cancelled=False,
+            staging_root=None if cleanup_ok else staging_root,
+            staged=[],
+            errors=[
+                StageError(
+                    None,
+                    None,
+                    code,
+                    f"unexpected error while staging: {type(exc).__name__}",
+                )
+            ],
+            cleanup_ok=cleanup_ok,
+            bytes_copied=0,
+            originals_modified=False,
+        )
 
     if error is not None:
         cleanup_ok = cleanup_staging_dir(staging_root)
@@ -333,10 +416,16 @@ def stage_sources(
             ok=False,
             cancelled=error.code == "cancelled",
             staging_root=None if cleanup_ok else staging_root,
-            staged=staged,
+            # Every already-staged file was just deleted along with the rest
+            # of `staging_root` above -- report none of them as staged and
+            # no bytes copied, rather than the pre-rollback counts (review
+            # finding #5): a caller reading `staged`/`bytes_copied` on a
+            # failed result must see what survives on disk (nothing), not
+            # what was briefly true mid-run.
+            staged=[],
             errors=[error],
             cleanup_ok=cleanup_ok,
-            bytes_copied=bytes_done,
+            bytes_copied=0,
             originals_modified=False,
         )
 

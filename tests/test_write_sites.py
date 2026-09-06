@@ -148,14 +148,14 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "_write_disabled_sources: persists the enabled/disabled plugin list "
         "to this app's own config-dir `plugins.json`, not a dataset."
     ),
-    "portable/copying.py": (
-        "_remove_partial (os.remove): deletes only the ONE staging-directory "
-        "destination file `stage_one_file` itself just created under a "
-        "caller-supplied staging root (P1.7 Pack Project PR 2) when a copy "
-        "fails partway through -- the path is always `join_bundle_path`'s "
-        "output inside the staging dir, never an original/source path (every "
-        "source is opened `\"rb\"` only; see staging.py's module docstring's "
-        "`originals_modified` guarantee)."
+    "portable/copy_stream.py": (
+        "remove_partial (os.remove): deletes only the ONE staging-directory "
+        "destination file `stage_one_file` (in `copying.py`, one layer up) "
+        "itself just created under a caller-supplied staging root (P1.7 Pack "
+        "Project PR 2) when a copy fails partway through -- the path is "
+        "always `join_bundle_path`'s output inside the staging dir, never an "
+        "original/source path (every source is opened `\"rb\"` only; see "
+        "staging.py's module docstring's `originals_modified` guarantee)."
     ),
     "portable/staging.py": (
         "cleanup_staging_dir (os.remove): tears down a whole staging "
