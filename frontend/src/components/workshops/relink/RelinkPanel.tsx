@@ -9,6 +9,7 @@
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
+import { isCommittableRow } from "../../../lib/relink";
 import { useRelink, relinkableDatasets, type RelinkPreviewRow, type RelinkRowStatus } from "../../../store/relink";
 
 // Non-"resolved" statuses each already say exactly what happened — kept as
@@ -36,15 +37,16 @@ const STATUS_COLOR: Record<RelinkRowStatus, string> = {
  *  (blocked, offer Import as new version) / Could not verify (per-row "Use
  *  anyway") / the distinct Missing / Offline / Permission denied statuses. */
 function rowLabel(row: RelinkPreviewRow): string {
-  // P1.7 slice 2: a contested destination is stated BEFORE any verdict —
-  // whether the file matches is moot until the user says which dataset
-  // gets it. A "skip" row stays exactly as recorded.
-  if (row.collision) {
-    const others = row.collision.others.join(", ");
-    if (row.collision.resolution === "keep") return `Keeps this file (over ${others})`;
-    if (row.collision.resolution === "skip") return "Skipped — another dataset keeps this file";
-    return `Same destination as ${others} — choose one`;
+  // P1.7 slice 2: an UNRESOLVED contested destination is stated before any
+  // verdict — whether the file matches is moot until the user says which
+  // dataset gets it. A "skip" row stays exactly as recorded. A "keep" row
+  // falls through to its ordinary verdict label: being chosen does not
+  // make a changed/unverified row committable, and the label must not
+  // claim otherwise.
+  if (row.collision && !row.collision.resolution) {
+    return `Same destination as ${row.collision.others.join(", ")} — choose one`;
   }
+  if (row.collision?.resolution === "skip") return "Skipped — another dataset keeps this file";
   if (row.status !== "resolved") return STATUS_LABEL[row.status];
   if (row.changeVerdict === "changed") return "Changed — content differs";
   if (row.changeVerdict === "unknown") {
@@ -86,13 +88,10 @@ export default function RelinkPanel() {
   // session — lib/relink.sourceChangeVerdict) is committable ONLY once
   // per-row escalated via `escalateUnknownRow`; a bulk commit never sweeps it in
   // (store/relink.ts's `commit()` filter mirrors this exactly).
-  const committable = preview.filter(
-    (r) =>
-      r.status === "resolved" &&
-      r.changeVerdict !== "changed" &&
-      (r.changeVerdict !== "unknown" || r.escalated) &&
-      (!r.collision || r.collision.resolution === "keep"),
-  ).length;
+  // ONE predicate shared with store/relinkCommit.ts's candidate filter
+  // (lib/relink.ts's `isCommittableRow`) so this count and the write never
+  // disagree.
+  const committable = preview.filter(isCommittableRow).length;
   const changedCount = preview.filter((r) => r.changeVerdict === "changed").length;
   const unverifiedCount = preview.filter((r) => r.changeVerdict === "unknown" && !r.escalated).length;
   const collisionCount = preview.filter((r) => r.collision && !r.collision.resolution).length;

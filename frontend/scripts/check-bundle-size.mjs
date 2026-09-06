@@ -58,7 +58,7 @@ import { fileURLToPath } from "node:url";
  *  in store/relinkCommit.ts and the row builder in store/relinkPreview.ts,
  *  both `import()`ed on the click (the folderOps precedent), which lands
  *  lib/relink.ts in a lazy chunk with them (relink / relinkPreview /
- *  relinkCommit chunks: 1.7 + 1.1 + 2.3 kB). The R3 identity snapshot is
+ *  relinkCommit chunks: 1.7 + 1.1 + 2.3 kB; 886.4 kB after the self-review pass). The R3 identity snapshot is
  *  still taken synchronously at the click, before the chunk is awaited.
  *
  *  2026-09-04 — pin UNCHANGED at 910,711; one split funds P3.7's eager

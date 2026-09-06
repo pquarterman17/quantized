@@ -4,6 +4,7 @@ import {
   evaluateCommitProbe,
   findCandidateCollisions,
   guardVerdict,
+  isCommittableRow,
   pathKey,
   joinUnderRoot,
   relinkedCandidate,
@@ -383,6 +384,47 @@ describe("findCandidateCollisions", () => {
     expect(out.get("c")).toEqual(["a", "b"]);
   });
 
+  // The probe is the oracle for "one file": case-variant candidates that
+  // probed as two DIFFERENT files (a case-sensitive volume) are not contested.
+  it("exempts a group whose rows are provably distinct files by checksum", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", candidateChecksum: "sha256:1", candidateSize: 10 },
+      { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", candidateChecksum: "sha256:2", candidateSize: 10 },
+    ]);
+    expect(out.size).toBe(0);
+  });
+
+  it("exempts a group whose rows are provably distinct files by size when no checksum is available", () => {
+    const out = findCandidateCollisions([
+      { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", candidateChecksum: null, candidateSize: 10 },
+      { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", candidateChecksum: null, candidateSize: 11 },
+    ]);
+    expect(out.size).toBe(0);
+  });
+
+  it("stays conservative when the probes agree or a fingerprint is missing on either side", () => {
+    expect(
+      findCandidateCollisions([
+        { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", candidateChecksum: "sha256:1", candidateSize: 10 },
+        { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", candidateChecksum: "sha256:1", candidateSize: 10 },
+      ]).size,
+    ).toBe(2);
+    expect(
+      findCandidateCollisions([
+        { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", candidateChecksum: "sha256:1", candidateSize: 10 },
+        { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", candidateChecksum: null, candidateSize: null },
+      ]).size,
+    ).toBe(2);
+    // Three rows: a/b provably distinct, c unfingerprinted — the whole group stays reported.
+    expect(
+      findCandidateCollisions([
+        { datasetId: "a", oldPath: "/old/A.csv", candidatePath: "/new/A.csv", candidateChecksum: "sha256:1" },
+        { datasetId: "b", oldPath: "/old/a.csv", candidatePath: "/new/a.csv", candidateChecksum: "sha256:2" },
+        { datasetId: "c", oldPath: "/old/A.CSV", candidatePath: "/new/A.CSV" },
+      ]).size,
+    ).toBe(3);
+  });
+
   it("ignores rows without a candidate", () => {
     const out = findCandidateCollisions([
       { datasetId: "a", oldPath: "/old/a.csv", candidatePath: null },
@@ -398,5 +440,26 @@ describe("findCandidateCollisions", () => {
       { datasetId: "b", oldPath: `C:${B}old${B}run${B}a.csv`, candidatePath: "/new/run/a.csv" },
     ]);
     expect(out.get("a")).toEqual(["b"]);
+  });
+});
+
+describe("isCommittableRow (the one predicate the panel count and commit share)", () => {
+  const base = { status: "resolved", candidatePath: "/new/a.csv", changeVerdict: "unchanged" as const };
+  it("resolved + unchanged commits", () => {
+    expect(isCommittableRow(base)).toBe(true);
+  });
+  it("never a non-resolved row, a candidate-less row, or a changed row", () => {
+    expect(isCommittableRow({ ...base, status: "missing" })).toBe(false);
+    expect(isCommittableRow({ ...base, candidatePath: null })).toBe(false);
+    expect(isCommittableRow({ ...base, changeVerdict: "changed" })).toBe(false);
+  });
+  it("an unknown row only once escalated", () => {
+    expect(isCommittableRow({ ...base, changeVerdict: "unknown" })).toBe(false);
+    expect(isCommittableRow({ ...base, changeVerdict: "unknown", escalated: true })).toBe(true);
+  });
+  it("a contested destination only for its kept row", () => {
+    expect(isCommittableRow({ ...base, collision: {} })).toBe(false);
+    expect(isCommittableRow({ ...base, collision: { resolution: "skip" } })).toBe(false);
+    expect(isCommittableRow({ ...base, collision: { resolution: "keep" } })).toBe(true);
   });
 });

@@ -10,7 +10,7 @@
 // inline below, unchanged from where it lived in the store.
 
 import { probeSource } from "../lib/desktopBridge";
-import { evaluateCommitProbe, pathKey } from "../lib/relink";
+import { evaluateCommitProbe, findCandidateCollisions, isCommittableRow } from "../lib/relink";
 import type { Dataset } from "../lib/types";
 import type { RelinkState } from "./relink";
 import { toast } from "./toasts";
@@ -31,6 +31,11 @@ type PendingWrite = {
    *  even when the path text is identical, and a string compare would miss
    *  that entirely. */
   orig: NonNullable<Dataset["source"]>;
+  /** The FRESH commit-time probe's fingerprint (not the provenance being
+   *  written, which for an escalated row is the ORIGINAL recorded one) —
+   *  what the write-side collision guard below hands
+   *  `findCandidateCollisions` as its "is this really one file" oracle. */
+  probed: { checksum: string | null; size: number | null };
 };
 
 export async function commitRelink(
@@ -43,18 +48,9 @@ export async function commitRelink(
   liveById: ReadonlyMap<string, Dataset>,
 ): Promise<void> {
   const { preview } = get();
-  const candidates = preview.filter(
-    (r) =>
-      r.status === "resolved" &&
-      r.candidatePath &&
-      r.changeVerdict !== "changed" &&
-      // P1-2 defect 2: an "unknown" row commits ONLY once explicitly
-      // escalated via `escalateUnknownRow` — a bulk commit never sweeps it in.
-      (r.changeVerdict !== "unknown" || r.escalated) &&
-      // P1.7 slice 2: a contested destination commits ONLY its one
-      // explicitly chosen row — never both, never a default.
-      (!r.collision || r.collision.resolution === "keep"),
-  );
+  // `isCommittableRow` (lib/relink.ts) is the SAME predicate the panel's
+  // Relink count uses — the button and the write can never disagree.
+  const candidates = preview.filter(isCommittableRow);
   if (candidates.length === 0) {
     toast("nothing to relink — no resolved, unchanged candidates", "danger");
     return;
@@ -119,7 +115,14 @@ export async function commitRelink(
           unverifiedAtCommit++;
           return null;
         }
-        return [row.datasetId, { source: { kind: "path" as const, path: row.candidatePath!, ...outcome }, orig: src }];
+        return [
+          row.datasetId,
+          {
+            source: { kind: "path" as const, path: row.candidatePath!, ...outcome },
+            orig: src,
+            probed: { checksum: probe.checksum, size: probe.size },
+          },
+        ];
       }),
     );
     pending = new Map(results.flatMap((r) => (r ? [r] : [])));
@@ -153,19 +156,18 @@ export async function commitRelink(
   // group (never pick a winner here) — the preview filter above is the
   // UI contract, this is the invariant that holds even if state was
   // edited underneath it.
-  const byDest = new Map<string, { ids: string[]; oldPaths: Set<string> }>();
-  for (const [id, entry] of pending) {
-    const g = byDest.get(pathKey(entry.source.path)) ?? { ids: [], oldPaths: new Set<string>() };
-    g.ids.push(id);
-    g.oldPaths.add(entry.orig.path);
-    byDest.set(pathKey(entry.source.path), g);
-  }
-  for (const g of byDest.values()) {
-    if (g.oldPaths.size < 2) continue;
-    for (const id of g.ids) {
-      pending.delete(id);
-      collidedAtCommit++;
-    }
+  const collided = findCandidateCollisions(
+    [...pending].map(([id, e]) => ({
+      datasetId: id,
+      oldPath: e.orig.path,
+      candidatePath: e.source.path,
+      candidateChecksum: e.probed.checksum,
+      candidateSize: e.probed.size,
+    })),
+  );
+  for (const id of collided.keys()) {
+    pending.delete(id);
+    collidedAtCommit++;
   }
   // F5 (code-review, actionable-advice split): the panel's "Use anyway"
   // escalate control (RelinkPanel.tsx) renders ONLY for a row Preview
@@ -182,8 +184,10 @@ export async function commitRelink(
   let skippedChanged = 0;
   let escalatable = 0;
   let collisionUnresolved = 0;
+  let collisionSkipped = 0;
   for (const r of preview) {
-    if (r.collision && r.collision.resolution !== "keep") collisionUnresolved++;
+    if (r.collision && !r.collision.resolution) collisionUnresolved++;
+    else if (r.collision?.resolution === "skip") collisionSkipped++;
     else if (r.changeVerdict === "changed") skippedChanged++;
     else if (r.status === "resolved" && r.changeVerdict === "unknown" && !r.escalated) escalatable++;
   }
@@ -209,6 +213,7 @@ export async function commitRelink(
       [identityChangedAtCommit, "moved/reimported"],
       [unreachableAtCommit, "unreachable"],
       [collisionUnresolved, "share a destination (choose one per file to include)"],
+      [collisionSkipped, "skipped (another dataset keeps the file)"],
       [collidedAtCommit, "would collide on one destination"],
     ] as const
   ).flatMap(([n, label]) => (n > 0 ? [`${n} ${label}`] : []));

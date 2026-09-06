@@ -219,9 +219,22 @@ export const useRelink = create<RelinkState>((set, get) => ({
   // dataset snapshot the R3 identity guard compares against is taken HERE,
   // synchronously, before the chunk is awaited: a swap landing while the
   // module loads must be caught exactly like one landing during the probe.
-  commit: () => {
+  // `busy` is ALSO set here, synchronously, and held until the body has
+  // fully returned: the panel gates Relink/Preview/Cancel on it, and the
+  // chunk load is an async window the old inline body never had — a Cancel
+  // or a second Relink landing inside it must find the panel busy, never
+  // a commit that then writes after the panel closed, or two concurrent
+  // commits each recording its own history entry.
+  commit: async () => {
+    if (get().busy) return;
     const liveById = new Map(useApp.getState().datasets.map((d) => [d.id, d]));
-    return import("./relinkCommit").then((m) => m.commitRelink(get, set, liveById));
+    set({ busy: true });
+    try {
+      const { commitRelink } = await import("./relinkCommit");
+      await commitRelink(get, set, liveById);
+    } finally {
+      set({ busy: false });
+    }
   },
 
   escalateUnknownRow: (datasetId) =>

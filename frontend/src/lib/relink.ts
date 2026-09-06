@@ -281,24 +281,78 @@ export function pathKey(path: string): string {
  *  collision only if at least two distinct old-path strings meet at the
  *  candidate — and then EVERY row in that group is reported, shared-source
  *  members included, since the destination is contested for all of them.
- *  Rows without a candidate are ignored. Returns, per colliding
- *  `datasetId`, the ids of the OTHER rows in its group (in input order). */
-export function findCandidateCollisions(
-  rows: readonly { datasetId: string; oldPath: string; candidatePath: string | null }[],
-): Map<string, string[]> {
-  const groups = new Map<string, { ids: string[]; oldPaths: Set<string> }>();
+ *  Rows without a candidate are ignored.
+ *
+ *  The probe is the oracle for "one file", so a group is EXEMPT when every
+ *  pair of its rows is PROVABLY two files — differing non-null
+ *  `candidateChecksum`s, or differing non-null `candidateSize`s (a
+ *  case-sensitive volume where `/new/A.csv` and `/new/a.csv` really are
+ *  two files, each probed on its own). Any pair the probes cannot tell
+ *  apart (equal fingerprints, or a fingerprint missing on either side)
+ *  keeps the whole group reported — conservative by design.
+ *
+ *  Returns, per colliding `datasetId`, the ids of the OTHER rows in its
+ *  group (in input order). */
+export interface CollisionRow {
+  datasetId: string;
+  oldPath: string;
+  candidatePath: string | null;
+  candidateChecksum?: string | null;
+  candidateSize?: number | null;
+}
+
+function provablyDistinct(a: CollisionRow, b: CollisionRow): boolean {
+  if (a.candidateChecksum != null && b.candidateChecksum != null) return a.candidateChecksum !== b.candidateChecksum;
+  return a.candidateSize != null && b.candidateSize != null && a.candidateSize !== b.candidateSize;
+}
+
+export function findCandidateCollisions(rows: readonly CollisionRow[]): Map<string, string[]> {
+  const groups = new Map<string, { rows: CollisionRow[]; oldPaths: Set<string> }>();
   for (const r of rows) {
     if (r.candidatePath === null) continue;
     const key = pathKey(r.candidatePath);
-    const g = groups.get(key) ?? { ids: [], oldPaths: new Set<string>() };
-    g.ids.push(r.datasetId);
+    const g = groups.get(key) ?? { rows: [], oldPaths: new Set<string>() };
+    g.rows.push(r);
     g.oldPaths.add(r.oldPath);
     groups.set(key, g);
   }
   const out = new Map<string, string[]>();
   for (const g of groups.values()) {
     if (g.oldPaths.size < 2) continue;
-    for (const id of g.ids) out.set(id, g.ids.filter((other) => other !== id));
+    let allDistinct = true;
+    for (let i = 0; i < g.rows.length && allDistinct; i++) {
+      for (let j = i + 1; j < g.rows.length; j++) {
+        if (!provablyDistinct(g.rows[i], g.rows[j])) {
+          allDistinct = false;
+          break;
+        }
+      }
+    }
+    if (allDistinct) continue;
+    const ids = g.rows.map((r) => r.datasetId);
+    for (const id of ids) out.set(id, ids.filter((other) => other !== id));
   }
   return out;
+}
+
+/** The ONE "may this preview row be written by commit" rule, shared by
+ *  the panel's Relink count (RelinkPanel.tsx) and `store/relinkCommit.ts`'s
+ *  candidate filter so the button and the write can never disagree:
+ *  resolved, not "changed" (box 5), "unknown" only once per-row escalated
+ *  (P1-2 defect 2), and — P1.7 slice 2 — a contested destination only for
+ *  its one explicitly kept row. */
+export function isCommittableRow(row: {
+  status: string;
+  candidatePath: string | null;
+  changeVerdict: "unchanged" | "changed" | "unknown";
+  escalated?: boolean;
+  collision?: { resolution?: "keep" | "skip" };
+}): boolean {
+  return (
+    row.status === "resolved" &&
+    row.candidatePath !== null &&
+    row.changeVerdict !== "changed" &&
+    (row.changeVerdict !== "unknown" || row.escalated === true) &&
+    (!row.collision || row.collision.resolution === "keep")
+  );
 }

@@ -53,7 +53,11 @@ export async function buildPreviewRows(
       candidateSize: probe.size,
     });
   }
-  const collisions = findCandidateCollisions(rows);
+  // Only a row that COULD commit contests a destination: a missing/offline/
+  // permission-denied/unavailable row can never be written, so asking the
+  // user to choose between it and a resolved one would be a choice about
+  // nothing — and its own status label already says what is wrong with it.
+  const collisions = findCandidateCollisions(rows.filter((r) => r.status === "resolved"));
   if (collisions.size === 0) return rows;
   const nameOf = new Map(rows.map((r) => [r.datasetId, r.datasetName]));
   return rows.map((r) => {
