@@ -52,6 +52,18 @@ describe("ReimportAllDialog — problem report", () => {
     expect(screen.getByText(/1 of 2 sources could not be re-imported/)).toBeInTheDocument();
   });
 
+  it("labels a permission-denied source as no-access, not missing or offline (P1.1, #303 review)", () => {
+    useApp.setState({
+      reimportAllRows: [
+        row({ datasetId: "d1", datasetName: "A.dat", outcome: "denied", message: "source exists but cannot be read (permission denied) — restore access and retry" }),
+      ],
+    });
+    render(<ReimportAllDialog />);
+    expect(screen.getByText(/No access/)).toBeInTheDocument();
+    expect(screen.getByText(/restore access/)).toBeInTheDocument();
+    expect(screen.queryByText(/Missing|Offline/)).not.toBeInTheDocument();
+  });
+
   it("Close discards the report with zero mutation", () => {
     useApp.setState({ reimportAllRows: [row({ outcome: "missing", message: "gone" })] });
     render(<ReimportAllDialog />);

@@ -22,12 +22,14 @@ import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { useToasts } from "./toasts";
+import { useWorkingPaths } from "./workingPaths";
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
 
 interface FakeApi {
-  save_file_dialog?: (name?: string) => Promise<Record<string, unknown>>;
+  save_file_dialog?: (name?: string, directory?: string) => Promise<Record<string, unknown>>;
   write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
+  path_status?: (path: string) => Promise<Record<string, unknown>>;
 }
 
 function setShell(api: FakeApi | null): void {
@@ -92,6 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   setShell(null);
   localStorage.clear();
+  useWorkingPaths.setState({ paths: [], current: "" });
   useRecentProjects.setState({ recentProjects: [] });
   useToasts.setState({ toasts: [] });
   useProjectLock.setState({
@@ -136,6 +139,47 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String), expect.any(String));
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  // P1.1: "working-directory selection affects the next chooser" — Save As
+  // opens where the user works and suggests the open project's own name.
+  it("with a project open, opens the save dialog NEXT TO it with its own name — never in the last import folder", async () => {
+    // Self-review: seeding at the import folder with the project's name
+    // pre-filled made a same-named fork one Enter away, and that fork then
+    // became currentProject for every later quick save.
+    const dialog = vi.fn(async () => ({ path: "/proj/run3.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/run3.dwk" }) });
+    useWorkingPaths.getState().use("/data/runs");
+    useApp.getState().setCurrentProject({ name: "run3.dwk", path: "/proj/run3.dwk" });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("run3.dwk", "/proj");
+  });
+
+  it("with no project open, opens the save dialog at the current working path", async () => {
+    const dialog = vi.fn(async () => ({ path: "/data/runs/workspace.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/data/runs/workspace.dwk" }) });
+    useWorkingPaths.getState().use("/data/runs");
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "/data/runs");
+  });
+
+  it("suggests workspace.dwk and no directory when nothing is known yet", async () => {
+    const dialog = vi.fn(async () => ({ path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/workspace.dwk" }) });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "");
+  });
+
+  it("remembers the folder actually saved into; a cancel remembers nothing", async () => {
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/deep/workspace.dwk" }),
+      write_project_file: async () => ({ ok: true, path: "/proj/deep/workspace.dwk" }),
+    });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(useWorkingPaths.getState().current).toBe("/proj/deep");
+    setShell({ save_file_dialog: async () => ({ path: null }), write_project_file: async () => ({ ok: true }) });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(useWorkingPaths.getState().current).toBe("/proj/deep");
   });
 
   it("records a Recent Projects entry on a successful native save", async () => {
@@ -413,6 +457,39 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     expect(dialog).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String), expect.any(String));
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  // P1.1: an unmounted share is OFFLINE, not a write target — never write
+  // through an absent mount point, never nudge the user into forking the
+  // project via Save As for a drive that will be back.
+  it("refuses to write to a project whose volume is offline, says so, and keeps the project dirty", async () => {
+    const write = vi.fn(async () => ({ ok: true }));
+    setShell({
+      save_file_dialog: vi.fn(),
+      write_project_file: write,
+      path_status: async () => ({ state: "offline", path: "/mnt/share/workspace.dwk" }),
+    });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/mnt/share/workspace.dwk" });
+    useApp.getState().markProjectDirty();
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().projectDirty).toBe(true);
+    expect(useToasts.getState().toasts.some((t) => /not available right now/.test(t.msg))).toBe(true);
+  });
+
+  it("still writes when the file is merely missing on a live volume (the write recreates it)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({
+      save_file_dialog: vi.fn(),
+      write_project_file: write,
+      path_status: async () => ({ state: "missing", path: "/proj/workspace.dwk" }),
+    });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    await useApp.getState().saveWorkspace();
+    expect(write).toHaveBeenCalledOnce();
   });
 
   it("clears the dirty flag on a successful quick save", async () => {

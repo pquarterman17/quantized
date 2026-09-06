@@ -18,7 +18,7 @@ import { api, CANCELLED, num, str, type PathState } from "./desktopBridge";
  *  reachable by stat but not by content read — never a stand-in for "the
  *  checksum is empty". */
 export interface SourceProbe {
-  state: PathState | "permission_denied";
+  state: PathState;
   path: string | null;
   size: number | null;
   mtime: number | null;

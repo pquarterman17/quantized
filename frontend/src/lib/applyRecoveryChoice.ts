@@ -45,7 +45,17 @@ export function applyRecoverAutosave(prompt: RecoveryPrompt): void {
  *  it is still newer than whatever they save next. */
 export async function applyKeepLastProject(prompt: RecoveryPrompt): Promise<void> {
   useRecoveryChoice.getState().clearRecovery();
-  await openRecentProject(prompt.lastProject.name, prompt.lastProject.path);
+  const outcome = await openRecentProject(prompt.lastProject.name, prompt.lastProject.path);
+  // P1.1: after a relaunch the reopen goes through a native dialog (consent
+  // is per-process), and cancelling it is silent for a Recent click — but
+  // here the prompt is already gone, so an empty session with no word
+  // would read as "the recovery lost my work". Say what actually happened.
+  if (outcome === "cancelled") {
+    toast(
+      `"${prompt.lastProject.name}" was not reopened — use File ▸ Open recent project to try again; the autosave stays available next launch`,
+      "info",
+    );
+  }
 }
 
 /** "Cancel" — closes the prompt and does nothing else. Both candidates

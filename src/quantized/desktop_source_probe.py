@@ -132,7 +132,14 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
             "path": resolved,
         }
     except (OSError, ValueError):
-        return {"state": "invalid", "path": resolved}
+        # A stale/unreachable mount surfaces as ESTALE/EIO/ETIMEDOUT (or
+        # Windows' ERROR_NOT_READY/ERROR_SEM_TIMEOUT -> EINVAL), never as
+        # ENOENT — still "the volume is gone", so still offline, not a
+        # malformed path (P1.1 self-review).
+        return {
+            "state": "invalid" if volume_present(resolved) else "offline",
+            "path": resolved,
+        }
     if not os.path.isfile(resolved):
         return {"state": "invalid", "path": resolved}
     out: dict[str, Any] = {

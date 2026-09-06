@@ -959,4 +959,31 @@ describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
     expect(useApp.getState().datasets[0].data).toEqual(raw);
     expect(useApp.getState().history).toHaveLength(0);
   });
+
+  // P1.1 (#303 review): `pathState` gained `permission_denied`; before this
+  // it fell through to the ordinary import and failed with a raw backend
+  // error. A present-but-unreadable file is neither missing nor offline and
+  // is not a relink case — the user needs access restored, not a new path.
+  it("permission denied: says the file exists but cannot be read, never imports, never opens Relink", async () => {
+    const { hasDesktopShell, pathState } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("permission_denied");
+    const { useRelink } = await import("./relink");
+    const openPanel = vi.fn();
+    useRelink.setState({ openPanel });
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(importFile).not.toHaveBeenCalled();
+    expect(uploadFile).not.toHaveBeenCalled();
+    const status = useApp.getState().status;
+    expect(status).toMatch(/permission denied/i);
+    expect(status).toMatch(/restore access/i);
+    expect(status).not.toMatch(/unavailable|unreachable|not found/i);
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/permission denied/i), "danger");
+    expect(openPanel).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
 });

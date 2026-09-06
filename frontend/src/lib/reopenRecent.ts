@@ -32,7 +32,7 @@ export interface ReopenStore {
 
 /** What reopening did — returned so the caller (and tests) can tell the
  *  outcomes apart without scraping status text. */
-export type ReopenOutcome = "imported" | "located" | "offline" | "picker";
+export type ReopenOutcome = "imported" | "located" | "offline" | "denied" | "picker";
 
 export async function reopenRecent(
   store: ReopenStore,
@@ -55,6 +55,12 @@ export async function reopenRecent(
       `${entry.name}: the drive or share is not available right now — reconnect and try again`,
     );
     return "offline";
+  }
+  if (state === "permission_denied") {
+    // Present but unreadable (P1.1): like offline, the file is NOT gone, so
+    // no Locate — the remedy is access, not a different path.
+    store.setStatus(`${entry.name}: exists but cannot be read (permission denied)`);
+    return "denied";
   }
   if (state === "unknown") {
     // No desktop bridge to ask. Do not guess that the file is gone.

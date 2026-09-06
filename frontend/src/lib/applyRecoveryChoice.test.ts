@@ -6,10 +6,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
-import { pathState, readProject } from "./desktopBridge";
+import { CANCELLED, openProject, pathState, readProject } from "./desktopBridge";
 import { WORKSPACE_FORMAT, parseWorkspace } from "./workspace";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
+import { useToasts } from "../store/toasts";
 import {
   applyCancelRecovery,
   applyKeepLastProject,
@@ -21,6 +22,7 @@ vi.mock("./desktopBridge", async (orig) => ({
   ...(await orig<typeof import("./desktopBridge")>()),
   pathState: vi.fn(),
   readProject: vi.fn(),
+  openProject: vi.fn(),
 }));
 
 const WS = JSON.stringify({
@@ -48,6 +50,9 @@ beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(pathState).mockReset();
   vi.mocked(readProject).mockReset();
+  vi.mocked(openProject).mockReset();
+  vi.mocked(openProject).mockResolvedValue(null);
+  useToasts.setState({ toasts: [] });
   useApp.setState({ datasets: [], activeId: null, currentProject: null, projectDirty: false });
   useRecoveryChoice.setState({ pending: null });
 });
@@ -84,6 +89,26 @@ describe("applyKeepLastProject", () => {
     useRecoveryChoice.setState({ pending: prompt() });
     await applyKeepLastProject(prompt());
     expect(useRecoveryChoice.getState().pending).toBeNull();
+  });
+
+  // P1.1: after a relaunch consent has lapsed, so "Keep" goes through a
+  // native dialog; cancelling it must not leave an unexplained empty
+  // session with the prompt already gone.
+  it("says so when the reopen dialog is cancelled — the prompt is gone and nothing loaded", async () => {
+    vi.mocked(pathState).mockResolvedValue("ok");
+    vi.mocked(readProject).mockResolvedValue(null);
+    vi.mocked(openProject).mockResolvedValue(CANCELLED);
+    await applyKeepLastProject(prompt());
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(useToasts.getState().toasts.some((t) => /was not reopened/.test(t.msg))).toBe(true);
+  });
+
+  it("does not double up on a reason already toasted (offline)", async () => {
+    vi.mocked(pathState).mockResolvedValue("offline");
+    await applyKeepLastProject(prompt());
+    const msgs = useToasts.getState().toasts.map((t) => t.msg);
+    expect(msgs.some((m) => /not available right now/.test(m))).toBe(true);
+    expect(msgs.some((m) => /was not reopened/.test(m))).toBe(false);
   });
 });
 

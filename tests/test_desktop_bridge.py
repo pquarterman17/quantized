@@ -322,6 +322,29 @@ def test_path_status_distinguishes_a_local_miss_from_an_unmounted_volume(
     assert remote_state == "offline"
 
 
+def test_path_status_permission_denied_is_not_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.1: an ACL-blocked project is PRESENT — reporting it as ``missing``
+    tells the user their file is gone and invites a Locate/cleanup for a
+    file that is fine. Same distinction relink's `probe_source` draws."""
+    target = _csv(tmp_path)
+    real_stat = os.stat
+
+    def denied(path: Any, *a: Any, **kw: Any) -> Any:
+        if str(path) == os.path.realpath(str(target)):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr(os, "stat", denied)
+    assert DesktopApi().path_status(str(target))["state"] == "permission_denied"
+
+
+def test_path_status_reports_a_directory_as_invalid(tmp_path: Path) -> None:
+    """A directory is neither a readable project nor a deleted one."""
+    assert DesktopApi().path_status(str(tmp_path))["state"] == "invalid"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX-only limitation")
 def test_path_status_reports_missing_outside_a_recognizable_volume() -> None:
     """The documented POSIX limit, pinned so it stays deliberate.
@@ -624,6 +647,25 @@ def test_save_file_dialog_grants_write_consent_but_not_read_consent(tmp_path: Pa
     # Picking a SAVE destination must not also grant READ access to it (or to
     # anything else) — the two consent kinds are deliberately independent.
     assert not is_consented(resolved)
+
+
+def test_save_file_dialog_opens_in_the_requested_directory(tmp_path: Path) -> None:
+    """P1.1: the working-directory hint reaches the SAVE dialog too (it
+    always reached `pick_files`/`open_project_file`)."""
+    api = DesktopApi()
+    win = FakeWindow([str(tmp_path / "w.dwk")])
+    api.attach(win)
+    api.save_file_dialog("w.dwk", str(tmp_path))
+    assert win.calls[0]["directory"] == str(tmp_path)
+    assert win.calls[0]["save_filename"] == "w.dwk"
+
+
+def test_save_file_dialog_defaults_to_the_cwd_without_a_hint(tmp_path: Path) -> None:
+    api = DesktopApi()
+    win = FakeWindow([str(tmp_path / "w.dwk")])
+    api.attach(win)
+    api.save_file_dialog("w.dwk")
+    assert win.calls[0]["directory"] == os.getcwd()
 
 
 def test_save_file_dialog_cancel_returns_none_and_grants_nothing() -> None:

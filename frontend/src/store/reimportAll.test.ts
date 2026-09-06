@@ -429,6 +429,25 @@ describe("browser (no desktop bridge) degrade — matches store/reimport.ts", ()
 
     expect(useApp.getState().reimportAllRows![0].outcome).toBe("offline");
   });
+
+  // P1.1 (#303 review): a present-but-unreadable source gets its OWN
+  // outcome — never "missing"/"offline", and never the fingerprint retry's
+  // "could not verify" — and no read is attempted.
+  it("with a desktop bridge, a permission-denied source is reported as denied and never read", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    vi.mocked(pathState).mockResolvedValue("permission_denied");
+    useApp.setState({ datasets: [ds("d1", "/a")] });
+
+    await useApp.getState().stageReimportAll(["d1"]);
+
+    const row = useApp.getState().reimportAllRows![0];
+    expect(row.outcome).toBe("denied");
+    expect(row.message).toMatch(/permission denied/i);
+    expect(row.message).toMatch(/restore access/i);
+    expect(row.message).not.toMatch(/unavailable|unreachable|verify/i);
+    expect(importFile).not.toHaveBeenCalled();
+    expect(probeSource).not.toHaveBeenCalled();
+  });
 });
 
 describe("corrections re-validated during staging (zero mutation on a rejected correction)", () => {

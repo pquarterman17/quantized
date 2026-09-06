@@ -89,6 +89,7 @@ export type ReimportAllOutcome =
   | "no_source" // browser upload with no recorded path -- re-import it individually instead
   | "missing" // desktop-bridge-confirmed absent (never guessed without a bridge)
   | "offline" // desktop-bridge-confirmed volume unreachable
+  | "denied" // desktop-bridge-confirmed present but unreadable (permission denied) -- restore access, never relink
   | "parse_error" // import/resolveFreshData/corrections rejected -- message carries why
   | "removed" // the dataset no longer exists (gone before staging, or between stage and commit)
   | "changed" // the dataset was edited by something else between stage and commit

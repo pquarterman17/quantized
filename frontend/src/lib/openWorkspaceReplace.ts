@@ -11,7 +11,9 @@ import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { useRelink } from "../store/relink";
 import { toast } from "../store/toasts";
+import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
+import { parentDirectory } from "./importEntry";
 import type { LoadedWorkspace } from "./workspace";
 
 /** Snapshot of the lock this instance held BEFORE a project switch —
@@ -110,10 +112,17 @@ function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior
  *  (fileCommands.ts's append-workspace dispatch) — same rule, different
  *  chokepoint, because there IS no shared "apply" function to hang it on
  *  there. A browser-picker open (`native` undefined) still never records
- *  (unchanged from before — lib/recentProjects.ts's module doc). */
-function recordNativeOpen(native: ProjectIdentity | undefined): void {
+ *  (unchanged from before — lib/recentProjects.ts's module doc).
+ *
+ *  P1.1: the SAME acceptance gate decides the working path — the folder a
+ *  project was actually opened from floats to the top for the next
+ *  Open/Save As/import dialog, but only once it is really loaded. Exported
+ *  for append-workspace's own commit point (fileCommands.ts). */
+export function recordNativeOpen(native: ProjectIdentity | undefined): void {
   if (!native) return;
   useRecentProjects.getState().pushRecentProject(native.name, native.path);
+  const dir = parentDirectory(native.path);
+  if (dir) useWorkingPaths.getState().use(dir);
 }
 
 /** `loadWorkspace` + the P3.4 slice 4 staging call that must immediately

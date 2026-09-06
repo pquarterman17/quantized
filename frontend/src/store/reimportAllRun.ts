@@ -116,6 +116,16 @@ async function stageOneSource(
         message: "source volume unreachable — reconnect the drive/network and retry",
       };
     }
+    if (state === "permission_denied") {
+      // P1.1 (#303 review): present but unreadable — its own outcome, so
+      // the report never describes an ACL-blocked file as missing, offline,
+      // or (via the fingerprint retry below) "could not verify".
+      return {
+        ...base,
+        outcome: "denied",
+        message: "source exists but cannot be read (permission denied) — restore access and retry",
+      };
+    }
   }
   try {
     // Coordinator review G3: the fingerprint is captured BEFORE the file is

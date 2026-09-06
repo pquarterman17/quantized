@@ -73,6 +73,42 @@ def test_probe_permission_denied_when_stat_itself_is_refused(
     assert out["state"] == "permission_denied"
 
 
+def test_probe_stale_mount_oserror_is_offline_not_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.1 self-review: a stale/unreachable share raises ESTALE/EIO/
+    ETIMEDOUT from stat — NOT ENOENT — and must still read as offline
+    (the volume is gone), never as a malformed path, or every downstream
+    consumer offers Locate/cleanup for a project that is fine."""
+    target = _unmounted_volume_path()
+    real_stat = os.stat
+
+    def _stale(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(116, "Stale file handle", path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _stale)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "offline"
+
+
+def test_probe_generic_oserror_on_a_live_volume_is_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The counterpart: the same OSError where the volume IS reachable is
+    a bad path, exactly as before."""
+    target = str(tmp_path / "weird")
+    real_stat = os.stat
+
+    def _boom(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(22, "Invalid argument", path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
+
+
 def test_probe_degrades_to_invalid_when_stat_raises_valueerror_not_oserror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
