@@ -164,6 +164,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () => s().saveWorkspaceToFile(),
     },
     {
+      id: "pack",
+      group: "File",
+      label: "Pack Project",
+      run: () => (
+        globalThis.qP(true),
+        import("../store/packProject").then((m) => m.usePackProject.getState().previewPackProject())
+      ),
+    },
+    {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
