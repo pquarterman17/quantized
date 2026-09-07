@@ -988,6 +988,25 @@ export interface CorrectionParams {
 /** Per-column role (`io/import_preview.DATA_ROLES`): `x` -> axis; `y`/`error` -> DataStruct channels; `categorical` -> a P1.4 categorical channel (string levels preserved); `label`/`ignore` drop from `.values` (`label`'s raw strings still land in `text_columns`, `ignore`'s don't). */
 export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore" | "categorical";
 
+/** One error-column -> signal pairing as persisted on `ImportSettingsWire`
+ *  (`quantized.io.import_error_bindings.ErrorBinding.to_dict()`), RAW FILE
+ *  COLUMN indexed (`column`/`target` are positions in the delimited file,
+ *  like `roles`/`column_names` above), NOT the `channel`-indexed shape
+ *  `Dataset.errorRoles`/`./errorRoles.ErrorBinding` uses once a dataset has
+ *  been imported -- see that dataclass's docstring for why. `side` also
+ *  uses a different (deliberately more legible in a saved-settings file)
+ *  vocabulary than the post-import `ErrorSide` ("both"/"+"/"-") -- the
+ *  backend translates `lower`/`upper` -> `-`/`+` when it builds
+ *  `DataStruct.metadata["error_roles"]` at parse time, so nothing here
+ *  needs to. */
+export interface ImportErrorBindingWire {
+  column: number;
+  /** -1 means the dataset's x axis. */
+  target: number;
+  axis: "x" | "y";
+  side: "lower" | "upper" | "both";
+}
+
 /** How to read a delimited file — mirrors `quantized.io.import_preview.
  *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
 export interface ImportSettingsWire {
@@ -998,6 +1017,13 @@ export interface ImportSettingsWire {
   data_start_line: number;
   column_names: string[] | null;
   roles: ImportColumnRole[] | null;
+  /** P1.6: error-column -> signal bindings, raw-column-indexed. `null`/absent
+   *  (the common case, and every settings object saved before this field
+   *  existed) means no bindings recorded -- not yet wired into the Import
+   *  Wizard UI; present so the wire type doesn't drift from the backend and
+   *  a round-tripped saved filter doesn't lose the field if a future UI
+   *  slice sets it. */
+  error_bindings?: ImportErrorBindingWire[] | null;
 }
 
 /** One resolved column descriptor from `preview_import`. */

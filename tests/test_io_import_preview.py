@@ -10,6 +10,17 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from quantized.io.import_error_bindings import (
+    COLUMN_NOT_ERROR_ROLE,
+    COLUMN_OUT_OF_RANGE,
+    DUPLICATE_COLUMN,
+    INVALID_AXIS,
+    INVALID_SIDE,
+    TARGET_EQUALS_COLUMN,
+    TARGET_NOT_Y_ROLE,
+    TARGET_OUT_OF_RANGE,
+    ErrorBinding,
+)
 from quantized.io.import_preview import (
     DATA_ROLES,
     ImportSettings,
@@ -405,3 +416,253 @@ def test_preview_effective_name_without_label_line_matches_header_name() -> None
     settings = ImportSettings(header_line=0, units_line=1, data_start_line=3, roles=["x", "y", "y"])
     pv = preview_import(_MULTI_ROW_TEXT, settings)
     assert [c["effective_name"] for c in pv["columns"]] == [c["name"] for c in pv["columns"]]
+
+
+# --- P1.6 item 4: error-column bindings (raw-column-indexed, ImportSettings) --
+
+# Temp(x=0), Moment(y=1), dMoment(error=2), Field(y=3), dField(error=4) --
+# two independent error columns so drop-reason tests can exercise ONE bad
+# binding on its own error column while a GOOD binding (on a different
+# column) survives alongside it, proving drops are per-binding, not
+# all-or-nothing.
+_ERR_TEXT = "Temp,Moment,dMoment,Field,dField\n1,10,0.1,100,1\n2,20,0.2,100,1\n3,30,0.3,100,1\n"
+_ERR_ROLES = ["x", "y", "error", "y", "error"]
+_GOOD_BINDING = ErrorBinding(column=2, target=1, axis="y", side="both")  # dMoment -> Moment
+
+
+def _err_settings(bindings: list[ErrorBinding] | None) -> ImportSettings:
+    return ImportSettings(
+        header_line=0, data_start_line=1, roles=list(_ERR_ROLES), error_bindings=bindings
+    )
+
+
+def test_import_settings_error_bindings_default_to_none() -> None:
+    assert ImportSettings().error_bindings is None
+
+
+def test_import_settings_error_bindings_roundtrip_through_dict() -> None:
+    s = _err_settings([_GOOD_BINDING, ErrorBinding(column=4, target=3, axis="x", side="upper")])
+    assert ImportSettings.from_dict(s.to_dict()) == s
+    assert s.to_dict()["error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"},
+        {"column": 4, "target": 3, "axis": "x", "side": "upper"},
+    ]
+
+
+def test_from_dict_drops_malformed_error_binding_entries_keeping_the_good_ones() -> None:
+    payload = {
+        "roles": _ERR_ROLES,
+        "error_bindings": [
+            {"column": 2, "target": 1, "axis": "y", "side": "both"},  # good
+            {"column": 4},  # missing target/axis/side
+            "not a dict",
+            123,
+            None,
+            {"column": "oops", "target": 1, "axis": "y", "side": "both"},  # wrong type
+            # good, ignores an extra key
+            {"column": 4, "target": 3, "axis": "y", "side": "both", "extra": "ignored"},
+            {"column": 4, "target": 3, "axis": "sideways", "side": "both"},  # bad axis literal
+            {"column": True, "target": 1, "axis": "y", "side": "both"},  # bool isn't a real index
+        ],
+    }
+    settings = ImportSettings.from_dict(payload)
+    assert settings.error_bindings == [
+        ErrorBinding(column=2, target=1, axis="y", side="both"),
+        ErrorBinding(column=4, target=3, axis="y", side="both"),
+    ]
+
+
+def test_from_dict_error_bindings_non_list_or_absent_is_none() -> None:
+    assert ImportSettings.from_dict({"error_bindings": "oops"}).error_bindings is None
+    assert ImportSettings.from_dict({"error_bindings": None}).error_bindings is None
+    assert ImportSettings.from_dict({}).error_bindings is None
+
+
+def test_preview_reports_kept_error_bindings_with_no_problems() -> None:
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    assert pv["error_binding_problems"] == []
+
+
+def test_preview_error_binding_keys_are_present_even_when_unset() -> None:
+    """Unlike `metadata['error_roles']` on the DataStruct (which is omitted
+    entirely when there is nothing to report), the preview payload's two
+    keys are always present -- an empty list IS the "nothing bound / nothing
+    wrong" answer the wizard needs to render, not something to omit."""
+    pv = preview_import(_ERR_TEXT, _err_settings(None))
+    assert pv["error_bindings"] == []
+    assert pv["error_binding_problems"] == []
+
+
+def test_drop_invalid_axis() -> None:
+    bad = ErrorBinding(column=4, target=3, axis="sideways", side="both")  # type: ignore[arg-type]
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == INVALID_AXIS
+
+
+def test_drop_invalid_side() -> None:
+    bad = ErrorBinding(column=4, target=3, axis="y", side="sideways")  # type: ignore[arg-type]
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == INVALID_SIDE
+
+
+def test_drop_column_out_of_range() -> None:
+    bad = ErrorBinding(column=99, target=3, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == COLUMN_OUT_OF_RANGE
+    assert "99" in problem["reason"]
+
+
+def test_drop_column_not_error_role() -> None:
+    """The bound column exists but isn't marked `error` (e.g. `Field` here
+    is a `y` column) -- named by NAME in the reason."""
+    bad = ErrorBinding(column=3, target=1, axis="y", side="both")  # Field is role "y"
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == COLUMN_NOT_ERROR_ROLE
+    assert "Field" in problem["reason"]
+
+
+def test_drop_binding_reroled_to_ignore_is_named_by_column() -> None:
+    """A binding recorded while its column was `error`, later re-roled to
+    `ignore` by the user -- must drop with a reason naming the column, not
+    silently vanish."""
+    text = "Temp,Moment,dMoment\n1,10,0.1\n2,20,0.2\n"
+    settings = ImportSettings(
+        header_line=0, data_start_line=1, roles=["x", "y", "ignore"],
+        error_bindings=[ErrorBinding(column=2, target=1, axis="y", side="both")],
+    )
+    pv = preview_import(text, settings)
+    assert pv["error_bindings"] == []
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == COLUMN_NOT_ERROR_ROLE
+    assert "dMoment" in problem["reason"]
+
+
+def test_drop_target_out_of_range() -> None:
+    bad = ErrorBinding(column=4, target=99, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == TARGET_OUT_OF_RANGE
+    assert "99" in problem["reason"]
+
+
+def test_drop_target_equals_column() -> None:
+    bad = ErrorBinding(column=4, target=4, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == TARGET_EQUALS_COLUMN
+    assert "dField" in problem["reason"]
+
+
+def test_drop_target_not_y_role() -> None:
+    """target=0 is `Temp`, role `x` (and not -1, the "x axis" sentinel) --
+    a real column pointed at with a role that can't be an error target."""
+    bad = ErrorBinding(column=4, target=0, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == TARGET_NOT_Y_ROLE
+    assert "Temp" in problem["reason"]
+
+
+def test_drop_target_not_y_role_rejects_another_error_column_as_target() -> None:
+    """A target must be `y`, not `error` -- two error columns can't describe
+    each other."""
+    bad = ErrorBinding(column=4, target=2, axis="y", side="both")  # dField -> dMoment (error)
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == TARGET_NOT_Y_ROLE
+
+
+def test_drop_duplicate_column_keeps_the_first() -> None:
+    dup = ErrorBinding(column=2, target=3, axis="y", side="both")  # same column as _GOOD_BINDING
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, dup]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict()]
+    [problem] = pv["error_binding_problems"]
+    assert problem["code"] == DUPLICATE_COLUMN
+    assert "dMoment" in problem["reason"]
+
+
+def test_target_minus_one_is_always_the_x_axis_never_dropped() -> None:
+    bad = ErrorBinding(column=4, target=-1, axis="x", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([_GOOD_BINDING, bad]))
+    assert pv["error_bindings"] == [_GOOD_BINDING.to_dict(), bad.to_dict()]
+    assert pv["error_binding_problems"] == []
+
+
+# --- parse_import: raw column -> channel index translation -----------------
+
+
+def test_parse_import_error_roles_absent_when_no_bindings_set() -> None:
+    ds = parse_import(_MESSY, guess_settings(_MESSY))
+    assert "error_roles" not in ds.metadata
+
+
+def test_parse_import_translates_raw_columns_to_channel_indices() -> None:
+    ds = parse_import(_ERR_TEXT, _err_settings([_GOOD_BINDING]))
+    # chan_cols raw order is [1, 2, 3, 4] (Moment, dMoment, Field, dField) ->
+    # channel indices [0, 1, 2, 3]; column=2 (dMoment) -> channel 1,
+    # target=1 (Moment) -> channel 0.
+    assert ds.labels == ("Moment", "dMoment", "Field", "dField")
+    assert ds.metadata["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+
+
+def test_parse_import_translates_raw_columns_with_categorical_channel_after_numeric() -> None:
+    """A categorical column shifts the channel numbering (P1.4: categorical
+    channels append AFTER every numeric one) -- exercise that ordering
+    actually flows into the translated `error_roles` indices."""
+    text = "Temp,Moment,dMoment,Sample\n1,10,0.1,A\n2,20,0.2,B\n3,30,0.3,A\n"
+    settings = ImportSettings(
+        header_line=0, data_start_line=1, roles=["x", "y", "error", "categorical"],
+        error_bindings=[ErrorBinding(column=2, target=1, axis="y", side="both")],
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("Moment", "dMoment", "Sample")  # numeric first, categorical after
+    assert ds.metadata["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+
+
+def test_parse_import_error_target_is_the_x_axis() -> None:
+    text = "Temp,dTemp,Moment\n1,0.1,10\n2,0.1,20\n"
+    settings = ImportSettings(
+        header_line=0, data_start_line=1, roles=["x", "error", "y"],
+        error_bindings=[ErrorBinding(column=1, target=-1, axis="x", side="both")],
+    )
+    ds = parse_import(text, settings)
+    assert ds.labels == ("dTemp", "Moment")
+    assert ds.metadata["error_roles"] == [{"channel": 0, "target": -1, "axis": "x", "side": "both"}]
+
+
+def test_parse_import_translates_side_vocabulary_to_frontend_signs() -> None:
+    """`lower`/`upper`/`both` (this module's storage vocabulary) become
+    `-`/`+`/`both` (`frontend/src/lib/errorRoles.ts`'s `ErrorSide`) so the
+    frontend needs no translation layer of its own to consume this."""
+    settings = _err_settings([
+        ErrorBinding(column=2, target=1, axis="y", side="upper"),
+        ErrorBinding(column=4, target=3, axis="y", side="lower"),
+    ])
+    ds = parse_import(_ERR_TEXT, settings)
+    sides = {e["channel"]: e["side"] for e in ds.metadata["error_roles"]}
+    assert sides == {1: "+", 3: "-"}
+
+
+def test_parse_import_drops_stale_binding_silently_from_metadata() -> None:
+    """A binding that fails validation contributes nothing to
+    `error_roles` -- it never raises `parse_import`, matching the
+    "never an exception, always reported (via preview) instead" contract;
+    parse_import itself has nowhere to surface the drop reason, so it's
+    simply absent here (the wizard is expected to have shown/resolved it
+    via `preview_import` before Import is ever reachable)."""
+    settings = _err_settings([ErrorBinding(column=99, target=1, axis="y", side="both")])
+    ds = parse_import(_ERR_TEXT, settings)
+    assert "error_roles" not in ds.metadata

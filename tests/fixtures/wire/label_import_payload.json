@@ -18,6 +18,7 @@
       "column_names": null,
       "data_start_line": 5,
       "delimiter": ",",
+      "error_bindings": null,
       "header_line": 2,
       "label_line": 4,
       "roles": [

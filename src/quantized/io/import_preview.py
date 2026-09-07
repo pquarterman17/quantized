@@ -45,13 +45,20 @@ from quantized.io.delimited import (
     _encode_categorical,
     _extract_units,
 )
+from quantized.io.import_error_bindings import (
+    SIDE_TO_CHANNEL_WIRE,
+    ErrorBinding,
+    valid_error_bindings,
+)
 
 __all__ = [
     "DATA_ROLES",
+    "ErrorBinding",
     "ImportSettings",
     "guess_settings",
     "parse_import",
     "preview_import",
+    "valid_error_bindings",
 ]
 
 # P1.4: "categorical" joins the roles a column can carry -- it produces a
@@ -91,14 +98,37 @@ class ImportSettings:
     data_start_line: int = 0
     column_names: list[str] | None = None
     roles: list[str] | None = None
+    # P1.6: error-column -> signal pairings (Import Wizard "bind" step), RAW
+    # COLUMN indexed like `roles`/`column_names` above -- see `ErrorBinding`'s
+    # docstring for why. `None` (the default) means "no bindings recorded",
+    # additive/no-op for every settings object created before this field
+    # existed. Never trusted as-is against a real file: `preview_import`/
+    # `parse_import` always run these through `valid_error_bindings` first.
+    error_bindings: list[ErrorBinding] | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        # `asdict` recurses through nested dataclasses (including ones
+        # inside a list), so `error_bindings`'s `ErrorBinding` entries need
+        # no special-casing here -- each becomes a plain dict automatically.
         return asdict(self)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> ImportSettings:
         allowed = {f for f in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in payload.items() if k in allowed})
+        kwargs = {k: v for k, v in payload.items() if k in allowed}
+        raw_bindings = kwargs.get("error_bindings")
+        if isinstance(raw_bindings, list):
+            # `ErrorBinding.from_dict` is itself tolerant (returns `None` for
+            # a malformed entry) -- disk-sourced JSON is never trusted, so a
+            # bad entry is dropped rather than raising or poisoning the rest.
+            kwargs["error_bindings"] = [
+                b for b in (ErrorBinding.from_dict(item) for item in raw_bindings)
+                if b is not None
+            ]
+        else:
+            # missing / null / wrong type entirely -> no bindings, not a crash
+            kwargs.pop("error_bindings", None)
+        return cls(**kwargs)
 
 
 @dataclass
@@ -324,6 +354,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         }
         for k in range(n_cols)
     ]
+    # P1.6: re-validate every reapplied binding against THIS file's resolved
+    # roles/names on every preview -- a saved filter's pairing can go stale
+    # (the target got re-roled, the column count shrank, ...) and the wizard
+    # needs to show that, not silently drop it or silently keep a bad one.
+    kept_bindings, dropped_bindings = valid_error_bindings(
+        settings.error_bindings, p.roles, effective_names
+    )
     return {
         "raw_lines": p.lines[:max_lines],
         "n_lines": len(p.lines),
@@ -337,6 +374,8 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "n_data_rows": int(n_rows),
         "n_preview_rows": len(preview_rows),
         "comments": _preamble_comments(p, settings),
+        "error_bindings": [b.to_dict() for b in kept_bindings],
+        "error_binding_problems": [d.to_dict() for d in dropped_bindings],
     }
 
 
@@ -429,6 +468,31 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     comments = _preamble_comments(p, settings)
     if comments:
         metadata["comments"] = comments
+
+    # P1.6: carry confirmed error-column bindings into the DataStruct as a
+    # metadata sidecar, translated from RAW COLUMN indices (how
+    # `ErrorBinding` is stored/validated) to CHANNEL indices (how `labels`/
+    # `values` -- and the frontend's `Dataset.errorRoles` -- number things).
+    # `chan_cols + cat_cols` is the EXACT order `labels` was just built in
+    # above (numeric channels, then categorical ones appended after, P1.4's
+    # rule), so this map is guaranteed consistent with the DataStruct this
+    # call is about to return. Re-validated here (not just trusted from a
+    # stale saved filter) for the same reason `preview_import` does.
+    kept_bindings, _dropped = valid_error_bindings(
+        settings.error_bindings, p.roles, effective_names
+    )
+    if kept_bindings:
+        channel_order = chan_cols + cat_cols
+        raw_to_channel = {raw: chan for chan, raw in enumerate(channel_order)}
+        metadata["error_roles"] = [
+            {
+                "channel": raw_to_channel[b.column],
+                "target": -1 if b.target == -1 else raw_to_channel[b.target],
+                "axis": b.axis,
+                "side": SIDE_TO_CHANNEL_WIRE[b.side],
+            }
+            for b in kept_bindings
+        ]
     return DataStruct.create(
         x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
     )

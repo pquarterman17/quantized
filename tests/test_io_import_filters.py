@@ -20,7 +20,7 @@ from quantized.io.import_filters import (
     match_filter,
     save_filter,
 )
-from quantized.io.import_preview import ImportSettings
+from quantized.io.import_preview import ErrorBinding, ImportSettings
 from quantized.io.registry import _EXT_MAP, import_auto, resolve_parser
 
 _MESSY_WEIRD = "\n".join([
@@ -87,6 +87,24 @@ def test_save_upserts_by_name() -> None:
 def test_save_empty_name_raises() -> None:
     with pytest.raises(ValueError, match="name"):
         save_filter(ImportFilter(name="   ", glob="*.dat", settings=_settings()))
+
+
+def test_error_bindings_roundtrip_through_a_saved_filter_on_disk() -> None:
+    """P1.6 item 5: `ImportSettings.error_bindings` must survive a real
+    save_filter -> load_filters round trip through the on-disk JSON file,
+    not just `to_dict`/`from_dict` in memory."""
+    settings = _settings(
+        roles=["x", "y", "error"],
+        column_names=["Temp", "Moment", "dMoment"],
+        error_bindings=[ErrorBinding(column=2, target=1, axis="y", side="both")],
+    )
+    save_filter(ImportFilter(name="WithErr", glob="*.err", settings=settings))
+    loaded = load_filters()
+    assert len(loaded) == 1
+    assert loaded[0].settings.error_bindings == [
+        ErrorBinding(column=2, target=1, axis="y", side="both")
+    ]
+    assert loaded[0].settings == settings
 
 
 def test_delete_filter() -> None:
