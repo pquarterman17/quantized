@@ -663,6 +663,28 @@ def test_two_columns_may_hold_opposite_sides_of_one_target() -> None:
     assert out["error_binding_problems"] == []
 
 
+def test_parse_import_records_dropped_bindings_for_callers_that_saw_no_preview() -> None:
+    """`io/registry.py`'s saved-filter path parses a glob-matched file with no
+    wizard and no preview, and a filter reused across files is exactly where a
+    binding goes stale. The drop must leave a record SOMEWHERE, or that user
+    gets a dataset with no error bars and nothing explaining why."""
+    settings = _err_settings([
+        ErrorBinding(column=2, target=1, axis="y", side="both"),   # good
+        ErrorBinding(column=2, target=3, axis="y", side="both"),   # duplicate column
+    ])
+    ds = parse_import(_ERR_TEXT, settings)
+    assert len(ds.metadata["error_roles"]) == 1
+    problems = ds.metadata["import_problems"]
+    assert [p["code"] for p in problems] == [DUPLICATE_COLUMN]
+    assert "already bound" in problems[0]["reason"]
+
+
+def test_parse_import_has_no_import_problems_key_when_every_binding_survives() -> None:
+    settings = _err_settings([ErrorBinding(column=2, target=1, axis="y", side="both")])
+    ds = parse_import(_ERR_TEXT, settings)
+    assert "import_problems" not in ds.metadata
+
+
 def test_parse_import_error_roles_absent_when_no_bindings_set() -> None:
     ds = parse_import(_MESSY, guess_settings(_MESSY))
     assert "error_roles" not in ds.metadata

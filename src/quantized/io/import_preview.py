@@ -47,6 +47,7 @@ from quantized.io.delimited import (
 )
 from quantized.io.import_error_bindings import (
     ErrorBinding,
+    binding_metadata,
     valid_error_bindings,
 )
 
@@ -477,21 +478,10 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     # rule), so this map is guaranteed consistent with the DataStruct this
     # call is about to return. Re-validated here (not just trusted from a
     # stale saved filter) for the same reason `preview_import` does.
-    kept_bindings, _dropped = valid_error_bindings(
+    kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
-    if kept_bindings:
-        channel_order = chan_cols + cat_cols
-        raw_to_channel = {raw: chan for chan, raw in enumerate(channel_order)}
-        metadata["error_roles"] = [
-            {
-                "channel": raw_to_channel[b.column],
-                "target": -1 if b.target == -1 else raw_to_channel[b.target],
-                "axis": b.axis,
-                "side": b.side,
-            }
-            for b in kept_bindings
-        ]
+    metadata.update(binding_metadata(kept_bindings, dropped_bindings, chan_cols + cat_cols))
     return DataStruct.create(
         x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
     )
