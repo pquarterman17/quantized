@@ -107,6 +107,28 @@ def test_error_bindings_roundtrip_through_a_saved_filter_on_disk() -> None:
     assert loaded[0].settings == settings
 
 
+def test_allow_large_categorical_roundtrips_through_a_saved_filter_on_disk() -> None:
+    """P1.6 Part C review finding #2: `ImportSettings.allow_large_categorical`
+    must survive a real save_filter -> load_filters round trip through the
+    on-disk JSON file, the same way `error_bindings` already does -- a saved
+    filter is exactly how a scientist's "yes, 800 levels is right" decision
+    is meant to persist across re-imports of the same instrument's files."""
+    settings = _settings(
+        roles=["x", "categorical"],
+        column_names=["Idx", "Sample"],
+        allow_large_categorical=True,
+    )
+    save_filter(ImportFilter(name="ManyLevels", glob="*.ids", settings=settings))
+    loaded = load_filters()
+    assert len(loaded) == 1
+    assert loaded[0].settings.allow_large_categorical is True
+    assert loaded[0].settings == settings
+
+    # the on-disk JSON itself carries the field (not just the in-memory object)
+    raw = json.loads((config_dir() / "import_filters.json").read_text())
+    assert raw[0]["settings"]["allow_large_categorical"] is True
+
+
 def test_delete_filter() -> None:
     save_filter(ImportFilter(name="A", glob="*.dat", settings=_settings()))
     assert delete_filter("A") is True
