@@ -181,3 +181,66 @@ def test_import_with_filter_no_filename_match_is_404() -> None:
 def test_import_with_filter_requires_filename_or_name() -> None:
     resp = client.post("/api/import/filters/parse", json={"text": _MESSY})
     assert resp.status_code == 422
+
+
+# ── P1.6 item 6: error_bindings flows through the route layer ────────────
+
+
+def test_preview_and_parse_carry_error_bindings_over_the_wire() -> None:
+    text = "Temp,Moment,dMoment\n1,10,0.1\n2,20,0.2\n"
+    settings = {
+        "header_line": 0, "data_start_line": 1, "roles": ["x", "y", "error"],
+        "error_bindings": [{"column": 2, "target": 1, "axis": "y", "side": "both"}],
+    }
+
+    pv = client.post("/api/import/preview", json={"text": text, "settings": settings})
+    assert pv.status_code == 200
+    body = pv.json()
+    assert body["error_bindings"] == [{"column": 2, "target": 1, "axis": "y", "side": "both"}]
+    assert body["error_binding_problems"] == []
+
+    ds = client.post("/api/import/parse", json={"text": text, "settings": settings})
+    assert ds.status_code == 200
+    meta = ds.json()["metadata"]
+    assert meta["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+
+
+def test_preview_reports_error_binding_problems_over_the_wire() -> None:
+    text = "Temp,Moment,dMoment\n1,10,0.1\n2,20,0.2\n"
+    settings = {
+        "header_line": 0, "data_start_line": 1, "roles": ["x", "y", "error"],
+        "error_bindings": [{"column": 99, "target": 1, "axis": "y", "side": "both"}],
+    }
+    pv = client.post("/api/import/preview", json={"text": text, "settings": settings})
+    assert pv.status_code == 200
+    body = pv.json()
+    assert body["error_bindings"] == []
+    assert body["error_binding_problems"][0]["code"] == "column_out_of_range"
+
+
+def test_saved_filter_round_trips_error_bindings_over_the_wire() -> None:
+    settings = {
+        "header_line": 0, "data_start_line": 1, "roles": ["x", "y", "error"],
+        "column_names": ["Temp", "Moment", "dMoment"],
+        "error_bindings": [{"column": 2, "target": 1, "axis": "y", "side": "both"}],
+    }
+    saved = client.post(
+        "/api/import/filters", json={"name": "WithErr", "glob": "*.err", "settings": settings}
+    ).json()
+    assert saved["settings"]["error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"}
+    ]
+
+    listed = client.get("/api/import/filters").json()
+    assert listed[0]["settings"]["error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"}
+    ]
+
+    text = "Temp,Moment,dMoment\n1,10,0.1\n2,20,0.2\n"
+    resp = client.post(
+        "/api/import/filters/parse", json={"text": text, "filter_name": "WithErr"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["metadata"]["error_roles"] == [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"}
+    ]

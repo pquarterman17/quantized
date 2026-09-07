@@ -28,30 +28,47 @@ Pure ``io`` layer — no fastapi/pydantic imports.
 
 from __future__ import annotations
 
-import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import (
-    _detect_delimiter,
     _looks_like_units_row,
     _numeric_score,
-    _to_float,
 )
 from quantized.io.delimited import (
     _encode_categorical,
-    _extract_units,
+)
+from quantized.io.import_error_bindings import (
+    ErrorBinding,
+    binding_metadata,
+    malformed_problems,
+    valid_error_bindings,
+)
+from quantized.io.import_parse import (
+    DATA_ROLES as _DATA_ROLES,
+)
+from quantized.io.import_parse import (
+    _effective_names,
+    _effective_ncols,
+    _label_row_overrides,
+    _parse_core,
+    _preamble_comments,
+    _resolve_delim,
+    _resolve_names,
+    _split,
 )
 
 __all__ = [
     "DATA_ROLES",
+    "ErrorBinding",
     "ImportSettings",
     "guess_settings",
     "parse_import",
     "preview_import",
+    "valid_error_bindings",
 ]
 
 # P1.4: "categorical" joins the roles a column can carry -- it produces a
@@ -59,20 +76,10 @@ __all__ = [
 # below). The Import Wizard UI for picking it is P1.6's slice; the backend
 # role already works (guess_settings never suggests it -- only an explicit
 # ImportSettings.roles entry selects it).
-DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
+DATA_ROLES = _DATA_ROLES  # re-exported; defined with the parsing internals
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
 _CATEGORICAL_ROLE = "categorical"
-# friendly delimiter aliases -> how to split
-_NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
-                 "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
 
-# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
-# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
-# far the sniffer actually looks) -- an accidental huge value would make
-# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
-# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
-# `max_lines` bound on `raw_lines`.
-_MAX_PREAMBLE_COMMENTS = 500
 
 
 @dataclass(frozen=True)
@@ -91,61 +98,62 @@ class ImportSettings:
     data_start_line: int = 0
     column_names: list[str] | None = None
     roles: list[str] | None = None
+    # P1.6: error-column -> signal pairings (Import Wizard "bind" step), RAW
+    # COLUMN indexed like `roles`/`column_names` above -- see `ErrorBinding`'s
+    # docstring for why. `None` (the default) means "no bindings recorded",
+    # additive/no-op for every settings object created before this field
+    # existed. Never trusted as-is against a real file: `preview_import`/
+    # `parse_import` always run these through `valid_error_bindings` first.
+    error_bindings: list[ErrorBinding] | None = None
+    #: Raw `error_bindings` entries `from_dict` could not parse at all (bad
+    #: types, an unknown `axis`/`side` spelling). NOT part of the persisted
+    #: shape -- `to_dict` never writes it back, so a round trip drops the junk
+    #: rather than re-saving it -- but it rides along on the in-memory object
+    #: so a preview/parse can REPORT what was thrown away instead of leaving
+    #: the user wondering where their pairing went.
+    malformed_error_bindings: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        # `asdict` recurses through nested dataclasses (including ones
+        # inside a list), so `error_bindings`'s `ErrorBinding` entries need
+        # no special-casing here -- each becomes a plain dict automatically.
+        out = asdict(self)
+        out.pop("malformed_error_bindings", None)  # in-memory diagnostic, never persisted
+        return out
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> ImportSettings:
-        allowed = {f for f in cls.__dataclass_fields__}
-        return cls(**{k: v for k, v in payload.items() if k in allowed})
-
-
-@dataclass
-class _Parsed:
-    lines: list[str]
-    delim: str
-    names: list[str]
-    units: list[str]
-    roles: list[str]
-    matrix: np.ndarray  # (n_rows, n_cols) float
-    data_start: int
-    # Raw string cells per data row (n_rows entries, each up to n_cols wide),
-    # BEFORE `_to_float` conversion -- the P1.4 "label"/"categorical" roles
-    # need the original text, which the numeric `matrix` has already erased.
-    data_tokens: list[list[str]]
-    # Every line, delimiter-split (P1.6: label_line lookup + preamble capture
-    # both need lines ABOVE data_start, which `data_tokens` excludes).
-    all_tokens: list[list[str]]
-
-
-def _split(line: str, delim: str) -> list[str]:
-    if delim in (" ", "whitespace"):
-        return re.split(r"\s+", line.strip())
-    return line.split(delim)
-
-
-def _effective_ncols(rows: list[list[str]]) -> int:
-    """Column count ignoring trailing empty tokens (a trailing-delimiter row
-    like ``"1,2,"`` is 2 columns, not 3), while preserving empty *interior*
-    cells (``"1,,3"`` stays 3). Mirrors ``import_csv``'s trailing-column guard.
-    """
-    best = 0
-    for row in rows:
-        last = 0
-        for k, cell in enumerate(row):
-            if cell.strip():
-                last = k + 1
-        best = max(best, last)
-    return best
-
-
-def _resolve_delim(lines: list[str], setting: str) -> str:
-    d = _NAMED_DELIMS.get(setting.lower(), setting)
-    if d != "auto":
-        return d
-    non_empty = [ln for ln in lines if ln.strip()]
-    return _detect_delimiter(non_empty) if non_empty else ","
+        allowed = {f for f in cls.__dataclass_fields__ if f != "malformed_error_bindings"}
+        kwargs = {k: v for k, v in payload.items() if k in allowed}
+        raw_bindings = kwargs.get("error_bindings")
+        malformed: list[dict[str, Any]] = []
+        if isinstance(raw_bindings, list):
+            # `ErrorBinding.from_dict` is itself tolerant (returns `None` for
+            # a malformed entry) -- disk-sourced JSON is never trusted, so a
+            # bad entry is dropped rather than raising or poisoning the rest.
+            # But dropping it SILENTLY is the very failure this whole contract
+            # exists to prevent (review round 2): an `axis` of "Y" or a `side`
+            # of "plus" -- a hand-edited filter file, or one written by an
+            # older/newer build -- would vanish here, before
+            # `valid_error_bindings` ever sees it, so INVALID_AXIS/INVALID_SIDE
+            # were unreachable on every route path and `save_filter`'s
+            # load-then-rewrite made the loss permanent on disk. Keep the raw
+            # entries; `preview_import`/`parse_import` report them alongside
+            # the bindings that failed semantic validation.
+            parsed: list[ErrorBinding] = []
+            for item in raw_bindings:
+                b = ErrorBinding.from_dict(item)
+                if b is None:
+                    malformed.append(item if isinstance(item, dict) else {"entry": repr(item)})
+                else:
+                    parsed.append(b)
+            kwargs["error_bindings"] = parsed
+        else:
+            # missing / null / wrong type entirely -> no bindings, not a crash
+            kwargs.pop("error_bindings", None)
+        settings = cls(**kwargs)
+        object.__setattr__(settings, "malformed_error_bindings", malformed)
+        return settings
 
 
 def guess_settings(text: str) -> ImportSettings:
@@ -175,120 +183,6 @@ def guess_settings(text: str) -> ImportSettings:
         delimiter="auto", header_line=header_line, units_line=units_line,
         data_start_line=data_start, column_names=names, roles=roles,
     )
-
-
-def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int) -> list[str]:
-    if header_line is not None and 0 <= header_line < len(tokens):
-        raw = [c.strip() for c in tokens[header_line]]
-    else:
-        raw = []
-    names = [raw[k] if k < len(raw) and raw[k] else f"Col{k + 1}" for k in range(n_cols)]
-    return names
-
-
-def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
-    lines = text.splitlines()
-    delim = _resolve_delim(lines, settings.delimiter)
-    tokens = [_split(ln, delim) for ln in lines]
-    ds = max(0, settings.data_start_line)
-    data_tokens = [t for t in tokens[ds:] if any(c.strip() for c in t)]
-    n_cols = _effective_ncols(data_tokens)
-    if settings.column_names:
-        names = [settings.column_names[k] if k < len(settings.column_names) else f"Col{k + 1}"
-                 for k in range(n_cols)]
-    else:
-        names = _resolve_names(tokens, settings.header_line, n_cols)
-    # split any "Name (unit)" embedded units out of the header names
-    units = [""] * n_cols
-    for k in range(n_cols):
-        u, lbl = _extract_units(names[k])
-        names[k], units[k] = lbl, u
-    # an explicit units row overrides
-    if settings.units_line is not None and 0 <= settings.units_line < len(tokens):
-        urow = [c.strip().strip("()[]{}") for c in tokens[settings.units_line]]
-        for k in range(min(n_cols, len(urow))):
-            if urow[k]:
-                units[k] = urow[k]
-    roles = _resolve_roles(settings.roles, n_cols)
-
-    matrix = np.full((len(data_tokens), n_cols), np.nan, dtype=float)
-    for i, row in enumerate(data_tokens):
-        for k in range(min(len(row), n_cols)):
-            matrix[i, k] = _to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens)
-
-
-def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
-    """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
-    POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
-    `label_line` isn't set or is out of range (no override, unchanged
-    behavior).
-
-    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
-    `units_line`), reuse the already `_extract_units`-split `p.names` (or
-    `p.units`) rather than re-reading the raw token row -- the raw row still
-    has an embedded "Name (unit)" suffix that `_extract_units` already
-    stripped out of `p.names`, so reading it again would silently
-    reintroduce the unit text into the label."""
-    ll = settings.label_line
-    if ll is None:
-        return None
-    if ll == settings.header_line:
-        return list(p.names)
-    if ll == settings.units_line:
-        return list(p.units)
-    if not (0 <= ll < len(p.all_tokens)):
-        return None
-    row = p.all_tokens[ll]
-    return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
-
-
-def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int) -> list[str]:
-    """P1-5 DEFECT 2: the name each column's DataStruct channel/label will
-    ACTUALLY carry -- `label_overrides[k]` when set (P1.6 `label_line`),
-    else the header-derived `p.names[k]` unchanged. This is the SAME rule
-    `parse_import`'s local `label_for` applies; factored out here so
-    `preview_import` can report it too (`columns[k].effective_name`)
-    instead of only ever offering the raw header name, which a wizard
-    classifying error-role suggestions against would otherwise be matching
-    a name the final dataset never carries whenever `label_line` is set."""
-    return [
-        label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
-        for k in range(n_cols)
-    ]
-
-
-def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
-    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
-    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
-    (raw stripped text) as searchable metadata instead of silently dropped.
-    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
-    consumer (search, the Inspector) reads one convention regardless of
-    which import path produced the dataset.
-
-    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
-    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
-    directly user-settable through the wizard, so an oversized value (typo,
-    or a stale saved filter) can't balloon `metadata["comments"]` to the
-    size of the whole file."""
-    consumed = {settings.header_line, settings.units_line, settings.label_line}
-    out: list[str] = []
-    for i in range(p.data_start):
-        if len(out) >= _MAX_PREAMBLE_COMMENTS:
-            break
-        if i in consumed:
-            continue
-        raw = p.lines[i].strip() if i < len(p.lines) else ""
-        if raw:
-            out.append(raw)
-    return out
-
-
-def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
-    if not roles:
-        return (["x"] + ["y"] * (n_cols - 1)) if n_cols else []
-    out = [roles[k] if k < len(roles) and roles[k] in DATA_ROLES else "y" for k in range(n_cols)]
-    return out
 
 
 def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
@@ -324,6 +218,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         }
         for k in range(n_cols)
     ]
+    # P1.6: re-validate every reapplied binding against THIS file's resolved
+    # roles/names on every preview -- a saved filter's pairing can go stale
+    # (the target got re-roled, the column count shrank, ...) and the wizard
+    # needs to show that, not silently drop it or silently keep a bad one.
+    kept_bindings, dropped_bindings = valid_error_bindings(
+        settings.error_bindings, p.roles, effective_names
+    )
     return {
         "raw_lines": p.lines[:max_lines],
         "n_lines": len(p.lines),
@@ -337,6 +238,11 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "n_data_rows": int(n_rows),
         "n_preview_rows": len(preview_rows),
         "comments": _preamble_comments(p, settings),
+        "error_bindings": [b.to_dict() for b in kept_bindings],
+        "error_binding_problems": [
+            d.to_dict()
+            for d in malformed_problems(settings.malformed_error_bindings) + dropped_bindings
+        ],
     }
 
 
@@ -429,6 +335,21 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     comments = _preamble_comments(p, settings)
     if comments:
         metadata["comments"] = comments
+
+    # P1.6: carry confirmed error-column bindings into the DataStruct as a
+    # metadata sidecar, translated from RAW COLUMN indices (how
+    # `ErrorBinding` is stored/validated) to CHANNEL indices (how `labels`/
+    # `values` -- and the frontend's `Dataset.errorRoles` -- number things).
+    # `chan_cols + cat_cols` is the EXACT order `labels` was just built in
+    # above (numeric channels, then categorical ones appended after, P1.4's
+    # rule), so this map is guaranteed consistent with the DataStruct this
+    # call is about to return. Re-validated here (not just trusted from a
+    # stale saved filter) for the same reason `preview_import` does.
+    kept_bindings, dropped_bindings = valid_error_bindings(
+        settings.error_bindings, p.roles, effective_names
+    )
+    dropped_bindings = malformed_problems(settings.malformed_error_bindings) + dropped_bindings
+    metadata.update(binding_metadata(kept_bindings, dropped_bindings, chan_cols + cat_cols))
     return DataStruct.create(
         x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None
     )
