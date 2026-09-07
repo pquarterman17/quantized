@@ -29,27 +29,25 @@ __all__ = [
     "TARGET_OUT_OF_RANGE",
     "DroppedErrorBinding",
     "ErrorBinding",
-    "SIDE_TO_CHANNEL_WIRE",
     "valid_error_bindings",
 ]
 
 ErrorAxis = Literal["x", "y"]
-ErrorSide = Literal["lower", "upper", "both"]
+#: ONE spelling of `side`, everywhere: the same `"both" | "+" | "-"` the
+#: frontend already uses (`frontend/src/lib/errorLabelCandidates.ts`) and
+#: already PERSISTS in a `.dwk`'s `Dataset.errorRoles` (its reader,
+#: `errorRoles.sanitizeBindings`, accepts exactly these three). A descriptive
+#: `lower`/`upper` would read better in a hand-edited filter file taken on its
+#: own, but it would put TWO spellings of one field in two user-facing JSON
+#: files the same person opens (`import_filters.json` beside a `.dwk`), plus a
+#: translation table between them for a later change to drift through. `"+"`
+#: is the upper half and `"-"` the lower (the wizard's own picker reads
+#: "+ upper" / "− lower"), so a binding now round-trips import filter ->
+#: DataStruct metadata -> `.dwk` byte-identically, with nothing to translate.
+ErrorSide = Literal["both", "+", "-"]
 
 _AXES: tuple[ErrorAxis, ...] = ("x", "y")
-_SIDES: tuple[ErrorSide, ...] = ("lower", "upper", "both")
-
-#: Maps this module's storage-side `side` vocabulary to the frontend
-#: `ErrorSide` vocabulary (`frontend/src/lib/errorLabelCandidates.ts`:
-#: `"both" | "+" | "-"`, where `"+"` is the upper half and `"-"` the lower
-#: half -- see `ErrorColumnsPanel.tsx`'s `SIDES` list: "+ upper", "− lower").
-#: `lower`/`upper`/`both` read clearer in a persisted-settings file than a
-#: bare sign, so the persisted shape keeps the descriptive spelling and this
-#: table is the ONE place that bridges to the frontend's sign-based one, used
-#: when building `DataStruct.metadata["error_roles"]`
-#: (`import_preview.parse_import`) so the frontend needs no translation of
-#: its own to consume it.
-SIDE_TO_CHANNEL_WIRE: dict[ErrorSide, str] = {"lower": "-", "upper": "+", "both": "both"}
+_SIDES: tuple[ErrorSide, ...] = ("both", "+", "-")
 
 # ── validation drop codes ────────────────────────────────────────────────
 INVALID_AXIS = "invalid_axis"
@@ -193,7 +191,7 @@ def valid_error_bindings(
         if b.side not in _SIDES:
             dropped.append(DroppedErrorBinding(
                 b.column, b.target, b.axis, b.side, INVALID_SIDE,
-                f"side must be 'lower', 'upper', or 'both' (got {b.side!r})",
+                f"side must be 'both', '+' (upper), or '-' (lower) (got {b.side!r})",
             ))
             continue
         if not (0 <= b.column < n_cols):

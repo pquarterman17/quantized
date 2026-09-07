@@ -441,11 +441,11 @@ def test_import_settings_error_bindings_default_to_none() -> None:
 
 
 def test_import_settings_error_bindings_roundtrip_through_dict() -> None:
-    s = _err_settings([_GOOD_BINDING, ErrorBinding(column=4, target=3, axis="x", side="upper")])
+    s = _err_settings([_GOOD_BINDING, ErrorBinding(column=4, target=3, axis="x", side="+")])
     assert ImportSettings.from_dict(s.to_dict()) == s
     assert s.to_dict()["error_bindings"] == [
         {"column": 2, "target": 1, "axis": "y", "side": "both"},
-        {"column": 4, "target": 3, "axis": "x", "side": "upper"},
+        {"column": 4, "target": 3, "axis": "x", "side": "+"},
     ]
 
 
@@ -648,8 +648,8 @@ def test_parse_import_translates_side_vocabulary_to_frontend_signs() -> None:
     `-`/`+`/`both` (`frontend/src/lib/errorRoles.ts`'s `ErrorSide`) so the
     frontend needs no translation layer of its own to consume this."""
     settings = _err_settings([
-        ErrorBinding(column=2, target=1, axis="y", side="upper"),
-        ErrorBinding(column=4, target=3, axis="y", side="lower"),
+        ErrorBinding(column=2, target=1, axis="y", side="+"),
+        ErrorBinding(column=4, target=3, axis="y", side="-"),
     ])
     ds = parse_import(_ERR_TEXT, settings)
     sides = {e["channel"]: e["side"] for e in ds.metadata["error_roles"]}

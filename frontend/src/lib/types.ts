@@ -1004,7 +1004,7 @@ export interface ImportErrorBindingWire {
   /** -1 means the dataset's x axis. */
   target: number;
   axis: "x" | "y";
-  side: "lower" | "upper" | "both";
+  side: "both" | "+" | "-";
 }
 
 /** How to read a delimited file — mirrors `quantized.io.import_preview.

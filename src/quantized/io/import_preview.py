@@ -46,7 +46,6 @@ from quantized.io.delimited import (
     _extract_units,
 )
 from quantized.io.import_error_bindings import (
-    SIDE_TO_CHANNEL_WIRE,
     ErrorBinding,
     valid_error_bindings,
 )
@@ -489,7 +488,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
                 "channel": raw_to_channel[b.column],
                 "target": -1 if b.target == -1 else raw_to_channel[b.target],
                 "axis": b.axis,
-                "side": SIDE_TO_CHANNEL_WIRE[b.side],
+                "side": b.side,
             }
             for b in kept_bindings
         ]
