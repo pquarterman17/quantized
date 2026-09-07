@@ -44,15 +44,20 @@ export interface ImportSettingsWire {
    *  a round-tripped saved filter doesn't lose the field if a future UI
    *  slice sets it. */
   error_bindings?: ImportErrorBindingWire[] | null;
-  /** P1.6 Part C review finding #2: lifts `parse_import`'s default refusal
-   *  of a `categorical` column whose level table exceeds
+  /** P1.6 Part C review finding #2: the RAW FILE COLUMN INDICES whose
+   *  `categorical` level table the user has explicitly accepted, lifting
+   *  `parse_import`'s default refusal of a column that exceeds
    *  `import_categorical_guards.MAX_CATEGORICAL_LEVELS` — for a column with
    *  genuinely many levels (real sample IDs, run labels, ...) rather than
-   *  one mis-marked categorical. `preview_import` reports the level-cap
-   *  problem (`categorical_problems`) either way. Optional/absent (the
-   *  common case, and every settings object saved before this field
-   *  existed) means `false` — the default refusal still applies. */
-  allow_large_categorical?: boolean;
+   *  one mis-marked categorical. Per column, not a flag (PR #315 review
+   *  finding #1): accepting a legitimate 600-level `SampleID` must not
+   *  pre-accept the mis-marked column the cap exists to catch. Matched on
+   *  the index, never the name — two columns can share a header.
+   *  `preview_import` reports the level-cap problem
+   *  (`categorical_problems`) either way, and `save_filter` STRIPS this
+   *  field: a one-time acceptance is not a policy for every future file the
+   *  glob matches (finding #2). Optional/absent means "none accepted". */
+  allow_large_categorical?: number[];
 }
 
 /** One resolved column descriptor from `preview_import`. */
@@ -95,6 +100,14 @@ export interface ImportPreviewResponse {
    *  LAST occurrence's value won (see `header_fields`); each entry names
    *  which key was overwritten. */
   header_field_problems?: ImportHeaderFieldProblem[];
+  /** P1.6 Part A: the COMPLEMENT of `header_fields` over `comments` — the
+   *  preamble lines that are NOT `key: value`. `header_fields` is a parse of
+   *  the very `comments` this response also carries, so rendering both shows
+   *  every field line twice; render this instead of `comments` alongside the
+   *  structured map. Derived server-side (`import_metadata.
+   *  unparsed_comments`) so the "is this a field?" rule stays in one
+   *  language. Falls back to `comments` when absent (older fixtures). */
+  unparsed_comments?: string[];
   /** P1.6: the error bindings from `settings` that SURVIVED validation
    *  against this file, echoed back raw-column-indexed. */
   error_bindings?: ImportErrorBindingWire[];
@@ -154,12 +167,26 @@ export interface ImportHeaderFieldProblem {
  *  after up to `MAX_CATEGORICAL_COLLISIONS` `categorical_case_collision`
  *  entries for the same column, when that column had more collision groups
  *  than were reported — review finding #1: reported collisions are capped
- *  and truncation is always signalled, never silent. */
+ *  and truncation is always signalled, never silent.
+ *
+ *  Every entry carries BOTH the column's raw file `index` and its display
+ *  `column` name. The index identifies the column — names are not unique
+ *  (`_resolve_names` never de-duplicates them, so two columns can share a
+ *  header) and are user-editable mid-session — so React keys, per-column
+ *  acceptance, and any other identity use must key on `index`.
+ */
 export type ImportCategoricalProblem =
-  | { type: "categorical_level_cap"; column: string; level_count: number; cap: number }
-  | { type: "categorical_case_collision"; column: string; labels: string[] }
+  | {
+      type: "categorical_level_cap";
+      index: number;
+      column: string;
+      level_count: number;
+      cap: number;
+    }
+  | { type: "categorical_case_collision"; index: number; column: string; labels: string[] }
   | {
       type: "categorical_case_collision_truncated";
+      index: number;
       column: string;
       collision_count: number;
       cap: number;

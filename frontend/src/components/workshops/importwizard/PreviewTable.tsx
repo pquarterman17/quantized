@@ -81,7 +81,11 @@ export default function PreviewTable({
               {preview.columns.map((c) => {
                 const xConflict = xConflictIndices.has(c.index);
                 return (
-                  <th key={c.index} style={{ textAlign: "left", minWidth: 120 }}>
+                  // `verticalAlign: top` so the conditional legend-label hint
+                  // below lengthens THIS header cell without pushing every
+                  // other column's inputs and role select out of alignment
+                  // (`.qz-table th` sets no vertical-align of its own).
+                  <th key={c.index} style={{ textAlign: "left", minWidth: 120, verticalAlign: "top" }}>
                     <input
                       className="qz-input"
                       style={{ width: "100%", marginBottom: 3 }}
@@ -91,7 +95,7 @@ export default function PreviewTable({
                     />
                     {c.effective_name && c.effective_name !== c.name && (
                       <div
-                        className="qzk-ds-meta"
+                        className="qzk-ds-meta qzk-msg"
                         title="The selected label line will use this text in legends and axis labels"
                         style={{ color: "var(--accent)", marginBottom: 3 }}
                       >
