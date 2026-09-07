@@ -41,6 +41,7 @@ __all__ = [
     "flat_norm",
     "generate_candidates",
     "has_confirmed_candidate",
+    "js_strip",
     "segments_of",
 ]
 
@@ -96,11 +97,54 @@ CONFIRMED_QUANTITY_PREFIXES: tuple[str, ...] = ("i",)
 
 _CAMEL_SPLIT_RE = re.compile(r"(?=[A-Z])")
 _DIGIT_SPLIT_RE = re.compile(r"(?<=[a-zA-Z])(?=[0-9])")
-_WORD_SPLIT_RE = re.compile(r"[\s_]+")
+
+# JS's `String.prototype.trim()` / `/\s/` WhiteSpace+LineTerminator set is
+# NOT the same set as Python's `str.strip()` / `re`'s `\s` -- both agree on
+# the ASCII/common Unicode space characters, but diverge at the edges:
+#   - U+FEFF (BOM/ZWNBSP) IS whitespace to JS, is NOT to Python
+#     (`"\ufeff".isspace()` is False -- it's category Cf, not space).
+#   - U+001C-U+001F (file/group/record/unit separators) and U+0085 (NEL)
+#     ARE whitespace to Python (`str.isspace()`/`\s` follow the Unicode
+#     White_Space property, which includes these), are NOT to JS.
+# A label straight off a real file can carry any of these (a BOM from a
+# Windows export, a stray control byte), and `flat_norm`/`segments_of` MUST
+# match `errorLabelCandidates.ts`'s classification exactly (the parity
+# fixture pins it) -- so this is JS's exact WhiteSpace+LineTerminator set,
+# not Python's, used everywhere this module would otherwise call
+# `str.strip()` or split on `\s`.
+_JS_WHITESPACE_CODEPOINTS: tuple[int, ...] = (
+    0x09, 0x0A, 0x0B, 0x0C, 0x0D,  # TAB LF VT FF CR
+    0x20,  # SPACE
+    0xA0,  # NO-BREAK SPACE
+    0x1680,  # OGHAM SPACE MARK
+    *range(0x2000, 0x200B),  # EN QUAD .. HAIR SPACE (11 codepoints)
+    0x2028, 0x2029,  # LINE SEPARATOR, PARAGRAPH SEPARATOR
+    0x202F,  # NARROW NO-BREAK SPACE
+    0x205F,  # MEDIUM MATHEMATICAL SPACE
+    0x3000,  # IDEOGRAPHIC SPACE
+    0xFEFF,  # BOM / ZERO WIDTH NO-BREAK SPACE
+)
+_JS_WHITESPACE = "".join(chr(c) for c in _JS_WHITESPACE_CODEPOINTS)
+_JS_WHITESPACE_SET = frozenset(_JS_WHITESPACE)
+_WORD_SPLIT_RE = re.compile("[" + re.escape(_JS_WHITESPACE) + "_]+")
+
+
+def js_strip(s: str) -> str:
+    """``s.trim()`` in JavaScript, exactly -- strips ``_JS_WHITESPACE``
+    from both ends only (never Python's own, differently-shaped, notion of
+    whitespace). See ``_JS_WHITESPACE``'s comment for the two divergent
+    codepoint ranges this exists to cover."""
+    start = 0
+    end = len(s)
+    while start < end and s[start] in _JS_WHITESPACE_SET:
+        start += 1
+    while end > start and s[end - 1] in _JS_WHITESPACE_SET:
+        end -= 1
+    return s[start:end]
 
 
 def _norm_seg(s: str) -> str:
-    return s.strip().lower()
+    return js_strip(s).lower()
 
 
 def segments_of(label: str) -> list[str]:
@@ -116,7 +160,7 @@ def segments_of(label: str) -> list[str]:
     never a digit-to-letter boundary, so ``2theta`` stays one piece. So
     both spellings of the same intent segment identically.
     """
-    words = [w for w in _WORD_SPLIT_RE.split(label.strip()) if w]
+    words = [w for w in _WORD_SPLIT_RE.split(js_strip(label)) if w]
     out: list[str] = []
     for word in words:
         camel = [p for p in _CAMEL_SPLIT_RE.split(word) if p]

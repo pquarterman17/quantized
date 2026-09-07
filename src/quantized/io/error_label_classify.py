@@ -30,6 +30,7 @@ from quantized.io.error_label_candidates import (
     flat_norm,
     generate_candidates,
     has_confirmed_candidate,
+    js_strip,
 )
 
 __all__ = [
@@ -139,7 +140,7 @@ def classify_error_label_in_labels(
     classifier and a separate pairing pass.
     """
     label = labels[index]
-    if not label or not label.strip():
+    if not label or not js_strip(label):
         return None
     candidates = generate_candidates(label, tokens)
     selected = select_candidate(candidates, labels, index, tokens)
@@ -167,7 +168,7 @@ def classify_error_label(
     being misclassified via this wrapper's own top-ranked-regardless
     fallback.
     """
-    if not label or not label.strip():
+    if not label or not js_strip(label):
         return None
     candidates = generate_candidates(label, tokens)
     if not candidates:

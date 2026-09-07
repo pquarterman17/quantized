@@ -932,6 +932,67 @@
         "err"
       ],
       "bindings": []
+    },
+    {
+      "note": "U+FEFF (BOM) leading a base name must still base-name-match its error column (JS treats BOM as whitespace)",
+      "labels": [
+        "﻿M",
+        "T",
+        "M_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+FEFF (BOM) trailing an error label's own name doesn't break suffix matching either",
+      "labels": [
+        "M",
+        "M_err﻿"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+001C (file separator) is NOT whitespace to JS -- stays part of the label, so it does NOT base-name-match a sibling missing it",
+      "labels": [
+        "R\u001c",
+        "dR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+0085 (NEL) is NOT whitespace to JS either -- same divergence shape as U+001C",
+      "labels": [
+        "R",
+        "dR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
     }
   ]
 }

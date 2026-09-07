@@ -182,6 +182,30 @@ const CASES: CaseSpec[] = [
   { note: "empty label list", labels: [] },
   { note: "single ordinary column, no error columns at all", labels: ["Temp"] },
   { note: "single error-like column alone -- nothing to bind to", labels: ["err"] },
+
+  // ── review finding #5: JS `trim()`/`\s` vs Python `str.strip()`/`\s` ───────
+  // diverge at two edges -- U+FEFF (BOM/ZWNBSP) IS whitespace to JS, is NOT
+  // to Python; U+001C-U+001F (separators) and U+0085 (NEL) ARE whitespace to
+  // Python, are NOT to JS. A label straight off a real file (a BOM from a
+  // Windows export, a stray control byte) can carry either, and the two
+  // languages must classify it identically -- see
+  // `quantized/io/error_label_candidates.py`'s `_JS_WHITESPACE_CODEPOINTS`.
+  {
+    note: "U+FEFF (BOM) leading a base name must still base-name-match its error column (JS treats BOM as whitespace)",
+    labels: ["﻿M", "T", "M_err"],
+  },
+  {
+    note: "U+FEFF (BOM) trailing an error label's own name doesn't break suffix matching either",
+    labels: ["M", "M_err﻿"],
+  },
+  {
+    note: "U+001C (file separator) is NOT whitespace to JS -- stays part of the label, so it does NOT base-name-match a sibling missing it",
+    labels: ["R", "dR"],
+  },
+  {
+    note: "U+0085 (NEL) is NOT whitespace to JS either -- same divergence shape as U+001C",
+    labels: ["R", "dR"],
+  },
 ];
 
 function computeCases(): FixtureCase[] {
