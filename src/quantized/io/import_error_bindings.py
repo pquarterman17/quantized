@@ -33,6 +33,8 @@ __all__ = [
     "DroppedErrorBinding",
     "ErrorBinding",
     "valid_error_bindings",
+    "malformed_problems",
+    "MALFORMED_ENTRY",
     "binding_metadata",
 ]
 
@@ -61,6 +63,7 @@ COLUMN_NOT_ERROR_ROLE = "column_not_error_role"
 TARGET_OUT_OF_RANGE = "target_out_of_range"
 TARGET_EQUALS_COLUMN = "target_equals_column"
 TARGET_NOT_Y_ROLE = "target_not_y_role"
+MALFORMED_ENTRY = "malformed_entry"
 AXIS_CONTRADICTS_TARGET = "axis_contradicts_target"
 NO_X_COLUMN = "no_x_column"
 DUPLICATE_TARGET = "duplicate_target"
@@ -187,7 +190,19 @@ def valid_error_bindings(
       be a target (that would let two error columns describe each other),
       and a ``"categorical"`` channel has no numeric magnitude for an error
       bar to sit around;
-    - ``column`` already claimed by an earlier binding in this same list.
+    - ``target == -1`` (the x axis) with an ``axis`` that isn't ``"x"`` --
+      self-contradictory;
+    - ``target == -1`` when NO column holds the ``"x"`` role, so the axis
+      would be a synthesized 1..N sample index;
+    - ``column`` already claimed by an earlier binding in this same list;
+    - the same ``(target, axis, side)`` already supplied by an earlier
+      binding -- two columns describing one signal collapse downstream, so
+      the later one is reported rather than silently displacing the first.
+      Opposite SIDES of one target are not duplicates: that is exactly what
+      an asymmetric pair is.
+
+    Entries that could not be parsed into an ``ErrorBinding`` at all never
+    reach here; :func:`malformed_problems` reports those.
     """
     n_cols = len(roles)
     kept: list[ErrorBinding] = []
@@ -306,10 +321,16 @@ def binding_metadata(
     `import_problems` exists because NOT every caller saw a preview:
     `io/registry.py`'s saved-filter path parses a glob-matched file with no
     wizard in sight, and a filter reused across files is exactly where a
-    binding goes stale. Dropping it with no record anywhere would hand that
-    user a dataset with no error bars and nothing to explain why. The wizard,
-    which already renders `error_binding_problems` from the preview, can
-    ignore this copy.
+    binding goes stale. Dropping it with no record anywhere would leave
+    nothing anywhere to explain why the error bars are missing.
+
+    Both keys are BACKEND CONTRACT ONLY today: no frontend code reads
+    `error_binding_problems` from a preview yet, and nothing maps
+    `metadata["error_roles"]` onto `Dataset.errorRoles` at import, so a
+    packed pairing does not yet produce bars on a plot. Rendering both is the
+    Import Wizard UI slice (P1.6, Sol's lane) building on this contract --
+    said plainly here so the next reader does not mistake "recorded" for
+    "surfaced".
     """
     raw_to_channel = {raw: chan for chan, raw in enumerate(channel_order)}
     out: dict[str, Any] = {}
@@ -325,4 +346,32 @@ def binding_metadata(
         ]
     if dropped:
         out["import_problems"] = [d.to_dict() for d in dropped]
+    return out
+
+
+def malformed_problems(entries: Sequence[dict[str, Any]]) -> list[DroppedErrorBinding]:
+    """Report entries `ImportSettings.from_dict` could not parse AT ALL, in the
+    same shape as a binding that failed semantic validation.
+
+    These never reach :func:`valid_error_bindings` -- they are not
+    `ErrorBinding`s -- so without this they would vanish between reading a
+    saved filter off disk and previewing it, which is the one outcome this
+    contract exists to rule out. The offending values are echoed back as
+    given (a `-1`/`""` placeholder where a field was absent or unusable) so
+    the message can quote what was actually in the file."""
+    out: list[DroppedErrorBinding] = []
+    for entry in entries:
+        column = entry.get("column")
+        target = entry.get("target")
+        axis = entry.get("axis")
+        side = entry.get("side")
+        out.append(DroppedErrorBinding(
+            column if isinstance(column, int) else -1,
+            target if isinstance(target, int) else -1,
+            str(axis) if axis is not None else "",
+            str(side) if side is not None else "",
+            MALFORMED_ENTRY,
+            "saved error binding could not be read "
+            f"(axis={axis!r}, side={side!r}, column={column!r}, target={target!r})",
+        ))
     return out
