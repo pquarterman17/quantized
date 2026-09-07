@@ -229,11 +229,18 @@ def test_pack_project_interrupted_publish_leaves_no_destination(
     def _boom(_src: str, _dst: str) -> None:
         raise OSError("Permission denied")
 
-    monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
+    # The primary rename path is `rename_noreplace`'s platform primitive,
+    # not a bare `os.rename` call in `publish.py` -- force the failure at
+    # that seam instead (see `test_portable_publish.py` for the same
+    # pattern against `publish_bundle` directly).
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace", _boom
+    )
     result = pack_project(payload, "proj", destination, probe=_probe, packed_at=_PACKED_AT)
 
     assert result.ok is False
     assert result.errors[0]["code"] == "publish_failed"
+    assert result.no_replace == "atomic"
     assert result.originals_modified is False
     assert not os.path.exists(destination)
     assert result.cleanup_ok is True

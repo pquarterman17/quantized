@@ -1988,17 +1988,58 @@ below — the packer's own implementation work starts fresh here:
     rename — another process, a concurrent pack run racing the same
     path, a user's own `mkdir` — was silently absorbed instead of
     refused, contradicting the module's own "never overwrites" contract.
-    Fixed with an `os.mkdir` reservation immediately before the rename
-    (a genuine atomic existence check for ANY pre-existing entry, unlike
-    a second `lexists` call), rolling the reservation back with
-    `os.rmdir` on a subsequent rename failure so a failed publish still
-    leaves the destination completely absent. A no-op hardening on
-    Windows, where `os.rename` already refuses outright whenever the
-    destination exists at all. Forced (not merely observed) in
+    The FIRST fix attempt (an `os.mkdir` reservation immediately before
+    the rename, rolled back with `os.rmdir` on a subsequent rename
+    failure) was itself reviewed by the owner on PR #309 and found to
+    still be non-atomic: a THIRD party can `rmdir` the reservation and
+    `mkdir` its own empty directory at the same path before the
+    following `os.rename` runs, and POSIX `rename` absorbs that foreign
+    empty directory exactly as it would have absorbed the original one —
+    two syscalls with a gap between them are not one atomic operation,
+    however narrow, and the code's own comment claiming "nothing else can
+    have raced ahead of it" was not true.
+    **Fixed for real in this commit** with a new pure module,
+    `quantized.portable.atomic_rename`, exposing `rename_noreplace` — a
+    SINGLE syscall wherever the platform provides one: glibc's
+    `renameat2(..., RENAME_NOREPLACE)` via `ctypes` on Linux, Darwin's
+    `renamex_np(..., RENAME_EXCL)` via `ctypes` on macOS, and plain
+    `os.rename` on Windows (already atomic no-replace there). `publish_bundle`
+    tries this first and reports `PublishResult.no_replace: "atomic"` when
+    it ran. Only when the platform/kernel/filesystem has none of those at
+    all (`NoReplaceUnsupported` — an old kernel/glibc without `renameat2`,
+    a filesystem that rejects the flag) does it fall back to the OLD
+    `os.mkdir` reservation + `os.rename` sequence, reporting
+    `no_replace: "best_effort"` — an HONEST contract now: the module
+    docstring and `PublishResult.no_replace`'s own doc say plainly that
+    the fallback leaves the same narrow residual race described above
+    open, rather than claiming it is closed. `PackResult` (`pack.py`) and
+    the `pack_status` result dict (`desktop_bridge_pack.py`) both carry
+    `no_replace` through to the frontend
+    (`frontend/src/lib/desktopPackBridge.ts`'s `PackStatus.result` gained
+    an optional `no_replace` field). Verified on this Linux dev runner:
+    `no_replace_available()` is `True` (glibc `renameat2` with
+    `RENAME_NOREPLACE` is supported) — every real publish on this
+    platform gets the atomic path, never the fallback, in normal
+    operation.
+    Regression coverage, forced rather than merely observed
+    (CLAUDE.md's evidence standard): `tests/test_portable_atomic_rename.py`
+    exercises the real primitive (skipped with a precise reason when
+    `no_replace_available()` is `False`) plus a seam test that fakes the
+    platform primitive to prove `NoReplaceUnsupported` routes correctly
+    without needing an actually unsupported kernel.
+    `tests/test_portable_publish.py` keeps the original
     `test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_race`
-    (`tests/test_portable_publish.py`) by making `os.path.lexists`
-    itself plant the racing directory as a side effect of the very call
-    whose result it reports.
+    passing on the new atomic path, adds
+    `test_publish_bundle_atomic_primitive_seam_refuses_a_directory_planted_during_the_race`
+    (the owner's exact seam ask, with the primitive faked so it is
+    deterministic on any runner), and adds
+    `test_publish_bundle_fallback_absorbs_a_directory_planted_between_reservation_and_rename`
+    — which PINS the fallback's residual race by forcing it (wrapping
+    `os.mkdir` to rmdir-and-recreate a foreign empty directory right after
+    the reservation) and asserting the honest outcome: the foreign
+    directory IS absorbed, the publish still reports `ok=True`, and
+    `no_replace` is `"best_effort"`, never `"atomic"` — the fix is an
+    honest contract, not a claim that this residual race is closed.
   - **Defect 2 — `pack_preview` had no catch for its own internal
     assertion failures** (item 13, path-leak). `build_dry_run_manifest`
     (via `naming.plan_bundle_names`) can raise `RuntimeError` from a

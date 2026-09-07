@@ -456,7 +456,10 @@ class DesktopPackBridge:
             errors = list(self._pack_errors)
             cleanup_ok = self._pack_cleanup_ok
             result = (
-                {"bundle_dir": self._pack_result.bundle_dir}
+                {
+                    "bundle_dir": self._pack_result.bundle_dir,
+                    "no_replace": self._pack_result.no_replace,
+                }
                 if self._pack_result is not None and self._pack_result.ok
                 else None
             )

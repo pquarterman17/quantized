@@ -143,6 +143,19 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "_write_disabled_sources: persists the enabled/disabled plugin list "
         "to this app's own config-dir `plugins.json`, not a dataset."
     ),
+    "portable/atomic_rename.py": (
+        "_windows_rename_noreplace: os.rename(src, dst) on Windows IS the "
+        "atomic no-replace primitive itself (it already refuses any "
+        "existing destination) -- both args are caller-supplied paths "
+        "(publish.py's staging root and destination_dir), never a "
+        "declared dataset source; the Linux/macOS syscalls are reached "
+        "via ctypes, invisible to this scan, and never write through "
+        "`os`/`shutil`/`tempfile` at all. _no_replace_available_cached: "
+        "the one open(...,'w') creates a throwaway empty temp file, "
+        "inside a tempfile.TemporaryDirectory() this function creates "
+        "and tears down itself, purely to probe whether the platform "
+        "primitive is available -- never a caller-supplied path."
+    ),
     "portable/copying.py": (
         "stage_one_file: os.open(dest, open_flags, 0o644) creates the ONE "
         "destination file for a single manifest row, always computed via "

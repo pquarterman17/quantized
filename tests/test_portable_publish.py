@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 
 from quantized.desktop_source_probe import probe_source_path
+from quantized.portable.atomic_rename import NoReplaceUnsupported
 from quantized.portable.layout import MANIFEST_FILENAME
 from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 from quantized.portable.publish import (
@@ -208,6 +209,129 @@ def test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_
     assert not os.path.exists(staging_root)
 
 
+def _fake_true_no_replace_semantics(src: str, dst: str) -> None:
+    """A fake `_platform_rename_noreplace` implementing GENUINE no-replace
+    semantics in pure Python: check-then-rename with no real atomicity of
+    its own, but that's fine here -- these seam tests plant the race
+    BEFORE this function is even called (via the `os.path.lexists` hook
+    on the pre-check in `publish_bundle` itself, exactly as
+    `test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_race`
+    does), so by the time this runs the destination already carries the
+    planted directory and this correctly refuses it -- deterministically,
+    on any runner, regardless of what its actual kernel/filesystem
+    supports."""
+    if os.path.lexists(dst):
+        raise FileExistsError(f"[Errno 17] File exists: {dst!r}")
+    os.rename(src, dst)
+
+
+def test_publish_bundle_atomic_primitive_seam_refuses_a_directory_planted_during_the_race(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The owner's ask on PR #309, restated for the NEW primitive path:
+    with `rename_noreplace` in play there is no `os.mkdir` reservation
+    step at all, so the seam to force here is the primitive itself. Faking
+    `_platform_rename_noreplace` with genuine no-replace semantics and
+    planting the race via the same `os.path.lexists` hook as the sibling
+    test above proves `publish_bundle` refuses the foreign directory on
+    the ATOMIC path too, deterministically -- not just when this runner's
+    kernel happens to support a real no-replace syscall."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace",
+        _fake_true_no_replace_semantics,
+    )
+    real_lexists = os.path.lexists
+
+    def _lexists_then_plant_empty_dir(path: str) -> bool:
+        result = real_lexists(path)
+        if path == destination:
+            os.makedirs(destination, exist_ok=True)
+        return result
+
+    monkeypatch.setattr(
+        "quantized.portable.publish.os.path.lexists", _lexists_then_plant_empty_dir
+    )
+
+    result = publish_bundle(staging_root, destination)
+
+    assert result.ok is False
+    assert result.error is not None
+    assert result.error["code"] == "destination_exists"
+    assert result.no_replace == "atomic"
+    assert os.listdir(destination) == []
+    assert not os.path.exists(staging_root)
+
+
+def _raise_no_replace_unsupported(_src: str, _dst: str) -> None:
+    raise NoReplaceUnsupported("fake: no atomic no-replace rename here")
+
+
+def test_publish_bundle_falls_back_and_reports_best_effort_when_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`NoReplaceUnsupported` from the primitive must not fail the
+    publish outright -- it routes to the older reservation sequence,
+    which still succeeds on an ordinary (uncontested) publish, but must
+    honestly report the weaker guarantee level it actually used."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace",
+        _raise_no_replace_unsupported,
+    )
+
+    result = publish_bundle(staging_root, destination)
+
+    assert result.ok is True
+    assert result.no_replace == "best_effort"
+    assert result.bundle_dir == destination
+    assert os.path.isdir(destination)
+    assert os.path.isfile(os.path.join(destination, MANIFEST_FILENAME))
+    assert not os.path.exists(staging_root)
+
+
+def test_publish_bundle_fallback_absorbs_a_directory_planted_between_reservation_and_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pins the DOCUMENTED residual race the fallback leaves open (the
+    owner's finding on PR #309 against the OLD code): even with the
+    `os.mkdir` reservation immediately before the rename, a third party
+    that removes it and creates its OWN empty directory at the same path
+    in between is silently absorbed by the final `os.rename` -- exactly
+    the "not actually atomic" gap the reservation could not close. This
+    is not a bug to fix here; it is the residual race `no_replace:
+    "best_effort"` exists to report honestly. Forces the race (CLAUDE.md's
+    evidence standard) by wrapping `os.mkdir` itself: right after it
+    creates OUR reservation, it removes it and creates a foreign one at
+    the same path, modeling a concurrent process racing for the exact
+    same destination."""
+    staging_root, destination = _write_complete_staging(tmp_path)
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace",
+        _raise_no_replace_unsupported,
+    )
+    real_mkdir = os.mkdir
+
+    def _mkdir_then_race(path: str, *args: object, **kwargs: object) -> None:
+        real_mkdir(path, *args, **kwargs)  # our own reservation
+        if path == destination:
+            os.rmdir(path)
+            real_mkdir(path)  # "another process" reserving the same path
+
+    monkeypatch.setattr("quantized.portable.publish.os.mkdir", _mkdir_then_race)
+
+    result = publish_bundle(staging_root, destination)
+
+    # Documents the outcome rather than claiming it is closed: the foreign
+    # directory IS absorbed, the publish reports success, and it is
+    # reported as best_effort -- never atomic.
+    assert result.ok is True
+    assert result.no_replace == "best_effort"
+    assert os.path.isdir(destination)
+    assert os.path.isfile(os.path.join(destination, MANIFEST_FILENAME))
+    assert not os.path.exists(staging_root)
+
+
 def test_publish_bundle_refuses_a_non_sibling_destination(tmp_path: Path) -> None:
     staging_root, _ = _write_complete_staging(tmp_path)
     elsewhere = tmp_path / "elsewhere" / "proj_bundle"
@@ -236,17 +360,24 @@ def test_publish_bundle_refuses_incomplete_staging_missing_marker(tmp_path: Path
 def test_publish_bundle_interrupted_rename_cleans_up_and_never_partially_publishes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The primary path is `rename_noreplace` (a single syscall, no
+    `os.rename` call in `publish.py` itself on the happy path), so the
+    OSError is forced at that seam -- `_platform_rename_noreplace`, the
+    one module-level primitive `atomic_rename.rename_noreplace` calls."""
     staging_root, destination = _write_complete_staging(tmp_path)
 
     def _boom(_src: str, _dst: str) -> None:
         raise OSError("Permission denied")
 
-    monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace", _boom
+    )
     result = publish_bundle(staging_root, destination)
 
     assert result.ok is False
     assert result.error is not None
     assert result.error["code"] == "publish_failed"
+    assert result.no_replace == "atomic"
     assert result.originals_modified is False
     assert not os.path.exists(destination)
     assert result.cleanup_ok is True
@@ -256,16 +387,19 @@ def test_publish_bundle_interrupted_rename_cleans_up_and_never_partially_publish
 def test_publish_bundle_rename_oserror_message_is_path_free(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Review finding (PR #307): a real `os.rename` failure raises an
-    `OSError` carrying BOTH `filename` (the staging path) and `filename2`
-    (the destination path) -- `str(exc)` on that embeds both absolute
-    paths. `PublishResult.error["message"]` must contain neither."""
+    """Review finding (PR #307): a real rename failure's `OSError` can
+    carry BOTH `filename` (the staging path) and `filename2` (the
+    destination path) -- `str(exc)` on that embeds both absolute paths.
+    `PublishResult.error["message"]` must contain neither. Forced at the
+    `rename_noreplace` primitive seam (see the test above)."""
     staging_root, destination = _write_complete_staging(tmp_path)
 
     def _boom(src: str, dst: str) -> None:
         raise OSError(errno.EACCES, "Permission denied", src, None, dst)
 
-    monkeypatch.setattr("quantized.portable.publish.os.rename", _boom)
+    monkeypatch.setattr(
+        "quantized.portable.atomic_rename._platform_rename_noreplace", _boom
+    )
     result = publish_bundle(staging_root, destination)
 
     assert result.ok is False

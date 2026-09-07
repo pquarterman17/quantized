@@ -173,7 +173,13 @@ export interface PackStatus {
   progress: PackProgress;
   warnings: PortableManifestWarning[];
   errors: PackStatusError[];
-  result: { bundle_dir: string } | null;
+  /** `no_replace` reports the strength of the no-overwrite guarantee this
+   *  publish actually got (`atomic_rename.py`/PR #309 follow-up):
+   *  `"atomic"` when a genuine no-replace rename syscall ran, or
+   *  `"best_effort"` when the platform had none and the older
+   *  reservation fallback ran instead. Optional -- absent on an older
+   *  backend that predates this field. */
+  result: { bundle_dir: string; no_replace?: "atomic" | "best_effort" } | null;
   cleanup_ok: boolean | null;
   originals_modified: false;
 }

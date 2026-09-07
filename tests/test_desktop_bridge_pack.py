@@ -423,6 +423,11 @@ def test_real_pack_completes_and_revokes_its_own_grants(tmp_path: Path) -> None:
     assert status["result"] is not None
     bundle_dir = status["result"]["bundle_dir"]
     assert bundle_dir == os.path.join(destination_parent, "myproj")
+    # `PackResult.no_replace` (P1.7 PR 5 audit, PR #309 follow-up) is
+    # threaded all the way through `pack_project` -> `pack_status`'s own
+    # `result` dict -- surfaced so a caller can tell whether this publish
+    # got the strict no-overwrite guarantee or the older best-effort one.
+    assert status["result"]["no_replace"] in ("atomic", "best_effort")
 
     check = validate_bundle(bundle_dir, verify_checksums=True)
     assert check.complete, check.problems
@@ -685,7 +690,7 @@ def test_a_cancelled_pack_never_touches_the_original_dwk_or_sources(tmp_path: Pa
 def test_a_failed_pack_never_touches_the_original_dwk_or_sources(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import quantized.portable.publish as publish_module
+    import quantized.portable.atomic_rename as atomic_rename_module
 
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
@@ -699,7 +704,10 @@ def test_a_failed_pack_never_touches_the_original_dwk_or_sources(
     def _boom_rename(src: str, dst: str) -> None:
         raise OSError(13, "Permission denied", src, None, dst)
 
-    monkeypatch.setattr(publish_module.os, "rename", _boom_rename)
+    # The primary rename path is `rename_noreplace`'s platform primitive,
+    # not a bare `os.rename` call in `publish.py` -- force the failure
+    # there instead (see `test_portable_publish.py` for the same pattern).
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
     out = api.pack_start(preview["token"], content)
     assert out["ok"] is True
     status = _wait_for_terminal(api)
@@ -913,7 +921,7 @@ def test_a_failing_pack_status_snapshot_never_contains_the_tmp_path_anywhere(
     `OSError`, not a fully mocked `pack_project`) exercises the actual
     message-building code across staging, publish, and this bridge's own
     status-shaping in one pass."""
-    import quantized.portable.publish as publish_module
+    import quantized.portable.atomic_rename as atomic_rename_module
 
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
@@ -923,7 +931,7 @@ def test_a_failing_pack_status_snapshot_never_contains_the_tmp_path_anywhere(
     def _boom_rename(src: str, dst: str) -> None:
         raise OSError(13, "Permission denied", src, None, dst)
 
-    monkeypatch.setattr(publish_module.os, "rename", _boom_rename)
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
     out = api.pack_start(preview["token"], content)
     assert out["ok"] is True
 
@@ -971,12 +979,12 @@ def test_a_thread_start_failure_reverts_phase_and_revokes_its_grants(
 def test_publish_failure_message_reported_through_the_bridge_never_leaks_a_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Review finding #6, exercised end to end through the bridge:
-    ``os.rename``'s own ``OSError`` embeds the absolute staging and
+    """Review finding #6, exercised end to end through the bridge: a real
+    rename failure's ``OSError`` embeds the absolute staging and
     destination paths (``.filename``/``.filename2``) -- the status this
     bridge surfaces must carry only the OS's own errno text, never either
     absolute path nor the tmp_path root they live under."""
-    import quantized.portable.publish as publish_module
+    import quantized.portable.atomic_rename as atomic_rename_module
 
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
@@ -987,7 +995,7 @@ def test_publish_failure_message_reported_through_the_bridge_never_leaks_a_path(
     def _boom_rename(src: str, dst: str) -> None:
         raise OSError(13, "Permission denied", src, None, dst)
 
-    monkeypatch.setattr(publish_module.os, "rename", _boom_rename)
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
     out = api.pack_start(preview["token"], content)
     assert out["ok"] is True
 

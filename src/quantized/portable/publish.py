@@ -3,13 +3,23 @@
 ## The publish contract
 
 A bundle only ever comes into existence at its final destination through
-ONE atomic ``os.rename`` of a fully-written STAGING directory
+ONE rename of a fully-written STAGING directory
 (:mod:`quantized.portable.staging`'s ``create_staging_dir``/``stage_sources``
 have already copied and verified every packable source into it by the time
 this module runs). Nothing here ever writes directly at the destination,
 and nothing here ever partially publishes: :func:`publish_bundle` either
-renames a complete tree into place in one syscall, or leaves the
-destination completely absent and cleans the staging directory up.
+renames a complete tree into place, or leaves the destination completely
+absent and cleans the staging directory up.
+
+**The no-overwrite guarantee is honest about what the platform can back.**
+:func:`publish_bundle` tries :func:`quantized.portable.atomic_rename
+.rename_noreplace` first — one syscall, no race window (see that
+module's docstring) — reporting ``no_replace: "atomic"`` when it ran.
+Only on ``NoReplaceUnsupported`` does it fall back to the older
+``os.mkdir`` reservation + ``os.rename`` sequence
+(:func:`_publish_via_reservation_fallback`), reporting the documented
+residual race honestly as ``"best_effort"`` rather than claiming a
+guarantee this module cannot back.
 
 **Why a sibling staging dir makes the safe fallback trivial.**
 :func:`quantized.portable.staging.create_staging_dir` always stages inside
@@ -54,10 +64,11 @@ import os
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from quantized.desktop_project_file import WRITE_TEMP_PREFIX
 
+from .atomic_rename import NoReplaceUnsupported, rename_noreplace
 from .copy_stream import safe_os_error
 from .copying import StagedFile
 from .layout import (
@@ -82,6 +93,9 @@ __all__ = [
 ]
 
 _CHECKSUM_CHUNK_BYTES = 1024 * 1024
+# The strength of the no-overwrite guarantee one publish actually got --
+# see `PublishResult.no_replace`'s own doc and the module docstring.
+_NoReplaceLevel = Literal["atomic", "best_effort"]
 
 
 def _fsync_directory_best_effort(directory: str) -> None:
@@ -208,100 +222,101 @@ def write_bundle_files(
 @dataclass(slots=True)
 class PublishResult:
     """The outcome of one :func:`publish_bundle` call. ``cleanup_ok`` is a
-    concrete bool whenever ``ok`` is ``False`` (a cleanup was always
-    attempted on a refusal/failure) and ``None`` on success (the staging
-    directory no longer exists — it WAS the published bundle)."""
+    concrete bool whenever ``ok`` is ``False`` and ``None`` on success
+    (the staging directory no longer exists — it WAS the published
+    bundle). ``no_replace`` defaults to ``"atomic"`` (a single no-replace
+    rename syscall ran, no race window) or ``"best_effort"`` (the older
+    reservation sequence ran instead — see
+    :func:`_publish_via_reservation_fallback`)."""
 
     ok: bool
     bundle_dir: str | None
     error: dict[str, str] | None
     cleanup_ok: bool | None
     originals_modified: bool = False
+    no_replace: _NoReplaceLevel = "atomic"
 
 
-def _refuse(staging_root: str, code: str, message: str) -> PublishResult:
+_DEST_EXISTS = ("destination_exists", "destination already exists")
+
+
+def _refuse(
+    staging_root: str, code: str, message: str, *, no_replace: _NoReplaceLevel = "atomic"
+) -> PublishResult:
     cleanup_ok = cleanup_staging_dir(staging_root)
-    return PublishResult(
-        ok=False,
-        bundle_dir=None,
-        error={"code": code, "message": message},
-        cleanup_ok=cleanup_ok,
-    )
+    error = {"code": code, "message": message}
+    return PublishResult(False, None, error, cleanup_ok, False, no_replace)
 
 
 def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
     """Publish a fully-staged bundle by renaming ``staging_root`` onto
-    ``destination_dir`` in ONE atomic ``os.rename`` — see the module
-    docstring for the full rationale (sibling staging makes cross-device
-    rename impossible by construction, so refuse-and-clean is the only
-    safe fallback on any remaining ``OSError``).
+    ``destination_dir`` — see the module docstring for the full rationale.
 
-    Refuses (staging cleaned, destination never touched) when:
-      * ``destination_dir`` already exists (``destination_exists`` — this
-        PR never overwrites);
-      * ``destination_dir``'s parent is not the same directory
-        ``staging_root`` lives in (``invalid_destination``);
-      * ``staging_root`` has no completion marker yet
-        (``incomplete_staging`` — see the module docstring's "manifest
-        last" rule).
+    Refuses (staging cleaned, destination untouched) when it already
+    exists (``destination_exists``), its parent isn't the directory
+    ``staging_root`` lives in (``invalid_destination``), or
+    ``staging_root`` has no completion marker yet (``incomplete_staging``
+    — the module docstring's "manifest last" rule).
 
-    On an ``OSError`` from ``os.rename`` itself (permission, a race — never
-    ``EXDEV``, by construction): ``publish_failed``, staging cleaned,
-    destination absent.
+    Tries :func:`quantized.portable.atomic_rename.rename_noreplace`
+    first; its ``FileExistsError`` maps to ``destination_exists``, any
+    other ``OSError`` to ``publish_failed``, and
+    ``NoReplaceUnsupported`` falls back to
+    :func:`_publish_via_reservation_fallback` (``no_replace:
+    "best_effort"``).
     """
     if os.path.lexists(destination_dir):
-        return _refuse(staging_root, "destination_exists", "destination already exists")
+        return _refuse(staging_root, *_DEST_EXISTS)
     dest_parent = os.path.dirname(os.path.realpath(destination_dir))
     staging_parent = os.path.realpath(os.path.dirname(staging_root))
     if dest_parent != staging_parent:
-        return _refuse(
-            staging_root,
-            "invalid_destination",
-            "staging directory must be a sibling of the destination",
-        )
+        msg = "staging directory must be a sibling of the destination"
+        return _refuse(staging_root, "invalid_destination", msg)
     if not os.path.isfile(os.path.join(staging_root, MANIFEST_FILENAME)):
-        return _refuse(
-            staging_root, "incomplete_staging", "staging directory has no completion marker"
-        )
-    # Audit finding (P1.7 PR 5): the `lexists` check above and `os.rename`
-    # below are NOT one atomic operation -- on POSIX, `os.rename` onto an
-    # existing EMPTY directory silently succeeds and replaces it (unlike a
-    # non-empty one, which raises `ENOTEMPTY`). A directory created in the
-    # split second between the check and the rename (another process, a
-    # concurrent pack run racing for the same path, a user's own `mkdir`)
-    # would otherwise be silently absorbed -- contradicting this function's
-    # own "never overwrites" contract for the specific case of an empty
-    # directory. `os.mkdir` is a genuine atomic existence check (it raises
-    # `FileExistsError` for ANY pre-existing entry at that path, file or
-    # directory, empty or not) where a second `lexists` call would not be,
-    # so it is used here as a reservation: once it succeeds, nothing else
-    # can have raced ahead of it, and the immediately-following `os.rename`
-    # (replacing our own just-created empty directory) closes the window to
-    # the two syscalls between them -- as tight as pure Python's `os` module
-    # permits without a platform-specific syscall.
-    # The reservation is POSIX-only: on Windows `os.rename` refuses ANY
-    # existing destination -- including an empty directory we created
-    # ourselves a syscall earlier -- so reserving there would make every
-    # publish fail; the rename itself is the atomic existence check on that
-    # platform, and its `FileExistsError` is mapped to `destination_exists`
-    # below.
+        msg = "staging directory has no completion marker"
+        return _refuse(staging_root, "incomplete_staging", msg)
+    try:
+        rename_noreplace(staging_root, destination_dir)
+    except FileExistsError:
+        return _refuse(staging_root, *_DEST_EXISTS)
+    except NoReplaceUnsupported:
+        return _publish_via_reservation_fallback(staging_root, destination_dir)
+    except OSError as exc:
+        # `safe_os_error`, never `str(exc)`: an `OSError` from a rename
+        # syscall carries BOTH the staging and destination paths (review
+        # finding, PR #307).
+        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
+    return PublishResult(True, destination_dir, None, None, False, "atomic")
+
+
+def _best_effort_refuse(staging_root: str, code: str, message: str) -> PublishResult:
+    return _refuse(staging_root, code, message, no_replace="best_effort")
+
+
+def _publish_via_reservation_fallback(staging_root: str, destination_dir: str) -> PublishResult:
+    """The pre-``rename_noreplace`` reservation sequence — used ONLY on
+    ``NoReplaceUnsupported``; every result carries ``no_replace:
+    "best_effort"``. ``os.mkdir`` reserves the path (an atomic existence
+    check, unlike a second ``lexists``) right before the rename, narrowing
+    but NOT closing the gap: a third party can still ``rmdir`` it and
+    ``mkdir`` its own empty directory first, which POSIX ``rename``
+    silently absorbs (module docstring). POSIX-only in practice — on
+    Windows ``os.rename`` already refuses any existing destination, and
+    ``rename_noreplace`` never raises ``NoReplaceUnsupported`` there."""
     reserved = False
     if os.name != "nt":
         try:
             os.mkdir(destination_dir)
         except FileExistsError:
-            return _refuse(staging_root, "destination_exists", "destination already exists")
+            return _best_effort_refuse(staging_root, *_DEST_EXISTS)
         except OSError as exc:
-            return _refuse(staging_root, "publish_failed", safe_os_error(exc))
+            return _best_effort_refuse(staging_root, "publish_failed", safe_os_error(exc))
         reserved = True
     try:
         os.rename(staging_root, destination_dir)
     except OSError as exc:
-        # Undo our own reservation so a failed publish truly leaves the
-        # destination completely absent, matching the module doc's promise
-        # -- best-effort: if this itself fails there is nothing further to
-        # do that would not risk deleting something a third party legitimately
-        # created there since.
+        # Undo the reservation (best-effort) so a failed publish truly
+        # leaves the destination absent.
         reservation_removed = False
         if reserved:
             try:
@@ -310,27 +325,22 @@ def publish_bundle(staging_root: str, destination_dir: str) -> PublishResult:
             except OSError:
                 pass
         if isinstance(exc, FileExistsError) and reservation_removed:
-            # The rename refused OUR OWN empty reservation, and removing it
-            # succeeded: a filesystem that does not absorb an empty
-            # directory (some network/FUSE mounts). The destination is now
-            # provably absent, and on exactly such a filesystem a plain
-            # rename is safe -- it refuses any target that appears
-            # meanwhile instead of merging into it.
+            # Our OWN reservation was refused, and removing it succeeded:
+            # a filesystem that does not absorb an empty directory. The
+            # destination is now provably absent, so a plain retry is safe.
             try:
                 os.rename(staging_root, destination_dir)
             except FileExistsError:
-                return _refuse(staging_root, "destination_exists", "destination already exists")
+                return _best_effort_refuse(staging_root, *_DEST_EXISTS)
             except OSError as retry_exc:
-                return _refuse(staging_root, "publish_failed", safe_os_error(retry_exc))
-            return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
+                return _best_effort_refuse(staging_root, "publish_failed", safe_os_error(retry_exc))
+            return PublishResult(True, destination_dir, None, None, False, "best_effort")
         if isinstance(exc, FileExistsError):
-            return _refuse(staging_root, "destination_exists", "destination already exists")
-        # `safe_os_error`, never `str(exc)`: an `OSError` from `os.rename`
-        # carries BOTH `filename` and `filename2` -- the absolute staging
-        # and destination paths -- and this result is structured, possibly
-        # logged, output (review finding, PR #307).
-        return _refuse(staging_root, "publish_failed", safe_os_error(exc))
-    return PublishResult(ok=True, bundle_dir=destination_dir, error=None, cleanup_ok=None)
+            return _best_effort_refuse(staging_root, *_DEST_EXISTS)
+        # `safe_os_error`, never `str(exc)`: carries BOTH the staging and
+        # destination paths (review finding, PR #307).
+        return _best_effort_refuse(staging_root, "publish_failed", safe_os_error(exc))
+    return PublishResult(True, destination_dir, None, None, False, "best_effort")
 
 
 @dataclass(slots=True)
