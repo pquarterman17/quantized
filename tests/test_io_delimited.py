@@ -310,7 +310,7 @@ def test_encode_categorical_columns_matches_encode_categorical_unmodified() -> N
 
     cells = ["B", "A", "B", "A", "C"]
     want_codes, want_levels = _encode_categorical(cells)
-    (got,), problems = encode_categorical_columns([("Tag", cells)])
+    (got,), problems = encode_categorical_columns([(0, "Tag", cells)])
     got_codes, got_levels = got
     assert got_levels == want_levels
     assert got_codes.tolist() == want_codes.tolist()
@@ -324,10 +324,11 @@ def test_encode_categorical_columns_level_cap_problem() -> None:
     )
 
     cells = [f"L{i}" for i in range(MAX_CATEGORICAL_LEVELS + 1)]
-    _, problems = encode_categorical_columns([("Tag", cells)])
+    _, problems = encode_categorical_columns([(0, "Tag", cells)])
     assert problems == [
         {
             "type": "categorical_level_cap",
+            "index": 0,
             "column": "Tag",
             "level_count": MAX_CATEGORICAL_LEVELS + 1,
             "cap": MAX_CATEGORICAL_LEVELS,
@@ -342,18 +343,18 @@ def test_encode_categorical_columns_no_cap_problem_at_exactly_the_cap() -> None:
     )
 
     cells = [f"L{i}" for i in range(MAX_CATEGORICAL_LEVELS)]
-    _, problems = encode_categorical_columns([("Tag", cells)])
+    _, problems = encode_categorical_columns([(0, "Tag", cells)])
     assert problems == []
 
 
 def test_encode_categorical_columns_case_collision_problem() -> None:
     from quantized.io.import_categorical_guards import encode_categorical_columns
 
-    (codes_levels,), problems = encode_categorical_columns([("Tag", ["Fe", "fe", "Cu"])])
+    (codes_levels,), problems = encode_categorical_columns([(0, "Tag", ["Fe", "fe", "Cu"])])
     codes, levels = codes_levels
     assert levels == ("Fe", "fe", "Cu")  # kept distinct, lossless
     assert problems == [
-        {"type": "categorical_case_collision", "column": "Tag", "labels": ("Fe", "fe")}
+        {"type": "categorical_case_collision", "index": 0, "column": "Tag", "labels": ("Fe", "fe")}
     ]
 
 
@@ -361,7 +362,7 @@ def test_encode_categorical_columns_multiple_collision_groups() -> None:
     from quantized.io.import_categorical_guards import encode_categorical_columns
 
     cells = ["Fe", "fe", "Cu", "cu", "CU"]
-    _, problems = encode_categorical_columns([("Tag", cells)])
+    _, problems = encode_categorical_columns([(0, "Tag", cells)])
     kinds = [p for p in problems if p["type"] == "categorical_case_collision"]
     assert {p["labels"] for p in kinds} == {("Fe", "fe"), ("Cu", "cu", "CU")}
 
@@ -370,10 +371,15 @@ def test_encode_categorical_columns_multiple_columns_independent_problems() -> N
     from quantized.io.import_categorical_guards import encode_categorical_columns
 
     _, problems = encode_categorical_columns(
-        [("Clean", ["A", "B"]), ("Collides", ["X", "x"])]
+        [(0, "Clean", ["A", "B"]), (1, "Collides", ["X", "x"])]
     )
     assert problems == [
-        {"type": "categorical_case_collision", "column": "Collides", "labels": ("X", "x")}
+        {
+            "type": "categorical_case_collision",
+            "index": 1,  # the SECOND column, identified by its own raw index
+            "column": "Collides",
+            "labels": ("X", "x"),
+        }
     ]
 
 

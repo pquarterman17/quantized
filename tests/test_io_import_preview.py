@@ -1083,9 +1083,10 @@ def test_categorical_level_cap_does_not_reject_a_column_at_the_cap() -> None:
 
 
 def test_categorical_level_cap_override_allows_the_import() -> None:
-    """Review finding #2: `allow_large_categorical=True` lifts the refusal
-    for a column with genuinely many levels (e.g. 800 real sample IDs) --
-    the cap stays the DEFAULT protection, but is no longer absolute."""
+    """Review finding #2: listing a column's index in
+    `allow_large_categorical` lifts the refusal for a column with genuinely
+    many levels (e.g. 800 real sample IDs) -- the cap stays the DEFAULT
+    protection, but is no longer absolute."""
     from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
 
     n = MAX_CATEGORICAL_LEVELS + 5
@@ -1093,10 +1094,59 @@ def test_categorical_level_cap_override_allows_the_import() -> None:
     text = f"Idx,Value\n{rows}\n"
     settings = ImportSettings(
         header_line=0, data_start_line=1, roles=["x", "categorical"],
-        allow_large_categorical=True,
+        allow_large_categorical=[1],
     )
     ds = parse_import(text, settings)  # must not raise
     assert len(ds.cat_levels[0]) == n
+
+
+def test_accepting_one_categorical_column_does_not_accept_another() -> None:
+    """PR #315 review finding #1: the override is PER COLUMN. Accepting a
+    legitimate 600-level `SampleID` must not pre-accept a second column that
+    blows the cap -- the whole point of the cap is the column the user did
+    NOT look at."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    n = MAX_CATEGORICAL_LEVELS + 5
+    rows = "\n".join(f"{i},S{i},G{i}" for i in range(n))
+    text = f"Idx,SampleID,Garbage\n{rows}\n"
+    settings = ImportSettings(
+        header_line=0,
+        data_start_line=1,
+        roles=["x", "categorical", "categorical"],
+        allow_large_categorical=[1],  # SampleID accepted; Garbage was not
+    )
+    with pytest.raises(ValueError, match="Garbage") as excinfo:
+        parse_import(text, settings)
+    assert "SampleID" not in str(excinfo.value)  # the accepted one isn't named
+
+    both = ImportSettings(
+        header_line=0,
+        data_start_line=1,
+        roles=["x", "categorical", "categorical"],
+        allow_large_categorical=[1, 2],
+    )
+    ds = parse_import(text, both)  # accepting both proceeds
+    assert len(ds.cat_levels[0]) == n
+
+
+def test_categorical_override_matches_on_index_not_name() -> None:
+    """Two columns can share a header (`_resolve_names` never de-duplicates),
+    so an override keyed on the NAME would lift both. Only the accepted
+    INDEX is lifted."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    n = MAX_CATEGORICAL_LEVELS + 5
+    rows = "\n".join(f"{i},A{i},B{i}" for i in range(n))
+    text = f"Idx,Tag,Tag\n{rows}\n"
+    settings = ImportSettings(
+        header_line=0,
+        data_start_line=1,
+        roles=["x", "categorical", "categorical"],
+        allow_large_categorical=[1],
+    )
+    with pytest.raises(ValueError, match="level cap"):
+        parse_import(text, settings)
 
 
 def test_categorical_level_cap_refusal_message_names_the_override() -> None:
@@ -1112,6 +1162,19 @@ def test_categorical_level_cap_refusal_message_names_the_override() -> None:
         parse_import(text, settings)
 
 
+def test_categorical_level_cap_refusal_message_names_the_column_index() -> None:
+    """The override is per column now, so the refusal has to say WHICH index
+    to add -- naming only the column's text is not actionable when two
+    columns share a header."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    rows = "\n".join(f"{i},{i * 0.1}" for i in range(MAX_CATEGORICAL_LEVELS + 5))
+    text = f"Idx,Value\n{rows}\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "categorical"])
+    with pytest.raises(ValueError, match=r"index/indices 1\b"):
+        parse_import(text, settings)
+
+
 def test_categorical_level_cap_still_reported_in_preview_with_override_set() -> None:
     """`preview_import` must keep reporting the problem regardless of the
     override, so the wizard can offer the choice BEFORE Import, not just
@@ -1121,7 +1184,7 @@ def test_categorical_level_cap_still_reported_in_preview_with_override_set() -> 
     n = MAX_CATEGORICAL_LEVELS + 5
     rows = "\n".join(f"{i},L{i}" for i in range(n))
     text = f"Idx,Value\n{rows}\n"
-    for allow in (False, True):
+    for allow in ([], [1]):
         settings = ImportSettings(
             header_line=0, data_start_line=1, roles=["x", "categorical"],
             allow_large_categorical=allow,
@@ -1136,16 +1199,32 @@ def test_categorical_level_cap_still_reported_in_preview_with_override_set() -> 
 def test_allow_large_categorical_round_trips_through_dict() -> None:
     settings = ImportSettings(
         header_line=0, data_start_line=1, roles=["x", "categorical"],
-        allow_large_categorical=True,
+        allow_large_categorical=[1, 3],
     )
     d = settings.to_dict()
-    assert d["allow_large_categorical"] is True
+    assert d["allow_large_categorical"] == [1, 3]
     assert ImportSettings.from_dict(d) == settings
 
 
-def test_allow_large_categorical_defaults_false() -> None:
-    assert ImportSettings().allow_large_categorical is False
-    assert ImportSettings.from_dict({}).allow_large_categorical is False
+def test_allow_large_categorical_defaults_empty() -> None:
+    assert ImportSettings().allow_large_categorical == []
+    assert ImportSettings.from_dict({}).allow_large_categorical == []
+
+
+@pytest.mark.parametrize("legacy", [True, False, "yes", 1, None, {"1": True}])
+def test_allow_large_categorical_fails_closed_on_a_non_list_value(legacy: object) -> None:
+    """The field was a plain `bool` before it became a per-column index list.
+    Disk JSON is never trusted, and reading a legacy `true` as "accept
+    whatever blows the cap in this file" would carry the global override the
+    per-column change removes, permanently, into files it was never granted
+    for. Anything that is not a list of ints means NOTHING is accepted."""
+    settings = ImportSettings.from_dict({"allow_large_categorical": legacy})
+    assert settings.allow_large_categorical == []
+
+
+def test_allow_large_categorical_drops_non_int_entries_from_a_list() -> None:
+    got = ImportSettings.from_dict({"allow_large_categorical": [1, "2", True, 3.0, 4]})
+    assert got.allow_large_categorical == [1, 4]  # bools are not indices
 
 
 def test_preview_reports_categorical_level_cap_without_raising() -> None:
@@ -1177,7 +1256,12 @@ def test_categorical_case_collision_is_reported_not_merged() -> None:
     pv = preview_import(text, settings)
     problems = pv["categorical_problems"]
     assert problems == [
-        {"type": "categorical_case_collision", "column": "Sample", "labels": ("Fe", "fe")}
+        {
+            "type": "categorical_case_collision",
+            "index": 1,
+            "column": "Sample",
+            "labels": ("Fe", "fe"),
+        }
     ]
 
 
@@ -1215,7 +1299,7 @@ def test_categorical_case_collision_round_trips_losslessly() -> None:
     from quantized.io.import_categorical_guards import encode_categorical_columns
 
     cells = ["Fe", "fe", " Fe", "FE", "fe"]
-    (encoded,), problems = encode_categorical_columns([("Sample", cells)])
+    (encoded,), problems = encode_categorical_columns([(0, "Sample", cells)])
     codes, levels = encoded
     for i, raw in enumerate(cells):
         assert levels[int(codes[i])] == raw.strip()
@@ -1250,6 +1334,7 @@ def test_categorical_case_collision_reporting_is_capped_with_truncation_signal()
     assert truncations == [
         {
             "type": "categorical_case_collision_truncated",
+            "index": 1,
             "column": "Sample",
             "collision_count": n_pairs,
             "cap": MAX_CATEGORICAL_COLLISIONS,
@@ -1278,6 +1363,7 @@ def test_categorical_level_cap_stops_collision_building_entirely() -> None:
     assert problems == [
         {
             "type": "categorical_level_cap",
+            "index": 1,
             "column": "Sample",
             "level_count": n_rows,
             "cap": MAX_CATEGORICAL_LEVELS,

@@ -55,6 +55,12 @@ export interface ImportWizardState {
    *  every other one). The view disables Import and shows this message
    *  while it's set. */
   xConflict: string | null;
+  categoricalBlocked: boolean;
+  /** Raw file column indices whose oversized categorical level table the user
+   *  accepted for THIS import (never persisted — see the state comment). */
+  acceptedCategorical: number[];
+  acceptLargeCategorical: (index: number) => void;
+  unacceptLargeCategorical: (index: number) => void;
   pickFile: (f: File) => Promise<void>;
   patchSettings: (patch: Partial<ImportSettingsWire>) => void;
   setColumnRole: (index: number, role: ImportColumnRole) => void;
@@ -92,6 +98,19 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
+  // Raw file column indices whose oversized `categorical` level table the
+  // user has explicitly accepted. Deliberately NOT part of `settings`:
+  //   - `preview_import` ignores it, so folding it into `settings` re-posted
+  //     the whole file through the debounced preview for a response
+  //     guaranteed identical — ~0.7-1.25 s on precisely the large files that
+  //     trigger the cap, and it cleared any visible error on the way past
+  //     (review finding #5);
+  //   - `settings` is what "Save as filter…" persists, and a one-time "yes,
+  //     that column is right" must not become a permanent headless policy
+  //     for every future file the glob matches (finding #2 — `save_filter`
+  //     strips the field server-side too, so this is belt and braces).
+  // It is merged into the settings `doImport` sends, and nowhere else.
+  const [acceptedRaw, setAcceptedRaw] = useState<number[]>([]);
   const { errorRows, setErrorTarget, setErrorAxis, setErrorSide, resetErrorRows } =
     useImportErrorRoles(columns);
 
@@ -141,6 +160,7 @@ export function useImportWizard(): ImportWizardState {
     setPreview(null);
     setColumns([]);
     setImported(false);
+    setAcceptedRaw([]);
     setFile(f);
     setBusy(true);
     try {
@@ -201,6 +221,7 @@ export function useImportWizard(): ImportWizardState {
         return;
       }
       setImported(false);
+      setAcceptedRaw([]);  // a new layout is a new set of columns to judge
       setSettings({ ...filt.settings });
       setPreview(fresh);
       setColumns(fresh.columns);
@@ -240,6 +261,50 @@ export function useImportWizard(): ImportWizardState {
   // column-edit affordance in this hook.
   const xConflict = useMemo(() => xRoleConflictMessage(columns), [columns]);
 
+  // An acceptance is about the column AS THE USER SAW IT. Re-roling that
+  // column away from `categorical` retires the decision rather than leaving
+  // it armed for whatever the index means later.
+  const acceptedCategorical = useMemo(
+    () => acceptedRaw.filter(
+      (index) => columns.find((column) => column.index === index)?.role === "categorical",
+    ),
+    [acceptedRaw, columns],
+  );
+
+  // `preview` is the SERVER's answer for the settings as they were up to
+  // DEBOUNCE_MS + a round trip ago. Marking a column `categorical` therefore
+  // leaves the level-cap problem unreported for that whole window, and Import
+  // stayed enabled through it — sending a request the backend rejects with a
+  // 422, the exact outcome this guard exists to prevent (review finding #3).
+  // The optimistic `columns` overlay is resynced to `preview.columns` the
+  // moment a preview lands, so a disagreement about which columns are
+  // categorical means precisely "the answer on screen predates this edit":
+  // block until the fresh answer arrives, the same way `xConflict` derives
+  // from the overlay rather than the server.
+  const categoricalPreviewStale = useMemo(
+    () => !!preview && columns.some(
+      (column, i) => (column.role === "categorical")
+        !== (preview.columns[i]?.role === "categorical"),
+    ),
+    [columns, preview],
+  );
+  const categoricalBlocked = categoricalPreviewStale || (preview?.categorical_problems ?? []).some(
+    (problem) => problem.type === "categorical_level_cap"
+      && !acceptedCategorical.includes(problem.index),
+  );
+
+  function acceptLargeCategorical(index: number): void {
+    setImported(false);
+    setAcceptedRaw((current) => (current.includes(index) ? current : [...current, index]));
+  }
+
+  /** Undo an acceptance — the original override had no way back once the
+   *  button was replaced, so a mis-click was unrecoverable short of
+   *  re-picking the file. */
+  function unacceptLargeCategorical(index: number): void {
+    setAcceptedRaw((current) => current.filter((item) => item !== index));
+  }
+
   async function doImport(): Promise<void> {
     if (!file || !settings || !text) return;
     // Defense in depth: the view disables Import while `xConflict` is set,
@@ -250,10 +315,20 @@ export function useImportWizard(): ImportWizardState {
       setError(xConflict);
       return;
     }
+    if (categoricalBlocked) {
+      setError("Import is paused: review the large categorical column or explicitly import it anyway.");
+      return;
+    }
     setImporting(true);
     setError(null);
     try {
-      const data = await importParse(text, settings);
+      // The ONLY place the acceptances are sent. `allow_large_categorical`
+      // never enters `settings` itself, so it cannot leak into a saved filter
+      // or trigger a pointless re-preview.
+      const data = await importParse(
+        text,
+        acceptedCategorical.length ? { ...settings, allow_large_categorical: acceptedCategorical } : settings,
+      );
       const id = `impwiz-${++_seq}`;
       // P1.6 item 2: only EXPLICITLY assigned error rows (target !== null)
       // become Dataset.errorRoles — an unassigned suggestion contributes
@@ -282,6 +357,7 @@ export function useImportWizard(): ImportWizardState {
     setColumns([]);
     setError(null);
     setImported(false);
+    setAcceptedRaw([]);
     resetErrorRows();
   }
 
@@ -307,6 +383,10 @@ export function useImportWizard(): ImportWizardState {
     imported,
     errorRows,
     xConflict,
+    categoricalBlocked,
+    acceptedCategorical,
+    acceptLargeCategorical,
+    unacceptLargeCategorical,
     pickFile,
     patchSettings,
     setColumnRole,

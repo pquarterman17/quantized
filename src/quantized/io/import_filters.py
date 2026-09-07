@@ -125,7 +125,21 @@ def save_filter(filt: ImportFilter) -> ImportFilter:
     """
     if not filt.name.strip():
         raise ValueError("filter name must not be empty")
-    stamped = replace(filt, updated=datetime.now(UTC).isoformat())
+    # `allow_large_categorical` is a ONE-TIME "yes, I meant that column"
+    # decision about ONE file the user was looking at -- never a policy
+    # (PR #315 review finding #2). Persisting it would make
+    # `registry._import_via_saved_filter` parse EVERY future glob match with
+    # the level-cap refusal lifted: headless, no wizard, no warning, and no
+    # way to clear it short of hand-editing `import_filters.json`. A one-time
+    # override becoming a permanent silent policy is strictly worse than the
+    # original absolute refusal, so the field is dropped on the way to disk
+    # and each new file re-asks. Everything else in `settings` describes the
+    # file's SHAPE and is exactly what a filter is for.
+    stamped = replace(
+        filt,
+        settings=replace(filt.settings, allow_large_categorical=[]),
+        updated=datetime.now(UTC).isoformat(),
+    )
     remaining = [f for f in load_filters() if f.name != stamped.name]
     remaining.append(stamped)
     _write_filters(remaining)
