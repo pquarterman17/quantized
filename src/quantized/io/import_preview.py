@@ -41,14 +41,9 @@ from quantized.io._delimited_layout import (
     _numeric_score,
     _to_float,
 )
-from quantized.io.delimited import (
-    _encode_categorical,
-    _extract_units,
-)
-from quantized.io.import_error_bindings import (
-    ErrorBinding,
-    valid_error_bindings,
-)
+from quantized.io.delimited import _encode_categorical, _extract_units
+from quantized.io.error_binding_suggestions import suggest_error_bindings
+from quantized.io.import_error_bindings import ErrorBinding, valid_error_bindings
 
 __all__ = [
     "DATA_ROLES",
@@ -360,6 +355,12 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
+    # P16: name/position SUGGESTIONS for every `error`-role column, raw-
+    # column-indexed like `error_bindings` above -- always computed fresh,
+    # independent of (never merged into) `settings.error_bindings`/
+    # `kept_bindings`; the wizard decides what to show. See
+    # `error_binding_suggestions.py`.
+    suggested_bindings = suggest_error_bindings(columns)
     return {
         "raw_lines": p.lines[:max_lines],
         "n_lines": len(p.lines),
@@ -375,6 +376,7 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "comments": _preamble_comments(p, settings),
         "error_bindings": [b.to_dict() for b in kept_bindings],
         "error_binding_problems": [d.to_dict() for d in dropped_bindings],
+        "suggested_error_bindings": [b.to_dict() for b in suggested_bindings],
     }
 
 

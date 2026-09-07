@@ -83,6 +83,15 @@ export interface ImportPreviewResponse {
    *  human-readable `reason` naming the column. What the wizard shows when a
    *  saved filter's pairings no longer fit the file being imported. */
   error_binding_problems?: ImportErrorBindingProblem[];
+  /** P16: name/position-driven SUGGESTIONS for every `error`-role column,
+   *  raw-column-indexed like `error_bindings` above -- computed fresh on
+   *  every preview from `quantized.io.error_binding_suggestions`
+   *  (the backend port of this file's own `suggestErrorBindings`, P1.6's
+   *  TWO-TIER narrowing), independent of (never merged into) the confirmed
+   *  `error_bindings`/`settings.error_bindings`. NOT yet wired into the
+   *  wizard UI -- present so a future slice can seed a picker from it
+   *  without a backend change. */
+  suggested_error_bindings?: ImportErrorBindingWire[];
 }
 
 /** One rejected `ImportErrorBindingWire`, mirroring

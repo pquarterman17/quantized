@@ -725,3 +725,45 @@ def test_parse_import_drops_stale_binding_silently_from_metadata() -> None:
     settings = _err_settings([ErrorBinding(column=99, target=1, axis="y", side="both")])
     ds = parse_import(_ERR_TEXT, settings)
     assert "error_roles" not in ds.metadata
+
+
+# ── P16: suggested_error_bindings (name/position-driven, raw-column-indexed) ─
+
+def test_preview_carries_name_driven_suggestions_for_every_error_column() -> None:
+    # dMoment -> Moment (col 1), dField -> Field (col 3) -- both base-name
+    # matches, so both survive the wizard's two-tier narrowing regardless
+    # of what follows.
+    pv = preview_import(_ERR_TEXT, _err_settings(None))
+    assert pv["suggested_error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"},
+        {"column": 4, "target": 3, "axis": "y", "side": "both"},
+    ]
+
+
+def test_suggestions_are_independent_of_confirmed_error_bindings() -> None:
+    """Suggestions are computed fresh from the file's resolved columns on
+    every preview -- present alongside `error_bindings` even when the user
+    already confirmed a (different) set, and never merged into it."""
+    confirmed = ErrorBinding(column=4, target=3, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([confirmed]))
+    assert pv["error_bindings"] == [confirmed.to_dict()]
+    assert pv["suggested_error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"},
+        {"column": 4, "target": 3, "axis": "y", "side": "both"},
+    ]
+
+
+def test_suggestions_are_empty_when_no_column_is_marked_error() -> None:
+    pv = preview_import(_MESSY, guess_settings(_MESSY))
+    assert pv["suggested_error_bindings"] == []
+
+
+def test_suggestions_demote_a_genuinely_ambiguous_positional_pairing() -> None:
+    # "T err" sits between two equally plausible y columns -- the wizard's
+    # two-tier narrowing must leave it unsuggested (see
+    # error_binding_suggestions.py / importwizard.ts's TWO-TIER rule),
+    # unlike the raw infer_error_bindings_from_labels, which would bind it.
+    text = "T1,T err,T2\n1,0.1,2\n3,0.1,4\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["y", "error", "y"])
+    pv = preview_import(text, settings)
+    assert pv["suggested_error_bindings"] == []
