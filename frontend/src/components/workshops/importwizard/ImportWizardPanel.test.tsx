@@ -181,6 +181,23 @@ describe("ImportWizardPanel", () => {
     expect(screen.queryByText(/only one column can be x/)).not.toBeInTheDocument();
   });
 
+  it("blocks a categorical level-cap problem until the explicit override", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      categorical_problems: [{ type: "categorical_level_cap", column: "Sample", level_count: 1200, cap: 1000 }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText(/Sample has 1200 distinct values/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import large category anyway" }));
+    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String), expect.objectContaining({ allow_large_categorical: true }), 30,
+    ));
+  });
+
   it("saves the confirmed settings as a named filter via the param dialog", async () => {
     const saved: ImportFilterWire = { name: "run1", glob: "*.dat", settings: SETTINGS, updated: "t" };
     saveImportFilterMock.mockResolvedValue(saved);

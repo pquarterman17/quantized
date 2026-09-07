@@ -55,6 +55,7 @@ export interface ImportWizardState {
    *  every other one). The view disables Import and shows this message
    *  while it's set. */
   xConflict: string | null;
+  categoricalBlocked: boolean;
   pickFile: (f: File) => Promise<void>;
   patchSettings: (patch: Partial<ImportSettingsWire>) => void;
   setColumnRole: (index: number, role: ImportColumnRole) => void;
@@ -239,6 +240,9 @@ export function useImportWizard(): ImportWizardState {
   // role edit shows the conflict/clears it instantly, same as every other
   // column-edit affordance in this hook.
   const xConflict = useMemo(() => xRoleConflictMessage(columns), [columns]);
+  const categoricalBlocked = !!preview?.categorical_problems?.some(
+    (problem) => problem.type === "categorical_level_cap",
+  ) && !settings?.allow_large_categorical;
 
   async function doImport(): Promise<void> {
     if (!file || !settings || !text) return;
@@ -248,6 +252,10 @@ export function useImportWizard(): ImportWizardState {
     // silently truncated).
     if (xConflict) {
       setError(xConflict);
+      return;
+    }
+    if (categoricalBlocked) {
+      setError("Import is paused: review the large categorical column or explicitly import it anyway.");
       return;
     }
     setImporting(true);
@@ -307,6 +315,7 @@ export function useImportWizard(): ImportWizardState {
     imported,
     errorRows,
     xConflict,
+    categoricalBlocked,
     pickFile,
     patchSettings,
     setColumnRole,

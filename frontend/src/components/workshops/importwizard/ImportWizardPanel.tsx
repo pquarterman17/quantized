@@ -21,6 +21,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import ErrorRolesEditor from "./ErrorRolesEditor";
 import MetadataPreview from "./MetadataPreview";
+import CategoricalProblems from "./CategoricalProblems";
 import PreviewTable from "./PreviewTable";
 import { useImportWizard } from "./useImportWizard";
 
@@ -181,6 +182,14 @@ export default function ImportWizardPanel() {
           {w.preview && <MetadataPreview preview={w.preview} />}
 
           {w.preview && (
+            <CategoricalProblems
+              problems={w.preview.categorical_problems ?? []}
+              allowLarge={!!w.settings?.allow_large_categorical}
+              onAllowLarge={() => w.patchSettings({ allow_large_categorical: true })}
+            />
+          )}
+
+          {w.preview && (
             <div style={{ marginTop: 10 }}>
               <ErrorRolesEditor
                 rows={w.errorRows}
@@ -196,7 +205,7 @@ export default function ImportWizardPanel() {
             <Button
               variant="primary"
               size="sm"
-              disabled={!w.preview || w.importing || !!w.xConflict}
+              disabled={!w.preview || w.importing || !!w.xConflict || w.categoricalBlocked}
               onClick={() => void w.doImport()}
             >
               {w.importing ? "Importing…" : w.imported ? "Imported ✓ — import again" : "Import"}
