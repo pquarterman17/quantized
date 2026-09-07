@@ -11,11 +11,14 @@ import numpy as np
 import pytest
 
 from quantized.io.import_error_bindings import (
+    AXIS_CONTRADICTS_TARGET,
     COLUMN_NOT_ERROR_ROLE,
     COLUMN_OUT_OF_RANGE,
     DUPLICATE_COLUMN,
+    DUPLICATE_TARGET,
     INVALID_AXIS,
     INVALID_SIDE,
+    NO_X_COLUMN,
     TARGET_EQUALS_COLUMN,
     TARGET_NOT_Y_ROLE,
     TARGET_OUT_OF_RANGE,
@@ -604,6 +607,62 @@ def test_target_minus_one_is_always_the_x_axis_never_dropped() -> None:
 # --- parse_import: raw column -> channel index translation -----------------
 
 
+def test_binding_to_the_x_axis_with_a_y_axis_is_dropped() -> None:
+    """`target == -1` names the x axis specifically, so `axis="y"` on it is
+    self-contradictory: it would persist a binding nothing can render, giving
+    the user neither error bars nor a diagnostic."""
+    s = _err_settings([ErrorBinding(column=2, target=-1, axis="y", side="both")])
+    out = preview_import(_ERR_TEXT, s)
+    assert out["error_bindings"] == []
+    problem = out["error_binding_problems"][0]
+    assert problem["code"] == AXIS_CONTRADICTS_TARGET
+    assert "must be 'x'" in problem["reason"]
+
+
+def test_binding_to_the_x_axis_is_dropped_when_no_column_holds_the_x_role() -> None:
+    """With no x column, `parse_import` synthesizes a 1..N sample index —
+    error bars on a row counter are meaningless, so the binding is stale in
+    exactly the way a y target that lost its role is."""
+    s = ImportSettings(
+        header_line=0,
+        data_start_line=1,
+        roles=["y", "y", "error", "y", "error"],  # no x role anywhere
+        error_bindings=[ErrorBinding(column=2, target=-1, axis="x", side="both")],
+    )
+    out = preview_import(_ERR_TEXT, s)
+    assert out["error_bindings"] == []
+    problem = out["error_binding_problems"][0]
+    assert problem["code"] == NO_X_COLUMN
+    assert "no column is marked with the x role" in problem["reason"]
+
+
+def test_two_columns_claiming_one_target_axis_side_keeps_only_the_first() -> None:
+    """The frontend keys error channels by target, so a second binding for the
+    same target/axis/side would silently displace the first downstream. Drop it
+    here instead, with a reason that names both ends."""
+    s = _err_settings([
+        ErrorBinding(column=2, target=1, axis="y", side="both"),
+        ErrorBinding(column=4, target=1, axis="y", side="both"),
+    ])
+    out = preview_import(_ERR_TEXT, s)
+    assert [b["column"] for b in out["error_bindings"]] == [2]
+    problem = out["error_binding_problems"][0]
+    assert problem["code"] == DUPLICATE_TARGET
+    assert problem["column"] == 4
+
+
+def test_two_columns_may_hold_opposite_sides_of_one_target() -> None:
+    """The reason asymmetric error bars exist: a `-` and a `+` column for the
+    same signal are NOT duplicates and must both survive."""
+    s = _err_settings([
+        ErrorBinding(column=2, target=1, axis="y", side="-"),
+        ErrorBinding(column=4, target=1, axis="y", side="+"),
+    ])
+    out = preview_import(_ERR_TEXT, s)
+    assert [b["column"] for b in out["error_bindings"]] == [2, 4]
+    assert out["error_binding_problems"] == []
+
+
 def test_parse_import_error_roles_absent_when_no_bindings_set() -> None:
     ds = parse_import(_MESSY, guess_settings(_MESSY))
     assert "error_roles" not in ds.metadata
@@ -643,7 +702,7 @@ def test_parse_import_error_target_is_the_x_axis() -> None:
     assert ds.metadata["error_roles"] == [{"channel": 0, "target": -1, "axis": "x", "side": "both"}]
 
 
-def test_parse_import_translates_side_vocabulary_to_frontend_signs() -> None:
+def test_parse_import_carries_each_side_through_unchanged_to_frontend_signs() -> None:
     """`lower`/`upper`/`both` (this module's storage vocabulary) become
     `-`/`+`/`both` (`frontend/src/lib/errorRoles.ts`'s `ErrorSide`) so the
     frontend needs no translation layer of its own to consume this."""

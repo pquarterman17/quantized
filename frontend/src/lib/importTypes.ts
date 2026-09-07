@@ -1,0 +1,102 @@
+// Import-wizard wire types — the shapes `routes/import_wizard.py` and
+// `routes/import_template.py` exchange with the Import Wizard, extracted
+// from lib/types.ts (the lib/reductionTypes.ts precedent, P1.6 PR 1) so the
+// error-binding contract could be added without raising types.ts's pinned
+// ratchet ceiling. Re-exported from lib/types.ts, so every existing import
+// path keeps working.
+
+// ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
+
+/** Per-column role (`io/import_preview.DATA_ROLES`): `x` -> axis; `y`/`error` -> DataStruct channels; `categorical` -> a P1.4 categorical channel (string levels preserved); `label`/`ignore` drop from `.values` (`label`'s raw strings still land in `text_columns`, `ignore`'s don't). */
+export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore" | "categorical";
+
+/** One error-column -> signal pairing as persisted on `ImportSettingsWire`
+ *  (`quantized.io.import_error_bindings.ErrorBinding.to_dict()`), RAW FILE
+ *  COLUMN indexed (`column`/`target` are positions in the delimited file,
+ *  like `roles`/`column_names` above), NOT the `channel`-indexed shape
+ *  `Dataset.errorRoles`/`./errorRoles.ErrorBinding` uses once a dataset has
+ *  been imported -- see that dataclass's docstring for why. `side` uses the SAME
+ *  `"both" | "+" | "-"` vocabulary as the post-import `ErrorSide`, so a
+ *  binding round-trips import filter -> `DataStruct.metadata["error_roles"]`
+ *  -> a `.dwk`'s `Dataset.errorRoles` with nothing to translate. */
+export interface ImportErrorBindingWire {
+  column: number;
+  /** -1 means the dataset's x axis. */
+  target: number;
+  axis: "x" | "y";
+  side: "both" | "+" | "-";
+}
+
+/** How to read a delimited file — mirrors `quantized.io.import_preview.
+ *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
+export interface ImportSettingsWire {
+  delimiter: string;
+  header_line: number | null;
+  units_line: number | null;
+  label_line: number | null; // P1.6: legend-label row's cells override each channel's display label; null = header-derived name stands
+  data_start_line: number;
+  column_names: string[] | null;
+  roles: ImportColumnRole[] | null;
+  /** P1.6: error-column -> signal bindings, raw-column-indexed. `null`/absent
+   *  (the common case, and every settings object saved before this field
+   *  existed) means no bindings recorded -- not yet wired into the Import
+   *  Wizard UI; present so the wire type doesn't drift from the backend and
+   *  a round-tripped saved filter doesn't lose the field if a future UI
+   *  slice sets it. */
+  error_bindings?: ImportErrorBindingWire[] | null;
+}
+
+/** One resolved column descriptor from `preview_import`. */
+export interface ImportPreviewColumn {
+  index: number;
+  name: string;
+  /** P1-5 DEFECT 2: the name this column's channel/label will ACTUALLY
+   *  carry once imported -- `name` with any `label_line` override applied
+   *  (io/import_preview.py's `_effective_names`, the same rule
+   *  `parse_import` uses for `.labels`). Optional on the wire type (older
+   *  fixtures / mocked previews may omit it); callers that need the true
+   *  post-import name should read `c.effective_name ?? c.name`. Equal to
+   *  `name` whenever no `label_line` override applies to this column. */
+  effective_name?: string;
+  unit: string;
+  role: ImportColumnRole;
+}
+
+/** `/api/import/preview` response — the wizard's live preview payload. */
+export interface ImportPreviewResponse {
+  raw_lines: string[];
+  n_lines: number;
+  delimiter: string;
+  header_line: number | null;
+  units_line: number | null;
+  label_line: number | null;
+  data_start_line: number;
+  columns: ImportPreviewColumn[];
+  rows: (number | null)[][];
+  n_data_rows: number;
+  n_preview_rows: number;
+  comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
+  /** P1.6: the error bindings from `settings` that SURVIVED validation
+   *  against this file, echoed back raw-column-indexed. */
+  error_bindings?: ImportErrorBindingWire[];
+  /** P1.6: bindings this file rejected — each with a `code` and a
+   *  human-readable `reason` naming the column. What the wizard shows when a
+   *  saved filter's pairings no longer fit the file being imported. */
+  error_binding_problems?: ImportErrorBindingProblem[];
+}
+
+/** One rejected `ImportErrorBindingWire`, mirroring
+ *  `quantized.io.import_error_bindings.DroppedErrorBinding.to_dict()`. */
+export interface ImportErrorBindingProblem extends ImportErrorBindingWire {
+  code: string;
+  reason: string;
+}
+
+/** A saved, named `ImportSettingsWire` bound to a filename glob
+ *  (`io.import_filters.ImportFilter`). */
+export interface ImportFilterWire {
+  name: string;
+  glob: string;
+  settings: ImportSettingsWire;
+  updated: string;
+}

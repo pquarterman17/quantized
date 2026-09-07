@@ -27,6 +27,9 @@ __all__ = [
     "TARGET_EQUALS_COLUMN",
     "TARGET_NOT_Y_ROLE",
     "TARGET_OUT_OF_RANGE",
+    "AXIS_CONTRADICTS_TARGET",
+    "NO_X_COLUMN",
+    "DUPLICATE_TARGET",
     "DroppedErrorBinding",
     "ErrorBinding",
     "valid_error_bindings",
@@ -57,6 +60,9 @@ COLUMN_NOT_ERROR_ROLE = "column_not_error_role"
 TARGET_OUT_OF_RANGE = "target_out_of_range"
 TARGET_EQUALS_COLUMN = "target_equals_column"
 TARGET_NOT_Y_ROLE = "target_not_y_role"
+AXIS_CONTRADICTS_TARGET = "axis_contradicts_target"
+NO_X_COLUMN = "no_x_column"
+DUPLICATE_TARGET = "duplicate_target"
 DUPLICATE_COLUMN = "duplicate_column"
 
 
@@ -133,6 +139,12 @@ class DroppedErrorBinding:
         return asdict(self)
 
 
+def _target_label(names: Sequence[str], target: int) -> str:
+    """How a binding's target reads in a problem message: the x axis by name,
+    or the target column's own name."""
+    return "the x axis" if target == -1 else repr(_name_of(names, target))
+
+
 def _name_of(names: Sequence[str], index: int) -> str:
     return names[index] if 0 <= index < len(names) else f"column {index}"
 
@@ -180,6 +192,7 @@ def valid_error_bindings(
     kept: list[ErrorBinding] = []
     dropped: list[DroppedErrorBinding] = []
     claimed: set[int] = set()
+    claimed_signals: set[tuple[int, str, str]] = set()
 
     for b in bindings or ():
         if b.axis not in _AXES:
@@ -226,6 +239,27 @@ def valid_error_bindings(
                 f"target column {_name_of(names, b.target)!r} is not a y column",
             ))
             continue
+        # `target == -1` names the X AXIS specifically, so a `y` axis on it is
+        # self-contradictory -- it would store a binding nothing can render
+        # and give the user neither error bars nor a diagnostic.
+        if b.target == -1 and b.axis != "x":
+            dropped.append(DroppedErrorBinding(
+                b.column, b.target, b.axis, b.side, AXIS_CONTRADICTS_TARGET,
+                f"column {_name_of(names, b.column)!r} targets the x axis, "
+                f"so its axis must be 'x' (got {b.axis!r})",
+            ))
+            continue
+        # ... and only when the file HAS an x column. With no x role,
+        # `parse_import` synthesizes a 1..N sample index, and error bars on a
+        # row counter are meaningless -- the same staleness we already drop on
+        # a y target that lost its role (review round 1).
+        if b.target == -1 and "x" not in roles:
+            dropped.append(DroppedErrorBinding(
+                b.column, b.target, b.axis, b.side, NO_X_COLUMN,
+                f"column {_name_of(names, b.column)!r} describes the x axis, "
+                "but no column is marked with the x role",
+            ))
+            continue
         if b.column in claimed:
             dropped.append(DroppedErrorBinding(
                 b.column, b.target, b.axis, b.side, DUPLICATE_COLUMN,
@@ -233,7 +267,20 @@ def valid_error_bindings(
                 "by another error binding",
             ))
             continue
+        # Two error columns describing the SAME target/axis/side collapse
+        # downstream (the frontend keys error channels by target), so the
+        # later one would vanish with no diagnostic. Drop it here, with one.
+        signal = (b.target, b.axis, b.side)
+        if signal in claimed_signals:
+            dropped.append(DroppedErrorBinding(
+                b.column, b.target, b.axis, b.side, DUPLICATE_TARGET,
+                f"column {_name_of(names, b.column)!r} duplicates an error "
+                f"binding another column already provides for "
+                f"{_target_label(names, b.target)} ({b.axis} {b.side})",
+            ))
+            continue
         claimed.add(b.column)
+        claimed_signals.add(signal)
         kept.append(b)
 
     return kept, dropped
