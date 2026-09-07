@@ -147,6 +147,17 @@ describe("resolveGroups", () => {
     expect(groups.map((g) => g.label)).toEqual(["group = 0", "group = 1", "group = 2"]);
   });
 
+  it("carries categorical level names into box/violin/strip group labels", () => {
+    const categorical = makeDataset(["group", "valA", "valB"], rows);
+    categorical.data.cat_levels = { 0: ["Control", "Low field", "High field"] };
+    const groups = resolveGroups(categorical.data, 0, 1, [1, 2]);
+    expect(groups.map((g) => g.label)).toEqual([
+      "group = Control",
+      "group = Low field",
+      "group = High field",
+    ]);
+  });
+
   it("falls back to one group per plotted channel when groupCol is null", () => {
     const groups = resolveGroups(ds.data, null, 1, [1, 2]);
     expect(groups).toHaveLength(2);

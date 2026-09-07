@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRunRequest,
   groupsByCategory,
+  groupsByCategoryIndexed,
   groupsFromColumns,
   reportRecord,
   resultRows,
@@ -41,6 +42,21 @@ describe("groupsByCategory", () => {
     expect(gs.map((g) => g.label)).toEqual(["batch = 0", "batch = 1"]);
     expect(gs[0].values).toEqual([10, 11]); // NaN pair dropped
     expect(gs[1].values).toEqual([20, 21, 22]);
+  });
+
+  it("uses imported categorical names in both statistical grouping paths", () => {
+    const categorical: DataStruct = {
+      ...DATA,
+      cat_levels: { 1: ["Reference", "Annealed"] },
+    };
+    expect(groupsByCategory(categorical, 0, 1).map((g) => g.label)).toEqual([
+      "batch = Reference",
+      "batch = Annealed",
+    ]);
+    expect(groupsByCategoryIndexed(categorical, 0, 1).map((g) => g.label)).toEqual([
+      "batch = Reference",
+      "batch = Annealed",
+    ]);
   });
 });
 

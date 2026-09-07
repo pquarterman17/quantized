@@ -5,6 +5,7 @@
 // flattens a test-result dict into displayable rows. Pure (no React / store /
 // fetch) so every branch unit-tests standalone.
 
+import { groupLevelLabel } from "./categorical";
 import type { DataStruct } from "./types";
 
 /** One candidate group: a label for the UI + its finite values. */
@@ -29,6 +30,15 @@ const colValues = (data: DataStruct, index: number): number[] =>
 
 const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
 
+/** Keep statistical labels aligned with plots, filters, and Tabulate: a
+ *  categorical code is implementation detail, while its level-table text is
+ *  what the scientist assigned and expects to see. Numeric/legacy groups
+ *  retain the previous stringified-number fallback. */
+const categoryGroupLabel = (data: DataStruct, byCol: number, level: number): string => {
+  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
+  return `${byLabel} = ${groupLevelLabel(data, byCol, level)}`;
+};
+
 /** Columns mode: each picked column (-1 = x, 0.. = channels) is one group. */
 export function groupsFromColumns(data: DataStruct, cols: readonly number[]): GroupSpec[] {
   const xName = String(data.metadata?.["x_column_name"] ?? "x");
@@ -47,7 +57,6 @@ export function groupsByCategory(
 ): GroupSpec[] {
   const by = colValues(data, byCol);
   const val = colValues(data, valueCol);
-  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
   const parts = new Map<number, number[]>();
   const n = Math.min(by.length, val.length);
   for (let i = 0; i < n; i++) {
@@ -58,7 +67,7 @@ export function groupsByCategory(
   }
   return [...parts.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([level, values]) => ({ label: `${byLabel} = ${level}`, values }));
+    .map(([level, values]) => ({ label: categoryGroupLabel(data, byCol, level), values }));
 }
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
@@ -102,7 +111,6 @@ export function groupsByCategoryIndexed(
 ): IndexedGroupSpec[] {
   const by = colValues(data, byCol);
   const val = colValues(data, valueCol);
-  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
   const parts = new Map<number, IndexedPoint[]>();
   const n = Math.min(by.length, val.length);
   for (let i = 0; i < n; i++) {
@@ -114,7 +122,7 @@ export function groupsByCategoryIndexed(
   }
   return [...parts.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([level, points]) => ({ label: `${byLabel} = ${level}`, points }));
+    .map(([level, points]) => ({ label: categoryGroupLabel(data, byCol, level), points }));
 }
 
 /** Build the request for the RECOMMENDED endpoint from the same groups the
