@@ -2,6 +2,109 @@
   "_generated_from": "frontend/src/lib/errorSuggestionParityFixture.gen.test.ts, running the real suggestErrorBindings (importwizard.ts). A diff against src/quantized/io/error_binding_suggestions.py's suggest_error_bindings_by_channel port means the two languages disagree -- fix the disagreement, never regenerate this file to hide it. See this generator's header comment for the deliberate-divergence scope note.",
   "cases": [
     {
+      "note": "x-named error column binds to the X AXIS, not the nearest y (was mis-bound in both)",
+      "columns": [
+        {
+          "name": "H",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 1
+        },
+        {
+          "name": "H_err",
+          "role": "error",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "same, with the x column NOT first — catches an index-space off-by-one",
+      "columns": [
+        {
+          "name": "M",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "H",
+          "role": "x",
+          "index": 1
+        },
+        {
+          "name": "H_err",
+          "role": "error",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a base-name match landing on a categorical column is never suggested",
+      "columns": [
+        {
+          "name": "X",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 1
+        },
+        {
+          "name": "Cat",
+          "role": "categorical",
+          "index": 2
+        },
+        {
+          "name": "Cat_err",
+          "role": "error",
+          "index": 3
+        }
+      ],
+      "bindings": []
+    },
+    {
+      "note": "an ignore-role column with an error-shaped name is never a suggestion source",
+      "columns": [
+        {
+          "name": "T",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "R",
+          "role": "y",
+          "index": 1
+        },
+        {
+          "name": "dR",
+          "role": "ignore",
+          "index": 2
+        }
+      ],
+      "bindings": []
+    },
+    {
       "note": "unambiguous base-name pairing: Temp(x), R(y), dR(error)",
       "columns": [
         {

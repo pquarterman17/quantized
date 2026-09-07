@@ -22,18 +22,16 @@
 // (or regenerate after an intentional TS change, then re-verify Python),
 // NEVER to regenerate the fixture to paper over a Python regression.
 //
-// SCOPE NOTE: every case below is a scenario the Python port's SEVERAL
-// review-round fixes (x-name-axis matching, source/target role
-// restrictions -- see error_binding_suggestions.py's module docstring) do
-// NOT change the answer for, so the two languages legitimately still
-// agree on all of them. Those fixes are DELIBERATE Python-only
-// improvements over a shared latent bug this two-tier layer has (e.g.
-// `H, M, H_err` with `H` marked x -- Python now resolves it to the x
-// axis, TypeScript still mis-binds it to `M`); they are pinned instead by
-// dedicated Python-only regression tests in
-// tests/test_io_error_binding_suggestions.py, deliberately NOT by this
-// shared fixture, precisely because this fixture must never encode an
-// intentional disagreement as if it were a bug.
+// SCOPE NOTE: the cases below deliberately INCLUDE the ones that first
+// exposed a divergence, rather than avoiding them. An earlier round fixed
+// three real bugs in the Python only (an error column whose base name is
+// the x column's was mis-bound to the nearest y instead of the x axis;
+// source and target columns were not restricted by role) and scoped this
+// corpus around them -- which would have left a parity fixture that passes
+// only because it looks away from the one place the two disagree. The
+// TypeScript carried the same bugs and has been fixed to match, so the
+// cases live here where a future change to either side has to keep them
+// agreeing.
 //
 // To regenerate after a deliberate change to the TS two-tier narrowing:
 //   ERROR_LABEL_FIXTURE_WRITE=1 npx vitest run src/lib/errorSuggestionParityFixture.gen.test.ts
@@ -97,6 +95,39 @@ function toColumns(spec: ColumnSpec[]): ImportPreviewColumn[] {
 // generated pin instead of two hand-maintained, independently-written
 // test files that could drift apart without anything noticing.
 const CASES: CaseSpec[] = [
+  {
+    note: "x-named error column binds to the X AXIS, not the nearest y (was mis-bound in both)",
+    columns: [
+      { name: "H", role: "x" },
+      { name: "M", role: "y" },
+      { name: "H_err", role: "error" },
+    ],
+  },
+  {
+    note: "same, with the x column NOT first — catches an index-space off-by-one",
+    columns: [
+      { name: "M", role: "y" },
+      { name: "H", role: "x" },
+      { name: "H_err", role: "error" },
+    ],
+  },
+  {
+    note: "a base-name match landing on a categorical column is never suggested",
+    columns: [
+      { name: "X", role: "x" },
+      { name: "M", role: "y" },
+      { name: "Cat", role: "categorical" },
+      { name: "Cat_err", role: "error" },
+    ],
+  },
+  {
+    note: "an ignore-role column with an error-shaped name is never a suggestion source",
+    columns: [
+      { name: "T", role: "x" },
+      { name: "R", role: "y" },
+      { name: "dR", role: "ignore" },
+    ],
+  },
   {
     note: "unambiguous base-name pairing: Temp(x), R(y), dR(error)",
     columns: [
