@@ -300,8 +300,8 @@ describe("errorRoleChannels / seedErrorRows / confirmedErrorBindings", () => {
   it("seedErrorRows pre-fills an unambiguous suggestion and leaves a position-only fallback filled too (nearest-preceding rule)", () => {
     const rows = seedErrorRows(cs);
     expect(rows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" }, // dR -> R by base name
-      { channel: 3, label: "err", target: 2, axis: "y", side: "both" }, // err -> nearest preceding (M)
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested" }, // dR -> R by base name
+      { channel: 3, label: "err", target: 2, axis: "y", side: "both", provenance: "suggested" }, // err -> nearest preceding (M)
     ]);
   });
 
@@ -310,7 +310,7 @@ describe("errorRoleChannels / seedErrorRows / confirmedErrorBindings", () => {
       { index: 0, name: "err", unit: "", role: "error" },
       { index: 1, name: "M", unit: "", role: "y" },
     ];
-    expect(seedErrorRows(leading)).toEqual([{ channel: 0, label: "err", target: null, axis: "y", side: "both" }]);
+    expect(seedErrorRows(leading)).toEqual([{ channel: 0, label: "err", target: null, axis: "y", side: "both", provenance: "unassigned" }]);
   });
 
   it("confirmedErrorBindings drops unassigned rows silently — never a guessed target reaches Dataset.errorRoles", () => {

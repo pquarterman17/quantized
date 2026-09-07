@@ -51,7 +51,8 @@ export default function ErrorRolesEditor({
         <tbody>
           {rows.map((row) => {
             const options = errorTargetOptions(columns, row.channel);
-            const suggested = row.target !== null;
+            const suggested = row.provenance === "suggested"
+              || (row.provenance === undefined && row.target !== null);
             return (
               <tr key={row.channel}>
                 <td>{row.label}</td>

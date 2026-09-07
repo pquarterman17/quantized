@@ -104,6 +104,7 @@ export function useImportWizard(): ImportWizardState {
     setErrorTarget: setErrorTargetLocal,
     setErrorAxis: setErrorAxisLocal,
     setErrorSide: setErrorSideLocal,
+    resetErrorEdits,
     resetErrorRows,
   } =
     useImportErrorRoles(
@@ -111,6 +112,30 @@ export function useImportWizard(): ImportWizardState {
       preview?.error_bindings ?? NO_ERROR_BINDINGS,
       preview?.suggested_error_bindings ?? NO_ERROR_BINDINGS,
     );
+
+  // A pre-filled suggestion is part of the visible import configuration, so
+  // persist it too. Otherwise Import (which reads errorRows) and a saved
+  // filter (which reads settings) silently describe different datasets.
+  useEffect(() => {
+    if (!columns.length) return;
+    const order = finalChannelOrder(columns);
+    const rawByChannel = new Map(order.map((item) => [item.channel, item.sourceIndex]));
+    setSettings((current) => {
+      if (!current) return current;
+      const bindings = [...(current.error_bindings ?? [])];
+      let changed = false;
+      for (const row of errorRows) {
+        if (row.provenance !== "suggested" || row.target === null) continue;
+        const column = rawByChannel.get(row.channel);
+        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
+        if (column === undefined || target === undefined) continue;
+        if (bindings.some((binding) => binding.column === column)) continue;
+        bindings.push({ column, target, axis: row.axis, side: row.side });
+        changed = true;
+      }
+      return changed ? { ...current, error_bindings: bindings } : current;
+    });
+  }, [columns, errorRows]);
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -239,12 +264,11 @@ export function useImportWizard(): ImportWizardState {
   }
 
   function setErrorTarget(channel: number, target: number | null): void {
-    const current = errorRows.find((row) => row.channel === channel);
     setErrorTargetLocal(channel, target);
     // The backend contract reserves target -1 for the x axis and rejects it
     // unless axis is also x. Keep the visible editor and persisted binding
     // valid in the same interaction instead of waiting for a rejected preview.
-    const axis = target === -1 ? "x" : current?.target === -1 && target !== null ? "y" : undefined;
+    const axis = target === -1 ? "x" : target !== null ? "y" : undefined;
     if (axis) setErrorAxisLocal(channel, axis);
     persistErrorRow(channel, { target, ...(axis ? { axis } : {}) });
   }
@@ -297,6 +321,7 @@ export function useImportWizard(): ImportWizardState {
       }
       setImported(false);
       setSettings({ ...filt.settings });
+      resetErrorEdits();
       setPreview(fresh);
       setColumns(fresh.columns);
       setError(null);

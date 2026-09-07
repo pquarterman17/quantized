@@ -14,7 +14,7 @@ describe("useImportErrorRoles", () => {
   it("seeds one row per error-role column with the name-based suggestion", () => {
     const { result } = renderHook(() => useImportErrorRoles(cols()));
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested" },
     ]);
   });
 
@@ -30,7 +30,7 @@ describe("useImportErrorRoles", () => {
       [{ column: 2, target: 1, axis: "y", side: "both" }],
     ));
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: -1, axis: "x", side: "+" },
+      { channel: 1, label: "dR", target: -1, axis: "x", side: "+", provenance: "confirmed" },
     ]);
   });
 
@@ -104,7 +104,7 @@ describe("useImportErrorRoles", () => {
       initialProps: { columns: raw },
     });
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "Col3", target: null, axis: "y", side: "both" }, // no base-name match yet
+      { channel: 1, label: "Col3", target: null, axis: "y", side: "both", provenance: "unassigned" }, // no base-name match yet
     ]);
 
     // A label_line edit lands: raw `name`s are untouched, but effective_name
@@ -116,7 +116,7 @@ describe("useImportErrorRoles", () => {
     ];
     rerender({ columns: labeled });
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested" },
     ]);
   });
 

@@ -160,7 +160,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested" },
     ]));
 
     await act(async () => {
@@ -186,7 +186,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 0, label: "err", target: null, axis: "y", side: "both" },
+      { channel: 0, label: "err", target: null, axis: "y", side: "both", provenance: "unassigned" },
     ]));
 
     await act(async () => {
@@ -213,7 +213,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "T err", target: null, axis: "y", side: "both" },
+      { channel: 1, label: "T err", target: null, axis: "y", side: "both", provenance: "unassigned" },
     ]));
 
     await act(async () => {
@@ -272,6 +272,37 @@ describe("useImportWizard", () => {
     });
     expect(result.current.settings).toEqual(SETTINGS);
     expect(result.current.preview).toEqual(PREVIEW);
+  });
+
+  it("applying a filter clears prior editor overrides and shows the filter binding", async () => {
+    const binding = { column: 2, target: -1, axis: "x" as const, side: "both" as const };
+    const filterSettings: ImportSettingsWire = {
+      ...SETTINGS,
+      column_names: ["Temp", "Moment", "dMoment"],
+      roles: ["x", "y", "error"],
+      error_bindings: [binding],
+    };
+    const filt: ImportFilterWire = { name: "With errors", glob: "*.dat", settings: filterSettings, updated: "t" };
+    const errorPreview: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        ...PREVIEW.columns,
+        { index: 2, name: "dMoment", unit: "", role: "error" },
+      ],
+      error_bindings: [binding],
+    };
+    vi.mocked(listImportFilters).mockResolvedValue([filt]);
+    vi.mocked(importPreview).mockResolvedValue(errorPreview);
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.filters).toEqual([filt]));
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.errorRows[0]?.target).toBe(-1));
+    act(() => result.current.setErrorTarget(1, null));
+    expect(result.current.errorRows[0].target).toBeNull();
+
+    await act(async () => { await result.current.applyFilter("With errors"); });
+    await waitFor(() => expect(result.current.errorRows[0]?.target).toBe(-1));
+    expect(result.current.settings?.error_bindings).toEqual([binding]);
   });
 
   it("refuses to apply a saved filter whose column shape no longer matches, leaving current settings untouched (P1.6 item 4)", async () => {

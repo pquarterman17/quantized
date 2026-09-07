@@ -343,6 +343,9 @@ describe("ImportWizardPanel", () => {
     ));
 
     importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "unassigned" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenCalled());
+    importPreviewMock.mockClear();
     fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "0" } });
     await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
       expect.any(String),
@@ -351,6 +354,31 @@ describe("ImportWizardPanel", () => {
       }),
       30,
     ));
+  });
+
+  it("persists a pre-filled suggestion and only labels genuine suggestions", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText("(suggested)")).toBeInTheDocument());
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+
+    fireEvent.change(screen.getByLabelText("dMoment error side"), { target: { value: "+" } });
+    expect(screen.queryByText("(suggested)")).not.toBeInTheDocument();
   });
 
   it("removes a rejected binding from settings so it can be saved cleanly", async () => {
