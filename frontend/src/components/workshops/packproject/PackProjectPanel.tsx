@@ -4,22 +4,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { NOTHING_MODIFIED_NOTE, usePackProject } from "../../../store/packProject";
 import { usePackProjectPanel } from "../../../store/packProjectPanel";
-
-// Binary units (KiB/MiB/GiB), matching lib/trashSummary.ts's own
-// formatTrashBytes — deliberately NOT a shared formatter (see that file's
-// comment: there is no `formatBytes`/`humanBytes`/`formatSize` to reuse),
-// kept local to this panel the same way.
-function bytes(value: number): string {
-  if (value < 1024) return `${value} B`;
-  const units = ["KiB", "MiB", "GiB", "TiB"];
-  let n = value / 1024;
-  let unit = units[0];
-  for (let i = 1; i < units.length && n >= 1024; i += 1) {
-    n /= 1024;
-    unit = units[i];
-  }
-  return `${n.toFixed(n >= 10 ? 0 : 1)} ${unit}`;
-}
+import { formatBytes as bytes } from "../../../lib/formatBytes";
 
 function statusLabel(status: string): string {
   return status.replaceAll("_", " ");
@@ -38,7 +23,6 @@ export default function PackProjectPanel() {
   const retry = usePackProject((s) => s.previewPackProject);
   const setOpen = usePackProjectPanel((s) => s.setOpen);
 
-  const terminal = phase === "completed" || phase === "cancelled" || phase === "failed";
 
   // The panel opens (commands/packProjectCommands.ts) BEFORE the preview has
   // moved the phase off "idle", so an unconditional "idle -> close" here
@@ -58,19 +42,22 @@ export default function PackProjectPanel() {
   // The X button and every "Cancel"/"Close" control below funnel through
   // this one function so the panel's close semantics stay in one place.
   const dismiss = async () => {
-    if (phase === "awaiting_confirmation" || phase === "selecting_destination" || phase === "scanning") {
-      await cancel();
-      await reset();
+    if (phase === "idle") {
+      // Open at idle only if the preview never left it (a failed chunk
+      // load, say): nothing to reset, just close.
       setOpen(false);
-    } else if (terminal) {
-      await reset();
-      setOpen(false);
-    } else {
+    } else if (phase === "packing" || phase === "cancelling") {
       // packing/cancelling: nothing original is ever modified (pack only
       // COPIES), so aborting is always safe — the X here is equivalent to
       // the Cancel button by design. Leave the window open so the
       // "Stopping safely…" -> "Pack cancelled" outcome is visible.
       await cancel();
+    } else {
+      // Terminal, or a pre-packing active phase (picker/scan/review): reset
+      // is legal from all of them and goes straight to idle, so backing out
+      // of the review step never flashes the "Pack cancelled" screen.
+      await reset();
+      setOpen(false);
     }
   };
 

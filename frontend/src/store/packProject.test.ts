@@ -133,7 +133,10 @@ describe("previewPackProject transition legality", () => {
       expect(s.phase).toBe(phase);
     } else {
       expect(s.lastRejected).toBeNull();
-      expect(s.phase).toBe("idle"); // bridge unavailable -> picker "cancel" -> idle
+      // No usable bridge is a FAILURE (bridge_unavailable), not a silent
+      // idle: a broken shell must not look like the user pressing Cancel.
+      expect(s.phase).toBe("failed");
+      expect(s.errors[0]?.code).toBe("bridge_unavailable");
     }
   });
 });
@@ -181,13 +184,14 @@ describe("resetPackProject transition legality", () => {
     resetStore(phase);
     await usePackProject.getState().resetPackProject();
     const s = usePackProject.getState();
-    if (TERMINAL.includes(phase)) {
+    if (phase === "packing" || phase === "cancelling") {
+      expect(s.lastRejected).toEqual({ from: phase, action: "resetPackProject" });
+      expect(s.phase).toBe(phase);
+    } else {
+      // Terminal AND pre-packing active phases: a one-step dismiss to idle.
       expect(s.lastRejected).toBeNull();
       expect(s.phase).toBe("idle");
       expect(s.preview).toBeNull();
-    } else {
-      expect(s.lastRejected).toEqual({ from: phase, action: "resetPackProject" });
-      expect(s.phase).toBe(phase);
     }
   });
 });

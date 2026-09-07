@@ -60,6 +60,16 @@ describe("runPackProject", () => {
     expect(usePackProjectPanel.getState().open).toBe(false);
   });
 
+  it("with a shell, a preview that throws closes the panel and toasts instead of rejecting", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    usePackProject.setState({
+      previewPackProject: vi.fn().mockRejectedValue(new Error("chunk load failed")),
+    });
+    await expect(runPackProject()).resolves.toBeUndefined();
+    expect(usePackProjectPanel.getState().open).toBe(false);
+    expect(lastToast()).toBe("pack preview failed — chunk load failed");
+  });
+
   it("with a shell, leaves the panel open when the phase is awaiting_confirmation after the preview resolves", async () => {
     vi.mocked(hasDesktopShell).mockReturnValue(true);
     usePackProject.setState({

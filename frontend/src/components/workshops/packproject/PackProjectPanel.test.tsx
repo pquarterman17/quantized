@@ -199,7 +199,7 @@ describe("PackProjectPanel — open/idle mount-time race", () => {
 });
 
 describe("PackProjectPanel — dismiss()", () => {
-  it("review-step Cancel cancels, resets, and closes the panel flag", async () => {
+  it("review-step Cancel resets straight to idle (never via the cancelled screen) and closes the panel flag", async () => {
     const cancel = vi.fn().mockResolvedValue(undefined);
     const reset = vi.fn().mockResolvedValue(undefined);
     usePackProject.setState({
@@ -212,9 +212,23 @@ describe("PackProjectPanel — dismiss()", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     });
-    expect(cancel).toHaveBeenCalledOnce();
     expect(reset).toHaveBeenCalledOnce();
+    expect(cancel).not.toHaveBeenCalled();
     expect(usePackProjectPanel.getState().open).toBe(false);
+  });
+
+  it("the X button at idle closes the panel without touching the store", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({ phase: "idle", cancelPackProject: cancel, resetPackProject: reset });
+    usePackProjectPanel.setState({ open: true });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /close/i }));
+    });
+    expect(usePackProjectPanel.getState().open).toBe(false);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
   });
 
   it("a terminal Close resets and closes the panel flag (never calls cancel)", async () => {

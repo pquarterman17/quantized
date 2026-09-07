@@ -166,7 +166,6 @@ export function buildFileCommands(s: StoreGet): Action[] {
     {
       id: "pack-project",
       group: "File",
-      section: "Project",
       label: "Pack Project…",
       description: "Create a portable, self-contained copy of the open project and its source files.",
       keywords: "pack project portable bundle copy sources",

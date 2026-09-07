@@ -37,7 +37,16 @@ export async function runPackProject(): Promise<void> {
     return;
   }
   usePackProjectPanel.getState().setOpen(true);
-  await usePackProject.getState().previewPackProject();
+  try {
+    await usePackProject.getState().previewPackProject();
+  } catch (e: unknown) {
+    // A rejected lazy chunk load or a throw inside the preview would
+    // otherwise be an unhandled rejection with the panel left open on an
+    // empty idle body: close it and say so.
+    usePackProjectPanel.getState().setOpen(false);
+    toast(`pack preview failed — ${e instanceof Error ? e.message : "error"}`, "danger");
+    return;
+  }
   if (usePackProject.getState().phase === "idle") {
     usePackProjectPanel.getState().setOpen(false);
   }

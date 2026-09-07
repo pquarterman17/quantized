@@ -202,7 +202,13 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
 
   resetPackProject: async () => {
     const phase = get().phase;
-    if (phase !== "completed" && phase !== "cancelled" && phase !== "failed") {
+    // Legal from every phase except the two where the backend worker is
+    // actually running (`packing`/`cancelling` — cancel first). From the
+    // pre-packing active phases (destination picker, scan, review) a reset
+    // is a one-step dismiss: it bumps the generation counter so any in-
+    // flight preview continuation is dropped, and goes straight to `idle`
+    // without bouncing through the terminal `cancelled` screen.
+    if (phase === "packing" || phase === "cancelling") {
       reject(set, phase, "resetPackProject");
       return;
     }
