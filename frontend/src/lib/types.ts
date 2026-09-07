@@ -987,10 +987,12 @@ export interface CorrectionParams {
 // Definitions live in lib/importTypes.ts (extracted, P1.6 PR 1 — see that
 // file's header); re-exported here so existing import paths keep working.
 export type {
+  ImportCategoricalProblem,
   ImportColumnRole,
   ImportErrorBindingProblem,
   ImportErrorBindingWire,
   ImportFilterWire,
+  ImportHeaderFieldProblem,
   ImportPreviewColumn,
   ImportPreviewResponse,
   ImportSettingsWire,

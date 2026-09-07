@@ -14,7 +14,12 @@
       "# Operator: pq"
     ],
     "delimiter": ",",
+    "header_fields": {
+      "Operator": "pq",
+      "Sample": "NbAu bilayer"
+    },
     "import_settings": {
+      "allow_large_categorical": false,
       "column_names": null,
       "data_start_line": 5,
       "delimiter": ",",

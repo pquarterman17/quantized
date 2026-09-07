@@ -1172,6 +1172,17 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   labels)" badge so the row itself is visible; showing its RESOLVED
   per-column text needs its own display slot in `PreviewTable`/
   `preview_import`, not a same-field overwrite. Booked to P1.6b.
+  SHIPPED (P1.6b audit, 2026-09-07): `preview_import`'s half was already
+  done — `ImportPreviewColumn.effective_name` (backend PR #197, "P1-5
+  DEFECT 2") is exactly this display slot: `label_overrides[k]` when
+  `label_line` applies, else the header-derived `name` unchanged, its OWN
+  field alongside `name` rather than overwriting it. Checked before
+  re-adding it, per this booking's own instruction; nothing new was added
+  backend-side. The `PreviewTable`/`useImportErrorRoles`/`importwizard.ts`
+  frontend already CONSUME `effective_name` (suggestion classification,
+  figure labels) but do not yet RENDER it as a visible cell distinct from
+  the editable `name` input — that visual half remains open, is a frontend
+  (not backend/import-contract) change, and is unbooked.
 - [x] No guess can silently attach error to the wrong signal — pinned
   red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
@@ -3556,6 +3567,71 @@ work (its BACKLOG row).
   `tsc -p e2e/tsconfig.json --noEmit` clean, `playwright test --list`
   still discovers both tests — still not executable in this sandbox (same
   blocked-host constraint as the prior entry).
+
+#### 2026-09-07 — P1.6 backend/import-contract lane: header_fields + categorical guards (Sonnet agent, branch `claude/p16-import-metadata`, stacked on `claude/p16-import-error-bindings`)
+
+- Part A (additive): `io/import_metadata.py` (new, 131 lines) parses the
+  SAME preamble lines `_preamble_comments` already retains verbatim into an
+  ordered `dict[str, str]` (`key: value` / `key = value`, optional leading
+  `# % // ;` marker, both halves trimmed) — `metadata["header_fields"]`,
+  omitted entirely when empty, never a replacement for `comments`. Keys
+  stay VERBATIM (never normalized). A repeated key: LAST value wins,
+  reported once per key (`{"type": "duplicate_header_field", "key": ...}`)
+  in `preview_import`'s new `header_field_problems` list — the SAME
+  structured-problems-channel convention `error_binding_problems` already
+  established. Capped independently at `MAX_HEADER_FIELDS` = 200 distinct
+  keys (documented reasoning: real instrument preambles carry a handful to
+  a few dozen fields; the comment-line cap of 500 already bounds this in
+  practice, but the field cap doesn't ride on that constant so a future
+  change to one can't silently move the other).
+- Part B: checked FIRST per the booking's own instruction —
+  `ImportPreviewColumn.effective_name` (already shipped, PR #197, "P1-5
+  DEFECT 2", well before this lane) already IS the booked display slot: a
+  resolved-label field of its own, `label_line`-applied text without
+  overwriting `name`. Nothing added backend-side; the P1.6b booking bullet
+  above updated to record it SHIPPED rather than re-adding the field. The
+  frontend's `PreviewTable` doesn't yet RENDER `effective_name` as a
+  visible cell — flagged as a separate, unbooked, frontend-only follow-up.
+- Part C: `io/import_categorical_guards.py` (new, 118 lines) adds two
+  guards around `delimited._encode_categorical` WITHOUT touching its
+  lossless round trip or level order: a level-count cap
+  (`MAX_CATEGORICAL_LEVELS` = 500, chosen to mirror `MAX_PREAMBLE_COMMENTS`'s
+  order of magnitude — real categoricals span a few to a few hundred
+  levels, not thousands) that REFUSES `parse_import` (a `ValueError` naming
+  the column(s)/counts) but only REPORTS in `preview_import`
+  (`categorical_problems`, never raises there); and case-collision
+  reporting (`"Fe"`/`"fe"` kept distinct, whitespace already merged by
+  `_encode_categorical` itself) that never raises anywhere, informational
+  only. Deliberately does NOT touch `import_csv`'s own automatic
+  categorical-promotion fallback (f2/D6) — that path exists to rescue an
+  otherwise-unimportable file with no numeric columns at all, and applying
+  a hard refusal there would turn a previously-importable messy file into
+  an import failure with no user decision behind it; pinned by
+  `test_import_csv_categorical_fallback_is_not_capped`.
+- One legitimate wire-fixture shift: `tests/fixtures/wire/
+  label_import_payload.json` regenerated (its committed recipe) to include
+  the new `header_fields` key its 2-line preamble now parses into — no
+  other fixture moved.
+- `io/import_preview.py` sits at exactly 500 lines (the god-module
+  ceiling) after this PR — trimmed several pre-existing docstrings
+  (meaning preserved, prose tightened) to make room; `io/delimited.py`
+  untouched at 468 lines (the two new guard modules were split out
+  specifically so this wouldn't need to grow).
+- Tests: +26 in `tests/test_io_import_preview.py` (header-field parse
+  shapes/non-shapes, duplicate-key rule, both caps, the lossless round
+  trip with fields extracted, the level-cap refusal + its preview-only
+  report, the case-collision report + its never-blocks proof, the
+  omit-when-empty rules) and +6 in `tests/test_io_delimited.py`
+  (`encode_categorical_columns` unit coverage: unmodified vs
+  `_encode_categorical`, the cap problem shape, no-problem-at-exactly-cap,
+  one/multiple collision groups, independent per-column problems).
+- Gates: `ruff check src tests tools` / `mypy src` / `pytest -q -n auto`
+  all clean (4453 passed, 183 skipped, 18 xfailed — 0 failed, +32 over the
+  pre-PR count). Frontend: `tsc --noEmit` clean, `eslint --max-warnings=0`
+  clean on `src`, `vitest run src/architecture.test.ts src/lib` clean
+  (wire types only — `lib/importTypes.ts`/`lib/types.ts` gained the new
+  optional `header_fields`/`header_field_problems`/`categorical_problems`
+  fields, no component changed).
 
 ## Reference baseline
 

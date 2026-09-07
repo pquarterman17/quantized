@@ -6,9 +6,13 @@ stacked slices in a row bought room by deleting explanatory comments and
 folding imports — shaving the reasoning a reader needs in order to keep a
 line count, which is the opposite of what the ceiling is for. These are the
 low-level pieces (delimiter resolution, tokenization, the resolved
-names/units/roles/label-override/preamble views over a parsed file); the
-module they came from keeps the public shape (`ImportSettings`,
-`guess_settings`, `preview_import`, `parse_import`).
+names/units/roles/label-override views over a parsed file). Preamble-comment
+retention and its structured `key: value` parse live in
+:mod:`quantized.io.import_metadata` instead -- a merge of this split with a
+sibling P1.6 slice that had already carved that concern out on its own, so
+there is exactly one implementation rather than two. The module this all
+came from keeps the public shape (`ImportSettings`, `guess_settings`,
+`preview_import`, `parse_import`).
 
 Pure, like everything under `io/`: no fastapi/pydantic/starlette, no I/O of
 its own — callers hand in text.
@@ -32,13 +36,10 @@ if TYPE_CHECKING:  # ImportSettings lives in import_preview, which imports THIS
 #: which re-exports this as the public name).
 DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
 
-# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
-# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
-# far the sniffer actually looks) -- an accidental huge value would make
-# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
-# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
-# `max_lines` bound on `raw_lines`.
-_MAX_PREAMBLE_COMMENTS = 500
+# Preamble/metadata concerns (the comment-line cap, header-field parsing)
+# live in `import_metadata` -- see `MAX_PREAMBLE_COMMENTS` there for the
+# cap rationale; this module owns only tokenization and the resolved
+# names/units/roles/label-override views.
 
 # friendly delimiter aliases -> how to split
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
@@ -170,38 +171,6 @@ def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int)
         label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
         for k in range(n_cols)
     ]
-
-
-def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
-    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
-    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
-    (raw stripped text) as searchable metadata instead of silently dropped.
-    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
-    consumer (search, the Inspector) reads one convention regardless of
-    which import path produced the dataset.
-
-    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
-    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
-    directly user-settable through the wizard, so an oversized value (typo,
-    or a stale saved filter) can't balloon `metadata["comments"]` to the
-    size of the whole file."""
-    consumed = {settings.header_line, settings.units_line, settings.label_line}
-    out: list[str] = []
-    # Iterate the LINES THAT EXIST, not `range(data_start)`: the cap below
-    # bounds what is collected, not how long the walk takes, and
-    # `data_start_line` is free-text in the wizard -- `data_start` of 10^10
-    # spent ~15 minutes stepping past EOF to collect nothing. Slicing bounds
-    # the loop by the file itself, so an oversized value is O(file), not
-    # O(the number the user typed).
-    for i, line in enumerate(p.lines[: p.data_start]):
-        if len(out) >= _MAX_PREAMBLE_COMMENTS:
-            break
-        if i in consumed:
-            continue
-        raw = line.strip()
-        if raw:
-            out.append(raw)
-    return out
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:

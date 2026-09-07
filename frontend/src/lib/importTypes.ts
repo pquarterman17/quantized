@@ -44,6 +44,15 @@ export interface ImportSettingsWire {
    *  a round-tripped saved filter doesn't lose the field if a future UI
    *  slice sets it. */
   error_bindings?: ImportErrorBindingWire[] | null;
+  /** P1.6 Part C review finding #2: lifts `parse_import`'s default refusal
+   *  of a `categorical` column whose level table exceeds
+   *  `import_categorical_guards.MAX_CATEGORICAL_LEVELS` — for a column with
+   *  genuinely many levels (real sample IDs, run labels, ...) rather than
+   *  one mis-marked categorical. `preview_import` reports the level-cap
+   *  problem (`categorical_problems`) either way. Optional/absent (the
+   *  common case, and every settings object saved before this field
+   *  existed) means `false` — the default refusal still applies. */
+  allow_large_categorical?: boolean;
 }
 
 /** One resolved column descriptor from `preview_import`. */
@@ -76,6 +85,16 @@ export interface ImportPreviewResponse {
   n_data_rows: number;
   n_preview_rows: number;
   comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
+  /** P1.6 Part A: the SAME `comments` lines, additionally parsed into an
+   *  ordered `key -> value` map (`quantized.io.import_metadata.
+   *  parse_header_fields`) — strictly additive, never a replacement.
+   *  Optional on the wire type (older fixtures / mocked previews may omit
+   *  it) -- always present on a live `/api/import/preview` response. */
+  header_fields?: Record<string, string>;
+  /** P1.6 Part A: keys that appeared more than once in the preamble — the
+   *  LAST occurrence's value won (see `header_fields`); each entry names
+   *  which key was overwritten. */
+  header_field_problems?: ImportHeaderFieldProblem[];
   /** P1.6: the error bindings from `settings` that SURVIVED validation
    *  against this file, echoed back raw-column-indexed. */
   error_bindings?: ImportErrorBindingWire[];
@@ -107,7 +126,44 @@ export interface ImportPreviewResponse {
    *  suggested, no matter how error-shaped its name looks -- only a
    *  column currently `y` or `error` is eligible. */
   suggested_error_bindings?: ImportErrorBindingWire[];
+  /** P1.6 Part C: structured problems in every `categorical`-role column's
+   *  level table (`quantized.io.import_categorical_guards`) — a
+   *  `categorical_level_cap` entry means `parse_import` will REFUSE the
+   *  import UNLESS the settings sent set `allow_large_categorical`, in which
+   *  case the same problem is still reported here but Import proceeds; a
+   *  `categorical_case_collision`/`categorical_case_collision_truncated`
+   *  entry is informational only (never blocks Import). The backend reports
+   *  this field; NOTHING in the frontend reads it yet — there is no
+   *  consumer, so today a level-cap refusal surfaces to the user as a raw
+   *  422 from Import, not a preflight warning. Wiring a warning/disable
+   *  here is the Import Wizard UI slice (not this backend contract).
+   *  Optional on the wire type for the same reason as `header_fields`
+   *  above. */
+  categorical_problems?: ImportCategoricalProblem[];
 }
+
+/** One duplicate key found while parsing `header_fields` (P1.6 Part A). */
+export interface ImportHeaderFieldProblem {
+  type: "duplicate_header_field";
+  key: string;
+}
+
+/** One structured problem in a `categorical` column's level table (P1.6
+ *  Part C), mirroring `quantized.io.import_categorical_guards`'s problem
+ *  shapes exactly. `categorical_case_collision_truncated` appears once,
+ *  after up to `MAX_CATEGORICAL_COLLISIONS` `categorical_case_collision`
+ *  entries for the same column, when that column had more collision groups
+ *  than were reported — review finding #1: reported collisions are capped
+ *  and truncation is always signalled, never silent. */
+export type ImportCategoricalProblem =
+  | { type: "categorical_level_cap"; column: string; level_count: number; cap: number }
+  | { type: "categorical_case_collision"; column: string; labels: string[] }
+  | {
+      type: "categorical_case_collision_truncated";
+      column: string;
+      collision_count: number;
+      cap: number;
+    };
 
 /** One rejected `ImportErrorBindingWire`, mirroring
  *  `quantized.io.import_error_bindings.DroppedErrorBinding.to_dict()`. */
