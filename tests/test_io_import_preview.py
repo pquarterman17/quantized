@@ -25,7 +25,11 @@ from quantized.io.import_error_bindings import (
     TARGET_OUT_OF_RANGE,
     ErrorBinding,
 )
-from quantized.io.import_metadata import MAX_HEADER_FIELDS, parse_header_fields
+from quantized.io.import_metadata import (
+    MAX_HEADER_FIELDS,
+    parse_header_fields,
+    unparsed_comments,
+)
 from quantized.io.import_preview import (
     DATA_ROLES,
     ImportSettings,
@@ -947,6 +951,46 @@ def test_parse_header_fields_capped_at_max() -> None:
     assert len(fields) == MAX_HEADER_FIELDS == 200
     assert "Key0" in fields
     assert f"Key{MAX_HEADER_FIELDS + 10}" not in fields
+
+
+def test_unparsed_comments_is_the_exact_complement_of_the_fields() -> None:
+    """`unparsed_comments` and `parse_header_fields` PARTITION their input:
+    every line goes to exactly one side, in order, verbatim. The preview sends
+    both so a UI can show the structured map next to the leftover prose
+    WITHOUT rendering a `key: value` line twice -- that only holds if the two
+    halves agree on the rule, which is why they share one pass."""
+    lines = [
+        "instrument note",
+        "# Temperature: 300 K",
+        "-- a separator --",
+        "Sample = NiFe_03",
+        ": no key",
+    ]
+    fields, _ = parse_header_fields(lines)
+    left = unparsed_comments(lines)
+    assert fields == {"Temperature": "300 K", "Sample": "NiFe_03"}
+    assert left == ["instrument note", "-- a separator --", ": no key"]
+    assert len(left) + len(fields) == len(lines)
+
+
+def test_unparsed_comments_reports_lines_skipped_by_the_field_cap() -> None:
+    """A line past `MAX_HEADER_FIELDS` is not parsed, so it is genuinely
+    unparsed -- it must appear on the leftover side rather than falling out of
+    both halves and vanishing from the UI entirely."""
+    lines = [f"Key{i}: {i}" for i in range(MAX_HEADER_FIELDS + 3)]
+    fields, _ = parse_header_fields(lines)
+    left = unparsed_comments(lines)
+    assert len(fields) == MAX_HEADER_FIELDS
+    assert left == [f"Key{i}: {i}" for i in range(MAX_HEADER_FIELDS, MAX_HEADER_FIELDS + 3)]
+
+
+def test_preview_sends_unparsed_comments_alongside_the_structured_fields() -> None:
+    text = "# Temp: 300 K\n# just a free-text note\nField,Moment\n100,0.001\n"
+    settings = ImportSettings(header_line=2, data_start_line=3, roles=["x", "y"])
+    payload = preview_import(text, settings)
+    assert payload["header_fields"] == {"Temp": "300 K"}
+    assert payload["comments"] == ["# Temp: 300 K", "# just a free-text note"]
+    assert payload["unparsed_comments"] == ["# just a free-text note"]
 
 
 _HEADER_FIELD_TEXT = (
