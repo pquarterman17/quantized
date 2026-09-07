@@ -7,6 +7,7 @@
 
 import { useMemo } from "react";
 
+import { resolveCategoryLabels } from "../../../lib/barlayout";
 import { filteredOutRows, isActive } from "../../../lib/datafilter";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { ColumnFilter, DataFilter } from "../../../lib/types";
@@ -18,6 +19,10 @@ export interface FilterColumn {
   kind: "range" | "set";
   /** Distinct sorted levels (set columns only). */
   levels: number[];
+  /** Display labels aligned 1:1 with `levels`. Categorical channels use
+   *  their imported level table; legacy numeric categories fall back to the
+   *  same metadata/numeric resolver used by plots and Tabulate. */
+  levelLabels: string[];
   /** Current predicate for this column (undefined = no constraint). */
   current?: ColumnFilter;
   /** The column's own finite value range (range columns only) — the domain
@@ -77,6 +82,7 @@ export function useDataFilter(): DataFilterState {
         label: xName,
         kind: "range",
         levels: [],
+        levelLabels: [],
         current: currentOf(-1),
         dataMin: xRange?.[0],
         dataMax: xRange?.[1],
@@ -85,12 +91,14 @@ export function useDataFilter(): DataFilterState {
     for (let i = 0; i < active.data.labels.length; i++) {
       const cat = isCategorical(channelModelingType(active, i));
       const colVals = active.data.values.map((r) => r[i]);
+      const levels = cat ? distinctLevels(colVals) : [];
       const range = cat ? null : dataRange(colVals);
       cols.push({
         index: i,
         label: active.data.labels[i],
         kind: cat ? "set" : "range",
-        levels: cat ? distinctLevels(colVals) : [],
+        levels,
+        levelLabels: cat ? resolveCategoryLabels(active.data, i, levels) : [],
         current: currentOf(i),
         dataMin: range?.[0],
         dataMax: range?.[1],

@@ -34,6 +34,20 @@ describe("useDataFilter", () => {
     expect(cols[2]).toMatchObject({ index: 1, kind: "range" }); // val (continuous)
   });
 
+  it("shows imported categorical labels instead of leaking numeric codes", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "samples.csv",
+        data: { ...DATA, cat_levels: { 0: ["Reference", "Annealed"] } },
+      }],
+    });
+    const { result } = renderHook(() => useDataFilter());
+    const group = result.current.columns.find((c) => c.index === 0)!;
+    expect(group.levels).toEqual([0, 1]);
+    expect(group.levelLabels).toEqual(["Reference", "Annealed"]);
+  });
+
   it("exposes each range column's own data bounds (RangeSlider domain), ignoring the current filter", () => {
     const { result } = renderHook(() => useDataFilter());
     const cols = result.current.columns;
