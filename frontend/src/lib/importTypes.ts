@@ -96,7 +96,16 @@ export interface ImportPreviewResponse {
 
 /** One rejected `ImportErrorBindingWire`, mirroring
  *  `quantized.io.import_error_bindings.DroppedErrorBinding.to_dict()`. */
-export interface ImportErrorBindingProblem extends ImportErrorBindingWire {
+export interface ImportErrorBindingProblem {
+  column: number;
+  target: number;
+  /** WIDER than `ImportErrorBindingWire`'s union on purpose: a problem echoes
+   *  back the value that was REJECTED, which for an `invalid_axis` /
+   *  `invalid_side` / `malformed_entry` code is precisely a string outside
+   *  the union (`"Y"`, `"plus"`, `""`). Narrowing these would make the type
+   *  lie about the one case the field exists to describe. */
+  axis: string;
+  side: string;
   code: string;
   reason: string;
 }

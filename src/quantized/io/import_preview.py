@@ -28,7 +28,7 @@ Pure ``io`` layer — no fastapi/pydantic imports.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
@@ -45,6 +45,7 @@ from quantized.io.error_binding_suggestions import suggest_error_bindings
 from quantized.io.import_error_bindings import (
     ErrorBinding,
     binding_metadata,
+    malformed_problems,
     valid_error_bindings,
 )
 from quantized.io.import_parse import (
@@ -79,17 +80,7 @@ __all__ = [
 DATA_ROLES = _DATA_ROLES  # re-exported; defined with the parsing internals
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
 _CATEGORICAL_ROLE = "categorical"
-# friendly delimiter aliases -> how to split
-_NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
-                 "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
 
-# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
-# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
-# far the sniffer actually looks) -- an accidental huge value would make
-# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
-# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
-# `max_lines` bound on `raw_lines`.
-_MAX_PREAMBLE_COMMENTS = 500
 
 
 @dataclass(frozen=True)
@@ -115,30 +106,55 @@ class ImportSettings:
     # existed. Never trusted as-is against a real file: `preview_import`/
     # `parse_import` always run these through `valid_error_bindings` first.
     error_bindings: list[ErrorBinding] | None = None
+    #: Raw `error_bindings` entries `from_dict` could not parse at all (bad
+    #: types, an unknown `axis`/`side` spelling). NOT part of the persisted
+    #: shape -- `to_dict` never writes it back, so a round trip drops the junk
+    #: rather than re-saving it -- but it rides along on the in-memory object
+    #: so a preview/parse can REPORT what was thrown away instead of leaving
+    #: the user wondering where their pairing went.
+    malformed_error_bindings: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         # `asdict` recurses through nested dataclasses (including ones
         # inside a list), so `error_bindings`'s `ErrorBinding` entries need
         # no special-casing here -- each becomes a plain dict automatically.
-        return asdict(self)
+        out = asdict(self)
+        out.pop("malformed_error_bindings", None)  # in-memory diagnostic, never persisted
+        return out
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> ImportSettings:
-        allowed = {f for f in cls.__dataclass_fields__}
+        allowed = {f for f in cls.__dataclass_fields__ if f != "malformed_error_bindings"}
         kwargs = {k: v for k, v in payload.items() if k in allowed}
         raw_bindings = kwargs.get("error_bindings")
+        malformed: list[dict[str, Any]] = []
         if isinstance(raw_bindings, list):
             # `ErrorBinding.from_dict` is itself tolerant (returns `None` for
             # a malformed entry) -- disk-sourced JSON is never trusted, so a
             # bad entry is dropped rather than raising or poisoning the rest.
-            kwargs["error_bindings"] = [
-                b for b in (ErrorBinding.from_dict(item) for item in raw_bindings)
-                if b is not None
-            ]
+            # But dropping it SILENTLY is the very failure this whole contract
+            # exists to prevent (review round 2): an `axis` of "Y" or a `side`
+            # of "plus" -- a hand-edited filter file, or one written by an
+            # older/newer build -- would vanish here, before
+            # `valid_error_bindings` ever sees it, so INVALID_AXIS/INVALID_SIDE
+            # were unreachable on every route path and `save_filter`'s
+            # load-then-rewrite made the loss permanent on disk. Keep the raw
+            # entries; `preview_import`/`parse_import` report them alongside
+            # the bindings that failed semantic validation.
+            parsed: list[ErrorBinding] = []
+            for item in raw_bindings:
+                b = ErrorBinding.from_dict(item)
+                if b is None:
+                    malformed.append(item if isinstance(item, dict) else {"entry": repr(item)})
+                else:
+                    parsed.append(b)
+            kwargs["error_bindings"] = parsed
         else:
             # missing / null / wrong type entirely -> no bindings, not a crash
             kwargs.pop("error_bindings", None)
-        return cls(**kwargs)
+        settings = cls(**kwargs)
+        object.__setattr__(settings, "malformed_error_bindings", malformed)
+        return settings
 
 
 def guess_settings(text: str) -> ImportSettings:
@@ -230,7 +246,10 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "n_preview_rows": len(preview_rows),
         "comments": _preamble_comments(p, settings),
         "error_bindings": [b.to_dict() for b in kept_bindings],
-        "error_binding_problems": [d.to_dict() for d in dropped_bindings],
+        "error_binding_problems": [
+            d.to_dict()
+            for d in malformed_problems(settings.malformed_error_bindings) + dropped_bindings
+        ],
         "suggested_error_bindings": [b.to_dict() for b in suggested_bindings],
     }
 
@@ -337,6 +356,7 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
+    dropped_bindings = malformed_problems(settings.malformed_error_bindings) + dropped_bindings
     metadata.update(binding_metadata(kept_bindings, dropped_bindings, chan_cols + cat_cols))
     return DataStruct.create(
         x, values, labels=labels, units=units, metadata=metadata, cat_levels=cat_levels or None

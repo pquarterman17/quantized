@@ -187,12 +187,18 @@ def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
     size of the whole file."""
     consumed = {settings.header_line, settings.units_line, settings.label_line}
     out: list[str] = []
-    for i in range(p.data_start):
+    # Iterate the LINES THAT EXIST, not `range(data_start)`: the cap below
+    # bounds what is collected, not how long the walk takes, and
+    # `data_start_line` is free-text in the wizard -- `data_start` of 10^10
+    # spent ~15 minutes stepping past EOF to collect nothing. Slicing bounds
+    # the loop by the file itself, so an oversized value is O(file), not
+    # O(the number the user typed).
+    for i, line in enumerate(p.lines[: p.data_start]):
         if len(out) >= _MAX_PREAMBLE_COMMENTS:
             break
         if i in consumed:
             continue
-        raw = p.lines[i].strip() if i < len(p.lines) else ""
+        raw = line.strip()
         if raw:
             out.append(raw)
     return out
