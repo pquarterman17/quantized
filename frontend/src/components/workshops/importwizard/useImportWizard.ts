@@ -99,6 +99,7 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
+  const [allowErrorSuggestions, setAllowErrorSuggestions] = useState(true);
   const {
     errorRows,
     setErrorTarget: setErrorTargetLocal,
@@ -111,29 +112,50 @@ export function useImportWizard(): ImportWizardState {
       columns,
       preview?.error_bindings ?? NO_ERROR_BINDINGS,
       preview?.suggested_error_bindings ?? NO_ERROR_BINDINGS,
+      allowErrorSuggestions,
     );
 
-  // A pre-filled suggestion is part of the visible import configuration, so
-  // persist it too. Otherwise Import (which reads errorRows) and a saved
-  // filter (which reads settings) silently describe different datasets.
+  // For columns represented by the editor, rows are authoritative: add,
+  // replace, AND prune bindings so Import and saved filters cannot drift from
+  // what the controls show. Out-of-range/malformed entries remain until the
+  // user removes their visible problem alert.
   useEffect(() => {
     if (!columns.length) return;
     const order = finalChannelOrder(columns);
     const rawByChannel = new Map(order.map((item) => [item.channel, item.sourceIndex]));
+    const channelByRaw = new Map(order.map((item) => [item.sourceIndex, item.channel]));
+    const errorCount = columns.filter((column) => column.role === "error").length;
+    if (errorRows.length !== errorCount) return;
     setSettings((current) => {
       if (!current) return current;
-      const bindings = [...(current.error_bindings ?? [])];
-      let changed = false;
+      const next: ImportErrorBindingWire[] = [];
+      const emitted = new Set<number>();
+      for (const binding of current.error_bindings ?? []) {
+        const source = columns.find((column) => column.index === binding.column);
+        if (!source) {
+          next.push(binding);
+          continue;
+        }
+        const channel = channelByRaw.get(binding.column);
+        const row = errorRows.find((item) => item.channel === channel);
+        if (source.role !== "error" || !row || row.target === null || emitted.has(binding.column)) continue;
+        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
+        if (target === undefined) continue;
+        next.push({ column: binding.column, target, axis: row.axis, side: row.side });
+        emitted.add(binding.column);
+      }
       for (const row of errorRows) {
-        if (row.provenance !== "suggested" || row.target === null) continue;
+        if (row.target === null) continue;
         const column = rawByChannel.get(row.channel);
         const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
         if (column === undefined || target === undefined) continue;
-        if (bindings.some((binding) => binding.column === column)) continue;
-        bindings.push({ column, target, axis: row.axis, side: row.side });
-        changed = true;
+        if (emitted.has(column)) continue;
+        next.push({ column, target, axis: row.axis, side: row.side });
+        emitted.add(column);
       }
-      return changed ? { ...current, error_bindings: bindings } : current;
+      return JSON.stringify(next) === JSON.stringify(current.error_bindings ?? [])
+        ? current
+        : { ...current, error_bindings: next };
     });
   }, [columns, errorRows]);
 
@@ -188,7 +210,9 @@ export function useImportWizard(): ImportWizardState {
     try {
       const t = await f.text();
       setText(t);
-      setSettings(await importGuess(t));
+      const guessed = await importGuess(t);
+      setAllowErrorSuggestions(guessed.error_bindings == null);
+      setSettings(guessed);
     } catch (e) {
       setError(e instanceof Error ? e.message : "couldn't read file");
       setBusy(false);
@@ -264,24 +288,37 @@ export function useImportWizard(): ImportWizardState {
   }
 
   function setErrorTarget(channel: number, target: number | null): void {
+    const current = errorRows.find((row) => row.channel === channel);
     setErrorTargetLocal(channel, target);
     // The backend contract reserves target -1 for the x axis and rejects it
     // unless axis is also x. Keep the visible editor and persisted binding
     // valid in the same interaction instead of waiting for a rejected preview.
-    const axis = target === -1 ? "x" : target !== null ? "y" : undefined;
-    if (axis) setErrorAxisLocal(channel, axis);
+    const axis = target === -1 ? "x" : target !== null ? current?.preferredAxis ?? "y" : undefined;
+    if (axis) setErrorAxisLocal(channel, axis, false);
     persistErrorRow(channel, { target, ...(axis ? { axis } : {}) });
   }
 
   function removeRejectedErrorBinding(problem: ImportErrorBindingProblem): void {
     if (!settings) return;
+    const bindings = settings.error_bindings ?? [];
+    let removeIndex = bindings.findIndex((binding) => (
+      binding.column === problem.column
+      && binding.target === problem.target
+      && binding.axis === problem.axis
+      && binding.side === problem.side
+    ));
+    if (removeIndex < 0 && problem.code === "malformed_entry") {
+      removeIndex = bindings.findIndex((binding) => {
+        const raw = binding as unknown as Record<string, unknown>;
+        return !Number.isInteger(raw.column)
+          || !Number.isInteger(raw.target)
+          || (raw.axis !== "x" && raw.axis !== "y")
+          || (raw.side !== "both" && raw.side !== "+" && raw.side !== "-");
+      });
+    }
+    if (removeIndex < 0) return;
     patchSettings({
-      error_bindings: (settings.error_bindings ?? []).filter((binding) => !(
-        binding.column === problem.column
-        && binding.target === problem.target
-        && binding.axis === problem.axis
-        && binding.side === problem.side
-      )),
+      error_bindings: bindings.filter((_, index) => index !== removeIndex),
     });
   }
 
@@ -320,6 +357,7 @@ export function useImportWizard(): ImportWizardState {
         return;
       }
       setImported(false);
+      setAllowErrorSuggestions(filt.settings.error_bindings == null);
       setSettings({ ...filt.settings });
       resetErrorEdits();
       setPreview(fresh);
@@ -409,6 +447,7 @@ export function useImportWizard(): ImportWizardState {
     setColumns([]);
     setError(null);
     setImported(false);
+    setAllowErrorSuggestions(true);
     resetErrorRows();
   }
 

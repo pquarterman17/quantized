@@ -160,7 +160,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested", preferredAxis: null },
     ]));
 
     await act(async () => {
@@ -186,7 +186,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 0, label: "err", target: null, axis: "y", side: "both", provenance: "unassigned" },
+      { channel: 0, label: "err", target: null, axis: "y", side: "both", provenance: "unassigned", preferredAxis: null },
     ]));
 
     await act(async () => {
@@ -213,7 +213,7 @@ describe("useImportWizard", () => {
       await result.current.pickFile(fakeFile("run1.dat"));
     });
     await waitFor(() => expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "T err", target: null, axis: "y", side: "both", provenance: "unassigned" },
+      { channel: 1, label: "T err", target: null, axis: "y", side: "both", provenance: "unassigned", preferredAxis: null },
     ]));
 
     await act(async () => {
@@ -303,6 +303,65 @@ describe("useImportWizard", () => {
     await act(async () => { await result.current.applyFilter("With errors"); });
     await waitFor(() => expect(result.current.errorRows[0]?.target).toBe(-1));
     expect(result.current.settings?.error_bindings).toEqual([binding]);
+  });
+
+  it("does not repopulate a filter that explicitly saved no error bindings", async () => {
+    const filterSettings: ImportSettingsWire = {
+      ...SETTINGS,
+      column_names: ["Temp", "Moment", "dMoment"],
+      roles: ["x", "y", "error"],
+      error_bindings: [],
+    };
+    const filt: ImportFilterWire = { name: "No errors", glob: "*.dat", settings: filterSettings, updated: "t" };
+    const errorPreview: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [...PREVIEW.columns, { index: 2, name: "dMoment", unit: "", role: "error" }],
+      error_bindings: [],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    };
+    vi.mocked(listImportFilters).mockResolvedValue([filt]);
+    vi.mocked(importPreview).mockResolvedValue(errorPreview);
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.filters).toEqual([filt]));
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await act(async () => { await result.current.applyFilter("No errors"); });
+    await waitFor(() => expect(result.current.errorRows[0]?.target).toBeNull());
+    expect(result.current.settings?.error_bindings).toEqual([]);
+  });
+
+  it("preserves an explicitly horizontal axis when repointing between signal targets", async () => {
+    const wide: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "", role: "x" },
+        { index: 1, name: "A", unit: "", role: "y" },
+        { index: 2, name: "dA", unit: "", role: "error" },
+        { index: 3, name: "B", unit: "", role: "y" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(wide);
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.errorRows[0]?.target).not.toBeNull());
+    await waitFor(() => expect(result.current.settings?.error_bindings).toHaveLength(1));
+    act(() => result.current.setErrorAxis(1, "x"));
+    expect(result.current.errorRows[0]).toMatchObject({ axis: "x", preferredAxis: "x" });
+    act(() => result.current.setErrorTarget(1, 2));
+    expect(result.current.errorRows[0].axis).toBe("x");
+    expect(result.current.settings?.error_bindings).toContainEqual({
+      column: 2, target: 3, axis: "x", side: "both",
+    });
+  });
+
+  it("removes a malformed saved binding even when backend placeholders cannot exactly match it", async () => {
+    const malformed = [{ column: "2", target: 1, axis: "Y", side: "plus" }] as unknown as NonNullable<ImportSettingsWire["error_bindings"]>;
+    vi.mocked(importGuess).mockResolvedValue({ ...SETTINGS, error_bindings: malformed });
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    act(() => result.current.removeRejectedErrorBinding({
+      column: -1, target: 1, axis: "Y", side: "plus", code: "malformed_entry", reason: "Malformed binding",
+    }));
+    expect(result.current.settings?.error_bindings).toEqual([]);
   });
 
   it("refuses to apply a saved filter whose column shape no longer matches, leaving current settings untouched (P1.6 item 4)", async () => {

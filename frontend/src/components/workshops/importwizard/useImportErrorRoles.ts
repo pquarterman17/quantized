@@ -32,7 +32,7 @@ const NO_BINDINGS: ImportErrorBindingWire[] = [];
 export interface ImportErrorRolesState {
   errorRows: WizardErrorRow[];
   setErrorTarget: (channel: number, target: number | null) => void;
-  setErrorAxis: (channel: number, axis: "x" | "y") => void;
+  setErrorAxis: (channel: number, axis: "x" | "y", remember?: boolean) => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
   resetErrorEdits: () => void;
   resetErrorRows: () => void;
@@ -51,13 +51,22 @@ function seedFromWire(
   columns: ImportPreviewColumn[],
   confirmed: readonly ImportErrorBindingWire[],
   suggested: readonly ImportErrorBindingWire[],
+  allowSuggestions: boolean,
 ): WizardErrorRow[] {
-  const fallback = seedErrorRows(columns);
+  const fallback = allowSuggestions ? seedErrorRows(columns) : errorRoleChannels(columns).map((column) => ({
+    channel: column.channel,
+    label: column.label,
+    target: null,
+    axis: "y" as const,
+    side: "both" as const,
+    provenance: "unassigned" as const,
+    preferredAxis: null,
+  }));
   const channels = finalChannelOrder(columns);
   const rawToChannel = new Map(channels.map((c) => [c.sourceIndex, c.channel]));
   return errorRoleChannels(columns).map((errorColumn) => {
     const binding = confirmed.find((b) => b.column === errorColumn.sourceIndex)
-      ?? suggested.find((b) => b.column === errorColumn.sourceIndex);
+      ?? (allowSuggestions ? suggested.find((b) => b.column === errorColumn.sourceIndex) : undefined);
     const target = binding?.target === -1 ? -1 : rawToChannel.get(binding?.target ?? Number.NaN);
     if (!binding || target === undefined) {
       return fallback.find((row) => row.channel === errorColumn.channel)!;
@@ -69,6 +78,7 @@ function seedFromWire(
       axis: binding.axis,
       side: binding.side,
       provenance: confirmed.includes(binding) ? "confirmed" : "suggested",
+      preferredAxis: binding.target === -1 ? null : binding.axis,
     };
   });
 }
@@ -77,6 +87,7 @@ export function useImportErrorRoles(
   columns: ImportPreviewColumn[],
   confirmed: readonly ImportErrorBindingWire[] = NO_BINDINGS,
   suggested: readonly ImportErrorBindingWire[] = NO_BINDINGS,
+  allowSuggestions = true,
 ): ImportErrorRolesState {
   const [rows, setRows] = useState<WizardErrorRow[]>([]);
   const [revision, setRevision] = useState(0);
@@ -92,14 +103,23 @@ export function useImportErrorRoles(
 
   useEffect(() => {
     const arrangement = signatureOf(columns);
-    const wire = `${JSON.stringify(confirmed)}::${JSON.stringify(suggested)}`;
+    const wire = `${JSON.stringify(confirmed)}::${JSON.stringify(suggested)}::${allowSuggestions}`;
     if (arrangement === prevArrangement.current && wire === prevWire.current) return;
     const arrangementChanged = arrangement !== prevArrangement.current;
     prevArrangement.current = arrangement;
     prevWire.current = wire;
     if (arrangementChanged) editedChannels.current.clear();
-    const seeded = columns.length ? seedFromWire(columns, confirmed, suggested) : [];
-    setRows((current) => arrangementChanged ? seeded : seeded.map((row) => {
+    const seeded = columns.length ? seedFromWire(columns, confirmed, suggested, allowSuggestions) : [];
+    setRows((current) => arrangementChanged ? seeded.map((row) => {
+      // A suggestion persisted for settings parity is not promoted into an
+      // explicit binding merely because the backend echoes it as confirmed.
+      // Re-evaluate it when names/roles change, so a now-ambiguous guess is
+      // removed from both the row and settings by the reconciliation effect.
+      const previous = current.find((item) => item.channel === row.channel);
+      if (previous?.provenance !== "suggested") return row;
+      return seedFromWire(columns, [], suggested, allowSuggestions)
+        .find((item) => item.channel === row.channel) ?? row;
+    }) : seeded.map((row) => {
       const previous = current.find((item) => item.channel === row.channel);
       const sameSuggestedValue = previous?.provenance === "suggested"
         && previous.target === row.target
@@ -107,7 +127,7 @@ export function useImportErrorRoles(
         && previous.side === row.side;
       return editedChannels.current.has(row.channel) || sameSuggestedValue ? previous ?? row : row;
     }));
-  }, [columns, confirmed, suggested, revision]);
+  }, [columns, confirmed, suggested, allowSuggestions, revision]);
 
   function patch(channel: number, p: Partial<WizardErrorRow>): void {
     editedChannels.current.add(channel);
@@ -119,7 +139,10 @@ export function useImportErrorRoles(
   return {
     errorRows: rows,
     setErrorTarget: (channel, target) => patch(channel, { target }),
-    setErrorAxis: (channel, axis) => patch(channel, { axis }),
+    setErrorAxis: (channel, axis, remember = true) => patch(
+      channel,
+      { axis, ...(remember ? { preferredAxis: axis } : {}) },
+    ),
     setErrorSide: (channel, side) => patch(channel, { side }),
     resetErrorEdits: () => {
       editedChannels.current.clear();
