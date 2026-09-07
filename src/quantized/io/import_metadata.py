@@ -81,10 +81,23 @@ def preamble_comments(
 
 
 def _strip_marker(line: str) -> str:
+    """Strip every REPEATED leading comment marker, not just one. JCAMP-DX
+    (already parsed elsewhere in this repo, ``io/jcamp.py``) prefixes its
+    ``##KEY=value`` records with a DOUBLE ``#``, and a plain ``## Sample:
+    NbAu``-style preamble line is common too -- stopping after a single
+    marker left the leading ``#`` glued onto the key (``"# Sample"`` instead
+    of ``"Sample"``). Only LEADING markers are ever touched: a value that
+    legitimately contains a ``#`` (or any other marker character) later in
+    the line is left exactly as written."""
     s = line.strip()
-    for marker in _MARKERS:
-        if s.startswith(marker):
-            return s[len(marker) :].strip()
+    stripped = True
+    while stripped:
+        stripped = False
+        for marker in _MARKERS:
+            if s.startswith(marker):
+                s = s[len(marker) :].strip()
+                stripped = True
+                break
     return s
 
 
@@ -107,13 +120,16 @@ def parse_header_fields(lines: Sequence[str]) -> tuple[dict[str, str], list[dict
 
     Keys are kept VERBATIM (never lowercased/normalized -- an instrument key
     like ``"H (Oe)"`` is meaningful as written). A key that repeats is
-    handled deterministically -- the LAST occurrence's value wins -- and
-    every key after the first is also recorded in the returned problems list
+    handled deterministically -- the LAST occurrence's value wins -- and the
+    KEY is recorded ONCE in the returned problems list, on its first repeat
     (``{"type": "duplicate_header_field", "key": ...}``, the same structured
     "problems channel" convention this PR's Part C introduces for
     categorical columns and P1.6 PR 1 introduced for error bindings) so a
     caller (the wizard) can surface that a value was silently overwritten
-    rather than the overwrite happening with no trace anywhere.
+    rather than the overwrite happening with no trace anywhere. A THIRD (or
+    later) occurrence of the same key overwrites the value again but is not
+    reported again -- one problem entry per key, not one per duplicate
+    occurrence, is enough to tell the wizard which keys need a look.
 
     Capped at ``MAX_HEADER_FIELDS`` distinct keys -- once reached, further
     lines (including further duplicates of an already-seen key) are not
