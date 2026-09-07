@@ -1,40 +1,44 @@
-// "Pack Project" — command palette entry (P1.7 PR 4). A minimal harness to
-// exercise the store/desktopPackBridge contract this PR ships — NOT the
-// real dialog (assigned to Sol). Mirrors commands/relinkCommands.ts's own
-// registry-publish pattern; the store's run module loads lazily on click.
+// "Pack Project" — the command body behind the File-menu "Pack Project…"
+// row (commands/fileCommands.ts). Lazily imported on click (that module's
+// own doc comment on the "pack-project" entry) so this file's own eager
+// bundle cost — the desktop-shell check, `usePackProjectPanel`, and
+// `store/packProject.ts` — stays off the startup path; only the metadata
+// and the one `import()` arrow live in fileCommands.ts itself.
 //
-// NOT mounted in Stage.tsx yet: wiring it pushed the eager bundle 0.4 kB
-// over check-bundle-size.mjs's ratchet with no headroom left. A later PR
-// mounts it once the budget allows or the real dialog supersedes it.
+// No desktop shell (a browser tab): packing needs a native destination
+// folder and a bridge-backed copy loop neither of which a browser tab can
+// do, so this shows an explanatory toast and never opens the panel at all
+// — matching desktopBridge.ts's own "no usable bridge -> the caller falls
+// back" contract rather than opening a panel that can only ever fail.
+//
+// With a shell: open the panel FIRST, then kick off the preview. Opening
+// first (not after a successful preview) is what lets the panel's own
+// "selecting_destination"/"scanning" phases render while the native folder
+// picker and the scan are in flight, rather than leaving the user staring
+// at nothing until `previewPackProject` resolves.
+//
+// The store's own state machine can come back to `idle` in two ways that
+// are NOT errors: the user backed out of the native destination picker, or
+// (rare) desktopPackBridge finds no usable bridge despite `hasDesktopShell()`
+// having said yes moments earlier. Either way there is nothing to review, so
+// the panel closes itself rather than sitting open on an empty idle screen —
+// PackProjectPanel.tsx's own mount-time race (`sawActive`) is the other half
+// of this: it must not ALSO close the panel just because it hasn't yet seen
+// a non-idle phase when it first renders.
 
-import { useEffect } from "react";
-
-import { useCommands, type Action } from "../store/commands";
+import { hasDesktopShell } from "../lib/desktopBridge";
+import { usePackProject } from "../store/packProject";
+import { usePackProjectPanel } from "../store/packProjectPanel";
 import { toast } from "../store/toasts";
 
-export function usePackProjectCommands(): void {
-  useEffect(() => {
-    const actions: Action[] = [
-      {
-        id: "pack-project",
-        group: "File",
-        section: "Project",
-        label: "Pack Project…",
-        description: "Preview a portable, self-contained copy of the open project (P1.7).",
-        keywords: "pack project portable bundle export copy sources",
-        run: async () => {
-          const { usePackProject } = await import("../store/packProject");
-          await usePackProject.getState().previewPackProject();
-          const s = usePackProject.getState();
-          if (s.phase === "awaiting_confirmation" && s.preview) {
-            const { packable, blocked } = s.preview.manifest.summary;
-            toast(`${packable} source${packable === 1 ? "" : "s"} packable, ${blocked} blocked`, "info");
-          } else if (s.errors.length > 0) {
-            toast(`pack preview failed — ${s.errors[0].message}`, "danger");
-          }
-        },
-      },
-    ];
-    useCommands.getState().setMenuCommands("packProject", actions);
-  }, []);
+export async function runPackProject(): Promise<void> {
+  if (!hasDesktopShell()) {
+    toast("Pack Project needs the desktop app", "info");
+    return;
+  }
+  usePackProjectPanel.getState().setOpen(true);
+  await usePackProject.getState().previewPackProject();
+  if (usePackProject.getState().phase === "idle") {
+    usePackProjectPanel.getState().setOpen(false);
+  }
 }

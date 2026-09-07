@@ -20,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
 import { useApp } from "../store/useApp";
@@ -54,5 +54,27 @@ describe("File menu — Save-As label matches the e2e download-trigger locator",
     const cmd = buildFileCommands(useApp.getState).find((c) => c.id === "save-workspace");
     expect(cmd).toBeDefined();
     expect(cmd?.label).toBe(expected);
+  });
+});
+
+vi.mock("./packProjectCommands", () => ({ runPackProject: vi.fn() }));
+
+describe("File menu — Pack Project command", () => {
+  it("has a description and an ellipsis-terminated label (every registered command needs a description)", () => {
+    const cmd = buildFileCommands(useApp.getState).find((c) => c.id === "pack-project");
+    expect(cmd).toBeDefined();
+    expect(cmd?.description).toBeTruthy();
+    expect(cmd?.label.endsWith("…")).toBe(true);
+  });
+
+  it("loads the lazy module and delegates to runPackProject when run", async () => {
+    const cmd = buildFileCommands(useApp.getState).find((c) => c.id === "pack-project");
+    if (!cmd) throw new Error("no pack-project command");
+    // `Action.run` is typed `() => void` (store/commands.ts), but this
+    // command's actual body returns the `import().then(...)` promise — cast
+    // to await it rather than racing the dynamic import.
+    await (cmd.run() as unknown as Promise<void>);
+    const { runPackProject } = await import("./packProjectCommands");
+    expect(runPackProject).toHaveBeenCalledOnce();
   });
 });

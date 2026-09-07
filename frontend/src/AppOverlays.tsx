@@ -61,6 +61,7 @@ import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import { useApp } from "./store/useApp";
+import { usePackProjectPanel } from "./store/packProjectPanel";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
@@ -241,8 +242,7 @@ export default function AppOverlays() {
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelink((s) => s.open);
-  const [packProjectOpen, setPackProjectOpen] = useState<boolean>();
-  globalThis.qP = setPackProjectOpen;
+  const packProjectOpen = usePackProjectPanel((s) => s.open);
   const recodeOpen = useRecode((s) => s.open);
   // Heard while the dialog chunk is still unloaded -- the store owns the
   // listener so the Data command can dispatch before anything is mounted.

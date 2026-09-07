@@ -1,12 +1,17 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { NOTHING_MODIFIED_NOTE, usePackProject } from "../../../store/packProject";
+import { usePackProjectPanel } from "../../../store/packProjectPanel";
 
+// Binary units (KiB/MiB/GiB), matching lib/trashSummary.ts's own
+// formatTrashBytes — deliberately NOT a shared formatter (see that file's
+// comment: there is no `formatBytes`/`humanBytes`/`formatSize` to reuse),
+// kept local to this panel the same way.
 function bytes(value: number): string {
   if (value < 1024) return `${value} B`;
-  const units = ["KB", "MB", "GB", "TB"];
+  const units = ["KiB", "MiB", "GiB", "TiB"];
   let n = value / 1024;
   let unit = units[0];
   for (let i = 1; i < units.length && n >= 1024; i += 1) {
@@ -31,24 +36,50 @@ export default function PackProjectPanel() {
   const cancel = usePackProject((s) => s.cancelPackProject);
   const reset = usePackProject((s) => s.resetPackProject);
   const retry = usePackProject((s) => s.previewPackProject);
+  const setOpen = usePackProjectPanel((s) => s.setOpen);
 
   const terminal = phase === "completed" || phase === "cancelled" || phase === "failed";
+
+  // The panel opens (commands/packProjectCommands.ts) BEFORE the preview has
+  // moved the phase off "idle", so an unconditional "idle -> close" here
+  // would close the panel the instant it mounts. Only close on idle once an
+  // ACTIVE phase has actually been observed — that is what distinguishes
+  // "the native picker was cancelled / preview came back with nothing to
+  // review" (close) from "we just opened and previewPackProject hasn't run
+  // yet" (stay open). runPackProject's own idle check after `await
+  // previewPackProject()` covers the same case from the run side; this
+  // covers every OTHER path back to idle (e.g. a future retry).
+  const sawActive = useRef(false);
   useEffect(() => {
-    if (phase === "idle") globalThis.qP(false);
-  }, [phase]);
-  const close = () => {
-    if (terminal) {
-      void reset();
-      globalThis.qP(false);
-    } else void cancel();
+    if (phase !== "idle") sawActive.current = true;
+    else if (sawActive.current) setOpen(false);
+  }, [phase, setOpen]);
+
+  // The X button and every "Cancel"/"Close" control below funnel through
+  // this one function so the panel's close semantics stay in one place.
+  const dismiss = async () => {
+    if (phase === "awaiting_confirmation" || phase === "selecting_destination" || phase === "scanning") {
+      await cancel();
+      await reset();
+      setOpen(false);
+    } else if (terminal) {
+      await reset();
+      setOpen(false);
+    } else {
+      // packing/cancelling: nothing original is ever modified (pack only
+      // COPIES), so aborting is always safe — the X here is equivalent to
+      // the Cancel button by design. Leave the window open so the
+      // "Stopping safely…" -> "Pack cancelled" outcome is visible.
+      await cancel();
+    }
   };
 
   return (
-    <ToolWindow id="pack-project" title="Pack Project" width={620} onClose={close}>
+    <ToolWindow id="pack-project" title="Pack Project" width={620} onClose={() => void dismiss()}>
       {(phase === "selecting_destination" || phase === "scanning") && (
         <div role="status" aria-live="polite">
           <p>{phase === "selecting_destination" ? "Choose where to create the portable project." : "Checking source files…"}</p>
-          <Button size="sm" onClick={() => void cancel()}>Cancel</Button>
+          <Button size="sm" onClick={() => void dismiss()}>Cancel</Button>
         </div>
       )}
 
@@ -82,10 +113,10 @@ export default function PackProjectPanel() {
               ))}</tbody>
             </table>
           </div>
-          {preview.blockers.length > 0 && <p className="qzk-ds-meta">{preview.blockers.length} unavailable source{preview.blockers.length === 1 ? "" : "s"} will remain embedded-only or externally linked.</p>}
+          {preview.blockers.length > 0 && <p className="qzk-ds-meta">{preview.blockers.length} unavailable source{preview.blockers.length === 1 ? "" : "s"} keep their original absolute paths in the packed copy.</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Button size="sm" onClick={() => void start(preview.manifest)} disabled={preview.destination.exists}>Pack Project</Button>
-            <Button size="sm" onClick={() => void cancel()}>Cancel</Button>
+            <Button size="sm" onClick={() => void dismiss()}>Cancel</Button>
           </div>
         </>
       )}
@@ -100,9 +131,9 @@ export default function PackProjectPanel() {
         </div>
       )}
 
-      {phase === "completed" && <div role="status"><h3>Portable project created</h3><p style={{ overflowWrap: "anywhere" }}>{resultPath}</p><p className="qzk-ds-meta">{NOTHING_MODIFIED_NOTE}</p><Button size="sm" onClick={() => void reset()}>Close</Button></div>}
-      {phase === "cancelled" && <div role="status"><h3>Pack cancelled</h3><p>{NOTHING_MODIFIED_NOTE}</p><Button size="sm" onClick={() => void reset()}>Close</Button></div>}
-      {phase === "failed" && <div role="alert"><h3>Could not pack project</h3>{errors.map((error, i) => <p key={`${error.code}-${i}`}>{error.message}</p>)}<p className="qzk-ds-meta">{NOTHING_MODIFIED_NOTE}{cleanupOk === false ? " Temporary files could not be fully removed." : ""}</p><div style={{ display: "flex", gap: 8 }}><Button size="sm" onClick={() => void retry()}>Try again</Button><Button size="sm" onClick={() => void reset()}>Close</Button></div></div>}
+      {phase === "completed" && <div role="status"><h3>Portable project created</h3><p style={{ overflowWrap: "anywhere" }}>{resultPath}</p><p className="qzk-ds-meta">{NOTHING_MODIFIED_NOTE}</p><Button size="sm" onClick={() => void dismiss()}>Close</Button></div>}
+      {phase === "cancelled" && <div role="status"><h3>Pack cancelled</h3><p>{NOTHING_MODIFIED_NOTE}</p><Button size="sm" onClick={() => void dismiss()}>Close</Button></div>}
+      {phase === "failed" && <div role="alert"><h3>Could not pack project</h3>{errors.map((error, i) => <p key={`${error.code}-${i}`}>{error.message}</p>)}<p className="qzk-ds-meta">{NOTHING_MODIFIED_NOTE}{cleanupOk === false ? " Temporary files could not be fully removed." : ""}</p><div style={{ display: "flex", gap: 8 }}><Button size="sm" onClick={() => void retry()}>Try again</Button><Button size="sm" onClick={() => void dismiss()}>Close</Button></div></div>}
     </ToolWindow>
   );
 }
