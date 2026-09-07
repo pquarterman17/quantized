@@ -33,6 +33,7 @@ __all__ = [
     "DroppedErrorBinding",
     "ErrorBinding",
     "valid_error_bindings",
+    "binding_metadata",
 ]
 
 ErrorAxis = Literal["x", "y"]
@@ -284,3 +285,44 @@ def valid_error_bindings(
         kept.append(b)
 
     return kept, dropped
+
+
+def binding_metadata(
+    kept: Sequence[ErrorBinding],
+    dropped: Sequence[DroppedErrorBinding],
+    channel_order: Sequence[int],
+) -> dict[str, Any]:
+    """The `DataStruct.metadata` entries a parsed import contributes for its
+    error bindings: `error_roles` for what survived, `import_problems` for what
+    did not. Either key is OMITTED when its list is empty -- no empty-list
+    noise in the metadata of the many datasets that have no bindings at all.
+
+    `channel_order` is the RAW column index of each emitted channel, in channel
+    order (`parse_import` builds it as its numeric columns followed by its
+    categorical ones), and is what turns this module's raw-column indices into
+    the channel indices `Dataset.errorRoles` uses. A binding targeting the x
+    axis keeps `target: -1` -- the x axis is not a channel.
+
+    `import_problems` exists because NOT every caller saw a preview:
+    `io/registry.py`'s saved-filter path parses a glob-matched file with no
+    wizard in sight, and a filter reused across files is exactly where a
+    binding goes stale. Dropping it with no record anywhere would hand that
+    user a dataset with no error bars and nothing to explain why. The wizard,
+    which already renders `error_binding_problems` from the preview, can
+    ignore this copy.
+    """
+    raw_to_channel = {raw: chan for chan, raw in enumerate(channel_order)}
+    out: dict[str, Any] = {}
+    if kept:
+        out["error_roles"] = [
+            {
+                "channel": raw_to_channel[b.column],
+                "target": -1 if b.target == -1 else raw_to_channel[b.target],
+                "axis": b.axis,
+                "side": b.side,
+            }
+            for b in kept
+        ]
+    if dropped:
+        out["import_problems"] = [d.to_dict() for d in dropped]
+    return out
