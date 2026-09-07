@@ -42,7 +42,10 @@ from quantized.io._delimited_layout import (
     _looks_like_units_row,
     _numeric_score,
 )
-from quantized.io.import_categorical_guards import encode_categorical_columns
+from quantized.io.import_categorical_guards import (
+    categorical_level_problems_only,
+    encode_categorical_columns,
+)
 from quantized.io.import_error_bindings import (
     ErrorBinding,
     binding_metadata,
@@ -117,6 +120,17 @@ class ImportSettings:
     #: so a preview/parse can REPORT what was thrown away instead of leaving
     #: the user wondering where their pairing went.
     malformed_error_bindings: list[dict[str, Any]] = field(default_factory=list)
+    # P1.6 Part C review finding #2: the DEFAULT protection against a column
+    # mis-marked categorical that is actually continuous (see
+    # `import_categorical_guards.MAX_CATEGORICAL_LEVELS`) is a hard refusal
+    # in `parse_import` -- but a column with hundreds of GENUINE levels (real
+    # sample IDs, run labels, ...) is legitimate and must still be
+    # importable. Setting this to `True` lifts that refusal for THIS import
+    # (`preview_import` keeps reporting the level-cap problem regardless, so
+    # the wizard can offer the choice before Import, not just after a 422).
+    # Persisted like every other field (plain `asdict`/`from_dict`, no
+    # special-casing needed) so a saved filter remembers the decision.
+    allow_large_categorical: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         # `asdict` recurses through nested dataclasses (including ones
@@ -244,9 +258,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     comments = _preamble_comments(p, settings)
     header_fields, header_field_problems = parse_header_fields(comments)
     # P1.6 Part C: report-only here (a level cap is a hard refusal, but only
-    # inside `parse_import`, so the wizard can still show the warning first).
+    # inside `parse_import`, and only absent `allow_large_categorical`, so
+    # the wizard can still show the warning first). Levels-only (review
+    # finding #4) -- this path never needs the encoded codes, so it skips
+    # building them at all (`categorical_level_problems_only`), unlike
+    # `parse_import`'s `encode_categorical_columns` below, which does.
     cat_cols_all = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
-    _, categorical_problems = encode_categorical_columns(
+    categorical_problems = categorical_level_problems_only(
         [(effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
          for k in cat_cols_all]
     )
@@ -293,9 +311,11 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     DEFECT 1, defense-in-depth -- the wizard UI already disables Import on
     this) and when a ``categorical`` column's level table exceeds
     `import_categorical_guards.MAX_CATEGORICAL_LEVELS` (P1.6 Part C, naming
-    the offending column(s)/counts) -- a same-case-folded level collision is
-    reported instead (`preview_import`'s ``categorical_problems``), never
-    raised.
+    the offending column(s)/counts) -- UNLESS ``settings.
+    allow_large_categorical`` is set, which lifts that one refusal for a
+    column with genuinely many levels (P1.6 Part C review finding #2). A
+    same-case-folded level collision is reported instead
+    (`preview_import`'s ``categorical_problems``), never raised.
     """
     p = _parse_core(text, settings)
     n_rows, n_cols = p.matrix.shape
@@ -343,13 +363,15 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
              for k in cat_cols]
         )
         cap_problems = [pr for pr in cat_problems if pr["type"] == "categorical_level_cap"]
-        if cap_problems:
+        if cap_problems and not settings.allow_large_categorical:
             named = ", ".join(
                 f"{pr['column']!r} ({pr['level_count']} levels)" for pr in cap_problems
             )
             raise ValueError(
                 f"categorical column(s) exceed the level cap: {named} -- likely "
-                "mismarked as categorical; change the role to y/label/ignore"
+                "mismarked as categorical; change the role to y/label/ignore, or "
+                "set ImportSettings.allow_large_categorical=True if these are "
+                "genuine levels and the import should proceed as-is"
             )
         cat_arrays = []
         for k, (codes, levels) in zip(cat_cols, encoded, strict=True):
