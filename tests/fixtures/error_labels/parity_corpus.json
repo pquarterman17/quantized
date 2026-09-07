@@ -1,0 +1,998 @@
+{
+  "_generated_from": "frontend/src/lib/errorLabelParityFixture.gen.test.ts, running the real inferErrorBindingsFromLabels (errorRoles.ts). A diff against src/quantized/io/error_inference.py's port means the two languages disagree -- fix the disagreement, never regenerate this file to hide it.",
+  "cases": [
+    {
+      "note": "base-name match: dR -> R (unambiguous)",
+      "labels": [
+        "R",
+        "dR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "explicit x-prefix binds to the x axis",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "explicit y-prefix (symmetry check for x-prefix)",
+      "labels": [
+        "Signal",
+        "yerr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "nearest PRECEDING value column (reflectometry instrument-file convention)",
+      "labels": [
+        "R++",
+        "err",
+        "SA",
+        "err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        },
+        {
+          "channel": 3,
+          "target": 2,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "both halves of an asymmetric +/- pair",
+      "labels": [
+        "M",
+        "M_err+",
+        "M_err-"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric hi/lo suffixes",
+      "labels": [
+        "M",
+        "M_hi",
+        "M_lo"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "asymmetric upper/lower suffixes",
+      "labels": [
+        "M",
+        "M_upper",
+        "M_lower"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "leading error column has nothing defensible preceding it -> unbound",
+      "labels": [
+        "err",
+        "M"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "no error columns at all -> nothing",
+      "labels": [
+        "Temp",
+        "Moment"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "inferErrorBindingsFromLabels === inferErrorBindings(ds) delegation fixture",
+      "labels": [
+        "R",
+        "dR",
+        "M_err+",
+        "M_err-",
+        "M"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        },
+        {
+          "channel": 2,
+          "target": 4,
+          "axis": "y",
+          "side": "+"
+        },
+        {
+          "channel": 3,
+          "target": 4,
+          "axis": "y",
+          "side": "-"
+        }
+      ]
+    },
+    {
+      "note": "dQ base-name match (second delta-convention letter)",
+      "labels": [
+        "Q",
+        "dQ"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "never-classify: Kerr beside T,R (no K sibling) -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Kerr"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Phase beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Phase"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Noise beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Noise"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Sensor beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sensor"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Response beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Response"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Dose beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Dose"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Pulse beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Pulse"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Base beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Base"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Use beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Use"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Series beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Series"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Second beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Second"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Depth beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Depth"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Delay beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delay"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Density beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Density"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "never-classify: Set beside T,R (2-char token glue exclusion) -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Set"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "X_err acceptance: Phase_err -> Phase",
+      "labels": [
+        "Time",
+        "Phase",
+        "Phase_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Base_err -> Base",
+      "labels": [
+        "Time",
+        "Base",
+        "Base_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Noise_err -> Noise",
+      "labels": [
+        "Time",
+        "Noise",
+        "Noise_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Sensor_err -> Sensor",
+      "labels": [
+        "Time",
+        "Sensor",
+        "Sensor_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Response_err -> Response",
+      "labels": [
+        "Time",
+        "Response",
+        "Response_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Set_err -> Set",
+      "labels": [
+        "Time",
+        "Set",
+        "Set_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Pulse_err -> Pulse",
+      "labels": [
+        "Time",
+        "Pulse",
+        "Pulse_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Use_err -> Use",
+      "labels": [
+        "Time",
+        "Use",
+        "Use_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Ierr with NO I sibling -> positional pairing takes over (XRD)",
+      "labels": [
+        "2theta",
+        "Intensity",
+        "Ierr"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Ierr WITH a literal I sibling -> base-name match",
+      "labels": [
+        "I",
+        "Ierr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Ierr alone, no siblings at all -> unbound (nothing precedes)",
+      "labels": [
+        "Ierr"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "Kerr beside Field,Phase (no K sibling) -> unbound (the deliberate exclusion)",
+      "labels": [
+        "Field",
+        "Phase",
+        "Kerr"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "Kerr WITH a literal K sibling -> base-name match (symmetric with Ierr)",
+      "labels": [
+        "K",
+        "Kerr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "MStdErr beside M -> base-name match on the longer token (stderr)",
+      "labels": [
+        "M",
+        "MStdErr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "M_std_err (explicit separators) beside M -> same as camelCase",
+      "labels": [
+        "M",
+        "M_std_err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "ordinary name starting with d-: Depth, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Depth"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with d-: Density, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Density"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with d-: Delay, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delay"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with d-: Deviation, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Deviation"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with d-: Delta, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delta"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with d-: Deg, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Deg"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with s-: Sample, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sample"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with s-: Sensitivity, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sensitivity"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with s-: Separation, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Separation"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with e-: Temperature, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Temperature"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with e-: Energy, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Energy"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "ordinary name starting with e-: Extinction, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Extinction"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "nastiest shape: a real D column beside Depth -> still unbound",
+      "labels": [
+        "D",
+        "Depth"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "nastiest shape: a real S column beside Sample -> still unbound",
+      "labels": [
+        "S",
+        "Sample"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "nastiest shape: a real E column beside Energy -> still unbound",
+      "labels": [
+        "E",
+        "Energy"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "a genuine error bar still detected alongside an inert ordinary name (not merely inert everywhere)",
+      "labels": [
+        "Depth",
+        "R",
+        "Rerr"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Rerr glued reading alone (provisional, no sibling) -> unbound",
+      "labels": [
+        "Rerr"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "Rerr glued reading WITH sibling R -> base-name match",
+      "labels": [
+        "R",
+        "Rerr"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "T,Set (2-char token glue exclusion, single-letter sibling present)",
+      "labels": [
+        "T",
+        "Set"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "Std Dev (separated, no base) binds positionally",
+      "labels": [
+        "M",
+        "Std Dev"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "hyphenated Origin sample name: NbAu-1_err -> NbAu-1 (punctuation base-matching)",
+      "labels": [
+        "NbAu-1",
+        "NbAu-1_err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "hyphenated Origin sample names: NbAu-1_err must not bind to NbAu-2",
+      "labels": [
+        "NbAu-1",
+        "NbAu-2",
+        "NbAu-1_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "MOKE: Field, Kerr, Phase (Kerr stays unbound, no K sibling)",
+      "labels": [
+        "Field",
+        "Kerr",
+        "Phase"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "XRD: 2theta, Intensity, Ierr",
+      "labels": [
+        "2theta",
+        "Intensity",
+        "Ierr"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "SIMS depth profile: Depth (nm), Si, O, Si_sigma",
+      "labels": [
+        "Depth (nm)",
+        "Si",
+        "O",
+        "Si_sigma"
+      ],
+      "bindings": [
+        {
+          "channel": 3,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "magnetometry: Temp (K), M, M_std_err",
+      "labels": [
+        "Temp (K)",
+        "M",
+        "M_std_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Temp, M, err -- single-candidate positional pairing",
+      "labels": [
+        "Temp",
+        "M",
+        "err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "T1, 'T err', T2 -- raw inference still binds via rule 3 (unbounded-forward); the wizard's two-tier narrowing (Python error_binding_suggestions.py, TS importwizard.ts) is what demotes this to unassigned, NOT this function",
+      "labels": [
+        "T1",
+        "T err",
+        "T2"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Unicode accented base name with explicit _err suffix",
+      "labels": [
+        "Résistance",
+        "Résistance_err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Unicode Greek letter base name with explicit _err suffix",
+      "labels": [
+        "Ω",
+        "Ω_err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "Unicode combining base name (Delta-theta) with explicit _err suffix",
+      "labels": [
+        "Δθ",
+        "Δθ_err"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "mixed case: ALL-CAPS base, mixed-case _ERR suffix",
+      "labels": [
+        "MASS",
+        "mass_ERR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "mixed case: Title-case base, ALL-CAPS _ERR suffix",
+      "labels": [
+        "Voltage",
+        "VOLTAGE_ERR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "empty label list",
+      "labels": [],
+      "bindings": []
+    },
+    {
+      "note": "single ordinary column, no error columns at all",
+      "labels": [
+        "Temp"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "single error-like column alone -- nothing to bind to",
+      "labels": [
+        "err"
+      ],
+      "bindings": []
+    },
+    {
+      "note": "U+FEFF (BOM) leading a base name must still base-name-match its error column (JS treats BOM as whitespace)",
+      "labels": [
+        "﻿M",
+        "T",
+        "M_err"
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+FEFF (BOM) trailing an error label's own name doesn't break suffix matching either",
+      "labels": [
+        "M",
+        "M_err﻿"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+001C (file separator) is NOT whitespace to JS -- stays part of the label, so it does NOT base-name-match a sibling missing it",
+      "labels": [
+        "R\u001c",
+        "dR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "U+0085 (NEL) is NOT whitespace to JS either -- same divergence shape as U+001C",
+      "labels": [
+        "R",
+        "dR"
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    }
+  ]
+}

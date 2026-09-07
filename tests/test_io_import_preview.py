@@ -803,6 +803,76 @@ def test_parse_import_drops_stale_binding_silently_from_metadata() -> None:
     assert "error_roles" not in ds.metadata
 
 
+# ── P16: suggested_error_bindings (name/position-driven, raw-column-indexed) ─
+
+def test_preview_carries_name_driven_suggestions_for_every_error_column() -> None:
+    # dMoment -> Moment (col 1), dField -> Field (col 3) -- both base-name
+    # matches, so both survive the wizard's two-tier narrowing regardless
+    # of what follows.
+    pv = preview_import(_ERR_TEXT, _err_settings(None))
+    assert pv["suggested_error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"},
+        {"column": 4, "target": 3, "axis": "y", "side": "both"},
+    ]
+
+
+def test_suggestions_are_independent_of_confirmed_error_bindings() -> None:
+    """Suggestions are computed fresh from the file's resolved columns on
+    every preview -- present alongside `error_bindings` even when the user
+    already confirmed a (different) set, and never merged into it."""
+    confirmed = ErrorBinding(column=4, target=3, axis="y", side="both")
+    pv = preview_import(_ERR_TEXT, _err_settings([confirmed]))
+    assert pv["error_bindings"] == [confirmed.to_dict()]
+    assert pv["suggested_error_bindings"] == [
+        {"column": 2, "target": 1, "axis": "y", "side": "both"},
+        {"column": 4, "target": 3, "axis": "y", "side": "both"},
+    ]
+
+
+def test_suggestions_are_empty_when_no_column_has_an_error_shaped_name() -> None:
+    """Renamed from a check that used to pass for the WRONG reason (review
+    finding #6): `_MESSY`'s columns (Temperature, Moment, Field) carry no
+    error-shaped NAMES at all -- this is empty because the label classifier
+    finds nothing to bind, not because of any role restriction. Suggestions
+    are NOT restricted to already-`error`-role columns -- `guess_settings`
+    (used here) never even assigns that role, and error_binding_
+    suggestions.py's docstring says so explicitly; the real role rule is
+    covered separately below."""
+    pv = preview_import(_MESSY, guess_settings(_MESSY))
+    assert pv["suggested_error_bindings"] == []
+
+
+def test_suggestions_never_name_a_column_marked_ignore_or_label() -> None:
+    """The REAL role rule (review finding #2): an error-shaped name is
+    suggested for a column currently `y`/`error` (or effectively
+    unassigned, since `guess_settings` defaults every non-`x` column to
+    `y`) -- but NEVER for one the user already retyped `ignore` or
+    `label`, even though `dR`'s name is exactly as error-shaped as it
+    would be under `y`/`error` (see the sibling test above/below for the
+    positive case)."""
+    text = "Temp,R,dR\n1,10,0.1\n2,20,0.2\n"
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    )["suggested_error_bindings"] == []
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    )["suggested_error_bindings"] == []
+    # Positive control: the SAME shape, still `error`, still suggested --
+    # proves the two assertions above are the role, not the name/shape.
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "error"])
+    )["suggested_error_bindings"] == [{"column": 2, "target": 1, "axis": "y", "side": "both"}]
+
+
+def test_suggestions_demote_a_genuinely_ambiguous_positional_pairing() -> None:
+    # "T err" sits between two equally plausible y columns -- the wizard's
+    # two-tier narrowing must leave it unsuggested (see
+    # error_binding_suggestions.py / importwizard.ts's TWO-TIER rule),
+    # unlike the raw infer_error_bindings_from_labels, which would bind it.
+    text = "T1,T err,T2\n1,0.1,2\n3,0.1,4\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["y", "error", "y"])
+    pv = preview_import(text, settings)
+    assert pv["suggested_error_bindings"] == []
 # --- P1.6 Part A: structured preamble metadata (header_fields) -------------
 
 

@@ -42,6 +42,7 @@ from quantized.io._delimited_layout import (
     _looks_like_units_row,
     _numeric_score,
 )
+from quantized.io.error_binding_suggestions import suggest_error_bindings
 from quantized.io.import_categorical_guards import (
     categorical_level_problems_only,
     encode_categorical_columns,
@@ -255,6 +256,14 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
+    # P16: name/position SUGGESTIONS, raw-column-indexed like
+    # `error_bindings` above -- NOT restricted to already-`error`-role
+    # columns (a suggestion PROPOSES marking `column` as `error` in the
+    # first place; see `error_binding_suggestions.py`'s docstring for the
+    # full contract). Always computed fresh, independent of (never merged
+    # into) `settings.error_bindings`/`kept_bindings`; the wizard decides
+    # what to show.
+    suggested_bindings = suggest_error_bindings(columns)
     comments = _preamble_comments(p, settings)
     header_fields, header_field_problems = parse_header_fields(comments)
     # P1.6 Part C: report-only here (a level cap is a hard refusal, but only
@@ -288,6 +297,7 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
             d.to_dict()
             for d in malformed_problems(settings.malformed_error_bindings) + dropped_bindings
         ],
+        "suggested_error_bindings": [b.to_dict() for b in suggested_bindings],
         "categorical_problems": categorical_problems,
     }
 
