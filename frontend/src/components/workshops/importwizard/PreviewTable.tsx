@@ -89,6 +89,15 @@ export default function PreviewTable({
                       onChange={(e) => onNameChange(c.index, e.target.value)}
                       aria-label={`column ${c.index + 1} name`}
                     />
+                    {c.effective_name && c.effective_name !== c.name && (
+                      <div
+                        className="qzk-ds-meta"
+                        title="The selected label line will use this text in legends and axis labels"
+                        style={{ color: "var(--accent)", marginBottom: 3 }}
+                      >
+                        Legend label: {c.effective_name}
+                      </div>
+                    )}
                     <input
                       className="qz-input"
                       style={{ width: "100%", marginBottom: 3 }}

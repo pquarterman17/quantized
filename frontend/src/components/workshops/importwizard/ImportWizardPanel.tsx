@@ -20,6 +20,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import ErrorRolesEditor from "./ErrorRolesEditor";
+import MetadataPreview from "./MetadataPreview";
 import PreviewTable from "./PreviewTable";
 import { useImportWizard } from "./useImportWizard";
 
@@ -177,11 +178,7 @@ export default function ImportWizardPanel() {
             />
           )}
 
-          {w.preview && w.preview.comments.length > 0 && (
-            <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
-              Preamble retained as searchable metadata: {w.preview.comments.join(" · ")}
-            </div>
-          )}
+          {w.preview && <MetadataPreview preview={w.preview} />}
 
           {w.preview && (
             <div style={{ marginTop: 10 }}>
