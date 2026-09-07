@@ -20,6 +20,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from quantized.desktop_consent import (
+    grant_paths,
     is_consented,
     is_declared_source,
     is_dir_consented,
@@ -28,6 +29,8 @@ from quantized.desktop_consent import (
 from quantized.desktop_source_probe import probe_source_path
 
 __all__ = [
+    "grant_eligible_packable_sources",
+    "ineligible_packable_sources",
     "NOTHING_MODIFIED_NOTE",
     "empty_progress",
     "eligible",
@@ -120,3 +123,54 @@ def initial_progress(manifest: Mapping[str, Any]) -> dict[str, Any]:
         "bytes_total": bytes_total,
         "stage": stage,
     }
+
+
+def ineligible_packable_sources(manifest: Mapping[str, Any]) -> list[str]:
+    """``original_path`` of every ``packable`` row in the approved manifest
+    that is NOT eligible under the consent state in force right now. Empty
+    means every approved row may still be read; anything else means
+    ``pack_start`` must refuse rather than copy from a path whose consent
+    lapsed after the user approved the preview."""
+    sources_raw = manifest.get("sources")
+    sources = sources_raw if isinstance(sources_raw, list) else []
+    lost: list[str] = []
+    for row in sources:
+        if not isinstance(row, dict) or not row.get("packable"):
+            continue
+        original_path = row.get("original_path")
+        if isinstance(original_path, str) and not eligible(original_path):
+            lost.append(original_path)
+    return lost
+
+
+def grant_eligible_packable_sources(manifest: Mapping[str, Any]) -> list[str]:
+    """Mint real read consent for every ``packable`` row's
+    ``original_path`` that is not ALREADY read-consented — i.e. the
+    rows that reached ``packable`` only via a directory grant or a
+    declared source, never an arbitrary path.
+
+    Review finding #1: a row's ``packable`` flag comes from the STORED
+    preview's manifest, computed against whatever was ``_eligible`` at
+    PREVIEW time — but consent can move between preview and this call.
+    ``pack_start`` already refuses (``consent_changed``) when any
+    packable row is no longer eligible, so by the time this runs every
+    candidate should pass ``_eligible``; the check is repeated here as
+    defence in depth so this function can never mint a grant for an
+    ineligible path whatever its caller did. Returns exactly what was
+    granted, for ``pack_start``'s ``finally``/failure paths to revoke
+    unconditionally."""
+    sources_raw = manifest.get("sources")
+    sources = sources_raw if isinstance(sources_raw, list) else []
+    to_grant: list[str] = []
+    for row in sources:
+        if not isinstance(row, dict) or not row.get("packable"):
+            continue
+        original_path = row.get("original_path")
+        if not isinstance(original_path, str):
+            continue
+        if not eligible(original_path):
+            continue
+        resolved = normalize_path(original_path)
+        if resolved is not None and not is_consented(resolved):
+            to_grant.append(original_path)
+    return grant_paths(to_grant)

@@ -83,7 +83,7 @@ before minting anything or spawning the worker: if even one row is no
 longer eligible, the call is refused with ``consent_changed`` (preview
 again — the new preview will show the row as blocked) and nothing is
 granted, staged, or copied. Only when every approved row is still
-eligible does ``_grant_eligible_packable_sources`` mint the missing read
+eligible does ``grant_eligible_packable_sources`` mint the missing read
 grants — never widening the grant registry to a path that is not eligible
 right now.
 
@@ -100,7 +100,6 @@ from __future__ import annotations
 import hashlib
 import os
 import threading
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -108,9 +107,7 @@ from quantized import desktop_bridge_pack_state as _state
 from quantized.desktop_bridge_common import FOLDER_DIALOG_DEFAULT, dialog_kind
 from quantized.desktop_consent import (
     clear_write_dir_grants,
-    grant_paths,
     grant_write_dir,
-    is_consented,
     is_write_dir_consented,
     normalize_path,
     revoke_paths,
@@ -122,24 +119,6 @@ from quantized.portable.manifest import build_dry_run_manifest, manifest_json
 from quantized.portable.pack import PackResult, pack_project
 
 __all__ = ["DesktopPackBridge"]
-
-
-def _ineligible_packable_sources(manifest: Mapping[str, Any]) -> list[str]:
-    """``original_path`` of every ``packable`` row in the approved manifest
-    that is NOT eligible under the consent state in force right now. Empty
-    means every approved row may still be read; anything else means
-    ``pack_start`` must refuse rather than copy from a path whose consent
-    lapsed after the user approved the preview."""
-    sources_raw = manifest.get("sources")
-    sources = sources_raw if isinstance(sources_raw, list) else []
-    lost: list[str] = []
-    for row in sources:
-        if not isinstance(row, dict) or not row.get("packable"):
-            continue
-        original_path = row.get("original_path")
-        if isinstance(original_path, str) and not _state.eligible(original_path):
-            lost.append(original_path)
-    return lost
 
 
 class DesktopPackBridge:
@@ -291,12 +270,12 @@ class DesktopPackBridge:
             project_name = preview["project_name"]
             manifest = preview["manifest"]
 
-            if _ineligible_packable_sources(manifest):
+            if _state.ineligible_packable_sources(manifest):
                 return _state.err(
                     "consent_changed",
                     "a source lost read consent since preview — preview again",
                 )
-            newly_granted = self._grant_eligible_packable_sources(manifest)
+            newly_granted = _state.grant_eligible_packable_sources(manifest)
 
             cancel_event = threading.Event()
             self._pack_cancel_event = cancel_event
@@ -382,38 +361,6 @@ class DesktopPackBridge:
                 ]
             return _state.err("thread_failed", "packing could not be started")
         return {"ok": True}
-
-    def _grant_eligible_packable_sources(self, manifest: Mapping[str, Any]) -> list[str]:
-        """Mint real read consent for every ``packable`` row's
-        ``original_path`` that is not ALREADY read-consented — i.e. the
-        rows that reached ``packable`` only via a directory grant or a
-        declared source, never an arbitrary path.
-
-        Review finding #1: a row's ``packable`` flag comes from the STORED
-        preview's manifest, computed against whatever was ``_eligible`` at
-        PREVIEW time — but consent can move between preview and this call.
-        ``pack_start`` already refuses (``consent_changed``) when any
-        packable row is no longer eligible, so by the time this runs every
-        candidate should pass ``_eligible``; the check is repeated here as
-        defence in depth so this function can never mint a grant for an
-        ineligible path whatever its caller did. Returns exactly what was
-        granted, for ``pack_start``'s ``finally``/failure paths to revoke
-        unconditionally."""
-        sources_raw = manifest.get("sources")
-        sources = sources_raw if isinstance(sources_raw, list) else []
-        to_grant: list[str] = []
-        for row in sources:
-            if not isinstance(row, dict) or not row.get("packable"):
-                continue
-            original_path = row.get("original_path")
-            if not isinstance(original_path, str):
-                continue
-            if not _state.eligible(original_path):
-                continue
-            resolved = normalize_path(original_path)
-            if resolved is not None and not is_consented(resolved):
-                to_grant.append(original_path)
-        return grant_paths(to_grant)
 
     def _apply_progress_tick(self, tick: StageProgress) -> None:
         """Must be called holding `_pack_lock`. See this module's doc for
