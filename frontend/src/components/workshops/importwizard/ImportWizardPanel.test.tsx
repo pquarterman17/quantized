@@ -344,7 +344,11 @@ describe("ImportWizardPanel", () => {
 
     importPreviewMock.mockClear();
     fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "unassigned" } });
-    await waitFor(() => expect(importPreviewMock).toHaveBeenCalled());
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ error_bindings: [] }),
+      30,
+    ));
     importPreviewMock.mockClear();
     fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "0" } });
     await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(

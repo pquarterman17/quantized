@@ -13,7 +13,6 @@ import type { ErrorBinding } from "../../../lib/errorRoles";
 import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
 import {
   confirmedErrorBindings,
-  finalChannelOrder,
   resolveImportFilter,
   withColumnName,
   withColumnUnit,
@@ -32,11 +31,10 @@ import type {
 } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useImportErrorRoles } from "./useImportErrorRoles";
+import { useImportErrorBindings } from "./useImportErrorBindings";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
-const NO_ERROR_BINDINGS: ImportErrorBindingWire[] = [];
 
 let _seq = 0;
 
@@ -99,65 +97,28 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
-  const [allowErrorSuggestions, setAllowErrorSuggestions] = useState(true);
+
+  // Error bindings (rows + the reconciled `error_bindings` array) live in their
+  // own hook — see useImportErrorBindings.ts.
   const {
     errorRows,
-    setErrorTarget: setErrorTargetLocal,
-    setErrorAxis: setErrorAxisLocal,
-    setErrorSide: setErrorSideLocal,
+    setErrorTarget,
+    setErrorAxis,
+    setErrorSide,
+    applyErrorSuggestion,
+    removeRejectedErrorBinding,
+    setAllowSuggestions: setAllowErrorSuggestions,
     resetErrorEdits,
     resetErrorRows,
-  } =
-    useImportErrorRoles(
-      columns,
-      preview?.error_bindings ?? NO_ERROR_BINDINGS,
-      preview?.suggested_error_bindings ?? NO_ERROR_BINDINGS,
-      allowErrorSuggestions,
-    );
+  } = useImportErrorBindings({
+    columns,
+    setColumns,
+    settings,
+    setSettings,
+    patchSettings,
+    preview,
+  });
 
-  // For columns represented by the editor, rows are authoritative: add,
-  // replace, AND prune bindings so Import and saved filters cannot drift from
-  // what the controls show. Out-of-range/malformed entries remain until the
-  // user removes their visible problem alert.
-  useEffect(() => {
-    if (!columns.length) return;
-    const order = finalChannelOrder(columns);
-    const rawByChannel = new Map(order.map((item) => [item.channel, item.sourceIndex]));
-    const channelByRaw = new Map(order.map((item) => [item.sourceIndex, item.channel]));
-    const errorCount = columns.filter((column) => column.role === "error").length;
-    if (errorRows.length !== errorCount) return;
-    setSettings((current) => {
-      if (!current) return current;
-      const next: ImportErrorBindingWire[] = [];
-      const emitted = new Set<number>();
-      for (const binding of current.error_bindings ?? []) {
-        const source = columns.find((column) => column.index === binding.column);
-        if (!source) {
-          next.push(binding);
-          continue;
-        }
-        const channel = channelByRaw.get(binding.column);
-        const row = errorRows.find((item) => item.channel === channel);
-        if (source.role !== "error" || !row || row.target === null || emitted.has(binding.column)) continue;
-        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
-        if (target === undefined) continue;
-        next.push({ column: binding.column, target, axis: row.axis, side: row.side });
-        emitted.add(binding.column);
-      }
-      for (const row of errorRows) {
-        if (row.target === null) continue;
-        const column = rawByChannel.get(row.channel);
-        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
-        if (column === undefined || target === undefined) continue;
-        if (emitted.has(column)) continue;
-        next.push({ column, target, axis: row.axis, side: row.side });
-        emitted.add(column);
-      }
-      return JSON.stringify(next) === JSON.stringify(current.error_bindings ?? [])
-        ? current
-        : { ...current, error_bindings: next };
-    });
-  }, [columns, errorRows]);
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -242,95 +203,6 @@ export function useImportWizard(): ImportWizardState {
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
   }
 
-  function applyErrorSuggestion(binding: ImportErrorBindingWire): void {
-    if (!settings || !columns.length) return;
-    const position = columns.findIndex((column) => column.index === binding.column);
-    if (position < 0) return;
-    setColumns((current) => current.map((column, i) => (
-      i === position ? { ...column, role: "error" } : column
-    )));
-    patchSettings({
-      roles: withRole(columns, position, "error"),
-      error_bindings: [
-        ...(settings.error_bindings ?? []).filter((item) => item.column !== binding.column),
-        binding,
-      ],
-    });
-  }
-
-  function persistErrorRow(channel: number, patch: Partial<WizardErrorRow>): void {
-    if (!settings) return;
-    const row = errorRows.find((item) => item.channel === channel);
-    const source = finalChannelOrder(columns).find((item) => item.channel === channel);
-    if (!row || !source) return;
-    const next = { ...row, ...patch };
-    const bindings = settings.error_bindings ?? [];
-    const currentIndex = bindings.findIndex((item) => item.column === source.sourceIndex);
-    if (next.target === null) {
-      patchSettings({ error_bindings: bindings.filter((_, index) => index !== currentIndex) });
-      return;
-    }
-    const target = next.target === -1
-      ? -1
-      : finalChannelOrder(columns).find((item) => item.channel === next.target)?.sourceIndex;
-    if (target === undefined) return;
-    const binding = {
-      column: source.sourceIndex,
-      target,
-      axis: next.axis,
-      side: next.side,
-    };
-    patchSettings({
-      error_bindings: currentIndex < 0
-        ? [...bindings, binding]
-        : bindings.map((item, index) => index === currentIndex ? binding : item),
-    });
-  }
-
-  function setErrorTarget(channel: number, target: number | null): void {
-    const current = errorRows.find((row) => row.channel === channel);
-    setErrorTargetLocal(channel, target);
-    // The backend contract reserves target -1 for the x axis and rejects it
-    // unless axis is also x. Keep the visible editor and persisted binding
-    // valid in the same interaction instead of waiting for a rejected preview.
-    const axis = target === -1 ? "x" : target !== null ? current?.preferredAxis ?? "y" : undefined;
-    if (axis) setErrorAxisLocal(channel, axis, false);
-    persistErrorRow(channel, { target, ...(axis ? { axis } : {}) });
-  }
-
-  function removeRejectedErrorBinding(problem: ImportErrorBindingProblem): void {
-    if (!settings) return;
-    const bindings = settings.error_bindings ?? [];
-    let removeIndex = bindings.findIndex((binding) => (
-      binding.column === problem.column
-      && binding.target === problem.target
-      && binding.axis === problem.axis
-      && binding.side === problem.side
-    ));
-    if (removeIndex < 0 && problem.code === "malformed_entry") {
-      removeIndex = bindings.findIndex((binding) => {
-        const raw = binding as unknown as Record<string, unknown>;
-        return !Number.isInteger(raw.column)
-          || !Number.isInteger(raw.target)
-          || (raw.axis !== "x" && raw.axis !== "y")
-          || (raw.side !== "both" && raw.side !== "+" && raw.side !== "-");
-      });
-    }
-    if (removeIndex < 0) return;
-    patchSettings({
-      error_bindings: bindings.filter((_, index) => index !== removeIndex),
-    });
-  }
-
-  function setErrorAxis(channel: number, axis: "x" | "y"): void {
-    setErrorAxisLocal(channel, axis);
-    persistErrorRow(channel, { axis });
-  }
-
-  function setErrorSide(channel: number, side: ErrorBinding["side"]): void {
-    setErrorSideLocal(channel, side);
-    persistErrorRow(channel, { side });
-  }
 
   // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
   // H-template semantics (quickPlotTemplates.resolveTemplate): re-preview
