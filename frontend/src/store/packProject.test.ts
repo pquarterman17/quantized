@@ -379,6 +379,19 @@ describe("backend failures", () => {
   });
 });
 
+// -- picker cancel leaves no footprint ------------------------------------
+
+it("backing out of the destination picker resets fully (packReset sent) rather than a bare idle", async () => {
+  const { CANCELLED } = await import("../lib/desktopBridge");
+  vi.mocked(bridge.pickPackDestination).mockResolvedValue(CANCELLED);
+  await usePackProject.getState().previewPackProject();
+  expect(usePackProject.getState().phase).toBe("idle");
+  expect(usePackProject.getState().lastRejected).toBeNull();
+  // The backend clears the stale preview and any earlier pick's write-dir
+  // grant on reset -- so the reset must actually be sent, every time.
+  expect(bridge.packReset).toHaveBeenCalledOnce();
+});
+
 // -- retry ------------------------------------------------------------
 
 it("retry after failure via reset -> idle -> preview again works", async () => {

@@ -134,7 +134,11 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
     // self-review). A backend REFUSAL (review finding #8) is likewise a
     // failure, or a bad destination pick would look like an ordinary cancel.
     if (picked === CANCELLED) {
-      set({ phase: "idle" });
+      // A full reset, not a bare `set({ phase: "idle" })`: a retry after a
+      // failed attempt may still hold the EARLIER pick's write-dir grant and
+      // a stale backend preview; `pack_reset` clears both, so backing out
+      // of the picker leaves no footprint behind (PR 6 self-review).
+      await runResetPackProject(set);
       return;
     }
     if (picked === null) {

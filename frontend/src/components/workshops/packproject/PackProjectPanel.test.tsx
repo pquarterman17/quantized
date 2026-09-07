@@ -217,6 +217,37 @@ describe("PackProjectPanel — dismiss()", () => {
     expect(usePackProjectPanel.getState().open).toBe(false);
   });
 
+  it("'Try again' from failed re-runs the preview (not a reset)", async () => {
+    const retry = vi.fn().mockResolvedValue(undefined);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      phase: "failed",
+      errors: [{ code: "x", message: "boom", originalsModified: false, note: "" }],
+      previewPackProject: retry,
+      resetPackProject: reset,
+    });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    });
+    expect(retry).toHaveBeenCalledOnce();
+    expect(reset).not.toHaveBeenCalled();
+  });
+
+  it("Cancel while scanning resets straight to idle and closes the panel flag", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({ phase: "scanning", cancelPackProject: cancel, resetPackProject: reset });
+    usePackProjectPanel.setState({ open: true });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    expect(reset).toHaveBeenCalledOnce();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(usePackProjectPanel.getState().open).toBe(false);
+  });
+
   it("the X button at idle closes the panel without touching the store", async () => {
     const cancel = vi.fn().mockResolvedValue(undefined);
     const reset = vi.fn().mockResolvedValue(undefined);

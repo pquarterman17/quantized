@@ -56,7 +56,7 @@ export async function runPackProject(): Promise<void> {
   const phase = usePackProject.getState().phase;
   if (phase === "idle") {
     usePackProjectPanel.getState().setOpen(false);
-  } else if (!usePackProjectPanel.getState().open && phase !== "packing" && phase !== "cancelling") {
+  } else if (!usePackProjectPanel.getState().open) {
     await resetIfLegal(); // closed while the preview was in flight: abandon it
   }
 }
