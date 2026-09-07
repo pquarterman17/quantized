@@ -24,6 +24,66 @@ This demotion is SURGICAL to this wizard-seeding layer --
 ``infer_error_bindings_from_labels`` itself is untouched and every other
 consumer keeps its existing, broader "any preceding column" bar.
 
+CONTRACT (review round 2 -- this is NOT "suggestions are restricted to
+``error``-role columns", despite an earlier draft of this docstring and of
+``frontend/src/lib/importTypes.ts`` claiming exactly that):
+
+  - A suggestion is a PROPOSAL to mark ``column`` with the ``error`` role
+    AND bind it to ``target`` -- both halves, together. It is computed from
+    LABEL SHAPE alone, so it can name a column that is not (yet) marked
+    ``error`` -- that is the entire point: the wizard shows a suggestion
+    to help the user assign roles in the first place, before any column
+    has been marked ``error`` at all. ``guess_settings`` never assigns the
+    ``error`` role on its own, so a suggestion source restricted to
+    already-``error`` columns would be ALWAYS EMPTY on a fresh preview.
+  - Applying a suggestion means setting BOTH the role and the binding. A
+    suggestion fed straight into ``settings.error_bindings`` WITHOUT also
+    setting ``column``'s role to ``error`` is dropped by
+    ``valid_error_bindings`` with ``COLUMN_NOT_ERROR_ROLE``
+    ("column_not_error_role") -- the wizard UI is responsible for setting
+    both together.
+  - A column already marked with a DIFFERENT role the user chose
+    deliberately -- ``ignore`` or ``label`` (never a channel at all, so
+    never even reaches this module's candidate pool) or ``categorical``
+    (a channel, but never a plausible error SOURCE) -- is NEVER suggested,
+    regardless of how error-shaped its name looks: the user has already
+    said what that column is. Only a column currently ``y`` or ``error``
+    (which includes every "unassigned" column, since ``guess_settings``
+    defaults every non-``x`` column to ``y``) is eligible to be a
+    suggestion's ``column``.
+  - A suggestion's ``target`` must be a column that CAN validly become one
+    -- role ``y`` (the only role ``valid_error_bindings`` accepts as a
+    target), or ``-1`` (the x axis). ``infer_error_bindings_from_labels``
+    itself has no notion of role and searches the combined
+    numeric+categorical label list for rule 1's (base-name) match, so it
+    can land on a ``categorical`` column's name (e.g. ``X, M, Cat,
+    Cat_err`` matches ``Cat_err`` to ``Cat``) -- that binding is DEAD ON
+    ARRIVAL (``valid_error_bindings`` always refuses it,
+    ``TARGET_NOT_Y_ROLE``), so it is filtered out here rather than ever
+    surfaced. (Rule 3, nearest-PRECEDING, can never reach a categorical
+    target this way -- ``_final_channel_order`` always places every
+    categorical channel after every numeric one, so nothing categorical
+    ever precedes a numeric/error channel in the final order -- but the
+    filter below is a blanket one regardless of which rule produced the
+    target, cheap insurance against relying on that invariant forever.)
+  - A base-name match against the ``x``-role column's own name IS a real
+    NAME-driven signal too, even though ``x`` never becomes a channel and
+    so is invisible to ``infer_error_bindings_from_labels`` (which only
+    ever sees this module's channel-label list, never ``x``'s name) --
+    e.g. ``H, M, H_err`` names "H" twice: once as the x axis, once as
+    "H_err"'s extracted base. Without checking the x column's name
+    separately, that base-name evidence is invisible, "H_err" falls
+    through to rule 3 (position), and gets a false single-candidate
+    suggestion binding it to ``M`` -- wrong, and silently so (see the
+    ``suggest_error_bindings_by_channel`` docstring for the mechanism).
+    This IS a deliberate divergence from ``importwizard.ts``'s
+    ``suggestErrorBindings``, which has no equivalent x-name check and
+    reproduces the ``M`` misbinding -- ``infer_error_bindings_from_labels``
+    itself stays byte-for-byte parity-pinned (nothing above changes it),
+    but this wizard-seeding layer is free to be strictly MORE careful
+    about what it pre-fills than the raw label inference is required to
+    be, and now is.
+
 Unlike the TypeScript (which works in DataStruct CHANNEL indices over the
 wizard's own ``finalChannelOrder``), the bindings this module hands back to
 ``preview_import`` are RAW FILE COLUMN indexed
@@ -50,7 +110,7 @@ from dataclasses import dataclass
 from quantized.io.error_inference import ErrorBinding as LabelErrorBinding
 from quantized.io.error_inference import infer_error_bindings_from_labels
 from quantized.io.error_label_candidates import flat_norm
-from quantized.io.error_label_classify import classify_error_label_in_labels
+from quantized.io.error_label_classify import ClassifiedLabel, classify_error_label_in_labels
 from quantized.io.import_error_bindings import ErrorBinding
 
 __all__ = ["suggest_error_bindings", "suggest_error_bindings_by_channel"]
@@ -86,7 +146,11 @@ def _final_channel_order(columns: Sequence[Mapping[str, object]]) -> list[_Chann
     ``categorical`` columns appended after (P1.4's rule) -- ``x``/
     ``label``/``ignore`` never become channels. ``channel`` is that final
     0-based index -- the SAME number ``Dataset.errorRoles``' ``channel``/
-    ``target`` mean once the dataset lands.
+    ``target`` mean once the dataset lands. Exactly ``parse_import``'s own
+    ``chan_cols + cat_cols`` (each list built the same way, over the same
+    ``columns``, in the same order) -- so a channel index computed here
+    always means the same DataStruct channel ``parse_import`` will actually
+    emit.
     """
     numeric = [c for c in columns if c.get("role") in ("y", "error")]
     categorical = [c for c in columns if c.get("role") == "categorical"]
@@ -97,28 +161,42 @@ def _final_channel_order(columns: Sequence[Mapping[str, object]]) -> list[_Chann
     ]
 
 
-def _error_role_channels(columns: Sequence[Mapping[str, object]]) -> list[_ChannelInfo]:
-    """The channels sourced from an ``error``-role column, in final-channel
-    order -- the ONLY rows the error-role editor shows."""
+def _role_channels(columns: Sequence[Mapping[str, object]], role: str) -> set[int]:
+    """The FINAL-channel-order channel numbers sourced from a column
+    currently marked ``role`` -- e.g. ``_role_channels(columns, "error")``
+    is exactly the rows the error-role editor shows."""
     by_source = {_column_index(c): c for c in columns}
-    return [
-        ci for ci in _final_channel_order(columns)
-        if by_source.get(ci.source_index, {}).get("role") == "error"
-    ]
+    return {
+        ci.channel for ci in _final_channel_order(columns)
+        if by_source.get(ci.source_index, {}).get("role") == role
+    }
 
 
-def _categorical_role_channels(columns: Sequence[Mapping[str, object]]) -> list[_ChannelInfo]:
-    """The channels sourced from a ``categorical``-role column, in
-    final-channel order -- mirrors ``_error_role_channels`` above, but for
-    the OTHER role that is never a plausible error target."""
-    by_source = {_column_index(c): c for c in columns}
-    return [
-        ci for ci in _final_channel_order(columns)
-        if by_source.get(ci.source_index, {}).get("role") == "categorical"
-    ]
+def _x_label(columns: Sequence[Mapping[str, object]]) -> str | None:
+    """The effective label of the file's ``x``-role column, or ``None`` if
+    none is marked -- ``x`` never becomes a channel, so it is absent from
+    ``_final_channel_order`` entirely and invisible to
+    ``infer_error_bindings_from_labels``'s own base-name matching. Without
+    this, an error column whose true target IS the x axis by name (e.g.
+    ``H_err`` beside an x column named ``H``) has no name evidence to match
+    against and silently falls through to position-only rule 3 instead --
+    see this module's docstring. (Multiple ``x`` columns is an invalid
+    intermediate wizard state, P1-5 DEFECT 1 -- take the first rather than
+    refuse to suggest anything; ``parse_import`` itself still rejects the
+    ambiguous multi-x state at Import time.)
+    """
+    for c in columns:
+        if c.get("role") == "x":
+            return _effective_label(c)
+    return None
 
 
-def _is_name_driven_match(labels: Sequence[str], error_channel: int) -> bool:
+def _is_name_driven_match(
+    classified: Sequence[ClassifiedLabel | None],
+    is_error_label: Sequence[bool],
+    labels: Sequence[str],
+    error_channel: int,
+) -> bool:
     """True when ``labels[error_channel]`` matched via
     ``infer_error_bindings_from_labels``' RULE 1 (base-name match, e.g.
     ``dR`` -> ``R``) or RULE 2 (explicit ``x`` prefix) -- a real
@@ -127,27 +205,26 @@ def _is_name_driven_match(labels: Sequence[str], error_channel: int) -> bool:
 
     This re-derives WHICH rule fired without reaching into
     ``infer_error_bindings_from_labels``'s internals, so it MUST make the
-    same three decisions the same way it does:
-
-    1. The CLASSIFIER: uses the evidence-gated
-       ``classify_error_label_in_labels`` (never the lax context-free
-       ``classify_error_label``) to decide which OTHER columns are
-       eligible to serve as a base -- a provisional-only label (e.g.
-       "Serr": a glued "err" at the edge with no sibling "S") must not be
-       wrongly struck off as a possible base.
-    2. The NORMALIZER: ``flat_norm``, the SAME function
-       ``error_inference.py`` compares with.
+    same decisions the same way it does -- but takes ``classified``
+    (``classify_error_label_in_labels(labels, i)`` for every ``i``) and
+    ``is_error_label`` (``classified[i] is not None``) as ALREADY COMPUTED
+    by the caller, once, rather than re-deriving them per call: this
+    function used to re-run the evidence-gated classifier over every OTHER
+    label on every call, on top of ``infer_error_bindings_from_labels``
+    already doing the same O(n) classification once internally -- since
+    this runs once per candidate binding (up to O(n) of them), that made
+    ``suggest_error_bindings_by_channel`` cubic in column count
+    (~1ms at 41 columns, ~97s at 401 -- ``preview_import`` runs on every
+    wizard keystroke). Reusing one shared classification pass keeps the
+    whole function at the classifier's own O(n^2), no worse.
     """
-    info = classify_error_label_in_labels(labels, error_channel)
+    info = classified[error_channel]
     if info is None:
         return False
     if info.axis == "x":
         return True  # rule 2
     if not info.base:
         return False
-    is_error_label = [
-        classify_error_label_in_labels(labels, i) is not None for i in range(len(labels))
-    ]
     return any(
         not is_error_label[i] and flat_norm(lbl) == info.base for i, lbl in enumerate(labels)
     )  # rule 1
@@ -181,35 +258,86 @@ def suggest_error_bindings_by_channel(
     columns: Sequence[Mapping[str, object]],
 ) -> list[LabelErrorBinding]:
     """Suggested error-role bindings for the CURRENT preview, CHANNEL
-    indexed (mirrors TypeScript's ``suggestErrorBindings`` exactly). Runs
-    the SAME name-based inference the rest of the app uses
+    indexed. Runs the SAME name-based inference the rest of the app uses
     (``infer_error_bindings_from_labels``) against the final channel
-    labels, THEN demotes a MULTI-CANDIDATE, POSITION-ONLY (rule 3) pairing
-    back to "no suggestion" -- see this module's docstring.
+    labels, THEN:
 
-    Whatever survives: a column whose pairing is genuinely ambiguous is
-    simply ABSENT from the result (never guessed) -- "no guess can
-    silently attach error to the wrong signal".
+    1. restricts candidate SOURCE columns to ones a suggestion is actually
+       allowed to name -- currently ``y`` or ``error`` (never
+       ``categorical``, which never reaches this function's caller as a
+       plausible error column at all -- see the module docstring);
+    2. checks the ``x``-role column's own name for a base-name match
+       ``infer_error_bindings_from_labels`` cannot see (it never receives
+       ``x``'s label at all), so a genuine name-driven x-axis pairing
+       (e.g. ``H_err`` beside x column ``H``) is recognized instead of
+       silently falling through to a position-only guess against the
+       wrong column;
+    3. demotes a MULTI-CANDIDATE, POSITION-ONLY (rule 3) pairing back to
+       "no suggestion" -- see this module's docstring;
+    4. drops any surviving suggestion whose TARGET could never validly
+       become one (not role ``y``, not ``-1``) -- ``infer_error_bindings_
+       from_labels`` has no notion of role and its rule-1 base-name match
+       can land on a ``categorical`` column's name, which
+       ``valid_error_bindings`` always refuses.
+
+    Whatever survives: a column whose pairing is genuinely ambiguous, or
+    whose only candidate pairing could never validate, is simply ABSENT
+    from the result (never guessed) -- "no guess can silently attach error
+    to the wrong signal".
     """
     order = _final_channel_order(columns)
     labels = [ci.label for ci in order]
-    raw = infer_error_bindings_from_labels(labels)
-    error_channels = {ci.channel for ci in _error_role_channels(columns)}
-    categorical_channels = {ci.channel for ci in _categorical_role_channels(columns)}
-    return [
-        b for b in raw
-        if _is_name_driven_match(labels, b.channel)
-        or not _has_following_candidate(order, b.channel, error_channels, categorical_channels)
-    ]
+    raw_by_channel = {b.channel: b for b in infer_error_bindings_from_labels(labels)}
+    # One shared classification pass -- see `_is_name_driven_match`'s
+    # docstring for why this (not a re-classify-per-binding) is what keeps
+    # this function from going cubic.
+    classified = [classify_error_label_in_labels(labels, i) for i in range(len(labels))]
+    is_error_label = [c is not None for c in classified]
+
+    error_channels = _role_channels(columns, "error")
+    categorical_channels = _role_channels(columns, "categorical")
+    y_channels = _role_channels(columns, "y")
+    source_channels = error_channels | y_channels  # categorical/ignore/label excluded
+
+    x_label = _x_label(columns)
+    x_base = flat_norm(x_label) if x_label else None
+
+    out: list[LabelErrorBinding] = []
+    for ci in order:
+        if ci.channel not in source_channels:
+            continue
+        info = classified[ci.channel]
+        if info is None:
+            continue
+        if _is_name_driven_match(classified, is_error_label, labels, ci.channel):
+            b = raw_by_channel.get(ci.channel)
+            if b is not None:
+                out.append(b)
+            continue
+        if info.base and x_base and info.base == x_base:
+            out.append(LabelErrorBinding(channel=ci.channel, target=-1, axis="x", side=info.side))
+            continue
+        b = raw_by_channel.get(ci.channel)
+        if b is not None and not _has_following_candidate(
+            order, ci.channel, error_channels, categorical_channels
+        ):
+            out.append(b)
+
+    # A suggestion's target must be able to become a real `y` channel, or
+    # `-1` (the x axis) -- see the module docstring's `TARGET_NOT_Y_ROLE`
+    # paragraph for why `infer_error_bindings_from_labels`'s rule 1 can
+    # land a `target` on a `categorical` column despite that.
+    return [b for b in out if b.target == -1 or b.target in y_channels]
 
 
 def suggest_error_bindings(columns: Sequence[Mapping[str, object]]) -> list[ErrorBinding]:
     """``suggest_error_bindings_by_channel`` translated to RAW FILE COLUMN
     indices (``quantized.io.import_error_bindings.ErrorBinding`` -- the
     same shape ``ImportSettings.error_bindings`` uses), the reverse of
-    ``import_preview.py``'s own ``raw_to_channel`` map. Only columns whose
-    role is ``"error"`` can appear as a suggestion's ``column`` -- exactly
-    the channels ``_error_role_channels`` enumerates.
+    ``import_preview.py``'s own ``raw_to_channel`` map. See the module
+    docstring for exactly which columns can appear as a suggestion's
+    ``column``/``target`` -- NOT restricted to already-``error``-role
+    columns (a common misreading this docstring used to encode).
     """
     order = _final_channel_order(columns)
     channel_to_raw = {ci.channel: ci.source_index for ci in order}

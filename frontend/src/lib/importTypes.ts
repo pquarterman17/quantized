@@ -83,14 +83,29 @@ export interface ImportPreviewResponse {
    *  human-readable `reason` naming the column. What the wizard shows when a
    *  saved filter's pairings no longer fit the file being imported. */
   error_binding_problems?: ImportErrorBindingProblem[];
-  /** P16: name/position-driven SUGGESTIONS for every `error`-role column,
-   *  raw-column-indexed like `error_bindings` above -- computed fresh on
-   *  every preview from `quantized.io.error_binding_suggestions`
-   *  (the backend port of this file's own `suggestErrorBindings`, P1.6's
-   *  TWO-TIER narrowing), independent of (never merged into) the confirmed
+  /** P16: name/position-driven SUGGESTIONS, raw-column-indexed like
+   *  `error_bindings` above -- computed fresh on every preview from
+   *  `quantized.io.error_binding_suggestions` (the backend port of this
+   *  file's own `suggestErrorBindings`, P1.6's TWO-TIER narrowing),
+   *  independent of (never merged into) the confirmed
    *  `error_bindings`/`settings.error_bindings`. NOT yet wired into the
    *  wizard UI -- present so a future slice can seed a picker from it
-   *  without a backend change. */
+   *  without a backend change.
+   *
+   *  NOT restricted to columns already marked `error` -- a suggestion is a
+   *  proposal to mark `column` with the `error` role AND bind it to
+   *  `target`, computed from label shape alone regardless of the column's
+   *  CURRENT role (so it can fire before any column has been marked
+   *  `error` at all -- the wizard's `guess_settings` starting state never
+   *  assigns that role on its own, and restricting suggestions to it would
+   *  make them always empty on a fresh preview). Applying a suggestion
+   *  means setting BOTH the role and the binding together: one fed
+   *  straight into `settings.error_bindings` without also setting
+   *  `column`'s role to `error` is dropped by `valid_error_bindings` as
+   *  `column_not_error_role`. A column the user already marked something
+   *  else deliberately (`ignore`, `label`, or `categorical`) is never
+   *  suggested, no matter how error-shaped its name looks -- only a
+   *  column currently `y` or `error` is eligible. */
   suggested_error_bindings?: ImportErrorBindingWire[];
 }
 

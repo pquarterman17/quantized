@@ -226,11 +226,13 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
-    # P16: name/position SUGGESTIONS for every `error`-role column, raw-
-    # column-indexed like `error_bindings` above -- always computed fresh,
-    # independent of (never merged into) `settings.error_bindings`/
-    # `kept_bindings`; the wizard decides what to show. See
-    # `error_binding_suggestions.py`.
+    # P16: name/position SUGGESTIONS, raw-column-indexed like
+    # `error_bindings` above -- NOT restricted to already-`error`-role
+    # columns (a suggestion PROPOSES marking `column` as `error` in the
+    # first place; see `error_binding_suggestions.py`'s docstring for the
+    # full contract). Always computed fresh, independent of (never merged
+    # into) `settings.error_bindings`/`kept_bindings`; the wizard decides
+    # what to show.
     suggested_bindings = suggest_error_bindings(columns)
     return {
         "raw_lines": p.lines[:max_lines],
