@@ -44,6 +44,15 @@ export interface ImportSettingsWire {
    *  a round-tripped saved filter doesn't lose the field if a future UI
    *  slice sets it. */
   error_bindings?: ImportErrorBindingWire[] | null;
+  /** P1.6 Part C review finding #2: lifts `parse_import`'s default refusal
+   *  of a `categorical` column whose level table exceeds
+   *  `import_categorical_guards.MAX_CATEGORICAL_LEVELS` — for a column with
+   *  genuinely many levels (real sample IDs, run labels, ...) rather than
+   *  one mis-marked categorical. `preview_import` reports the level-cap
+   *  problem (`categorical_problems`) either way. Optional/absent (the
+   *  common case, and every settings object saved before this field
+   *  existed) means `false` — the default refusal still applies. */
+  allow_large_categorical?: boolean;
 }
 
 /** One resolved column descriptor from `preview_import`. */
@@ -96,9 +105,16 @@ export interface ImportPreviewResponse {
   /** P1.6 Part C: structured problems in every `categorical`-role column's
    *  level table (`quantized.io.import_categorical_guards`) — a
    *  `categorical_level_cap` entry means `parse_import` will REFUSE the
-   *  import (Import must be disabled/warned); a `categorical_case_collision`
-   *  entry is informational only (never blocks Import). Optional on the wire
-   *  type for the same reason as `header_fields` above. */
+   *  import UNLESS the settings sent set `allow_large_categorical`, in which
+   *  case the same problem is still reported here but Import proceeds; a
+   *  `categorical_case_collision`/`categorical_case_collision_truncated`
+   *  entry is informational only (never blocks Import). The backend reports
+   *  this field; NOTHING in the frontend reads it yet — there is no
+   *  consumer, so today a level-cap refusal surfaces to the user as a raw
+   *  422 from Import, not a preflight warning. Wiring a warning/disable
+   *  here is the Import Wizard UI slice (not this backend contract).
+   *  Optional on the wire type for the same reason as `header_fields`
+   *  above. */
   categorical_problems?: ImportCategoricalProblem[];
 }
 
@@ -109,11 +125,21 @@ export interface ImportHeaderFieldProblem {
 }
 
 /** One structured problem in a `categorical` column's level table (P1.6
- *  Part C), mirroring `quantized.io.import_categorical_guards`'s two problem
- *  shapes exactly. */
+ *  Part C), mirroring `quantized.io.import_categorical_guards`'s problem
+ *  shapes exactly. `categorical_case_collision_truncated` appears once,
+ *  after up to `MAX_CATEGORICAL_COLLISIONS` `categorical_case_collision`
+ *  entries for the same column, when that column had more collision groups
+ *  than were reported — review finding #1: reported collisions are capped
+ *  and truncation is always signalled, never silent. */
 export type ImportCategoricalProblem =
   | { type: "categorical_level_cap"; column: string; level_count: number; cap: number }
-  | { type: "categorical_case_collision"; column: string; labels: string[] };
+  | { type: "categorical_case_collision"; column: string; labels: string[] }
+  | {
+      type: "categorical_case_collision_truncated";
+      column: string;
+      collision_count: number;
+      cap: number;
+    };
 
 /** One rejected `ImportErrorBindingWire`, mirroring
  *  `quantized.io.import_error_bindings.DroppedErrorBinding.to_dict()`. */
