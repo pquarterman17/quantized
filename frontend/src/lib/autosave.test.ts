@@ -120,6 +120,37 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
   });
 });
 
+// P1.7 PR 5 audit item 10: a crash-recovery autosave snapshot has no `.dwk`
+// file of its own to resolve a bundle-relative source against (it's a
+// localStorage/IndexedDB blob, not a path on disk) — `saveAutosave` calls
+// `serializeWorkspace(ws)` with no `projectDir` (this module's own source,
+// unchanged by this test), which `serializeDatasetSource` treats as "always
+// write the absolute kind:path form" (lib/workspaceSerialize.ts). This is
+// what makes recovery safe: there is no relative bundle string anywhere in
+// an autosave generation that a reopen could ever resolve against the
+// process's own CWD instead of the (nonexistent, for autosave) project
+// directory.
+describe("crash-recovery autosave never writes a bundle-relative source (P1.7 PR 5 audit item 10)", () => {
+  it("autosaves an absolute kind:path source even for a dataset resolved from a packed bundle", async () => {
+    const packedDataset: Dataset = {
+      ...ds("a", "packed"),
+      source: { kind: "path", path: "/proj/sources/run1.csv", checksum: "sha256:abc" },
+    };
+    await saveAutosave({ datasets: [packedDataset] });
+
+    const generations = await listAutosaveGenerations();
+    expect(generations).toHaveLength(1);
+    expect(generations[0].text).not.toMatch(/"kind"\s*:\s*"bundle"/);
+
+    const restored = await loadAutosave();
+    expect(restored?.datasets[0].source).toEqual({
+      kind: "path",
+      path: "/proj/sources/run1.csv",
+      checksum: "sha256:abc",
+    });
+  });
+});
+
 describe("rotating generations (#32)", () => {
   it("keeps several recovery points instead of one slot", async () => {
     await saveAutosave({ datasets: [ds("a", "one")] }, 1);

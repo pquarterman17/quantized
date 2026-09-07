@@ -221,6 +221,12 @@ class DesktopPackBridge:
             dry_run_manifest = build_dry_run_manifest(payload, project_name, probe, consented)
         except ValueError as exc:
             return _state.err("invalid_project_name", str(exc))
+        except RuntimeError:
+            # PR 5 audit item 13: `build_dry_run_manifest`'s internal
+            # "structurally impossible" assertions raise RuntimeError with the
+            # offending bundle_path in the message. A genuine bug, still
+            # reported as a structured refusal, never raised into pywebview.
+            return _state.err("internal_error", "could not build a pack preview")
 
         project = dry_run_manifest["project"]
         sanitized_name = project["name"] if isinstance(project, dict) else project_name
@@ -306,6 +312,11 @@ class DesktopPackBridge:
                 self._apply_progress_tick(tick)
 
         def _run() -> None:
+            # Grants are revoked BEFORE the terminal phase is published, under
+            # the lock `pack_status` reads through, so a poller that observes
+            # a terminal phase is guaranteed the footprint is already gone
+            # (PR 5 audit item 12: finally-after-phase let a poll race it).
+            result: PackResult | None = None
             try:
                 result = pack_project(
                     payload,
@@ -318,35 +329,38 @@ class DesktopPackBridge:
                     packed_at=datetime.now(UTC).isoformat(),
                 )
             except Exception:  # noqa: BLE001 - a genuine bug, still reported, never raised
-                with self._pack_lock:
-                    self._pack_phase = "failed"
-                    msg = "packing failed unexpectedly"
-                    self._pack_errors = [self._error_row("internal_error", msg)]
-            else:
-                with self._pack_lock:
-                    self._pack_result = result
-                    self._pack_cleanup_ok = result.cleanup_ok
-                    self._pack_errors = [
-                        self._error_row(
-                            e.get("code", "pack_failed"),
-                            e.get("message", "packing failed"),
-                            source_id=e.get("source_id"),
-                            bundle_path=e.get("bundle_path"),
-                        )
-                        for e in result.errors
-                    ]
-                    if result.cancelled:
-                        self._pack_phase = "cancelled"
-                    elif result.ok:
-                        self._pack_phase = "completed"
-                        self._pack_progress["stage"] = None
-                        self._pack_progress["current_file"] = None
-                        self._pack_progress["completed_files"] = self._pack_progress["total_files"]
-                    else:
-                        self._pack_phase = "failed"
+                result = None
             finally:
-                revoke_paths(newly_granted)
-                clear_write_dir_grants()
+                with self._pack_lock:
+                    revoke_paths(newly_granted)
+                    clear_write_dir_grants()
+                    if result is None:
+                        self._pack_phase = "failed"
+                        msg = "packing failed unexpectedly"
+                        self._pack_errors = [self._error_row("internal_error", msg)]
+                    else:
+                        self._pack_result = result
+                        self._pack_cleanup_ok = result.cleanup_ok
+                        self._pack_errors = [
+                            self._error_row(
+                                e.get("code", "pack_failed"),
+                                e.get("message", "packing failed"),
+                                source_id=e.get("source_id"),
+                                bundle_path=e.get("bundle_path"),
+                            )
+                            for e in result.errors
+                        ]
+                        if result.cancelled:
+                            self._pack_phase = "cancelled"
+                        elif result.ok:
+                            self._pack_phase = "completed"
+                            self._pack_progress["stage"] = None
+                            self._pack_progress["current_file"] = None
+                            self._pack_progress["completed_files"] = self._pack_progress[
+                                "total_files"
+                            ]
+                        else:
+                            self._pack_phase = "failed"
 
         try:
             threading.Thread(target=_run, daemon=True).start()
@@ -360,12 +374,12 @@ class DesktopPackBridge:
             # failure, and report a structured refusal instead of letting
             # the exception escape into pywebview's JS bridge.
             with self._pack_lock:
+                revoke_paths(newly_granted)  # before the phase flips, as in _run
+                clear_write_dir_grants()
                 self._pack_phase = "failed"
                 self._pack_errors = [
                     self._error_row("thread_failed", "packing could not be started")
                 ]
-            revoke_paths(newly_granted)
-            clear_write_dir_grants()
             return _state.err("thread_failed", "packing could not be started")
         return {"ok": True}
 
@@ -442,7 +456,10 @@ class DesktopPackBridge:
             errors = list(self._pack_errors)
             cleanup_ok = self._pack_cleanup_ok
             result = (
-                {"bundle_dir": self._pack_result.bundle_dir}
+                {
+                    "bundle_dir": self._pack_result.bundle_dir,
+                    "no_replace": self._pack_result.no_replace,
+                }
                 if self._pack_result is not None and self._pack_result.ok
                 else None
             )

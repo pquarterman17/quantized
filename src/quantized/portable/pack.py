@@ -14,7 +14,7 @@ import json
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from .copy_stream import safe_os_error
 from .copying import ProgressCallback, ShouldCancel
@@ -38,7 +38,12 @@ class PackResult:
     :func:`quantized.portable.publish.finalize_manifest` has run, even when
     a later step (the rewrite, the bundle-file writes, or the publish
     itself) still failed. ``errors`` is a list of ``{"code", "message"}``
-    (plus, for a staging failure, ``"source_id"``/``"bundle_path"``)."""
+    (plus, for a staging failure, ``"source_id"``/``"bundle_path"``).
+    ``no_replace`` is carried straight through from
+    :class:`quantized.portable.publish.PublishResult` — ``"atomic"``
+    (default) when the publish's rename ran through a genuine no-replace
+    syscall, ``"best_effort"`` when the platform had none and the older
+    reservation fallback ran instead."""
 
     ok: bool
     cancelled: bool
@@ -47,6 +52,7 @@ class PackResult:
     errors: list[dict[str, Any]] = field(default_factory=list)
     cleanup_ok: bool | None = None
     originals_modified: bool = False
+    no_replace: Literal["atomic", "best_effort"] = "atomic"
 
 
 def _error(code: str, message: str) -> dict[str, Any]:
@@ -268,10 +274,14 @@ def pack_project(
     if not publish_result.ok:
         error = publish_result.error or _error("publish_failed", "publish failed")
         return PackResult(
-            False, False, None, manifest, [error], publish_result.cleanup_ok
+            False, False, None, manifest, [error], publish_result.cleanup_ok,
+            no_replace=publish_result.no_replace,
         )
 
-    return PackResult(True, False, publish_result.bundle_dir, manifest, [], None, False)
+    return PackResult(
+        True, False, publish_result.bundle_dir, manifest, [], None, False,
+        no_replace=publish_result.no_replace,
+    )
 
 
 def _dumps(payload: Mapping[str, Any]) -> str:

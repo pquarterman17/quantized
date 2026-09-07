@@ -14,6 +14,54 @@ paragraph.
 
 ---
 
+Prior (twenty-sixth pass, 2026-09-06 — the P1.7 Pack Project PR 5 audit
+reconciliation). What changed:
+
+1. **`PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.7's "Pack Project stack"
+   subsection consolidated into one coherent record for PR 1-5
+   (#305-#308 + this PR 5 audit).** Two stale leftover "PR 2 (planned,
+   not shipped)"/"PR 3 (planned, not shipped)" placeholder bullets —
+   drift from when PR 3's frontend half shipped ahead of its backend —
+   were removed/re-homed now that both PRs are fully written up above
+   them; "PR # pending" placeholders were replaced with the actual PR
+   numbers throughout. The new PR 5 entry documents the adversarial
+   audit's two real defects (a POSIX TOCTOU race letting
+   `publish_bundle`'s atomic rename silently absorb an empty directory
+   created in its own check-then-act window; `pack_preview` propagating
+   a raw, path-carrying `RuntimeError` from its own internal
+   duplicate-bundle-path assertion instead of a structured refusal) and
+   the full per-item mapping of its 14-item checklist to the test that
+   proves each item, plus a ratchet audit (no bundle-size/architecture
+   pin raised; the write-site allowlist gained
+   `portable/{copying,copy_stream,publish,staging}.py`, justified, and
+   legitimately dropped `desktop_bridge.py` once its own write moved into
+   the now-covered `atomic_replace_file`). The `portable` mode box is
+   marked BACKEND COMPLETE (the pack → move → reopen roundtrip in
+   `tests/test_portable_pack_roundtrip.py` plus the frontend's parse-side
+   proof in `lib/workspace.test.ts`); the visual "Pack Project" workflow
+   (destination-picker dialog, preview/progress UI) is stated plainly as
+   NOT shipped, assigned to ChatGPT/Sol against PR 4 (#308)'s
+   already-shipped bridge/frontend contract. `linked` mode remains NOT
+   implemented.
+2. **`BACKLOG.md`'s plans-dashboard row for `PRIMARY_SOFTWARE_AUDIT_PLAN.md`**
+   gained a clause naming P1.7's now-backend-complete `portable` mode and
+   the still-open visual layer, and the "Sequencing-gated, incomplete
+   engineering" sentence was narrowed from "P1.3-P1.7" to "P1.3-P1.6...
+   plus P1.7's own visual layer and `linked` mode" to reflect that P1.7's
+   backend is no longer part of that open set.
+3. **No `RELEASE_BLOCKERS.md`/`POST_SPRINT_INDEPENDENT_REVIEW.md` rows
+   changed** — grepped both for "P1.7"/"Pack Project"/"portab"; neither
+   file tracks this item at all (P1.7 predates the RC sprint both files
+   are scoped to).
+4. **No `CHANGELOG.md` entry** — the audit's two fixes (the publish
+   TOCTOU race, the pack_preview exception leak) are both defense-in-depth
+   hardening of a backend-only stack with no shipped user-facing surface
+   yet (the visual Pack Project workflow is still unbuilt), so there is no
+   user-visible behavior to changelog.
+5. Carried forward unchanged: `v0.24.0` is still the current stable
+   release; Dependabot alert #24 (extract-zip) stays open, upstream-
+   blocked; alert #1 (glib) stays a dismissed, tolerable risk.
+
 Prior (twenty-fifth pass, 2026-09-06 — the perf-PR reconciliation). What
 changed:
 

@@ -7,6 +7,7 @@ exercised for real against real tmp files.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -225,6 +226,85 @@ def test_pack_preview_invalid_project_name(tmp_path: Path) -> None:
     assert out["error"]["code"] == "invalid_project_name"
 
 
+def test_pack_preview_reports_an_internal_manifest_bug_without_raising_or_leaking_a_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.7 PR 5 audit item 13: `build_dry_run_manifest` can raise a
+    `RuntimeError` (never a `ValueError`) from its own internal "this
+    should be structurally impossible" assertions -- e.g. a duplicate
+    planned bundle path -- and that error's message embeds the offending
+    bundle-relative path. Before this fix, `pack_preview` caught only
+    `ValueError`, so a latent bug there would propagate the raw,
+    path-carrying exception straight out of this js_api method rather than
+    the safe, structured refusal every other bridge method returns."""
+    secret_bundle_path = "sources/tmp_path_leak_marker.csv"
+
+    def _boom(*_args: Any, **_kw: Any) -> dict[str, Any]:
+        raise RuntimeError(f"duplicate planned bundle_path: {secret_bundle_path!r}")
+
+    monkeypatch.setattr(pack_bridge_module, "build_dry_run_manifest", _boom)
+
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, _ = _declare_and_content(tmp_path, "a.csv")
+
+    out = api.pack_preview(content, "myproj", destination_parent)
+
+    assert out["ok"] is False
+    assert out["error"]["code"] == "internal_error"
+    assert secret_bundle_path not in out["error"]["message"]
+
+
+def test_pack_preview_cost_on_200_sources_stays_well_under_a_second(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.7 PR 5 audit item 7: `pack_preview` runs SYNCHRONOUSLY on the
+    pywebview js_api thread (unlike `pack_start`, which hands the real work
+    off to a worker thread and returns immediately) -- a slow preview
+    freezes the whole desktop window's UI thread for its whole duration.
+    The probe is faked so this measures the cost actually under this
+    bridge method's own control (manifest building, collision-safe
+    destination naming, JSON serialization for the token hash) rather than
+    real disk I/O variance, which is not what this method is being audited
+    for here."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    paths = [os.path.join(str(tmp_path), "sources", f"run{i:04d}.csv") for i in range(200)]
+    set_declared_sources(paths)
+    content = _workspace_json(*paths)
+
+    probe_calls: list[str] = []
+
+    def _fake_probe(path: str) -> dict[str, Any]:
+        probe_calls.append(path)
+        return {
+            "state": "ok",
+            "size": 1024,
+            "mtime": 1_700_000_000.0,
+            "checksum": "sha256:" + "0" * 64,
+        }
+
+    monkeypatch.setattr(pack_bridge_module._state, "probe_checksummed", _fake_probe)
+
+    started = time.perf_counter()
+    result = api.pack_preview(content, "myproj", destination_parent)
+    elapsed = time.perf_counter() - started
+
+    assert result["ok"] is True
+    assert result["manifest"]["summary"]["sources"] == 200
+    assert result["manifest"]["summary"]["packable"] == 200
+    # Load-invariant property (CLAUDE.md "Test determinism"): exactly one
+    # probe per distinct source -- linear, never once per folded key or
+    # per pairwise comparison. The clock below is only a loose backstop.
+    assert len(probe_calls) == 200
+    assert len(set(probe_calls)) == 200
+    assert elapsed < 5.0, (
+        f"pack_preview took {elapsed:.3f}s for 200 sources with a faked probe "
+        "-- this runs synchronously on the pywebview UI thread and would "
+        "freeze the desktop window for that whole duration"
+    )
+
+
 # -- pack_start: synchronous rejections ------------------------------------
 
 
@@ -343,6 +423,11 @@ def test_real_pack_completes_and_revokes_its_own_grants(tmp_path: Path) -> None:
     assert status["result"] is not None
     bundle_dir = status["result"]["bundle_dir"]
     assert bundle_dir == os.path.join(destination_parent, "myproj")
+    # `PackResult.no_replace` (P1.7 PR 5 audit, PR #309 follow-up) is
+    # threaded all the way through `pack_project` -> `pack_status`'s own
+    # `result` dict -- surfaced so a caller can tell whether this publish
+    # got the strict no-overwrite guarantee or the older best-effort one.
+    assert status["result"]["no_replace"] in ("atomic", "best_effort")
 
     check = validate_bundle(bundle_dir, verify_checksums=True)
     assert check.complete, check.problems
@@ -523,6 +608,115 @@ def test_real_pack_with_nothing_packable_still_completes(tmp_path: Path) -> None
     assert status["phase"] == "completed"
 
 
+# -- originals are never touched, on any outcome (P1.7 PR 5 audit item 4) --
+
+
+def _fingerprint(*paths: Path) -> dict[str, tuple[bytes, float]]:
+    """(sha256 bytes, mtime) for every path, keyed by its string form — the
+    strongest available proxy for "this file's on-disk content and its own
+    metadata are completely untouched": a hash catches ANY content change,
+    however small, and the mtime catches a rewrite that happened to
+    round-trip to byte-identical content (e.g. an open-for-write-then-
+    truncate-then-restore) that a content hash alone could not see."""
+    out: dict[str, tuple[bytes, float]] = {}
+    for p in paths:
+        digest = hashlib.sha256(p.read_bytes()).digest()
+        out[str(p)] = (digest, p.stat().st_mtime)
+    return out
+
+
+def test_a_completed_pack_never_touches_the_original_dwk_or_sources(tmp_path: Path) -> None:
+    """Whole-stack regression: every original file this operation reads
+    from — the project's own ``.dwk`` file on disk AND each dataset
+    source — must be byte-for-byte and mtime-for-mtime identical after a
+    full, successful ``pack_start`` run through the bridge. `pack_project`'s
+    own module doc promises ``originals_modified`` is always ``False``;
+    this test verifies that promise against the actual filesystem rather
+    than trusting the field."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv", "b.csv")
+    project_file = tmp_path / "project.dwk"
+    project_file.write_text(content, encoding="utf-8")
+
+    before = _fingerprint(project_file, *files)
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+    status = _wait_for_terminal(api)
+    assert status["phase"] == "completed"
+    assert status["result"] is not None
+
+    after = _fingerprint(project_file, *files)
+    assert after == before
+
+
+def test_a_cancelled_pack_never_touches_the_original_dwk_or_sources(tmp_path: Path) -> None:
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv", "b.csv")
+    project_file = tmp_path / "project.dwk"
+    project_file.write_text(content, encoding="utf-8")
+
+    before = _fingerprint(project_file, *files)
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    started = threading.Event()
+
+    def _cancellable_pack_project(*_args: Any, should_cancel: Any, **_kw: Any) -> PackResult:
+        started.set()
+        while not should_cancel():
+            time.sleep(0.01)
+        return PackResult(False, True, None, {"sources": []}, [], True, False)
+
+    import quantized.desktop_bridge_pack as pack_bridge_module_local
+
+    original = pack_bridge_module_local.pack_project
+    pack_bridge_module_local.pack_project = _cancellable_pack_project
+    try:
+        out = api.pack_start(preview["token"], content)
+        assert out["ok"] is True
+        assert started.wait(timeout=5.0)
+        api.pack_cancel()
+        status = _wait_for_terminal(api)
+        assert status["phase"] == "cancelled"
+    finally:
+        pack_bridge_module_local.pack_project = original
+
+    after = _fingerprint(project_file, *files)
+    assert after == before
+
+
+def test_a_failed_pack_never_touches_the_original_dwk_or_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import quantized.portable.atomic_rename as atomic_rename_module
+
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv", "b.csv")
+    project_file = tmp_path / "project.dwk"
+    project_file.write_text(content, encoding="utf-8")
+
+    before = _fingerprint(project_file, *files)
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    def _boom_rename(src: str, dst: str) -> None:
+        raise OSError(13, "Permission denied", src, None, dst)
+
+    # The primary rename path is `rename_noreplace`'s platform primitive,
+    # not a bare `os.rename` call in `publish.py` -- force the failure
+    # there instead (see `test_portable_publish.py` for the same pattern).
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+    status = _wait_for_terminal(api)
+    assert status["phase"] == "failed"
+
+    after = _fingerprint(project_file, *files)
+    assert after == before
+
+
 # -- cancellation -------------------------------------------------------
 
 
@@ -531,7 +725,8 @@ def test_cancel_mid_copy_reaches_cancelled_with_cleanup_ok(
 ) -> None:
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
-    content, _ = _declare_and_content(tmp_path, "a.csv")
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    baseline_consent = consent_count()
     preview = api.pack_preview(content, "myproj", destination_parent)
 
     started = threading.Event()
@@ -554,6 +749,100 @@ def test_cancel_mid_copy_reaches_cancelled_with_cleanup_ok(
     status = _wait_for_terminal(api)
     assert status["phase"] == "cancelled"
     assert status["cleanup_ok"] is True
+
+    # P1.7 PR 5 audit item 12: a CANCELLED outcome must leave consent
+    # exactly as it was before this operation started -- the same "revoke
+    # exactly what was minted, on every outcome" guarantee already proven
+    # for "completed" (`test_real_pack_completes_and_revokes_its_own_grants`)
+    # and "thread_start_failed"
+    # (`test_a_thread_start_failure_reverts_phase_and_revokes_its_grants`).
+    resolved = os.path.realpath(str(files[0]))
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+    assert write_dir_grant_count() == 0
+
+
+def test_terminal_phase_is_never_observable_before_grants_are_revoked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forces the race (docs/testing.md): `revoke_paths` is slowed by 50 ms,
+    and a status poller records whether it ever saw a terminal phase while
+    the minted read grant was still live. The worker must revoke under the
+    same lock `pack_status` reads through, BEFORE flipping the phase, so
+    the poller can never observe "completed" with the grant intact."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    resolved = os.path.realpath(str(files[0]))
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    real_revoke = pack_bridge_module.revoke_paths
+
+    def _slow_revoke(paths: list[str]) -> None:
+        time.sleep(0.05)
+        real_revoke(paths)
+
+    monkeypatch.setattr(pack_bridge_module, "revoke_paths", _slow_revoke)
+    assert api.pack_start(preview["token"], content)["ok"] is True
+
+    leaked = False
+    deadline = time.time() + 5.0
+    while time.time() < deadline:
+        status = api.pack_status()
+        if status["phase"] not in ("packing", "cancelling"):
+            leaked = is_consented(resolved)
+            break
+        time.sleep(0.001)
+    assert status["phase"] == "completed"
+    assert leaked is False
+
+
+def test_cancel_during_publishing_cannot_corrupt_or_delete_the_finished_bundle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.7 PR 5 audit item 8: `should_cancel` is only ever polled during
+    PR 2's staging copy -- `pack.py`'s own pipeline never threads it
+    through to the rewrite/finalize/write/publish steps that follow (see
+    that module's source), so a cancel request landing once staging has
+    already finished (the "publishing" stage this bridge only INFERS, per
+    its own module doc) can never actually be honored mid-publish. This
+    forces exactly that race: `pack_cancel()` fires the instant the real
+    `publish_bundle` is invoked (staging has already fully succeeded by
+    then), and asserts the already-committed atomic rename completes
+    normally, the bundle survives INTACT on disk, and the reported outcome
+    is honest -- "completed", never a misreported "cancelled" (which would
+    wrongly imply the bundle was rolled back), and `cleanup_ok` -- which
+    only ever means "the staging directory was torn down" -- is `None`
+    (a genuine success, nothing to clean up), never a value implying a
+    teardown that never happened."""
+    import quantized.portable.pack as pack_module
+
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, _ = _declare_and_content(tmp_path, "a.csv", "b.csv")
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    real_publish_bundle = pack_module.publish_bundle
+
+    def _cancel_then_publish(*args: Any, **kwargs: Any) -> Any:
+        api.pack_cancel()  # fires exactly when staging has already succeeded
+        return real_publish_bundle(*args, **kwargs)
+
+    monkeypatch.setattr(pack_module, "publish_bundle", _cancel_then_publish)
+
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+    status = _wait_for_terminal(api)
+
+    bundle_dir = os.path.join(destination_parent, "myproj")
+    assert os.path.isdir(bundle_dir)  # survives -- the rename already committed
+    check = validate_bundle(bundle_dir, verify_checksums=True)
+    assert check.complete, check.problems
+
+    assert status["phase"] == "completed"
+    assert status["result"] is not None
+    assert status["result"]["bundle_dir"] == bundle_dir
+    assert status["cleanup_ok"] is None
 
 
 def test_pack_cancel_is_idempotent_before_during_after(tmp_path: Path) -> None:
@@ -606,6 +895,52 @@ def test_a_thrown_exception_is_reported_as_failed_without_a_raw_path(
     assert "No original files or project were modified." == error["note"]
 
 
+def _assert_no_string_field_contains(value: Any, needle: str, path: str = "$") -> None:
+    """Recursively walk a JSON-like structure (dict/list/str/...) and fail
+    with the exact field path the moment any string value contains
+    ``needle`` — used below to check an ENTIRE `pack_status()` snapshot at
+    once, rather than one hand-picked field at a time."""
+    if isinstance(value, str):
+        assert needle not in value, f"{path} contains the leaked substring: {value!r}"
+    elif isinstance(value, dict):
+        for k, v in value.items():
+            _assert_no_string_field_contains(v, needle, f"{path}.{k}")
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            _assert_no_string_field_contains(v, needle, f"{path}[{i}]")
+
+
+def test_a_failing_pack_status_snapshot_never_contains_the_tmp_path_anywhere(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """P1.7 PR 5 audit item 13: rather than checking one hand-picked
+    ``error["message"]`` field (as the tests above do for their own
+    specific failure), recursively scan the WHOLE `pack_status()` result —
+    every warning, every error, every nested field — for the tmp_path root
+    itself. A real, backend-originated failure (a genuine `publish_bundle`
+    `OSError`, not a fully mocked `pack_project`) exercises the actual
+    message-building code across staging, publish, and this bridge's own
+    status-shaping in one pass."""
+    import quantized.portable.atomic_rename as atomic_rename_module
+
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, _ = _declare_and_content(tmp_path, "a.csv", "b.csv")
+    preview = api.pack_preview(content, "myproj", destination_parent)
+
+    def _boom_rename(src: str, dst: str) -> None:
+        raise OSError(13, "Permission denied", src, None, dst)
+
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
+    out = api.pack_start(preview["token"], content)
+    assert out["ok"] is True
+
+    status = _wait_for_terminal(api)
+    assert status["phase"] == "failed"
+    _assert_no_string_field_contains(status, str(tmp_path))
+    _assert_no_string_field_contains(status, destination_parent)
+
+
 def test_a_thread_start_failure_reverts_phase_and_revokes_its_grants(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -644,22 +979,23 @@ def test_a_thread_start_failure_reverts_phase_and_revokes_its_grants(
 def test_publish_failure_message_reported_through_the_bridge_never_leaks_a_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Review finding #6, exercised end to end through the bridge:
-    ``os.rename``'s own ``OSError`` embeds the absolute staging and
+    """Review finding #6, exercised end to end through the bridge: a real
+    rename failure's ``OSError`` embeds the absolute staging and
     destination paths (``.filename``/``.filename2``) -- the status this
     bridge surfaces must carry only the OS's own errno text, never either
     absolute path nor the tmp_path root they live under."""
-    import quantized.portable.publish as publish_module
+    import quantized.portable.atomic_rename as atomic_rename_module
 
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)
-    content, _ = _declare_and_content(tmp_path, "a.csv")
+    content, files = _declare_and_content(tmp_path, "a.csv")
+    baseline_consent = consent_count()
     preview = api.pack_preview(content, "myproj", destination_parent)
 
     def _boom_rename(src: str, dst: str) -> None:
         raise OSError(13, "Permission denied", src, None, dst)
 
-    monkeypatch.setattr(publish_module.os, "rename", _boom_rename)
+    monkeypatch.setattr(atomic_rename_module, "_platform_rename_noreplace", _boom_rename)
     out = api.pack_start(preview["token"], content)
     assert out["ok"] is True
 
@@ -671,6 +1007,16 @@ def test_publish_failure_message_reported_through_the_bridge_never_leaks_a_path(
     assert str(tmp_path) not in error["message"]
     assert destination_parent not in error["message"]
     assert not os.path.exists(os.path.join(destination_parent, "myproj"))
+
+    # P1.7 PR 5 audit item 12: a real, backend-originated FAILED outcome
+    # (not a mocked `pack_project`) must leave consent exactly as it was
+    # before this operation started -- same guarantee as every other
+    # outcome (see the "cancelled"/"completed"/"thread_start_failed" tests'
+    # own citations of this one).
+    resolved = os.path.realpath(str(files[0]))
+    assert not is_consented(resolved)
+    assert consent_count() == baseline_consent
+    assert write_dir_grant_count() == 0
 
 
 # -- pack_status progress -------------------------------------------------
