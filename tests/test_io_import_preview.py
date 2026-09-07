@@ -18,6 +18,7 @@ from quantized.io.import_error_bindings import (
     DUPLICATE_TARGET,
     INVALID_AXIS,
     INVALID_SIDE,
+    MALFORMED_ENTRY,
     NO_X_COLUMN,
     TARGET_EQUALS_COLUMN,
     TARGET_NOT_Y_ROLE,
@@ -328,7 +329,7 @@ def test_preamble_comments_capped_at_max() -> None:
     filter reapplied to a much longer file) walked and retained EVERY
     preceding line as a `comments` entry, unbounded. 600 preamble lines
     caps down to `_MAX_PREAMBLE_COMMENTS` (500), not 600."""
-    from quantized.io.import_preview import _MAX_PREAMBLE_COMMENTS
+    from quantized.io.import_metadata import MAX_PREAMBLE_COMMENTS as _MAX_PREAMBLE_COMMENTS
 
     lines = [f"# comment {i}" for i in range(600)] + ["Temp,Moment", "1,10"]
     text = "\n".join(lines) + "\n"
@@ -686,6 +687,58 @@ def test_parse_import_has_no_import_problems_key_when_every_binding_survives() -
     assert "import_problems" not in ds.metadata
 
 
+def test_a_binding_too_malformed_to_parse_is_reported_not_swallowed() -> None:
+    """The failure this whole contract exists to prevent. A hand-edited (or
+    older-build) filter file carrying `axis: "Y"` never becomes an
+    `ErrorBinding` at all, so `valid_error_bindings` never sees it -- before
+    this it vanished in `from_dict`, INVALID_AXIS was unreachable on every
+    route path, and `save_filter`'s load-then-rewrite made the loss permanent
+    on disk."""
+    settings = ImportSettings.from_dict({
+        "header_line": 0,
+        "data_start_line": 1,
+        "roles": ["x", "y", "error", "y", "error"],
+        "error_bindings": [
+            {"column": 2, "target": 1, "axis": "Y", "side": "both"},      # bad axis case
+            {"column": 4, "target": 3, "axis": "y", "side": "plus"},      # unknown side
+            {"column": 4, "target": 3, "axis": "y", "side": "both"},      # good
+        ],
+    })
+    assert len(settings.malformed_error_bindings) == 2
+    out = preview_import(_ERR_TEXT, settings)
+    codes = [p["code"] for p in out["error_binding_problems"]]
+    assert codes.count(MALFORMED_ENTRY) == 2
+    assert "'Y'" in out["error_binding_problems"][0]["reason"]
+    assert [b["column"] for b in out["error_bindings"]] == [4]
+    # and the junk is NOT written back out, so a load->save round trip drops it
+    assert "malformed_error_bindings" not in settings.to_dict()
+
+
+def test_parse_import_also_reports_unparseable_bindings() -> None:
+    settings = ImportSettings.from_dict({
+        "header_line": 0,
+        "data_start_line": 1,
+        "roles": ["x", "y", "error", "y", "error"],
+        "error_bindings": [{"column": 2, "target": 1, "axis": "sideways", "side": "both"}],
+    })
+    ds = parse_import(_ERR_TEXT, settings)
+    assert [p["code"] for p in ds.metadata["import_problems"]] == [MALFORMED_ENTRY]
+
+
+def test_an_absurd_data_start_line_does_not_walk_past_the_end_of_the_file() -> None:
+    """`data_start_line` is free text in the wizard. The comment CAP bounds
+    what is collected, not how long the walk takes, so `range(data_start)`
+    spent minutes stepping past EOF on a large typo. Bounded by the file now."""
+    import time
+
+    settings = ImportSettings(header_line=0, data_start_line=10**9)
+    started = time.perf_counter()
+    out = preview_import(_ERR_TEXT, settings)
+    assert time.perf_counter() - started < 1.0
+    # every line of this tiny file is preamble under that data_start
+    assert len(out["comments"]) <= len(_ERR_TEXT.splitlines())
+
+
 def test_parse_import_error_roles_absent_when_no_bindings_set() -> None:
     ds = parse_import(_MESSY, guess_settings(_MESSY))
     assert "error_roles" not in ds.metadata
@@ -725,10 +778,10 @@ def test_parse_import_error_target_is_the_x_axis() -> None:
     assert ds.metadata["error_roles"] == [{"channel": 0, "target": -1, "axis": "x", "side": "both"}]
 
 
-def test_parse_import_carries_each_side_through_unchanged_to_frontend_signs() -> None:
-    """`lower`/`upper`/`both` (this module's storage vocabulary) become
-    `-`/`+`/`both` (`frontend/src/lib/errorRoles.ts`'s `ErrorSide`) so the
-    frontend needs no translation layer of its own to consume this."""
+def test_parse_import_carries_each_side_through_unchanged() -> None:
+    """One vocabulary end to end: the `both`/`+`/`-` a binding is stored with
+    is the same `ErrorSide` `frontend/src/lib/errorRoles.ts` reads, so nothing
+    translates on either side and each side lands on the right channel."""
     settings = _err_settings([
         ErrorBinding(column=2, target=1, axis="y", side="+"),
         ErrorBinding(column=4, target=3, axis="y", side="-"),

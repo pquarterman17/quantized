@@ -63,12 +63,18 @@ def preamble_comments(
     see that function's docstring for the full rationale."""
     consumed_set = set(consumed)
     out: list[str] = []
-    for i in range(data_start):
+    # Iterate the LINES THAT EXIST, not `range(data_start)`: the cap below
+    # bounds what is COLLECTED, not how long the walk takes, and
+    # `data_start_line` is free text in the wizard -- a `data_start` of 10^10
+    # spent ~15 minutes stepping past EOF to collect nothing. Slicing bounds
+    # the loop by the file itself, so an oversized value costs O(file), not
+    # O(the number the user typed).
+    for i, line in enumerate(lines[:data_start]):
         if len(out) >= MAX_PREAMBLE_COMMENTS:
             break
         if i in consumed_set:
             continue
-        raw = lines[i].strip() if i < len(lines) else ""
+        raw = line.strip()
         if raw:
             out.append(raw)
     return out
