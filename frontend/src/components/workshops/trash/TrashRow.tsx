@@ -4,7 +4,8 @@
 
 import { useState } from "react";
 
-import { formatTrashBytes, trashAge } from "../../../lib/trashSummary";
+import { formatBytes } from "../../../lib/formatBytes";
+import { trashAge } from "../../../lib/trashSummary";
 import { trashEntryId, type TrashEntry } from "../../../store/trash";
 import { useApp } from "../../../store/useApp";
 import { Badge, Button } from "../../primitives";
@@ -45,7 +46,7 @@ export default function TrashRow({ entry, now }: { entry: TrashEntry; now: numbe
       <span className="qzk-menu-trunc" style={{ flex: 1 }} title={name}>
         {name}
       </span>
-      <span className="qz-shortcut">{formatTrashBytes(entry.bytes)}</span>
+      <span className="qz-shortcut">{formatBytes(entry.bytes)}</span>
       <span className="qz-shortcut">{trashAge(entry.at, now)}</span>
       <Button
         size="sm"

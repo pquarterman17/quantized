@@ -34,12 +34,6 @@ export function trashSummary(entries: readonly TrashEntry[], now: number): Trash
   return { count: entries.length, bytes, byKind, oldestAt, oldestAgeMs: oldestAt === null ? null : now - oldestAt };
 }
 
-/** A short human size — the shared `lib/formatBytes` (binary units,
- *  matching `TRASH_MAX_BYTES`'s own MiB accounting). Kept as a named export
- *  so existing callers and tests need no change. */
-export function formatTrashBytes(bytes: number): string {
-  return formatBytes(bytes);
-}
 
 /** One label per kind, for the panel's badges and the purge-preview line
  *  ("N datasets, M figures, …"). Singular/plural handled inline; order is
@@ -78,5 +72,5 @@ export function purgePreviewLine(summary: TrashSummary, now: number): string {
     return `${n} ${n === 1 ? singular : plural}`;
   });
   const age = summary.oldestAt === null ? "" : ` — oldest ${trashAge(summary.oldestAt, now)}`;
-  return `${parts.join(", ")} — ${formatTrashBytes(summary.bytes)}${age}`;
+  return `${parts.join(", ")} — ${formatBytes(summary.bytes)}${age}`;
 }

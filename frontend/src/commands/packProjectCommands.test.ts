@@ -60,14 +60,35 @@ describe("runPackProject", () => {
     expect(usePackProjectPanel.getState().open).toBe(false);
   });
 
-  it("with a shell, a preview that throws closes the panel and toasts instead of rejecting", async () => {
+  it("with a shell, a preview that throws closes the panel, resets the store, and toasts instead of rejecting", async () => {
     vi.mocked(hasDesktopShell).mockReturnValue(true);
+    const reset = vi.fn().mockResolvedValue(undefined);
     usePackProject.setState({
-      previewPackProject: vi.fn().mockRejectedValue(new Error("chunk load failed")),
+      previewPackProject: vi.fn().mockImplementation(async () => {
+        usePackProject.setState({ phase: "scanning" }); // wedged mid-preview
+        throw new Error("chunk load failed");
+      }),
+      resetPackProject: reset,
     });
     await expect(runPackProject()).resolves.toBeUndefined();
     expect(usePackProjectPanel.getState().open).toBe(false);
+    expect(reset).toHaveBeenCalledOnce();
     expect(lastToast()).toBe("pack preview failed — chunk load failed");
+  });
+
+  it("with a shell, a panel closed while the preview was in flight abandons the preview (reset)", async () => {
+    vi.mocked(hasDesktopShell).mockReturnValue(true);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      previewPackProject: vi.fn().mockImplementation(async () => {
+        usePackProjectPanel.setState({ open: false }); // the X, clicked mid-preview
+        usePackProject.setState({ phase: "awaiting_confirmation" });
+      }),
+      resetPackProject: reset,
+    });
+    await runPackProject();
+    expect(reset).toHaveBeenCalledOnce();
+    expect(usePackProjectPanel.getState().open).toBe(false);
   });
 
   it("with a shell, leaves the panel open when the phase is awaiting_confirmation after the preview resolves", async () => {

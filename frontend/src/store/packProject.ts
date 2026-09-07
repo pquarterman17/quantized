@@ -10,6 +10,7 @@
 //        -> packing -> completed
 //   any ACTIVE state -> cancelling -> cancelled
 //   any ACTIVE state -> failed
+//   any TERMINAL state, or any ACTIVE state before packing -> idle (reset)
 //
 // where ACTIVE means anything other than idle/completed/cancelled/failed.
 // Every action below checks the CURRENT phase against what it requires and
@@ -150,8 +151,9 @@ export interface PackProjectState {
    *  from `packing`/`cancelling` asks the backend to cancel and lets the
    *  poll loop resolve the final phase. */
   cancelPackProject: () => Promise<void>;
-  /** Clears a terminal phase back to `idle` so a retry can start. Rejected
-   *  from any non-terminal phase. */
+  /** Back to `idle` from a terminal phase (so a retry can start) or from a
+   *  pre-packing active phase (a one-step dismiss of the picker/scan/review
+   *  step). Rejected only from `packing`/`cancelling`: cancel first. */
   resetPackProject: () => Promise<void>;
 }
 

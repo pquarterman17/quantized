@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatTrashBytes, purgePreviewLine, trashAge, trashSummary } from "./trashSummary";
+import { purgePreviewLine, trashAge, trashSummary } from "./trashSummary";
 import type { TrashEntry } from "../store/trash";
 
 const entry = (kind: TrashEntry["kind"], at: number, bytes: number): TrashEntry => {
@@ -32,14 +32,6 @@ describe("trashSummary", () => {
     expect(s.byKind.report).toBe(1);
     expect(s.oldestAt).toBe(50);
     expect(s.oldestAgeMs).toBe(950);
-  });
-});
-
-describe("formatTrashBytes", () => {
-  it("formats bytes, KiB, and MiB", () => {
-    expect(formatTrashBytes(500)).toBe("500 B");
-    expect(formatTrashBytes(2048)).toBe("2.0 KiB");
-    expect(formatTrashBytes(5 * 1024 * 1024)).toBe("5.0 MiB");
   });
 });
 

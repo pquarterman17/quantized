@@ -17,14 +17,21 @@
 // picker and the scan are in flight, rather than leaving the user staring
 // at nothing until `previewPackProject` resolves.
 //
-// The store's own state machine can come back to `idle` in two ways that
-// are NOT errors: the user backed out of the native destination picker, or
-// (rare) desktopPackBridge finds no usable bridge despite `hasDesktopShell()`
-// having said yes moments earlier. Either way there is nothing to review, so
-// the panel closes itself rather than sitting open on an empty idle screen —
-// PackProjectPanel.tsx's own mount-time race (`sawActive`) is the other half
-// of this: it must not ALSO close the panel just because it hasn't yet seen
-// a non-idle phase when it first renders.
+// The store comes back to `idle` for exactly one non-error reason: the user
+// backed out of the native destination picker. There is then nothing to
+// review, so the panel closes itself rather than sitting open on an empty
+// idle screen. (A shell that turns out to have no usable pack bridge is a
+// `failed` phase with `bridge_unavailable`, shown in the panel — never a
+// silent idle.) PackProjectPanel.tsx's own mount-time race (`sawActive`) is
+// the other half of this: it must not ALSO close the panel just because it
+// hasn't yet seen a non-idle phase when it first renders. The run chunk is
+// preloaded before the panel opens so that window is a single microtask.
+//
+// Two failure paths are handled here rather than left as unhandled
+// rejections: a preview that throws (a rejected chunk load, a serialize
+// error) resets the store when it is legal to and toasts; and a panel the
+// user closed while the preview was still in flight abandons the preview
+// (reset) instead of leaving the store active with no UI attached.
 
 import { hasDesktopShell } from "../lib/desktopBridge";
 import { usePackProject } from "../store/packProject";
@@ -36,18 +43,27 @@ export async function runPackProject(): Promise<void> {
     toast("Pack Project needs the desktop app", "info");
     return;
   }
+  await import("../store/packProjectRun"); // preload: the preview leaves idle without a chunk wait
   usePackProjectPanel.getState().setOpen(true);
   try {
     await usePackProject.getState().previewPackProject();
   } catch (e: unknown) {
-    // A rejected lazy chunk load or a throw inside the preview would
-    // otherwise be an unhandled rejection with the panel left open on an
-    // empty idle body: close it and say so.
     usePackProjectPanel.getState().setOpen(false);
+    await resetIfLegal();
     toast(`pack preview failed — ${e instanceof Error ? e.message : "error"}`, "danger");
     return;
   }
-  if (usePackProject.getState().phase === "idle") {
+  const phase = usePackProject.getState().phase;
+  if (phase === "idle") {
     usePackProjectPanel.getState().setOpen(false);
+  } else if (!usePackProjectPanel.getState().open && phase !== "packing" && phase !== "cancelling") {
+    await resetIfLegal(); // closed while the preview was in flight: abandon it
+  }
+}
+
+async function resetIfLegal(): Promise<void> {
+  const phase = usePackProject.getState().phase;
+  if (phase !== "packing" && phase !== "cancelling") {
+    await usePackProject.getState().resetPackProject();
   }
 }

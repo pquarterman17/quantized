@@ -493,4 +493,7 @@ class DesktopPackBridge:
             self._pack_result = None
             self._pack_cleanup_ok = None
             self._pack_cancel_event = None
+            # A destination picked but never started minted a write-dir
+            # grant; a reset ends that attempt, so its footprint ends too.
+            clear_write_dir_grants()
         return {"ok": True}
