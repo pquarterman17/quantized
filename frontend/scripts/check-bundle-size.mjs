@@ -45,6 +45,35 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-07 — pin UNCHANGED at 910,711; one split funds the Pack Project
+ *  UI (P1.7 PR 6, sol/pack-project-ui-1). Giving the "pack-project" command
+ *  its required `description` (every registered command needs one — CI's
+ *  helpContent.test.ts/workshopHelp.test.ts) plus the store-owned
+ *  `store/packProjectPanel.ts` open flag (replacing the earlier
+ *  `globalThis.qP` runtime callback so AppOverlays.tsx never has to import
+ *  `store/packProject.ts` eagerly) measured 889.8 kB locally, 0.4 kB over
+ *  the pin. FIRST SPLIT ATTEMPT (measured, then discarded): moving the
+ *  "Send to Origin (COM)"/"Export Origin (.ogs)"/"Export consolidated CSV"
+ *  command bodies to a new lazily-`import()`ed `commands/fileCommandsLazy.ts`
+ *  while ALSO re-importing their `lib/api.ts` calls from that lazy module
+ *  measured as a net INCREASE (889.8 -> 890.0 kB local before the second
+ *  origin/consolidated body moved, one wash short of even) — api.ts is
+ *  already reachable synchronously elsewhere (store/useApp.ts's
+ *  `fftSpectral`/`fitModel`/`peaksIntegrate`/`uploadFile`), so adding an
+ *  async edge into a few of its OTHER exports forced Rollup to extract
+ *  api.ts + its lib/http.ts dependency into a new shared chunk that — being
+ *  STILL reachable synchronously — got modulepreloaded (counted eager)
+ *  anyway, on top of real chunk-boundary overhead. THE SPLIT THAT WORKED
+ *  (-0.8 kB local, 889.8 -> 889.0 kB): keep those three `lib/api.ts` calls
+ *  imported EAGERLY in fileCommands.ts exactly as before (byte-identical
+ *  reachability graph — no new async edge into api.ts) and pass them into
+ *  fileCommandsLazy.ts's runners as plain function arguments; only the
+ *  actual body logic (try/catch, the Origin-graph object literal, the
+ *  resolveDatasets/toast calls) leaves the entry chunk. Verified in the
+ *  build output: no new `api-*.js`/`http-*.js` chunk in either the entry
+ *  script or the modulepreload list, only the entry chunk itself shrinking.
+ *  Full vitest, tsc --noEmit, and eslint all green post-split.
+ *
  *  2026-09-06 — pin UNCHANGED at 910,711; one split funds P1.7 slice 2's
  *  eager growth. Collision-safe relinking (lib/relink.ts's `pathKey`/
  *  `findCandidateCollisions`, store/relink.ts's `resolveCollision` + the

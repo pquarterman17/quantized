@@ -4,6 +4,7 @@
 // composition), so nothing that exists purely for the panel's rendering
 // belongs there. See store/trash.ts's own header for the eager/lazy split.
 
+import { formatBytes } from "./formatBytes";
 import type { TrashEntry } from "../store/trash";
 
 export interface TrashSummary {
@@ -33,14 +34,6 @@ export function trashSummary(entries: readonly TrashEntry[], now: number): Trash
   return { count: entries.length, bytes, byKind, oldestAt, oldestAgeMs: oldestAt === null ? null : now - oldestAt };
 }
 
-/** A short human size — no existing formatter in `lib/` to reuse (checked:
- *  no `formatBytes`/`humanBytes`/`formatSize`). Binary units (KiB/MiB),
- *  matching `TRASH_MAX_BYTES`'s own MiB accounting. */
-export function formatTrashBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
 
 /** One label per kind, for the panel's badges and the purge-preview line
  *  ("N datasets, M figures, …"). Singular/plural handled inline; order is
@@ -79,5 +72,5 @@ export function purgePreviewLine(summary: TrashSummary, now: number): string {
     return `${n} ${n === 1 ? singular : plural}`;
   });
   const age = summary.oldestAt === null ? "" : ` — oldest ${trashAge(summary.oldestAt, now)}`;
-  return `${parts.join(", ")} — ${formatTrashBytes(summary.bytes)}${age}`;
+  return `${parts.join(", ")} — ${formatBytes(summary.bytes)}${age}`;
 }

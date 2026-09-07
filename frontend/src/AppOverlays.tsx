@@ -61,6 +61,7 @@ import Toaster from "./components/overlays/Toaster";
 import TooltipLayer from "./components/overlays/TooltipLayer";
 import InteractionHints from "./components/overlays/InteractionHints";
 import { useApp } from "./store/useApp";
+import { usePackProjectPanel } from "./store/packProjectPanel";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useHelp } from "./store/help";
 import { useAnnotationTextDialog } from "./store/annotationTextDialog";
@@ -177,6 +178,7 @@ const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/Recov
 // action (opened from the command palette, never on startup), so it stays
 // out of the eager bundle like every other workshop panel above.
 const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"));
+const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"));
 // J2: the Recode workshop, opened from the worksheet's column context menu
 // (a categorical column only) — rare-ish, on-demand, so it stays out of the
 // eager bundle like every other workshop panel above.
@@ -240,6 +242,7 @@ export default function AppOverlays() {
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelink((s) => s.open);
+  const packProjectOpen = usePackProjectPanel((s) => s.open);
   const recodeOpen = useRecode((s) => s.open);
   // Heard while the dialog chunk is still unloaded -- the store owns the
   // listener so the Data command can dispatch before anything is mounted.
@@ -309,6 +312,7 @@ export default function AppOverlays() {
       {prefsMounted && <PreferencesDialog />}
       {recoveryPending && <RecoveryChoiceDialog />}
       {relinkOpen && <RelinkPanel />}
+      {packProjectOpen && <PackProjectPanel />}
       {recodeOpen && <RecodePanel />}
       <Toaster />
     </>

@@ -1244,17 +1244,22 @@ rationale in that module's doc):
   `tests/test_portable_pack_roundtrip.py::test_pack_move_and_reopen_roundtrip`
   (backend) plus `lib/workspace.test.ts`'s "workspace bundle-relative
   source" describe block, including a full `checksum`/`mtime`/`size`/
-  `packedFrom` provenance round trip (frontend parse side). What is NOT
-  shipped is the visual "Pack Project" workflow itself — the
-  destination-picker dialog and the preview/progress UI a user actually
-  clicks through; PR 4 (#308) ships a fully bridge-tested contract
-  (`desktopPackBridge.ts` + `store/packProject.ts`/`packProjectRun.ts`)
-  with no visible surface in the app yet beyond an exercise-only palette
-  command (`commands/packProjectCommands.ts`) — that visual layer is
-  assigned to ChatGPT/Sol against PR 4's already-shipped contract. See
-  the full PR 1-5 writeup and the PR 5 audit's own findings under the
-  "Pack Project stack" subsection below. Named home: same P1.7 follow-up,
-  tracked as "Pack Project".
+  `packedFrom` provenance round trip (frontend parse side). The visual
+  "Pack Project" workflow ships in PR 6 (#310, `sol/pack-project-ui-1`):
+  File → "Pack Project…" opens a lazy `ToolWindow`
+  (`components/workshops/packproject/PackProjectPanel.tsx`) driven by PR
+  4's state machine — destination picker, review step (per-source
+  readiness/size, warnings, blockers, refuse-overwrite), per-file and
+  byte progress, cancel, and completed/cancelled/failed outcomes, every
+  one carrying the "nothing original was modified" note. The panel's open
+  flag is a store (`store/packProjectPanel.ts`); the command body is the
+  lazily imported `commands/packProjectCommands.ts`. Three review rounds
+  on that PR closed a mount-time open/idle race, a store wedged by a
+  preview throw, a headless preview after an early close, clipped review
+  text, and two consent-footprint leaks (`pack_reset` now clears the
+  write-dir grant; a cancelled picker resets fully). See the "Pack Project
+  stack" subsection below. Named home: same P1.7 follow-up, tracked as
+  "Pack Project".
 
 **Provenance (box 2).** `Dataset.source` (`lib/datasetSource.ts`) gained
 `checksum`/`mtime`/`size`, captured from the desktop bridge's new
@@ -1832,9 +1837,9 @@ below — the packer's own implementation work starts fresh here:
     is now routed through the dataset-source serialize/parse pair instead
     of being written/read verbatim; and a single module-level
     `TextEncoder` replaced one constructed per path segment.
-- **PR 4 (this branch, #308) — pack orchestration bridge, consent
-  scoping, and the frontend state-machine contract; no visual dialog yet
-  (assigned to Sol):** the pywebview bridge method a "Pack Project" UI
+- **PR 4 (#308) — pack orchestration bridge, consent scoping, and the
+  frontend state-machine contract (the visual dialog followed in PR 6,
+  #310):** the pywebview bridge method a "Pack Project" UI
   action calls, wiring PR 1-3's manifest/copy/publish primitives into one
   cancellable, pollable job, plus the frontend contract consuming it.
   - **A fourth, orthogonal consent kind: the WRITE-DIRECTORY grant**

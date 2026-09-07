@@ -1105,6 +1105,22 @@ def test_pack_reset_rejected_while_packing(tmp_path: Path, monkeypatch: pytest.M
         _wait_for_terminal(api)
 
 
+def test_pack_reset_from_a_preview_clears_the_write_dir_grant(tmp_path: Path) -> None:
+    """Backing out at the review step (frontend reset from
+    awaiting_confirmation) must not leave the picked destination's write
+    grant alive: the operation is over, so its footprint is too."""
+    api = DesktopApi()
+    destination_parent = _dest(api, tmp_path)
+    content, _ = _declare_and_content(tmp_path, "a.csv")
+    preview = api.pack_preview(content, "myproj", destination_parent)
+    assert preview["ok"] is True
+    assert write_dir_grant_count() == 1
+
+    assert api.pack_reset() == {"ok": True}
+    assert write_dir_grant_count() == 0
+    assert api.pack_status()["phase"] == "idle"
+
+
 def test_pack_reset_allowed_after_completion(tmp_path: Path) -> None:
     api = DesktopApi()
     destination_parent = _dest(api, tmp_path)

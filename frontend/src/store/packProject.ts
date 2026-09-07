@@ -10,6 +10,7 @@
 //        -> packing -> completed
 //   any ACTIVE state -> cancelling -> cancelled
 //   any ACTIVE state -> failed
+//   any TERMINAL state, or any ACTIVE state before packing -> idle (reset)
 //
 // where ACTIVE means anything other than idle/completed/cancelled/failed.
 // Every action below checks the CURRENT phase against what it requires and
@@ -150,8 +151,9 @@ export interface PackProjectState {
    *  from `packing`/`cancelling` asks the backend to cancel and lets the
    *  poll loop resolve the final phase. */
   cancelPackProject: () => Promise<void>;
-  /** Clears a terminal phase back to `idle` so a retry can start. Rejected
-   *  from any non-terminal phase. */
+  /** Back to `idle` from a terminal phase (so a retry can start) or from a
+   *  pre-packing active phase (a one-step dismiss of the picker/scan/review
+   *  step). Rejected only from `packing`/`cancelling`: cancel first. */
   resetPackProject: () => Promise<void>;
 }
 
@@ -202,7 +204,13 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
 
   resetPackProject: async () => {
     const phase = get().phase;
-    if (phase !== "completed" && phase !== "cancelled" && phase !== "failed") {
+    // Legal from every phase except the two where the backend worker is
+    // actually running (`packing`/`cancelling` — cancel first). From the
+    // pre-packing active phases (destination picker, scan, review) a reset
+    // is a one-step dismiss: it bumps the generation counter so any in-
+    // flight preview continuation is dropped, and goes straight to `idle`
+    // without bouncing through the terminal `cancelled` screen.
+    if (phase === "packing" || phase === "cancelling") {
       reject(set, phase, "resetPackProject");
       return;
     }

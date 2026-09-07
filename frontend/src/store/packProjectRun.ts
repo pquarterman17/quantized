@@ -125,13 +125,24 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
     set({ phase: "selecting_destination" });
     const picked = await pickPackDestination();
     if (generation !== myGeneration) return; // cancelled/reset while the dialog was open
-    // `null` (no usable bridge) and `CANCELLED` (the user backed out of
-    // the native dialog) both degrade the same way this store always has —
-    // silently back to `idle`, never a rejection. A backend REFUSAL (review
-    // finding #8) is neither: it must surface as a failure, or a bad
-    // destination pick would look indistinguishable from an ordinary cancel.
-    if (picked === null || picked === CANCELLED) {
-      set({ phase: "idle" });
+    // `CANCELLED` (the user backed out of the native dialog) degrades the
+    // way this store always has — silently back to `idle`, never a
+    // rejection. `null` (no usable bridge: the shell lacks the pack methods
+    // or the picker threw) is a FAILURE, exactly as `packPreview`'s null is
+    // below — otherwise a broken bridge is indistinguishable from the user
+    // pressing Cancel and the panel closes with no explanation (PR 6
+    // self-review). A backend REFUSAL (review finding #8) is likewise a
+    // failure, or a bad destination pick would look like an ordinary cancel.
+    if (picked === CANCELLED) {
+      // A full reset, not a bare `set({ phase: "idle" })`: a retry after a
+      // failed attempt may still hold the EARLIER pick's write-dir grant and
+      // a stale backend preview; `pack_reset` clears both, so backing out
+      // of the picker leaves no footprint behind (PR 6 self-review).
+      await runResetPackProject(set);
+      return;
+    }
+    if (picked === null) {
+      set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
       return;
     }
     if (typeof picked !== "string") {

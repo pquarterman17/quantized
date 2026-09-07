@@ -41,7 +41,7 @@
 // BOUNDS: `bytes` is computed ONCE at trash time (`byteSize`, a single
 // `JSON.stringify(...).length`) and stored on the entry — never recomputed
 // per render. The panel's own display-only helpers (`trashSummary`,
-// `formatTrashBytes`) live in `lib/trashSummary.ts`, imported ONLY by the
+// `purgePreviewLine`) live in `lib/trashSummary.ts`, imported ONLY by the
 // lazy-loaded `TrashPanel` — this file is EAGER (part of `useApp`'s slice
 // composition), so nothing panel-only belongs here.
 

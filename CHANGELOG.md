@@ -6,12 +6,17 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
-- Pack Project (in progress): the backend can now produce a complete,
-  movable portable project bundle — staging, verifying, and atomically
-  publishing the packed project file and its dataset copies together —
-  and a new orchestration bridge wires that into one cancellable, pollable
-  job with a matching frontend state machine. The visual "Pack Project"
-  dialog itself is still to come.
+- Pack Project: File → **Pack Project…** (desktop app) creates a portable,
+  self-contained copy of the open project next to a folder you pick — the
+  packed project file plus a verified copy of every reachable source file
+  — after a review step that shows each source's readiness, size, and any
+  blockers. Progress is shown per file and by bytes, packing can be
+  cancelled at any point, and an existing destination folder is never
+  overwritten. Your open project and original data files are never
+  modified. Sources that are missing or offline keep their original
+  absolute paths in the packed copy. Backend: staging, verification, and
+  atomic publication of the bundle (an atomic no-replace rename on Linux,
+  macOS, and Windows), with a cancellable, pollable orchestration job.
 - Relink Sources now detects when two datasets with different recorded
   source paths would be pointed at the same file (for example `/old/a.csv`
   and `/OLD/a.csv` after a folder move) and asks you to choose which
