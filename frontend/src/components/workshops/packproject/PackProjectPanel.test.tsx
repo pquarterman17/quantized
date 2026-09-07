@@ -339,6 +339,27 @@ describe("PackProjectPanel — dismiss()", () => {
     expect(usePackProjectPanel.getState().open).toBe(true);
   });
 
+  it("the X while already cancelling neither prompts nor re-issues the cancel", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      phase: "cancelling",
+      progress: { ...EMPTY_PACK_PROGRESS, totalCount: 3 },
+      cancelPackProject: cancel,
+      resetPackProject: reset,
+    });
+    usePackProjectPanel.setState({ open: true });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Close"));
+    });
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    expect(usePackProject.getState().phase).toBe("cancelling");
+    expect(usePackProjectPanel.getState().open).toBe(true);
+  });
+
   it("the visible Cancel button while packing stays immediate (never asks)", async () => {
     const cancel = vi.fn().mockResolvedValue(undefined);
     usePackProject.setState({

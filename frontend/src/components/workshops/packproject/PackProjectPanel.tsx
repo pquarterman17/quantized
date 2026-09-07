@@ -55,7 +55,13 @@ export default function PackProjectPanel() {
       // the preview still proceeds, runPackProject sees the flag is down
       // and resets the store rather than leaving it active and headless.
       setOpen(false);
-    } else if (phase === "packing" || phase === "cancelling") {
+    } else if (phase === "cancelling") {
+      // Already stopping: there is nothing left to confirm or to ask for.
+      // The X does nothing at all rather than prompting a second time and
+      // reissuing `packCancel` (owner review on #310) — the window stays
+      // put so "Stopping safely…" and then the outcome remain visible.
+      return;
+    } else if (phase === "packing") {
       // Declining must leave BOTH the operation and the panel untouched, so
       // the confirm is the only thing that happens on a "no" — no reset, no
       // close, no cancel. On a "yes" the window stays open so the
