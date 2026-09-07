@@ -77,16 +77,28 @@ export function useImportErrorRoles(
   // including one that leaves roles/names alone), but only actually
   // reseeds when the VALUE signature differs from the last one it saw, so
   // a user's explicit edit survives a reference-only change.
-  const prevSignature = useRef<string | null>(null);
+  const prevArrangement = useRef<string | null>(null);
+  const prevWire = useRef<string | null>(null);
+  const editedChannels = useRef(new Set<number>());
 
   useEffect(() => {
-    const sig = `${signatureOf(columns)}::${JSON.stringify(confirmed)}::${JSON.stringify(suggested)}`;
-    if (sig === prevSignature.current) return;
-    prevSignature.current = sig;
-    setRows(columns.length ? seedFromWire(columns, confirmed, suggested) : []);
+    const arrangement = signatureOf(columns);
+    const wire = `${JSON.stringify(confirmed)}::${JSON.stringify(suggested)}`;
+    if (arrangement === prevArrangement.current && wire === prevWire.current) return;
+    const arrangementChanged = arrangement !== prevArrangement.current;
+    prevArrangement.current = arrangement;
+    prevWire.current = wire;
+    if (arrangementChanged) editedChannels.current.clear();
+    const seeded = columns.length ? seedFromWire(columns, confirmed, suggested) : [];
+    setRows((current) => arrangementChanged ? seeded : seeded.map((row) => (
+      editedChannels.current.has(row.channel)
+        ? current.find((item) => item.channel === row.channel) ?? row
+        : row
+    )));
   }, [columns, confirmed, suggested]);
 
   function patch(channel: number, p: Partial<WizardErrorRow>): void {
+    editedChannels.current.add(channel);
     setRows((rs) => rs.map((r) => (r.channel === channel ? { ...r, ...p } : r)));
   }
 
@@ -96,7 +108,9 @@ export function useImportErrorRoles(
     setErrorAxis: (channel, axis) => patch(channel, { axis }),
     setErrorSide: (channel, side) => patch(channel, { side }),
     resetErrorRows: () => {
-      prevSignature.current = null;
+      prevArrangement.current = null;
+      prevWire.current = null;
+      editedChannels.current.clear();
       setRows([]);
     },
   };

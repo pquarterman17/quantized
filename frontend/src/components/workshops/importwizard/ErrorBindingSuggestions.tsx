@@ -16,11 +16,13 @@ export default function ErrorBindingSuggestions({
   suggestions,
   problems,
   onApply,
+  onRemoveProblem,
 }: {
   columns: ImportPreviewColumn[];
   suggestions: ImportErrorBindingWire[];
   problems: ImportErrorBindingProblem[];
   onApply: (binding: ImportErrorBindingWire) => void;
+  onRemoveProblem: (problem: ImportErrorBindingProblem) => void;
 }) {
   const unapplied = suggestions.filter(
     (binding) => columns.find((column) => column.index === binding.column)?.role !== "error",
@@ -49,7 +51,14 @@ export default function ErrorBindingSuggestions({
         <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
           <strong>Saved error settings need attention:</strong>
           <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
-            {problems.map((problem, index) => <li key={`${problem.code}-${index}`}>{problem.reason}</li>)}
+            {problems.map((problem, index) => (
+              <li key={`${problem.code}-${index}`}>
+                {problem.reason}{" "}
+                <Button size="sm" variant="ghost" onClick={() => onRemoveProblem(problem)}>
+                  Remove invalid setting
+                </Button>
+              </li>
+            ))}
           </ul>
         </div>
       )}

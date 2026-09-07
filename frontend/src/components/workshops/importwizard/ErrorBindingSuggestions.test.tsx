@@ -13,7 +13,7 @@ describe("ErrorBindingSuggestions", () => {
   it("explains a backend suggestion and only applies it on request", () => {
     const onApply = vi.fn();
     const suggestion = { column: 2, target: 1, axis: "y" as const, side: "both" as const };
-    render(<ErrorBindingSuggestions columns={columns} suggestions={[suggestion]} problems={[]} onApply={onApply} />);
+    render(<ErrorBindingSuggestions columns={columns} suggestions={[suggestion]} problems={[]} onApply={onApply} onRemoveProblem={vi.fn()} />);
 
     expect(screen.getByText(/Use/).parentElement).toHaveTextContent("Use dMoment as y-error for Moment");
     expect(onApply).not.toHaveBeenCalled();
@@ -29,9 +29,20 @@ describe("ErrorBindingSuggestions", () => {
       side: "both",
       code: "column_out_of_range",
       reason: "Error column 9 no longer exists in this file.",
-    }]} onApply={vi.fn()} />);
+    }]} onApply={vi.fn()} onRemoveProblem={vi.fn()} />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("Saved error settings need attention");
     expect(screen.getByRole("alert")).toHaveTextContent("Error column 9 no longer exists");
+  });
+
+  it("lets the user remove a rejected saved setting", () => {
+    const onRemoveProblem = vi.fn();
+    const problem = {
+      column: 8, target: 1, axis: "y", side: "both", code: "column_out_of_range",
+      reason: "Error column 9 no longer exists in this file.",
+    };
+    render(<ErrorBindingSuggestions columns={columns} suggestions={[]} problems={[problem]} onApply={vi.fn()} onRemoveProblem={onRemoveProblem} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove invalid setting" }));
+    expect(onRemoveProblem).toHaveBeenCalledWith(problem);
   });
 });

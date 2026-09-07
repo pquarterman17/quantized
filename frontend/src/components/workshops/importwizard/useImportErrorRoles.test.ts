@@ -34,6 +34,17 @@ describe("useImportErrorRoles", () => {
     ]);
   });
 
+  it("keeps an explicit unassign when the next preview still suggests the binding", () => {
+    const suggestion = [{ column: 2, target: 1, axis: "y" as const, side: "both" as const }];
+    const { result, rerender } = renderHook(
+      ({ confirmed }) => useImportErrorRoles(cols(), confirmed, suggestion),
+      { initialProps: { confirmed: suggestion } },
+    );
+    act(() => result.current.setErrorTarget(1, null));
+    rerender({ confirmed: [] });
+    expect(result.current.errorRows[0].target).toBeNull();
+  });
+
   it("setErrorTarget/-Axis/-Side edit one row by channel, leaving others untouched", () => {
     const wide: ImportPreviewColumn[] = [
       { index: 0, name: "Temp", unit: "K", role: "x" },

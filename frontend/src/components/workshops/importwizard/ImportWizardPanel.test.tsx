@@ -341,6 +341,34 @@ describe("ImportWizardPanel", () => {
       }),
       30,
     ));
+
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "0" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+  });
+
+  it("removes a rejected binding from settings so it can be saved cleanly", async () => {
+    const rejected = { column: 8, target: 1, axis: "y" as const, side: "both" as const };
+    importGuessMock.mockResolvedValue({ ...SETTINGS, error_bindings: [rejected] });
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [{ ...rejected, code: "column_out_of_range", reason: "Column 9 is gone." }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await screen.findByText("Column 9 is gone.");
+    importPreviewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove invalid setting" }));
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String), expect.objectContaining({ error_bindings: [] }), 30,
+    ));
   });
 
   it("lists saved filters and applies one to re-preview", async () => {

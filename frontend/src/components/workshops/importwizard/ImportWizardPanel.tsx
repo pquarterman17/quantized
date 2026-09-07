@@ -196,6 +196,7 @@ export default function ImportWizardPanel() {
               suggestions={w.preview.suggested_error_bindings ?? []}
               problems={w.preview.error_binding_problems ?? []}
               onApply={w.applyErrorSuggestion}
+              onRemoveProblem={w.removeRejectedErrorBinding}
             />
           )}
 

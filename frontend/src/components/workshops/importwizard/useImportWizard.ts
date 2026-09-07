@@ -23,6 +23,7 @@ import {
 } from "../../../lib/importwizard";
 import type {
   ImportColumnRole,
+  ImportErrorBindingProblem,
   ImportFilterWire,
   ImportErrorBindingWire,
   ImportPreviewColumn,
@@ -68,6 +69,7 @@ export interface ImportWizardState {
   setErrorAxis: (channel: number, axis: "x" | "y") => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
   applyErrorSuggestion: (binding: ImportErrorBindingWire) => void;
+  removeRejectedErrorBinding: (problem: ImportErrorBindingProblem) => void;
   applyFilter: (name: string) => Promise<void>;
   saveAsFilter: (name: string, glob: string) => Promise<void>;
   removeFilter: (name: string) => Promise<void>;
@@ -213,32 +215,50 @@ export function useImportWizard(): ImportWizardState {
     const source = finalChannelOrder(columns).find((item) => item.channel === channel);
     if (!row || !source) return;
     const next = { ...row, ...patch };
-    const withoutCurrent = (settings.error_bindings ?? []).filter(
-      (item) => item.column !== source.sourceIndex,
-    );
+    const bindings = settings.error_bindings ?? [];
+    const currentIndex = bindings.findIndex((item) => item.column === source.sourceIndex);
     if (next.target === null) {
-      patchSettings({ error_bindings: withoutCurrent });
+      patchSettings({ error_bindings: bindings.filter((_, index) => index !== currentIndex) });
       return;
     }
     const target = next.target === -1
       ? -1
       : finalChannelOrder(columns).find((item) => item.channel === next.target)?.sourceIndex;
     if (target === undefined) return;
-    patchSettings({ error_bindings: [...withoutCurrent, {
+    const binding = {
       column: source.sourceIndex,
       target,
       axis: next.axis,
       side: next.side,
-    }] });
+    };
+    patchSettings({
+      error_bindings: currentIndex < 0
+        ? [...bindings, binding]
+        : bindings.map((item, index) => index === currentIndex ? binding : item),
+    });
   }
 
   function setErrorTarget(channel: number, target: number | null): void {
+    const current = errorRows.find((row) => row.channel === channel);
     setErrorTargetLocal(channel, target);
     // The backend contract reserves target -1 for the x axis and rejects it
     // unless axis is also x. Keep the visible editor and persisted binding
     // valid in the same interaction instead of waiting for a rejected preview.
-    if (target === -1) setErrorAxisLocal(channel, "x");
-    persistErrorRow(channel, { target, ...(target === -1 ? { axis: "x" as const } : {}) });
+    const axis = target === -1 ? "x" : current?.target === -1 && target !== null ? "y" : undefined;
+    if (axis) setErrorAxisLocal(channel, axis);
+    persistErrorRow(channel, { target, ...(axis ? { axis } : {}) });
+  }
+
+  function removeRejectedErrorBinding(problem: ImportErrorBindingProblem): void {
+    if (!settings) return;
+    patchSettings({
+      error_bindings: (settings.error_bindings ?? []).filter((binding) => !(
+        binding.column === problem.column
+        && binding.target === problem.target
+        && binding.axis === problem.axis
+        && binding.side === problem.side
+      )),
+    });
   }
 
   function setErrorAxis(channel: number, axis: "x" | "y"): void {
@@ -399,6 +419,7 @@ export function useImportWizard(): ImportWizardState {
     setErrorAxis,
     setErrorSide,
     applyErrorSuggestion,
+    removeRejectedErrorBinding,
     applyFilter,
     saveAsFilter,
     removeFilter,

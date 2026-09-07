@@ -86,9 +86,13 @@ export default function ErrorRolesEditor({
                     ]}
                     value={row.axis}
                     disabled={row.target === null || row.target === -1}
-                    title={row.target === -1 ? "The x-axis target always uses x error" : undefined}
                     onChange={(e) => onAxisChange(row.channel, e.target.value as "x" | "y")}
                   />
+                  {row.target === -1 && (
+                    <span className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginLeft: 6 }}>
+                      x axis requires x error
+                    </span>
+                  )}
                 </td>
                 <td>
                   <Select
