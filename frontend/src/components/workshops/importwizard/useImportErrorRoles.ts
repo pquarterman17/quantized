@@ -24,8 +24,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ErrorBinding } from "../../../lib/errorRoles";
-import { seedErrorRows, type WizardErrorRow } from "../../../lib/importwizard";
-import type { ImportPreviewColumn } from "../../../lib/types";
+import { errorRoleChannels, finalChannelOrder, seedErrorRows, type WizardErrorRow } from "../../../lib/importwizard";
+import type { ImportErrorBindingWire, ImportPreviewColumn } from "../../../lib/types";
+
+const NO_BINDINGS: ImportErrorBindingWire[] = [];
 
 export interface ImportErrorRolesState {
   errorRows: WizardErrorRow[];
@@ -44,7 +46,30 @@ function signatureOf(columns: readonly ImportPreviewColumn[]): string {
   return columns.map((c) => `${c.role}:${c.name}:${c.effective_name ?? c.name}`).join("|");
 }
 
-export function useImportErrorRoles(columns: ImportPreviewColumn[]): ImportErrorRolesState {
+function seedFromWire(
+  columns: ImportPreviewColumn[],
+  confirmed: readonly ImportErrorBindingWire[],
+  suggested: readonly ImportErrorBindingWire[],
+): WizardErrorRow[] {
+  const fallback = seedErrorRows(columns);
+  const channels = finalChannelOrder(columns);
+  const rawToChannel = new Map(channels.map((c) => [c.sourceIndex, c.channel]));
+  return errorRoleChannels(columns).map((errorColumn) => {
+    const binding = confirmed.find((b) => b.column === errorColumn.sourceIndex)
+      ?? suggested.find((b) => b.column === errorColumn.sourceIndex);
+    const target = binding?.target === -1 ? -1 : rawToChannel.get(binding?.target ?? Number.NaN);
+    if (!binding || target === undefined) {
+      return fallback.find((row) => row.channel === errorColumn.channel)!;
+    }
+    return { channel: errorColumn.channel, label: errorColumn.label, target, axis: binding.axis, side: binding.side };
+  });
+}
+
+export function useImportErrorRoles(
+  columns: ImportPreviewColumn[],
+  confirmed: readonly ImportErrorBindingWire[] = NO_BINDINGS,
+  suggested: readonly ImportErrorBindingWire[] = NO_BINDINGS,
+): ImportErrorRolesState {
   const [rows, setRows] = useState<WizardErrorRow[]>([]);
   // `null` forces the NEXT effect run to reseed regardless of what the
   // signature turns out to be (resetErrorRows sets this) — the effect
@@ -55,11 +80,11 @@ export function useImportErrorRoles(columns: ImportPreviewColumn[]): ImportError
   const prevSignature = useRef<string | null>(null);
 
   useEffect(() => {
-    const sig = signatureOf(columns);
+    const sig = `${signatureOf(columns)}::${JSON.stringify(confirmed)}::${JSON.stringify(suggested)}`;
     if (sig === prevSignature.current) return;
     prevSignature.current = sig;
-    setRows(columns.length ? seedErrorRows(columns) : []);
-  }, [columns]);
+    setRows(columns.length ? seedFromWire(columns, confirmed, suggested) : []);
+  }, [columns, confirmed, suggested]);
 
   function patch(channel: number, p: Partial<WizardErrorRow>): void {
     setRows((rs) => rs.map((r) => (r.channel === channel ? { ...r, ...p } : r)));

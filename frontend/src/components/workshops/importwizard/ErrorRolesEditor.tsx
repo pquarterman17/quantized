@@ -85,7 +85,8 @@ export default function ErrorRolesEditor({
                       { value: "x", label: "x" },
                     ]}
                     value={row.axis}
-                    disabled={row.target === null}
+                    disabled={row.target === null || row.target === -1}
+                    title={row.target === -1 ? "The x-axis target always uses x error" : undefined}
                     onChange={(e) => onAxisChange(row.channel, e.target.value as "x" | "y")}
                   />
                 </td>

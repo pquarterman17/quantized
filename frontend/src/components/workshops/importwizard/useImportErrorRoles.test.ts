@@ -23,6 +23,17 @@ describe("useImportErrorRoles", () => {
     expect(result.current.errorRows).toEqual([]);
   });
 
+  it("uses backend-confirmed bindings ahead of suggestions and the legacy client fallback", () => {
+    const { result } = renderHook(() => useImportErrorRoles(
+      cols(),
+      [{ column: 2, target: -1, axis: "x", side: "+" }],
+      [{ column: 2, target: 1, axis: "y", side: "both" }],
+    ));
+    expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "dR", target: -1, axis: "x", side: "+" },
+    ]);
+  });
+
   it("setErrorTarget/-Axis/-Side edit one row by channel, leaving others untouched", () => {
     const wide: ImportPreviewColumn[] = [
       { index: 0, name: "Temp", unit: "K", role: "x" },

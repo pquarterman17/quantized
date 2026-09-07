@@ -13,6 +13,7 @@ import type { ErrorBinding } from "../../../lib/errorRoles";
 import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
 import {
   confirmedErrorBindings,
+  finalChannelOrder,
   resolveImportFilter,
   withColumnName,
   withColumnUnit,
@@ -23,6 +24,7 @@ import {
 import type {
   ImportColumnRole,
   ImportFilterWire,
+  ImportErrorBindingWire,
   ImportPreviewColumn,
   ImportPreviewResponse,
   ImportSettingsWire,
@@ -33,6 +35,7 @@ import { useImportErrorRoles } from "./useImportErrorRoles";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
+const NO_ERROR_BINDINGS: ImportErrorBindingWire[] = [];
 
 let _seq = 0;
 
@@ -64,6 +67,7 @@ export interface ImportWizardState {
   setErrorTarget: (channel: number, target: number | null) => void;
   setErrorAxis: (channel: number, axis: "x" | "y") => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
+  applyErrorSuggestion: (binding: ImportErrorBindingWire) => void;
   applyFilter: (name: string) => Promise<void>;
   saveAsFilter: (name: string, glob: string) => Promise<void>;
   removeFilter: (name: string) => Promise<void>;
@@ -93,8 +97,18 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
-  const { errorRows, setErrorTarget, setErrorAxis, setErrorSide, resetErrorRows } =
-    useImportErrorRoles(columns);
+  const {
+    errorRows,
+    setErrorTarget: setErrorTargetLocal,
+    setErrorAxis: setErrorAxisLocal,
+    setErrorSide: setErrorSideLocal,
+    resetErrorRows,
+  } =
+    useImportErrorRoles(
+      columns,
+      preview?.error_bindings ?? NO_ERROR_BINDINGS,
+      preview?.suggested_error_bindings ?? NO_ERROR_BINDINGS,
+    );
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -175,6 +189,66 @@ export function useImportWizard(): ImportWizardState {
     if (!settings || !columns.length) return;
     setColumns((cs) => cs.map((c, i) => (i === index ? { ...c, unit } : c)));
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
+  }
+
+  function applyErrorSuggestion(binding: ImportErrorBindingWire): void {
+    if (!settings || !columns.length) return;
+    const position = columns.findIndex((column) => column.index === binding.column);
+    if (position < 0) return;
+    setColumns((current) => current.map((column, i) => (
+      i === position ? { ...column, role: "error" } : column
+    )));
+    patchSettings({
+      roles: withRole(columns, position, "error"),
+      error_bindings: [
+        ...(settings.error_bindings ?? []).filter((item) => item.column !== binding.column),
+        binding,
+      ],
+    });
+  }
+
+  function persistErrorRow(channel: number, patch: Partial<WizardErrorRow>): void {
+    if (!settings) return;
+    const row = errorRows.find((item) => item.channel === channel);
+    const source = finalChannelOrder(columns).find((item) => item.channel === channel);
+    if (!row || !source) return;
+    const next = { ...row, ...patch };
+    const withoutCurrent = (settings.error_bindings ?? []).filter(
+      (item) => item.column !== source.sourceIndex,
+    );
+    if (next.target === null) {
+      patchSettings({ error_bindings: withoutCurrent });
+      return;
+    }
+    const target = next.target === -1
+      ? -1
+      : finalChannelOrder(columns).find((item) => item.channel === next.target)?.sourceIndex;
+    if (target === undefined) return;
+    patchSettings({ error_bindings: [...withoutCurrent, {
+      column: source.sourceIndex,
+      target,
+      axis: next.axis,
+      side: next.side,
+    }] });
+  }
+
+  function setErrorTarget(channel: number, target: number | null): void {
+    setErrorTargetLocal(channel, target);
+    // The backend contract reserves target -1 for the x axis and rejects it
+    // unless axis is also x. Keep the visible editor and persisted binding
+    // valid in the same interaction instead of waiting for a rejected preview.
+    if (target === -1) setErrorAxisLocal(channel, "x");
+    persistErrorRow(channel, { target, ...(target === -1 ? { axis: "x" as const } : {}) });
+  }
+
+  function setErrorAxis(channel: number, axis: "x" | "y"): void {
+    setErrorAxisLocal(channel, axis);
+    persistErrorRow(channel, { axis });
+  }
+
+  function setErrorSide(channel: number, side: ErrorBinding["side"]): void {
+    setErrorSideLocal(channel, side);
+    persistErrorRow(channel, { side });
   }
 
   // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
@@ -324,6 +398,7 @@ export function useImportWizard(): ImportWizardState {
     setErrorTarget,
     setErrorAxis,
     setErrorSide,
+    applyErrorSuggestion,
     applyFilter,
     saveAsFilter,
     removeFilter,
