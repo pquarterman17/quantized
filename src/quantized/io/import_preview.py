@@ -28,7 +28,6 @@ Pure ``io`` layer — no fastapi/pydantic imports.
 
 from __future__ import annotations
 
-import re
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -36,19 +35,29 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import (
-    _detect_delimiter,
     _looks_like_units_row,
     _numeric_score,
-    _to_float,
 )
 from quantized.io.delimited import (
     _encode_categorical,
-    _extract_units,
 )
 from quantized.io.import_error_bindings import (
     ErrorBinding,
     binding_metadata,
     valid_error_bindings,
+)
+from quantized.io.import_parse import (
+    DATA_ROLES as _DATA_ROLES,
+)
+from quantized.io.import_parse import (
+    _effective_names,
+    _effective_ncols,
+    _label_row_overrides,
+    _parse_core,
+    _preamble_comments,
+    _resolve_delim,
+    _resolve_names,
+    _split,
 )
 
 __all__ = [
@@ -66,7 +75,7 @@ __all__ = [
 # below). The Import Wizard UI for picking it is P1.6's slice; the backend
 # role already works (guess_settings never suggests it -- only an explicit
 # ImportSettings.roles entry selects it).
-DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
+DATA_ROLES = _DATA_ROLES  # re-exported; defined with the parsing internals
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
 _CATEGORICAL_ROLE = "categorical"
 # friendly delimiter aliases -> how to split
@@ -131,53 +140,6 @@ class ImportSettings:
         return cls(**kwargs)
 
 
-@dataclass
-class _Parsed:
-    lines: list[str]
-    delim: str
-    names: list[str]
-    units: list[str]
-    roles: list[str]
-    matrix: np.ndarray  # (n_rows, n_cols) float
-    data_start: int
-    # Raw string cells per data row (n_rows entries, each up to n_cols wide),
-    # BEFORE `_to_float` conversion -- the P1.4 "label"/"categorical" roles
-    # need the original text, which the numeric `matrix` has already erased.
-    data_tokens: list[list[str]]
-    # Every line, delimiter-split (P1.6: label_line lookup + preamble capture
-    # both need lines ABOVE data_start, which `data_tokens` excludes).
-    all_tokens: list[list[str]]
-
-
-def _split(line: str, delim: str) -> list[str]:
-    if delim in (" ", "whitespace"):
-        return re.split(r"\s+", line.strip())
-    return line.split(delim)
-
-
-def _effective_ncols(rows: list[list[str]]) -> int:
-    """Column count ignoring trailing empty tokens (a trailing-delimiter row
-    like ``"1,2,"`` is 2 columns, not 3), while preserving empty *interior*
-    cells (``"1,,3"`` stays 3). Mirrors ``import_csv``'s trailing-column guard.
-    """
-    best = 0
-    for row in rows:
-        last = 0
-        for k, cell in enumerate(row):
-            if cell.strip():
-                last = k + 1
-        best = max(best, last)
-    return best
-
-
-def _resolve_delim(lines: list[str], setting: str) -> str:
-    d = _NAMED_DELIMS.get(setting.lower(), setting)
-    if d != "auto":
-        return d
-    non_empty = [ln for ln in lines if ln.strip()]
-    return _detect_delimiter(non_empty) if non_empty else ","
-
-
 def guess_settings(text: str) -> ImportSettings:
     """Best-effort starting settings for ``text`` (the wizard's initial state)."""
     lines = text.splitlines()
@@ -205,120 +167,6 @@ def guess_settings(text: str) -> ImportSettings:
         delimiter="auto", header_line=header_line, units_line=units_line,
         data_start_line=data_start, column_names=names, roles=roles,
     )
-
-
-def _resolve_names(tokens: list[list[str]], header_line: int | None, n_cols: int) -> list[str]:
-    if header_line is not None and 0 <= header_line < len(tokens):
-        raw = [c.strip() for c in tokens[header_line]]
-    else:
-        raw = []
-    names = [raw[k] if k < len(raw) and raw[k] else f"Col{k + 1}" for k in range(n_cols)]
-    return names
-
-
-def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
-    lines = text.splitlines()
-    delim = _resolve_delim(lines, settings.delimiter)
-    tokens = [_split(ln, delim) for ln in lines]
-    ds = max(0, settings.data_start_line)
-    data_tokens = [t for t in tokens[ds:] if any(c.strip() for c in t)]
-    n_cols = _effective_ncols(data_tokens)
-    if settings.column_names:
-        names = [settings.column_names[k] if k < len(settings.column_names) else f"Col{k + 1}"
-                 for k in range(n_cols)]
-    else:
-        names = _resolve_names(tokens, settings.header_line, n_cols)
-    # split any "Name (unit)" embedded units out of the header names
-    units = [""] * n_cols
-    for k in range(n_cols):
-        u, lbl = _extract_units(names[k])
-        names[k], units[k] = lbl, u
-    # an explicit units row overrides
-    if settings.units_line is not None and 0 <= settings.units_line < len(tokens):
-        urow = [c.strip().strip("()[]{}") for c in tokens[settings.units_line]]
-        for k in range(min(n_cols, len(urow))):
-            if urow[k]:
-                units[k] = urow[k]
-    roles = _resolve_roles(settings.roles, n_cols)
-
-    matrix = np.full((len(data_tokens), n_cols), np.nan, dtype=float)
-    for i, row in enumerate(data_tokens):
-        for k in range(min(len(row), n_cols)):
-            matrix[i, k] = _to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens)
-
-
-def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:
-    """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
-    POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
-    `label_line` isn't set or is out of range (no override, unchanged
-    behavior).
-
-    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
-    `units_line`), reuse the already `_extract_units`-split `p.names` (or
-    `p.units`) rather than re-reading the raw token row -- the raw row still
-    has an embedded "Name (unit)" suffix that `_extract_units` already
-    stripped out of `p.names`, so reading it again would silently
-    reintroduce the unit text into the label."""
-    ll = settings.label_line
-    if ll is None:
-        return None
-    if ll == settings.header_line:
-        return list(p.names)
-    if ll == settings.units_line:
-        return list(p.units)
-    if not (0 <= ll < len(p.all_tokens)):
-        return None
-    row = p.all_tokens[ll]
-    return [row[k].strip() if k < len(row) else "" for k in range(n_cols)]
-
-
-def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int) -> list[str]:
-    """P1-5 DEFECT 2: the name each column's DataStruct channel/label will
-    ACTUALLY carry -- `label_overrides[k]` when set (P1.6 `label_line`),
-    else the header-derived `p.names[k]` unchanged. This is the SAME rule
-    `parse_import`'s local `label_for` applies; factored out here so
-    `preview_import` can report it too (`columns[k].effective_name`)
-    instead of only ever offering the raw header name, which a wizard
-    classifying error-role suggestions against would otherwise be matching
-    a name the final dataset never carries whenever `label_line` is set."""
-    return [
-        label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
-        for k in range(n_cols)
-    ]
-
-
-def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
-    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
-    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
-    (raw stripped text) as searchable metadata instead of silently dropped.
-    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
-    consumer (search, the Inspector) reads one convention regardless of
-    which import path produced the dataset.
-
-    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
-    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
-    directly user-settable through the wizard, so an oversized value (typo,
-    or a stale saved filter) can't balloon `metadata["comments"]` to the
-    size of the whole file."""
-    consumed = {settings.header_line, settings.units_line, settings.label_line}
-    out: list[str] = []
-    for i in range(p.data_start):
-        if len(out) >= _MAX_PREAMBLE_COMMENTS:
-            break
-        if i in consumed:
-            continue
-        raw = p.lines[i].strip() if i < len(p.lines) else ""
-        if raw:
-            out.append(raw)
-    return out
-
-
-def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
-    if not roles:
-        return (["x"] + ["y"] * (n_cols - 1)) if n_cols else []
-    out = [roles[k] if k < len(roles) and roles[k] in DATA_ROLES else "y" for k in range(n_cols)]
-    return out
 
 
 def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
