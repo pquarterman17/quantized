@@ -1,0 +1,308 @@
+{
+  "_generated_from": "frontend/src/lib/errorSuggestionParityFixture.gen.test.ts, running the real suggestErrorBindings (importwizard.ts). A diff against src/quantized/io/error_binding_suggestions.py's suggest_error_bindings_by_channel port means the two languages disagree -- fix the disagreement, never regenerate this file to hide it. See this generator's header comment for the deliberate-divergence scope note.",
+  "cases": [
+    {
+      "note": "unambiguous base-name pairing: Temp(x), R(y), dR(error)",
+      "columns": [
+        {
+          "name": "Temp",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "R",
+          "role": "y",
+          "index": 1
+        },
+        {
+          "name": "dR",
+          "role": "error",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "rule-1 pairing whose base is only provisionally error-like (Serr) is not dropped",
+      "columns": [
+        {
+          "name": "Serr",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "dSerr",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "X",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "control: the same shape with a non-provisional base was never affected",
+      "columns": [
+        {
+          "name": "R",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "dR",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "X",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "classifies against effective_name, not the raw header name, when label_line overrides it",
+      "columns": [
+        {
+          "name": "Col1",
+          "role": "x",
+          "effective_name": "Temp",
+          "index": 0
+        },
+        {
+          "name": "Col2",
+          "role": "y",
+          "effective_name": "R",
+          "index": 1
+        },
+        {
+          "name": "Col3",
+          "role": "error",
+          "effective_name": "dR",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "genuinely ambiguous error column gets NO suggestion at all -- never a guessed default",
+      "columns": [
+        {
+          "name": "Temp",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "err",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": []
+    },
+    {
+      "note": "demotes a MULTI-CANDIDATE position-only (rule 3) pairing to unassigned",
+      "columns": [
+        {
+          "name": "T1",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "T err",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "T2",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": []
+    },
+    {
+      "note": "keeps a SINGLE-CANDIDATE position-only pairing as a real suggestion",
+      "columns": [
+        {
+          "name": "Temp",
+          "role": "x",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 1
+        },
+        {
+          "name": "err",
+          "role": "error",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a base-name match (rule 1) is never demoted, even with a plausible column following",
+      "columns": [
+        {
+          "name": "R",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "dR",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "an explicit x-prefix (rule 2) is never demoted either",
+      "columns": [
+        {
+          "name": "Signal",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "xerr",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a following ERROR-role column (not a value column) does not itself trigger demotion",
+      "columns": [
+        {
+          "name": "T1",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "err1",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "err2",
+          "role": "error",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a following CATEGORICAL column (not a plausible numeric target) does not itself trigger demotion",
+      "columns": [
+        {
+          "name": "T",
+          "role": "y",
+          "index": 0
+        },
+        {
+          "name": "err",
+          "role": "error",
+          "index": 1
+        },
+        {
+          "name": "Sample",
+          "role": "categorical",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    }
+  ]
+}
