@@ -57,6 +57,7 @@ from quantized.io.import_metadata import (
     MAX_PREAMBLE_COMMENTS,
     parse_header_fields,
     preamble_comments,
+    unparsed_comments,
 )
 from quantized.io.import_parse import (
     DATA_ROLES as _DATA_ROLES,
@@ -292,6 +293,14 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "comments": comments,
         "header_fields": header_fields,  # P1.6 Part A: `comments`, structured
         "header_field_problems": header_field_problems,
+        # The COMPLEMENT of `header_fields` over `comments` -- the preamble
+        # lines that are not `key: value`. `header_fields` is a parse of the
+        # very `comments` this payload also returns, so a UI rendering both
+        # shows every field line twice (a preamble that is entirely
+        # `key: value` renders in full, twice) unless it can tell the two
+        # apart. Sent from here rather than re-derived client-side so the
+        # "is this a field?" rule stays in one language.
+        "unparsed_comments": unparsed_comments(comments),
         "error_bindings": [b.to_dict() for b in kept_bindings],
         "error_binding_problems": [
             d.to_dict()

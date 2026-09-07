@@ -95,6 +95,14 @@ export interface ImportPreviewResponse {
    *  LAST occurrence's value won (see `header_fields`); each entry names
    *  which key was overwritten. */
   header_field_problems?: ImportHeaderFieldProblem[];
+  /** P1.6 Part A: the COMPLEMENT of `header_fields` over `comments` — the
+   *  preamble lines that are NOT `key: value`. `header_fields` is a parse of
+   *  the very `comments` this response also carries, so rendering both shows
+   *  every field line twice; render this instead of `comments` alongside the
+   *  structured map. Derived server-side (`import_metadata.
+   *  unparsed_comments`) so the "is this a field?" rule stays in one
+   *  language. Falls back to `comments` when absent (older fixtures). */
+  unparsed_comments?: string[];
   /** P1.6: the error bindings from `settings` that SURVIVED validation
    *  against this file, echoed back raw-column-indexed. */
   error_bindings?: ImportErrorBindingWire[];
