@@ -828,9 +828,39 @@ def test_suggestions_are_independent_of_confirmed_error_bindings() -> None:
     ]
 
 
-def test_suggestions_are_empty_when_no_column_is_marked_error() -> None:
+def test_suggestions_are_empty_when_no_column_has_an_error_shaped_name() -> None:
+    """Renamed from a check that used to pass for the WRONG reason (review
+    finding #6): `_MESSY`'s columns (Temperature, Moment, Field) carry no
+    error-shaped NAMES at all -- this is empty because the label classifier
+    finds nothing to bind, not because of any role restriction. Suggestions
+    are NOT restricted to already-`error`-role columns -- `guess_settings`
+    (used here) never even assigns that role, and error_binding_
+    suggestions.py's docstring says so explicitly; the real role rule is
+    covered separately below."""
     pv = preview_import(_MESSY, guess_settings(_MESSY))
     assert pv["suggested_error_bindings"] == []
+
+
+def test_suggestions_never_name_a_column_marked_ignore_or_label() -> None:
+    """The REAL role rule (review finding #2): an error-shaped name is
+    suggested for a column currently `y`/`error` (or effectively
+    unassigned, since `guess_settings` defaults every non-`x` column to
+    `y`) -- but NEVER for one the user already retyped `ignore` or
+    `label`, even though `dR`'s name is exactly as error-shaped as it
+    would be under `y`/`error` (see the sibling test above/below for the
+    positive case)."""
+    text = "Temp,R,dR\n1,10,0.1\n2,20,0.2\n"
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "ignore"])
+    )["suggested_error_bindings"] == []
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "label"])
+    )["suggested_error_bindings"] == []
+    # Positive control: the SAME shape, still `error`, still suggested --
+    # proves the two assertions above are the role, not the name/shape.
+    assert preview_import(
+        text, ImportSettings(header_line=0, data_start_line=1, roles=["x", "y", "error"])
+    )["suggested_error_bindings"] == [{"column": 2, "target": 1, "axis": "y", "side": "both"}]
 
 
 def test_suggestions_demote_a_genuinely_ambiguous_positional_pairing() -> None:
