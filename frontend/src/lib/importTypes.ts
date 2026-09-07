@@ -76,6 +76,16 @@ export interface ImportPreviewResponse {
   n_data_rows: number;
   n_preview_rows: number;
   comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
+  /** P1.6 Part A: the SAME `comments` lines, additionally parsed into an
+   *  ordered `key -> value` map (`quantized.io.import_metadata.
+   *  parse_header_fields`) — strictly additive, never a replacement.
+   *  Optional on the wire type (older fixtures / mocked previews may omit
+   *  it) -- always present on a live `/api/import/preview` response. */
+  header_fields?: Record<string, string>;
+  /** P1.6 Part A: keys that appeared more than once in the preamble — the
+   *  LAST occurrence's value won (see `header_fields`); each entry names
+   *  which key was overwritten. */
+  header_field_problems?: ImportHeaderFieldProblem[];
   /** P1.6: the error bindings from `settings` that SURVIVED validation
    *  against this file, echoed back raw-column-indexed. */
   error_bindings?: ImportErrorBindingWire[];
@@ -83,7 +93,27 @@ export interface ImportPreviewResponse {
    *  human-readable `reason` naming the column. What the wizard shows when a
    *  saved filter's pairings no longer fit the file being imported. */
   error_binding_problems?: ImportErrorBindingProblem[];
+  /** P1.6 Part C: structured problems in every `categorical`-role column's
+   *  level table (`quantized.io.import_categorical_guards`) — a
+   *  `categorical_level_cap` entry means `parse_import` will REFUSE the
+   *  import (Import must be disabled/warned); a `categorical_case_collision`
+   *  entry is informational only (never blocks Import). Optional on the wire
+   *  type for the same reason as `header_fields` above. */
+  categorical_problems?: ImportCategoricalProblem[];
 }
+
+/** One duplicate key found while parsing `header_fields` (P1.6 Part A). */
+export interface ImportHeaderFieldProblem {
+  type: "duplicate_header_field";
+  key: string;
+}
+
+/** One structured problem in a `categorical` column's level table (P1.6
+ *  Part C), mirroring `quantized.io.import_categorical_guards`'s two problem
+ *  shapes exactly. */
+export type ImportCategoricalProblem =
+  | { type: "categorical_level_cap"; column: string; level_count: number; cap: number }
+  | { type: "categorical_case_collision"; column: string; labels: string[] };
 
 /** One rejected `ImportErrorBindingWire`, mirroring
  *  `quantized.io.import_error_bindings.DroppedErrorBinding.to_dict()`. */

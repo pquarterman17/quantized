@@ -12,14 +12,18 @@ with the confirmed settings. This module provides that:
   also the persistable "import filter" shape; binding a saved filter to a
   glob and consulting it from the registry is the remaining (design) half
   of #40. Every preamble line above ``data_start_line`` NOT consumed as
-  header/units/label is retained (``metadata["comments"]``, P1.6 item 3)
-  instead of silently dropped.
+  header/units/label is retained (``metadata["comments"]``, P1.6 item 3) and
+  additionally parsed into ``metadata["header_fields"]`` (P1.6 Part A, see
+  ``import_metadata``).
 - :func:`guess_settings` — a starting guess from the raw text (reusing the
   ``delimited`` detectors).
 - :func:`preview_import` — parse the first rows under given settings and return
   a table + resolved columns for the wizard to render.
 - :func:`parse_import` — parse the full text under settings into a
-  ``DataStruct``.
+  ``DataStruct``. A ``categorical`` column's level table is guarded (P1.6
+  Part C, see ``import_categorical_guards``): a level-count cap refuses the
+  import rather than building a garbage channel, and same-case-folded levels
+  are reported (never auto-merged).
 
 Absolute line indices (over ``text.splitlines()``, comments/blanks included)
 so the wizard can number every line and let the user point at the header.
@@ -41,13 +45,13 @@ from quantized.io._delimited_layout import (
     _numeric_score,
     _to_float,
 )
-from quantized.io.delimited import (
-    _encode_categorical,
-    _extract_units,
-)
-from quantized.io.import_error_bindings import (
-    ErrorBinding,
-    valid_error_bindings,
+from quantized.io.delimited import _extract_units
+from quantized.io.import_categorical_guards import encode_categorical_columns
+from quantized.io.import_error_bindings import ErrorBinding, valid_error_bindings
+from quantized.io.import_metadata import (
+    MAX_PREAMBLE_COMMENTS,
+    parse_header_fields,
+    preamble_comments,
 )
 
 __all__ = [
@@ -60,11 +64,9 @@ __all__ = [
     "valid_error_bindings",
 ]
 
-# P1.4: "categorical" joins the roles a column can carry -- it produces a
-# categorical DataStruct channel (see `_encode_categorical`/`cat_levels`
-# below). The Import Wizard UI for picking it is P1.6's slice; the backend
-# role already works (guess_settings never suggests it -- only an explicit
-# ImportSettings.roles entry selects it).
+# P1.4: "categorical" joins the roles a column can carry -- a categorical
+# DataStruct channel (`encode_categorical_columns`/`cat_levels` below).
+# `guess_settings` never suggests it -- only an explicit `roles` entry does.
 DATA_ROLES = ("x", "y", "error", "label", "ignore", "categorical")
 _CHANNEL_ROLES = ("y", "error")  # numeric roles that become DataStruct channels
 _CATEGORICAL_ROLE = "categorical"
@@ -72,13 +74,8 @@ _CATEGORICAL_ROLE = "categorical"
 _NAMED_DELIMS = {"auto": "auto", "comma": ",", "tab": "\t", "\\t": "\t",
                  "semicolon": ";", "pipe": "|", "space": " ", "whitespace": " "}
 
-# P1.6 review round P3(b): `data_start_line` is USER-SETTABLE via the wizard
-# (unlike `io/delimited.py`'s auto-sniffed preamble, which is bounded by how
-# far the sniffer actually looks) -- an accidental huge value would make
-# `_preamble_comments` walk (and retain in `metadata["comments"]`) every line
-# of a potentially enormous file. Cap it, mirroring `preview_import`'s own
-# `max_lines` bound on `raw_lines`.
-_MAX_PREAMBLE_COMMENTS = 500
+# Re-exported (rationale now in `import_metadata`) for existing callers/tests.
+_MAX_PREAMBLE_COMMENTS = MAX_PREAMBLE_COMMENTS
 
 
 @dataclass(frozen=True)
@@ -88,21 +85,17 @@ class ImportSettings:
     delimiter: str = "auto"
     header_line: int | None = None
     units_line: int | None = None
-    # P1.6: the "default legend-label row" -- when set, its per-column cells
-    # (aligned by raw column position, same as header_line/units_line)
-    # override each CHANNEL column's display LABEL (not its unit). Absent
-    # (None, the default) means the header-derived name stands unchanged --
-    # additive, no behavior change for a settings object that doesn't set it.
+    # P1.6: the "default legend-label row" -- its per-column cells (aligned
+    # like header_line/units_line) override each CHANNEL's display LABEL,
+    # not its unit. `None` (default) = header-derived name stands, additive.
     label_line: int | None = None
     data_start_line: int = 0
     column_names: list[str] | None = None
     roles: list[str] | None = None
-    # P1.6: error-column -> signal pairings (Import Wizard "bind" step), RAW
-    # COLUMN indexed like `roles`/`column_names` above -- see `ErrorBinding`'s
-    # docstring for why. `None` (the default) means "no bindings recorded",
-    # additive/no-op for every settings object created before this field
-    # existed. Never trusted as-is against a real file: `preview_import`/
-    # `parse_import` always run these through `valid_error_bindings` first.
+    # P1.6: error-column -> signal pairings, RAW COLUMN indexed like
+    # `roles`/`column_names` (see `ErrorBinding`'s docstring for why). `None`
+    # (default) = no bindings recorded, additive. Never trusted as-is against
+    # a real file -- always re-run through `valid_error_bindings` first.
     error_bindings: list[ErrorBinding] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -155,10 +148,9 @@ def _split(line: str, delim: str) -> list[str]:
 
 
 def _effective_ncols(rows: list[list[str]]) -> int:
-    """Column count ignoring trailing empty tokens (a trailing-delimiter row
-    like ``"1,2,"`` is 2 columns, not 3), while preserving empty *interior*
-    cells (``"1,,3"`` stays 3). Mirrors ``import_csv``'s trailing-column guard.
-    """
+    """Column count ignoring trailing empty tokens (``"1,2,"`` is 2 columns,
+    not 3) while preserving empty *interior* cells (``"1,,3"`` stays 3).
+    Mirrors ``import_csv``'s trailing-column guard."""
     best = 0
     for row in rows:
         last = 0
@@ -251,13 +243,10 @@ def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> l
     """P1.6: the `label_line` row's per-column cells, aligned to RAW COLUMN
     POSITION (0..n_cols-1) like `header_line`/`units_line` -- `None` when
     `label_line` isn't set or is out of range (no override, unchanged
-    behavior).
-
-    Review round P2-1: when `label_line` COINCIDES with `header_line` (or
-    `units_line`), reuse the already `_extract_units`-split `p.names` (or
-    `p.units`) rather than re-reading the raw token row -- the raw row still
-    has an embedded "Name (unit)" suffix that `_extract_units` already
-    stripped out of `p.names`, so reading it again would silently
+    behavior). Review round P2-1: when `label_line` COINCIDES with
+    `header_line`/`units_line`, reuse the already `_extract_units`-split
+    `p.names`/`p.units` rather than re-reading the raw row, which still has
+    an embedded "Name (unit)" suffix that would otherwise silently
     reintroduce the unit text into the label."""
     ll = settings.label_line
     if ll is None:
@@ -274,13 +263,10 @@ def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> l
 
 def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int) -> list[str]:
     """P1-5 DEFECT 2: the name each column's DataStruct channel/label will
-    ACTUALLY carry -- `label_overrides[k]` when set (P1.6 `label_line`),
-    else the header-derived `p.names[k]` unchanged. This is the SAME rule
-    `parse_import`'s local `label_for` applies; factored out here so
-    `preview_import` can report it too (`columns[k].effective_name`)
-    instead of only ever offering the raw header name, which a wizard
-    classifying error-role suggestions against would otherwise be matching
-    a name the final dataset never carries whenever `label_line` is set."""
+    ACTUALLY carry -- `label_overrides[k]` when set, else `p.names[k]`
+    unchanged. Shared by `preview_import` (`columns[k].effective_name`) and
+    `parse_import` so a wizard classifying against it never matches a name
+    the final dataset doesn't carry whenever `label_line` is set."""
     return [
         label_overrides[k] if label_overrides and label_overrides[k] else p.names[k]
         for k in range(n_cols)
@@ -288,29 +274,14 @@ def _effective_names(p: _Parsed, label_overrides: list[str] | None, n_cols: int)
 
 
 def _preamble_comments(p: _Parsed, settings: ImportSettings) -> list[str]:
-    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` that isn't
-    consumed as `header_line`/`units_line`/`label_line` -- retained verbatim
-    (raw stripped text) as searchable metadata instead of silently dropped.
-    Mirrors `io/delimited.py`'s `comments` metadata shape/key exactly, so a
-    consumer (search, the Inspector) reads one convention regardless of
-    which import path produced the dataset.
-
-    Capped at `_MAX_PREAMBLE_COMMENTS` (review round P3(b)) -- unlike
-    `io/delimited.py`'s auto-sniffed preamble, `data_start_line` here is
-    directly user-settable through the wizard, so an oversized value (typo,
-    or a stale saved filter) can't balloon `metadata["comments"]` to the
-    size of the whole file."""
+    """P1.6 (item 3): every non-blank line ABOVE `data_start_line` not
+    consumed as `header_line`/`units_line`/`label_line`, retained verbatim
+    instead of silently dropped -- mirrors `io/delimited.py`'s `comments`
+    shape/key exactly. Thin wrapper over `import_metadata.preamble_comments`
+    -- see that module for the cap rationale and Part A's further
+    structured-field parse of these SAME lines (`parse_header_fields`)."""
     consumed = {settings.header_line, settings.units_line, settings.label_line}
-    out: list[str] = []
-    for i in range(p.data_start):
-        if len(out) >= _MAX_PREAMBLE_COMMENTS:
-            break
-        if i in consumed:
-            continue
-        raw = p.lines[i].strip() if i < len(p.lines) else ""
-        if raw:
-            out.append(raw)
-    return out
+    return preamble_comments(p.lines, p.data_start, consumed)
 
 
 def _resolve_roles(roles: list[str] | None, n_cols: int) -> list[str]:
@@ -360,6 +331,15 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     kept_bindings, dropped_bindings = valid_error_bindings(
         settings.error_bindings, p.roles, effective_names
     )
+    comments = _preamble_comments(p, settings)
+    header_fields, header_field_problems = parse_header_fields(comments)
+    # P1.6 Part C: report-only here (a level cap is a hard refusal, but only
+    # inside `parse_import`, so the wizard can still show the warning first).
+    cat_cols_all = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
+    _, categorical_problems = encode_categorical_columns(
+        [(effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
+         for k in cat_cols_all]
+    )
     return {
         "raw_lines": p.lines[:max_lines],
         "n_lines": len(p.lines),
@@ -372,9 +352,12 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "rows": preview_rows,
         "n_data_rows": int(n_rows),
         "n_preview_rows": len(preview_rows),
-        "comments": _preamble_comments(p, settings),
+        "comments": comments,
+        "header_fields": header_fields,  # P1.6 Part A: `comments`, structured
+        "header_field_problems": header_field_problems,
         "error_bindings": [b.to_dict() for b in kept_bindings],
         "error_binding_problems": [d.to_dict() for d in dropped_bindings],
+        "categorical_problems": categorical_problems,
     }
 
 
@@ -394,13 +377,12 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     user explicitly asked for that.
 
     Raises ``ValueError`` when MORE THAN ONE column is marked ``x`` (P1-5
-    DEFECT 1) -- previously this silently kept only ``x_cols[0]`` as the
-    axis and dropped every OTHER x column entirely: not a channel, not a
-    ``text_columns`` entry, no trace anywhere in the resulting DataStruct.
-    The wizard UI makes this unreachable by disabling Import on the same
-    condition; this is defense-in-depth for any other caller (a direct API
-    request, a stale saved filter) that reaches ``parse_import`` with an
-    invalid multi-x selection.
+    DEFECT 1, defense-in-depth -- the wizard UI already disables Import on
+    this) and when a ``categorical`` column's level table exceeds
+    `import_categorical_guards.MAX_CATEGORICAL_LEVELS` (P1.6 Part C, naming
+    the offending column(s)/counts) -- a same-case-folded level collision is
+    reported instead (`preview_import`'s ``categorical_problems``), never
+    raised.
     """
     p = _parse_core(text, settings)
     n_rows, n_cols = p.matrix.shape
@@ -438,12 +420,26 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
 
     # P1.4: categorical channels append AFTER the numeric ones -- same rule
     # as import_csv's f1/f2 fallback, one predictable ordering everywhere.
+    # P1.6 Part C: refuse (rather than silently building a garbage channel)
+    # when any categorical column blew the level-count cap -- a case
+    # collision alone is informational and never blocks the import.
     cat_levels: dict[int, tuple[str, ...]] = {}
     if cat_cols:
+        encoded, cat_problems = encode_categorical_columns(
+            [(effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
+             for k in cat_cols]
+        )
+        cap_problems = [pr for pr in cat_problems if pr["type"] == "categorical_level_cap"]
+        if cap_problems:
+            named = ", ".join(
+                f"{pr['column']!r} ({pr['level_count']} levels)" for pr in cap_problems
+            )
+            raise ValueError(
+                f"categorical column(s) exceed the level cap: {named} -- likely "
+                "mismarked as categorical; change the role to y/label/ignore"
+            )
         cat_arrays = []
-        for k in cat_cols:
-            cells = [row[k] if k < len(row) else "" for row in p.data_tokens]
-            codes, levels = _encode_categorical(cells)
+        for k, (codes, levels) in zip(cat_cols, encoded, strict=True):
             cat_levels[len(labels)] = levels
             labels.append(effective_names[k])
             units.append(p.units[k])
@@ -467,6 +463,13 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     comments = _preamble_comments(p, settings)
     if comments:
         metadata["comments"] = comments
+    # P1.6 Part A: structured parse of the SAME comment lines -- strictly
+    # additive to `comments` above (never a replacement), omitted entirely
+    # when no `key: value`/`key = value` line was found (matches how
+    # `comments`/`error_roles` already only appear when non-empty).
+    header_fields, _header_field_problems = parse_header_fields(comments)
+    if header_fields:
+        metadata["header_fields"] = header_fields
 
     # P1.6: carry confirmed error-column bindings into the DataStruct as a
     # metadata sidecar, translated from RAW COLUMN indices (how
