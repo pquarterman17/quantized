@@ -13,6 +13,9 @@ import type { PortableManifest } from "../../../lib/desktopPackBridge";
 import { EMPTY_PACK_PROGRESS, usePackProject } from "../../../store/packProject";
 import { usePackProjectPanel } from "../../../store/packProjectPanel";
 import PackProjectPanel from "./PackProjectPanel";
+import { askConfirm } from "../../overlays/ConfirmDialog";
+
+vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const fakeAppState = {
   toolWindowLayout: {},
@@ -80,6 +83,7 @@ function fakePreview(overrides: Partial<PortableManifest> = {}) {
 }
 
 beforeEach(() => {
+  vi.mocked(askConfirm).mockReset();
   usePackProjectPanel.setState({ open: true });
   usePackProject.setState({
     phase: "idle",
@@ -128,14 +132,29 @@ describe("PackProjectPanel — phase rendering", () => {
     expect(screen.getByRole("button", { name: "Pack Project" })).toBeDisabled();
   });
 
-  it("says blocked sources keep their original absolute paths in the packed copy", () => {
+  it("says a single blocked source keeps its original absolute path (singular copy)", () => {
     const preview = fakePreview();
     usePackProject.setState({
       phase: "awaiting_confirmation",
       preview: { ...preview, blockers: [preview.manifest.sources[0]] },
     });
     render(<PackProjectPanel />);
-    expect(screen.getByText(/keep their original absolute paths in the packed copy/)).toBeInTheDocument();
+    expect(
+      screen.getByText("1 unavailable source keeps its original absolute path in the packed copy."),
+    ).toBeInTheDocument();
+  });
+
+  it("switches to plural copy for more than one blocked source", () => {
+    const preview = fakePreview();
+    const [first] = preview.manifest.sources;
+    usePackProject.setState({
+      phase: "awaiting_confirmation",
+      preview: { ...preview, blockers: [first, { ...first, source_id: "s2" }] },
+    });
+    render(<PackProjectPanel />);
+    expect(
+      screen.getByText("2 unavailable sources keep their original absolute paths in the packed copy."),
+    ).toBeInTheDocument();
   });
 
   it("renders packing progress", () => {
@@ -278,7 +297,8 @@ describe("PackProjectPanel — dismiss()", () => {
     expect(usePackProjectPanel.getState().open).toBe(false);
   });
 
-  it("the X button while packing cancels but leaves the panel open (equivalent to the Cancel button)", async () => {
+  it("the title-bar X while packing asks first, then cancels and leaves the panel open", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(true);
     const cancel = vi.fn().mockResolvedValue(undefined);
     const reset = vi.fn().mockResolvedValue(undefined);
     usePackProject.setState({
@@ -291,8 +311,46 @@ describe("PackProjectPanel — dismiss()", () => {
     await act(async () => {
       fireEvent.click(screen.getByTitle("Close"));
     });
+    expect(vi.mocked(askConfirm).mock.calls[0][0]).toBe("Cancel packing?");
     expect(cancel).toHaveBeenCalledOnce();
     expect(reset).not.toHaveBeenCalled();
     expect(usePackProjectPanel.getState().open).toBe(true);
+  });
+
+  it("declining that confirmation leaves the pack and the panel completely untouched", async () => {
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const reset = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      phase: "packing",
+      progress: { ...EMPTY_PACK_PROGRESS, totalCount: 3 },
+      cancelPackProject: cancel,
+      resetPackProject: reset,
+    });
+    usePackProjectPanel.setState({ open: true });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByTitle("Close"));
+    });
+    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(reset).not.toHaveBeenCalled();
+    expect(usePackProject.getState().phase).toBe("packing");
+    expect(usePackProjectPanel.getState().open).toBe(true);
+  });
+
+  it("the visible Cancel button while packing stays immediate (never asks)", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    usePackProject.setState({
+      phase: "packing",
+      progress: { ...EMPTY_PACK_PROGRESS, totalCount: 3 },
+      cancelPackProject: cancel,
+    });
+    render(<PackProjectPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(cancel).toHaveBeenCalledOnce();
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
+import { askConfirm } from "../../overlays/ConfirmDialog";
 import { Button } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { MetaRow } from "../../primitives/MetaRow";
@@ -43,7 +44,11 @@ export default function PackProjectPanel() {
 
   // The X button and every "Cancel"/"Close" control below funnel through
   // this one function so the panel's close semantics stay in one place.
-  const dismiss = async () => {
+  // `viaTitleBar` is true only for the ToolWindow's own X: aborting an
+  // in-flight pack must be DELIBERATE (owner review on #310), and the X is
+  // easy to hit by accident in a way the labelled Cancel button is not, so
+  // that one path asks first. The visible Cancel button stays immediate.
+  const dismiss = async (viaTitleBar = false) => {
     if (phase === "idle") {
       // Open at idle only in the microtask between runPackProject opening
       // the panel and the (preloaded) preview leaving idle. Just close; if
@@ -51,10 +56,14 @@ export default function PackProjectPanel() {
       // and resets the store rather than leaving it active and headless.
       setOpen(false);
     } else if (phase === "packing" || phase === "cancelling") {
-      // packing/cancelling: nothing original is ever modified (pack only
-      // COPIES), so aborting is always safe — the X here is equivalent to
-      // the Cancel button by design. Leave the window open so the
-      // "Stopping safely…" -> "Pack cancelled" outcome is visible.
+      // Declining must leave BOTH the operation and the panel untouched, so
+      // the confirm is the only thing that happens on a "no" — no reset, no
+      // close, no cancel. On a "yes" the window stays open so the
+      // "Stopping safely…" -> "Pack cancelled" outcome is still visible
+      // (nothing original is ever modified either way: pack only COPIES).
+      if (viaTitleBar && !(await askConfirm("Cancel packing?", "", "Cancel packing", true))) {
+        return;
+      }
       await cancel();
     } else {
       // Terminal, or a pre-packing active phase (picker/scan/review): reset
@@ -66,7 +75,7 @@ export default function PackProjectPanel() {
   };
 
   return (
-    <ToolWindow id="pack-project" title="Pack Project" width={620} onClose={() => void dismiss()}>
+    <ToolWindow id="pack-project" title="Pack Project" width={620} onClose={() => void dismiss(true)}>
       {(phase === "selecting_destination" || phase === "scanning") && (
         <div role="status" aria-live="polite">
           <p>{phase === "selecting_destination" ? "Choose where to create the portable project." : "Checking source files…"}</p>
@@ -103,7 +112,7 @@ export default function PackProjectPanel() {
               ])}
             />
           </div>
-          {preview.blockers.length > 0 && <p className="qzk-ds-meta qzk-msg">{preview.blockers.length} unavailable source{preview.blockers.length === 1 ? "" : "s"} keep their original absolute paths in the packed copy.</p>}
+          {preview.blockers.length > 0 && <p className="qzk-ds-meta qzk-msg">{preview.blockers.length === 1 ? "1 unavailable source keeps its original absolute path" : `${preview.blockers.length} unavailable sources keep their original absolute paths`} in the packed copy.</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <Button size="sm" onClick={() => void start(preview.manifest)} disabled={preview.destination.exists}>Pack Project</Button>
             <Button size="sm" onClick={() => void dismiss()}>Cancel</Button>
