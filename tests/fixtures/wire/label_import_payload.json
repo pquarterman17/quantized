@@ -19,7 +19,7 @@
       "Sample": "NbAu bilayer"
     },
     "import_settings": {
-      "allow_large_categorical": false,
+      "allow_large_categorical": [],
       "column_names": null,
       "data_start_line": 5,
       "delimiter": ",",
