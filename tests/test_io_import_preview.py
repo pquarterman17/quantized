@@ -819,6 +819,29 @@ def test_parse_header_fields_strips_leading_comment_markers() -> None:
     assert fields == {"Scan rate": "2 deg/min", "Operator": "pq", "Note": "ok", "Run": "7"}
 
 
+def test_parse_header_fields_strips_repeated_leading_markers() -> None:
+    """Review finding #3: JCAMP-DX's own convention (`io/jcamp.py`) is a
+    DOUBLE `#` (`##KEY=value`); a plain `## Sample: NbAu` preamble line is
+    just as common. Stopping after ONE marker used to leave a literal `#`
+    glued onto the key (`"# Sample"` instead of `"Sample"`)."""
+    fields, _ = parse_header_fields(
+        ["## Sample: NbAu", "##Title=NMR run 3", "#% Note: mixed markers", "// Op: pq"]
+    )
+    assert fields == {
+        "Sample": "NbAu",
+        "Title": "NMR run 3",
+        "Note": "mixed markers",
+        "Op": "pq",
+    }
+
+
+def test_parse_header_fields_value_containing_a_marker_char_is_untouched() -> None:
+    """Only LEADING markers are ever stripped -- a value that legitimately
+    contains a `#` (e.g. a run/tag reference) must not be damaged."""
+    fields, _ = parse_header_fields(["# Note: see run #42 for details"])
+    assert fields == {"Note": "see run #42 for details"}
+
+
 def test_parse_header_fields_keeps_keys_verbatim_not_normalized() -> None:
     """Instrument keys are meaningful as written -- never lowercased/stripped
     of internal structure like `H (Oe)`."""
@@ -945,6 +968,72 @@ def test_categorical_level_cap_does_not_reject_a_column_at_the_cap() -> None:
     assert len(ds.cat_levels[0]) == MAX_CATEGORICAL_LEVELS
 
 
+def test_categorical_level_cap_override_allows_the_import() -> None:
+    """Review finding #2: `allow_large_categorical=True` lifts the refusal
+    for a column with genuinely many levels (e.g. 800 real sample IDs) --
+    the cap stays the DEFAULT protection, but is no longer absolute."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    n = MAX_CATEGORICAL_LEVELS + 5
+    rows = "\n".join(f"{i},L{i}" for i in range(n))
+    text = f"Idx,Value\n{rows}\n"
+    settings = ImportSettings(
+        header_line=0, data_start_line=1, roles=["x", "categorical"],
+        allow_large_categorical=True,
+    )
+    ds = parse_import(text, settings)  # must not raise
+    assert len(ds.cat_levels[0]) == n
+
+
+def test_categorical_level_cap_refusal_message_names_the_override() -> None:
+    """The refusal itself must tell the user how to get past it, not just
+    that they can't -- otherwise the override exists but is undiscoverable
+    from the error a script/route surfaces."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    rows = "\n".join(f"{i},{i * 0.1}" for i in range(MAX_CATEGORICAL_LEVELS + 5))
+    text = f"Idx,Value\n{rows}\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "categorical"])
+    with pytest.raises(ValueError, match="allow_large_categorical"):
+        parse_import(text, settings)
+
+
+def test_categorical_level_cap_still_reported_in_preview_with_override_set() -> None:
+    """`preview_import` must keep reporting the problem regardless of the
+    override, so the wizard can offer the choice BEFORE Import, not just
+    react to whether it succeeded."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    n = MAX_CATEGORICAL_LEVELS + 5
+    rows = "\n".join(f"{i},L{i}" for i in range(n))
+    text = f"Idx,Value\n{rows}\n"
+    for allow in (False, True):
+        settings = ImportSettings(
+            header_line=0, data_start_line=1, roles=["x", "categorical"],
+            allow_large_categorical=allow,
+        )
+        pv = preview_import(text, settings)
+        problems = pv["categorical_problems"]
+        assert len(problems) == 1
+        assert problems[0]["type"] == "categorical_level_cap"
+        assert problems[0]["level_count"] == n
+
+
+def test_allow_large_categorical_round_trips_through_dict() -> None:
+    settings = ImportSettings(
+        header_line=0, data_start_line=1, roles=["x", "categorical"],
+        allow_large_categorical=True,
+    )
+    d = settings.to_dict()
+    assert d["allow_large_categorical"] is True
+    assert ImportSettings.from_dict(d) == settings
+
+
+def test_allow_large_categorical_defaults_false() -> None:
+    assert ImportSettings().allow_large_categorical is False
+    assert ImportSettings.from_dict({}).allow_large_categorical is False
+
+
 def test_preview_reports_categorical_level_cap_without_raising() -> None:
     """`preview_import` never raises -- it reports the SAME problem so the
     wizard can warn before the user ever attempts Import."""
@@ -1017,6 +1106,102 @@ def test_categorical_case_collision_round_trips_losslessly() -> None:
     for i, raw in enumerate(cells):
         assert levels[int(codes[i])] == raw.strip()
     assert any(p["type"] == "categorical_case_collision" for p in problems)
+
+
+def test_categorical_case_collision_reporting_is_capped_with_truncation_signal() -> None:
+    """Review finding #1: reported case-collision problems are capped
+    (`MAX_CATEGORICAL_COLLISIONS`) even when the column's level count stays
+    UNDER `MAX_CATEGORICAL_LEVELS` (so the level-cap early-return doesn't
+    already mask it) -- 250 genuine collision groups (500 levels, exactly at
+    the level cap, each level case-paired) previously all became separate
+    problem entries; now only the cap's worth are reported, with a single
+    ``categorical_case_collision_truncated`` summary entry naming the true
+    count, never a silently-shortened list."""
+    from quantized.io.import_categorical_guards import (
+        MAX_CATEGORICAL_COLLISIONS,
+        MAX_CATEGORICAL_LEVELS,
+    )
+
+    n_pairs = MAX_CATEGORICAL_LEVELS // 2  # 500 levels total -- AT the cap, not over it
+    assert n_pairs > MAX_CATEGORICAL_COLLISIONS  # the scenario this test exists to cover
+    cells = [f"Val{i}" if j == 0 else f"val{i}" for i in range(n_pairs) for j in range(2)]
+    text = "Idx,Sample\n" + "\n".join(f"{i},{c}" for i, c in enumerate(cells)) + "\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "categorical"])
+
+    pv = preview_import(text, settings)
+    problems = pv["categorical_problems"]
+    collisions = [p for p in problems if p["type"] == "categorical_case_collision"]
+    truncations = [p for p in problems if p["type"] == "categorical_case_collision_truncated"]
+    assert len(collisions) == MAX_CATEGORICAL_COLLISIONS
+    assert truncations == [
+        {
+            "type": "categorical_case_collision_truncated",
+            "column": "Sample",
+            "collision_count": n_pairs,
+            "cap": MAX_CATEGORICAL_COLLISIONS,
+        }
+    ]
+    assert len(problems) == MAX_CATEGORICAL_COLLISIONS + 1  # bounded, not one-per-group
+
+
+def test_categorical_level_cap_stops_collision_building_entirely() -> None:
+    """Review finding #1's measured incident: a 200k-row file with a
+    case-varying text column marked `categorical` previously returned
+    100,001 problems (the level-cap problem plus ~100,000 case-collision
+    entries, built even though the column was ALREADY refused on the level
+    cap alone). Once the level cap fires, collision detail is noise -- it
+    must not be computed at all."""
+    from quantized.io.import_categorical_guards import MAX_CATEGORICAL_LEVELS
+
+    n_rows = 200_000
+    assert n_rows > MAX_CATEGORICAL_LEVELS * 2  # enough distinct case-paired levels to blow the cap
+    cells = [f"Val{i // 2}" if i % 2 == 0 else f"val{i // 2}" for i in range(n_rows)]
+    text = "Idx,Sample\n" + "\n".join(f"{i},{c}" for i, c in enumerate(cells)) + "\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "categorical"])
+
+    pv = preview_import(text, settings)  # must not raise
+    problems = pv["categorical_problems"]
+    assert problems == [
+        {
+            "type": "categorical_level_cap",
+            "column": "Sample",
+            "level_count": n_rows,
+            "cap": MAX_CATEGORICAL_LEVELS,
+        }
+    ]  # exactly one entry, not 100,001 -- collision grouping never ran
+
+
+def test_preview_categorical_skips_building_codes_and_stays_fast() -> None:
+    """Review finding #4: `preview_import` only needs the level table and
+    the problems it produces -- never the codes array `_encode_categorical`
+    would also allocate and write. Pinned two ways per CLAUDE.md's test-
+    determinism convention: (1) the LOAD-INVARIANT property that the full
+    encoder is never even called (patched to raise if it is -- this is the
+    assertion that actually matters), and (2) a loose wall-clock backstop as
+    a secondary signal only, generous enough to never flake."""
+    import time
+
+    import quantized.io.import_categorical_guards as guards
+
+    def _boom(cells: object) -> None:  # pragma: no cover -- should never run
+        raise AssertionError("preview_import must not build the codes array")
+
+    n = 50_000
+    text = "Idx,Sample\n" + "\n".join(f"{i},L{i % 200}" for i in range(n)) + "\n"
+    settings = ImportSettings(header_line=0, data_start_line=1, roles=["x", "categorical"])
+
+    orig = guards._encode_categorical
+    guards._encode_categorical = _boom  # type: ignore[assignment]
+    try:
+        start = time.perf_counter()
+        pv = preview_import(text, settings)  # must not raise -- the encoder above must not run
+        elapsed = time.perf_counter() - start
+    finally:
+        guards._encode_categorical = orig
+
+    assert pv["categorical_problems"] == []
+    assert pv["n_data_rows"] == n
+    assert elapsed < 10.0  # generous backstop only -- property (1) above is the real assertion
 
 
 def test_import_csv_categorical_fallback_is_not_capped() -> None:
