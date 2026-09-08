@@ -6,6 +6,13 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-08
+
+A **minor** release: the window since `v0.24.0` adds new user-facing
+surfaces — Pack Project, project trash, and the import wizard's error-
+binding and metadata work — alongside a performance batch and the
+completion of P1.1 project lifecycle.
+
 - Pack Project: File → **Pack Project…** (desktop app) creates a portable,
   self-contained copy of the open project next to a folder you pick — the
   packed project file plus a verified copy of every reachable source file
@@ -32,6 +39,63 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   relinked); a project you lack permission to read is reported as such
   rather than as "not found". Quick save no longer tries to write to a
   project on a disconnected drive.
+- Project trash: deleting a figure, page, report or folder now goes to trash
+  rather than away. Reports and legacy publication figures recorded no undo
+  entry at all before, so trash is their only recovery path. Restore is
+  dependency-aware — a figure whose bound dataset is also in trash brings the
+  dataset back with it and says so; if the dataset is gone entirely the figure
+  restores with its binding cleared, exactly as opening a project clamps a
+  dangling reference. Folder restore re-homes members and child folders still
+  sitting where the delete sent them and leaves anything you have moved since.
+  The panel shows counts by kind, per-row size, and the retention rules
+  (128 MiB, plus the existing count and age caps; the newest entry is always
+  kept). **Empty trash** names exactly what would be lost, and the Library
+  dataset menu gains a **Delete permanently…** that states it bypasses trash
+  and cannot be undone.
+- Import Wizard — error columns. An error column is now bound to what it
+  describes, and the pairing survives everything: saving an import filter and
+  reapplying it used to restore the roles and silently drop every pairing, and
+  a CLI or API import emitted error columns as ordinary channels with no
+  record at all. Bindings are stored against raw file columns, so a saved
+  filter still applies to a file whose channel numbering has shifted. The
+  wizard offers the backend's inferred pairings as explicit, reviewable
+  suggestions — never applied automatically — and applying one assigns the
+  role and persists the binding together. A saved binding the backend has to
+  reject is shown with the reason, naming the column rather than an index,
+  instead of vanishing.
+- Import Wizard — file preamble. Instrument header lines such as
+  `Temperature: 300 K` or `##SCAN RATE=2` are parsed into structured fields
+  and shown in the wizard, so a scan's conditions are readable instead of
+  buried in free text. Every line is still retained verbatim and searchable as
+  before. A key repeated with different values resolves to the last one and
+  says so rather than overwriting silently. The wizard also shows the file's
+  own label-line text separately from the column names you can edit.
+- Import Wizard — categorical columns. A continuous numeric column mistakenly
+  marked categorical produces one level per row; the wizard now shows that
+  before import and blocks Import by default, with an explicit **Import large
+  category anyway** override for the genuine case (hundreds of real sample
+  IDs). Case-only collisions such as `Fe` and `fe` are reported as warnings
+  and never merged — the distinction is real in some notations. Imported
+  category names now also reach the Data Filter and the statistical tools
+  (test chooser, box/violin/strip), which previously showed the raw numeric
+  codes.
+- Recipe Library: peak recipes, graph templates and fit models can be exported
+  and imported as files, round-tripping losslessly; a malformed or
+  wrong-shaped file is refused with a reason rather than partially loaded.
+  Toolbar gains **Import recipe…**, which identifies the kind from the file
+  itself. Each row gains a **Details** disclosure showing scope, schema
+  version, timestamps, technique, tags and the kind's own facts (plot channels
+  and marks, analysis steps, peak baseline/model/report, a fit model's
+  equation and parameters, a graph template's style and override counts), plus
+  the actions actually available for that row.
+- Project files are saved more defensively. A save is now flushed and synced
+  to disk before the atomic replace, closing a window in which a crash or
+  power loss right after the rename could leave a zero-length or partial
+  project file where a good one had been. Saving is refused outright — before
+  any temporary file is written — when the destination is a data file the open
+  project declares as one of its own sources, so Save As can no longer
+  overwrite your raw data; the refusal is now reported to you rather than
+  looking like a cancelled dialog.
 - Extend the dataset-handle cache (`routes/_datasetcache.py`) to
   `/api/plot/series`: a committed zoom/pan on an already server-decimated
   series used to re-POST the whole dataset on every step. Measured on a
