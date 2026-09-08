@@ -22,14 +22,16 @@ import {
 } from "../../../lib/importwizard";
 import type {
   ImportColumnRole,
+  ImportErrorBindingProblem,
   ImportFilterWire,
+  ImportErrorBindingWire,
   ImportPreviewColumn,
   ImportPreviewResponse,
   ImportSettingsWire,
 } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useImportErrorRoles } from "./useImportErrorRoles";
+import { useImportErrorBindings } from "./useImportErrorBindings";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
@@ -69,6 +71,8 @@ export interface ImportWizardState {
   setErrorTarget: (channel: number, target: number | null) => void;
   setErrorAxis: (channel: number, axis: "x" | "y") => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
+  applyErrorSuggestion: (binding: ImportErrorBindingWire) => void;
+  removeRejectedErrorBinding: (problem: ImportErrorBindingProblem) => void;
   applyFilter: (name: string) => Promise<void>;
   saveAsFilter: (name: string, glob: string) => Promise<void>;
   removeFilter: (name: string) => Promise<void>;
@@ -98,6 +102,28 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
+
+  // Error bindings (rows + the reconciled `error_bindings` array) live in their
+  // own hook — see useImportErrorBindings.ts.
+  const {
+    errorRows,
+    setErrorTarget,
+    setErrorAxis,
+    setErrorSide,
+    applyErrorSuggestion,
+    removeRejectedErrorBinding,
+    setAllowSuggestions: setAllowErrorSuggestions,
+    resetErrorEdits,
+    resetErrorRows,
+  } = useImportErrorBindings({
+    columns,
+    setColumns,
+    settings,
+    setSettings,
+    patchSettings,
+    preview,
+  });
+
   // Raw file column indices whose oversized `categorical` level table the
   // user has explicitly accepted. Deliberately NOT part of `settings`:
   //   - `preview_import` ignores it, so folding it into `settings` re-posted
@@ -111,8 +137,6 @@ export function useImportWizard(): ImportWizardState {
   //     strips the field server-side too, so this is belt and braces).
   // It is merged into the settings `doImport` sends, and nowhere else.
   const [acceptedRaw, setAcceptedRaw] = useState<number[]>([]);
-  const { errorRows, setErrorTarget, setErrorAxis, setErrorSide, resetErrorRows } =
-    useImportErrorRoles(columns);
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -166,7 +190,9 @@ export function useImportWizard(): ImportWizardState {
     try {
       const t = await f.text();
       setText(t);
-      setSettings(await importGuess(t));
+      const guessed = await importGuess(t);
+      setAllowErrorSuggestions(guessed.error_bindings == null);
+      setSettings(guessed);
     } catch (e) {
       setError(e instanceof Error ? e.message : "couldn't read file");
       setBusy(false);
@@ -196,6 +222,7 @@ export function useImportWizard(): ImportWizardState {
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
   }
 
+
   // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
   // H-template semantics (quickPlotTemplates.resolveTemplate): re-preview
   // the CURRENT file under the CANDIDATE filter's settings, resolve the
@@ -221,8 +248,10 @@ export function useImportWizard(): ImportWizardState {
         return;
       }
       setImported(false);
+      setAllowErrorSuggestions(filt.settings.error_bindings == null);
       setAcceptedRaw([]);  // a new layout is a new set of columns to judge
       setSettings({ ...filt.settings });
+      resetErrorEdits();
       setPreview(fresh);
       setColumns(fresh.columns);
       setError(null);
@@ -358,6 +387,7 @@ export function useImportWizard(): ImportWizardState {
     setError(null);
     setImported(false);
     setAcceptedRaw([]);
+    setAllowErrorSuggestions(true);
     resetErrorRows();
   }
 
@@ -395,6 +425,8 @@ export function useImportWizard(): ImportWizardState {
     setErrorTarget,
     setErrorAxis,
     setErrorSide,
+    applyErrorSuggestion,
+    removeRejectedErrorBinding,
     applyFilter,
     saveAsFilter,
     removeFilter,

@@ -206,6 +206,12 @@ export interface WizardErrorRow {
   target: number | null;
   axis: "x" | "y";
   side: ErrorBinding["side"];
+  /** Why the current value is present. Optional keeps older callers and
+   *  serialized test fixtures compatible; only `suggested` gets the badge. */
+  provenance?: "suggested" | "confirmed" | "manual" | "unassigned";
+  /** Last axis explicitly chosen for a signal target. Forced x-axis-target
+   *  display does not overwrite it, so returning to a signal restores intent. */
+  preferredAxis?: "x" | "y" | null;
 }
 
 /** Seed one `WizardErrorRow` per error-role channel: the inferred
@@ -216,8 +222,8 @@ export function seedErrorRows(columns: readonly ImportPreviewColumn[]): WizardEr
   return errorRoleChannels(columns).map((ec) => {
     const s = suggested.find((b) => b.channel === ec.channel);
     return s
-      ? { channel: ec.channel, label: ec.label, target: s.target, axis: s.axis, side: s.side }
-      : { channel: ec.channel, label: ec.label, target: null, axis: "y" as const, side: "both" as const };
+      ? { channel: ec.channel, label: ec.label, target: s.target, axis: s.axis, side: s.side, provenance: "suggested", preferredAxis: null }
+      : { channel: ec.channel, label: ec.label, target: null, axis: "y" as const, side: "both" as const, provenance: "unassigned", preferredAxis: null };
   });
 }
 

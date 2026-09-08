@@ -116,6 +116,44 @@ describe("ImportWizardPanel", () => {
     );
   });
 
+  it("applies a backend error suggestion as both a role and a persisted binding", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [...PREVIEW.columns, { index: 2, name: "dMoment", unit: "emu", role: "y" }],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText(/Use/).parentElement).toHaveTextContent("dMoment"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply suggestion" }));
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        roles: ["x", "y", "error"],
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+  });
+
+  it("surfaces backend explanations for rejected saved error bindings", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [{
+        column: 4,
+        target: 1,
+        axis: "y",
+        side: "both",
+        code: "column_out_of_range",
+        reason: "Error column 5 no longer exists in this file.",
+      }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Error column 5 no longer exists");
+  });
+
   it("imports the previewed file into a new library dataset", async () => {
     importParseMock.mockResolvedValue(DS);
     render(<ImportWizardPanel />);
@@ -341,6 +379,90 @@ describe("ImportWizardPanel", () => {
     await waitFor(() => expect(screen.getByLabelText("dMoment error target")).toBeInTheDocument());
     expect(screen.getByLabelText("dMoment error target")).toHaveValue("0"); // "dMoment" -> "Moment", channel 0
     expect(screen.getByText("(suggested)")).toBeInTheDocument();
+  });
+
+  it("persists an edited error pairing in raw-column form for filters and parsing", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByLabelText("dMoment error target")).toBeInTheDocument());
+    importPreviewMock.mockClear();
+
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "-1" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: -1, axis: "x", side: "both" }],
+      }),
+      30,
+    ));
+
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "unassigned" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ error_bindings: [] }),
+      30,
+    ));
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "0" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+  });
+
+  it("persists a pre-filled suggestion and only labels genuine suggestions", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText("(suggested)")).toBeInTheDocument());
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+
+    fireEvent.change(screen.getByLabelText("dMoment error side"), { target: { value: "+" } });
+    expect(screen.queryByText("(suggested)")).not.toBeInTheDocument();
+  });
+
+  it("removes a rejected binding from settings so it can be saved cleanly", async () => {
+    const rejected = { column: 8, target: 1, axis: "y" as const, side: "both" as const };
+    importGuessMock.mockResolvedValue({ ...SETTINGS, error_bindings: [rejected] });
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [{ ...rejected, code: "column_out_of_range", reason: "Column 9 is gone." }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await screen.findByText("Column 9 is gone.");
+    importPreviewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove invalid setting" }));
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String), expect.objectContaining({ error_bindings: [] }), 30,
+    ));
   });
 
   it("lists saved filters and applies one to re-preview", async () => {

@@ -20,6 +20,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import ErrorRolesEditor from "./ErrorRolesEditor";
+import ErrorBindingSuggestions from "./ErrorBindingSuggestions";
 import MetadataPreview from "./MetadataPreview";
 import CategoricalProblems from "./CategoricalProblems";
 import PreviewTable from "./PreviewTable";
@@ -187,6 +188,16 @@ export default function ImportWizardPanel() {
               accepted={w.acceptedCategorical}
               onAccept={w.acceptLargeCategorical}
               onUnaccept={w.unacceptLargeCategorical}
+            />
+          )}
+
+          {w.preview && (
+            <ErrorBindingSuggestions
+              columns={w.preview.columns}
+              suggestions={w.preview.suggested_error_bindings ?? []}
+              problems={w.preview.error_binding_problems ?? []}
+              onApply={w.applyErrorSuggestion}
+              onRemoveProblem={w.removeRejectedErrorBinding}
             />
           )}
 
