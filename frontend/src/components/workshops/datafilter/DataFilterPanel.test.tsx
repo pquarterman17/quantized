@@ -65,3 +65,32 @@ describe("DataFilterPanel — dual-thumb range slider (#53 item 7a)", () => {
     expect(screen.getByLabelText("val minimum")).toHaveValue("10"); // back to the column's data min
   });
 });
+
+describe("DataFilterPanel — categorical labels (P1.4/P1.5)", () => {
+  it("renders the imported level names and filters by their underlying codes", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "samples.csv",
+        data: {
+          time: [0, 1, 2, 3],
+          values: [[0], [0], [1], [1]],
+          labels: ["Treatment"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["Reference", "Annealed"] },
+        },
+      }],
+      activeId: "d1",
+    });
+
+    render(<DataFilterPanel />);
+    expect(screen.getByText("Reference")).toBeInTheDocument();
+    expect(screen.getByText("Annealed")).toBeInTheDocument();
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(screen.queryByText("1")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Annealed"));
+    expect(filterOf()).toEqual([{ col: 0, kind: "set", values: [0] }]);
+  });
+});
