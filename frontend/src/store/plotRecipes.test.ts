@@ -973,6 +973,36 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
     if (!focused || focused.kind !== "plot" || !focused.document) throw new Error("recipe window has no document");
 
     const stageSpec = buildStageFigureSpec(() => useApp.getState(), target, "d2", render);
+
+    // ABSOLUTE assertions first, on the decoration `decorated` above set up.
+    // Comparing Stage's spec to `buildFigureSpecFromDocument`'s alone proves
+    // nothing here: `buildStageFigureSpec` DELEGATES to that very function
+    // whenever it can route through the document (`figureSpec.ts`), with the
+    // same argument shape this test would pass by hand — so the two sides are
+    // one call and agree no matter how broken the builder is. Measured, not
+    // assumed: gutting `buildFigureSpecFromDocument` to drop xScale/yLim/
+    // annotations/shapes left the relative comparison passing. These
+    // assertions are what actually notice a recipe-applied figure losing its
+    // decoration on the way to a render request.
+    expect(stageSpec.x_scale).toBe("log");
+    expect(stageSpec.y_scale).toBe("log");
+    expect(stageSpec.x_key).toBe(0);
+    expect(stageSpec.y_keys).toEqual([1]);
+    expect(stageSpec.dataset.labels).toContain("Corrected intensity");
+    expect(stageSpec.series_styles).toEqual([{ color: "#336699", width: 2.5 }]);
+    expect(stageSpec.overrides).toMatchObject({
+      x_lim: [10, 30],
+      y_lim: [100, 300],
+      legend: { show: true, title: "Scan", loc: "custom", anchor: [0.72, 0.18] },
+      annotations: [{ x: 20, y: 200, text: "(002)" }],
+      shapes: [{ kind: "line", x1: 15, y1: 120, x2: 25, y2: 240 }],
+      region_shades: [{ x1: 18, x2: 22, y1: 100, y2: 300, fill: "#999999" }],
+    });
+
+    // Pin the branch the delegation above depends on, so a future change that
+    // sends Stage down the live-view builder instead turns this into a real
+    // two-implementation comparison LOUDLY rather than silently.
+    expect(focused.document.bindings.datasetId).toBe(target.id);
     const builderSpec = buildFigureSpecFromDocument(focused.document, target, "d2", {
       ...render,
       filename: null,
@@ -984,6 +1014,11 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
     const reopened = useApp.getState();
     const reopenedTarget = reopened.datasets.find((d) => d.id === target.id)!;
     const reopenedSpec = buildStageFigureSpec(() => useApp.getState(), reopenedTarget, "d2", render);
+    // THIS comparison is genuine: the two specs come from the same builder but
+    // from different INPUTS — the live store vs. a serialize/parse round trip —
+    // so anything the `.dwk` fails to carry shows up as a difference. (Also
+    // measured: dropping `view.annotations`/`view.shapes` in `serializeWorkspace`
+    // makes this fail, as it should.)
     expect(reopenedSpec).toEqual(stageSpec);
   });
 });

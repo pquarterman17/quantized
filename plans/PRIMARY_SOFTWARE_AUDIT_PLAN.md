@@ -802,14 +802,22 @@ Behavior:
 - [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
 - [x] Stage/Figure Builder/reopen/export/clipboard remain equivalent —
-  `plotRecipes.test.ts` now applies a decorated recipe through the real
-  store, proves Stage's `buildStageFigureSpec` equals Figure Builder's
-  canonical-document adapter, saves/reopens the `.dwk`, and proves the
-  reopened figure produces the identical render spec. Export and clipboard
-  both consume that same Stage-spec chokepoint (independently pinned in their
-  command tests), so this is runtime equivalence evidence rather than an
-  architectural inference. Owner acceptance remains useful release QA, but
-  is no longer required to establish the code-path contract.
+  `plotRecipes.test.ts` applies a DECORATED recipe (log axes, limits, legend
+  placement, series style, annotation, shape, region shade) through the real
+  store and asserts those decorations survive into the render spec Stage
+  builds, then saves and reopens the `.dwk` and asserts the reopened figure
+  produces the identical spec. The reopen leg is the strong evidence: both
+  sides come from the same builder but from DIFFERENT inputs (live store vs.
+  a serialize/parse round trip), so anything the `.dwk` drops shows up.
+  Scope, stated honestly: Stage and Figure Builder are equivalent BY
+  CONSTRUCTION, not by test — `buildStageFigureSpec` delegates to
+  `buildFigureSpecFromDocument` whenever it can route through the document,
+  so comparing them is an identity, and export/clipboard reach the same
+  builder through that same chokepoint. That part remains an architectural
+  inference (a sound one — `exportFigureCommand`/`copyFigureCommand` are
+  one-line calls to it), and the absolute assertions are what actually
+  protect the decoration those paths carry. Owner acceptance remains useful
+  release QA.
 
 ### P1.4 — First-class categorical and metadata channels [~]
 

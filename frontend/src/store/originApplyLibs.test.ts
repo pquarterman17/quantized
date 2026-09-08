@@ -184,15 +184,29 @@ describe("loadOriginApplyLibs caching", () => {
     // then a successful one on the SAME module instance. Without the `finally`
     // that clears the in-flight slot, the second call replays the rejection and
     // Origin figures stay permanently unappliable after one transient chunk 404.
+    //
+    // The failing/succeeding pair is ONE stateful mock factory rather than a
+    // `doMock(throw)` + `doUnmock` pair: vitest re-invokes the factory on each
+    // repeat `import()` (so the retry genuinely re-fetches), but `doUnmock`
+    // does not reach a module graph already imported by `mod` without a
+    // `resetModules()` — and resetting here would hand the second call a
+    // FRESH `originApplyLibs` instance, destroying the very thing under test.
+    // Keeping one instance and flipping the factory's own state is what makes
+    // this a same-instance retry. (Under vitest 4 the `doUnmock` happened to
+    // reach the already-imported graph; vitest 5 no longer does, which is
+    // what surfaced this.)
     vi.resetModules();
-    vi.doMock("../lib/originSpatialPanels", () => {
-      throw new Error("chunk 404");
+    let failNextLoad = true;
+    vi.doMock("../lib/originSpatialPanels", async () => {
+      if (failNextLoad) throw new Error("chunk 404");
+      return vi.importActual("../lib/originSpatialPanels");
     });
     const mod = await import("./originApplyLibs");
     await expect(mod.loadOriginApplyLibs()).rejects.toThrow();
 
-    vi.doUnmock("../lib/originSpatialPanels");
+    failNextLoad = false;
     await expect(mod.loadOriginApplyLibs()).resolves.toBeTruthy();
+    vi.doUnmock("../lib/originSpatialPanels");
     vi.resetModules();
   });
 });
