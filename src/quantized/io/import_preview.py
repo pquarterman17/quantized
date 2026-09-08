@@ -57,6 +57,7 @@ from quantized.io.import_metadata import (
     MAX_PREAMBLE_COMMENTS,
     parse_header_fields,
     preamble_comments,
+    unparsed_comments,
 )
 from quantized.io.import_parse import (
     DATA_ROLES as _DATA_ROLES,
@@ -126,12 +127,25 @@ class ImportSettings:
     # `import_categorical_guards.MAX_CATEGORICAL_LEVELS`) is a hard refusal
     # in `parse_import` -- but a column with hundreds of GENUINE levels (real
     # sample IDs, run labels, ...) is legitimate and must still be
-    # importable. Setting this to `True` lifts that refusal for THIS import
-    # (`preview_import` keeps reporting the level-cap problem regardless, so
-    # the wizard can offer the choice before Import, not just after a 422).
-    # Persisted like every other field (plain `asdict`/`from_dict`, no
-    # special-casing needed) so a saved filter remembers the decision.
-    allow_large_categorical: bool = False
+    # importable. Listing a RAW FILE COLUMN INDEX here lifts that refusal for
+    # THAT COLUMN (`preview_import` keeps reporting the level-cap problem
+    # regardless, so the wizard can offer the choice before Import, not just
+    # after a 422).
+    #
+    # PER COLUMN, not a single flag (PR #315 review finding #1): the decision
+    # a user makes is always about one specific column they looked at. A
+    # session-wide boolean meant that accepting a legitimate 600-level
+    # `SampleID` also pre-accepted every column mis-marked `categorical`
+    # afterwards -- the 200k-distinct-value float column the cap exists to
+    # catch imported silently, as exactly the garbage channel it was meant to
+    # block. An index accepted here and an index that blows the cap later are
+    # independent facts; only the columns actually named are lifted.
+    #
+    # Persisted like every other field (plain `asdict`/`from_dict`) -- but see
+    # `import_filters.save_filter`, which strips it: a one-time "yes, I meant
+    # it" must not become a permanent headless policy for every future file
+    # the filter's glob matches (review finding #2).
+    allow_large_categorical: list[int] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         # `asdict` recurses through nested dataclasses (including ones
@@ -171,6 +185,21 @@ class ImportSettings:
         else:
             # missing / null / wrong type entirely -> no bindings, not a crash
             kwargs.pop("error_bindings", None)
+        # `allow_large_categorical` was a plain `bool` before it became a
+        # per-column index list (PR #315 review finding #1). Disk-sourced JSON
+        # is never trusted here, so anything that is not a list of ints --
+        # including a legacy `true` -- FAILS CLOSED to "nothing accepted": the
+        # level-cap refusal stands and the user re-accepts the specific column
+        # in the wizard. Silently reading a legacy `true` as "accept whatever
+        # blows the cap in this file" would carry the exact global override
+        # both findings are about, permanently, into files it was never
+        # granted for.
+        raw_allow = kwargs.get("allow_large_categorical")
+        kwargs["allow_large_categorical"] = (
+            [int(i) for i in raw_allow if isinstance(i, int) and not isinstance(i, bool)]
+            if isinstance(raw_allow, list)
+            else []
+        )
         settings = cls(**kwargs)
         object.__setattr__(settings, "malformed_error_bindings", malformed)
         return settings
@@ -274,7 +303,7 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
     # `parse_import`'s `encode_categorical_columns` below, which does.
     cat_cols_all = [k for k in range(n_cols) if p.roles[k] == _CATEGORICAL_ROLE]
     categorical_problems = categorical_level_problems_only(
-        [(effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
+        [(k, effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
          for k in cat_cols_all]
     )
     return {
@@ -292,6 +321,14 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         "comments": comments,
         "header_fields": header_fields,  # P1.6 Part A: `comments`, structured
         "header_field_problems": header_field_problems,
+        # The COMPLEMENT of `header_fields` over `comments` -- the preamble
+        # lines that are not `key: value`. `header_fields` is a parse of the
+        # very `comments` this payload also returns, so a UI rendering both
+        # shows every field line twice (a preamble that is entirely
+        # `key: value` renders in full, twice) unless it can tell the two
+        # apart. Sent from here rather than re-derived client-side so the
+        # "is this a field?" rule stays in one language.
+        "unparsed_comments": unparsed_comments(comments),
         "error_bindings": [b.to_dict() for b in kept_bindings],
         "error_binding_problems": [
             d.to_dict()
@@ -321,9 +358,11 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     DEFECT 1, defense-in-depth -- the wizard UI already disables Import on
     this) and when a ``categorical`` column's level table exceeds
     `import_categorical_guards.MAX_CATEGORICAL_LEVELS` (P1.6 Part C, naming
-    the offending column(s)/counts) -- UNLESS ``settings.
-    allow_large_categorical`` is set, which lifts that one refusal for a
-    column with genuinely many levels (P1.6 Part C review finding #2). A
+    the offending column(s)/counts) -- UNLESS that column's raw index is
+    listed in ``settings.allow_large_categorical``, which lifts that one
+    refusal for THAT column, and only that column, when its many levels are
+    genuine (P1.6 Part C review finding #2, scoped per column by PR #315
+    review finding #1). A
     same-case-folded level collision is reported instead
     (`preview_import`'s ``categorical_problems``), never raised.
     """
@@ -369,19 +408,31 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
     cat_levels: dict[int, tuple[str, ...]] = {}
     if cat_cols:
         encoded, cat_problems = encode_categorical_columns(
-            [(effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
+            [(k, effective_names[k], [row[k] if k < len(row) else "" for row in p.data_tokens])
              for k in cat_cols]
         )
-        cap_problems = [pr for pr in cat_problems if pr["type"] == "categorical_level_cap"]
-        if cap_problems and not settings.allow_large_categorical:
+        # Only the columns the user explicitly accepted are lifted -- a column
+        # that blows the cap and is NOT in `allow_large_categorical` still
+        # refuses, even in the same import as an accepted one (review finding
+        # #1). Matched on the raw file INDEX, never the name: two columns can
+        # share a header, and names are editable mid-session.
+        accepted = set(settings.allow_large_categorical)
+        cap_problems = [
+            pr
+            for pr in cat_problems
+            if pr["type"] == "categorical_level_cap" and pr["index"] not in accepted
+        ]
+        if cap_problems:
             named = ", ".join(
                 f"{pr['column']!r} ({pr['level_count']} levels)" for pr in cap_problems
             )
+            indices = ", ".join(str(pr["index"]) for pr in cap_problems)
             raise ValueError(
                 f"categorical column(s) exceed the level cap: {named} -- likely "
                 "mismarked as categorical; change the role to y/label/ignore, or "
-                "set ImportSettings.allow_large_categorical=True if these are "
-                "genuine levels and the import should proceed as-is"
+                f"add column index/indices {indices} to "
+                "ImportSettings.allow_large_categorical if these are genuine "
+                "levels and the import should proceed as-is"
             )
         cat_arrays = []
         for k, (codes, levels) in zip(cat_cols, encoded, strict=True):

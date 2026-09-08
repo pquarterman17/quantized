@@ -31,6 +31,17 @@ const NO_BINDINGS: ImportErrorBindingWire[] = [];
 
 export interface ImportErrorRolesState {
   errorRows: WizardErrorRow[];
+  /** Seed one row from a RAW-column binding (`sourceIndex`/`target` are file
+   *  column indices, `target: -1` = the x axis), for the "apply this
+   *  suggestion" action: that action also re-roles the column to `error`, so
+   *  the row it needs to write usually does not exist yet and `setErrorTarget`
+   *  — a map over the CURRENT rows — would silently do nothing. Applied
+   *  immediately when the row already exists, otherwise held until the reseed
+   *  the role change triggers, then consumed once. */
+  applyErrorRow: (
+    sourceIndex: number,
+    value: { target: number; axis: "x" | "y"; side: ErrorBinding["side"] },
+  ) => void;
   setErrorTarget: (channel: number, target: number | null) => void;
   setErrorAxis: (channel: number, axis: "x" | "y", remember?: boolean) => void;
   setErrorSide: (channel: number, side: ErrorBinding["side"]) => void;
@@ -83,6 +94,42 @@ function seedFromWire(
   });
 }
 
+/** Overlay any rows held by `applyErrorRow` onto a freshly seeded set,
+ *  translating the RAW column indices they carry into the channel numbering
+ *  `columns` now produces, and consuming each entry (a pending row is written
+ *  once, then behaves like any other manual edit). An entry whose column is no
+ *  longer an error column, or whose target no longer resolves, is dropped
+ *  rather than guessed at. Mutates `pending`/`edited` — both are refs owned by
+ *  the caller. */
+function applyPending(
+  columns: readonly ImportPreviewColumn[],
+  seeded: WizardErrorRow[],
+  pending: Map<number, { target: number; axis: "x" | "y"; side: ErrorBinding["side"] }>,
+  edited: Set<number>,
+): WizardErrorRow[] {
+  if (pending.size === 0) return seeded;
+  const order = finalChannelOrder(columns);
+  const channelByRaw = new Map(order.map((item) => [item.sourceIndex, item.channel]));
+  const out = seeded.map((row) => {
+    const sourceIndex = order.find((item) => item.channel === row.channel)?.sourceIndex;
+    const want = sourceIndex === undefined ? undefined : pending.get(sourceIndex);
+    if (!want) return row;
+    const target = want.target === -1 ? -1 : channelByRaw.get(want.target);
+    if (target === undefined) return row;
+    edited.add(row.channel);
+    return {
+      ...row,
+      target,
+      axis: want.axis,
+      side: want.side,
+      provenance: "manual" as const,
+      preferredAxis: want.target === -1 ? null : want.axis,
+    };
+  });
+  pending.clear();
+  return out;
+}
+
 export function useImportErrorRoles(
   columns: ImportPreviewColumn[],
   confirmed: readonly ImportErrorBindingWire[] = NO_BINDINGS,
@@ -100,6 +147,9 @@ export function useImportErrorRoles(
   const prevArrangement = useRef<string | null>(null);
   const prevWire = useRef<string | null>(null);
   const editedChannels = useRef(new Set<number>());
+  // Raw source index -> the row value to write at the next reseed. See
+  // `applyErrorRow`.
+  const pendingRows = useRef(new Map<number, { target: number; axis: "x" | "y"; side: ErrorBinding["side"] }>());
 
   useEffect(() => {
     const arrangement = signatureOf(columns);
@@ -109,14 +159,15 @@ export function useImportErrorRoles(
     prevArrangement.current = arrangement;
     prevWire.current = wire;
     if (arrangementChanged) editedChannels.current.clear();
-    const seeded = columns.length ? seedFromWire(columns, confirmed, suggested, allowSuggestions) : [];
+    const raw = columns.length ? seedFromWire(columns, confirmed, suggested, allowSuggestions) : [];
+    const seeded = applyPending(columns, raw, pendingRows.current, editedChannels.current);
     setRows((current) => arrangementChanged ? seeded.map((row) => {
       // A suggestion persisted for settings parity is not promoted into an
       // explicit binding merely because the backend echoes it as confirmed.
       // Re-evaluate it when names/roles change, so a now-ambiguous guess is
       // removed from both the row and settings by the reconciliation effect.
       const previous = current.find((item) => item.channel === row.channel);
-      if (previous?.provenance !== "suggested") return row;
+      if (row.provenance === "manual" || previous?.provenance !== "suggested") return row;
       return seedFromWire(columns, [], suggested, allowSuggestions)
         .find((item) => item.channel === row.channel) ?? row;
     }) : seeded.map((row) => {
@@ -136,8 +187,35 @@ export function useImportErrorRoles(
     )));
   }
 
+  function applyErrorRow(
+    sourceIndex: number,
+    value: { target: number; axis: "x" | "y"; side: ErrorBinding["side"] },
+  ): void {
+    const channel = finalChannelOrder(columns).find((c) => c.sourceIndex === sourceIndex)?.channel;
+    const existing = channel === undefined
+      ? undefined
+      : rows.find((row) => row.channel === channel);
+    if (channel === undefined || !existing) {
+      // No row yet (the caller is re-roling this column to `error` in the same
+      // interaction) — hold the value for the reseed that change triggers.
+      pendingRows.current.set(sourceIndex, value);
+      return;
+    }
+    const target = value.target === -1
+      ? -1
+      : finalChannelOrder(columns).find((c) => c.sourceIndex === value.target)?.channel;
+    if (target === undefined) return;
+    patch(channel, {
+      target,
+      axis: value.axis,
+      side: value.side,
+      preferredAxis: value.target === -1 ? null : value.axis,
+    });
+  }
+
   return {
     errorRows: rows,
+    applyErrorRow,
     setErrorTarget: (channel, target) => patch(channel, { target }),
     setErrorAxis: (channel, axis, remember = true) => patch(
       channel,

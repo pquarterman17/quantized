@@ -32,6 +32,7 @@ __all__ = [
     "MAX_PREAMBLE_COMMENTS",
     "parse_header_fields",
     "preamble_comments",
+    "unparsed_comments",
 ]
 
 # Moved verbatim from `import_preview._MAX_PREAMBLE_COMMENTS` (review round
@@ -114,6 +115,45 @@ def _split_field(line: str) -> tuple[str, str] | None:
     return key, value
 
 
+def _parse(
+    lines: Sequence[str],
+) -> tuple[dict[str, str], list[dict[str, Any]], list[str]]:
+    """The single pass behind BOTH public parse entry points, so the rule for
+    "is this line a field?" cannot drift between them: a caller asking for the
+    fields and a caller asking for what is left over always partition the SAME
+    input on the SAME decision, cap included (a line skipped because
+    ``MAX_HEADER_FIELDS`` was already reached is genuinely unparsed, and is
+    reported as such rather than vanishing from both halves)."""
+    fields: dict[str, str] = {}
+    problems: list[dict[str, Any]] = []
+    unparsed: list[str] = []
+    dupes_seen: set[str] = set()
+    for raw in lines:
+        parsed = None if len(fields) >= MAX_HEADER_FIELDS else _split_field(_strip_marker(raw))
+        if parsed is None:
+            unparsed.append(raw)
+            continue
+        key, value = parsed
+        if key in fields and key not in dupes_seen:
+            problems.append({"type": "duplicate_header_field", "key": key})
+            dupes_seen.add(key)
+        fields[key] = value
+    return fields, problems, unparsed
+
+
+def unparsed_comments(lines: Sequence[str]) -> list[str]:
+    """The lines of ``lines`` that are NOT ``key: value`` fields, verbatim --
+    the exact complement of ``parse_header_fields``'s keys over the same input.
+
+    Exists so a UI can show the structured map and the leftover prose WITHOUT
+    showing the same line twice (the preview's ``header_fields`` is a parse of
+    the very ``comments`` it also returns, so a preamble that is entirely
+    ``key: value`` rendered in full twice). Mirroring the parse rule in the
+    client instead would put the same decision in two languages, which is the
+    drift this repo already pays a parity fixture to prevent elsewhere."""
+    return _parse(lines)[2]
+
+
 def parse_header_fields(lines: Sequence[str]) -> tuple[dict[str, str], list[dict[str, Any]]]:
     """Parse ``lines`` (the SAME retained-comment lines ``metadata["comments"]``
     already carries) into an ordered ``key -> value`` map.
@@ -136,18 +176,5 @@ def parse_header_fields(lines: Sequence[str]) -> tuple[dict[str, str], list[dict
     parsed. Never raises; a line that doesn't parse as a field is just
     skipped (it stays comments-only, unaffected).
     """
-    fields: dict[str, str] = {}
-    problems: list[dict[str, Any]] = []
-    dupes_seen: set[str] = set()
-    for raw in lines:
-        if len(fields) >= MAX_HEADER_FIELDS:
-            break
-        parsed = _split_field(_strip_marker(raw))
-        if parsed is None:
-            continue
-        key, value = parsed
-        if key in fields and key not in dupes_seen:
-            problems.append({"type": "duplicate_header_field", "key": key})
-            dupes_seen.add(key)
-        fields[key] = value
+    fields, problems, _unparsed = _parse(lines)
     return fields, problems

@@ -13,7 +13,6 @@ import type { ErrorBinding } from "../../../lib/errorRoles";
 import { importGuess, importParse, importPreview, listImportFilters, saveImportFilter, deleteImportFilter } from "../../../lib/api/importFilters";
 import {
   confirmedErrorBindings,
-  finalChannelOrder,
   resolveImportFilter,
   withColumnName,
   withColumnUnit,
@@ -32,11 +31,10 @@ import type {
 } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
-import { useImportErrorRoles } from "./useImportErrorRoles";
+import { useImportErrorBindings } from "./useImportErrorBindings";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
-const NO_ERROR_BINDINGS: ImportErrorBindingWire[] = [];
 
 let _seq = 0;
 
@@ -60,6 +58,11 @@ export interface ImportWizardState {
    *  while it's set. */
   xConflict: string | null;
   categoricalBlocked: boolean;
+  /** Raw file column indices whose oversized categorical level table the user
+   *  accepted for THIS import (never persisted — see the state comment). */
+  acceptedCategorical: number[];
+  acceptLargeCategorical: (index: number) => void;
+  unacceptLargeCategorical: (index: number) => void;
   pickFile: (f: File) => Promise<void>;
   patchSettings: (patch: Partial<ImportSettingsWire>) => void;
   setColumnRole: (index: number, role: ImportColumnRole) => void;
@@ -99,65 +102,41 @@ export function useImportWizard(): ImportWizardState {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imported, setImported] = useState(false);
-  const [allowErrorSuggestions, setAllowErrorSuggestions] = useState(true);
+
+  // Error bindings (rows + the reconciled `error_bindings` array) live in their
+  // own hook — see useImportErrorBindings.ts.
   const {
     errorRows,
-    setErrorTarget: setErrorTargetLocal,
-    setErrorAxis: setErrorAxisLocal,
-    setErrorSide: setErrorSideLocal,
+    setErrorTarget,
+    setErrorAxis,
+    setErrorSide,
+    applyErrorSuggestion,
+    removeRejectedErrorBinding,
+    setAllowSuggestions: setAllowErrorSuggestions,
     resetErrorEdits,
     resetErrorRows,
-  } =
-    useImportErrorRoles(
-      columns,
-      preview?.error_bindings ?? NO_ERROR_BINDINGS,
-      preview?.suggested_error_bindings ?? NO_ERROR_BINDINGS,
-      allowErrorSuggestions,
-    );
+  } = useImportErrorBindings({
+    columns,
+    setColumns,
+    settings,
+    setSettings,
+    patchSettings,
+    preview,
+  });
 
-  // For columns represented by the editor, rows are authoritative: add,
-  // replace, AND prune bindings so Import and saved filters cannot drift from
-  // what the controls show. Out-of-range/malformed entries remain until the
-  // user removes their visible problem alert.
-  useEffect(() => {
-    if (!columns.length) return;
-    const order = finalChannelOrder(columns);
-    const rawByChannel = new Map(order.map((item) => [item.channel, item.sourceIndex]));
-    const channelByRaw = new Map(order.map((item) => [item.sourceIndex, item.channel]));
-    const errorCount = columns.filter((column) => column.role === "error").length;
-    if (errorRows.length !== errorCount) return;
-    setSettings((current) => {
-      if (!current) return current;
-      const next: ImportErrorBindingWire[] = [];
-      const emitted = new Set<number>();
-      for (const binding of current.error_bindings ?? []) {
-        const source = columns.find((column) => column.index === binding.column);
-        if (!source) {
-          next.push(binding);
-          continue;
-        }
-        const channel = channelByRaw.get(binding.column);
-        const row = errorRows.find((item) => item.channel === channel);
-        if (source.role !== "error" || !row || row.target === null || emitted.has(binding.column)) continue;
-        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
-        if (target === undefined) continue;
-        next.push({ column: binding.column, target, axis: row.axis, side: row.side });
-        emitted.add(binding.column);
-      }
-      for (const row of errorRows) {
-        if (row.target === null) continue;
-        const column = rawByChannel.get(row.channel);
-        const target = row.target === -1 ? -1 : rawByChannel.get(row.target);
-        if (column === undefined || target === undefined) continue;
-        if (emitted.has(column)) continue;
-        next.push({ column, target, axis: row.axis, side: row.side });
-        emitted.add(column);
-      }
-      return JSON.stringify(next) === JSON.stringify(current.error_bindings ?? [])
-        ? current
-        : { ...current, error_bindings: next };
-    });
-  }, [columns, errorRows]);
+  // Raw file column indices whose oversized `categorical` level table the
+  // user has explicitly accepted. Deliberately NOT part of `settings`:
+  //   - `preview_import` ignores it, so folding it into `settings` re-posted
+  //     the whole file through the debounced preview for a response
+  //     guaranteed identical — ~0.7-1.25 s on precisely the large files that
+  //     trigger the cap, and it cleared any visible error on the way past
+  //     (review finding #5);
+  //   - `settings` is what "Save as filter…" persists, and a one-time "yes,
+  //     that column is right" must not become a permanent headless policy
+  //     for every future file the glob matches (finding #2 — `save_filter`
+  //     strips the field server-side too, so this is belt and braces).
+  // It is merged into the settings `doImport` sends, and nowhere else.
+  const [acceptedRaw, setAcceptedRaw] = useState<number[]>([]);
 
   async function refreshFilters(): Promise<void> {
     setFiltersBusy(true);
@@ -205,6 +184,7 @@ export function useImportWizard(): ImportWizardState {
     setPreview(null);
     setColumns([]);
     setImported(false);
+    setAcceptedRaw([]);
     setFile(f);
     setBusy(true);
     try {
@@ -242,95 +222,6 @@ export function useImportWizard(): ImportWizardState {
     patchSettings({ column_names: withColumnUnit(columns, index, unit) });
   }
 
-  function applyErrorSuggestion(binding: ImportErrorBindingWire): void {
-    if (!settings || !columns.length) return;
-    const position = columns.findIndex((column) => column.index === binding.column);
-    if (position < 0) return;
-    setColumns((current) => current.map((column, i) => (
-      i === position ? { ...column, role: "error" } : column
-    )));
-    patchSettings({
-      roles: withRole(columns, position, "error"),
-      error_bindings: [
-        ...(settings.error_bindings ?? []).filter((item) => item.column !== binding.column),
-        binding,
-      ],
-    });
-  }
-
-  function persistErrorRow(channel: number, patch: Partial<WizardErrorRow>): void {
-    if (!settings) return;
-    const row = errorRows.find((item) => item.channel === channel);
-    const source = finalChannelOrder(columns).find((item) => item.channel === channel);
-    if (!row || !source) return;
-    const next = { ...row, ...patch };
-    const bindings = settings.error_bindings ?? [];
-    const currentIndex = bindings.findIndex((item) => item.column === source.sourceIndex);
-    if (next.target === null) {
-      patchSettings({ error_bindings: bindings.filter((_, index) => index !== currentIndex) });
-      return;
-    }
-    const target = next.target === -1
-      ? -1
-      : finalChannelOrder(columns).find((item) => item.channel === next.target)?.sourceIndex;
-    if (target === undefined) return;
-    const binding = {
-      column: source.sourceIndex,
-      target,
-      axis: next.axis,
-      side: next.side,
-    };
-    patchSettings({
-      error_bindings: currentIndex < 0
-        ? [...bindings, binding]
-        : bindings.map((item, index) => index === currentIndex ? binding : item),
-    });
-  }
-
-  function setErrorTarget(channel: number, target: number | null): void {
-    const current = errorRows.find((row) => row.channel === channel);
-    setErrorTargetLocal(channel, target);
-    // The backend contract reserves target -1 for the x axis and rejects it
-    // unless axis is also x. Keep the visible editor and persisted binding
-    // valid in the same interaction instead of waiting for a rejected preview.
-    const axis = target === -1 ? "x" : target !== null ? current?.preferredAxis ?? "y" : undefined;
-    if (axis) setErrorAxisLocal(channel, axis, false);
-    persistErrorRow(channel, { target, ...(axis ? { axis } : {}) });
-  }
-
-  function removeRejectedErrorBinding(problem: ImportErrorBindingProblem): void {
-    if (!settings) return;
-    const bindings = settings.error_bindings ?? [];
-    let removeIndex = bindings.findIndex((binding) => (
-      binding.column === problem.column
-      && binding.target === problem.target
-      && binding.axis === problem.axis
-      && binding.side === problem.side
-    ));
-    if (removeIndex < 0 && problem.code === "malformed_entry") {
-      removeIndex = bindings.findIndex((binding) => {
-        const raw = binding as unknown as Record<string, unknown>;
-        return !Number.isInteger(raw.column)
-          || !Number.isInteger(raw.target)
-          || (raw.axis !== "x" && raw.axis !== "y")
-          || (raw.side !== "both" && raw.side !== "+" && raw.side !== "-");
-      });
-    }
-    if (removeIndex < 0) return;
-    patchSettings({
-      error_bindings: bindings.filter((_, index) => index !== removeIndex),
-    });
-  }
-
-  function setErrorAxis(channel: number, axis: "x" | "y"): void {
-    setErrorAxisLocal(channel, axis);
-    persistErrorRow(channel, { axis });
-  }
-
-  function setErrorSide(channel: number, side: ErrorBinding["side"]): void {
-    setErrorSideLocal(channel, side);
-    persistErrorRow(channel, { side });
-  }
 
   // P1.6 item 4: refusal-with-explanation on mismatch — mirrors the
   // H-template semantics (quickPlotTemplates.resolveTemplate): re-preview
@@ -358,6 +249,7 @@ export function useImportWizard(): ImportWizardState {
       }
       setImported(false);
       setAllowErrorSuggestions(filt.settings.error_bindings == null);
+      setAcceptedRaw([]);  // a new layout is a new set of columns to judge
       setSettings({ ...filt.settings });
       resetErrorEdits();
       setPreview(fresh);
@@ -397,9 +289,50 @@ export function useImportWizard(): ImportWizardState {
   // role edit shows the conflict/clears it instantly, same as every other
   // column-edit affordance in this hook.
   const xConflict = useMemo(() => xRoleConflictMessage(columns), [columns]);
-  const categoricalBlocked = !!preview?.categorical_problems?.some(
-    (problem) => problem.type === "categorical_level_cap",
-  ) && !settings?.allow_large_categorical;
+
+  // An acceptance is about the column AS THE USER SAW IT. Re-roling that
+  // column away from `categorical` retires the decision rather than leaving
+  // it armed for whatever the index means later.
+  const acceptedCategorical = useMemo(
+    () => acceptedRaw.filter(
+      (index) => columns.find((column) => column.index === index)?.role === "categorical",
+    ),
+    [acceptedRaw, columns],
+  );
+
+  // `preview` is the SERVER's answer for the settings as they were up to
+  // DEBOUNCE_MS + a round trip ago. Marking a column `categorical` therefore
+  // leaves the level-cap problem unreported for that whole window, and Import
+  // stayed enabled through it — sending a request the backend rejects with a
+  // 422, the exact outcome this guard exists to prevent (review finding #3).
+  // The optimistic `columns` overlay is resynced to `preview.columns` the
+  // moment a preview lands, so a disagreement about which columns are
+  // categorical means precisely "the answer on screen predates this edit":
+  // block until the fresh answer arrives, the same way `xConflict` derives
+  // from the overlay rather than the server.
+  const categoricalPreviewStale = useMemo(
+    () => !!preview && columns.some(
+      (column, i) => (column.role === "categorical")
+        !== (preview.columns[i]?.role === "categorical"),
+    ),
+    [columns, preview],
+  );
+  const categoricalBlocked = categoricalPreviewStale || (preview?.categorical_problems ?? []).some(
+    (problem) => problem.type === "categorical_level_cap"
+      && !acceptedCategorical.includes(problem.index),
+  );
+
+  function acceptLargeCategorical(index: number): void {
+    setImported(false);
+    setAcceptedRaw((current) => (current.includes(index) ? current : [...current, index]));
+  }
+
+  /** Undo an acceptance — the original override had no way back once the
+   *  button was replaced, so a mis-click was unrecoverable short of
+   *  re-picking the file. */
+  function unacceptLargeCategorical(index: number): void {
+    setAcceptedRaw((current) => current.filter((item) => item !== index));
+  }
 
   async function doImport(): Promise<void> {
     if (!file || !settings || !text) return;
@@ -418,7 +351,13 @@ export function useImportWizard(): ImportWizardState {
     setImporting(true);
     setError(null);
     try {
-      const data = await importParse(text, settings);
+      // The ONLY place the acceptances are sent. `allow_large_categorical`
+      // never enters `settings` itself, so it cannot leak into a saved filter
+      // or trigger a pointless re-preview.
+      const data = await importParse(
+        text,
+        acceptedCategorical.length ? { ...settings, allow_large_categorical: acceptedCategorical } : settings,
+      );
       const id = `impwiz-${++_seq}`;
       // P1.6 item 2: only EXPLICITLY assigned error rows (target !== null)
       // become Dataset.errorRoles — an unassigned suggestion contributes
@@ -447,6 +386,7 @@ export function useImportWizard(): ImportWizardState {
     setColumns([]);
     setError(null);
     setImported(false);
+    setAcceptedRaw([]);
     setAllowErrorSuggestions(true);
     resetErrorRows();
   }
@@ -474,6 +414,9 @@ export function useImportWizard(): ImportWizardState {
     errorRows,
     xConflict,
     categoricalBlocked,
+    acceptedCategorical,
+    acceptLargeCategorical,
+    unacceptLargeCategorical,
     pickFile,
     patchSettings,
     setColumnRole,
