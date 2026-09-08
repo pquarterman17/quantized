@@ -2,9 +2,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { resolveCategoryLabels } from "./barlayout";
 import {
   buildRunRequest,
   groupsByCategory,
+  groupsByCategoryIndexed,
   groupsFromColumns,
   reportRecord,
   resultRows,
@@ -41,6 +43,46 @@ describe("groupsByCategory", () => {
     expect(gs.map((g) => g.label)).toEqual(["batch = 0", "batch = 1"]);
     expect(gs[0].values).toEqual([10, 11]); // NaN pair dropped
     expect(gs[1].values).toEqual([20, 21, 22]);
+  });
+
+  it("uses imported categorical names in both statistical grouping paths", () => {
+    const categorical: DataStruct = {
+      ...DATA,
+      cat_levels: { 1: ["Reference", "Annealed"] },
+    };
+    expect(groupsByCategory(categorical, 0, 1).map((g) => g.label)).toEqual([
+      "batch = Reference",
+      "batch = Annealed",
+    ]);
+    expect(groupsByCategoryIndexed(categorical, 0, 1).map((g) => g.label)).toEqual([
+      "batch = Reference",
+      "batch = Annealed",
+    ]);
+  });
+
+  it("labels an Origin text-column categorical the same way Data Filter and Tabulate do", () => {
+    // A channel is categorical whenever `channelModelingType` says so — which
+    // includes a `channelTypes` override and `inferModelingType`, not just a
+    // P1.4 level table. An Origin `.opj` import is exactly that shape: numeric
+    // codes plus `origin_text_columns`, NO `cat_levels`. Reading only the level
+    // table (`categorical.groupLevelLabel`) printed "batch = 0" here while
+    // Data Filter and Tabulate printed "Reference" for the same column — the
+    // divergence this shares its resolver with them to prevent.
+    const origin: DataStruct = {
+      ...DATA,
+      metadata: {
+        ...DATA.metadata,
+        origin_text_columns: {
+          "1": ["Reference", "Reference", "Reference", "Annealed", "Annealed", "Annealed"],
+        },
+      },
+    };
+    const viaStats = groupsByCategory(origin, 0, 1).map((g) => g.label);
+    // The same labels the shared resolver hands Data Filter / Tabulate.
+    const viaSharedResolver = resolveCategoryLabels(origin, 1, [0, 1])
+      .map((text) => `batch = ${text}`);
+    expect(viaStats).toEqual(viaSharedResolver);
+    expect(viaStats).toEqual(["batch = Reference", "batch = Annealed"]);
   });
 });
 
