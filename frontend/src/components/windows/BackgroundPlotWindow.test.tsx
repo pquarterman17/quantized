@@ -19,6 +19,16 @@ import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import BackgroundPlotWindow from "./BackgroundPlotWindow";
 
+/** `defaultPlotView()` with the axis box switched OFF. The box is ON by default
+ *  (all four sides — see `store/useApp.ts`), and it is a DECORATION plugin, not
+ *  a tool plugin. These tests count `opts.plugins` to prove a background window
+ *  activates no TOOL plugins, so they opt out of the box to keep the "one
+ *  plugin = the thing under test" idiom readable — the same convention
+ *  `MultiPanelStage.test.tsx` uses. */
+function noBoxView(): PlotView {
+  return { ...defaultPlotView(), showAxisBox: false };
+}
+
 const { created, MockUPlot, statDrawCalls } = vi.hoisted(() => {
   const created: { opts: unknown; data: unknown }[] = [];
   const statDrawCalls: unknown[] = [];
@@ -102,7 +112,7 @@ describe("BackgroundPlotWindow", () => {
   });
 
   it("with a bound dataset, renders the SAME live data pipeline as the focused window (no tool plugin)", async () => {
-    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} />);
+    render(<BackgroundPlotWindow dataset={DATASET} view={noBoxView()} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
     // tool="zoom" + no refLines/annotations/errorBars/wheelZoom/peakWizardEdit
@@ -214,7 +224,7 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
 
   it("view.stackMode renders one uPlot panel per channel — per-window sync key, no tool plugins", async () => {
     expect(useApp.getState().stackMode).toBe(false);
-    const view = { ...defaultPlotView(), stackMode: true };
+    const view = { ...noBoxView(), stackMode: true };
     render(<BackgroundPlotWindow dataset={DATASET2} view={view} />);
     await waitFor(() => expect(created).toHaveLength(2)); // one panel per channel
     for (const c of created) {
@@ -304,7 +314,7 @@ const RICH_DATASET: Dataset = { id: "rich1", name: "rich", data: RICH_DATA };
  *  ends up empty and `errorBars` (the legacy plugin's input) is empty too.
  *  Any error-bar rendering here can ONLY come from `errorSpans`. */
 function richErrorDocument() {
-  const seedView = { ...defaultPlotView(), yKeys: [0] };
+  const seedView = { ...noBoxView(), yKeys: [0] };
   return createFigureDocument({
     id: "fig-rich",
     name: "Rich Figure",
@@ -337,7 +347,7 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
   // Without a `document` prop (an ordinary, non-editable-figure window),
   // behavior is UNCHANGED: no rich source, no plugin.
   it("without a document prop, an ordinary window with no errKeys still renders no error plugin", async () => {
-    render(<BackgroundPlotWindow dataset={RICH_DATASET} view={defaultPlotView()} />);
+    render(<BackgroundPlotWindow dataset={RICH_DATASET} view={noBoxView()} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
     expect(opts.plugins).toHaveLength(0);
@@ -347,7 +357,7 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
   // background rendering is byte-identical unchanged by this fix -- it
   // never touches `errKeys`/`errorBars`, only adds `errorSpans` consumption.
   it("control: a legacy symmetric-Y errKeys window still renders via errorBarsPlugin in the background", async () => {
-    const view = { ...defaultPlotView(), yKeys: [0], errKeys: { 0: 1 } };
+    const view = { ...noBoxView(), yKeys: [0], errKeys: { 0: 1 } };
     render(<BackgroundPlotWindow dataset={RICH_DATASET} view={view} />);
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };

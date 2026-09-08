@@ -366,7 +366,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   legendStatic: boolean; // clean read-only legend (Origin apply, decode #52)
   legendTitle: string | null; // legend header text (Origin apply, decode #52)
   plotTemplate: string; // on-screen publication template (base font + line width)
-  showAxisBox: boolean; // draw a full frame around the plot area
+  showAxisBox: boolean; // full frame on all four sides of the plot area (on by default)
   stackMode: boolean; // multi-panel: one stacked sub-plot per channel
   panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
   pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
@@ -964,7 +964,7 @@ export const useApp = create<AppState>((set, get) => ({
   legendStatic: false,
   legendTitle: null,
   plotTemplate: "screen",
-  showAxisBox: false,
+  showAxisBox: true,
   stackMode: false,
   panelFit: "frames",
   pageSetup: null,
