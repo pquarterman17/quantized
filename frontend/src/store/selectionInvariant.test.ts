@@ -90,16 +90,16 @@ describe("selection mutual exclusion — every writer that establishes a dataset
     expect(invariantHolds()).toBe(true);
   });
 
-  it("restoreFromTrash yields the tree selection only when the restore IS an activation", () => {
+  it("restoreFromTrash yields the tree selection only when the restore IS an activation", async () => {
     useApp.getState().removeDatasets(["d1", "d2"]);
     useApp.setState({ activeId: null, selectedIds: [], librarySelection: { kind: "folder", id: "f1" } });
-    useApp.getState().restoreFromTrash("d1"); // activates: activeId was null
+    await useApp.getState().restoreFromTrash("dataset:d1"); // activates: activeId was null
     expect(useApp.getState().activeId).toBe("d1");
     expect(useApp.getState().librarySelection).toBeNull();
 
     // The non-activation restore leaves the selection alone.
     useApp.setState({ librarySelection: { kind: "folder", id: "f1" }, selectedIds: [] });
-    useApp.getState().restoreFromTrash("d2"); // activeId already "d1"
+    await useApp.getState().restoreFromTrash("dataset:d2"); // activeId already "d1"
     expect(useApp.getState().librarySelection).toEqual({ kind: "folder", id: "f1" });
     expect(invariantHolds()).toBe(true); // selectedIds untouched by restore
   });

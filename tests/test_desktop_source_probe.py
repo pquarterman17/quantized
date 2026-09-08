@@ -39,6 +39,38 @@ def test_probe_ok_for_an_existing_file_without_checksum(tmp_path: Path) -> None:
     assert "checksum" not in out
 
 
+def test_probe_ok_reports_dev_and_ino(tmp_path: Path) -> None:
+    """RED-FIRST: the new filesystem-identity fields a caller (the portable
+    manifest builder) uses to prove two path spellings name one physical
+    file -- never populated before this slice."""
+    f = _file(tmp_path)
+    st = f.stat()
+    out = probe_source_path(str(f), compute_checksum=False)
+    assert out["dev"] == st.st_dev
+    assert out["ino"] == st.st_ino
+    assert isinstance(out["dev"], int)
+    assert isinstance(out["ino"], int)
+
+
+def test_probe_dev_ino_identical_for_two_spellings_of_one_file(tmp_path: Path) -> None:
+    """The whole point of dev/ino: two DIFFERENT path strings that resolve
+    to the SAME file report the SAME identity pair."""
+    f = _file(tmp_path)
+    spelling_a = str(f)
+    spelling_b = str(tmp_path / ".." / tmp_path.name / f.name)
+    out_a = probe_source_path(spelling_a, compute_checksum=False)
+    out_b = probe_source_path(spelling_b, compute_checksum=False)
+    assert (out_a["dev"], out_a["ino"]) == (out_b["dev"], out_b["ino"])
+
+
+def test_probe_dev_ino_differ_for_two_different_files(tmp_path: Path) -> None:
+    a = _file(tmp_path, "a.csv", "aaa")
+    b = _file(tmp_path, "b.csv", "bbb")
+    out_a = probe_source_path(str(a), compute_checksum=False)
+    out_b = probe_source_path(str(b), compute_checksum=False)
+    assert (out_a["dev"], out_a["ino"]) != (out_b["dev"], out_b["ino"])
+
+
 def test_probe_missing_when_the_volume_is_reachable(tmp_path: Path) -> None:
     out = probe_source_path(str(tmp_path / "nope.csv"), compute_checksum=False)
     assert out["state"] == "missing"
@@ -71,6 +103,42 @@ def test_probe_permission_denied_when_stat_itself_is_refused(
     monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
     out = probe_source_path(str(f), compute_checksum=False)
     assert out["state"] == "permission_denied"
+
+
+def test_probe_stale_mount_oserror_is_offline_not_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.1 self-review: a stale/unreachable share raises ESTALE/EIO/
+    ETIMEDOUT from stat — NOT ENOENT — and must still read as offline
+    (the volume is gone), never as a malformed path, or every downstream
+    consumer offers Locate/cleanup for a project that is fine."""
+    target = _unmounted_volume_path()
+    real_stat = os.stat
+
+    def _stale(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(116, "Stale file handle", path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _stale)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "offline"
+
+
+def test_probe_generic_oserror_on_a_live_volume_is_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The counterpart: the same OSError where the volume IS reachable is
+    a bad path, exactly as before."""
+    target = str(tmp_path / "weird")
+    real_stat = os.stat
+
+    def _boom(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(22, "Invalid argument", path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
 
 
 def test_probe_degrades_to_invalid_when_stat_raises_valueerror_not_oserror(

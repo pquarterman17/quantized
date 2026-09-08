@@ -14,13 +14,70 @@ describe("useImportErrorRoles", () => {
   it("seeds one row per error-role column with the name-based suggestion", () => {
     const { result } = renderHook(() => useImportErrorRoles(cols()));
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested", preferredAxis: null },
     ]);
   });
 
   it("empty columns yields no rows", () => {
     const { result } = renderHook(() => useImportErrorRoles([]));
     expect(result.current.errorRows).toEqual([]);
+  });
+
+  it("uses backend-confirmed bindings ahead of suggestions and the legacy client fallback", () => {
+    const { result } = renderHook(() => useImportErrorRoles(
+      cols(),
+      [{ column: 2, target: -1, axis: "x", side: "+" }],
+      [{ column: 2, target: 1, axis: "y", side: "both" }],
+    ));
+    expect(result.current.errorRows).toEqual([
+      { channel: 1, label: "dR", target: -1, axis: "x", side: "+", provenance: "confirmed", preferredAxis: null },
+    ]);
+  });
+
+  it("keeps an explicit unassign when the next preview still suggests the binding", () => {
+    const suggestion = [{ column: 2, target: 1, axis: "y" as const, side: "both" as const }];
+    const { result, rerender } = renderHook(
+      ({ confirmed }) => useImportErrorRoles(cols(), confirmed, suggestion),
+      { initialProps: { confirmed: suggestion } },
+    );
+    act(() => result.current.setErrorTarget(1, null));
+    rerender({ confirmed: [] });
+    expect(result.current.errorRows[0].target).toBeNull();
+  });
+
+  it("honors an explicit-empty configuration instead of reseeding suggestions", () => {
+    const { result } = renderHook(() => useImportErrorRoles(
+      cols(),
+      [],
+      [{ column: 2, target: 1, axis: "y", side: "both" }],
+      false,
+    ));
+    expect(result.current.errorRows[0]).toMatchObject({
+      target: null,
+      provenance: "unassigned",
+    });
+  });
+
+  it("re-evaluates an auto-persisted suggestion when renamed columns make it ambiguous", () => {
+    const initial: ImportPreviewColumn[] = [
+      { index: 0, name: "Temp", unit: "", role: "x" },
+      { index: 1, name: "R", unit: "", role: "y" },
+      { index: 2, name: "dR", unit: "", role: "error" },
+      { index: 3, name: "S", unit: "", role: "y" },
+    ];
+    const binding = { column: 2, target: 1, axis: "y" as const, side: "both" as const };
+    const { result, rerender } = renderHook(
+      ({ columns, confirmed, suggested }) => useImportErrorRoles(columns, confirmed, suggested),
+      { initialProps: { columns: initial, confirmed: [] as typeof binding[], suggested: [binding] } },
+    );
+    expect(result.current.errorRows[0].provenance).toBe("suggested");
+
+    rerender({
+      columns: initial.map((column) => column.index === 1 ? { ...column, name: "Q" } : column),
+      confirmed: [binding],
+      suggested: [],
+    });
+    expect(result.current.errorRows[0]).toMatchObject({ target: null, provenance: "unassigned" });
   });
 
   it("setErrorTarget/-Axis/-Side edit one row by channel, leaving others untouched", () => {
@@ -82,7 +139,7 @@ describe("useImportErrorRoles", () => {
       initialProps: { columns: raw },
     });
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "Col3", target: null, axis: "y", side: "both" }, // no base-name match yet
+      { channel: 1, label: "Col3", target: null, axis: "y", side: "both", provenance: "unassigned", preferredAxis: null }, // no base-name match yet
     ]);
 
     // A label_line edit lands: raw `name`s are untouched, but effective_name
@@ -94,7 +151,7 @@ describe("useImportErrorRoles", () => {
     ];
     rerender({ columns: labeled });
     expect(result.current.errorRows).toEqual([
-      { channel: 1, label: "dR", target: 0, axis: "y", side: "both" },
+      { channel: 1, label: "dR", target: 0, axis: "y", side: "both", provenance: "suggested", preferredAxis: null },
     ]);
   });
 

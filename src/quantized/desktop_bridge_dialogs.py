@@ -32,6 +32,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from quantized.desktop_bridge_common import (
+    FOLDER_DIALOG_DEFAULT,
+    OPEN_DIALOG_DEFAULT,
+    SAVE_DIALOG_DEFAULT,
+    dialog_kind,
+)
 from quantized.desktop_consent import (
     clear_dir_grants,
     consented_path,
@@ -45,7 +51,7 @@ from quantized.desktop_consent import (
     set_declared_sources,
 )
 from quantized.desktop_project_file import extract_declared_source_paths
-from quantized.desktop_source_probe import probe_source_path, volume_present
+from quantized.desktop_source_probe import probe_source_path
 
 __all__ = ["DesktopDialogBridge", "IMPORT_FILE_TYPES", "PROJECT_FILE_TYPES"]
 
@@ -69,26 +75,6 @@ PROJECT_FILE_TYPES: tuple[str, ...] = (
     "Quantized workspaces (*.dwk;*.json)",
     "All files (*.*)",
 )
-
-# pywebview's documented dialog-kind constants. Resolved from the module when
-# it is importable, with these as the fallback, because `webview` is an OPTIONAL
-# extra (`pip install quantized[desktop]`): requiring it merely to name a
-# constant would make this whole module unimportable — and untestable — on a
-# plain install, even though the only part that genuinely needs pywebview is the
-# window object the launcher injects.
-_OPEN_DIALOG_DEFAULT = 10
-_FOLDER_DIALOG_DEFAULT = 20
-_SAVE_DIALOG_DEFAULT = 30
-
-
-def _dialog_kind(name: str, fallback: int) -> int:
-    try:
-        import webview
-
-        value = getattr(webview, name, fallback)
-        return int(value) if isinstance(value, int) else fallback
-    except ImportError:
-        return fallback
 
 
 class DesktopDialogBridge:
@@ -116,7 +102,7 @@ class DesktopDialogBridge:
             return {"paths": [], "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("OPEN_DIALOG", _OPEN_DIALOG_DEFAULT),
+                dialog_kind("OPEN_DIALOG", OPEN_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
                 allow_multiple=multiple,
                 file_types=IMPORT_FILE_TYPES,
@@ -142,7 +128,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -174,7 +160,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("FOLDER_DIALOG", _FOLDER_DIALOG_DEFAULT),
+                dialog_kind("FOLDER_DIALOG", FOLDER_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
             )
         except Exception as exc:  # noqa: BLE001
@@ -212,12 +198,13 @@ class DesktopDialogBridge:
             resolved = os.path.realpath(path)
         except (OSError, ValueError):
             return {"state": "invalid"}
-        if os.path.isfile(resolved):
-            return {"state": "ok", "path": resolved}
-        return {
-            "state": "missing" if volume_present(resolved) else "offline",
-            "path": resolved,
-        }
+        # P1.1 (project reopen): delegate to the SAME reachability decision
+        # relink's `probe_source` uses, so an ACL-blocked file reports
+        # ``permission_denied`` (it is present — "not found" would tell the
+        # user their project is gone) and a directory reports ``invalid``.
+        # No checksum: this is the consent-free reachability check only.
+        probed = probe_source_path(resolved, compute_checksum=False)
+        return {"state": probed["state"], "path": resolved}
 
     # -- source probing / relink (P1.7) --------------------------------------
 
@@ -258,11 +245,24 @@ class DesktopDialogBridge:
 
     # -- project save destination (write itself lives in DesktopApi) --------
 
-    def save_file_dialog(self, suggested_name: str = "") -> dict[str, Any]:
+    def save_file_dialog(self, suggested_name: str = "", directory: str = "") -> dict[str, Any]:
         """Open a native SAVE dialog and grant WRITE consent for the chosen
         destination — read consent is a separate, unaffected grant (see
         desktop_consent's module doc): picking where to save never authorizes
         reading anything.
+
+        P1.2 box 4: if the chosen destination is a path the OPEN project's
+        own payload declared as a dataset's ``source.path``
+        (``is_declared_source``), NOTHING is granted — the user picked their
+        own raw source file in the save dialog, which ``write_project_file``
+        would refuse anyway, but refusing here means a stray write-consent
+        grant for that path is never even minted, and the frontend gets a
+        distinguishable error instead of a generic "could not grant" one.
+
+        `directory` seeds where the dialog opens (P1.1 "working-directory
+        selection affects the next chooser") — the frontend passes its
+        current working path, exactly as it does for `pick_files` and
+        `open_project_file`; empty falls back to the process cwd.
 
         Cancelling returns ``{"path": None}``, same non-error convention as
         every other dialog method here."""
@@ -270,7 +270,8 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("SAVE_DIALOG", _SAVE_DIALOG_DEFAULT),
+                dialog_kind("SAVE_DIALOG", SAVE_DIALOG_DEFAULT),
+                directory=directory or os.getcwd(),
                 save_filename=suggested_name or "workspace.dwk",
                 file_types=PROJECT_FILE_TYPES,
             )
@@ -283,6 +284,11 @@ class DesktopDialogBridge:
             resolved = os.path.realpath(str(first))
         except (OSError, ValueError) as exc:
             return {"path": None, "error": str(exc)}
+        if is_declared_source(resolved):
+            return {
+                "path": None,
+                "error": "refusing to save — that path is a data source of the open project",
+            }
         granted = grant_write_path(resolved)
         if granted is None:
             return {"path": None, "error": "could not grant write consent"}
@@ -305,6 +311,25 @@ class DesktopDialogBridge:
         can't retroactively "declare" a dataset list before it's ever
         reopened.
 
+        P1.7 PR 3 ("Pack Project"): `base_dir=os.path.dirname(granted)` is
+        passed through so a packed project's `kind: "bundle"` sources
+        resolve to their RESOLVED, ABSOLUTE bundle copies and become
+        declared sources too — under those absolute paths, not the
+        (possibly long-gone) original machine's paths.
+
+        This backend half does not itself accept a bundle-RELATIVE path
+        anywhere `grant_source_paths` or relink can act on it:
+        `grant_source_paths` (below) `os.path.realpath`s whatever the
+        caller sends against the process's OWN cwd, which is not the
+        bundle directory, so a raw `"sources/raw.csv"` string is never
+        eligible here — only the absolute resolved copy this method
+        declares is. The frontend half of PR 3 (a separate branch/agent)
+        is what makes that work in practice: it resolves every `kind:
+        "bundle"` source to an absolute path AT PARSE TIME (using the
+        `.dwk`'s own directory as `projectDir`), so it never sends a
+        relative bundle path to the bridge in the first place. Callers of
+        `grant_source_paths` MUST pass absolute paths for this reason.
+
         C1: the SAME "project change" moment also revokes every relink
         directory grant (`clear_dir_grants`) — a folder grant minted for
         project A's relink session must not silently keep covering project
@@ -321,7 +346,9 @@ class DesktopDialogBridge:
                 content = f.read()
         except OSError as exc:
             return {"path": granted, "error": str(exc)}
-        set_declared_sources(extract_declared_source_paths(content))
+        set_declared_sources(
+            extract_declared_source_paths(content, base_dir=os.path.dirname(granted))
+        )
         clear_dir_grants()
         return {"path": granted, "content": content}
 
@@ -334,7 +361,7 @@ class DesktopDialogBridge:
             return {"path": None, "error": "no window attached"}
         try:
             chosen = self._window.create_file_dialog(
-                _dialog_kind("OPEN_DIALOG", _OPEN_DIALOG_DEFAULT),
+                dialog_kind("OPEN_DIALOG", OPEN_DIALOG_DEFAULT),
                 directory=directory or os.getcwd(),
                 allow_multiple=False,
                 file_types=PROJECT_FILE_TYPES,

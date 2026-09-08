@@ -63,6 +63,23 @@ describe("PreviewTable", () => {
     expect(label.getAttribute("style")).not.toBe(header.getAttribute("style"));
   });
 
+  it("shows a label-line override separately from the editable column name", () => {
+    const withEffectiveName: ImportPreviewResponse = {
+      ...PREVIEW,
+      label_line: 0,
+      columns: [
+        { ...PREVIEW.columns[0], effective_name: "Temperature (sample)" },
+        { ...PREVIEW.columns[1], effective_name: "Moment" },
+      ],
+    };
+    render(
+      <PreviewTable preview={withEffectiveName} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    expect(screen.getByDisplayValue("Temp")).toBeInTheDocument();
+    expect(screen.getByText("Legend label: Temperature (sample)")).toBeInTheDocument();
+    expect(screen.queryByText("Legend label: Moment")).not.toBeInTheDocument();
+  });
+
   it("calls back with the column index on name / unit / role edits", () => {
     const onNameChange = vi.fn();
     const onUnitChange = vi.fn();

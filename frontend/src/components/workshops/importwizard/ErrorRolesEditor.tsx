@@ -51,7 +51,8 @@ export default function ErrorRolesEditor({
         <tbody>
           {rows.map((row) => {
             const options = errorTargetOptions(columns, row.channel);
-            const suggested = row.target !== null;
+            const suggested = row.provenance === "suggested"
+              || (row.provenance === undefined && row.target !== null);
             return (
               <tr key={row.channel}>
                 <td>{row.label}</td>
@@ -85,9 +86,14 @@ export default function ErrorRolesEditor({
                       { value: "x", label: "x" },
                     ]}
                     value={row.axis}
-                    disabled={row.target === null}
+                    disabled={row.target === null || row.target === -1}
                     onChange={(e) => onAxisChange(row.channel, e.target.value as "x" | "y")}
                   />
+                  {row.target === -1 && (
+                    <span className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginLeft: 6 }}>
+                      x axis requires x error
+                    </span>
+                  )}
                 </td>
                 <td>
                   <Select

@@ -3,7 +3,51 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-08-19 latest (Day-5 sprint reconciliation, QA lane): P1.1,
+**Updated:** 2026-09-06 (latest): **P1.7 Pack Project PR 5** — adversarial
+audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
+found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
+rename silently absorb an empty directory created in its check-then-act
+window; `pack_preview` propagating a raw, path-carrying `RuntimeError`
+instead of a structured refusal), a shared cross-language fixture pinning
+`is_bundle_relative`/`isBundleRelativePath` parity, and a write-site-scan
+gap (`portable/copying.py`'s `os.open` flags held in a local variable) —
+see the new PR 5 entry under P1.7 below; backend `portable` mode is now
+marked complete (pack → move → reopen roundtrip-tested), the visual
+workflow remains unshipped. Earlier the same day: **P1.7 Pack Project PR
+4** — pack
+orchestration bridge (`quantized.desktop_bridge_pack`), the write-directory
+consent kind + `revoke_paths` (`desktop_consent.py`), and the frontend
+state machine (`store/packProject.ts`/`.packProjectRun.ts`) consuming PR
+1-3's manifest/copy/publish primitives — see the new PR 4 entry under P1.7
+below. Earlier the same day: **P1.7 Pack Project PR 2 + PR 3** — atomic
+staging + verified source copying (`quantized.portable.staging`/
+`.copying`), then atomic bundle publication + bundle validation
+(`quantized.portable.publish`/`.pack`) and the `kind: "bundle"`
+dataset-source extension on both sides (backend resolution with
+`base_dir`; frontend parse with a known `projectDir`, written back at
+serialize time only when saving into that same directory) — see the PR 2
+and PR 3 entries under P1.7 below. Then the **PR 1 review fix**: an
+eleventh defect found on PR #305 review — source dedup was by folded
+`path_key`, which silently merged two DIFFERENT files on a case-sensitive
+filesystem into one shared source; fixed by grouping on the exact
+`original_path` string and collapsing only on proven filesystem identity
+(`(dev, ino)`, new fields on `desktop_source_probe.probe_source_path`),
+with the dedup/collapse logic split into `portable/grouping.py`. Earlier
+the same day: **P1.7 Pack Project PR 1** —
+bundle contract + dry-run manifest (`quantized.portable`, backend-only, no
+copying) — see the new subsection under P1.7 below. Earlier: **P1.7 slice
+2 — collision-safe relinking**
+shipped (the P3 residual booked on slice 1); the Pack Project stack
+continues with the portable-bundle packer. Earlier the same day: **P1.1's
+two uncontracted boxes closed** (working-
+directory hint for Open Project / Save As; project reopen with per-state
+remedies incl. `permission_denied` and the lapsed-consent dialog degrade) —
+only the owner-gated long-path and packaged-E2E boxes remain. Prior:
+2026-09-04 (#294): **P1.2 is COMPLETE** — its `[~]` tag is
+dropped, the P0.4-conditional compressed/chunked-container box is DECIDED NOT
+REQUIRED (see the box), and Gate B step 2 is ticked; the 2026-08-19 note
+below that added P1.2's `[~]` is superseded for P1.2 (still current for
+P1.1/P1.5). Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): P1.1,
 P1.2, and P1.5 had shipped partial slices (2026-08-17/18) with no `[~]`
 status tag in their section headers, unlike P1.4/P1.6/P1.7 — added the tag
 to all three for consistency; flipped two stale P1.2 boxes to `[x]`
@@ -108,8 +152,9 @@ Primary-software readiness is **not yet proven**. The largest risks are:
    slices — the shipped bridge uses pywebview (`desktop_bridge.py`,
    matching CLAUDE.md's actual stack), not Tauri, and named Save/Save As,
    recents, atomic write-validate-replace, bounded autosave generations, and
-   a consent-gated recovery dialog are now real (see P1.1 `[~]`/P1.2 `[~]`
-   below for the itemized, still-partial state). Packaged Windows/macOS E2E
+   a consent-gated recovery dialog are now real (see P1.1 `[~]` below for
+   its itemized, still-partial state; P1.2 is COMPLETE as of 2026-09-04 —
+   `#291` plus the decided container box). Packaged Windows/macOS E2E
    and long-Unicode/network-path behavior remain unverified — that part of
    this risk item still stands.
 3. Saved graph templates capture style, not a complete reusable plot recipe.
@@ -329,7 +374,10 @@ copy/export, and cleanup for:
 
 - [x] 1 million-row numeric worksheet (import/plot/interaction/memory
   measured 2026-07-26; worksheet-GRID interaction, save/reopen and
-  copy/export at 1M remain residuals);
+  copy/export at 1M remain residuals — the single-cell EDIT path of that
+  interaction residual is now CLOSED, 2026-09-06 (`#299`): incremental
+  formula recompute cut a 1M-row edit from ~4.2 s to ~18 ms; scroll/mount
+  were already in-budget per the 2026-07-26 run above);
 - [x] several large 2-D matrix sizes (backend 500²/1000²/2000² measured
   2026-07-26; browser-side measured 2026-07-27 (`2ea1f9a`): 12–13 s /
   52–59 s to map-visible at 500²/1000², mechanism = full-input
@@ -373,9 +421,13 @@ copy/export, and cleanup for:
   real-GPU zoom) are latency targets tracked on their own lines, not
   feedback gaps.
 - [ ] Failed thresholds have profiles (mechanism-level attribution exists:
-  import wall time is now `_detect_layout` scoring; F1's last 12 ms appears
-  to be headless canvas draw. Capture formal profiles if the targeted fix or
-  real-GPU run disputes either attribution).
+  import wall time was `_detect_layout` scoring (fixed `9f12216`); the
+  residual then moved to the tokenize/transpose/convert stages, formally
+  profiled and closed 2026-09-06 (`#298`, bulk `np.loadtxt` fast path):
+  1M×7 CSV `import_auto` 10.25 → 1.88 s, 989 → 546 MB peak. F1's last 12 ms
+  appears to be headless canvas draw — that half is still open pending a
+  real-GPU run; capture a formal profile only if that run disputes the
+  attribution).
 - [x] WebGL/workers/downsampling/chunked arrays/format changes are booked only
   where evidence supports them (downsampling + import efficiency booked
   below; WebGL/workers/chunked arrays deliberately NOT booked — no evidence;
@@ -388,6 +440,14 @@ first dated run on the Ryzen 7800X3D machine. Raw records in
 `docs/envelope/`, synthesis + residuals in `docs/performance_envelope.md`.
 Three measured follow-ups shipped; P0.4 stays open for the residuals above
 and `_detect_layout` below.
+
+**Progress (2026-09-06):** three more evidence-backed follow-ups shipped in
+the same envelope-adjacent class (import path, plot-path re-fetch, worksheet
+edit path — see the Booked follow-ups list below for `#295`/`#296`/`#298`,
+and the bullet/box updates above for `#299`). Dated record in
+`docs/performance_envelope.md`. P0.4 still stays open for exactly the two
+owner-gated residuals: real-GPU zoom confirmation, and network/offline
+transitions blocked on P1.1.
 
 **Booked follow-ups (evidence-backed):**
 
@@ -424,6 +484,33 @@ and `_detect_layout` below.
   ~7→4.72 s. 36 new differential tests pin the fast path bit-identical to
   the old per-cell logic; full suite 3,197 passed / 3,209 collected (no
   corpus shrinkage).
+- [x] ~~**Import-path efficiency, continued: bulk numeric parse**~~ SHIPPED
+  2026-09-06 (`#298`): after the sniffer-read and layout-detection fixes
+  above, the remaining cost was Python-level `line.split`/`zip` transpose/
+  per-column conversion; a start/middle/end sample of the data block now
+  gates one `np.loadtxt` call over the whole block, and that full parse is
+  what validates it — any failure or shape mismatch falls back unchanged
+  (ragged row, text/NA cell, datetime column). 1M×7 CSV `import_auto`
+  10.25→1.88 s wall, 989→546 MB peak; 100k rows 0.56→0.16 s. Bit-identical
+  to the old path on every fixture plus targeted ragged/text/NA/datetime
+  cases.
+- [x] ~~**Upload/import responsiveness under concurrent load**~~ SHIPPED
+  2026-09-06 (`#295`): `upload_file`/`upload_template` ran the synchronous
+  parse directly on the event loop, so `GET /api/health` (and any other
+  concurrent request) stalled for the whole parse — measured 15.5 s of a
+  16.8 s 1M-row upload. Parse now runs via `run_in_threadpool`; response
+  encoding (`routes/_payload.py`'s `DataStructResponse`) and the delimited
+  transpose chunk their C-level calls (~8k-element budget) so the GIL is
+  released between chunks too. `tests/test_upload_concurrency.py` drives a
+  live uvicorn socket and asserts health answers in <0.5 s while a parse is
+  held in flight.
+- [x] ~~**Plot-path point reduction, continued: dataset-handle cache for
+  `/api/plot/series`**~~ SHIPPED 2026-09-06 (`#296`): a committed zoom/pan
+  on a series over 10k points re-posted the WHOLE dataset even though it
+  never changed; `/api/plot/series` now takes the same dataset-handle cache
+  (`routes/_datasetcache.py`, `X-Dataset-Handle`) the map/RSM routes already
+  used. Measured (1M×7): windowed re-fetch 11.76→0.31 s server wall time;
+  request body 154 MB→112 bytes.
 
 ---
 
@@ -457,12 +544,23 @@ the existing remote-IPC security boundary must remain.
   `store/workspaceIO.ts:138`) wires Ctrl/Cmd+S to it via `store/project.ts`'s
   identity+dirty slice, with no dialog on the known path. Verified with a
   grep of `frontend/src` for `saveProjectTo` call sites — flipped to `[x]`.
-- [ ] Re-import uses its path and distinguishes offline from deletion.
+- [x] Re-import uses its path and distinguishes offline from deletion.
   Datasets already had this (MAIN_PLAN #31, `pathState`/`path_status`).
   Projects get the same distinction this slice, reused verbatim
   (`recentProjectsCommands.ts` checks `pathState` before reopening a Recent
   Projects entry) — but full "re-import a project" semantics beyond reopen
-  are **P1.2's** (project identity again).
+  are **P1.2's** (project identity again). **Completed 2026-09-06:** the
+  reopen now has a distinct remedy per state — `offline` stops (retry is
+  clicking again; nothing is cleaned up), `permission_denied` (new in
+  `path_status`, which now delegates to `probe_source_path`) says the file
+  is present but unreadable, `missing`/`invalid` offer **Locate…** (the
+  native dialog seeded at the old folder; a located file supersedes the
+  stale entry only once the workspace is actually applied), and a failed
+  direct read on an `ok` path — the NORMAL first reopen after a relaunch,
+  since consent is per-process — degrades to the dialog seeded at the
+  file's own folder instead of a dead-end toast. Quick save refuses to
+  write to a project whose volume is `offline` (never through an absent
+  mount point) while a merely `missing` file is recreated by the write.
 - [x] Recent Files and Recent Projects are separate. (`qz.recentProjects`
   vs. `qz.recent`, separate storage keys, separate stores — `lib/
   recentProjects.ts` / `store/recentProjects.ts` vs. the pre-existing
@@ -470,10 +568,14 @@ the existing remote-IPC security boundary must remain.
   commands, not a MenuBar row — see `recentProjectsCommands.ts`'s header for
   why: `store/useApp.ts`, which the MenuBar's Recent Files row reads, was
   pinned for this contract slice.)
-- [ ] Working-directory selection affects the next chooser. Datasets already
-  had this (MAIN_PLAN #31, `useWorkingPaths`). NOT wired for projects this
-  slice — `openProject`/`saveProjectAs` don't thread a working-directory
-  hint yet. **Deferred, no owner assigned** — small, uncontracted follow-up.
+- [x] Working-directory selection affects the next chooser. Datasets already
+  had this (MAIN_PLAN #31, `useWorkingPaths`). **Completed 2026-09-06:**
+  Open Project and Save As open at `useWorkingPaths.current` (the SAVE
+  dialog gained the `directory` hint `pick_files`/`open_project_file`
+  always had), Save As suggests the open project's own name, and the
+  folder actually opened from / saved into / located in is recorded back
+  via `use()` — so a project picked on a share seeds the next import
+  dialog too, and vice versa.
 - [x] Drag/drop and browser inputs remain fallbacks. (Every native call
   degrades to the pre-existing `openFilePicker`/`saveBlob` path exactly —
   verified by the full existing jsdom suite passing untouched, plus new
@@ -495,7 +597,7 @@ the existing remote-IPC security boundary must remain.
   `desktop_bridge.py`'s docstring (different consent story, cross-process
   IPC rather than in-process js_api).
 
-### P1.2 — Named project lifecycle, atomic recovery, scalable workspace [~]
+### P1.2 — Named project lifecycle, atomic recovery, scalable workspace
 
 **Goal:** make a project safe to trust for weeks.
 
@@ -542,7 +644,22 @@ weigh chunked/binary arrays for large members with that number in hand.
   the pre-P1.2 silent restore is unchanged (stated in this section's own
   "Current evidence" text above), which is not a consent gap since nothing
   named could be overwritten in that case.
-- [ ] Missing sources remain relinkable, metadata-rich placeholders.
+- [x] Missing sources remain relinkable, metadata-rich placeholders.
+  **(2026-09-02: resolved BY THE EMBEDDED MODE'S DESIGN.)** The only
+  implemented `ProjectPortabilityMode` (`lib/projectPortability.ts`) is
+  `"embedded"`, so every dataset always carries its full `DataStruct`
+  snapshot in the `.dwk` regardless of whether `source` is reachable
+  (`Dataset.source`'s own doc: the path is set "ONLY where a real path is
+  actually knowable" — the DATA is never gated on it). A missing/offline/
+  changed source can therefore never produce a placeholder, because no
+  data is ever missing to begin with — the dataset stays fully usable, and
+  `store/relink.ts`'s `RelinkPreviewRow` (datasetId/datasetName/oldPath/
+  candidatePath/status/changeVerdict/candidateChecksum/candidateMtime/
+  candidateSize) is exactly the rich metadata the Relink panel surfaces
+  for a `"missing"`/`"offline"`/`"permission_denied"` row. Verified: no
+  code path clears `Dataset.source` or `Dataset.data` on a failed probe. A
+  future `"linked"` mode (named, still deferred below) re-opens this box —
+  that mode's entire point is data NOT riding along.
 - [x] Define embedded versus linked portability. **Day-5 reconciliation
   (2026-08-19):** shipped under P1.7 slice 1, not this item —
   `lib/projectPortability.ts`'s `ProjectPortabilityMode = "embedded" |
@@ -550,10 +667,68 @@ weigh chunked/binary arrays for large members with that number in hand.
   "embedded" is implemented, "linked"/"portable" are named and deferred to a
   P1.7 follow-up (see that section). The definition itself — this box's
   actual ask — is done.
-- [ ] Add workspace version/migration tests.
-- [ ] Use compressed containers/chunked binary arrays only if P0.4 requires it.
-- [ ] Kill-process/interrupted-write and old-version round trips pass.
-- [ ] Raw source files are never rewritten.
+- [x] Add workspace version/migration tests. **(2026-09-02.)**
+  `frontend/src/lib/__fixtures__/workspace/` gains four frozen
+  `v1.dwk.json`..`v4.dwk.json` documents (see that directory's own README
+  for provenance — derived from one real `serializeWorkspace` call, never
+  hand-typed) and `lib/workspaceMigration.test.ts` (65 cases): every
+  fixture parses with zero `migrationWarnings`, re-serializes as
+  `version: 4`, round-trips idempotently (normalized for the one
+  documented, by-design volatile field — see the fixtures' README),
+  preserves dataset/folder/pipeline-and-recalc-mode/workbook content at
+  the version tier that introduced each, confirms `deriveWorkbooks`
+  derives exactly one workbook per dataset-group for v1-v3, and a
+  `version: 5` copy throws `/unsupported workspace version/`.
+- [x] ~~Use compressed containers/chunked binary arrays only if P0.4 requires
+  it.~~ DECIDED NOT REQUIRED 2026-09-04: P0.4's own measurement (above)
+  answered the condition at the 50-dataset/20-window scale, and the one
+  large-member cost it flagged — the 5.8 s synchronous `JSON.parse` on a
+  188 MB `.dwk` reopen — was closed by P3.4 slice 3's worker parse
+  (`481e0ea`), so no format change is owed. Reopen only on new evidence
+  (a measured member the worker parse cannot hold).
+- [x] Kill-process/interrupted-write and old-version round trips pass.
+  **(2026-09-02.)** Backend: `desktop_bridge.py`'s `write_project_file` now
+  `flush`+`fsync`s the temp file BEFORE `os.replace`, and best-effort
+  `fsync`s the containing directory after (POSIX-only, swallowed on
+  failure/Windows) — closing the "a crash right after `os.replace` can
+  still leave a partial `.dwk` at the real path" gap the module's own
+  docstring used to claim couldn't happen.
+  `tests/test_desktop_bridge.py` red-first-pins the fsync-before-replace
+  call order, that an fsync failure leaves the prior file byte-identical
+  with no stray temp, and that a directory-fsync failure never fails the
+  save. Frontend: `lib/workspaceMigration.test.ts` truncates each of the
+  four version fixtures at 25%/50%/90%/`length-1` and asserts
+  `parseWorkspace` always throws (never returns a partial workspace) and
+  `workspaceParseCore.parseWorkspaceBlob` reports `{ok: false}` with the
+  same message; `lib/openWorkspaceCommand.test.ts` (new) pins the native-
+  open consumer fact (a throw never reaches `dispatch`, `setStatus`
+  reports `open failed: …`); `lib/autosave.test.ts` extends the existing
+  "falls back past a corrupt newest generation" case with a
+  TRUNCATED-real-document variant (not just a `"junk"` string) for the
+  realistic torn-write shape.
+- [x] Raw source files are never rewritten — **scoped to the application's
+  project-save path** (review round, 2026-09-03). **(2026-09-02.)** Backend:
+  `write_project_file` refuses — before touching disk — when the target
+  path is a declared dataset source of the workspace being written, judged
+  TWO ways: the payload's own `datasets[].source.path` entries (the
+  authoritative description of the current workspace, realpath-resolved so
+  a symlink or `sub/../` spelling cannot slip by — covers a never-opened,
+  freshly imported or relinked workspace) AND the cached set a native
+  project open recorded (`desktop_consent.is_declared_source`);
+  `save_file_dialog` refuses the cached set at pick time. Red-first-tested
+  in `tests/test_desktop_bridge.py` (stale-write-consent, alias spelling,
+  symlink, relinked-source and positive-control cases).
+  `tests/test_write_sites.py` (new) is a heuristic INVENTORY of every
+  filesystem-write site under `src/quantized/` (an `ast` scan matching a
+  hand-justified allowlist exactly, two-sided) — it keeps the set of
+  writers visible and reviewed, it is not a proof about arbitrary output
+  paths; library exporters that take a caller path are listed with the
+  justification that no route feeds them user input. Frontend:
+  `store/workspaceIO.ts`'s `runSaveWorkspaceToFile` gains a fast, friendly
+  pre-check refusing a Save As destination equal to a live dataset's
+  `source.path`, tested in `store/workspaceIO.test.ts`. (P1.2 is
+  all-checked as of 2026-09-04: the compressed-containers box above,
+  the last one open, is DECIDED NOT REQUIRED on P0.4's evidence — #294.)
 
 ### P1.3 — Complete reusable plot-recipe templates [~]
 
@@ -626,11 +801,23 @@ Behavior:
   panel; schema version migration beyond the v1 parse-gate does not exist).
 - [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
-- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent (a
-  recipe-applied figure is built from the SAME `createWindow`/
-  `createFigureDocument` primitives every other figure uses, so this is
-  architecturally implied, but not independently verified by an owner
-  acceptance journey or an equivalence test).
+- [x] Stage/Figure Builder/reopen/export/clipboard remain equivalent —
+  `plotRecipes.test.ts` applies a DECORATED recipe (log axes, limits, legend
+  placement, series style, annotation, shape, region shade) through the real
+  store and asserts those decorations survive into the render spec Stage
+  builds, then saves and reopens the `.dwk` and asserts the reopened figure
+  produces the identical spec. The reopen leg is the strong evidence: both
+  sides come from the same builder but from DIFFERENT inputs (live store vs.
+  a serialize/parse round trip), so anything the `.dwk` drops shows up.
+  Scope, stated honestly: Stage and Figure Builder are equivalent BY
+  CONSTRUCTION, not by test — `buildStageFigureSpec` delegates to
+  `buildFigureSpecFromDocument` whenever it can route through the document,
+  so comparing them is an identity, and export/clipboard reach the same
+  builder through that same chokepoint. That part remains an architectural
+  inference (a sound one — `exportFigureCommand`/`copyFigureCommand` are
+  one-line calls to it), and the absolute assertions are what actually
+  protect the decoration those paths carry. Owner acceptance remains useful
+  release QA.
 
 ### P1.4 — First-class categorical and metadata channels [~]
 
@@ -894,13 +1081,12 @@ the upstream fetch already nulls those values first. P3 (nitpick) — a
 one-line comment in the E2E spec now names which assertion is load-bearing
 for the close/reopen proof, since the final export step also re-commits
 the Graph Builder's own live spec.
-- [ ] Supported statistical/scientific faceting — booked, NOT this slice
-  (the dispatch's own "Group-well core + what falls out naturally" scope;
-  Facet already has its OWN live mechanism, `facetByColumn`'s small-multiples
-  composition, structurally unrelated to the within-panel colour split this
-  slice closes — see `group-facet-journey.spec.ts`'s own header for exactly
-  why `FigureDocument.bindings.facetKey` remains unwired, unchanged by this
-  slice).
+- [x] Supported statistical/scientific faceting — completed later by the
+  F4.4 campaign (#222/#226/#227/#232/#234): `facetKey` is a durable
+  bindings-owned field, rebuilds the small-multiples grid after focus change,
+  `.dwk` reopen, and recipe application, and reaches every export/page/hitmap
+  path. Background-window and restored-single-series regressions are pinned
+  too. The older slice note claiming `facetKey` remained unwired was stale.
 - [ ] Data Filter / Tabulate / Stat Stage workbench wiring through
   `is_categorical`/`isCategoricalChannel` — booked to a future slice, named
   home not yet assigned (P1.4's own booking, restated here since it's
@@ -997,6 +1183,17 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   labels)" badge so the row itself is visible; showing its RESOLVED
   per-column text needs its own display slot in `PreviewTable`/
   `preview_import`, not a same-field overwrite. Booked to P1.6b.
+  SHIPPED (P1.6b audit, 2026-09-07): `preview_import`'s half was already
+  done — `ImportPreviewColumn.effective_name` (backend PR #197, "P1-5
+  DEFECT 2") is exactly this display slot: `label_overrides[k]` when
+  `label_line` applies, else the header-derived `name` unchanged, its OWN
+  field alongside `name` rather than overwriting it. Checked before
+  re-adding it, per this booking's own instruction; nothing new was added
+  backend-side. The `PreviewTable`/`useImportErrorRoles`/`importwizard.ts`
+  frontend already CONSUME `effective_name` (suggestion classification,
+  figure labels) but do not yet RENDER it as a visible cell distinct from
+  the editable `name` input — that visual half remains open, is a frontend
+  (not backend/import-contract) change, and is unbooked.
 - [x] No guess can silently attach error to the wrong signal — pinned
   red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
@@ -1060,14 +1257,31 @@ rationale in that module's doc):
   save-time UI decision and open-time "resolve every source first" flow, a
   materially different shape from what box 3 (relink) needed. Named home:
   a future P1.7 follow-up slice.
-- **portable** — NOT implemented: the raw-file-copying "Pack Project"
-  packer is explicitly booked to PR-N territory per this slice's own
-  scoping instruction. The relink machinery this slice ships (path
-  matching, dry-run preview, atomic commit) is exactly what a future packer
-  would reuse to repoint sources at its own bundle copies after unpacking
-  — this slice is that packer's future dependency, not a parallel
-  implementation. Named home: same P1.7 follow-up, tracked as "Pack
-  Project".
+- **portable** — **BACKEND COMPLETE (2026-09-06, PRs #305-#308 + this PR
+  5 audit); the visual workflow is NOT shipped.** The raw-file-copying
+  "Pack Project" packer (`quantized.portable` + `desktop_bridge_pack
+  .DesktopPackBridge`) builds a bundle, and the resulting bundle is
+  physically MOVED to a new location and reopened, proven in tests: the
+  pack → move → reopen roundtrip in
+  `tests/test_portable_pack_roundtrip.py::test_pack_move_and_reopen_roundtrip`
+  (backend) plus `lib/workspace.test.ts`'s "workspace bundle-relative
+  source" describe block, including a full `checksum`/`mtime`/`size`/
+  `packedFrom` provenance round trip (frontend parse side). The visual
+  "Pack Project" workflow ships in PR 6 (#310, `sol/pack-project-ui-1`):
+  File → "Pack Project…" opens a lazy `ToolWindow`
+  (`components/workshops/packproject/PackProjectPanel.tsx`) driven by PR
+  4's state machine — destination picker, review step (per-source
+  readiness/size, warnings, blockers, refuse-overwrite), per-file and
+  byte progress, cancel, and completed/cancelled/failed outcomes, every
+  one carrying the "nothing original was modified" note. The panel's open
+  flag is a store (`store/packProjectPanel.ts`); the command body is the
+  lazily imported `commands/packProjectCommands.ts`. Three review rounds
+  on that PR closed a mount-time open/idle race, a store wedged by a
+  preview throw, a headless preview after an early close, clipped review
+  text, and two consent-footprint leaks (`pack_reset` now clears the
+  write-dir grant; a cancelled picker resets fully). See the "Pack Project
+  stack" subsection below. Named home: same P1.7 follow-up, tracked as
+  "Pack Project".
 
 **Provenance (box 2).** `Dataset.source` (`lib/datasetSource.ts`) gained
 `checksum`/`mtime`/`size`, captured from the desktop bridge's new
@@ -1201,6 +1415,18 @@ alongside the original rather than refreshing it in place.
 - [x] Changed source warns and can import as a new version.
 - [x] Cross-platform folder-tree relinking passes.
 - [x] Raw originals are never replaced.
+- [x] Collision-safe relinking (**slice 2, 2026-09-06**): Preview flags
+  every row whose candidate names ONE file (`lib/relink.pathKey` — the same
+  tolerant either-separator, case-insensitive identity the root matcher
+  uses) from DIFFERENT recorded old paths (`findCandidateCollisions`; byte-
+  identical old paths are a shared source, not a collision). Contested rows
+  are excluded from `commit()` until the user picks exactly ONE keeper per
+  file (`resolveCollision`; the rest are marked skip and stay as recorded —
+  never a default winner), and a write-side guard in `commit()` fails the
+  whole group closed even if the per-row flags were edited underneath it.
+  The panel labels contested/kept/skipped rows distinctly and offers "Keep
+  this one" per row. Red-first in `store/relink.test.ts` (both rows
+  committed before the slice).
 
 **Explicitly booked, NOT shipped this slice — named home "P1.7 Pack
 Project" (no owner/slice assigned yet):** the full portable-bundle packer
@@ -1214,9 +1440,766 @@ has no dedup when two DIFFERENT old paths case-collide onto the SAME new
 candidate (e.g. two old sources differing only by case, or by a segment
 that normalizes identically under `lib/relink.ts`'s case-insensitive
 matching) — both would relink onto one path with no collision warning.
-Named home: same "P1.7 Pack Project" follow-up (a natural fit alongside
-the packer's own name-collision handling, L0.34's precedent for resolving
-duplicate names on import).
+CLOSED 2026-09-06 by slice 2 (the collision-safe relinking box above),
+the first PR of the "P1.7 Pack Project" stack; the packer's own
+name-collision handling (L0.34's precedent) will reuse `pathKey`/
+`findCandidateCollisions`.
+
+**Pack Project stack (2026-09-06 →), backend numbering.** Slice 2 above
+(the frontend collision-safe relink fix) is the precedent the packer's own
+collision handling reuses, not itself one of the numbered backend PRs
+below — the packer's own implementation work starts fresh here:
+
+- **PR 1 (this branch, #305) — bundle contract + dry-run
+  manifest, backend-only, copies nothing:** new pure package
+  `quantized.portable` (added to `tests/test_repo_integrity.py`'s
+  `PURE_LAYERS`).
+  - `portable/layout.py` — the bundle DIRECTORY layout
+    (`<bundle dir>/<project stem>.dwk` + `quantized-bundle.json` +
+    `sources/<bundle-relative name>`, bundle-relative paths always
+    forward-slash and rooted at `sources/`), `basename_of`/`path_key`
+    (mirroring `lib/importEntry.ts`'s `baseName` and `lib/relink.ts`'s
+    `pathKey`, the latter plus Unicode NFC normalization for a macOS
+    NFD-reporting volume), `sanitize_component` (cross-platform-safe
+    filenames: illegal/control characters, Windows reserved device names,
+    trailing dot/space, a `MAX_COMPONENT_BYTES=200` truncate+hash for an
+    over-long name — every change reports why), and the one containment
+    rule every future consumer must apply before turning a manifest path
+    into a real one: `is_bundle_relative` + `join_bundle_path` (raises on
+    `..`, an absolute path, a drive letter, a UNC prefix, a backslash, an
+    empty/NUL-bearing segment, or anything outside `sources/`).
+  - `portable/manifest.py`'s `build_dry_run_manifest(payload, project_name,
+    probe, consented=None)` — takes an already-parsed workspace payload
+    (`desktop_project_file.parse_workspace_payload`) and a probe callback
+    shaped like `desktop_source_probe.probe_source_path`; reads no file
+    itself. **Corrected 2026-09-06 (PR #305 review):** the original text
+    here said sources were "deduped by `path_key(original_path)`" — that
+    was the bug. Sources are deduped by the EXACT `original_path` STRING
+    (several datasets naming the byte-identical path share ONE row, each
+    with its own recorded provenance + a `sourceChangeVerdict`-equivalent
+    verdict, ported field-for-field from `lib/relink.ts`); every other
+    distinct spelling — including one that only differs by case, Unicode
+    normalization form, or separator style — gets its OWN row unless later
+    PROVEN to be the same physical file. `probe`/`consented` are invoked
+    exactly once per distinct exact spelling, never once per folded
+    `path_key`, and never at all for a path `consented` rejects. Two
+    spellings' rows COLLAPSE into one only when both probe `ok` and report
+    the identical, non-zero `(dev, ino)` filesystem-identity pair (new
+    fields on `desktop_source_probe.probe_source_path`'s `ok` result) — a
+    folded-key match alone is never sufficient (a case-sensitive
+    filesystem's `/data/A.csv` and `/data/a.csv` are two different files;
+    the prior fold-based dedup would have silently mapped both onto one
+    packed copy). The actual dedup/collapse logic lives in
+    `portable/grouping.py` (split out to keep `manifest.py` under the
+    500-line ceiling). Source rows are sorted by
+    `(path_key(original_path), original_path)` — the exact-path tiebreak
+    is now load-bearing, since two rows can share a folded `path_key`
+    without having collapsed — so the same payload always yields
+    byte-identical `manifest_json` (2-space, sorted-key,
+    `ensure_ascii=False` JSON) — including a merged row's `original_path`,
+    which is always the CANONICAL spelling among however many
+    case/Unicode-normalization-form variants were PROVEN to be one file
+    (the lexicographically-least by `(NFC-normalized string, raw
+    string)`, never whichever spelling happened to appear first in
+    payload order), with every other distinct spelling in that merged
+    group recorded in `original_path_variants` (empty list when there was
+    only one spelling, or when a same-`path_key` group never collapsed).
+    **Downstream note for the future "PR 3" project-rewrite work:**
+    anything that maps a dataset back onto a manifest row (e.g. a future
+    `project_rewrite.rewrite_payload_for_bundle`) MUST match by exact
+    `original_path` or membership in `original_path_variants` — never by
+    folded `path_key` — for the identical reason.
+    Destination-name collisions get L0.34's visible-suffix treatment
+    (`name.ext`, `name (2).ext`, `name (3).ext`, ... — never a silent
+    overwrite, and never able to duplicate another group's own plain name:
+    `portable/naming.py`'s `plan_bundle_names` reserves every group's
+    keeper name in one pass before any suffix is generated, split into its
+    own module to keep `manifest.py` under the 500-line ceiling), each
+    renamed row carrying `collision_group` + `renamed_from` and an entry
+    in the manifest's own `warnings` list. Five distinct, non-packable
+    source states (`missing`/`offline`/`permission_denied`/`invalid`/
+    `not_consented`) plus `ok`; `changed` (provenance mismatch) and
+    `unverified` (verdict `unknown`) are warnings, not blockers — still
+    `packable`, per this PR's own scoping. `project_name` is itself
+    sanitized and validated (`ValueError` for a path-traversal shape — a
+    separator or a literal `..` — or a name that sanitizes to nothing);
+    the manifest's `project` object carries the sanitized `name`, the
+    derived `project_file` (a trailing `.dwk` is stripped before one is
+    appended, so `"x.dwk"` never becomes `"x.dwk.dwk"`), and
+    `renamed_from` (the original name, or `null` if sanitizing changed
+    nothing).
+  - **Security/trust boundary** (also the module's own docstring):
+    `consented` is checked BEFORE `probe` is ever called for a path —
+    `probe` (which may do real I/O) never even runs for a source the
+    caller hasn't vouched for; reachability/size/mtime/checksum otherwise
+    come ONLY from `probe`, type-validated (a non-`str` checksum or
+    non-numeric size/mtime is treated as absent, never trusted or allowed
+    to crash the summary); the manifest reads no file content itself and
+    GRANTS NOTHING — a row's presence is never authorization to read or
+    copy anything; every bundle destination is built from a sanitized
+    BASENAME only, never from any part of the original directory tree, so
+    a bundle's own internal layout can never leak a source's original
+    location; `is_bundle_relative` (which also rejects a segment that is
+    well-formed as a bare path component but Windows-illegal on its own
+    merits — a colon, an illegal character, a reserved device name, a
+    trailing dot) + `join_bundle_path` are the only sanctioned
+    path-containment check for every future consumer (PR 2's copier, PR
+    3's opener); the builder itself asserts every planned `bundle_path` is
+    pairwise-unique before returning (`RuntimeError`, never a silent
+    duplicate).
+  - Frozen schema fixture: `tools/freeze_portable_manifest.py` builds one
+    synthetic payload covering a shared source, a plain and a case-variant
+    destination collision, a keeper-suffix collision (two `keep.csv`s plus
+    two pre-existing `keep (2).csv`s, proving the collision-safe planning
+    above), Windows/UNC/POSIX/`/Volumes` paths, missing/offline/
+    permission-denied sources, a Unicode name, a reserved name (plain and
+    multi-dot extension — `CON.tar.gz`), an over-long name, a no-source
+    dataset, and a malformed source — writes
+    `tests/fixtures/portable/manifest_v1.json`;
+    `tests/test_portable_manifest_fixture.py` byte-compares against it
+    forever (regenerate with `uv run python
+    tools/freeze_portable_manifest.py` on a deliberate behavior change).
+    **Extended 2026-09-06 (PR #305 review)** with the two cases the fix
+    itself exists to distinguish, same folder, differing only by case:
+    `/data/case/A.csv` vs `/data/case/a.csv` with DIFFERENT fake `(dev,
+    ino)` identities and checksums (two rows, visible suffix — the
+    regression for the defect) and `/data/same/Run1.csv` vs
+    `/data/same/run1.csv` with the SAME fake identity and checksum (one
+    row, `original_path_variants` populated — the legitimate collapse
+    case).
+  - **Review round (2026-09-06):** ten defects found and fixed, each with
+    a regression test — see the commit fixing this PR for the full list;
+    highlights: the keeper-suffix collision above (a silent-overwrite
+    hazard), `_looks_absolute` no longer trusts the host's own
+    `os.path.isabs` (checks `posixpath.isabs`/`ntpath.isabs` explicitly),
+    `sanitize_component`'s over-long truncation now truncates the WHOLE
+    name when the extension alone doesn't fit the budget, and its
+    reserved-device-name check now keys off the part before the FIRST dot
+    (Windows' own rule) rather than the last.
+  - **Follow-up review round (2026-09-06, PR #305 feedback):** an
+    eleventh defect — dedup was by folded `path_key`, not exact path
+    string, so two DIFFERENT files on a case-sensitive filesystem
+    (`/data/A.csv`/`/data/a.csv`) could be silently treated as one shared
+    source and mapped to a single packed copy. Fixed by grouping on the
+    exact `original_path` string and collapsing two groups into one row
+    only when both probe `ok` and report the identical, non-zero `(dev,
+    ino)` filesystem-identity pair — new fields on
+    `desktop_source_probe.probe_source_path`'s `ok` result — never on a
+    folded-key match alone. The dedup/collapse mechanism moved into its
+    own `portable/grouping.py` module (keeping `manifest.py` under the
+    500-line ceiling); see that module's docstring for the full rationale
+    and this section's corrected description above for the field-level
+    detail. Regression tests: two spellings with different `(dev, ino)`
+    never collapse even when their `path_key`s match (fake-probe and
+    real-filesystem-with-real-`probe_source_path` versions, in both
+    payload orders); two spellings with the same `(dev, ino)` do collapse
+    (fake-probe and a real-filesystem "two spellings resolve to one file"
+    version); a `(dev, ino)` of zero or absent ("unknown identity") never
+    collapses with anything.
+- **PR 2 (this branch, #306) — atomic staging + verified source
+  copying, backend-only, still no `.dwk` write, no publish:** the first
+  PR that touches a filesystem for real. New pure modules
+  `quantized.portable.staging` (public API: `create_staging_dir`,
+  `cleanup_staging_dir`, `stage_sources`, and the `StageProgress`/
+  `StagedFile`/`StageError`/`StageResult` dataclasses) + `.copying` (split
+  out under the 500-line ceiling; the per-file verified-copy state
+  machine, `stage_one_file`).
+  - **Fresh SIBLING staging dir.** `create_staging_dir(parent_dir)` always
+    `tempfile.mkdtemp`s INSIDE the caller-supplied `parent_dir` (never a
+    system temp location) with a fixed `STAGING_PREFIX = ".qz-pack-"` —
+    PR 3's eventual `os.replace`/rename into the final bundle location is
+    only atomic when both live on the same filesystem, which requires the
+    caller to pick the bundle's own parent directory.
+  - **Verified per-file copy (9 steps, `stage_one_file`):** re-probe the
+    source right now (never trust the manifest's snapshot) → compare
+    against the manifest's recorded size/mtime/checksum (any field both
+    sides have) → resolve the destination and confirm its parent stays
+    inside the staging root (symlink-aware, `os.path.realpath` +
+    `os.path.commonpath`) → create the destination with
+    `O_CREAT|O_EXCL|O_NOFOLLOW` (never overwrites, never follows a
+    symlink) → open the source strictly `"rb"`, fstat it against the
+    fresh probe's size → stream `chunk_bytes` at a time (default
+    `desktop_source_probe._CHECKSUM_CHUNK_BYTES`, 1 MiB) hashing +
+    writing each chunk, polling `should_cancel` between chunks → fsync +
+    close, then re-stat the SOURCE and compare against the pre-copy fstat
+    → cross-check the fresh probe's checksum (when it has one) against
+    the hash computed while streaming → re-read the WRITTEN file and hash
+    it a SECOND time to catch a short write fsync alone would miss.
+  - **Nine distinct, non-overlapping failure codes** on `StageError.code`
+    (`changed_since_preview`, `changed_during_copy`, `read_failed`,
+    `write_failed`, `checksum_mismatch`, `destination_exists`,
+    `escape_rejected`, `invalid_manifest`, `cancelled`) — never a generic
+    failure, and `message` never contains an absolute path (original or
+    staging), only `source_id`/`bundle_path` plus a state/reason.
+  - **All-or-nothing.** Sources are copied in manifest order and the very
+    first problem of any kind stops the whole run — a partial destination
+    file is removed, then the ENTIRE staging directory is torn down via
+    `cleanup_staging_dir` (which itself refuses to touch anything whose
+    basename doesn't carry `STAGING_PREFIX`, and never follows a symlinked
+    subdirectory — it unlinks the link itself rather than descending) — a
+    staging directory missing even one packable source must never be
+    publishable. On success `staging_root` is retained for the caller
+    (PR 3) and `cleanup_ok` is `None` (nothing was cleaned up).
+  - **Cancellation is cooperative:** `should_cancel` is polled before each
+    file and between every chunk, so a cancel mid-copy leaves no partial
+    file on disk.
+  - **`originals_modified` is always `False`** — every original path is
+    opened `open(path, "rb")` only; nothing under an original path is
+    ever created, written, renamed, or deleted. `StageResult` carries the
+    field explicitly so every reporting path states the guarantee, not
+    just infers it.
+  - **Write-site ratchet:** `tests/test_write_sites.py`'s allowlist gained
+    `portable/copying.py` (`_remove_partial`'s `os.remove`, only ever a
+    staging-dir destination path) and `portable/staging.py`
+    (`cleanup_staging_dir`'s `os.remove`, gated on `STAGING_PREFIX`) —
+    both justified as never touching an original dataset source.
+  - 23 tests across `tests/test_portable_staging.py` (happy path,
+    12 MiB/64 KiB bounded-chunk streaming, mid-copy cancellation,
+    shared-source dedup, read-only-source enforcement) and
+    `tests/test_portable_staging_failures.py` (every `StageError.code`,
+    the cleanup contract parametrized across failure classes, the
+    no-absolute-path-in-messages guarantee, symlink-escape rejection at
+    both the parent-directory and destination-file level).
+- **PR 3 (this branch, #307) — atomic bundle publish + bundle
+  validation + open-time resolution, backend-only, no bridge method yet:**
+  the packed `.dwk` and its manifest actually land on disk, and a moved
+  bundle opens cleanly. New pure modules `quantized.portable.project_rewrite`
+  (`rewrite_payload_for_bundle`, `resolve_bundle_source`),
+  `quantized.portable.publish` (`atomic_replace_file`, `finalize_manifest`,
+  `write_bundle_files`, `publish_bundle`, `validate_bundle`), and
+  `quantized.portable.pack` (`pack_project`, pure orchestration of PR 1-3's
+  pieces — PR 4 wraps this in the bridge + job/state machine).
+  - **The `kind: "bundle"` source extension — no `WORKSPACE_VERSIONS` bump.**
+    A packed copy's dataset rewrites `source` from
+    `{"kind": "path", "path": <absolute>, ...}` to `{"kind": "bundle",
+    "path": "sources/<name>", "checksum", "size", "mtime"?, "packedFrom":
+    <original absolute path>}` — `path` is bundle-relative
+    (`layout.is_bundle_relative`) and resolves against the `.dwk`'s own
+    directory via the ONE sanctioned resolver, `resolve_bundle_source`.
+    Ordinary (non-packed) projects are completely unaffected: they never
+    carry `kind: "bundle"` at all, so every existing `WORKSPACE_VERSIONS`
+    (1-4) payload round-trips unchanged — verified across all four in
+    `tests/test_portable_pack_roundtrip.py`. An older build opening a
+    packed copy that predates this PR simply doesn't recognize `"bundle"`
+    and degrades to no source (same as today's "missing" source handling),
+    never a crash.
+  - **`rewrite_payload_for_bundle`** deep-copies the payload and rewrites
+    ONLY `datasets[i].source` for a dataset whose `kind: "path"` matches
+    (by `path_key`, original or any `original_path_variants`) a manifest
+    row that is `packable` AND was actually staged this run (matched by
+    `bundle_path` — a row can be planned-packable without ever having been
+    staged if the caller stopped early). Every other dataset (embedded,
+    browser-upload, missing-source) and every other part of the payload —
+    corrections, figures, recipes, analyses, annotations, history,
+    project metadata — passes through byte-for-byte, verified in the
+    roundtrip test by stripping `source` fields and comparing
+    `json.dumps(sort_keys=True)`. The rewritten result is re-validated
+    with `parse_workspace_payload` before being returned; `ValueError` on
+    a failure, never a silently-broken `.dwk`.
+  - **The publish contract (`publish_bundle`): one atomic `os.rename`,
+    nothing partial, ever.** Staging is always a SIBLING of the
+    destination (PR 2's own contract), which makes cross-device rename
+    (`EXDEV`) impossible by construction — so the only realistic
+    `os.rename` failures are permission/race errors, and the documented
+    safe fallback on ANY of them is: clean the staging directory
+    (`cleanup_staging_dir`) and report `publish_failed` — never copy-tree,
+    never a partial publish. Refuses outright (staging cleaned,
+    destination untouched) when the destination already exists
+    (`destination_exists` — no overwrite/replace behavior in this PR),
+    when staging is not actually a sibling of the destination
+    (`invalid_destination`), or when staging has no completion marker yet
+    (`incomplete_staging`).
+  - **The manifest is the completion marker, written LAST.**
+    `write_bundle_files` writes the packed project file first, then
+    `quantized-bundle.json` deliberately last, through the same atomic
+    single-file sequence `desktop_bridge.write_project_file` already used
+    (`atomic_replace_file`, extracted out of that module into
+    `portable/publish.py` so neither duplicates it — `desktop_bridge.py`
+    shrank in the process, staying under the 500-line ceiling with room
+    for the `base_dir`-threading fix below). A crash between the two
+    writes leaves a staging directory `validate_bundle`/`publish_bundle`
+    both recognize as incomplete, never one that looks done but is
+    missing its project file.
+  - **`validate_bundle(bundle_dir, verify_checksums=False)`** — is a
+    (possibly moved) directory a complete, openable bundle? Fails safe on
+    a missing/unreadable/foreign/unsupported-version manifest
+    (`manifest_missing`/`manifest_invalid`/`not_a_bundle`/
+    `unsupported_manifest_version`, `complete=False`, manifest attached
+    only "for display" on the last two); accumulates every other finding
+    (`incomplete`, `project_file_missing`, `escape_rejected` for a hand-
+    edited `bundle_path` that fails `is_bundle_relative`, `source_missing`,
+    `source_size_mismatch`, and — only with `verify_checksums=True` — a
+    re-hashed `source_checksum_mismatch`). `problems` entries are always
+    bundle-relative or manifest-field values, never an absolute path.
+  - **Declared-source resolution gained `base_dir`.**
+    `desktop_project_file.declared_source_paths_of`/
+    `extract_declared_source_paths`/`payload_declares_source` all gained an
+    optional `base_dir` parameter (the `.dwk`'s own directory) so a
+    `kind: "bundle"` source resolves to its bundle copy — `kind: "path"`
+    (or no `kind` at all, every pre-existing fixture's shape) is
+    unaffected. `desktop_bridge_dialogs._read_granted` passes
+    `base_dir=os.path.dirname(granted)` so a reopened packed project's
+    bundle copies become declared sources under their RESOLVED, ABSOLUTE
+    paths (not the original machine's now-possibly-gone paths) — this
+    backend half declares those absolute copies; it does not itself
+    resolve a bundle-relative path anywhere `grant_source_paths`/relink
+    act on it (`grant_source_paths` realpaths the caller's argument
+    against the process cwd, not the bundle directory), so a caller must
+    always pass an absolute path. The separate frontend half of PR 3
+    is what guarantees that in practice, resolving every `kind: "bundle"`
+    source to an absolute path at parse time; `desktop_bridge.write_project_file` passes
+    the same so a save can never land on a packed project's own bundle
+    copy either. The cross-package call is deliberately function-local
+    (not a module-level import) on the `desktop_project_file` side to
+    avoid a real circular import with `portable.publish` (which needs
+    `desktop_project_file.WRITE_TEMP_PREFIX` at module load) — verified by
+    importing each module first, in both orders.
+  - **Write-site ratchet:** `desktop_bridge.py` dropped OUT of
+    `tests/test_write_sites.py`'s allowlist (it no longer contains any
+    AST-visible write call once `atomic_replace_file` moved out) and
+    `portable/publish.py` was added in its place, covering
+    `atomic_replace_file`'s mkstemp/write/replace sequence and
+    `publish_bundle`'s `os.rename` — both scoped to a staging directory
+    this package created or a destination that must not already exist,
+    never a dataset source.
+  - 42 new tests: `tests/test_portable_publish.py` (22 — `finalize_manifest`,
+    `write_bundle_files`, `publish_bundle` including an interrupted-
+    rename/`os.rename`-failure case, and every `validate_bundle` finding
+    code including a tampered-manifest and a hand-edited relative-escape
+    case), `tests/test_portable_pack_roundtrip.py` (14 — full pack → move →
+    reopen with a shared source AND a case-variant bundle-name collision
+    in the same project, byte-for-byte non-source-content equality,
+    originals-untouched hashing, mixed dataset shapes, all four
+    `WORKSPACE_VERSIONS`, an existing-destination refusal, an interrupted-
+    publish case, and `resolve_bundle_source` edge cases), and
+    `tests/test_desktop_project_file.py` extended (6 — `base_dir` on all
+    three declared-source functions, including a hand-edited relative
+    escape and the "no `base_dir`, not declared" case).
+- **PR 3 frontend half (`claude/p17-pack-3-frontend`) — shipped ahead of
+  the backend publish/copy work above, additive-optional, no
+  `WORKSPACE_VERSION` bump:** the frontend's read/write contract for a
+  dataset `source` that names a bundle-relative path, so the frontend is
+  ready the moment PR 2/3's backend copier lands. `lib/bundlePath.ts`'s
+  `isBundleRelativePath` is a rule-for-rule port of `layout.py`'s
+  `is_bundle_relative`; `resolveBundlePath` mirrors `join_bundle_path`'s
+  "validate, then join" shape (returning `null` instead of raising — this
+  side's documented malformed-field degrade, not an error) **plus that
+  function's own post-join containment re-check** (review round below) —
+  not the "line-for-line port" an earlier draft of this note claimed.
+  `Dataset.source` stays `kind: "path"` in memory always (every existing
+  consumer — reimport, relink, pathState — is untouched); a source
+  resolved from a packed project's `kind: "bundle"` manifest entry
+  carries only an optional `packedFrom` (the absolute path the packer
+  copied from — display-only provenance, never resolved) as extra
+  provenance — no separate bundle-relative field is kept on the
+  in-memory source (review round below). Resolution happens at PARSE
+  time only, and only when the caller actually knows the `.dwk`'s own
+  directory: `parseWorkspace(text, viewport, { projectDir })` threads
+  `projectDir` to `lib/workspaceDatasetParse.ts`'s per-dataset parse,
+  which threads it to `lib/datasetSource.ts`'s `parseDatasetSource` — a
+  `kind: "bundle"` entry with no `projectDir` (an EMPTY string counts as
+  none), or a non-conforming path, degrades to "no source" exactly like
+  any other malformed source (silent drop, no migration warning). The
+  two native-file callers that actually have a directory —
+  `lib/openWorkspaceCommand.ts`'s native-open branch and
+  `commands/recentProjectsCommands.ts`'s reopen — pass it (via
+  `parentDirectory(path) || undefined`, never a bare `parentDirectory(path)`
+  — its own "" no-separator sentinel must read as "unknown", not root);
+  the browser-picker/Worker path (`lib/parseWorkspaceFile.ts`) and every
+  autosave/browser-download round trip never do (no durable path to
+  derive one from), so a bundle source degrades there by design — noted
+  in `parseWorkspace`'s own doc comment. Serialization
+  (`lib/workspaceSerialize.ts`'s `serializeWorkspace(state, { projectDir })`)
+  writes a source back as `kind: "bundle"` ONLY when `projectDir` is
+  given AND `source.path` sits directly under `<projectDir>/sources/` —
+  an EXACT, case-sensitive prefix compare on the forward-slash-normalized
+  forms, derived FRESH from the live `path` at every save
+  (`lib/bundlePath.ts`'s `deriveBundleRelativePath`) rather than recalled
+  from a parse-time field. Any other case (Save As into a different
+  folder, no known directory, a relink that moved `path` since, a
+  case-different directory on the same volume) writes the ordinary
+  absolute `kind: "path"` shape instead — still fully valid, just no
+  longer relocatable as one portable unit. A workbook's own `source`
+  (import provenance) is routed through the identical
+  `serializeDatasetSource`/`parseDatasetSource` pair, so it gets the same
+  `kind: "bundle"` treatment rather than always leaking an absolute path
+  (review round below). `store/workspaceIO.ts` wires this: quick Save
+  (`runSaveWorkspace`) already knows its destination
+  (`currentProject.path`) before serializing, so it passes `projectDir`
+  straight through; Save As (`runSaveWorkspaceToFile`) splits the
+  existing "resolve pending books, fold the live view" preface
+  (`prepareWorkspaceState`) from the actual `JSON.stringify`, so the
+  stringify itself happens AFTER the native dialog returns a destination
+  — every existing Save/Save As test stayed green through that split.
+  Existing (unpacked) projects are completely unaffected: their sources
+  never sit under a `<projectDir>/sources/` prefix, so
+  `serializeDatasetSource` always takes the `kind: "path"` branch for
+  them, byte-for-byte as before this PR. Tests: `lib/bundlePath.test.ts`,
+  `lib/datasetSource.test.ts`, `lib/workbooks.test.ts`, the new
+  "workspace bundle-relative source" describe in `lib/workspace.test.ts`,
+  the native-open/reopen resolution tests in
+  `commands/openWorkspaceNative.test.ts` /
+  `commands/recentProjectsCommands.test.ts`, and the quick-save/Save-As
+  `kind` tests in `store/workspaceIO.test.ts`.
+  - **Review round (2026-09-06):** six defects found and fixed, each with a
+    regression test — see the commit fixing this PR for the full list;
+    highlights: the parse-time `bundlePath` field (and its case-folding
+    `bundlePathsMatch` save-time identity check) is gone entirely, replaced
+    by the fresh-derivation-at-save-time design above (the case-folding
+    check would have written a bundle reference against a case-DIFFERENT,
+    nonexistent directory on a case-sensitive volume); `parentDirectory`'s
+    `""` no-directory sentinel was flowing through as a truthy "known"
+    `projectDir` at three new call sites, resolving a bundle source against
+    a bogus root-anchored path — fixed both at the call sites
+    (`parentDirectory(p) || undefined`) and inside `resolveBundlePath`/
+    `deriveBundleRelativePath` themselves (empty `projectDir` treated as
+    unknown); `resolveBundlePath` now re-verifies containment on the
+    JOINED result, mirroring `join_bundle_path`'s own post-join check
+    rather than trusting pre-join validation alone; `WorkbookNode.source`
+    is now routed through the dataset-source serialize/parse pair instead
+    of being written/read verbatim; and a single module-level
+    `TextEncoder` replaced one constructed per path segment.
+- **PR 4 (#308) — pack orchestration bridge, consent scoping, and the
+  frontend state-machine contract (the visual dialog followed in PR 6,
+  #310):** the pywebview bridge method a "Pack Project" UI
+  action calls, wiring PR 1-3's manifest/copy/publish primitives into one
+  cancellable, pollable job, plus the frontend contract consuming it.
+  - **A fourth, orthogonal consent kind: the WRITE-DIRECTORY grant**
+    (`desktop_consent.grant_write_dir`/`is_write_dir_consented`, capped at
+    8 entries) — separate from the existing per-file write grant (that
+    names one file about to be overwritten) and the read-only directory
+    grant (that permits reading descendants of a relink root); this one
+    permits CREATING a bundle directory under a picked destination root,
+    and never satisfies a read or write file check. Minted only from
+    `pick_pack_destination`'s native folder dialog return (never a typed
+    path), which clears every prior write-dir grant first so a destination
+    picked but never started never accumulates. `revoke_paths(paths)` is
+    the new companion primitive — removes SPECIFIC entries from the
+    ordinary per-file READ grant store by exact resolved key, letting a
+    pack operation unwind precisely the read grants IT minted without
+    disturbing anything else live in the process.
+  - **`quantized.desktop_bridge_pack.DesktopPackBridge`** (a mixin added
+    to `DesktopApi`'s bases, the `DesktopDialogBridge` precedent) — six
+    js_api methods, none raising into JS, none leaking an absolute path
+    into a `message`/`error` string: `pick_pack_destination` (mints the
+    write-dir grant); `pack_preview` (dry-run plan, gated by an
+    `_eligible` predicate — already read-consented, covered by a
+    directory grant, or declared by the open project's own payload —
+    grants nothing itself); `pack_start` (re-verifies the stored preview's
+    token AND a fresh `sha256(content)` — either mismatch is
+    `stale_preview`, never a silent re-plan; mints real read consent for
+    the eligible-but-ungranted sources about to be copied, remembers
+    exactly which, spawns `portable.pack.pack_project` on a daemon
+    thread, and revokes exactly those grants plus the write-dir grant in
+    a `finally` on EVERY outcome — success, failure, or cancellation);
+    `pack_status`/`pack_cancel`/`pack_reset` (pure reads/mutations of one
+    in-memory job record behind a single `threading.Lock`, no filesystem,
+    no consent). `pack_start` passes the STORED preview's own manifest to
+    `pack_project` VERBATIM (`manifest=`, PR 4 review round 2's fix — see
+    the bug note below): `pack_project` never rebuilds a manifest from
+    current disk/consent state when one is supplied, so the operation
+    executes exactly the snapshot the user reviewed and approved, and
+    `portable.staging.stage_sources`'s own re-probe (unchanged) enforces it
+    — a source not `packable` in the approved manifest is never staged even
+    if it exists by start time, and a source whose bytes changed fails
+    closed with `changed_since_preview` against the manifest's PREVIEW-TIME
+    checksum. Separately, the approved manifest is a plan, not a read
+    grant: `pack_start` re-checks every `packable` row against `_eligible`
+    before minting anything, and refuses with `consent_changed` (preview
+    again) if any row's consent lapsed between preview and start — a lost
+    grant fails closed rather than copying. Progress's `"publishing"` stage is
+    INFERRED (the last
+    source's `"verifying"` tick, or immediately with nothing to stage) —
+    `pack_project` itself never emits a tick for the
+    rewrite/finalize/write/publish steps that follow the staged copy in
+    the same synchronous call.
+  - **The frontend state machine** (`store/packProject.ts` + the lazily-
+    imported `store/packProjectRun.ts`, the `store/relink.ts`/
+    `relinkCommit.ts` precedent): `idle → selecting_destination →
+    scanning → awaiting_confirmation → packing → completed`; any active
+    state → `cancelling` → `cancelled` (pre-`packing` active states go
+    straight to `cancelled` locally — nothing backend-side to cancel yet);
+    any active state → `failed`. Illegal calls record `lastRejected`
+    rather than mutating state. `startPackProject` requires its
+    `approvedManifest` to be REFERENCE-IDENTICAL to the stored preview's
+    manifest (a fresh preview always creates a new object, so identity IS
+    "is this still the current plan") and re-serializes the live workspace
+    to fingerprint-compare (a `contentFingerprint` helper that strips
+    `serializeWorkspace`'s own live `savedAt` stamp before comparing — a
+    raw string compare would treat the timestamp alone as a change) — on
+    a match it resends the EXACT `preview.content` string to `pack_start`,
+    byte-identical to what `pack_preview` saw, so the backend's own
+    `sha256` check passes trivially. The poll loop (250ms) lives in
+    MODULE scope, not a React effect — it survives regardless of mount and
+    stops itself on a terminal phase — and a trailing-edge throttle
+    (`scheduleStatusApply`, driven by an explicit `now` parameter rather
+    than `Date.now()`, for determinism) coalesces bursts of status changes
+    to at most one store update per 200ms, always carrying the LATEST
+    status. `bytesCopied`/`completedCount` are clamped (`Math.max` against
+    the current value) so an out-of-order/misbehaving status can never
+    regress the displayed progress. A minimal `pack-project` palette
+    command (`commands/packProjectCommands.ts`, under 40 lines) previews
+    and toasts a packable/blocked summary — exercising the contract, not
+    the real dialog.
+  - **Tests:** `tests/test_desktop_bridge_pack.py` (24 — destination pick
+    mints/clears the write-dir grant, preview refused without it, token
+    storage, wrong-token/changed-content/existing-destination refusals,
+    double-start `already_running`, a REAL end-to-end pack reaching
+    `completed` with a `validate_bundle`-checked bundle and every minted
+    grant revoked, cancel-mid-copy → `cancelled` with `cleanup_ok: true`,
+    a thrown exception → `failed` with no raw path in `message`, idempotent
+    `pack_cancel`, monotonic `pack_status` progress, `pack_reset` gating),
+    `tests/test_desktop_consent.py` extended (24 new — the write-dir grant
+    kind's full read-only-directory-grant-shaped suite plus `revoke_paths`),
+    `store/packProject.test.ts` (50 — a table-driven legality matrix over
+    every phase × action, double-start, cancel in every pre-packing state
+    and mid-packing via a scripted `cancelling`→`cancelled` status
+    sequence, both staleness cases, a bridge-null failure, a
+    `cleanup_ok: false` failure surfaced verbatim, retry-via-reset, the
+    progress clamp, and the throttle's coalescing proven by asserting a
+    middle status value never reaches a subscriber), `lib/
+    desktopPackBridge.test.ts` (21 — every wire call's null/ok/refusal/
+    malformed-response/throw paths).
+  - **A genuine bug found and fixed via a flaky-test investigation
+    (2026-09-06):** the FIRST content-staleness design compared raw
+    `serializeWorkspace` strings directly, which embeds a live `savedAt`
+    on every call — two serializations of the IDENTICAL workspace
+    routinely differed by nothing but that timestamp, making the
+    stale-preview check spuriously fire (or spuriously NOT fire, depending
+    on millisecond timing) independent of any real edit. Caught by running
+    the new test file back to back with `architecture.test.ts` (whose
+    slower module graph load widened the timing window) rather than by
+    inspection — see `docs/testing.md`'s evidence standard. Fixed by the
+    `contentFingerprint`/resend-the-original-string design above.
+  - **A blocking review finding on PR #308, fixed the same slice:**
+    `pack_start` validated the token and the workspace JSON, but the
+    worker called `pack.pack_project(payload, ...)` with no `manifest=`,
+    which REBUILT the manifest from CURRENT filesystem/consent state and
+    never compared it against the stored, user-approved preview manifest —
+    (1) a source `missing` (blocked) at preview time that appeared on disk
+    before start became packable and was copied, though the approved
+    preview excluded it; (2) a source whose content changed between
+    preview and start was staged against its NEW checksum (the rebuilt
+    manifest recorded whatever the file looked like right now), so the
+    approved snapshot was never actually enforced despite `stage_sources`'s
+    own `changed_since_preview` re-probe already existing — it was just
+    being compared against the wrong values. Fixed by giving
+    `pack_project` a `manifest: Mapping[str, Any] | None = None` keyword
+    that, when supplied, is used VERBATIM (no `build_dry_run_manifest`
+    call, rejecting anything that isn't itself a valid dry-run manifest as
+    `invalid_manifest`), and having `pack_start` pass
+    `self._pack_preview["manifest"]`. Because the executed manifest no
+    longer reflects current consent, `pack_start` now re-checks every
+    `packable` row against `_eligible` up front and refuses with
+    `consent_changed` if any lapsed (the prior round's finding #1 check in
+    `_grant_eligible_packable_sources` stays as defence in depth) — the
+    approved plan never becomes a substitute for a live read grant.
+- **PR 5 (this branch, `claude/p17-pack-5-audit`) — adversarial audit of
+  the whole Pack Project stack (PR 1-4/#305-#308), in the same spirit as
+  P1.7 slice 1's P1-A/P1-B fix rounds above.** A 14-item checklist run
+  against `portable/` (layout, naming, grouping, manifest, staging,
+  copying, copy_stream, project_rewrite, publish, pack), `desktop_consent.py`,
+  `desktop_bridge_pack.py`/`_pack_state.py`/`_common.py`,
+  `desktop_project_file.py`, and the frontend's `lib/bundlePath.ts`/
+  `datasetSource.ts`/`workspaceSerialize.ts`/`workspaceDatasetParse.ts`/
+  `desktopPackBridge.ts` + `store/packProject.ts`/`packProjectRun.ts`.
+  Two real defects found and fixed, both with forcing regression tests;
+  every other item verified to already hold, each closed with a new
+  regression test proving it rather than answered from memory.
+  - **Defect 1 — `publish_bundle`'s check-then-rename was not atomic**
+    (item 3, TOCTOU). `os.path.lexists(destination_dir)` and the
+    following `os.rename` are two separate syscalls; on POSIX,
+    `os.rename` onto an EXISTING EMPTY directory silently succeeds and
+    replaces it (unlike a non-empty one, which raises `ENOTEMPTY`), so a
+    directory created in the split second between the check and the
+    rename — another process, a concurrent pack run racing the same
+    path, a user's own `mkdir` — was silently absorbed instead of
+    refused, contradicting the module's own "never overwrites" contract.
+    The FIRST fix attempt (an `os.mkdir` reservation immediately before
+    the rename, rolled back with `os.rmdir` on a subsequent rename
+    failure) was itself reviewed by the owner on PR #309 and found to
+    still be non-atomic: a THIRD party can `rmdir` the reservation and
+    `mkdir` its own empty directory at the same path before the
+    following `os.rename` runs, and POSIX `rename` absorbs that foreign
+    empty directory exactly as it would have absorbed the original one —
+    two syscalls with a gap between them are not one atomic operation,
+    however narrow, and the code's own comment claiming "nothing else can
+    have raced ahead of it" was not true.
+    **Fixed for real in this commit** with a new pure module,
+    `quantized.portable.atomic_rename`, exposing `rename_noreplace` — a
+    SINGLE syscall wherever the platform provides one: glibc's
+    `renameat2(..., RENAME_NOREPLACE)` via `ctypes` on Linux, Darwin's
+    `renamex_np(..., RENAME_EXCL)` via `ctypes` on macOS, and plain
+    `os.rename` on Windows (already atomic no-replace there). `publish_bundle`
+    tries this first and reports `PublishResult.no_replace: "atomic"` when
+    it ran. Only when the platform/kernel/filesystem has none of those at
+    all (`NoReplaceUnsupported` — an old kernel/glibc without `renameat2`,
+    a filesystem that rejects the flag) does it fall back to the OLD
+    `os.mkdir` reservation + `os.rename` sequence, reporting
+    `no_replace: "best_effort"` — an HONEST contract now: the module
+    docstring and `PublishResult.no_replace`'s own doc say plainly that
+    the fallback leaves the same narrow residual race described above
+    open, rather than claiming it is closed. `PackResult` (`pack.py`) and
+    the `pack_status` result dict (`desktop_bridge_pack.py`) both carry
+    `no_replace` through to the frontend
+    (`frontend/src/lib/desktopPackBridge.ts`'s `PackStatus.result` gained
+    an optional `no_replace` field). Verified on this Linux dev runner:
+    `no_replace_available()` is `True` (glibc `renameat2` with
+    `RENAME_NOREPLACE` is supported) — every real publish on this
+    platform gets the atomic path, never the fallback, in normal
+    operation.
+    Regression coverage, forced rather than merely observed
+    (CLAUDE.md's evidence standard): `tests/test_portable_atomic_rename.py`
+    exercises the real primitive (skipped with a precise reason when
+    `no_replace_available()` is `False`) plus a seam test that fakes the
+    platform primitive to prove `NoReplaceUnsupported` routes correctly
+    without needing an actually unsupported kernel.
+    `tests/test_portable_publish.py` keeps the original
+    `test_publish_bundle_fails_closed_when_an_empty_directory_appears_during_the_race`
+    passing on the new atomic path, adds
+    `test_publish_bundle_atomic_primitive_seam_refuses_a_directory_planted_during_the_race`
+    (the owner's exact seam ask, with the primitive faked so it is
+    deterministic on any runner), and adds
+    `test_publish_bundle_fallback_absorbs_a_directory_planted_between_reservation_and_rename`
+    — which PINS the fallback's residual race by forcing it (wrapping
+    `os.mkdir` to rmdir-and-recreate a foreign empty directory right after
+    the reservation) and asserting the honest outcome: the foreign
+    directory IS absorbed, the publish still reports `ok=True`, and
+    `no_replace` is `"best_effort"`, never `"atomic"` — the fix is an
+    honest contract, not a claim that this residual race is closed.
+  - **Defect 2 — `pack_preview` had no catch for its own internal
+    assertion failures** (item 13, path-leak). `build_dry_run_manifest`
+    (via `naming.plan_bundle_names`) can raise `RuntimeError` from a
+    "this should be structurally impossible" assertion (a duplicate
+    planned bundle path) whose own message embeds the offending
+    bundle-relative path; `pack_preview` caught only `ValueError`, so a
+    latent bug there would propagate the raw, path-carrying exception
+    straight out of the js_api method into pywebview's own exception
+    surface — unlike `pack_start`'s worker thread, which already has an
+    equivalent blanket catch for exactly this "genuine bug, still
+    reported, never raised" case. Fixed with a matching `except
+    RuntimeError` returning a generic `internal_error` refusal. Forced
+    in `test_pack_preview_reports_an_internal_manifest_bug_without_raising_or_leaking_a_path`
+    (`tests/test_desktop_bridge_pack.py`) by monkeypatching
+    `build_dry_run_manifest` to raise with a marker path embedded.
+  - **Checklist items verified to already hold, each with a new or
+    cited test** (see the PR 5 commits for the full per-item mapping):
+    (1) arbitrary read/write authorization — the backend never executes
+    a frontend-supplied manifest (`pack_start`/`packStart` carry only
+    `token`+`content`; the approved manifest PR 4's second review round
+    added is the backend's OWN stored preview, never anything the
+    frontend sends), `project_name` traversal is rejected before
+    planning, and a symlinked destination-parent fails
+    `is_write_dir_consented` (new test:
+    `test_is_write_dir_consented_rejects_a_destination_symlinked_elsewhere`,
+    `tests/test_desktop_consent.py`); (2) a new shared cross-language
+    fixture, `tests/fixtures/portable/bundle_paths.json`, consumed by
+    both `tests/test_portable_bundle_paths_fixture.py` and
+    `frontend/src/lib/bundlePath.fixture.test.ts`, pins
+    `is_bundle_relative`/`isBundleRelativePath` parity; an NFC/NFD
+    Unicode-normalization collision case was added alongside the
+    existing ASCII-case one
+    (`test_nfc_nfd_unicode_variant_collision_still_suffixed`,
+    `tests/test_portable_manifest.py`); a symlinked `sources/` and a
+    symlinked destination file were already covered
+    (`tests/test_portable_staging_failures.py`); Windows junctions are
+    NOT exercised by any test in this repo (only `os.symlink`, which
+    needs elevated privilege on Windows CI and is skipped there) — noted
+    as a real, currently-unclosed coverage gap rather than claimed
+    covered; (3) TOCTOU — see Defect 1 above; a source replaced under an
+    open descriptor, a manifest-grouping fold across case/Unicode
+    spellings, and every `str(exc)` path-leak were independently found
+    and fixed on PRs #305-#307 during this same audit window (`(dev,
+    ino)` filesystem-identity checks in `portable/grouping.py` and
+    `copying.py`, `safe_os_error` throughout); (4) a new whole-stack
+    hash-before/after test suite
+    (`test_a_completed_pack_never_touches_the_original_dwk_or_sources`,
+    `..._cancelled_...`, `..._failed_...`,
+    `tests/test_desktop_bridge_pack.py`) hashes the project `.dwk` and
+    every source before and after a real bridge-driven pack run on each
+    outcome; the write-site allowlist gained `portable/copying.py`
+    after a real gap was found — its `os.open` write flags are built
+    into a local variable, invisible to the AST scan's flags-expression
+    check, closed with a targeted resolver
+    (`_simple_assignments` in `tests/test_write_sites.py`); (5)
+    `write_bundle_files`'s "manifest written last" ordering was forced
+    directly (raising between the two writes) and `validate_bundle`
+    confirmed `manifest_missing`/incomplete on the result, plus a
+    published bundle's `sources/` directory renamed away independently
+    confirmed `source_missing`
+    (`tests/test_portable_publish.py`); (6) every content hash in
+    `portable/` streams in `chunk_bytes`-sized reads (cited:
+    `test_large_file_streams_in_bounded_chunks`,
+    `tests/test_portable_staging.py`) — the one bare `.read()` in
+    `publish.py`'s `validate_bundle` is the small `quantized-bundle.json`
+    manifest file, not a source, and is proportional to source COUNT,
+    never dataset size; `pack_status`'s warnings/errors lists are set
+    once per run (bounded by manifest size and, by `stage_sources`'s own
+    "stop at the first problem" model, `errors` is always ≤1 entry) and
+    never accumulate across polls; (7) `pack_preview`'s own
+    manifest-building/naming/serialization cost on a 200-source
+    synthetic payload with a faked probe stays under 1s
+    (`test_pack_preview_cost_on_200_sources_stays_well_under_a_second`),
+    and `pack_start` returning before its Event-gated fake worker
+    finishes was already proven
+    (`test_two_starts_report_already_running`); (8) a forced
+    cancel-during-publishing race
+    (`test_cancel_during_publishing_cannot_corrupt_or_delete_the_finished_bundle`)
+    confirms the already-committed rename survives intact and the
+    outcome reports an honest `completed`/`cleanup_ok: None`, never a
+    misleading `cancelled`; (9) a full `checksum`/`mtime`/`size`/
+    `packedFrom` round trip through
+    `parseWorkspace`→`serializeWorkspace`→`parseWorkspace` again
+    (`lib/workspace.test.ts`) and through
+    `rewrite_payload_for_bundle`→`parse_workspace_payload`
+    (`tests/test_portable_pack_roundtrip.py`) closes a gap where each
+    field alone had a test but never all four together through the real
+    production path; (10) both `open_project_file` and
+    `read_project_file` (Recent Projects) resolve `base_dir` from the
+    OPENED file's own resolved directory, never CWD
+    (`desktop_bridge_dialogs._read_granted`), and crash-recovery autosave
+    never even serializes a bundle-relative source in the first place
+    (`saveAutosave` calls `serializeWorkspace` with no `projectDir`,
+    proven by a new test in `lib/autosave.test.ts`); (11) a new test
+    (`store/packProject.test.ts`) proves `useApp`'s `history`/
+    `future`/`datasets` stay REFERENCE-identical across a full
+    preview→start→completed run; (12) consent/write-dir-grant counts
+    return to baseline after completed, cancelled, failed, AND
+    thread-start-failed outcomes (the last three closed with new
+    assertions on existing tests in `tests/test_desktop_bridge_pack.py`);
+    (13) see Defect 2 above, plus a new recursive scan of an entire
+    failing `pack_status()` snapshot for the tmp_path root
+    (`test_a_failing_pack_status_snapshot_never_contains_the_tmp_path_anywhere`).
+  - **Ratchet audit (item 14):** diffed `tests/test_repo_integrity.py`,
+    `tests/test_write_sites.py`, `frontend/scripts/check-bundle-size.mjs`,
+    and `frontend/src/architecture.test.ts` against `origin/main`. The
+    bundle-size and architecture ratchets are byte-for-byte UNCHANGED —
+    no pin was raised. `test_repo_integrity.py` gained exactly `portable`
+    in `PURE_LAYERS` (`MAX_MODULE_LINES` untouched). The write-site
+    allowlist gained `portable/{copying,copy_stream,publish,staging}.py`
+    (all justified — see PR 2/3's own writeups above and Defect-adjacent
+    item 4 above for `copying.py`'s late addition) and legitimately
+    DROPPED `desktop_bridge.py` once `write_project_file` stopped
+    containing any AST-visible write call of its own (PR 3 moved its
+    atomic-write sequence into the now-covered `portable/publish
+    .atomic_replace_file`) — every change accounted for, none an
+    unjustified weakening.
+  - **`portable` mode status.** Backend COMPLETE: a packed bundle is
+    built, physically MOVED to a new location, and reopened in tests —
+    the pack → move → reopen roundtrip in
+    `tests/test_portable_pack_roundtrip.py::test_pack_move_and_reopen_roundtrip`
+    plus the frontend's own parse-side proof
+    (`lib/workspace.test.ts`'s "workspace bundle-relative source"
+    describe block, including this PR's own full-provenance round trip).
+    The VISUAL "Pack Project" workflow — the destination-picker dialog,
+    the preview/progress UI a user actually clicks through — is NOT
+    shipped; it is assigned to ChatGPT/Sol against the bridge contract
+    PR 4 (#308) already ships (`desktopPackBridge.ts` + `store/
+    packProject.ts`/`packProjectRun.ts`), which is fully tested end to
+    end but has no visible surface in the app yet (only the
+    exercise-only `commands/packProjectCommands.ts` palette command
+    noted under PR 4 above). `linked` mode remains NOT implemented (per
+    the mode contract above).
 
 ---
 
@@ -1507,12 +2490,24 @@ Original acceptance criteria (unchanged):
   safe delete actions. Unsupported operations are omitted rather than shown
   disabled. Secondary actions use a keyboard-accessible overflow menu so long
   recipe names remain readable; one busy state prevents conflicting edits.
-- [ ] Add a selected-recipe details/preview surface, including visible schema
+- [x] ~~Add a selected-recipe details/preview surface, including visible schema
   version and useful kind-specific metadata. Do not imply that a recipe can be
-  edited or applied when its kind does not support that operation.
-- [ ] Add a library-level import entry point and finish import/export parity
+  edited or applied when its kind does not support that operation.~~ SHIPPED
+  2026-09-04 (#290): per-row Details disclosure built by `lib/recipeDetails.ts`
+  — schema version shown even when "unversioned", kind-specific facts, and an
+  "Available actions" line derived only from `supportsOperation`, so a row
+  never lists an operation its kind lacks. Quick-plot channel usage is derived
+  from the mapping, not from the label snapshot (self-review finding).
+- [x] ~~Add a library-level import entry point and finish import/export parity
   for recipe kinds with safe, portable formats. Keep capability gating for
-  kinds that cannot yet round-trip without loss.
+  kinds that cannot yet round-trip without loss.~~ SHIPPED 2026-09-04 (#290):
+  "Import recipe…" sniffs the kind from the file (`lib/recipeFile.ts`); peak,
+  graph and fit-model recipes gained serializers and file-boundary parsers
+  that check every field (type, enum, and the semantic bounds the owning
+  wizard/backend enforce — mirrored exactly, via `peakClamp`, so a recipe the
+  app saved always re-imports) and drop unknown keys. quickPlot stays
+  non-importable by capability gate: bound to a workbook/schema signature, no
+  portable form.
 - [ ] Search comes later if real use proves navigation insufficient.
 - [ ] Revisit organization after usage; do not freeze it prematurely.
 
@@ -1524,6 +2519,13 @@ makes the incomplete-source safeguard above real), #277, #278, and #282. The rem
 import and round-trip parity; the prior single unchecked line obscured that
 split. New eager UI work must respect the bundle ratchet (the 2026-08-31
 verification had about 4.0 kB of headroom).
+
+**Status update — 2026-09-04:** #290 closed both of the boxes Sol's update
+above left open — details/preview/version and library-level import with
+round-trip parity. The only boxes still open in P3.5 are the two
+usage-gated ones (search, revisit organization). Bundle headroom after the
+stack (through #292) is about 3.0 kB, measured locally at #292; the pin
+was not raised.
 
 ### P3.6 — Office/report export acceptance
 
@@ -1540,10 +2542,79 @@ verification had about 4.0 kB of headroom).
 
 **Models:** GPT-5.6 Terra low / Claude Haiku 4.5.
 
-- [ ] Extend to folders, figures, reports, and durable objects.
-- [ ] Coherent dependency restore or clear limitation.
-- [ ] Bound by count/age/total size, with purge preview.
-- [ ] Allow explicit warned permanent deletion.
+- [x] ~~**Extend to folders, figures, reports, and durable objects.**~~ SHIPPED
+  2026-09-04 (#292) (`frontend/src/store/trash.ts`): `TrashEntry` is now a
+  discriminated union (`dataset`/`editableFigure`/`figureDoc`/`page`/
+  `report`/`folder`); every delete path (`deleteEditableFigure`,
+  `removeFigureDoc`, `deletePageDocument`, `removeReport`,
+  `deleteFolder(…, "reparent"|"cascade")`) captures before removing.
+  `deleteFolder` deletes no dataset either way (corrects the earlier
+  wording implying cascade destroys data — it only un-parents); the
+  `folder` entry captures the removed subtree plus which live
+  dataset/workbook members lost their `folderId`, so both delete modes
+  restore. Tests: `store/trash.test.ts`, `store/folderDelete.test.ts`.
+- [x] ~~**Coherent dependency restore or clear limitation.**~~ SHIPPED
+  2026-09-04 (#292): `restoreFromTrash` returns `{ok, note?}`/`{ok:false, reason}`.
+  `dataset` restore is unchanged (workbook self-heal). A live
+  `editableFigure`/`figureDoc` whose bound dataset is gone restores the
+  dataset too when it is ALSO in trash (same transaction, noted), else
+  restores with the binding nulled the same way a `.dwk` load clamps a
+  dangling ref (noted as a residual: renders frozen/disabled until
+  relinked). `folder` restore re-adds the subtree (dangling parent -> root,
+  reusing `pruneOrphans`/`parseFolders`'s own rule) and re-homes every
+  still-un-parented captured member, leaving a member the user has since
+  moved where they put it (noted). `report` restores as-is. `page` restore
+  is as-is too — a residual: its panels' missing-figure state follows the
+  existing F3 `resolvePagePanel` semantics unchanged, not a new mechanism.
+  Review round (same day): the "reparent" mode sends members and child
+  folders to the deleted node's PARENT, not the root, so the entry now
+  records that destination (`dest`) plus the re-parented `childFolders`,
+  and restore re-homes whatever still sits exactly there. Restore is
+  deliberately NOT an undo step: `trash` is outside the history snapshot,
+  so an undoable restore would let Ctrl+Z remove the object again with its
+  entry already consumed (`store/trash.test.ts` pins it).
+- [x] ~~**Bound by count/age/total size, with purge preview.**~~ SHIPPED
+  2026-09-04 (#292): `TRASH_MAX_BYTES` = 128 MiB (justified in `trash.ts` against
+  P0.4's measured 188 MB/1M-row `.dwk`), `evictTrash` always keeps the
+  newest entry even alone over cap (mirrors `autosaveGenerations.capBySize`).
+  `bytes` computed once at trash time, never per render — a dimension ESTIMATE
+  for datasets (`datasetByteEstimate`; the exact `JSON.stringify` measured
+  1.2 s on P0.4's 1M-row dataset, a stall this would have added to every
+  delete). An `editableFigure`/`figureDoc` entry whose document carries a
+  FROZEN data snapshot also uses the dimension estimate for that snapshot
+  (`editableFigureByteEstimate` / `figureDocByteEstimate`, same cost reason);
+  exact for the rest. `lib/trashSummary.ts`
+  (lazy, panel-only) rolls up count/bytes/byKind/oldest/newest;
+  `TrashPanel`'s "Empty trash" opens `askConfirm` with a purge-preview body
+  naming exactly what would be lost, destructive-styled, before `purgeTrash()`.
+- [x] ~~**Allow explicit warned permanent deletion.**~~ SHIPPED 2026-09-04 (#292):
+  `removeDatasets(ids, {permanent: true})` skips trash capture entirely;
+  the Library dataset menu's new "Delete permanently…" action
+  (`lib/datasetRemoveActions.ts`) confirms with a body stating the trash
+  bypass and irreversibility before calling it. Review round (2026-09-03):
+  the permanent branch records no undo step AND scrubs the dataset from
+  every retained history/future snapshot (`scrubDatasetsFromHistory`), so
+  neither Ctrl+Z nor an undo of an older edit can bring it back — the
+  confirmation's "cannot be undone" is literally true; a non-dataset
+  restore re-validates its entry inside the final transaction, so a purge
+  that lands while the restore chunk loads wins; the per-row ✕ / Sure?
+  controls carry row-naming accessible labels. Tests:
+  `lib/datasetDeletePermanently.test.ts`, `store/trash.test.ts`,
+  `components/workshops/trash/TrashPanel.test.tsx`.
+
+**Status update — 2026-09-04 (#292 self-review round):** permanent delete now
+does a full snapshot scrub — `scrubDatasetsFromHistory` maps every retained
+history and future snapshot through `removeDatasetsPatch`, not just the
+`datasets` array, so a stray `activeId`/binding/Origin ref naming the deleted
+id can't survive an undo. Trash is one entry per object: re-trashing the same
+id (e.g. delete → Undo → delete again) drops the older copy instead of
+double-counting it. A restored FROZEN `editableFigure`/`figureDoc` clamps a
+dangling dataset binding to null without attempting dependency restore — a
+frozen document renders from its own snapshot and needs none. The eager-
+bundle growth this round was funded by deferring
+`components/Library/folderOps.ts` to the click: its two eager importers
+(`lib/contextActions.ts`'s six folder actions and `MultiSelectBar.tsx`'s
+Export) now reach it through a dynamic `import()` inside the handler.
 
 ---
 
@@ -1654,7 +2725,9 @@ identifiers, the gates are the order.
 ### Gate B — Trustworthy daily project
 
 1. [ ] P1.1 native bridge.
-2. [ ] P1.2 project lifecycle.
+2. [x] ~~P1.2 project lifecycle.~~ COMPLETE 2026-09-04 — lifecycle slices
+   `#180`, recovery hardening `#291`, and the P0.4-conditional container box
+   decided NOT REQUIRED (`#294`). Gate B itself stays open for steps 1, 3, 4.
 3. [ ] P1.7 portability/relink.
 4. [ ] Repeat P0.1 and compare friction.
 
@@ -2002,7 +3075,8 @@ work (its BACKLOG row).
 - Findings booked as P0.4 follow-ups (plot-path point reduction; import-path
   efficiency incl. whole-file sniffer reads); WebGL/workers/chunked-arrays
   deliberately NOT booked (no evidence). P1.2's container question annotated
-  "not required at measured scale".
+  "not required at measured scale" (recorded as DECIDED NOT REQUIRED and the
+  P1.2 box closed 2026-09-04, #294).
 - Frontend agent's harness caught a real race in its own methodology (UI
   `clearAutosave()` is fire-and-forget; navigating away immediately lets
   autosave-restore repopulate silently) and one self-reporting bug it fixed
@@ -2504,6 +3578,71 @@ work (its BACKLOG row).
   `tsc -p e2e/tsconfig.json --noEmit` clean, `playwright test --list`
   still discovers both tests — still not executable in this sandbox (same
   blocked-host constraint as the prior entry).
+
+#### 2026-09-07 — P1.6 backend/import-contract lane: header_fields + categorical guards (Sonnet agent, branch `claude/p16-import-metadata`, stacked on `claude/p16-import-error-bindings`)
+
+- Part A (additive): `io/import_metadata.py` (new, 131 lines) parses the
+  SAME preamble lines `_preamble_comments` already retains verbatim into an
+  ordered `dict[str, str]` (`key: value` / `key = value`, optional leading
+  `# % // ;` marker, both halves trimmed) — `metadata["header_fields"]`,
+  omitted entirely when empty, never a replacement for `comments`. Keys
+  stay VERBATIM (never normalized). A repeated key: LAST value wins,
+  reported once per key (`{"type": "duplicate_header_field", "key": ...}`)
+  in `preview_import`'s new `header_field_problems` list — the SAME
+  structured-problems-channel convention `error_binding_problems` already
+  established. Capped independently at `MAX_HEADER_FIELDS` = 200 distinct
+  keys (documented reasoning: real instrument preambles carry a handful to
+  a few dozen fields; the comment-line cap of 500 already bounds this in
+  practice, but the field cap doesn't ride on that constant so a future
+  change to one can't silently move the other).
+- Part B: checked FIRST per the booking's own instruction —
+  `ImportPreviewColumn.effective_name` (already shipped, PR #197, "P1-5
+  DEFECT 2", well before this lane) already IS the booked display slot: a
+  resolved-label field of its own, `label_line`-applied text without
+  overwriting `name`. Nothing added backend-side; the P1.6b booking bullet
+  above updated to record it SHIPPED rather than re-adding the field. The
+  frontend's `PreviewTable` doesn't yet RENDER `effective_name` as a
+  visible cell — flagged as a separate, unbooked, frontend-only follow-up.
+- Part C: `io/import_categorical_guards.py` (new, 118 lines) adds two
+  guards around `delimited._encode_categorical` WITHOUT touching its
+  lossless round trip or level order: a level-count cap
+  (`MAX_CATEGORICAL_LEVELS` = 500, chosen to mirror `MAX_PREAMBLE_COMMENTS`'s
+  order of magnitude — real categoricals span a few to a few hundred
+  levels, not thousands) that REFUSES `parse_import` (a `ValueError` naming
+  the column(s)/counts) but only REPORTS in `preview_import`
+  (`categorical_problems`, never raises there); and case-collision
+  reporting (`"Fe"`/`"fe"` kept distinct, whitespace already merged by
+  `_encode_categorical` itself) that never raises anywhere, informational
+  only. Deliberately does NOT touch `import_csv`'s own automatic
+  categorical-promotion fallback (f2/D6) — that path exists to rescue an
+  otherwise-unimportable file with no numeric columns at all, and applying
+  a hard refusal there would turn a previously-importable messy file into
+  an import failure with no user decision behind it; pinned by
+  `test_import_csv_categorical_fallback_is_not_capped`.
+- One legitimate wire-fixture shift: `tests/fixtures/wire/
+  label_import_payload.json` regenerated (its committed recipe) to include
+  the new `header_fields` key its 2-line preamble now parses into — no
+  other fixture moved.
+- `io/import_preview.py` sits at exactly 500 lines (the god-module
+  ceiling) after this PR — trimmed several pre-existing docstrings
+  (meaning preserved, prose tightened) to make room; `io/delimited.py`
+  untouched at 468 lines (the two new guard modules were split out
+  specifically so this wouldn't need to grow).
+- Tests: +26 in `tests/test_io_import_preview.py` (header-field parse
+  shapes/non-shapes, duplicate-key rule, both caps, the lossless round
+  trip with fields extracted, the level-cap refusal + its preview-only
+  report, the case-collision report + its never-blocks proof, the
+  omit-when-empty rules) and +6 in `tests/test_io_delimited.py`
+  (`encode_categorical_columns` unit coverage: unmodified vs
+  `_encode_categorical`, the cap problem shape, no-problem-at-exactly-cap,
+  one/multiple collision groups, independent per-column problems).
+- Gates: `ruff check src tests tools` / `mypy src` / `pytest -q -n auto`
+  all clean (4453 passed, 183 skipped, 18 xfailed — 0 failed, +32 over the
+  pre-PR count). Frontend: `tsc --noEmit` clean, `eslint --max-warnings=0`
+  clean on `src`, `vitest run src/architecture.test.ts src/lib` clean
+  (wire types only — `lib/importTypes.ts`/`lib/types.ts` gained the new
+  optional `header_fields`/`header_field_problems`/`categorical_problems`
+  fields, no component changed).
 
 ## Reference baseline
 

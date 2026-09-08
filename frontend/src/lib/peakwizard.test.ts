@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
+  peakClamp,
   cutRange,
   DEFAULT_RECIPE,
   deleteRecipe,
@@ -60,6 +61,29 @@ describe("regionsFromPeaks", () => {
   it("falls back to a 2% window for a zero-FWHM peak", () => {
     const [r] = regionsFromPeaks([{ center: 5, fwhm: 0 }], 3, 0, 100);
     expect(r[1] - r[0]).toBeCloseTo(4); // 2 × (100/50)
+  });
+});
+
+describe("peakClamp — the wizard's edit rules, which the recipe-file importer mirrors", () => {
+  it("rounds and floors the integer fields, floors thresholds at 0", () => {
+    expect(peakClamp.radius(0.4)).toBe(1);
+    expect(peakClamp.radius(12.5)).toBe(13);
+    expect(peakClamp.order(-1.2)).toBe(0);
+    expect(peakClamp.order(2.5)).toBe(3);
+    expect(peakClamp.maxPeaks(0)).toBe(1);
+    expect(peakClamp.bgDegree(-3)).toBe(0);
+    expect(peakClamp.snrThreshold(-2)).toBe(0);
+    expect(peakClamp.snrThreshold(2.5)).toBe(2.5);
+  });
+
+  it("rejects (null) values outside an OPEN interval instead of inventing a nearby one", () => {
+    expect(peakClamp.lam(0)).toBeNull();
+    expect(peakClamp.lam(1e5)).toBe(1e5);
+    expect(peakClamp.p(0)).toBeNull();
+    expect(peakClamp.p(1)).toBeNull();
+    expect(peakClamp.p(0.01)).toBe(0.01);
+    expect(peakClamp.regionWidth(0)).toBeNull();
+    expect(peakClamp.regionWidth(3)).toBe(3);
   });
 });
 

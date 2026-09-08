@@ -110,7 +110,7 @@ export default function DataFilterPanel() {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 12px" }}>
-                    {c.levels.map((lv) => {
+                    {c.levels.map((lv, levelIndex) => {
                       const allowed =
                         c.current?.kind === "set" && c.current.values
                           ? c.current.values.includes(lv)
@@ -121,7 +121,7 @@ export default function DataFilterPanel() {
                           checked={allowed}
                           onChange={() => f.toggleLevel(c.index, lv)}
                         >
-                          {fmtNum(lv)}
+                          {c.levelLabels[levelIndex] ?? fmtNum(lv)}
                         </Checkbox>
                       );
                     })}

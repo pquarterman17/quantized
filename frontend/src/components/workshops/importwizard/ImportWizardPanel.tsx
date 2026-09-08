@@ -20,6 +20,9 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import ErrorRolesEditor from "./ErrorRolesEditor";
+import ErrorBindingSuggestions from "./ErrorBindingSuggestions";
+import MetadataPreview from "./MetadataPreview";
+import CategoricalProblems from "./CategoricalProblems";
 import PreviewTable from "./PreviewTable";
 import { useImportWizard } from "./useImportWizard";
 
@@ -177,10 +180,25 @@ export default function ImportWizardPanel() {
             />
           )}
 
-          {w.preview && w.preview.comments.length > 0 && (
-            <div className="qzk-ds-meta" style={{ ...faint, marginTop: 8 }}>
-              Preamble retained as searchable metadata: {w.preview.comments.join(" · ")}
-            </div>
+          {w.preview && <MetadataPreview preview={w.preview} />}
+
+          {w.preview && (
+            <CategoricalProblems
+              problems={w.preview.categorical_problems ?? []}
+              accepted={w.acceptedCategorical}
+              onAccept={w.acceptLargeCategorical}
+              onUnaccept={w.unacceptLargeCategorical}
+            />
+          )}
+
+          {w.preview && (
+            <ErrorBindingSuggestions
+              columns={w.preview.columns}
+              suggestions={w.preview.suggested_error_bindings ?? []}
+              problems={w.preview.error_binding_problems ?? []}
+              onApply={w.applyErrorSuggestion}
+              onRemoveProblem={w.removeRejectedErrorBinding}
+            />
           )}
 
           {w.preview && (
@@ -199,7 +217,7 @@ export default function ImportWizardPanel() {
             <Button
               variant="primary"
               size="sm"
-              disabled={!w.preview || w.importing || !!w.xConflict}
+              disabled={!w.preview || w.importing || !!w.xConflict || w.categoricalBlocked}
               onClick={() => void w.doImport()}
             >
               {w.importing ? "Importing…" : w.imported ? "Imported ✓ — import again" : "Import"}

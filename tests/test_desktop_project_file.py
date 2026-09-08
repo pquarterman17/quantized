@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -18,7 +19,10 @@ from quantized.desktop_project_file import (
     WORKSPACE_VERSIONS,
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
+    declared_source_paths_of,
     extract_declared_source_paths,
+    parse_workspace_payload,
+    payload_declares_source,
     validate_workspace_payload,
 )
 
@@ -206,3 +210,193 @@ def test_cleanup_stray_write_temps_ignores_files_without_the_prefix(tmp_path: Pa
     os.utime(other, (old, old))
     cleanup_stray_write_temps(str(tmp_path), min_age_seconds=0.0)
     assert other.exists()
+
+
+# --- payload_declares_source (P1.2 box 4, #291 self-review) -------------------
+
+
+def _payload_with_sources(*paths: str) -> dict[str, object]:
+    return {"datasets": [{"source": {"path": p}} for p in paths]}
+
+
+def test_payload_declares_source_matches_the_identical_and_alias_spellings(tmp_path) -> None:
+    raw = tmp_path / "sub" / "raw.csv"
+    raw.parent.mkdir()
+    raw.write_text("x")
+    dest = os.path.realpath(str(raw))
+    assert payload_declares_source(_payload_with_sources(str(raw)), dest)
+    # `sub/../sub/raw.csv` is caught by the pure-string pass, no realpath needed
+    alias = str(tmp_path / "sub" / ".." / "sub" / "raw.csv")
+    assert payload_declares_source(_payload_with_sources(alias), dest)
+    assert not payload_declares_source(_payload_with_sources(str(tmp_path / "other.csv")), dest)
+    assert not payload_declares_source(_payload_with_sources(), dest)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink creation needs a privilege on Windows")
+def test_payload_declares_source_resolves_a_symlink_on_the_same_root(tmp_path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("x")
+    link = tmp_path / "link.csv"
+    link.symlink_to(raw)
+    dest = os.path.realpath(str(raw))
+    assert payload_declares_source(_payload_with_sources(str(link)), dest)
+
+
+def test_payload_declares_source_never_resolves_a_source_on_another_root(
+    tmp_path, monkeypatch
+) -> None:
+    # The cost rule: a source on a different drive/UNC root than the
+    # destination is compared as a string only -- `os.path.realpath` (which
+    # can stall on an unreachable share) must not be called for it.
+    dest = os.path.realpath(str(tmp_path / "w.dwk"))
+    calls: list[str] = []
+    real_realpath = os.path.realpath
+
+    def spy(path: str, **kw: object) -> str:
+        calls.append(path)
+        return real_realpath(path, **kw)
+
+    def fake_splitdrive(p: str) -> tuple[str, str]:
+        # Separator/case-agnostic: on Windows the implementation hands this
+        # the `normcase(abspath(...))` spelling (`\\server\share\...`), on
+        # POSIX the forward-slash one — both must read as the UNC root.
+        q = p.replace("\\", "/").lower()
+        return ("//server/share", p[14:]) if q.startswith("//server/share") else ("", p)
+
+    monkeypatch.setattr(os.path, "splitdrive", fake_splitdrive)
+    monkeypatch.setattr(os.path, "realpath", spy)
+    assert not payload_declares_source(_payload_with_sources("//server/share/raw.csv"), dest)
+    assert calls == []
+
+
+def test_payload_declares_source_tolerates_an_unresolvable_string(tmp_path) -> None:
+    dest = os.path.realpath(str(tmp_path / "w.dwk"))
+    assert not payload_declares_source(_payload_with_sources("\x00bad"), dest)
+
+
+def test_parse_workspace_payload_returns_the_document_once_for_both_checks() -> None:
+    payload, reason = parse_workspace_payload(_workspace_json())
+    assert reason is None
+    assert isinstance(payload, dict)
+    bad_payload, bad_reason = parse_workspace_payload("not json")
+    assert bad_payload is None
+    assert bad_reason is not None and bad_reason.startswith("not valid JSON")
+
+
+# --- P1.7 PR 3 ("Pack Project"): `base_dir` / `kind: "bundle"` sources -----
+#
+# A packed project's dataset sources carry `kind: "bundle"` with a
+# bundle-relative `path` instead of an absolute one. These three functions
+# all gained an optional `base_dir` (the `.dwk`'s own directory) to resolve
+# that back to a real path -- see `quantized.portable.project_rewrite
+# .resolve_bundle_source` for the one sanctioned resolver these delegate to.
+
+
+def _bundle_payload(rel_path: str) -> dict[str, object]:
+    return {"datasets": [{"source": {"kind": "bundle", "path": rel_path}}]}
+
+
+def test_declared_source_paths_of_skips_a_bundle_source_with_no_base_dir() -> None:
+    assert declared_source_paths_of(_bundle_payload("sources/raw.csv")) == []
+
+
+def test_declared_source_paths_of_resolves_a_bundle_source_with_base_dir(
+    tmp_path: Path,
+) -> None:
+    resolved = declared_source_paths_of(_bundle_payload("sources/raw.csv"), base_dir=str(tmp_path))
+    assert resolved == [os.path.join(str(tmp_path), "sources", "raw.csv")]
+
+
+def test_declared_source_paths_of_still_handles_a_kind_path_source_with_base_dir(
+    tmp_path: Path,
+) -> None:
+    # `base_dir` must not change ordinary `kind: "path"` (or kind-less,
+    # pre-existing-fixture-shaped) sources at all.
+    payload = _payload_with_sources("/abs/raw.csv")
+    assert declared_source_paths_of(payload, base_dir=str(tmp_path)) == ["/abs/raw.csv"]
+
+
+def test_declared_source_paths_of_skips_a_bundle_source_that_escapes(tmp_path: Path) -> None:
+    escaping = _bundle_payload("../escape.csv")
+    assert declared_source_paths_of(escaping, base_dir=str(tmp_path)) == []
+
+
+def test_extract_declared_source_paths_resolves_a_bundle_source_with_base_dir(
+    tmp_path: Path,
+) -> None:
+    content = (
+        '{"format": "quantized-workspace", "version": 4, '
+        '"datasets": [{"source": {"kind": "bundle", "path": "sources/raw.csv"}}]}'
+    )
+    resolved = extract_declared_source_paths(content, base_dir=str(tmp_path))
+    assert resolved == [os.path.join(str(tmp_path), "sources", "raw.csv")]
+    # without base_dir, the bundle source is invisible
+    assert extract_declared_source_paths(content) == []
+
+
+def test_declared_source_paths_of_resolves_multiple_bundle_sources_with_one_base_dir(
+    tmp_path: Path,
+) -> None:
+    """Review finding #7 (PR 3 backend round): the lazy
+    ``quantized.portable.project_rewrite`` import in
+    ``declared_source_paths_of`` was hoisted out of the per-dataset loop
+    to run at most once per call rather than once per matching row — this
+    pins that the loop still resolves EVERY matching row correctly
+    afterward (not just the first, e.g. from a stale/shadowed binding a
+    careless hoist could introduce)."""
+    payload = {
+        "datasets": [
+            {"source": {"kind": "bundle", "path": "sources/a.csv"}},
+            {"source": {"kind": "path", "path": "/abs/untouched.csv"}},
+            {"source": {"kind": "bundle", "path": "sources/b.csv"}},
+        ]
+    }
+    resolved = declared_source_paths_of(payload, base_dir=str(tmp_path))
+    assert resolved == [
+        os.path.join(str(tmp_path), "sources", "a.csv"),
+        "/abs/untouched.csv",
+        os.path.join(str(tmp_path), "sources", "b.csv"),
+    ]
+
+
+def test_desktop_project_file_and_portable_import_cleanly_in_both_orders() -> None:
+    """Review finding #7: ``quantized.portable.project_rewrite`` now
+    imports ``parse_workspace_payload`` at MODULE level (the previous
+    function-local import was justified by a circular-import claim that
+    does not actually hold — see that module's own doc). The one real
+    cycle risk runs the OTHER way: ``quantized.portable.publish`` needs
+    ``quantized.desktop_project_file.WRITE_TEMP_PREFIX`` at module-load
+    time, so ``desktop_project_file``'s own cross-package call stays
+    function-local. Each import order is run in a FRESH subprocess so a
+    previous test's ``sys.modules`` caching can never hide a regression
+    (a module that already finished importing earlier in THIS process
+    would silently mask a real ordering bug)."""
+    import subprocess
+
+    for statement in (
+        "import quantized.desktop_project_file; import quantized.portable",
+        "import quantized.portable; import quantized.desktop_project_file",
+    ):
+        proc = subprocess.run(
+            [sys.executable, "-c", statement],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, (
+            f"import order {statement!r} failed:\n{proc.stdout}\n{proc.stderr}"
+        )
+
+
+def test_payload_declares_source_resolves_a_bundle_copy_only_with_base_dir(
+    tmp_path: Path,
+) -> None:
+    bundle_dir = tmp_path / "bundle"
+    sources_dir = bundle_dir / "sources"
+    sources_dir.mkdir(parents=True)
+    copied = sources_dir / "raw.csv"
+    copied.write_bytes(b"x")
+    dest = os.path.realpath(str(copied))
+
+    payload = _bundle_payload("sources/raw.csv")
+    assert payload_declares_source(payload, dest, base_dir=str(bundle_dir)) is True
+    assert payload_declares_source(payload, dest) is False

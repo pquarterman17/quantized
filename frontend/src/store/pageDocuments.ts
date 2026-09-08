@@ -10,6 +10,7 @@
 // workshop's own effect consume it once.
 import type { PageDocument } from "../lib/pageDocument";
 import type { AppState } from "./useApp";
+import { byteSize } from "./trash";
 
 let pageSequence = 0;
 const nextPageId = (): string => `page-${Date.now().toString(36)}-${++pageSequence}`;
@@ -103,8 +104,11 @@ export function createPageDocumentsSlice(set: SliceSet, get: SliceGet): PageDocu
       return copy.id;
     },
     deletePageDocument: (id) => {
-      if (!get().pages.some((p) => p.id === id)) return;
+      const page = get().pages.find((p) => p.id === id);
+      if (!page) return;
       get().recordHistory("delete figure page");
+      // P3.7: Trash capture, same two-call convention as removeDatasets.
+      get().sendEntriesToTrash([{ kind: "page", at: Date.now(), bytes: byteSize(page), page }]);
       set((state) => ({
         pages: state.pages.filter((p) => p.id !== id),
         status: "figure page deleted (Undo to restore)",

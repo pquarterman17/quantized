@@ -14,6 +14,108 @@ paragraph.
 
 ---
 
+Prior (twenty-sixth pass, 2026-09-06 — the P1.7 Pack Project PR 5 audit
+reconciliation). What changed:
+
+1. **`PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P1.7's "Pack Project stack"
+   subsection consolidated into one coherent record for PR 1-5
+   (#305-#308 + this PR 5 audit).** Two stale leftover "PR 2 (planned,
+   not shipped)"/"PR 3 (planned, not shipped)" placeholder bullets —
+   drift from when PR 3's frontend half shipped ahead of its backend —
+   were removed/re-homed now that both PRs are fully written up above
+   them; "PR # pending" placeholders were replaced with the actual PR
+   numbers throughout. The new PR 5 entry documents the adversarial
+   audit's two real defects (a POSIX TOCTOU race letting
+   `publish_bundle`'s atomic rename silently absorb an empty directory
+   created in its own check-then-act window; `pack_preview` propagating
+   a raw, path-carrying `RuntimeError` from its own internal
+   duplicate-bundle-path assertion instead of a structured refusal) and
+   the full per-item mapping of its 14-item checklist to the test that
+   proves each item, plus a ratchet audit (no bundle-size/architecture
+   pin raised; the write-site allowlist gained
+   `portable/{copying,copy_stream,publish,staging}.py`, justified, and
+   legitimately dropped `desktop_bridge.py` once its own write moved into
+   the now-covered `atomic_replace_file`). The `portable` mode box is
+   marked BACKEND COMPLETE (the pack → move → reopen roundtrip in
+   `tests/test_portable_pack_roundtrip.py` plus the frontend's parse-side
+   proof in `lib/workspace.test.ts`); the visual "Pack Project" workflow
+   (destination-picker dialog, preview/progress UI) is stated plainly as
+   NOT shipped, assigned to ChatGPT/Sol against PR 4 (#308)'s
+   already-shipped bridge/frontend contract. `linked` mode remains NOT
+   implemented.
+2. **`BACKLOG.md`'s plans-dashboard row for `PRIMARY_SOFTWARE_AUDIT_PLAN.md`**
+   gained a clause naming P1.7's now-backend-complete `portable` mode and
+   the still-open visual layer, and the "Sequencing-gated, incomplete
+   engineering" sentence was narrowed from "P1.3-P1.7" to "P1.3-P1.6...
+   plus P1.7's own visual layer and `linked` mode" to reflect that P1.7's
+   backend is no longer part of that open set.
+3. **No `RELEASE_BLOCKERS.md`/`POST_SPRINT_INDEPENDENT_REVIEW.md` rows
+   changed** — grepped both for "P1.7"/"Pack Project"/"portab"; neither
+   file tracks this item at all (P1.7 predates the RC sprint both files
+   are scoped to).
+4. **No `CHANGELOG.md` entry** — the audit's two fixes (the publish
+   TOCTOU race, the pack_preview exception leak) are both defense-in-depth
+   hardening of a backend-only stack with no shipped user-facing surface
+   yet (the visual Pack Project workflow is still unbuilt), so there is no
+   user-visible behavior to changelog.
+5. Carried forward unchanged: `v0.24.0` is still the current stable
+   release; Dependabot alert #24 (extract-zip) stays open, upstream-
+   blocked; alert #1 (glib) stays a dismissed, tolerable risk.
+
+Prior (twenty-fifth pass, 2026-09-06 — the perf-PR reconciliation). What
+changed:
+
+1. **Seven performance PRs (`#295`–`#301`) reconciled against
+   `PRIMARY_SOFTWARE_AUDIT_PLAN.md` §P0.4 and `docs/performance_envelope.md`.**
+   `#298` (bulk CSV `np.loadtxt` parse), `#295` (moved the upload parse off
+   the event loop; chunked response encoding so a concurrent `GET
+   /api/health` no longer stalls), and `#296` (extended the existing
+   dataset-handle cache to `/api/plot/series`) are booked as new
+   evidence-backed P0.4 follow-ups, each citing its PR's own measured
+   before/after numbers. `#299` (incremental worksheet formula recompute,
+   ~4.2 s → ~18 ms per edit at 1M rows) closes the single-cell EDIT half of
+   the 1M-row-worksheet residual that bullet has carried since 2026-07-26 —
+   scroll/mount were already in-budget per that run; only the edit path was
+   untested at that scale. The import-profile-attribution acceptance box's
+   text is updated to name `#298` as the mechanism that closed the
+   post-`_detect_layout` residual. `#297` (Debye lattice Gauss-Legendre
+   vectorization) and `#300` (startup import deferral: `openpyxl`/
+   `periodictable` moved out of `create_app()`) are recorded in
+   `docs/performance_envelope.md`'s new 2026-09-06 section for one dated
+   record but are not P0.4 fixture-list items. `#301` is a test-determinism
+   fix (forces the health/upload race via an `Event` instead of a wall-clock
+   sleep) with no performance number to report.
+2. **`MAIN_PLAN.md` gets a new `## Completed` entry** for the whole
+   2026-09-06 pass, naming the follow-ups NOT shipped this pass:
+   `io/import_preview.py::guess_settings` eager tokenization; a
+   separately profiled model-scan/optimizer follow-up (Poly4, bi-exponential,
+   and Bloch became the dominant scan cost only after `#297` sped Debye up;
+   their evaluators are already vectorized NumPy, and `#297` attributes the
+   time to optimizer behaviour and poor starting points, not a per-point
+   loop — improve starts/bounds/selection only with measurements); the
+   still-eager `scipy.stats` import at startup (kept eager deliberately —
+   the always-on statistics routes already import it, so deferring it here
+   would only move the cost to first request); a thread-based job queue for
+   import/export (today only the DREAM/bumps fit uses `routes/jobs_api`);
+   `response_model` on the routes that still lack one; the 33
+   `test_api_*.py` files still building their own `TestClient()` instead of
+   the shared `app`/`client` fixtures `#293` added; and the seven ESLint
+   rules `#293`'s type-aware lint sweep left off with dated counts.
+3. **The dead `errlog.ts`/`/api/debug/report` row stays removed** —
+   re-verified this pass by grepping the tree for `debug/report`: the only
+   hits are `CHANGELOG.md` and this file's own text describing the
+   2026-09-04 (`#294`) deletion, no live reference remains.
+4. **A new Actionable dev work row books the deferred follow-ups from
+   item 2** for a future pass, pointing at `MAIN_PLAN.md`'s new Completed
+   entry as the source of truth.
+
+Verified: `tests/test_repo_integrity.py`'s plan-drift guard
+(`test_plan_items_claiming_completion_are_moved_to_completed`) passes on the
+reconciled tree; `ruff check src tests tools` clean. Docs-only change, no
+code touched.
+
+---
+
 **Last reconciled:** 2026-08-28 (twenty-fourth pass). What changed:
 
 1. **`v0.23.0` and `v0.23.1` released 2026-08-28** (both stable; `v0.23.1`

@@ -71,6 +71,21 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   };
 }
 
+/** Cheap per-dataset identity fingerprint of every reference `droppedRows`
+ *  reads — the exclusion list, the local filter, and the underlying data —
+ *  for a caller that only needs to know "did this dataset's row-state (or
+ *  its data) change since I last looked", e.g. a `useMemo`/render-gate key,
+ *  without materializing the full dropped-row `Set` on every check. The
+ *  store's immutable-update convention means any of these three actually
+ *  changing always produces a new reference, so comparing this tuple by
+ *  `===` per element never misses a real change. This is the one place
+ *  allowed to read `ds.excludedRows` directly outside the row-state model
+ *  (see architecture.test.ts's #50 guard) — callers get the identity, never
+ *  the raw field. */
+export function rowStateIdentity(ds: Dataset | null | undefined): readonly [unknown, unknown, unknown] {
+  return [ds?.excludedRows, ds?.filter, ds?.data];
+}
+
 /** Every row dropped from analysis: manually-excluded (#50) ∪ filter-failed
  *  (#53). The single "what's out" set — the plot masks by it, analysisData
  *  prunes by it, and consumers realign fits by its complement. */

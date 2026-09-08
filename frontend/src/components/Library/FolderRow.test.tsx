@@ -6,7 +6,7 @@
 // dataTransfer, dispatched via RTL's low-level fireEvent, plus a mocked
 // getBoundingClientRect.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FolderRow from "./FolderRow";
@@ -282,11 +282,12 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     fireEvent.contextMenu(container.querySelector(".qzk-folder-head")!);
   };
 
-  it("offers the bulk ops; 'Select all' replaces the selection without moving the plot", () => {
+  it("offers the bulk ops; 'Select all' replaces the selection without moving the plot", async () => {
     open(fld("grp", null, 0), 2);
     expect(screen.getByText("Export folder as consolidated CSV")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Select all in folder (2)"));
-    expect(useApp.getState().selectedIds).toEqual(["d1", "d2"]);
+    // folderOps resolves through a dynamic import on the click — wait on state.
+    await waitFor(() => expect(useApp.getState().selectedIds).toEqual(["d1", "d2"]));
     expect(useApp.getState().activeId).toBe("d3"); // plot unaffected
   });
 
@@ -295,10 +296,9 @@ describe("FolderRow — bulk-ops context menu (project-organization plan item 8)
     open(fld("grp", null, 0), 2);
     fireEvent.click(screen.getByText("Delete folder + 2 dataset(s)"));
     expect(askConfirm).toHaveBeenCalledOnce();
-    await Promise.resolve(); // flush the askConfirm promise
-    const s = useApp.getState();
-    expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
-    expect(s.folders).toEqual([]);
+    // the askConfirm promise, then folderOps' dynamic import — wait on state.
+    await waitFor(() => expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d3"]));
+    expect(useApp.getState().folders).toEqual([]);
   });
 
   it("declining the confirm leaves the folder and its datasets untouched", async () => {

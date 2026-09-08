@@ -134,7 +134,14 @@ export function docRenderable(doc: FigureDoc, datasetIds: ReadonlySet<string>): 
 // ── User graph templates (#15) — localStorage, like peak recipes ───────────
 const KEY = "qz.graphTemplates";
 
-function isTemplate(v: unknown): v is GraphTemplate {
+/** Exported (P3.5) so `lib/nameKeyedRecipes.ts` can validate an imported file
+ *  with the SAME load-time tolerance `loadGraphTemplates` uses, rather than a
+ *  second hand-rolled shape check that could drift from this one. The
+ *  IMPORT path layers stricter checks on top (name non-empty, `overrides`/
+ *  `seriesStyles` typed when present) — deliberately NOT added here, so a
+ *  pre-#15 stored record missing those fields keeps loading exactly as it
+ *  always has. */
+export function isGraphTemplate(v: unknown): v is GraphTemplate {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return typeof o.name === "string" && typeof o.style === "string";
@@ -145,7 +152,7 @@ export function loadGraphTemplates(): GraphTemplate[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isTemplate) : [];
+    return Array.isArray(parsed) ? parsed.filter(isGraphTemplate) : [];
   } catch {
     return [];
   }

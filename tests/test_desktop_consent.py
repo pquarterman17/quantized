@@ -16,6 +16,7 @@ from quantized.app import app
 from quantized.desktop_consent import (
     clear_consent,
     clear_dir_grants,
+    clear_write_dir_grants,
     consent_count,
     consented_path,
     consented_write_path,
@@ -23,13 +24,17 @@ from quantized.desktop_consent import (
     dir_grant_count,
     grant_paths,
     grant_read_dir,
+    grant_write_dir,
     grant_write_path,
     is_consented,
     is_declared_source,
     is_dir_consented,
     is_write_consented,
+    is_write_dir_consented,
+    revoke_paths,
     set_declared_sources,
     write_consent_count,
+    write_dir_grant_count,
 )
 
 client = TestClient(app)
@@ -453,3 +458,199 @@ def test_clear_consent_also_revokes_directory_grants(tmp_path: Path) -> None:
     grant_read_dir(str(root))
     clear_consent()
     assert dir_grant_count() == 0
+
+
+# -- revoke_paths (P1.7 PR 4) -------------------------------------------
+
+
+def test_revoke_paths_removes_exact_granted_entries(tmp_path: Path) -> None:
+    a = _csv(tmp_path, "a.csv")
+    b = _csv(tmp_path, "b.csv")
+    grant_paths([str(a), str(b)])
+    removed = revoke_paths([str(a)])
+    assert removed == 1
+    assert not is_consented(os.path.realpath(str(a)))
+    assert is_consented(os.path.realpath(str(b)))  # untouched
+
+
+def test_revoke_paths_ignores_paths_never_granted(tmp_path: Path) -> None:
+    a = _csv(tmp_path, "a.csv")
+    never = _csv(tmp_path, "never.csv")
+    grant_paths([str(a)])
+    removed = revoke_paths([str(never)])
+    assert removed == 0
+    assert is_consented(os.path.realpath(str(a)))
+
+
+def test_revoke_paths_resolves_relative_and_traversal_spellings(tmp_path: Path) -> None:
+    a = _csv(tmp_path, "a.csv")
+    grant_paths([str(a)])
+    traversal = str(tmp_path / "sub" / ".." / "a.csv")
+    removed = revoke_paths([traversal])
+    assert removed == 1
+    assert not is_consented(os.path.realpath(str(a)))
+
+
+def test_revoke_paths_never_touches_write_or_dir_grants(tmp_path: Path) -> None:
+    a = _csv(tmp_path, "a.csv")
+    grant_paths([str(a)])
+    grant_write_path(str(a))
+    root = _tree(tmp_path)
+    grant_read_dir(str(root))
+    revoke_paths([str(a)])
+    assert is_write_consented(os.path.realpath(str(a)))  # untouched
+    assert is_dir_consented(str(root))  # untouched
+
+
+# -- write-directory grants (P1.7 PR 4: pack destination folder picker) --
+
+
+def test_grant_write_dir_returns_the_canonical_root(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    granted = grant_write_dir(str(root))
+    assert granted == os.path.realpath(str(root))
+    assert write_dir_grant_count() == 1
+
+
+def test_grant_write_dir_refuses_a_file(tmp_path: Path) -> None:
+    f = _csv(tmp_path)
+    assert grant_write_dir(str(f)) is None
+    assert write_dir_grant_count() == 0
+
+
+def test_grant_write_dir_refuses_a_missing_path(tmp_path: Path) -> None:
+    assert grant_write_dir(str(tmp_path / "does_not_exist")) is None
+    assert write_dir_grant_count() == 0
+
+
+def test_is_write_dir_consented_covers_root_and_descendants(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    grant_write_dir(str(root))
+    assert is_write_dir_consented(str(root))
+    assert is_write_dir_consented(str(root / "sub"))
+    assert is_write_dir_consented(str(root / "sub" / "not_yet_created.csv"))
+
+
+def test_is_write_dir_consented_false_before_any_grant(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    assert not is_write_dir_consented(str(root))
+
+
+def test_is_write_dir_consented_rejects_a_sibling_prefix_trick(tmp_path: Path) -> None:
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    proj2 = tmp_path / "proj2"
+    proj2.mkdir()
+    grant_write_dir(str(proj))
+    assert not is_write_dir_consented(str(proj2))
+
+
+def test_is_write_dir_consented_rejects_traversal_outside_the_root(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    outside = tmp_path / "secret.csv"
+    outside.write_text("x", encoding="utf-8")
+    grant_write_dir(str(root))
+    traversal = str(root / ".." / "secret.csv")
+    assert not is_write_dir_consented(traversal)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink semantics")
+def test_is_write_dir_consented_rejects_a_destination_symlinked_elsewhere(tmp_path: Path) -> None:
+    """P1.7 PR 5 audit item 1: a "Pack Project" destination folder that IS
+    (or contains) a symlink pointing somewhere else entirely must not
+    inherit the grant on the visible path — `is_write_dir_consented`
+    `realpath`-resolves the QUERIED path (same mechanism
+    `test_is_dir_consented_rejects_a_symlink_escape` already proves for the
+    read-only directory grant), so a symlinked destination's REAL target is
+    what actually gets checked, and a target outside the granted root fails
+    it precisely because its resolved form is not actually still under that
+    root."""
+    root = _tree(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    grant_write_dir(str(root))
+
+    # The granted root's NAME itself resolves elsewhere: a symlink chosen
+    # by the destination picker whose live target is a completely
+    # different directory than the one that was actually granted.
+    link = tmp_path / "picked_destination"
+    link.symlink_to(outside)
+    assert not is_write_dir_consented(str(link))
+    assert not is_write_dir_consented(str(link / "myproj"))
+
+    # A symlink planted INSIDE the granted root that points OUTSIDE it must
+    # not inherit the grant either.
+    escape = root / "escape"
+    escape.symlink_to(outside)
+    assert not is_write_dir_consented(str(escape))
+    assert not is_write_dir_consented(str(escape / "myproj"))
+
+    # The real granted root itself is unaffected by either symlink above.
+    assert is_write_dir_consented(str(root))
+
+
+def test_write_dir_grant_never_satisfies_a_read_or_write_file_check(tmp_path: Path) -> None:
+    """The core P1.7 PR 4 ruling: a write-directory grant answers ONE
+    question only — never a read or write check for a file under it."""
+    root = _tree(tmp_path)
+    grant_write_dir(str(root))
+    candidate = str(root / "sub" / "run1.csv")
+    resolved = os.path.realpath(candidate)
+    assert is_write_dir_consented(resolved)
+    assert not is_consented(resolved)
+    assert not is_write_consented(resolved)
+    assert consented_path(resolved) is None
+    assert consented_write_path(resolved) is None
+
+
+def test_write_dir_grant_is_independent_of_the_read_only_directory_grant(tmp_path: Path) -> None:
+    """A write-dir grant must not satisfy `is_dir_consented`, and a
+    read-only dir grant must not satisfy `is_write_dir_consented` — the two
+    are orthogonal stores even when granted on the SAME root."""
+    root = _tree(tmp_path)
+    grant_write_dir(str(root))
+    assert not is_dir_consented(str(root))
+    clear_write_dir_grants()
+    grant_read_dir(str(root))
+    assert not is_write_dir_consented(str(root))
+
+
+def test_write_dir_grant_is_bounded(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_WRITE_DIR_ENTRIES
+
+    for i in range(_MAX_WRITE_DIR_ENTRIES + 5):
+        d = tmp_path / f"d{i}"
+        d.mkdir()
+        grant_write_dir(str(d))
+    assert write_dir_grant_count() == _MAX_WRITE_DIR_ENTRIES
+
+
+def test_oldest_write_dir_grant_is_evicted_first(tmp_path: Path) -> None:
+    from quantized.desktop_consent import _MAX_WRITE_DIR_ENTRIES
+
+    first = tmp_path / "first"
+    first.mkdir()
+    grant_write_dir(str(first))
+    for i in range(_MAX_WRITE_DIR_ENTRIES):
+        d = tmp_path / f"d{i}"
+        d.mkdir()
+        grant_write_dir(str(d))
+    assert not is_write_dir_consented(str(first))
+
+
+def test_clear_write_dir_grants_revokes_only_write_dir_grants(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    f = _csv(tmp_path, "other.csv")
+    grant_write_dir(str(root))
+    grant_paths([str(f)])
+    clear_write_dir_grants()
+    assert write_dir_grant_count() == 0
+    assert not is_write_dir_consented(str(root))
+    assert is_consented(os.path.realpath(str(f)))  # untouched
+
+
+def test_clear_consent_also_revokes_write_dir_grants(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    grant_write_dir(str(root))
+    clear_consent()
+    assert write_dir_grant_count() == 0

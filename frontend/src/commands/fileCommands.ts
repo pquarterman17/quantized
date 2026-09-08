@@ -17,6 +17,7 @@ import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
+  recordNativeOpen,
   replaceConfirmMessage,
   replaceWorkspace,
   replaceWorkspaceSafely,
@@ -26,7 +27,6 @@ import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
-import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
@@ -164,6 +164,17 @@ export function buildFileCommands(s: StoreGet): Action[] {
       run: () => s().saveWorkspaceToFile(),
     },
     {
+      id: "pack-project",
+      group: "File",
+      label: "Pack Project…",
+      description: "Create a portable, self-contained copy of the open project and its source files.",
+      keywords: "pack project portable bundle copy sources",
+      // Body lives in lazily-imported commands/packProjectCommands.ts (that
+      // module's own doc comment) — keeps the desktop-shell check,
+      // usePackProjectPanel, and store/packProject.ts off the eager bundle.
+      run: () => import("./packProjectCommands").then((m) => m.runPackProject()),
+    },
+    {
       id: "open-workspace",
       group: "File",
       label: "Open workspace (.dwk)…",
@@ -218,7 +229,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // its own push at its own commit point instead.
       run: openWorkspaceCommand(s, "append", (ws, native) => {
         s().appendWorkspace(ws);
-        if (native) useRecentProjects.getState().pushRecentProject(native.name, native.path);
+        recordNativeOpen(native);
       }),
     },
     {
@@ -350,94 +361,31 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Export Origin (.ogs)…",
       description: "Export data and current plot settings as an Origin script plus accompanying data.",
-      run: () =>
-        exportActive(s, (stem, ds) =>
-          exportOrigin({
-            dataset: ds.data,
-            filename: stem,
-            log_x: s().xScale === "log", // Origin's own axis type is boolean-only
-            log_y: s().yScale === "log",
-            // Current plot state -> an Origin GRAPH, not just the workbook (item 26).
-            graph: {
-              y_keys: s().yKeys,
-              x_key: s().xKey,
-              x_log: s().xScale === "log",
-              y_log: s().yScale === "log",
-              x_lim: s().xLim,
-              y_lim: s().yLim,
-              y2_keys: s().y2Keys ?? [],
-            },
-          }),
-        ),
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
+      // size ratchet — see that file's own doc comment on WHY the api.ts
+      // calls stay imported here, eagerly, and are passed in as arguments
+      // rather than re-imported by the lazy module).
+      run: () => import("./fileCommandsLazy").then((m) => m.runExportOrigin(s, exportOrigin)),
     },
     {
       id: "send-to-origin",
       group: "File",
       label: "Send to Origin (COM)…",
       description: "Send selected datasets directly to a running Origin session on supported Windows systems.",
-      run: async () => {
-        // Selected datasets when a multi-selection exists, else the active one.
-        const all = s().datasets;
-        const sel = all.filter((d) => s().selectedIds.includes(d.id));
-        const targets = sel.length > 0 ? sel : all.filter((d) => d.id === s().activeId);
-        if (targets.length === 0) {
-          s().setStatus("no dataset to send");
-          toast("no dataset to send", "danger");
-          return;
-        }
-        try {
-          const { available } = await originComStatus();
-          if (!available) {
-            const msg =
-              "Origin COM unavailable (needs Windows + QZ_ORIGIN_COM=1 + a running Origin) — use Export Origin (.ogs) instead";
-            s().setStatus(msg);
-            toast(msg, "danger");
-            return;
-          }
-          // #38 deferred edge: a multi-selection can include datasets never
-          // activated/rendered — resolve every target's full data first
-          // (bounded concurrency) rather than silently sending previews.
-          const resolved = await s().resolveDatasets(targets.map((d) => d.id));
-          const r = await sendToOrigin({
-            datasets: resolved.map((d) => ({
-              dataset: d.data,
-              name: d.name.replace(/\.[^.]+$/, ""),
-            })),
-          });
-          const msg = `sent to Origin: ${r.books.join(", ")}`;
-          s().setStatus(msg);
-          toast(msg, "ok");
-        } catch (e: unknown) {
-          const msg = `send failed: ${e instanceof Error ? e.message : "error"}`;
-          s().setStatus(msg);
-          toast(msg, "danger");
-        }
-      },
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
+      // size ratchet — see that file's own doc comment): a Windows-only,
+      // feature-flagged COM path most sessions never touch has no business
+      // sitting in the eager entry chunk.
+      run: () => import("./fileCommandsLazy").then((m) => m.runSendToOrigin(s, originComStatus, sendToOrigin)),
     },
     {
       id: "export-consolidated",
       group: "File",
       label: "Export consolidated CSV…",
       description: "Combine every loaded dataset into one consolidated CSV export.",
-      run: async () => {
-        const all = s().datasets;
-        if (all.length === 0) {
-          s().setStatus("no datasets to consolidate");
-          return;
-        }
-        try {
-          // #38 deferred edge: consolidate touches EVERY loaded dataset,
-          // including ones never activated/rendered — resolve them all
-          // first (bounded concurrency) rather than silently exporting
-          // previews.
-          const resolved = await s().resolveDatasets(all.map((d) => d.id));
-          await exportConsolidated({
-            datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
-          });
-        } catch (e: unknown) {
-          s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
-        }
-      },
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
+      // size ratchet — see that file's own doc comment).
+      run: () => import("./fileCommandsLazy").then((m) => m.runExportConsolidated(s, exportConsolidated)),
     },
     {
       id: "preferences",

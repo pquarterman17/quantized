@@ -38,6 +38,7 @@
 // keep singleton groups. An agreement test (workbooks.test.ts) asserts the
 // two partitions never diverge on the shared (multi-sheet) subset.
 
+import { parseDatasetSource } from "./datasetSource";
 import { originSheetNumber, importStem } from "./grouping";
 import { orderBetween } from "./order";
 import type { Dataset, FolderNode } from "./types";
@@ -306,8 +307,22 @@ export function deriveWorkbooks(
  *  workbook's `folderId` if it names no folder in `folderIds` (the workbook
  *  itself is kept — it just falls back to the Library root, exactly how
  *  `parseFolders` reparents an orphaned folder to root rather than dropping
- *  it). */
-export function sanitizeWorkbooks(v: unknown, folderIds: ReadonlySet<string>): WorkbookNode[] {
+ *  it).
+ *
+ *  `projectDir` (PR 3 review finding #4) is threaded straight to
+ *  `lib/datasetSource.ts`'s `parseDatasetSource` so a workbook's `source` —
+ *  routed through the same `kind: "bundle"` | `kind: "path"` persisted
+ *  shape a dataset's `source` uses (`lib/workspaceSerialize.ts`'s
+ *  `serializeWorkspace`) — resolves identically: only `kind`/`path` are
+ *  kept (`WorkbookNode.source` carries no checksum/mtime/size/packedFrom of
+ *  its own), and an unresolvable bundle entry (no `projectDir`, or a
+ *  non-conforming path) degrades to "no source" exactly like a dataset's
+ *  does, never a guess. */
+export function sanitizeWorkbooks(
+  v: unknown,
+  folderIds: ReadonlySet<string>,
+  projectDir?: string,
+): WorkbookNode[] {
   if (!Array.isArray(v)) return [];
   const out: WorkbookNode[] = [];
   const seen = new Set<string>();
@@ -324,12 +339,8 @@ export function sanitizeWorkbooks(v: unknown, folderIds: ReadonlySet<string>): W
     if (typeof o.order === "number" && Number.isFinite(o.order)) node.order = o.order;
     if (typeof o.importedAt === "string" && o.importedAt) node.importedAt = o.importedAt;
     if (typeof o.originBook === "string" && o.originBook) node.originBook = o.originBook;
-    if (typeof o.source === "object" && o.source !== null) {
-      const s = o.source as Record<string, unknown>;
-      if (s.kind === "path" && typeof s.path === "string" && s.path) {
-        node.source = { kind: "path", path: s.path };
-      }
-    }
+    const parsedSource = parseDatasetSource(o.source, projectDir);
+    if (parsedSource) node.source = { kind: "path", path: parsedSource.path };
     out.push(node);
   }
   return out;

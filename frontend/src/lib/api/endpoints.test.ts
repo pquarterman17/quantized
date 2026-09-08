@@ -34,6 +34,11 @@ interface Found {
   file: string;
   line: number;
   literal: string;
+  /** The code immediately BEFORE the literal's opening quote — the tail of
+   *  the preceding `CONTEXT_LINES` code lines plus this line up to the
+   *  quote — so a caller can tell a request's path argument from a prefix
+   *  test or a body field, across ordinary multi-line formatting. */
+  before: string;
 }
 
 /** Walk `src/`, collecting every non-test `.ts`/`.tsx` file's (path, text). */
@@ -83,20 +88,44 @@ function normalize(literal: string): string {
   return literal.split("?")[0].replace(/\$\{[^}]*\}/g, "*");
 }
 
-function findLiterals(): Found[] {
+/** How many preceding code lines `Found.before` keeps. A formatted request
+ *  puts its path on the line after `fetch(` (one line); three covers a
+ *  wrapped callee chain without turning the check into a whole-file scan. */
+const CONTEXT_LINES = 3;
+
+/** Scan ONE source text (pure — exercised by the planted cases below). */
+function scanSource(file: string, src: string): Found[] {
   const found: Found[] = [];
-  for (const [file, src] of walkSources(SRC_ROOT)) {
-    for (const [line, text] of codeLines(src)) {
-      for (const re of [QUOTED, TEMPLATE]) {
-        re.lastIndex = 0;
-        let m: RegExpExecArray | null;
-        while ((m = re.exec(text)) !== null) {
-          found.push({ file, line, literal: normalize(m[1]) });
-        }
+  const lines = codeLines(src);
+  lines.forEach(([line, text], i) => {
+    const prior = lines
+      .slice(Math.max(0, i - CONTEXT_LINES), i)
+      .map(([, t]) => t)
+      .join("\n");
+    for (const re of [QUOTED, TEMPLATE]) {
+      re.lastIndex = 0;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        found.push({ file, line, literal: normalize(m[1]), before: `${prior}\n${text.slice(0, m.index)}` });
       }
     }
-  }
+  });
   return found;
+}
+
+function findLiterals(): Found[] {
+  return walkSources(SRC_ROOT).flatMap(([file, src]) => scanSource(file, src));
+}
+
+/** Is this literal the PATH argument of a request call? True when the code
+ *  right before its opening quote — whitespace and newlines included — ends
+ *  in `<request fn>(`. A second argument (`fetch(url,\n "/api/..")`), a
+ *  prefix test (`startsWith("/api/..")`) or a body field are all "no". */
+const REQUEST_FNS = ["fetch", "getJSON", "postJSON", "deleteJSON", "postForm", "postBlob", "postDownload", "postApi"];
+// `(<[^>]*>)?` — a typed call like `postJSON<Foo>(` still opens a request.
+const REQUEST_OPEN = new RegExp(String.raw`\b(${REQUEST_FNS.join("|")})(<[^>]*>)?\s*\(\s*$`);
+function isRequestTarget(f: Found): boolean {
+  return REQUEST_OPEN.test(f.before);
 }
 
 /** A literal path segment matches a backend segment if either is a
@@ -125,15 +154,6 @@ const ALLOWLIST: Record<string, string> = {
   // `recommend.endpoint.replace("/api/stats/", "")` — stripping a prefix off
   // a label the backend already returned, for display only.
   "/api/stats/": "display-string prefix strip, not a fetch target",
-  // Ported verbatim from fermiviewer's errlog.ts (shared platform code, per
-  // that file's own header); fermiviewer's backend has a matching route,
-  // quantized's never got one. `downloadBugReport` awaits the fetch, but a
-  // 404 leaves `r.ok` false, so the whole branch no-ops and `server` stays
-  // `null` — silently dropping the server half of every bug report generated
-  // in this app. Genuine dead frontend call, reported to the user rather
-  // than papered over; not fixed here (out of scope for this change, and
-  // adding a backend route is a product decision, not a typing exercise).
-  "/api/debug/report": "dead call: no such backend route exists (see this test's header comment) — reported, not fixed here",
 };
 
 describe("every /api/ literal in src names a real backend path (openapi.json)", () => {
@@ -164,5 +184,55 @@ describe("every /api/ literal in src names a real backend path (openapi.json)", 
     expect(stale, "remove from ALLOWLIST: no longer present in src, or now matches a real backend path").toEqual(
       [],
     );
+  });
+
+  it("no allowlisted literal is a request target", () => {
+    // The allowlist above may only excuse a literal that is genuinely NOT a
+    // fetch target (a prefix test, a display-string strip). If an
+    // allowlisted literal is the path argument of a request call, that's not
+    // an excused non-call — it's a dead fetch (or worse, a live one drifted
+    // from the backend) that must be fixed, not papered over here. Checked on
+    // `Found.before`, not the literal's own line, so ordinary formatting
+    // (`fetch(` on one line, the path on the next) cannot slip past it —
+    // the planted cases below pin both shapes.
+    const offenders = findLiterals()
+      .filter((f) => ALLOWLIST[f.literal])
+      .filter(isRequestTarget)
+      .map((f) => `${f.file}:${f.line}: ${f.literal}`);
+    expect(
+      offenders,
+      "an allowlisted literal is the path argument of a request call — the allowlist may only " +
+        "excuse non-fetch uses (prefix tests, display strings); a dead fetch must be fixed, not listed",
+    ).toEqual([]);
+  });
+});
+
+describe("the request-target matcher (planted cases)", () => {
+  const targets = (src: string): string[] =>
+    scanSource("planted.ts", src).filter(isRequestTarget).map((f) => f.literal);
+  const all = (src: string): string[] => scanSource("planted.ts", src).map((f) => f.literal);
+
+  it("catches a same-line request", () => {
+    expect(targets(`void fetch("/api/rsm/");`)).toEqual(["/api/rsm/"]);
+    expect(targets("const r = await postJSON<Foo>(`/api/rsm/${id}`, body);")).toEqual(["/api/rsm/*"]);
+  });
+
+  it("catches a request formatted across lines", () => {
+    const src = ["void fetch(", '  "/api/rsm/",', ");"].join("\n");
+    expect(all(src)).toEqual(["/api/rsm/"]);
+    expect(targets(src)).toEqual(["/api/rsm/"]);
+    // a comment line between the callee and the path is dropped, not context
+    const commented = ["void postJSON(", "  // the path", '  "/api/rsm/",', "  body,", ");"].join("\n");
+    expect(targets(commented)).toEqual(["/api/rsm/"]);
+  });
+
+  it("does not flag the non-fetch uses the allowlist exists for", () => {
+    expect(targets(`if (path.startsWith("/api/rsm/")) return true;`)).toEqual([]);
+    expect(targets(`label.replace("/api/stats/", "")`)).toEqual([]);
+    // a prefix passed as a BODY field of an unrelated request, same line or next
+    expect(targets(`void postJSON("/api/x", { prefix: "/api/rsm/" });`)).toEqual(["/api/x"]);
+    expect(targets(["void postJSON(", '  "/api/x",', '  { prefix: "/api/rsm/" },', ");"].join("\n"))).toEqual(["/api/x"]);
+    // a second positional argument is not the path
+    expect(targets(["void fetch(", "  url,", '  "/api/rsm/",', ");"].join("\n"))).toEqual([]);
   });
 });

@@ -5,7 +5,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
-import type { Dataset } from "../lib/types";
+import { recomputeFromBase } from "../lib/formulaInputs";
+import type { ComputedColumn, Dataset } from "../lib/types";
 
 const ds = (): Dataset => ({
   id: "d1",
@@ -104,6 +105,107 @@ describe("setCellBlock", () => {
   });
 });
 
+// PERF item (2026-09): setCellValue/setCategoricalCell's incremental
+// recompute fast path (lib/formulaIncremental.ts), exercised through the
+// real store actions rather than the pure function directly.
+function dsWithFormulas(formulas: ComputedColumn[]): Dataset {
+  const base = ds();
+  return { ...base, data: recomputeFromBase(base.data, formulas).data, formulas };
+}
+
+describe("setCellValue — formula recompute (incremental fast path)", () => {
+  it("recomputes a dependent formula column for the edited row only", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A + B" }])],
+      activeId: "d1",
+    });
+    expect(active().data.values[0][2]).toBe(110); // 10 + 100, pre-edit
+    useApp.getState().setCellValue("d1", 0, 0, 500);
+    expect(active().data.values[0][2]).toBe(600); // 500 + 100 — recomputed
+    expect(active().data.values[1][2]).toBe(220); // 20 + 200 — untouched row unaffected
+  });
+
+  it("is ONE undo entry that restores the previous computed value too", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A + B" }])],
+      activeId: "d1",
+    });
+    const beforeData = active().data;
+    useApp.getState().setCellValue("d1", 0, 0, 500);
+    expect(active().data.values[0][2]).toBe(600);
+    useApp.getState().undo();
+    expect(active().data).toEqual(beforeData);
+    expect(active().data.values[0][2]).toBe(110); // computed column restored, not just the base cell
+  });
+
+  it("falls back to a full recompute for an aggregate formula (still correct, just not incremental)", () => {
+    useApp.setState({
+      datasets: [dsWithFormulas([{ name: "C", expr: "A - mean(A)" }])],
+      activeId: "d1",
+    });
+    // mean(A) over [10, 20, 30] = 20, so C = A - 20.
+    useApp.getState().setCellValue("d1", 0, 0, 100);
+    // mean(A) is now (100+20+30)/3 = 50 — every row's C must reflect the NEW
+    // mean, which only a full recompute (not a row-local patch) can do.
+    expect(active().data.values[0][2]).toBeCloseTo(50, 10); // 100 - 50
+    expect(active().data.values[1][2]).toBeCloseTo(-30, 10); // 20 - 50, untouched row RE-evaluated
+  });
+
+  it("touches only the edited row's array (load-invariant: row-local incremental path, not a full recompute)", () => {
+    // formulaEvalCounter was a mutable module global the production hot path
+    // incremented unconditionally; it's gone now (self-review item 3), so
+    // this asserts the SAME load-invariant property a different way: a full
+    // recompute (lib/formula.ts's computeFormulas) rebuilds every row array
+    // fresh (`base.values.map((row) => [...row])`), while the row-local
+    // incremental path (lib/formulaIncremental.ts) only ever replaces the
+    // touched row. An untouched row keeping its exact ARRAY REFERENCE proves
+    // the incremental path ran, without needing a counter at all.
+    const rows = 5000;
+    const time = Array.from({ length: rows }, (_, i) => i);
+    const values = Array.from({ length: rows }, (_, i) => [i, i * 2]);
+    const big: Dataset = {
+      id: "big",
+      name: "big.dat",
+      data: { time, values, labels: ["A", "B"], units: ["", ""], metadata: {} },
+    };
+    const formulas: ComputedColumn[] = [{ name: "C", expr: "A + B" }];
+    useApp.setState({
+      datasets: [{ ...big, data: recomputeFromBase(big.data, formulas).data, formulas }],
+      activeId: "big",
+    });
+    const untouchedRowBefore = active().data.values[0];
+    useApp.getState().setCellValue("big", 2500, 0, 999);
+    expect(active().data.values[0]).toBe(untouchedRowBefore); // same reference — not rebuilt
+    expect(active().data.values[2500][2]).toBeCloseTo(999 + 5000, 10); // the edited row DID recompute
+  });
+});
+
+describe("setCategoricalCell — formula recompute (incremental fast path)", () => {
+  it("recomputes a dependent formula column for the edited row only", () => {
+    const base: Dataset = {
+      id: "d1",
+      name: "grades.dat",
+      data: {
+        time: [0, 1, 2],
+        values: [[0], [1], [2]],
+        labels: ["Grade"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["Pass", "OK", "Fail"] },
+      },
+    };
+    const formulas: ComputedColumn[] = [{ name: "Code", expr: "A * 10" }];
+    useApp.setState({
+      datasets: [{ ...base, data: recomputeFromBase(base.data, formulas).data, formulas }],
+      activeId: "d1",
+    });
+    expect(active().data.values[0][1]).toBe(0);
+    useApp.getState().setCategoricalCell("d1", 0, 0, "Fail"); // code 2
+    expect(active().data.values[0][1]).toBe(20);
+    expect(active().data.values[1][1]).toBe(10); // untouched row unaffected
+  });
+});
+
 // P1.6b item 7: setCellValue/setCellBlock guard categorical cells rather than
 // writing an unvalidated raw code, and a new setCategoricalCell gives the
 // worksheet UI a level-aware entry point (pick-existing / extend-the-table /
@@ -151,6 +253,46 @@ describe("setCellValue — categorical guard (P1.6b)", () => {
     useApp.setState({ datasets: [ds()], activeId: "d1" });
     useApp.getState().setCellValue("d1", 0, 0, 12345);
     expect(active().data.values[0][0]).toBe(12345);
+  });
+});
+
+describe("setCellValue / setCategoricalCell — row-range guard (self-review item 1)", () => {
+  it("setCellValue is a no-op for a negative row (no throw, no history, time.length unchanged)", () => {
+    const historyLenBefore = useApp.getState().history.length;
+    const timeBefore = active().data.time.length;
+    expect(() => useApp.getState().setCellValue("d1", -1, 0, 42)).not.toThrow();
+    expect(useApp.getState().history.length).toBe(historyLenBefore);
+    expect(active().data.time.length).toBe(timeBefore);
+  });
+
+  it("setCellValue is a no-op for a row past the end (no throw, no history, no sparse growth of time)", () => {
+    const historyLenBefore = useApp.getState().history.length;
+    const timeBefore = active().data.time.length;
+    expect(() => useApp.getState().setCellValue("d1", 999, 0, 42)).not.toThrow();
+    expect(useApp.getState().history.length).toBe(historyLenBefore);
+    expect(active().data.time.length).toBe(timeBefore); // NOT grown into a sparse array
+  });
+
+  it("setCellValue out-of-range row also guards the x/time column (col -1)", () => {
+    const historyLenBefore = useApp.getState().history.length;
+    const timeBefore = active().data.time.length;
+    expect(() => useApp.getState().setCellValue("d1", 999, -1, 42)).not.toThrow();
+    expect(useApp.getState().history.length).toBe(historyLenBefore);
+    expect(active().data.time.length).toBe(timeBefore);
+  });
+
+  it("setCategoricalCell is a no-op for a negative row (no throw, no history)", () => {
+    useApp.setState({ datasets: [catDs()], activeId: "d1" });
+    const historyLenBefore = useApp.getState().history.length;
+    expect(() => useApp.getState().setCategoricalCell("d1", -1, 0, "fail")).not.toThrow();
+    expect(useApp.getState().history.length).toBe(historyLenBefore);
+  });
+
+  it("setCategoricalCell is a no-op for a row past the end (no throw, no history)", () => {
+    useApp.setState({ datasets: [catDs()], activeId: "d1" });
+    const historyLenBefore = useApp.getState().history.length;
+    expect(() => useApp.getState().setCategoricalCell("d1", 999, 0, "fail")).not.toThrow();
+    expect(useApp.getState().history.length).toBe(historyLenBefore);
   });
 });
 

@@ -34,16 +34,77 @@ import { serializeComputedColumnsExtras } from "./workspaceComputedColumns";
 import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
+import { deriveBundleRelativePath } from "./bundlePath";
+import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
+
+/** A persisted dataset source entry — `kind: "path"` (today's shape,
+ *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
+ *  `serializeDatasetSource`'s doc for when each is written). */
+type SerializedSource =
+  | { kind: "path"; path: string; checksum?: string; mtime?: number; size?: number; packedFrom?: string }
+  | { kind: "bundle"; path: string; checksum?: string; mtime?: number; size?: number; packedFrom?: string };
+
+/** Write a dataset's (or a workbook's — see the call sites below, PR 3
+ *  review finding #4) `source` — `kind: "bundle"` (bundle-relative,
+ *  portable) when `projectDir` is given AND `source.path` sits directly
+ *  under `<projectDir>/sources/`; `kind: "path"` (absolute, today's shape)
+ *  otherwise. This is what makes a packed project saved BACK to its own
+ *  folder stay portable, while the same project "Saved As" into a
+ *  different folder (or opened with no known directory at all, e.g. after
+ *  an autosave recovery) is written with plain absolute paths to the
+ *  bundle copies — still perfectly valid, just no longer relocatable as a
+ *  unit.
+ *
+ *  PR 3 review finding #1/#2 (design change): the bundle-relative form is
+ *  derived FRESH from the live `source.path` at every save
+ *  (`lib/bundlePath.ts`'s `deriveBundleRelativePath`, an exact,
+ *  case-sensitive `<projectDir>/sources/` prefix compare) rather than
+ *  recalled from a parse-time `bundlePath` field and cross-checked by a
+ *  case-folding path-identity comparison — that old comparison would treat
+ *  `/data/Proj` and `/data/proj` as the same directory on a case-sensitive
+ *  volume and write a bundle reference to a file that does not exist
+ *  there. Deriving fresh means a relink or manual edit that moved
+ *  `source.path` since load is automatically reflected (a path no longer
+ *  under `<projectDir>/sources/` simply stops qualifying) with no separate
+ *  field to go stale. */
+function serializeDatasetSource(source: DatasetSource, projectDir: string | undefined): SerializedSource {
+  const provenance = {
+    ...(source.checksum ? { checksum: source.checksum } : {}),
+    ...(source.mtime !== undefined ? { mtime: source.mtime } : {}),
+    ...(source.size !== undefined ? { size: source.size } : {}),
+    ...(source.packedFrom ? { packedFrom: source.packedFrom } : {}),
+  };
+  if (projectDir !== undefined) {
+    const rel = deriveBundleRelativePath(projectDir, source.path);
+    if (rel !== null) {
+      return { kind: "bundle", path: rel, ...provenance };
+    }
+  }
+  return { kind: "path", path: source.path, ...provenance };
+}
+
+/** A serialized dataset entry — `Dataset` with its `source` field widened to
+ *  `SerializedSource` (the on-disk `kind: "path"` | `kind: "bundle"` union,
+ *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`. */
+type SerializedDataset = Omit<Dataset, "source"> & { source?: SerializedSource };
+
+/** A serialized workbook entry — `WorkbookNode` with its `source` field
+ *  (PR 3 review finding #4) widened the same way `SerializedDataset` widens
+ *  `Dataset.source`, so a workbook's import provenance gets the SAME
+ *  `kind: "bundle"` treatment as its member datasets' sources rather than
+ *  being written verbatim (which would leak an absolute path even for a
+ *  packed project saved back into its own bundle). */
+type SerializedWorkbookNode = Omit<WorkbookNode, "source"> & { source?: SerializedSource };
 
 interface WorkspaceDoc {
   format: string;
   version: number;
   savedAt: string;
-  datasets: Dataset[];
+  datasets: SerializedDataset[];
   folders: FolderNode[];
-  workbooks: WorkbookNode[];
+  workbooks: SerializedWorkbookNode[];
   activeId: string | null;
   selectedIds: string[];
   expandedFolders: string[];
@@ -71,14 +132,30 @@ interface WorkspaceDoc {
   plotRecipes: PlotRecipe[];
 }
 
-/** Serialize the library + folder tree to a pretty-printed .dwk JSON document. */
-export function serializeWorkspace(ws: WorkspaceState): string {
+/** Serialize the library + folder tree to a pretty-printed .dwk JSON
+ *  document.
+ *
+ *  `opts.projectDir` (P1.7 PR 3): the directory this `.dwk` is ABOUT to be
+ *  written into (or is already saved in, for a quick save) — passed only by
+ *  a caller that actually knows one (`store/workspaceIO.ts`'s
+ *  `runSaveWorkspace`/`runSaveWorkspaceToFile`), never by autosave or a
+ *  browser download, which have no durable directory to reason about. See
+ *  `serializeDatasetSource` for the per-source rule this enables. */
+export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: string }): string {
+  const projectDir = opts?.projectDir;
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     version: WORKSPACE_VERSION,
     savedAt: new Date().toISOString(),
     folders: ws.folders ?? [],
-    workbooks: ws.workbooks ?? [],
+    // PR 3 review finding #4: a workbook's `source` (import provenance) is
+    // routed through the SAME `serializeDatasetSource` helper a dataset's
+    // `source` uses — see `SerializedWorkbookNode`'s doc above — rather than
+    // written verbatim, which used to leak an absolute path even when the
+    // project itself is portable.
+    workbooks: (ws.workbooks ?? []).map((w) =>
+      w.source ? { ...w, source: serializeDatasetSource(w.source, projectDir) } : w,
+    ),
     activeId: ws.activeId ?? null,
     selectedIds: ws.selectedIds ?? [],
     expandedFolders: ws.expandedFolders ?? [],
@@ -146,7 +223,7 @@ export function serializeWorkspace(ws: WorkspaceState): string {
       // carry it: the render-side ensureBookData hooks re-fetch it the next
       // time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
-      ...(d.source ? { source: d.source } : {}),
+      ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
       // dropped entirely before (not just narrowed like `source`), so a
       // saved-and-reopened new-version dataset lost its link to the

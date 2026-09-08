@@ -31,6 +31,7 @@ export function stateBadge(state: PathState): { text: string; tone: string } | n
   if (state === "offline") return { text: "offline", tone: "var(--warn, #c80)" };
   if (state === "missing") return { text: "missing", tone: "var(--danger, #d33)" };
   if (state === "invalid") return { text: "bad path", tone: "var(--danger, #d33)" };
+  if (state === "permission_denied") return { text: "no access", tone: "var(--warn, #c80)" };
   return null;
 }
 

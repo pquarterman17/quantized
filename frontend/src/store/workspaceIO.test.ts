@@ -21,12 +21,15 @@ import { UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
+import { useToasts } from "./toasts";
+import { useWorkingPaths } from "./workingPaths";
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
 
 interface FakeApi {
-  save_file_dialog?: (name?: string) => Promise<Record<string, unknown>>;
+  save_file_dialog?: (name?: string, directory?: string) => Promise<Record<string, unknown>>;
   write_project_file?: (path: string, content: string, lockToken?: string) => Promise<Record<string, unknown>>;
+  path_status?: (path: string) => Promise<Record<string, unknown>>;
 }
 
 function setShell(api: FakeApi | null): void {
@@ -91,7 +94,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   setShell(null);
   localStorage.clear();
+  useWorkingPaths.setState({ paths: [], current: "" });
   useRecentProjects.setState({ recentProjects: [] });
+  useToasts.setState({ toasts: [] });
   useProjectLock.setState({
     status: "unlocked",
     record: null,
@@ -109,6 +114,26 @@ beforeEach(() => {
   });
 });
 
+// P1.7 PR 3 (Pack Project, frontend half): a dataset loaded from a packed
+// project keeps a plain absolute `source.path` — the serializer decides
+// per-save (PR 3 review finding #1/#2: derived FRESH from `source.path`,
+// never a recalled parse-time field) whether that path sits directly under
+// the SAME directory's own `sources/` folder and so round-trips back to
+// `kind: "bundle"`, or falls back to an absolute `kind: "path"` (saved
+// elsewhere, or with no known directory at all — the browser-download
+// fallback).
+const PACKED_DATASET = {
+  id: "a",
+  name: "a.dat",
+  data,
+  source: { kind: "path" as const, path: "/proj/sources/run1.csv" },
+};
+
+function sourceFromWriteCall(write: ReturnType<typeof vi.fn>): unknown {
+  const content = write.mock.calls[0][1] as string;
+  return (JSON.parse(content) as { datasets: { source?: unknown }[] }).datasets[0].source;
+}
+
 describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
   it("downloads a blob, byte-identical to the pre-P1.1 behavior", async () => {
     await useApp.getState().saveWorkspaceToFile();
@@ -118,6 +143,17 @@ describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
     expect(blob.type).toBe("application/json");
   });
 
+  // P1.7 PR 3: a browser download has no known directory at all — a
+  // bundle-sourced dataset falls back to its absolute path, unchanged.
+  it("writes an absolute kind:path source for a bundle-sourced dataset (no projectDir to round-trip against)", async () => {
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    await useApp.getState().saveWorkspaceToFile();
+    const [blob] = vi.mocked(saveBlob).mock.calls[0];
+    const content = await blob.text();
+    const source = (JSON.parse(content) as { datasets: { source?: unknown }[] }).datasets[0].source;
+    expect(source).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
   it("records no Recent Projects entry (no path was ever knowable)", async () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
@@ -125,6 +161,31 @@ describe("saveWorkspaceToFile — browser (no desktop shell)", () => {
 });
 
 describe("saveWorkspaceToFile — desktop shell", () => {
+  // P1.7 PR 3: Save As onto a DIFFERENT directory than the one the bundle
+  // source was resolved against writes an absolute kind:path — still a
+  // valid, working save, just no longer relocatable as a portable bundle.
+  it("Save As into a different directory writes an absolute kind:path for a bundle-sourced dataset", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/other/workspace.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/other/workspace.dwk" }), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
+  // Saving BACK into the very directory the bundle source was resolved
+  // against is what earns the portable kind:bundle shape.
+  it("Save As back into the bundle's own directory writes kind:bundle", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: async () => ({ path: "/proj/workspace.dwk" }), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
   it("saves natively and never touches the browser download", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
     setShell({
@@ -134,6 +195,47 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     await useApp.getState().saveWorkspaceToFile();
     expect(write).toHaveBeenCalledWith("/proj/workspace.dwk", expect.any(String), expect.any(String));
     expect(saveBlob).not.toHaveBeenCalled();
+  });
+
+  // P1.1: "working-directory selection affects the next chooser" — Save As
+  // opens where the user works and suggests the open project's own name.
+  it("with a project open, opens the save dialog NEXT TO it with its own name — never in the last import folder", async () => {
+    // Self-review: seeding at the import folder with the project's name
+    // pre-filled made a same-named fork one Enter away, and that fork then
+    // became currentProject for every later quick save.
+    const dialog = vi.fn(async () => ({ path: "/proj/run3.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/run3.dwk" }) });
+    useWorkingPaths.getState().use("/data/runs");
+    useApp.getState().setCurrentProject({ name: "run3.dwk", path: "/proj/run3.dwk" });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("run3.dwk", "/proj");
+  });
+
+  it("with no project open, opens the save dialog at the current working path", async () => {
+    const dialog = vi.fn(async () => ({ path: "/data/runs/workspace.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/data/runs/workspace.dwk" }) });
+    useWorkingPaths.getState().use("/data/runs");
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "/data/runs");
+  });
+
+  it("suggests workspace.dwk and no directory when nothing is known yet", async () => {
+    const dialog = vi.fn(async () => ({ path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: dialog, write_project_file: async () => ({ ok: true, path: "/proj/workspace.dwk" }) });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(dialog).toHaveBeenCalledWith("workspace.dwk", "");
+  });
+
+  it("remembers the folder actually saved into; a cancel remembers nothing", async () => {
+    setShell({
+      save_file_dialog: async () => ({ path: "/proj/deep/workspace.dwk" }),
+      write_project_file: async () => ({ ok: true, path: "/proj/deep/workspace.dwk" }),
+    });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(useWorkingPaths.getState().current).toBe("/proj/deep");
+    setShell({ save_file_dialog: async () => ({ path: null }), write_project_file: async () => ({ ok: true }) });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(useWorkingPaths.getState().current).toBe("/proj/deep");
   });
 
   it("records a Recent Projects entry on a successful native save", async () => {
@@ -211,6 +313,87 @@ describe("saveWorkspaceToFile — desktop shell", () => {
     expect(saveBlob).not.toHaveBeenCalled(); // a refusal, not a failure — no surprise download either
     expect(useApp.getState().status).toMatch(/refused|another instance/i);
     expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  // P1.2 box 4 (frontend fast pre-check — the backend, desktop_bridge.py's
+  // `save_file_dialog`/`write_project_file`, is what actually enforces
+  // this via `desktop_consent.is_declared_source`; see
+  // tests/test_desktop_bridge.py). Picking a project's own raw data source
+  // as the Save As destination must never write, never fall back to a
+  // browser download, and must name the affected dataset.
+  it("refuses to save onto a live dataset's own source path", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/data/raw.csv" }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/data/raw.csv" }),
+      write_project_file: write,
+    });
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.dat", data, source: { kind: "path", path: "/data/raw.csv" } }],
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("a.dat");
+    expect(useApp.getState().status).toMatch(/refused/);
+    const toasts = useToasts.getState().toasts;
+    expect(toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(toasts.at(-1)?.msg).toContain("a.dat");
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  it("surfaces the bridge's OWN declared-source refusal as a status — never a silent cancel, never a download", async () => {
+    // The backend half of P1.2 box 4: `save_file_dialog` refuses a pick that
+    // is the OPEN project's declared raw source and returns `{path: null,
+    // error}`. Before this, every `path: null` read as "the user cancelled",
+    // so the refusal produced no message at all — the user picked their raw
+    // file, nothing happened, and nothing said why.
+    const write = vi.fn(async () => ({ ok: true, path: "/data/raw.csv" }));
+    setShell({
+      save_file_dialog: async () => ({
+        path: null,
+        error: "refusing to save — that path is a data source of the open project",
+      }),
+      write_project_file: write,
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe(
+      "save refused — that path is a data source of the open project",
+    );
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+  });
+
+  it("a WRITE-time declared-source refusal is a refusal too — no download, no OK toast, the new lock released (self-review on #291)", async () => {
+    // The payload-derived check in desktop_bridge.py's `write_project_file`
+    // fires when the destination is a source under a spelling neither the
+    // frontend pre-check (exact string) nor the dialog's cached set knew.
+    // Before this, `saveProjectTo` mapped that onto `null`, and Save As
+    // fell through to a browser download announced with an OK toast.
+    const write = vi.fn(async () => ({
+      ok: false,
+      error: "refusing to write — that path is a data source of this workspace",
+    }));
+    setShell({
+      save_file_dialog: async () => ({ path: "/data/sub/../raw.csv" }),
+      write_project_file: write,
+    });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("save refused — that path is a data source of this workspace");
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(useApp.getState().currentProject).toBeNull();
+    expect(useRecentProjects.getState().recentProjects).toHaveLength(0);
+    const provider = useProjectLock.getState().provider as ReturnType<typeof freshLockProvider>;
+    expect(provider.store.has("/data/sub/../raw.csv")).toBe(false); // the just-acquired lock was released
   });
 
   it("Save As onto a DIFFERENT, unheld destination still works normally", async () => {
@@ -332,6 +515,69 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     expect(saveBlob).not.toHaveBeenCalled();
   });
 
+  // P1.7 PR 3: a quick save's destination IS the current project's known
+  // directory — a dataset whose bundle source was resolved against that
+  // same directory writes back as the portable kind:bundle shape.
+  it("writes kind:bundle to the bridge for a packed project quick-saved back into its own directory", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "bundle", path: "sources/run1.csv" });
+  });
+
+  // PR 3 review finding #3: a current project path with NO directory
+  // separator (e.g. a bare "workspace.dwk", `parentDirectory`'s own "no
+  // directory" sentinel) must never be treated as a known projectDir —
+  // writes absolute, never attempts a bundle derivation against a bogus
+  // root-anchored prefix.
+  it("writes an absolute kind:path when the current project path has no directory separator", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "workspace.dwk" }));
+    setShell({ save_file_dialog: vi.fn(), write_project_file: write });
+    useApp.setState({ datasets: [PACKED_DATASET] });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "workspace.dwk" });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(sourceFromWriteCall(write)).toEqual({ kind: "path", path: "/proj/sources/run1.csv" });
+  });
+
+  // P1.1: an unmounted share is OFFLINE, not a write target — never write
+  // through an absent mount point, never nudge the user into forking the
+  // project via Save As for a drive that will be back.
+  it("refuses to write to a project whose volume is offline, says so, and keeps the project dirty", async () => {
+    const write = vi.fn(async () => ({ ok: true }));
+    setShell({
+      save_file_dialog: vi.fn(),
+      write_project_file: write,
+      path_status: async () => ({ state: "offline", path: "/mnt/share/workspace.dwk" }),
+    });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/mnt/share/workspace.dwk" });
+    useApp.getState().markProjectDirty();
+
+    await useApp.getState().saveWorkspace();
+
+    expect(write).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().projectDirty).toBe(true);
+    expect(useToasts.getState().toasts.some((t) => /not available right now/.test(t.msg))).toBe(true);
+  });
+
+  it("still writes when the file is merely missing on a live volume (the write recreates it)", async () => {
+    const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));
+    setShell({
+      save_file_dialog: vi.fn(),
+      write_project_file: write,
+      path_status: async () => ({ state: "missing", path: "/proj/workspace.dwk" }),
+    });
+    useApp.getState().setCurrentProject({ name: "workspace.dwk", path: "/proj/workspace.dwk" });
+    await useApp.getState().saveWorkspace();
+    expect(write).toHaveBeenCalledOnce();
+  });
+
   it("clears the dirty flag on a successful quick save", async () => {
     setShell({
       save_file_dialog: vi.fn(),
@@ -397,6 +643,24 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
 // gates directly against the lock's last-known status for that exact path.
 // Save As always goes through a NEW native dialog (a deliberate destination
 // pick) and is left ungated — see store/workspaceIO.ts's comment.
+describe("saveWorkspace — a write-time declared-source refusal is reported as one (self-review on #291)", () => {
+  it("says the backend's reason, leaves the project dirty, never downloads", async () => {
+    setShell({
+      write_project_file: async () => ({
+        ok: false,
+        error: "refusing to write — that path is a data source of this workspace",
+      }),
+    });
+    useApp.setState({ currentProject: { name: "workspace.dwk", path: "/proj/workspace.dwk" } });
+
+    await useApp.getState().saveWorkspace();
+
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("save refused — that path is a data source of this workspace");
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+  });
+});
+
 describe("saveWorkspace — refuses when this instance does not hold the write lock (PR I2)", () => {
   it("refuses and leaves the project dirty when the lock is held read-only for this exact path", async () => {
     const write = vi.fn(async () => ({ ok: true, path: "/proj/workspace.dwk" }));

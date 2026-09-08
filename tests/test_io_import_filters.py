@@ -8,6 +8,7 @@ so this suite never reads or writes the real user config directory.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ from quantized.io.import_filters import (
     match_filter,
     save_filter,
 )
-from quantized.io.import_preview import ImportSettings
+from quantized.io.import_preview import ErrorBinding, ImportSettings
 from quantized.io.registry import _EXT_MAP, import_auto, resolve_parser
 
 _MESSY_WEIRD = "\n".join([
@@ -87,6 +88,64 @@ def test_save_upserts_by_name() -> None:
 def test_save_empty_name_raises() -> None:
     with pytest.raises(ValueError, match="name"):
         save_filter(ImportFilter(name="   ", glob="*.dat", settings=_settings()))
+
+
+def test_error_bindings_roundtrip_through_a_saved_filter_on_disk() -> None:
+    """P1.6 item 5: `ImportSettings.error_bindings` must survive a real
+    save_filter -> load_filters round trip through the on-disk JSON file,
+    not just `to_dict`/`from_dict` in memory."""
+    settings = _settings(
+        roles=["x", "y", "error"],
+        column_names=["Temp", "Moment", "dMoment"],
+        error_bindings=[ErrorBinding(column=2, target=1, axis="y", side="both")],
+    )
+    save_filter(ImportFilter(name="WithErr", glob="*.err", settings=settings))
+    loaded = load_filters()
+    assert len(loaded) == 1
+    assert loaded[0].settings.error_bindings == [
+        ErrorBinding(column=2, target=1, axis="y", side="both")
+    ]
+    assert loaded[0].settings == settings
+
+
+def test_allow_large_categorical_is_stripped_when_a_filter_is_saved() -> None:
+    """PR #315 review finding #2: `allow_large_categorical` is a ONE-TIME
+    "yes, that column is right" decision about ONE file the user was looking
+    at -- never a policy. Persisting it made
+    `registry._import_via_saved_filter` parse EVERY future glob match with the
+    level-cap refusal lifted: headless, no wizard, no warning, and no way to
+    clear it short of hand-editing `import_filters.json`. A one-time override
+    becoming a permanent silent policy is worse than the original absolute
+    refusal, so it is dropped on the way to disk and each new file re-asks."""
+    settings = _settings(
+        roles=["x", "categorical"],
+        column_names=["Idx", "Sample"],
+        allow_large_categorical=[1],
+    )
+    saved = save_filter(ImportFilter(name="ManyLevels", glob="*.ids", settings=settings))
+    assert saved.settings.allow_large_categorical == []
+
+    loaded = load_filters()
+    assert len(loaded) == 1
+    assert loaded[0].settings.allow_large_categorical == []
+
+    # ...and it is absent from the on-disk JSON's effect, not merely from the
+    # in-memory object handed back.
+    raw = json.loads((config_dir() / "import_filters.json").read_text())
+    assert raw[0]["settings"]["allow_large_categorical"] == []
+
+
+def test_stripping_the_override_leaves_every_other_setting_intact() -> None:
+    """Only the one-time override is dropped -- everything else in `settings`
+    describes the file's SHAPE, which is exactly what a filter is for."""
+    settings = _settings(
+        roles=["x", "categorical"],
+        column_names=["Idx", "Sample"],
+        allow_large_categorical=[1],
+    )
+    save_filter(ImportFilter(name="ManyLevels", glob="*.ids", settings=settings))
+    got = load_filters()[0].settings
+    assert got == replace(settings, allow_large_categorical=[])
 
 
 def test_delete_filter() -> None:

@@ -40,7 +40,11 @@ GPL_PACKAGES = {"rosettasciio", "rsciio", "hyperspy", "exspy", "holospy", "libor
 MAX_MODULE_LINES = 500
 # plugins/ is pure too: the plugin machinery (discovery, contract, registration)
 # must never reach the web stack — plugins register through io/calc, not routes.
-PURE_LAYERS = ("io", "calc", "plugins")
+# portable/ (P1.7 "Pack Project" PR 1) is pure for the same reason: the bundle
+# contract + dry-run manifest builder take a payload dict and a probe callback
+# in, return a dict out — a future bridge method is the only thing allowed to
+# touch pywebview/fastapi.
+PURE_LAYERS = ("io", "calc", "plugins", "portable")
 FORBIDDEN_IN_PURE = ("fastapi", "pydantic", "quantized.routes", "starlette")
 
 

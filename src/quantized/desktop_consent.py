@@ -60,6 +60,55 @@ per-EXACT-file; this is the one deliberate exception, and it stays narrow:
     and app exit (``server_launch._run_desktop``'s window-closed cleanup)
     all call ``clear_dir_grants``. ``clear_consent`` (the existing
     clear-everything primitive) clears it too.
+
+P1.7 "Pack Project" PR 4 adds a FOURTH grant kind: a WRITE-DIRECTORY grant
+(``grant_write_dir`` / ``is_write_dir_consented``), separate from every
+other kind above (in particular from the existing per-file
+``grant_write_path`` / ``is_write_consented`` write grant, and from the
+READ-only directory grant just above). It exists for exactly one gesture —
+``desktop_bridge_pack.DesktopPackBridge.pick_pack_destination``'s native
+folder dialog, the "choose where the bundle gets created" pick — and is
+narrow the same way:
+
+  * Minted ONLY from that picker's return (an existing real directory,
+    same "a directory or an unreadable entry grants nothing, only a
+    directory is accepted" rule ``grant_read_dir`` already follows), never
+    from a typed/pasted path, capped at 8 entries (one pack session picks
+    at most a handful of candidate destinations by hand, never hundreds).
+  * Segment-aware containment identical to ``is_dir_consented`` above (the
+    same ``_is_within`` helper, ``realpath``-resolved on both sides) — a
+    sibling that merely shares a text prefix, a ``..`` traversal, or a
+    symlink resolving outside the granted root all fail it.
+  * **A write-directory grant NEVER satisfies a file read or write check.**
+    ``is_write_dir_consented`` answers ONE question only — "may a NEW
+    bundle directory be created somewhere under this root" — and is never
+    consulted by ``is_consented``/``is_write_consented``/``is_dir_consented``
+    or vice versa. This is deliberately a fourth, orthogonal store, not a
+    variant of the existing per-file write grant: picking a pack
+    destination must never quietly authorize overwriting an unrelated file
+    under it, and an existing per-file write grant must never quietly
+    authorize creating a whole new bundle tree.
+  * Revoked when the pack operation it was minted for ENDS — success,
+    failure, or cancellation, every outcome (``desktop_bridge_pack.py``'s
+    ``pack_start`` thread body always calls ``clear_write_dir_grants`` in
+    its ``finally``, regardless of outcome). A destination picked but never
+    actually started (the user backs out before ``pack_start``) is never
+    left accumulating either: ``pick_pack_destination`` itself clears
+    every existing write-dir grant before minting its new one, so at most
+    ONE is ever live for a not-yet-started pack — the full "revoked on
+    panel close" story (an explicit close-triggered revoke, mirroring
+    ``revoke_relink_dir``) is left to the panel PR that actually builds the
+    close gesture this bridge-only slice has none of yet.
+    ``clear_write_dir_grants`` is the explicit revoke; ``clear_consent``
+    clears it too.
+
+This same PR adds ``revoke_paths(paths)``, which removes SPECIFIC entries
+from the ordinary per-file READ grant store (``_granted``) by their exact
+resolved key — used to unwind exactly the read grants a pack operation
+itself minted for otherwise-ungranted-but-eligible sources (see
+``desktop_bridge_pack.py``'s module doc) once that operation ends, without
+disturbing any read grant that existed before it started or was minted by
+something else entirely.
 """
 
 from __future__ import annotations
@@ -71,6 +120,7 @@ from collections.abc import Iterable
 __all__ = [
     "clear_consent",
     "clear_dir_grants",
+    "clear_write_dir_grants",
     "consent_count",
     "consented_path",
     "consented_write_path",
@@ -78,13 +128,18 @@ __all__ = [
     "dir_grant_count",
     "grant_paths",
     "grant_read_dir",
+    "grant_write_dir",
     "grant_write_path",
     "is_consented",
     "is_declared_source",
     "is_dir_consented",
     "is_write_consented",
+    "is_write_dir_consented",
+    "normalize_path",
+    "revoke_paths",
     "set_declared_sources",
     "write_consent_count",
+    "write_dir_grant_count",
 ]
 
 # Bounded so a very long session cannot grow this without limit. Comfortably
@@ -111,7 +166,7 @@ _granted: OrderedDict[str, str] = OrderedDict()
 _write_granted: OrderedDict[str, str] = OrderedDict()
 
 
-def _normalize(path: str) -> str | None:
+def normalize_path(path: str) -> str | None:
     """Resolve to the same form the import guard compares against.
 
     Both sides must agree, or consent silently never matches: ``/import``
@@ -130,7 +185,7 @@ def grant_paths(paths: Iterable[str]) -> list[str]:
     exact string the guard will later recognize."""
     accepted: list[str] = []
     for raw in paths:
-        resolved = _normalize(raw)
+        resolved = normalize_path(raw)
         if resolved is None or not os.path.isfile(resolved):
             continue  # a directory or an unreadable entry grants nothing
         _granted.pop(resolved, None)  # re-picking refreshes recency
@@ -167,6 +222,27 @@ def consent_count() -> int:
     return len(_granted)
 
 
+def revoke_paths(paths: Iterable[str]) -> int:
+    """Remove specific entries from the READ grant store (``_granted``) by
+    their EXACT resolved key — the inverse of ``grant_paths``, for a caller
+    that must unwind precisely the grants IT minted without disturbing
+    anything else live in the same process (P1.7 "Pack Project" PR 4: a
+    pack operation grants read consent for whichever eligible sources
+    lacked it, then must revoke exactly those once the operation ends,
+    never a read grant that already existed before it started or that
+    belongs to an unrelated caller).
+
+    ``paths`` need not already be normalized — each is resolved the same
+    way ``grant_paths`` resolves its input — and a path this store never
+    held is silently ignored. Returns the number actually removed."""
+    removed = 0
+    for raw in paths:
+        resolved = normalize_path(raw)
+        if resolved is not None and _granted.pop(resolved, None) is not None:
+            removed += 1
+    return removed
+
+
 # -- write consent (P1.1: native Save / Save As project dialogs) ------------
 
 
@@ -176,7 +252,7 @@ def grant_write_path(path: str) -> str | None:
     As destination is normally new. Returns the normalized path (what the
     frontend should send back on the write call), or `None` when the path
     cannot even be resolved."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None:
         return None
     _write_granted.pop(resolved, None)  # re-picking refreshes recency
@@ -238,7 +314,7 @@ def set_declared_sources(paths: Iterable[str]) -> None:
     `_read_granted`, never from an HTTP route or a frontend-settable js_api
     — see this section's module doc for the full ruling."""
     global _declared_sources
-    _declared_sources = {r for p in paths if (r := _normalize(p)) is not None}
+    _declared_sources = {r for p in paths if (r := normalize_path(p)) is not None}
 
 
 def is_declared_source(resolved_path: str) -> bool:
@@ -272,7 +348,7 @@ def grant_read_dir(path: str) -> str | None:
     an actual directory — mirroring `grant_paths`' "a directory or an
     unreadable entry grants nothing" rule in the opposite direction (there,
     a directory is refused; here, only a directory is accepted)."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None or not os.path.isdir(resolved):
         return None
     _dir_granted.pop(resolved, None)  # re-picking refreshes recency
@@ -307,7 +383,7 @@ def is_dir_consented(path: str) -> bool:
     fail it, because neither one's resolved form is actually still under
     the root. Never true for a path that merely shares the root's text
     prefix (see `_is_within`)."""
-    resolved = _normalize(path)
+    resolved = normalize_path(path)
     if resolved is None:
         return False
     return any(_is_within(root, resolved) for root in _dir_granted)
@@ -326,10 +402,72 @@ def clear_dir_grants() -> None:
 
 
 def clear_consent() -> None:
-    """Drop every grant — read, write, AND directory — AND the declared-
-    source set. Used by tests, and available for a future "forget picked
-    files" action."""
+    """Drop every grant — read, write, directory, AND write-directory —
+    AND the declared-source set. Used by tests, and available for a future
+    "forget picked files" action."""
     _granted.clear()
     _write_granted.clear()
     _declared_sources.clear()
     _dir_granted.clear()
+    _write_dir_granted.clear()
+
+
+# -- write-directory grants (P1.7 PR 4: pack destination folder picker) -----
+#
+# See the module doc's "P1.7 'Pack Project' PR 4" section for the full
+# ruling. A FOURTH, orthogonal grant kind — never interchangeable with the
+# read-only directory grant above (that one permits READING descendants of
+# a relink candidate root; this one permits CREATING a bundle directory
+# under a pack destination root — neither answers the other's question) nor
+# with the per-file write grant (that one names one exact file about to be
+# overwritten; this one names a root a brand-new subdirectory tree will be
+# created under). Bounded the same shape as the read-only directory store,
+# smaller still: one pack session picks at most a handful of candidate
+# destinations by hand.
+_MAX_WRITE_DIR_ENTRIES = 8
+
+# Canonical realpath root -> that same string, insertion-ordered (oldest
+# evicted first) -- same shape as `_dir_granted` above.
+_write_dir_granted: OrderedDict[str, str] = OrderedDict()
+
+
+def grant_write_dir(path: str) -> str | None:
+    """Record a directory root the user just chose in a NATIVE FOLDER
+    dialog as a "Pack Project" destination — the bundle will be created
+    INSIDE it. Returns the canonicalized root, or `None` when `path` cannot
+    be resolved or is not an actual existing directory (mirrors
+    `grant_read_dir`'s "only a directory is accepted" rule)."""
+    resolved = normalize_path(path)
+    if resolved is None or not os.path.isdir(resolved):
+        return None
+    _write_dir_granted.pop(resolved, None)  # re-picking refreshes recency
+    _write_dir_granted[resolved] = resolved
+    while len(_write_dir_granted) > _MAX_WRITE_DIR_ENTRIES:
+        _write_dir_granted.popitem(last=False)
+    return resolved
+
+
+def is_write_dir_consented(path: str) -> bool:
+    """True when `path` resolves to a granted write-directory root itself
+    or a canonical descendant of one — segment-aware containment, same
+    `_is_within` helper and the same `..`/symlink-resolving-before-check
+    discipline as `is_dir_consented`. **Never satisfies a file read or
+    write check** (see the module doc) — this is the ONE question this
+    store answers."""
+    resolved = normalize_path(path)
+    if resolved is None:
+        return False
+    return any(_is_within(root, resolved) for root in _write_dir_granted)
+
+
+def write_dir_grant_count() -> int:
+    return len(_write_dir_granted)
+
+
+def clear_write_dir_grants() -> None:
+    """Revoke every write-directory grant — narrower than `clear_consent`
+    (every other grant kind is untouched). Called when a pack operation
+    ends (any outcome — success, failure, or cancellation) and when the
+    pack panel closes, mirroring `clear_dir_grants`'s revocation points for
+    the read-only directory grant. Idempotent."""
+    _write_dir_granted.clear()

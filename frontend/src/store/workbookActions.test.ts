@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
+import type { DatasetTrashEntry } from "./trash";
 import { workbookDeleteBlockers } from "./workbookActions";
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView } from "../lib/plotview";
@@ -131,7 +132,7 @@ describe("workbookActions slice", () => {
       const s = useApp.getState();
       expect(s.workbooks.map((w) => w.id)).toEqual(["w2"]);
       expect(s.datasets.map((d) => d.id)).toEqual(["d3"]);
-      expect(s.trash.map((e) => e.dataset.id).sort()).toEqual(["d1", "d2"]);
+      expect((s.trash as DatasetTrashEntry[]).map((e) => e.dataset.id).sort()).toEqual(["d1", "d2"]);
       expect(s.history).toHaveLength(1);
     });
 
@@ -189,10 +190,10 @@ describe("workbookActions slice", () => {
       expect(s.history).toHaveLength(0);
     });
 
-    it("ordinary standalone worksheet delete -> Trash -> restore stays green (unchanged path)", () => {
+    it("ordinary standalone worksheet delete -> Trash -> restore stays green (unchanged path)", async () => {
       useApp.getState().removeDatasets(["d3"]);
-      expect(useApp.getState().trash.map((e) => e.dataset.id)).toEqual(["d3"]);
-      useApp.getState().restoreFromTrash("d3");
+      expect((useApp.getState().trash as DatasetTrashEntry[]).map((e) => e.dataset.id)).toEqual(["d3"]);
+      await useApp.getState().restoreFromTrash("dataset:d3");
       expect(useApp.getState().datasets.some((d) => d.id === "d3")).toBe(true);
       expect(useApp.getState().trash).toHaveLength(0);
     });

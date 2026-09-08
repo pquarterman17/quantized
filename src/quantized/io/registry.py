@@ -18,7 +18,6 @@ from quantized.datastruct import DataStruct
 from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.delimited import import_csv
-from quantized.io.excel import import_excel
 from quantized.io.import_filters import match_filter
 from quantized.io.import_preview import parse_import
 from quantized.io.jcamp import import_jcamp
@@ -78,6 +77,24 @@ def _accept_any(_path: Path) -> bool:
     return True
 
 
+def _import_excel_lazy(path: Path) -> DataStruct:
+    """Deferred ``import_excel`` — ``openpyxl`` (~0.2 s import, measured) loads only when
+    an ``.xlsx``/``.xlsm`` file is actually parsed, not at registry import time
+    (which runs at every app startup)."""
+    from quantized.io.excel import import_excel
+
+    return import_excel(path)
+
+
+# Name-keyed consumers (the parser matrix test's ids, technique.stamp_technique's
+# fallback) key off Parser.__name__ — copy import_excel's identity onto the lazy
+# wrapper (functools.wraps would require importing quantized.io.excel eagerly,
+# defeating the deferral) so the wrapper is transparent to them.
+_import_excel_lazy.__name__ = "import_excel"
+_import_excel_lazy.__qualname__ = "import_excel"
+_import_excel_lazy.__doc__ = """Import an ``.xlsx`` sheet (first column = x-axis by default)."""
+
+
 # Ambiguous extensions resolve by content sniffing — first match wins.
 _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
     ".dat": [
@@ -118,8 +135,8 @@ _SNIFFERS: dict[str, list[tuple[Sniffer, Parser]]] = {
         (_accept_any, import_csv),
     ],
     ".tsv": [(is_sims_file, import_sims), (_accept_any, import_csv)],
-    ".xlsx": [(is_sims_file, import_sims), (_accept_any, import_excel)],
-    ".xlsm": [(is_sims_file, import_sims), (_accept_any, import_excel)],
+    ".xlsx": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
+    ".xlsm": [(is_sims_file, import_sims), (_accept_any, _import_excel_lazy)],
 }
 
 

@@ -71,6 +71,21 @@ export const RECIPE_KIND_LABEL: Record<RecipeKind, string> = {
   fitModel: "Fit model",
 };
 
+/** Which workshop OWNS each name-keyed kind — the honest meaning of "open"
+ *  for the four kinds that have no in-Library apply gesture (see
+ *  `RecipeOperation`'s doc below). A label only: actually opening the
+ *  workshop needs the store, so `components/workshops/recipelibrary/
+ *  recipeActions.ts`'s `WORKSHOP_OPENERS` reads its labels from here rather
+ *  than re-typing the four names, and `lib/recipeDetails.ts` (pure, no
+ *  store) uses this alone to render the same "Open in <workshop>" verb a row
+ *  action would show, instead of hardcoding it a third time. */
+export const NAME_KEYED_WORKSHOP_LABEL: Record<Extract<RecipeKind, "analysis" | "peak" | "graph" | "fitModel">, string> = {
+  analysis: "Pipeline",
+  peak: "Peak Analyzer",
+  graph: "Figure Builder",
+  fitModel: "Curve Fit",
+};
+
 /** What a kind can actually do TODAY. Declared per kind rather than assumed,
  *  because they genuinely differ and a Library that offers Rename on a system
  *  where renaming destroys identity is worse than one that greys it out. */
@@ -99,14 +114,18 @@ export interface RecipeCapabilities {
  *  recipeManagerActions.ts).
  *
  *  P3.5 closed part of the gap this table exposed — rename and duplicate are
- *  now real for the four name-keyed kinds (`lib/nameKeyedRecipes.ts`), and
- *  quickPlot gained `duplicateQuickPlotTemplate` (store/quickPlotTemplates.ts)
- *  — and deliberately left the rest open rather than lying about it. What is
- *  still genuinely absent, and why:
+ *  now real for the four name-keyed kinds (`lib/nameKeyedRecipes.ts`),
+ *  quickPlot gained `duplicateQuickPlotTemplate` (store/quickPlotTemplates.ts),
+ *  and peak/graph/fitModel gained real serializers and validating parsers
+ *  (`lib/nameKeyedRecipes.ts`'s `serialize`/`parse`, backed by each system's
+ *  own `isPeakRecipe`/`isGraphTemplate`/`isCustomFitModel`) — and deliberately
+ *  left the rest open rather than lying about it. What is still genuinely
+ *  absent, and why:
  *
- *    - peak/graph/fitModel import/export: no serializer or validator exists,
- *      and inventing an ad-hoc JSON shape here would make this module the
- *      owner of a format it has no business defining.
+ *    - quickPlot import/export: no serializer exists, and it would need one
+ *      genuinely of its own — a quickPlot template is bound to a workbook or
+ *      schema signature (project-scoped by construction), not a portable
+ *      object the way a plot recipe or the name-keyed four already are.
  *    - project scope for the name-keyed four: they have no project-file
  *      representation at all, so "copy to project" is not a missing feature,
  *      it is a category error.
@@ -161,7 +180,7 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
     // that made offering it destructive before.
     canRename: true,
     canDuplicate: true,
-    canImportExport: false,
+    canImportExport: true, // P3.5: lib/nameKeyedRecipes.ts's serialize/isPeakRecipe
     hasTechnique: false,
     hasTimestamps: false,
     schemaVersioned: true,
@@ -176,7 +195,7 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
     // that made offering it destructive before.
     canRename: true,
     canDuplicate: true,
-    canImportExport: false,
+    canImportExport: true, // P3.5: lib/nameKeyedRecipes.ts's serialize/isGraphTemplate
     hasTechnique: false,
     hasTimestamps: false,
     schemaVersioned: false,
@@ -191,7 +210,7 @@ export const RECIPE_CAPABILITIES: Record<RecipeKind, RecipeCapabilities> = {
     // that made offering it destructive before.
     canRename: true,
     canDuplicate: true,
-    canImportExport: false,
+    canImportExport: true, // P3.5: lib/nameKeyedRecipes.ts's serialize/isCustomFitModel
     hasTechnique: false,
     hasTimestamps: false,
     schemaVersioned: true,

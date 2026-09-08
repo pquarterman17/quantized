@@ -45,6 +45,63 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-07 — pin UNCHANGED at 910,711; one split funds the Pack Project
+ *  UI (P1.7 PR 6, sol/pack-project-ui-1). Giving the "pack-project" command
+ *  its required `description` (every registered command needs one — CI's
+ *  helpContent.test.ts/workshopHelp.test.ts) plus the store-owned
+ *  `store/packProjectPanel.ts` open flag (replacing the earlier
+ *  `globalThis.qP` runtime callback so AppOverlays.tsx never has to import
+ *  `store/packProject.ts` eagerly) measured 889.8 kB locally, 0.4 kB over
+ *  the pin. FIRST SPLIT ATTEMPT (measured, then discarded): moving the
+ *  "Send to Origin (COM)"/"Export Origin (.ogs)"/"Export consolidated CSV"
+ *  command bodies to a new lazily-`import()`ed `commands/fileCommandsLazy.ts`
+ *  while ALSO re-importing their `lib/api.ts` calls from that lazy module
+ *  measured as a net INCREASE (889.8 -> 890.0 kB local before the second
+ *  origin/consolidated body moved, one wash short of even) — api.ts is
+ *  already reachable synchronously elsewhere (store/useApp.ts's
+ *  `fftSpectral`/`fitModel`/`peaksIntegrate`/`uploadFile`), so adding an
+ *  async edge into a few of its OTHER exports forced Rollup to extract
+ *  api.ts + its lib/http.ts dependency into a new shared chunk that — being
+ *  STILL reachable synchronously — got modulepreloaded (counted eager)
+ *  anyway, on top of real chunk-boundary overhead. THE SPLIT THAT WORKED
+ *  (-0.8 kB local, 889.8 -> 889.0 kB): keep those three `lib/api.ts` calls
+ *  imported EAGERLY in fileCommands.ts exactly as before (byte-identical
+ *  reachability graph — no new async edge into api.ts) and pass them into
+ *  fileCommandsLazy.ts's runners as plain function arguments; only the
+ *  actual body logic (try/catch, the Origin-graph object literal, the
+ *  resolveDatasets/toast calls) leaves the entry chunk. Verified in the
+ *  build output: no new `api-*.js`/`http-*.js` chunk in either the entry
+ *  script or the modulepreload list, only the entry chunk itself shrinking.
+ *  Full vitest, tsc --noEmit, and eslint all green post-split.
+ *
+ *  2026-09-06 — pin UNCHANGED at 910,711; one split funds P1.7 slice 2's
+ *  eager growth. Collision-safe relinking (lib/relink.ts's `pathKey`/
+ *  `findCandidateCollisions`, store/relink.ts's `resolveCollision` + the
+ *  commit-time collision guard) measured +1,127 B locally (889.0 -> 890.1 kB
+ *  as a same-environment delta), 0.8 kB over the pin. THE SPLIT (-3.8 kB
+ *  local, 890.1 -> 886.3 kB after): store/relink.ts is eager only for its
+ *  `open` flag and `openPanel`/`closePanel` (store/reimport.ts,
+ *  lib/openWorkspaceReplace.ts, AppOverlays), yet it statically pulled the
+ *  whole relink core — lib/relink.ts, whose ONLY importers were the store
+ *  and the preview builder — into the entry. The `commit()` body now lives
+ *  in store/relinkCommit.ts and the row builder in store/relinkPreview.ts,
+ *  both `import()`ed on the click (the folderOps precedent), which lands
+ *  lib/relink.ts in a lazy chunk with them (relink / relinkPreview /
+ *  relinkCommit chunks: 1.7 + 1.1 + 2.3 kB; 886.4 kB after the self-review pass). The R3 identity snapshot is
+ *  still taken synchronously at the click, before the chunk is awaited.
+ *
+ *  2026-09-04 — pin UNCHANGED at 910,711; one split funds P3.7's eager
+ *  growth. The trash capture paths (store/trash.ts estimates + dedupe,
+ *  removeDatasets' permanent scrub, folderDelete's capture) are store code
+ *  with no lazy-able panel behind them and measured +2,953 B locally
+ *  (904,718 -> 907,671 as a same-environment delta), which took the build
+ *  over the pin by ~0.5 kB. THE SPLIT (-3.5 kB local, 889.9 -> 886.4 kB,
+ *  907,689 B after): `components/Library/folderOps.ts` was eager through
+ *  two static edges — lib/contextActions.ts's folder actions and
+ *  MultiSelectBar's Export — although every use is inside a click handler.
+ *  Both now `import()` it on the click, which also drops the pipeline
+ *  runner chunk (`runTemplate`) that only folderOps reached eagerly.
+ *
  *  2026-08-29 — pin UNCHANGED at 910,711 after one split plus a full
  *  per-module profiling pass. CI at e276d56 measured 889.3 kB eager and
  *  printed "0.0 kB under budget" — 68 bytes of real headroom, i.e. the next

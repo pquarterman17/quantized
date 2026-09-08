@@ -984,62 +984,19 @@ export interface CorrectionParams {
 }
 
 // ── Import wizard (ORIGIN_GAP_PLAN #40) ─────────────────────────────────────
-
-/** Per-column role (`io/import_preview.DATA_ROLES`): `x` -> axis; `y`/`error` -> DataStruct channels; `categorical` -> a P1.4 categorical channel (string levels preserved); `label`/`ignore` drop from `.values` (`label`'s raw strings still land in `text_columns`, `ignore`'s don't). */
-export type ImportColumnRole = "x" | "y" | "error" | "label" | "ignore" | "categorical";
-
-/** How to read a delimited file — mirrors `quantized.io.import_preview.
- *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
-export interface ImportSettingsWire {
-  delimiter: string;
-  header_line: number | null;
-  units_line: number | null;
-  label_line: number | null; // P1.6: legend-label row's cells override each channel's display label; null = header-derived name stands
-  data_start_line: number;
-  column_names: string[] | null;
-  roles: ImportColumnRole[] | null;
-}
-
-/** One resolved column descriptor from `preview_import`. */
-export interface ImportPreviewColumn {
-  index: number;
-  name: string;
-  /** P1-5 DEFECT 2: the name this column's channel/label will ACTUALLY
-   *  carry once imported -- `name` with any `label_line` override applied
-   *  (io/import_preview.py's `_effective_names`, the same rule
-   *  `parse_import` uses for `.labels`). Optional on the wire type (older
-   *  fixtures / mocked previews may omit it); callers that need the true
-   *  post-import name should read `c.effective_name ?? c.name`. Equal to
-   *  `name` whenever no `label_line` override applies to this column. */
-  effective_name?: string;
-  unit: string;
-  role: ImportColumnRole;
-}
-
-/** `/api/import/preview` response — the wizard's live preview payload. */
-export interface ImportPreviewResponse {
-  raw_lines: string[];
-  n_lines: number;
-  delimiter: string;
-  header_line: number | null;
-  units_line: number | null;
-  label_line: number | null;
-  data_start_line: number;
-  columns: ImportPreviewColumn[];
-  rows: (number | null)[][];
-  n_data_rows: number;
-  n_preview_rows: number;
-  comments: string[]; // P1.6 item 3: retained preamble lines not consumed as header/units/label — searchable, never dropped
-}
-
-/** A saved, named `ImportSettingsWire` bound to a filename glob
- *  (`io.import_filters.ImportFilter`). */
-export interface ImportFilterWire {
-  name: string;
-  glob: string;
-  settings: ImportSettingsWire;
-  updated: string;
-}
+// Definitions live in lib/importTypes.ts (extracted, P1.6 PR 1 — see that
+// file's header); re-exported here so existing import paths keep working.
+export type {
+  ImportCategoricalProblem,
+  ImportColumnRole,
+  ImportErrorBindingProblem,
+  ImportErrorBindingWire,
+  ImportFilterWire,
+  ImportHeaderFieldProblem,
+  ImportPreviewColumn,
+  ImportPreviewResponse,
+  ImportSettingsWire,
+} from "./importTypes";
 
 // Reductions wire types (WilliamsonHallResult, FftThicknessResult,
 // SuperlatticeResult, ReflectivityFftResult) moved to lib/reductionTypes.ts

@@ -28,7 +28,6 @@
 //                bulk-select already use, just emptied).
 
 import { childFolders } from "../../lib/foldertree";
-import { exportDatasets } from "./folderOps";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -80,7 +79,8 @@ export default function MultiSelectBar() {
     if (updated > 0) toast(`tagged ${updated} dataset(s) "${tag}"`);
   };
 
-  const onExport = () => void exportDatasets([...selectedIds], `selection-${n}.csv`, "");
+  // folderOps loads on the click, not at launch (bundle-size ratchet).
+  const onExport = () => void import("./folderOps").then((m) => m.exportDatasets([...selectedIds], `selection-${n}.csv`, ""));
 
   // PR J slice 2 (L0.32-L0.34): same discoverable-from-the-multi-selection
   // entry point as Plot/Move/Tag/Export above — the dialog itself (not this

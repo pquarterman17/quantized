@@ -383,6 +383,17 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
         // this is the one flow that had not caught up.
         if (hasDesktopShell()) {
           const state = await pathState(ds.source.path);
+          // P1.1 (#303 review): `permission_denied` is a file that is
+          // PRESENT but unreadable — neither missing nor offline, and not
+          // a relink case either (the remedy is access, not another
+          // path). Stop with the accurate message rather than letting it
+          // fall through to a raw backend import failure.
+          if (state === "permission_denied") {
+            const msg = `source exists but cannot be read (permission denied) — restore access to "${ds.name}" (${ds.source.path}) and retry`;
+            get().setStatus(msg);
+            toast(msg, "danger");
+            return;
+          }
           if (state === "missing" || state === "offline") {
             const msg =
               state === "offline"

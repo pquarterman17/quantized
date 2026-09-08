@@ -224,21 +224,316 @@ describe("import / export", () => {
     expect(loadTemplates()).toHaveLength(2);
   });
 
-  it("reports the kinds that genuinely have no serializer, rather than inventing one", () => {
-    for (const kind of ["peak", "graph", "fitModel"] as const) {
-      expect(exportNameKeyed(kind, "anything")).toEqual({
-        ok: false,
-        reason: `${kind} recipes cannot be exported yet`,
-      });
-      expect(importNameKeyed(kind, "{}")).toEqual({
-        ok: false,
-        reason: `${kind} recipes cannot be imported yet`,
-      });
-    }
+  // P3.5: peak/graph/fitModel used to have no serializer at all (this test
+  // pinned that refusal, verbatim, until now). Inverted rather than deleted —
+  // it now pins the opposite: every name-keyed kind round-trips.
+  it("peak, graph, and fit model recipes round-trip through export and import", () => {
+    savePeakRecipe({ ...DEFAULT_RECIPE, name: "Peaks" });
+    saveGraphTemplate({ name: "Graph", style: "line", overrides: null, seriesStyles: null });
+    saveCustomModel({ version: 1, name: "Model", equation: "y=a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
+
+    const peakExport = exportNameKeyed("peak", "Peaks");
+    const graphExport = exportNameKeyed("graph", "Graph");
+    const modelExport = exportNameKeyed("fitModel", "Model");
+    expect(peakExport.ok, "peak export").toBe(true);
+    expect(graphExport.ok, "graph export").toBe(true);
+    expect(modelExport.ok, "fitModel export").toBe(true);
+    if (!peakExport.ok || !graphExport.ok || !modelExport.ok) return;
+
+    localStorage.clear();
+
+    expect(importNameKeyed("peak", peakExport.text)).toEqual({ ok: true, name: "Peaks" });
+    expect(importNameKeyed("graph", graphExport.text)).toEqual({ ok: true, name: "Graph" });
+    expect(importNameKeyed("fitModel", modelExport.text)).toEqual({ ok: true, name: "Model" });
+
+    expect(loadPeakRecipes()[0].find.max_peaks).toBe(DEFAULT_RECIPE.find.max_peaks);
+    expect(loadGraphTemplates()[0].style).toBe("line");
+    expect(loadCustomModels()[0].equation).toBe("y=a*x");
+  });
+
+  // Property-style: parse(serialize(r)) must deep-equal r for a real stored
+  // record, field for field — not just "the name came back".
+  it("round-trips DEFAULT_RECIPE losslessly through peak export/import", () => {
+    const original = { ...DEFAULT_RECIPE, name: "Full peak recipe" };
+    savePeakRecipe(original);
+    const exported = exportNameKeyed("peak", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  it("round-trips a fit model with null bounds losslessly", () => {
+    const original = {
+      version: 1 as const,
+      name: "Null bounds",
+      equation: "y=a*x+b",
+      params: ["a", "b"],
+      guesses: [1, 2],
+      lower: [null, 0],
+      upper: [10, null],
+    };
+    saveCustomModel(original);
+    const exported = exportNameKeyed("fitModel", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("fitModel", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadCustomModels()[0]).toEqual(original);
+  });
+
+  it("round-trips a graph template with an Origin source and null overrides losslessly", () => {
+    const original = { name: "Origin style", style: "scatter", overrides: null, seriesStyles: null, source: "origin" };
+    saveGraphTemplate(original);
+    const exported = exportNameKeyed("graph", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(original);
+  });
+
+  it("round-trips a graph template with populated overrides and series styles losslessly", () => {
+    const original = {
+      name: "Populated",
+      style: "line",
+      overrides: { font_size: 12 },
+      seriesStyles: [null, { color: "#ff0000" }],
+    };
+    saveGraphTemplate(original);
+    const exported = exportNameKeyed("graph", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(original);
   });
 
   it("surfaces a parse failure as a refusal, not an exception", () => {
     expect(importNameKeyed("analysis", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("peak", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("graph", "{{{ not json").ok).toBe(false);
+    expect(importNameKeyed("fitModel", "{{{ not json").ok).toBe(false);
+  });
+
+  it("refuses a garbage graph file carrying only name and style — the real shape always has more", () => {
+    // A REAL GraphTemplate always serializes both `overrides` and
+    // `seriesStyles` (required fields on the type); a file missing both is
+    // not something the app's own exporter could ever have produced.
+    expect(importNameKeyed("graph", JSON.stringify({ name: "G", style: "line" })).ok).toBe(false);
+  });
+
+  it("refuses an empty name on import, for every kind that gained a parser", () => {
+    expect(importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "" })).ok).toBe(false);
+    expect(
+      importNameKeyed(
+        "graph",
+        JSON.stringify({ name: "", style: "line", overrides: null, seriesStyles: null }),
+      ).ok,
+    ).toBe(false);
+    expect(
+      importNameKeyed(
+        "fitModel",
+        JSON.stringify({ version: 1, name: "", equation: "y=x", params: [], guesses: [], lower: [], upper: [] }),
+      ).ok,
+    ).toBe(false);
+  });
+});
+
+describe("import validates FIELDS at the file boundary, not just the shape (review finding on #290)", () => {
+  const peakJson = (patch: Record<string, unknown>) =>
+    JSON.stringify({ ...DEFAULT_RECIPE, name: "P", ...patch });
+
+  it("refuses a peak recipe whose five children are present but EMPTY objects", () => {
+    // Exactly the file `isPeakRecipe` alone accepts: every child is a non-null
+    // object, and every required numeric/enum field inside is absent.
+    const empty = JSON.stringify({ version: 1, name: "x", range: {}, baseline: {}, find: {}, model: {}, report: {} });
+    const r = importNameKeyed("peak", empty);
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/not a valid peak recipe file/) });
+    expect(loadPeakRecipes()).toEqual([]); // nothing persisted
+  });
+
+  it("refuses a peak recipe with a baseline method outside the enum, a non-finite number, or a non-boolean flag", () => {
+    expect(importNameKeyed("peak", peakJson({ baseline: { ...DEFAULT_RECIPE.baseline, method: "spline" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ find: { ...DEFAULT_RECIPE.find, max_peaks: "20" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ model: { ...DEFAULT_RECIPE.model, constrain: "yes" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ report: { ...DEFAULT_RECIPE.report, mode: "plot" } })).ok).toBe(false);
+    expect(importNameKeyed("peak", peakJson({ range: { lo: "0", hi: null } })).ok).toBe(false);
+    expect(loadPeakRecipes()).toEqual([]);
+  });
+
+  it("refuses a peak recipe that is well-typed but semantically unusable (review round 3 on #290)", () => {
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ["reversed range", { range: { lo: 40, hi: 20 } }, /range: lo > hi/],
+      ["lam <= 0", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", lam: 0 } }, /baseline\.lam/],
+      ["p > 1", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 1.5 } }, /baseline\.p/],
+      ["negative p", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: -0.1 } }, /baseline\.p/],
+      // baseline_als (calc/baseline.py) raises unless 0 < p < 1 — the closed
+      // ends are exactly the "imports, then fails on first use" case.
+      ["p = 0", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 0 } }, /baseline\.p/],
+      ["p = 1", { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", p: 1 } }, /baseline\.p/],
+      ["fractional radius", { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", radius: 2.5 } }, /baseline\.radius/],
+      ["zero radius", { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", radius: 0 } }, /baseline\.radius/],
+      ["negative order", { baseline: { ...DEFAULT_RECIPE.baseline, method: "modpoly", order: -1 } }, /baseline\.order/],
+      ["fractional order", { baseline: { ...DEFAULT_RECIPE.baseline, method: "modpoly", order: 1.5 } }, /baseline\.order/],
+      ["negative snr", { find: { ...DEFAULT_RECIPE.find, snr_threshold: -3 } }, /find\.snr_threshold/],
+      ["negative prominence", { find: { ...DEFAULT_RECIPE.find, min_prominence: -0.5 } }, /find\.min_prominence/],
+      ["max_peaks -1.5", { find: { ...DEFAULT_RECIPE.find, max_peaks: -1.5 } }, /find\.max_peaks/],
+      ["max_peaks 0", { find: { ...DEFAULT_RECIPE.find, max_peaks: 0 } }, /find\.max_peaks/],
+      ["max_peaks fractional", { find: { ...DEFAULT_RECIPE.find, max_peaks: 2.5 } }, /find\.max_peaks/],
+      ["unknown shape", { model: { ...DEFAULT_RECIPE.model, shape: "Voigt-ish" } }, /model\.shape/],
+      ["unknown link mode", { model: { ...DEFAULT_RECIPE.model, linkMode: "Shared everything" } }, /model\.linkMode/],
+      ["negative bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: -1 } }, /model\.bgDegree/],
+      ["fractional bgDegree", { model: { ...DEFAULT_RECIPE.model, bgDegree: 1.5 } }, /model\.bgDegree/],
+      ["zero regionWidth", { report: { mode: "integrate", regionWidth: 0 } }, /report\.regionWidth/],
+      ["negative regionWidth", { report: { mode: "integrate", regionWidth: -3 } }, /report\.regionWidth/],
+    ];
+    for (const [label, patch, reason] of cases) {
+      const r = importNameKeyed("peak", peakJson(patch));
+      expect(r, label).toMatchObject({ ok: false, reason: expect.stringMatching(reason) });
+    }
+    expect(loadPeakRecipes()).toEqual([]);
+  });
+
+  it("applies a semantic rule only to the fields the selected method / mode reads, but type-checks every field (self-review on #290)", () => {
+    // The wizard keeps whatever was typed for a method the user switched
+    // AWAY from (rolling-ball radius 0.5, then ALS), and ALS never reads it —
+    // so a recipe the app itself saved must still re-import. Non-numbers
+    // are still refused everywhere: the record type says number.
+    const okCases = [
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "none", p: 1, radius: 0.5, order: -1 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "als", radius: 0.5, order: 2.5 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, method: "rollingball", lam: 0, p: 7 } },
+      { report: { mode: "fit", regionWidth: 0 } },
+    ];
+    for (const patch of okCases) {
+      const r = importNameKeyed("peak", peakJson({ ...patch, name: `ok-${loadPeakRecipes().length}` }));
+      expect(r.ok, JSON.stringify(patch)).toBe(true);
+    }
+    expect(loadPeakRecipes()).toHaveLength(okCases.length);
+    const r = importNameKeyed("peak", peakJson({ baseline: { ...DEFAULT_RECIPE.baseline, method: "none", radius: "x" } }));
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/baseline\.radius/) });
+  });
+
+  it("refuses a fit model that is well-typed but unusable, naming the parameter (self-review on #290)", () => {
+    const model = (patch: Record<string, unknown>) =>
+      JSON.stringify({
+        version: 1, name: "F", equation: "y = a*x + b", params: ["a", "b"],
+        guesses: [1, 2], lower: [null, null], upper: [null, null], ...patch,
+      });
+    const cases: [string, Record<string, unknown>, RegExp][] = [
+      ["lower > upper", { lower: [1, null], upper: [0, null] }, /bounds\[a\]: lower > upper/],
+      ["guess below lower", { lower: [5, null] }, /guess\[a\]: outside/],
+      ["guess above upper", { upper: [null, 1] }, /guess\[b\]: outside/],
+      ["blank param name", { params: ["a", " "] }, /params\[1\]: empty/],
+      ["duplicate param name", { params: ["a", "a"] }, /params\[1\]: duplicate/],
+    ];
+    for (const [label, patch, reason] of cases) {
+      expect(importNameKeyed("fitModel", model(patch)), label).toMatchObject({
+        ok: false,
+        reason: expect.stringMatching(reason),
+      });
+    }
+    expect(loadCustomModels()).toEqual([]);
+    // Boundary-inclusive: a guess ON its bound, and one-sided bounds, are fine.
+    expect(importNameKeyed("fitModel", model({ lower: [1, null], upper: [null, 2] })).ok).toBe(true);
+  });
+
+  it("drops unknown extra keys from an imported fit model instead of persisting them", () => {
+    const r = importNameKeyed(
+      "fitModel",
+      JSON.stringify({
+        version: 1, name: "F", equation: "y = a*x", params: ["a"], guesses: [1], lower: [null], upper: [null],
+        junk: "x".repeat(1000),
+      }),
+    );
+    expect(r.ok).toBe(true);
+    const stored = loadCustomModels()[0] as unknown as Record<string, unknown>;
+    expect("junk" in stored).toBe(false);
+    expect(stored).toEqual({ version: 1, name: "F", equation: "y = a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
+  });
+
+  it("accepts the boundary values the wizard itself can produce", () => {
+    // Everything the UI clamps TO, plus a half-open range and an equal-bounds
+    // range, must still import: the rules mirror the constraints, no tighter.
+    // ALS p is the one OPEN interval (backend: 0 < p < 1), so its boundary
+    // cases are near-boundary interior values, not the ends.
+    for (const patch of [
+      { range: { lo: 20, hi: 20 } },
+      { range: { lo: null, hi: 20 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0.001, radius: 1, order: 0 } },
+      { baseline: { ...DEFAULT_RECIPE.baseline, p: 0.999 } },
+      { find: { snr_threshold: 0, min_prominence: 0, max_peaks: 1 } },
+      { model: { shape: "TCH-pV", bgDegree: 0, linkMode: "Shared FWHM + eta", constrain: true } },
+      { report: { mode: "integrate", regionWidth: 0.5 } },
+    ]) {
+      const r = importNameKeyed("peak", peakJson({ ...patch, name: `ok-${loadPeakRecipes().length}` }));
+      expect(r.ok, JSON.stringify(patch)).toBe(true);
+    }
+    expect(loadPeakRecipes()).toHaveLength(7);
+  });
+
+  it("drops unknown extra keys from an imported peak recipe instead of persisting them", () => {
+    const r = importNameKeyed("peak", peakJson({ junk: "x" }));
+    expect(r.ok).toBe(true);
+    const stored = loadPeakRecipes()[0] as unknown as Record<string, unknown>;
+    expect("junk" in stored).toBe(false);
+  });
+
+  it("refuses a graph template whose overrides is an ARRAY (an object to typeof, not to the type)", () => {
+    const r = importNameKeyed("graph", JSON.stringify({ name: "G", style: "scatter", overrides: [1, 2], seriesStyles: null }));
+    expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/overrides/) });
+    expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  it("refuses a graph template with a bare number or string inside seriesStyles", () => {
+    for (const styles of [[42], ["red"], [{ color: "#000" }, 7]]) {
+      const r = importNameKeyed("graph", JSON.stringify({ name: "G", style: "scatter", overrides: null, seriesStyles: styles }));
+      expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/seriesStyles/) });
+    }
+    expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  it("sanitizes nested override/series keys on import — an unknown or mistyped nested field never persists", () => {
+    const r = importNameKeyed(
+      "graph",
+      JSON.stringify({
+        name: "G",
+        style: "scatter",
+        overrides: { font_size: "big", grid: true, bogus: 1 },
+        seriesStyles: [{ color: "#123456", width: -5, sneaky: true }, null],
+      }),
+    );
+    expect(r.ok).toBe(true);
+    const stored = loadGraphTemplates()[0];
+    expect(stored.overrides).toEqual({ grid: true });
+    expect(stored.seriesStyles).toEqual([{ color: "#123456" }, null]);
+  });
+});
+
+describe("import verifies the write LANDED (review finding on #290)", () => {
+  it("refuses — and announces nothing — when the storage write throws", () => {
+    // The repo's ratchet (architecture.test.ts): replace the localStorage
+    // BINDING with a fake, never patch Storage.prototype — jsdom does not
+    // reliably route through prototype patches.
+    const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (): null => null,
+        setItem: (): never => {
+          throw new DOMException("quota", "QuotaExceededError");
+        },
+        removeItem: (): void => undefined,
+        clear: (): void => undefined,
+        key: (): null => null,
+        length: 0,
+      },
+    });
+    try {
+      const r = importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "P" }));
+      expect(r).toEqual({ ok: false, reason: "could not save the imported peak recipe — storage is full or unavailable" });
+    } finally {
+      if (original) Object.defineProperty(globalThis, "localStorage", original);
+    }
+    expect(loadPeakRecipes()).toEqual([]);
   });
 });
 

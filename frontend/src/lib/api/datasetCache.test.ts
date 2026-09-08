@@ -12,15 +12,15 @@ import { isDatasetCachePath, postJSONDatasetAware } from "./datasetCache";
 import type { RawFetchJSON } from "./datasetCache";
 
 describe("isDatasetCachePath", () => {
-  it("matches /api/plot/map and every /api/rsm/* path", () => {
+  it("matches /api/plot/map, /api/plot/series, and every /api/rsm/* path", () => {
     expect(isDatasetCachePath("/api/plot/map")).toBe(true);
+    expect(isDatasetCachePath("/api/plot/series")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/box")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/box-stats")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/strain")).toBe(true); // prefix match; no dataset field anyway
   });
 
   it("does not match unrelated dataset-bearing routes", () => {
-    expect(isDatasetCachePath("/api/plot/series")).toBe(false);
     expect(isDatasetCachePath("/api/corrections/apply")).toBe(false);
     expect(isDatasetCachePath("/api/export/figure")).toBe(false);
   });
@@ -75,6 +75,31 @@ describe("postJSONDatasetAware", () => {
       unknown
     >;
     expect(secondCallBody.dataset).toBeDefined(); // no remembered handle for THIS object -> full payload
+  });
+
+  it("does not store a handle when the server omits X-Dataset-Handle (a too-large dataset)", async () => {
+    // routes/_datasetcache.py's cache_dataset returns None (no header sent)
+    // when the posted dataset alone doesn't fit the cache budget -- a
+    // missing header must not poison the WeakMap with a `null`/`undefined`
+    // "handle" that would then ride the wire as `dataset_handle` on the
+    // NEXT call for the same object, which the server could never resolve.
+    const dataset = { time: [1, 2, 3] };
+    const rawFetch = vi
+      .fn()
+      .mockResolvedValueOnce({ value: { ok: 1 }, handle: null })
+      .mockResolvedValueOnce({ value: { ok: 2 }, handle: null }) as unknown as RawFetchJSON;
+
+    await postJSONDatasetAware("/api/rsm/box", { dataset, x_min: 0 }, undefined, rawFetch);
+    await postJSONDatasetAware("/api/rsm/box", { dataset, x_min: 1 }, undefined, rawFetch);
+
+    const secondCallBody = (rawFetch as ReturnType<typeof vi.fn>).mock.calls[1][1] as Record<
+      string,
+      unknown
+    >;
+    // Still the full dataset on the second call -- no handle was ever
+    // remembered, so there is nothing to swap in.
+    expect(secondCallBody.dataset).toBe(dataset);
+    expect(secondCallBody.dataset_handle).toBeUndefined();
   });
 
   it("passes a body with no dataset field straight through, untouched", async () => {

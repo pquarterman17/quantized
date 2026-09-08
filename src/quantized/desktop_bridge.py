@@ -138,7 +138,6 @@ not actually hold — the exact defect described above.
 from __future__ import annotations
 
 import os
-import tempfile
 import time
 import uuid
 from typing import Any
@@ -146,12 +145,15 @@ from typing import Any
 from quantized import desktop_project_lock as lockmod
 from quantized import desktop_project_lock_write as lockwrite
 from quantized.desktop_bridge_dialogs import DesktopDialogBridge
-from quantized.desktop_consent import consented_write_path
+from quantized.desktop_bridge_pack import DesktopPackBridge
+from quantized.desktop_consent import consented_write_path, is_declared_source
 from quantized.desktop_project_file import (
     WRITE_TEMP_PREFIX,
     cleanup_stray_write_temps,
-    validate_workspace_payload,
+    parse_workspace_payload,
+    payload_declares_source,
 )
+from quantized.portable.publish import atomic_replace_file
 
 __all__ = ["DesktopApi"]
 
@@ -167,16 +169,22 @@ __all__ = ["DesktopApi"]
 _MAX_CONSECUTIVE_CONTENDED_SOFT_SUCCESSES = 2
 
 
-class DesktopApi(DesktopDialogBridge):
+class DesktopApi(DesktopDialogBridge, DesktopPackBridge):
     """The object pywebview exposes at ``window.pywebview.api``.
 
     Every method is callable from the page, so each one is written as if the
     caller were hostile. The protection is not in this class: opening a modal
     OS dialog requires a human to choose a file, and nothing here can grant
     consent for a path the dialog did not return.
+
+    P1.7 PR 4 adds :class:`~quantized.desktop_bridge_pack.DesktopPackBridge`
+    to the base list, the same mixin shape as ``DesktopDialogBridge`` — see
+    that module's own doc for the "Pack Project" js_api methods and the
+    full consent ruling behind them.
     """
 
     def __init__(self) -> None:
+        DesktopPackBridge.__init__(self)
         self._window: Any = None
         # One id per running process, minted ONCE — see this module's "PR I2"
         # section for why the frontend can never supply or override this.
@@ -217,11 +225,26 @@ class DesktopApi(DesktopDialogBridge):
         (or spends) consent" boundary intact for writes too.
 
         Refuses any path that was not returned by ``save_file_dialog`` this
-        process. The write itself is temp-file-plus-``os.replace`` (same
-        directory, so the replace is atomic on a normal filesystem) so a
-        crash mid-write cannot leave a half-written ``.dwk`` at the real
-        path. ``content`` must pass ``validate_workspace_payload`` or the
-        write is refused before a temp file is even opened.
+        process. Also refuses (P1.2 box 4) any path the OPEN project's own
+        payload declared as a dataset's ``source.path`` — see
+        ``desktop_consent.is_declared_source`` — so a save/autosave/quick-
+        save can never overwrite the raw file the project was built from,
+        even if that path also happens to hold write consent. The write
+        itself is temp-file-plus-``os.replace`` (same directory, so the
+        replace is atomic on a normal filesystem) so a crash mid-write
+        cannot leave a half-written ``.dwk`` at the real path — **and**,
+        since P1.2 box 3's hardening, the temp file is ``flush``ed and
+        ``fsync``ed BEFORE that replace, so a crash or power loss right
+        after ``os.replace`` returns finds the new bytes durable on disk
+        rather than whatever the filesystem's delayed allocation had
+        buffered. Not guaranteed: durability of the containing directory's
+        own metadata beyond a best-effort directory ``fsync`` (POSIX-only,
+        swallowed on failure — see ``quantized.portable.publish``'s
+        ``_fsync_directory_best_effort``), which
+        only narrows that window further; it is never load-bearing for the
+        prior file's survival, which the temp-file-only failure mode above
+        already covers. ``content`` must pass ``parse_workspace_payload``
+        or the write is refused before a temp file is even opened.
 
         **R1 lock-held write (I2 hardening, P1-1):** when `lock_token` is
         non-empty, the token is verified AND the temp-write-plus-`os.replace`
@@ -248,12 +271,33 @@ class DesktopApi(DesktopDialogBridge):
             resolved = os.path.realpath(path)
         except (OSError, ValueError) as exc:
             return {"ok": False, "error": str(exc)}
+        if is_declared_source(resolved):
+            # Box 4: refuse BEFORE any temp file exists, and before even
+            # checking write consent — a path can hold write consent (a
+            # user can pick their own raw source in the Save As dialog) and
+            # still never be a legal write target while it is the open
+            # project's own declared source. See `save_file_dialog`'s
+            # matching refusal on the other bridge method that can reach
+            # this same path.
+            return {
+                "ok": False,
+                "error": "refusing to write — that path is a data source of the open project",
+            }
         granted = consented_write_path(resolved)
         if granted is None:
             return {"ok": False, "error": "path not consented for writing"}
-        invalid = validate_workspace_payload(content)
-        if invalid is not None:
+        payload, invalid = parse_workspace_payload(content)
+        if payload is None:
             return {"ok": False, "error": f"refusing to write — {invalid}"}
+        # The cached set above only knows natively OPENED projects; the payload's
+        # own sources are refused too (`payload_declares_source`, #291 review).
+        # `base_dir` (P1.7 PR 3) makes a packed project's `kind: "bundle"`
+        # sources declared too, not just `kind: "path"` ones.
+        if payload_declares_source(payload, resolved, base_dir=os.path.dirname(resolved)):
+            return {
+                "ok": False,
+                "error": "refusing to write — that path is a data source of this workspace",
+            }
         directory = os.path.dirname(granted) or "."
 
         def _replace() -> None:
@@ -266,20 +310,15 @@ class DesktopApi(DesktopDialogBridge):
             # temp file. `cleanup_stray_write_temps`'s own age floor is the
             # belt-and-braces protection for the unlocked, no-token legacy
             # path directly below, which has no such serialization at all.
+            #
+            # The actual atomic write sequence (mkstemp/write/fsync/replace/
+            # directory-fsync) is `quantized.portable.publish.
+            # atomic_replace_file` (P1.7 PR 3) — extracted there once the
+            # bundle publisher needed the exact same sequence for its own
+            # project-file and manifest writes, so neither module duplicates
+            # it and this one stays under the 500-line ceiling.
             cleanup_stray_write_temps(directory)
-            tmp_path: str | None
-            fd, tmp_path = tempfile.mkstemp(prefix=WRITE_TEMP_PREFIX, dir=directory)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    f.write(content)
-                os.replace(tmp_path, granted)
-                tmp_path = None  # replaced — nothing left to clean up
-            finally:
-                if tmp_path is not None:
-                    try:
-                        os.remove(tmp_path)
-                    except OSError:
-                        pass
+            atomic_replace_file(directory, granted, content, temp_prefix=WRITE_TEMP_PREFIX)
 
         try:
             if lock_token:

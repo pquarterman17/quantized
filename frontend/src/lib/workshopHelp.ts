@@ -29,6 +29,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   magtools: "Magnetometry",
   multivar: "Multivariate",
   "outlier-screening": "Outlier screening",
+  "pack-project": "Pack Project",
   peaks: "Find peaks",
   peakwizard: "Peak analyzer",
   pipeline: "Pipeline",

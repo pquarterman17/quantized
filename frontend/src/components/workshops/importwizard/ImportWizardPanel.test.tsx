@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct, ImportFilterWire, ImportPreviewResponse, ImportSettingsWire } from "../../../lib/types";
@@ -116,6 +116,44 @@ describe("ImportWizardPanel", () => {
     );
   });
 
+  it("applies a backend error suggestion as both a role and a persisted binding", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [...PREVIEW.columns, { index: 2, name: "dMoment", unit: "emu", role: "y" }],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText(/Use/).parentElement).toHaveTextContent("dMoment"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply suggestion" }));
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        roles: ["x", "y", "error"],
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+  });
+
+  it("surfaces backend explanations for rejected saved error bindings", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [{
+        column: 4,
+        target: 1,
+        axis: "y",
+        side: "both",
+        code: "column_out_of_range",
+        reason: "Error column 5 no longer exists in this file.",
+      }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Error column 5 no longer exists");
+  });
+
   it("imports the previewed file into a new library dataset", async () => {
     importParseMock.mockResolvedValue(DS);
     render(<ImportWizardPanel />);
@@ -179,6 +217,85 @@ describe("ImportWizardPanel", () => {
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Import" })).not.toBeDisabled());
     expect(screen.queryByText(/only one column can be x/)).not.toBeInTheDocument();
+  });
+
+  it("blocks a categorical level-cap problem until that column is explicitly accepted", async () => {
+    importGuessMock.mockResolvedValue({ ...SETTINGS, roles: ["x", "categorical"] });
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [PREVIEW.columns[0], { ...PREVIEW.columns[1], role: "categorical" }],
+      categorical_problems: [
+        { type: "categorical_level_cap", index: 1, column: "Sample", level_count: 1200, cap: 1000 },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText(/Sample has 1200 distinct values/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+    importPreviewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Import Sample as a large category anyway" }));
+    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+
+    // Review finding #5: accepting must NOT re-post the file.
+    // `preview_import` ignores the override, so the response is guaranteed
+    // identical — ~0.7-1.25 s wasted on precisely the large files that
+    // trigger the cap, and any visible error cleared on the way past.
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    expect(importPreviewMock).not.toHaveBeenCalled();
+
+    // ...and the acceptance reaches the PARSE request, as column indices.
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => expect(importParseMock).toHaveBeenLastCalledWith(
+      expect.any(String), expect.objectContaining({ allow_large_categorical: [1] }),
+    ));
+  });
+
+  it("does not carry an acceptance into a saved filter", async () => {
+    // Review finding #2: persisting it made `_import_via_saved_filter` parse
+    // every future glob match with the refusal lifted — headless, and with no
+    // way to clear it short of hand-editing import_filters.json.
+    importGuessMock.mockResolvedValue({ ...SETTINGS, roles: ["x", "categorical"] });
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [PREVIEW.columns[0], { ...PREVIEW.columns[1], role: "categorical" }],
+      categorical_problems: [
+        { type: "categorical_level_cap", index: 1, column: "Sample", level_count: 1200, cap: 1000 },
+      ],
+    });
+    saveImportFilterMock.mockResolvedValue({ name: "run1", glob: "*.dat", settings: SETTINGS, updated: "t" });
+    render(
+      <>
+        <ImportWizardPanel />
+        <ParamDialog />
+      </>,
+    );
+    pickFile();
+    await waitFor(() => expect(screen.getByText(/Sample has 1200 distinct values/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Import Sample as a large category anyway" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save as filter…" }));
+    await waitFor(() => expect(screen.getByText("Save as filter")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await waitFor(() => expect(saveImportFilterMock).toHaveBeenLastCalledWith(
+      "run1", "*.dat", expect.objectContaining({ roles: ["x", "categorical"] }),
+    ));
+    const sent = saveImportFilterMock.mock.calls[0][2] as ImportSettingsWire;
+    expect(sent.allow_large_categorical ?? []).toEqual([]);
+  });
+
+  it("keeps Import disabled during the debounce after a column is marked categorical", async () => {
+    // Review finding #3: `preview` is the server's answer for the settings as
+    // they were a debounce plus a round trip ago, so for that whole window
+    // Import was enabled and sent a request the backend rejects with a 422 —
+    // the exact outcome this guard exists to prevent.
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Import" })).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText("column 2 role"), { target: { value: "categorical" } });
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
   });
 
   it("saves the confirmed settings as a named filter via the param dialog", async () => {
@@ -262,6 +379,90 @@ describe("ImportWizardPanel", () => {
     await waitFor(() => expect(screen.getByLabelText("dMoment error target")).toBeInTheDocument());
     expect(screen.getByLabelText("dMoment error target")).toHaveValue("0"); // "dMoment" -> "Moment", channel 0
     expect(screen.getByText("(suggested)")).toBeInTheDocument();
+  });
+
+  it("persists an edited error pairing in raw-column form for filters and parsing", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByLabelText("dMoment error target")).toBeInTheDocument());
+    importPreviewMock.mockClear();
+
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "-1" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: -1, axis: "x", side: "both" }],
+      }),
+      30,
+    ));
+
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "unassigned" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ error_bindings: [] }),
+      30,
+    ));
+    importPreviewMock.mockClear();
+    fireEvent.change(screen.getByLabelText("dMoment error target"), { target: { value: "0" } });
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+  });
+
+  it("persists a pre-filled suggestion and only labels genuine suggestions", async () => {
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "K", role: "x" },
+        { index: 1, name: "Moment", unit: "emu", role: "y" },
+        { index: 2, name: "dMoment", unit: "emu", role: "error" },
+      ],
+      suggested_error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByText("(suggested)")).toBeInTheDocument());
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error_bindings: [{ column: 2, target: 1, axis: "y", side: "both" }],
+      }),
+      30,
+    ));
+
+    fireEvent.change(screen.getByLabelText("dMoment error side"), { target: { value: "+" } });
+    expect(screen.queryByText("(suggested)")).not.toBeInTheDocument();
+  });
+
+  it("removes a rejected binding from settings so it can be saved cleanly", async () => {
+    const rejected = { column: 8, target: 1, axis: "y" as const, side: "both" as const };
+    importGuessMock.mockResolvedValue({ ...SETTINGS, error_bindings: [rejected] });
+    importPreviewMock.mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [{ ...rejected, code: "column_out_of_range", reason: "Column 9 is gone." }],
+    });
+    render(<ImportWizardPanel />);
+    pickFile();
+    await screen.findByText("Column 9 is gone.");
+    importPreviewMock.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove invalid setting" }));
+    await waitFor(() => expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String), expect.objectContaining({ error_bindings: [] }), 30,
+    ));
   });
 
   it("lists saved filters and applies one to re-preview", async () => {

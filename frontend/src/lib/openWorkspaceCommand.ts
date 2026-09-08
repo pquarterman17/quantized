@@ -6,20 +6,13 @@
 
 import { openFilePicker } from "./openFilePicker";
 import { CANCELLED, hasDesktopShell, openProject } from "./desktopBridge";
+import { baseName, parentDirectory } from "./importEntry";
+import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
 import { parseWorkspace, type LoadedWorkspace } from "./workspace";
 import { withOp } from "../store/pendingOps";
 import type { ProjectIdentity } from "../store/project";
-
-/** Basename of a native path, tolerant of either separator — mirrors
- *  lib/importEntry.ts's `parentDirectory` (the complementary half of a
- *  path) and store/workspaceIO.ts's identical private helper for the save
- *  side; kept local rather than shared, matching that existing precedent. */
-function baseName(path: string): string {
-  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
-  return cut >= 0 ? path.slice(cut + 1) : path;
-}
 
 /** Shared Open/Append-workspace flow (the only difference between the
  *  "open-workspace"/"open-workspace-safe"/"append-workspace" File commands
@@ -94,13 +87,25 @@ export function openWorkspaceCommand(
       viaPicker();
       return;
     }
-    void openProject().then((native) => {
+    // P1.1: open where the user already works (the same working-path hint
+    // lib/importEntry.ts's `chooseAndImport` forwards for datasets). The
+    // folder actually opened from is remembered at the ACCEPTED-apply
+    // chokepoint (openWorkspaceReplace.ts's `recordNativeOpen`), not here
+    // — a pick the user then declines to load must not move the working
+    // path any more than it records a Recent Projects entry (DEFECT A).
+    void openProject(useWorkingPaths.getState().current || undefined).then((native) => {
       if (native === CANCELLED) return; // the user backed out — never fall back
       if (native === null) {
         viaPicker();
         return;
       }
-      void withOp(label, () => Promise.resolve(parseWorkspace(native.content, currentViewport())))
+      void withOp(label, () =>
+        Promise.resolve(
+          parseWorkspace(native.content, currentViewport(), {
+            projectDir: parentDirectory(native.path) || undefined,
+          }),
+        ),
+      )
         .then((ws) => dispatch(ws, { name: baseName(native.path), path: native.path }))
         .catch((e: unknown) =>
           s().setStatus(`${verb} failed: ${e instanceof Error ? e.message : "error"}`),

@@ -24,34 +24,21 @@
 // Recent Projects entry — see lib/recentProjects.ts's module doc for why a
 // browser download, which has no path, never does.
 
-import {
-  CANCELLED,
-  LOCK_LOST,
-  hasDesktopShell,
-  pickSaveDestination,
-  saveProjectTo,
-  type SaveProjectResult,
-} from "../lib/desktopBridge";
+import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
+import { baseName, parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
+import { useWorkingPaths } from "./workingPaths";
 import { nextDatasetId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-/** Basename of a native path, tolerant of either separator (the same "either
- *  slash, Windows paths included" handling lib/importEntry.ts's
- *  `parentDirectory` uses for the complementary half of a path). */
-function baseName(path: string): string {
-  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf(String.fromCharCode(92)));
-  return cut >= 0 ? path.slice(cut + 1) : path;
-}
 
 /** Shared "saved workspace [to PATH] — N dataset(s)" status/toast text —
  *  used by every successful save branch below (native Save As, quick Save,
@@ -60,12 +47,20 @@ function savedMsg(n: number, path?: string): string {
   return `saved workspace${path ? ` to ${path}` : ""} — ${n} dataset${n === 1 ? "" : "s"}`;
 }
 
-/** Resolve pending books and serialize the live workspace — the shared
+/** Resolve pending books and gather the live workspace state — the shared
  *  preface both Save (`runSaveWorkspace`) and Save As (`runSaveWorkspaceToFile`)
  *  need before they can write anything. Returns null when there is nothing to
  *  save or resolving pending books failed; both cases already set status/toast
- *  themselves, so callers just bail out. */
-async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> {
+ *  themselves, so callers just bail out.
+ *
+ *  Returns the (structurally WorkspaceState-compatible) store slice rather
+ *  than an already-serialized string — P1.7 PR 3's Save As needs to pick its
+ *  destination BEFORE it knows the `projectDir` `serializeWorkspace` should
+ *  use for bundle-relative sources, so the actual `JSON.stringify` has to
+ *  happen after that pick, not here. Everything ABOVE that split (bailing
+ *  out on nothing-to-save, resolving pending books, folding in the focused
+ *  window's live view) still runs at exactly the same point it always did. */
+async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
   const all = get().datasets;
   if (all.length === 0) {
     get().setStatus("no datasets to save");
@@ -92,7 +87,19 @@ async function serializeCurrentWorkspace(get: SliceGet): Promise<string | null> 
     s,
     s.techniqueViewMemory,
   );
-  return serializeWorkspace({ ...s, plotWindows: s.windowsForSave(), techniqueViewMemory });
+  return { ...s, plotWindows: s.windowsForSave(), techniqueViewMemory };
+}
+
+/** `prepareWorkspaceState` + serialize in one call, for the ONE caller that
+ *  already knows its `projectDir` before anything else happens: quick Save
+ *  (`runSaveWorkspace`, whose destination is the already-known current
+ *  project). Save As (`runSaveWorkspaceToFile`) calls `prepareWorkspaceState`
+ *  and `serializeWorkspace` separately instead — see that function's own
+ *  comment for why. */
+async function serializeCurrentWorkspace(get: SliceGet, projectDir?: string): Promise<string | null> {
+  const state = await prepareWorkspaceState(get);
+  if (state === null) return null;
+  return serializeWorkspace(state, projectDir !== undefined ? { projectDir } : undefined);
 }
 
 /** I2 (P0-3/P1-1): acquire the lock for a Save-As DESTINATION before ever
@@ -149,8 +156,14 @@ async function acquireDestinationLock(
 }
 
 export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
-  const content = await serializeCurrentWorkspace(get);
-  if (content === null) return;
+  // P1.7 PR 3: gather state (resolve pending books, fold the live view) at
+  // exactly the point the pre-existing flow always did — but hold off on the
+  // actual `JSON.stringify` until AFTER the destination below is picked, so
+  // `serializeWorkspace` can be told the right `projectDir` (a bundle source
+  // is only writable as `kind: "bundle"` relative to WHERE this save is
+  // actually landing, which isn't known yet at this line).
+  const state = await prepareWorkspaceState(get);
+  if (state === null) return;
   const all = get().datasets; // unaffected by serializing — safe to re-read for the count
 
   // P1.1 C3 + P2 (adversarial review, 2026-08-19): the dialog pick and the
@@ -161,10 +174,57 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // automatically a SAFE one: nothing previously stopped a read-only
   // session from Save-As-ing back onto the very path another LIVE instance
   // holds the write lock for and silently overwriting it.
-  const destination = await pickSaveDestination("workspace.dwk");
+  //
+  // P1.1: the dialog opens NEXT TO the open project when there is one (its
+  // own folder, its own name pre-filled — so Enter re-saves in place, never
+  // a same-named fork in whatever folder the last import came from), and
+  // otherwise in the current working path, the same hint the import and
+  // Open Project dialogs use.
+  const project = get().currentProject;
+  const destination = await pickSaveDestination(
+    project?.name || "workspace.dwk",
+    (project ? parentDirectory(project.path) : "") || useWorkingPaths.getState().current || undefined,
+  );
   if (destination === CANCELLED) return; // the user backed out — do nothing, never fall back
+  if (typeof destination === "object" && destination !== null) {
+    // The dialog itself refused the pick and said why (P1.2 box 4: the
+    // destination is the open project's own declared raw source — see
+    // desktop_bridge_dialogs.py's `save_file_dialog`). A refusal, not a
+    // cancel: say so, and never fall back to a download either.
+    const msg = saveErrorStatus(destination.refused);
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  // P1.7 PR 3: NOW `projectDir` is knowable — a real native destination
+  // means datasets that were resolved from THIS SAME directory's bundle can
+  // round-trip as `kind: "bundle"` (`serializeDatasetSource`'s identity
+  // check decides per-dataset, not this call); no destination (no usable
+  // bridge — every browser tab) means the browser-download fallback below,
+  // unchanged, always absolute.
+  const content = serializeWorkspace(
+    state,
+    destination !== null ? { projectDir: parentDirectory(destination) || undefined } : undefined,
+  );
   let native: SaveProjectResult | null = null;
   if (destination !== null) {
+    // P1.2 box 4: a fast, friendly PRE-check — the desktop bridge itself
+    // (desktop_bridge.py's `write_project_file`/`save_file_dialog`, backed
+    // by `desktop_consent.is_declared_source`) is what actually enforces
+    // this (exact realpath equality, server-side), so this is belt only,
+    // never the buckle: it just turns "silently refused two calls later"
+    // into an immediate, specific status naming the dataset, without a
+    // round trip through the dialog/lock machinery first. Exact string
+    // equality only — the backend's realpath resolution is the source of
+    // truth for anything a case-insensitive filesystem might otherwise
+    // disagree about.
+    const sourceDataset = get().datasets.find((d) => d.source?.path === destination);
+    if (sourceDataset) {
+      const msg = `save refused — "${baseName(destination)}" is the data source of "${sourceDataset.name}"`;
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return; // never write, never fall back to a browser download
+    }
     // I2 (P0-3/P1-1): ACQUIRE the destination's lock first — see
     // `acquireDestinationLock`'s own doc. This replaces the old
     // "only check IF the lock happens to already be tracking this exact
@@ -182,7 +242,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       return; // a deliberate refusal, not a failure — no download fallback either
     }
     const write = await saveProjectTo(destination, content, acquired.record.token);
-    if (write !== null && write !== LOCK_LOST) {
+    if (write !== null && write !== LOCK_LOST && !isSaveRefused(write)) {
       native = write;
       // Success: release the OLD lock — a DIFFERENT path this instance
       // actually held — now that the NEW path is the project's identity.
@@ -210,6 +270,17 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
       // leave the OLD lock completely untouched: the user is still
       // working in the prior project, this Save As simply didn't happen.
       await lock.provider.release(destination, acquired.record.token ?? "").catch(() => false);
+      if (isSaveRefused(write)) {
+        // The WRITE refused the destination (P1.2 box 4's payload-derived
+        // check: a declared source under a spelling neither the pre-check
+        // above nor the dialog's cached set matched). A refusal, not a
+        // failure — say why, and never fall back to a download that would
+        // announce success (self-review on #291).
+        const msg = saveErrorStatus(write.refused);
+        get().setStatus(msg);
+        toast(msg, "danger");
+        return;
+      }
     }
   }
   if (native !== null) {
@@ -218,6 +289,8 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
     // the live workspace and disk agree.
     get().setCurrentProject({ name: baseName(native.path), path: native.path });
     useRecentProjects.getState().pushRecentProject(baseName(native.path), native.path);
+    const dir = parentDirectory(native.path); // P1.1: the folder saved into floats to the top
+    if (dir) useWorkingPaths.getState().use(dir);
     const msg = savedMsg(all.length, native.path);
     get().setStatus(msg);
     toast(msg, "ok");
@@ -279,7 +352,22 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     toast(msg, "danger");
     return;
   }
-  const content = await serializeCurrentWorkspace(get);
+  // P1.1: a project on an UNMOUNTED share is temporarily offline, not a
+  // write target — writing "through" an absent mount point would land a
+  // stray local file at the mount path (and a failed write reads as
+  // "the save is broken, use Save As", which quietly forks the project).
+  // Say what is actually wrong and leave the dirty marker set; a re-press
+  // after reconnecting is the retry. Only `offline` is gated: a deleted
+  // file on a live volume is legitimately recreated by the write.
+  if ((await pathState(project.path)) === "offline") {
+    const msg = `${project.name}: the drive or share holding this project is not available right now — reconnect and save again, or use Save As to save a copy elsewhere`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  // P1.7 PR 3: a quick save's destination IS `project.path` — no dialog, no
+  // uncertainty — so `projectDir` is knowable up front, unlike Save As.
+  const content = await serializeCurrentWorkspace(get, parentDirectory(project.path) || undefined);
   if (content === null) return;
 
   // I2 (P0-3/P1-1): THE actual enforcement point — the CURRENTLY held
@@ -321,6 +409,17 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     const status = current === null ? "held-by-other-live" : classifyLock(current, lock.instanceId, Date.now());
     useProjectLock.setState({ status, record: current, unverifiableHeartbeats: 0 });
     const msg = "save refused — the project lock was lost (another instance may hold it now)";
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return;
+  }
+  if (isSaveRefused(result)) {
+    // The named project's own path is now one of its declared sources (a
+    // relink pointed a dataset at the .dwk itself, or an alias spelling the
+    // open-time cache never saw) — the backend refused before touching
+    // disk; say exactly that rather than "could not write" (self-review on
+    // #291). The dirty marker stays set.
+    const msg = saveErrorStatus(result.refused);
     get().setStatus(msg);
     toast(msg, "danger");
     return;
