@@ -16,9 +16,12 @@
 # Re-evaluated 2026-09-02 after GitHub reopened Dependabot alert #1 with no
 # lockfile change: tauri 2.11.5 is still the newest release and still pins
 # gtk 0.18; `cargo update -p glib --dry-run` locks 0 packages. Unchanged.
+# Re-verified 2026-09-08 (alert #1 still open, still surfacing on every push):
+# crates.io's newest stable tauri is STILL 2.11.5, the version locked here, so
+# no release exists that could move this chain. Unchanged again.
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0429"
-reason = "2026-08-01 (re-checked 2026-09-02, unchanged): mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
+reason = "2026-08-01 (re-checked 2026-09-02 and 2026-09-08, unchanged): mirrors the dated Dependabot dismissal — unreachable gtk3-stack unsoundness, no compatible fix while Tauri v2 pins gtk-rs 0.18; re-eval when Tauri adopts gtk-rs 0.20"
 
 # gtk3-rs bindings are unmaintained upstream (announced 2024) — advisory
 # notices, not vulnerabilities. They are Tauri v2's Linux backend, reached
@@ -65,26 +68,38 @@ reason = "2026-08-01: gtk-sys — unmaintained gtk3 bindings via Tauri v2 Linux 
 
 # Unmaintained-crate notices deeper in Tauri's tree — build-time or
 # pattern-matching helpers, no known vulnerability, no fix released.
+#
+# 2026-09-08: traced each to the dependency that actually pins it, so a future
+# re-evaluation does not have to re-derive it.
+#   - proc-macro-error is reached ONLY through glib-macros and gtk3-macros, so
+#     it clears with the same gtk-rs 0.20 move as the block above — it is not a
+#     separate piece of work.
+#   - every unic-* crate below is reached ONLY through urlpattern 0.3.0, which
+#     is pinned by tauri-utils; the newest tauri-utils (2.9.3, the version
+#     locked here) still declares `urlpattern = "^0.3"`, and urlpattern dropped
+#     the unic-* dependencies after 0.3. So these five are blocked on a
+#     tauri-utils release that widens that requirement, NOT on anything this
+#     repo controls — `cargo update` cannot clear them.
 [[IgnoredVulns]]
 id = "RUSTSEC-2024-0370"
-reason = "2026-08-01: proc-macro-error — unmaintained build-time proc-macro crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): proc-macro-error — unmaintained build-time proc-macro crate reached only via glib-macros/gtk3-macros; no vulnerability; clears with the gtk-rs 0.20 move"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0075"
-reason = "2026-08-01: unic-char-range — unmaintained unic project crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): unic-char-range — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0080"
-reason = "2026-08-01: unic-common — unmaintained unic project crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): unic-common — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0081"
-reason = "2026-08-01: unic-char-property — unmaintained unic project crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): unic-char-property — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0098"
-reason = "2026-08-01: unic-ucd-version — unmaintained unic project crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): unic-ucd-version — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
 
 [[IgnoredVulns]]
 id = "RUSTSEC-2025-0100"
-reason = "2026-08-01: unic-ucd-ident — unmaintained unic project crate in Tauri's tree; no vulnerability"
+reason = "2026-08-01 (re-checked 2026-09-08): unic-ucd-ident — unmaintained unic project crate, reached only via urlpattern 0.3.0 which tauri-utils 2.9.3 (newest) still pins at ^0.3; no vulnerability, not clearable by cargo update"
