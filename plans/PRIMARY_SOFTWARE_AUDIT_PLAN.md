@@ -801,11 +801,23 @@ Behavior:
   panel; schema version migration beyond the v1 parse-gate does not exist).
 - [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
-- [ ] Stage/Figure Builder/reopen/export/clipboard remain equivalent (a
-  recipe-applied figure is built from the SAME `createWindow`/
-  `createFigureDocument` primitives every other figure uses, so this is
-  architecturally implied, but not independently verified by an owner
-  acceptance journey or an equivalence test).
+- [x] Stage/Figure Builder/reopen/export/clipboard remain equivalent —
+  `plotRecipes.test.ts` applies a DECORATED recipe (log axes, limits, legend
+  placement, series style, annotation, shape, region shade) through the real
+  store and asserts those decorations survive into the render spec Stage
+  builds, then saves and reopens the `.dwk` and asserts the reopened figure
+  produces the identical spec. The reopen leg is the strong evidence: both
+  sides come from the same builder but from DIFFERENT inputs (live store vs.
+  a serialize/parse round trip), so anything the `.dwk` drops shows up.
+  Scope, stated honestly: Stage and Figure Builder are equivalent BY
+  CONSTRUCTION, not by test — `buildStageFigureSpec` delegates to
+  `buildFigureSpecFromDocument` whenever it can route through the document,
+  so comparing them is an identity, and export/clipboard reach the same
+  builder through that same chokepoint. That part remains an architectural
+  inference (a sound one — `exportFigureCommand`/`copyFigureCommand` are
+  one-line calls to it), and the absolute assertions are what actually
+  protect the decoration those paths carry. Owner acceptance remains useful
+  release QA.
 
 ### P1.4 — First-class categorical and metadata channels [~]
 
@@ -1069,13 +1081,12 @@ the upstream fetch already nulls those values first. P3 (nitpick) — a
 one-line comment in the E2E spec now names which assertion is load-bearing
 for the close/reopen proof, since the final export step also re-commits
 the Graph Builder's own live spec.
-- [ ] Supported statistical/scientific faceting — booked, NOT this slice
-  (the dispatch's own "Group-well core + what falls out naturally" scope;
-  Facet already has its OWN live mechanism, `facetByColumn`'s small-multiples
-  composition, structurally unrelated to the within-panel colour split this
-  slice closes — see `group-facet-journey.spec.ts`'s own header for exactly
-  why `FigureDocument.bindings.facetKey` remains unwired, unchanged by this
-  slice).
+- [x] Supported statistical/scientific faceting — completed later by the
+  F4.4 campaign (#222/#226/#227/#232/#234): `facetKey` is a durable
+  bindings-owned field, rebuilds the small-multiples grid after focus change,
+  `.dwk` reopen, and recipe application, and reaches every export/page/hitmap
+  path. Background-window and restored-single-series regressions are pinned
+  too. The older slice note claiming `facetKey` remained unwired was stale.
 - [ ] Data Filter / Tabulate / Stat Stage workbench wiring through
   `is_categorical`/`isCategoricalChannel` — booked to a future slice, named
   home not yet assigned (P1.4's own booking, restated here since it's
