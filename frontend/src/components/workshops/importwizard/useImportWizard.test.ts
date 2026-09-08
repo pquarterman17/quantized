@@ -487,4 +487,126 @@ describe("useImportWizard", () => {
     expect(deleteImportFilter).toHaveBeenCalledWith("Messy");
     expect(result.current.filters).toEqual([]);
   });
+  // ── Review round 4 regressions (error-binding / editor-row agreement) ──────
+
+  it("applies a suggestion even when suggestions are suppressed by an explicit saved binding set", async () => {
+    // A file opened through a saved filter that recorded "no error bindings"
+    // suppresses seeding, so the row for a newly re-roled column starts
+    // UNASSIGNED. Writing only settings made Apply a no-op: the reconciliation
+    // effect, for which the row is authoritative, pruned the binding straight
+    // back out one render later.
+    const suggestion = { column: 2, target: 1, axis: "y" as const, side: "both" as const };
+    vi.mocked(importGuess).mockResolvedValue({
+      ...SETTINGS,
+      column_names: ["Temp", "Moment", "dMoment"],
+      roles: ["x", "y", "y"],
+      error_bindings: [],
+    });
+    vi.mocked(importPreview).mockResolvedValue({
+      ...PREVIEW,
+      columns: [...PREVIEW.columns, { index: 2, name: "dMoment", unit: "", role: "y" }],
+      error_bindings: [],
+      suggested_error_bindings: [suggestion],
+    });
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.preview?.columns).toHaveLength(3));
+
+    await act(async () => { result.current.applyErrorSuggestion(suggestion); });
+
+    expect(result.current.settings?.error_bindings).toEqual([suggestion]);
+    expect(result.current.errorRows).toHaveLength(1);
+    expect(result.current.errorRows[0]).toMatchObject({ channel: 1, target: 0, axis: "y", side: "both" });
+  });
+
+  it("keeps a backend-REJECTED binding in settings until the user dismisses its alert", async () => {
+    // The column exists and IS an error column, so the row-authoritative
+    // reconciliation would happily overwrite/prune it -- deleting the evidence
+    // behind a visible "Remove invalid setting" alert, and silently discarding
+    // a saved pairing the user never acknowledged.
+    const rejected = { column: 2, target: 1, axis: "x" as const, side: "both" as const };
+    vi.mocked(importGuess).mockResolvedValue({
+      ...SETTINGS,
+      column_names: ["Temp", "Moment", "dMoment"],
+      roles: ["x", "y", "error"],
+      error_bindings: [rejected],
+    });
+    vi.mocked(importPreview).mockResolvedValue({
+      ...PREVIEW,
+      columns: [...PREVIEW.columns, { index: 2, name: "dMoment", unit: "", role: "error" }],
+      error_bindings: [],
+      error_binding_problems: [{
+        ...rejected,
+        code: "axis_contradicts_target",
+        reason: "x-axis error must target the x axis.",
+      }],
+    });
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.preview?.error_binding_problems).toHaveLength(1));
+
+    expect(result.current.settings?.error_bindings).toEqual([rejected]);
+
+    const problem = result.current.preview!.error_binding_problems![0];
+    await act(async () => { result.current.removeRejectedErrorBinding(problem); });
+    expect(result.current.settings?.error_bindings).toEqual([]);
+  });
+
+  it("never writes a binding against stale channel numbering when a preceding column is re-roled", async () => {
+    // Re-roling `A` (y -> ignore) renumbers every channel after it while the
+    // ERROR-column COUNT stays equal, so a count-only staleness guard let the
+    // stale rows be written against the new numbering -- persisting plain `B`
+    // as an error column for `dA`. It self-corrects on the next commit, but
+    // `settings` is read synchronously by doImport/saveAsFilter, so the
+    // assertion is over EVERY rendered value, not just the settled one.
+    const wide: ImportPreviewResponse = {
+      ...PREVIEW,
+      columns: [
+        { index: 0, name: "Temp", unit: "", role: "x" },
+        { index: 1, name: "A", unit: "", role: "y" },
+        { index: 2, name: "dA", unit: "", role: "error" },
+        { index: 3, name: "B", unit: "", role: "y" },
+      ],
+    };
+    vi.mocked(importPreview).mockResolvedValue(wide);
+    const seen: (ImportSettingsWire["error_bindings"])[] = [];
+    const { result } = renderHook(() => {
+      const state = useImportWizard();
+      seen.push(state.settings?.error_bindings);
+      return state;
+    });
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.settings?.error_bindings).toHaveLength(1));
+
+    await act(async () => { result.current.setColumnRole(1, "ignore"); });
+
+    for (const bindings of seen) {
+      // column 3 is `B`, a plain y column -- it must never appear as the
+      // ERROR column of a binding, in any intermediate render.
+      expect(bindings?.some((b) => b.column === 3) ?? false).toBe(false);
+    }
+  });
+
+  it("removes the CLICKED malformed binding, not merely the first shape-invalid one", async () => {
+    const malformed = [
+      { column: "2", target: 1, axis: "y", side: "both" },
+      { column: 3, target: 1, axis: "Y", side: "both" },
+    ] as unknown as NonNullable<ImportSettingsWire["error_bindings"]>;
+    vi.mocked(importGuess).mockResolvedValue({ ...SETTINGS, error_bindings: malformed });
+    vi.mocked(importPreview).mockResolvedValue({
+      ...PREVIEW,
+      error_binding_problems: [
+        { column: -1, target: 1, axis: "y", side: "both", code: "malformed_entry", reason: "Entry 1 is malformed." },
+        { column: 3, target: 1, axis: "y", side: "both", code: "malformed_entry", reason: "Entry 2 is malformed." },
+      ],
+    });
+    const { result } = renderHook(() => useImportWizard());
+    await act(async () => { await result.current.pickFile(fakeFile("run1.dat")); });
+    await waitFor(() => expect(result.current.preview?.error_binding_problems).toHaveLength(2));
+
+    const second = result.current.preview!.error_binding_problems![1];
+    await act(async () => { result.current.removeRejectedErrorBinding(second); });
+
+    expect(result.current.settings?.error_bindings).toEqual([malformed[0]]);
+  });
 });

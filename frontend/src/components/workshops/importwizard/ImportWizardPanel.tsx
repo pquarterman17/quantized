@@ -185,8 +185,9 @@ export default function ImportWizardPanel() {
           {w.preview && (
             <CategoricalProblems
               problems={w.preview.categorical_problems ?? []}
-              allowLarge={!!w.settings?.allow_large_categorical}
-              onAllowLarge={() => w.patchSettings({ allow_large_categorical: true })}
+              accepted={w.acceptedCategorical}
+              onAccept={w.acceptLargeCategorical}
+              onUnaccept={w.unacceptLargeCategorical}
             />
           )}
 
