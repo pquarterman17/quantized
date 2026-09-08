@@ -48,7 +48,7 @@ export default function ErrorBindingSuggestions({
         </div>
       )}
       {problems.length > 0 && (
-        <div role="alert" className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
+        <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>
           <strong>Saved error settings need attention:</strong>
           <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
             {problems.map((problem, index) => (

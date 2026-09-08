@@ -87,9 +87,18 @@ MAX_CATEGORICAL_LEVELS = 500
 MAX_CATEGORICAL_COLLISIONS = 50
 
 
-def _categorical_level_problems(column_name: str, levels: Sequence[str]) -> list[dict[str, Any]]:
+def _categorical_level_problems(
+    index: int, column_name: str, levels: Sequence[str]
+) -> list[dict[str, Any]]:
     """Structured problems in one categorical column's LEVEL TABLE. Two
-    kinds, by ``"type"``:
+    kinds, by ``"type"``.
+
+    Every entry carries BOTH the column's raw file ``index`` and its display
+    ``column`` name. The index is what identifies the column -- names are not
+    unique (``_resolve_names`` never de-duplicates them, so two columns can
+    share a header) and are user-editable mid-session, so a caller keying,
+    gating, or accepting per column must key on the index; the name is for
+    display only. Kinds:
 
     - ``"categorical_level_cap"``: more than `MAX_CATEGORICAL_LEVELS`
       distinct levels. Carries `level_count` and the `cap` itself. The
@@ -112,6 +121,7 @@ def _categorical_level_problems(column_name: str, levels: Sequence[str]) -> list
         problems.append(
             {
                 "type": "categorical_level_cap",
+                "index": index,
                 "column": column_name,
                 "level_count": len(levels),
                 "cap": MAX_CATEGORICAL_LEVELS,
@@ -125,12 +135,18 @@ def _categorical_level_problems(column_name: str, levels: Sequence[str]) -> list
     truncated = len(collisions) > MAX_CATEGORICAL_COLLISIONS
     for labels in collisions[:MAX_CATEGORICAL_COLLISIONS]:
         problems.append(
-            {"type": "categorical_case_collision", "column": column_name, "labels": labels}
+            {
+                "type": "categorical_case_collision",
+                "index": index,
+                "column": column_name,
+                "labels": labels,
+            }
         )
     if truncated:
         problems.append(
             {
                 "type": "categorical_case_collision_truncated",
+                "index": index,
                 "column": column_name,
                 "collision_count": len(collisions),
                 "cap": MAX_CATEGORICAL_COLLISIONS,
@@ -140,9 +156,9 @@ def _categorical_level_problems(column_name: str, levels: Sequence[str]) -> list
 
 
 def encode_categorical_columns(
-    columns: Sequence[tuple[str, Sequence[str]]],
+    columns: Sequence[tuple[int, str, Sequence[str]]],
 ) -> tuple[list[tuple[np.ndarray, tuple[str, ...]]], list[dict[str, Any]]]:
-    """Encode every ``(column_name, cells)`` pair with ``_encode_categorical``
+    """Encode every ``(raw_column_index, column_name, cells)`` triple with ``_encode_categorical``
     and collect the `_categorical_level_problems` each column's resulting
     level table raises -- ONE encode per column, so a caller that needs both
     the encoded result (to build the channel) and the problem list (to
@@ -153,10 +169,10 @@ def encode_categorical_columns(
     """
     encoded: list[tuple[np.ndarray, tuple[str, ...]]] = []
     problems: list[dict[str, Any]] = []
-    for name, cells in columns:
+    for index, name, cells in columns:
         codes, levels = _encode_categorical(cells)
         encoded.append((codes, levels))
-        problems.extend(_categorical_level_problems(name, levels))
+        problems.extend(_categorical_level_problems(index, name, levels))
     return encoded, problems
 
 
@@ -183,7 +199,7 @@ def _levels_only(cells: Sequence[str]) -> tuple[str, ...]:
 
 
 def categorical_level_problems_only(
-    columns: Sequence[tuple[str, Sequence[str]]],
+    columns: Sequence[tuple[int, str, Sequence[str]]],
 ) -> list[dict[str, Any]]:
     """Preview-only counterpart to `encode_categorical_columns`: the SAME
     problems, computed from `_levels_only` instead of a full
@@ -192,6 +208,6 @@ def categorical_level_problems_only(
     keep calling `encode_categorical_columns` (it needs the codes too).
     """
     problems: list[dict[str, Any]] = []
-    for name, cells in columns:
-        problems.extend(_categorical_level_problems(name, _levels_only(cells)))
+    for index, name, cells in columns:
+        problems.extend(_categorical_level_problems(index, name, _levels_only(cells)))
     return problems
