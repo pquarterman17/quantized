@@ -5,7 +5,7 @@
 // flattens a test-result dict into displayable rows. Pure (no React / store /
 // fetch) so every branch unit-tests standalone.
 
-import { groupLevelLabel } from "./categorical";
+import { resolveCategoryLabels } from "./barlayout";
 import type { DataStruct } from "./types";
 
 /** One candidate group: a label for the UI + its finite values. */
@@ -31,12 +31,30 @@ const colValues = (data: DataStruct, index: number): number[] =>
 const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
 
 /** Keep statistical labels aligned with plots, filters, and Tabulate: a
- *  categorical code is implementation detail, while its level-table text is
- *  what the scientist assigned and expects to see. Numeric/legacy groups
- *  retain the previous stringified-number fallback. */
-const categoryGroupLabel = (data: DataStruct, byCol: number, level: number): string => {
+ *  categorical code is implementation detail, while the text the scientist
+ *  assigned is what they expect to read on a group.
+ *
+ *  Resolved through `barlayout.resolveCategoryLabels` — the SAME three-source
+ *  precedence Tabulate, Fit Y by X, Data Filter, facets and `plotdata` use
+ *  (level table, then an Origin text column that consistently covers every
+ *  level, then formatted numerics). `categorical.groupLevelLabel` reads the
+ *  level table ONLY, which is not enough here: a channel is categorical
+ *  whenever `channelModelingType` says so, including via a `channelTypes`
+ *  override or `inferModelingType`, and an Origin `.opj` import is exactly
+ *  that shape — numeric codes plus `origin_text_columns`, no `cat_levels`.
+ *  Using the narrower accessor made Stat Stage print "batch = 0" for the same
+ *  column Data Filter and Tabulate label "Reference".
+ *
+ *  Resolves the whole level set in ONE call rather than per group: the Origin
+ *  text-column source scans the column to prove it covers every level, so
+ *  per-level resolution would re-walk it once per group. */
+const categoryGroupLabels = (
+  data: DataStruct,
+  byCol: number,
+  levels: readonly number[],
+): string[] => {
   const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
-  return `${byLabel} = ${groupLevelLabel(data, byCol, level)}`;
+  return resolveCategoryLabels(data, byCol, levels).map((text) => `${byLabel} = ${text}`);
 };
 
 /** Columns mode: each picked column (-1 = x, 0.. = channels) is one group. */
@@ -65,9 +83,9 @@ export function groupsByCategory(
     if (bucket) bucket.push(val[i]);
     else parts.set(by[i], [val[i]]);
   }
-  return [...parts.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([level, values]) => ({ label: categoryGroupLabel(data, byCol, level), values }));
+  const entries = [...parts.entries()].sort((a, b) => a[0] - b[0]);
+  const labels = categoryGroupLabels(data, byCol, entries.map(([level]) => level));
+  return entries.map(([, values], i) => ({ label: labels[i], values }));
 }
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
@@ -120,9 +138,9 @@ export function groupsByCategoryIndexed(
     if (bucket) bucket.push(point);
     else parts.set(by[i], [point]);
   }
-  return [...parts.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([level, points]) => ({ label: categoryGroupLabel(data, byCol, level), points }));
+  const entries = [...parts.entries()].sort((a, b) => a[0] - b[0]);
+  const labels = categoryGroupLabels(data, byCol, entries.map(([level]) => level));
+  return entries.map(([, points], i) => ({ label: labels[i], points }));
 }
 
 /** Build the request for the RECOMMENDED endpoint from the same groups the
