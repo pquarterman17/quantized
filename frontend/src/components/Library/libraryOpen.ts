@@ -31,6 +31,28 @@ export function selectLibraryNode(node: LibraryNode): void {
   else s.setLibrarySelection({ kind: node.kind, id: node.entityId });
 }
 
+/** The L0.25 selection test for one node, mirroring `selectLibraryNode`'s
+ *  own worksheet/other split: a worksheet is selected through the app-wide
+ *  `selectedIds`, every other kind through `librarySelection`. Shared by
+ *  LibraryDetails and LibraryTree (E-c3's virtualization "keep the selected
+ *  row visible" effect) so neither reimplements the split, and so importing
+ *  one lazy-loaded renderer never pulls in the other's chunk.
+ *
+ *  Takes a `ReadonlySet` (E-c3 "keep selection operations indexed" —
+ *  LIBRARY_WORKBOOK_UX_PLAN): both call sites run this once PER RENDERED
+ *  ROW, so an `Array.includes` here would rescan the whole live selection
+ *  once per row: O(rows × selection size) per render. Callers build the Set
+ *  once per render (`useMemo`); membership is then O(1) per row. */
+export function isSelected(
+  node: LibraryNode,
+  selectedIds: ReadonlySet<string>,
+  selection: { kind: string; id: string } | null,
+): boolean {
+  return node.kind === "worksheet"
+    ? selectedIds.has(node.entityId)
+    : selection?.kind === node.kind && selection.id === node.entityId;
+}
+
 /** The workbook id a node is nested under, or undefined when it isn't a
  *  workbook child (a folder/root-level item, or a cross-workbook artifact
  *  placed at a shared folder per L0.44). */

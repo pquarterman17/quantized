@@ -18,7 +18,7 @@
 // the true-empty state; each hides while the tree renders so nothing is
 // ever a Library item twice.
 
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import BookFamiliesSection from "./BookFamiliesSection";
 import CollectionsSection from "./CollectionsSection";
@@ -84,6 +84,12 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const revealTarget = useLibraryStore((s) => s.revealTarget);
   const clearReveal = useLibraryStore((s) => s.clearReveal);
   const startResize = useLibraryResize();
+  // E-c3 large-Library safeguard: the ONE real scrolling ancestor for both
+  // Tree and Details — header/search/sections and the row list share this
+  // one scrollbar (shell.css's `.qzk-library { overflow-y: auto }`), so
+  // their virtualization hooks must measure/scroll THIS element, not their
+  // own row container.
+  const panelRef = useRef<HTMLElement>(null);
   const { hierarchy, rows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -225,13 +231,13 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   if (query.trim() !== "") {
     body = (
       <Suspense fallback={null}>
-        <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} />
+        <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} panelRef={panelRef} />
       </Suspense>
     );
   } else if (inHierarchy && viewMode === "details") {
     body = (
       <Suspense fallback={null}>
-        <LibraryDetails hierarchy={hierarchy} />
+        <LibraryDetails hierarchy={hierarchy} panelRef={panelRef} />
       </Suspense>
     );
   } else if (inHierarchy) {
@@ -239,7 +245,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     // an Origin-like tree navigator while that workspace is open (L0.15).
     body = (
       <Suspense fallback={null}>
-        <LibraryTree rows={rows} onFilterTag={setQuery} />
+        <LibraryTree rows={rows} onFilterTag={setQuery} panelRef={panelRef} />
       </Suspense>
     );
   } else {
@@ -248,6 +254,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
 
   return (
     <aside
+      ref={panelRef}
       className={`qzk-library${dragging ? " dragover" : ""}`}
       onDragOver={(e) => {
         // Only react to OS file drags; an internal dataset drag (row → folder) is

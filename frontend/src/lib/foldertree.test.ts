@@ -16,6 +16,8 @@ import {
   pruneOrphans,
   renameFolder,
   resolveDropBeforeId,
+  subtreeCount,
+  subtreeCountIndex,
   subtreeDatasets,
   subtreeIds,
   updateFolder,
@@ -357,5 +359,68 @@ describe("resolveDropBeforeId", () => {
 
   it("a stale/missing target resolves to undefined (append) on below", () => {
     expect(resolveDropBeforeId(siblingIds, "ghost", "below")).toBeUndefined();
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN "Required large-Library engineering safeguards" —
+// "keep folder counts... indexed; avoid rescanning all workbook payloads on
+// every render or keystroke". LibraryTree.tsx's render loop used to call
+// `subtreeCount` once PER FOLDER ROW — for a folder CHAIN that re-walks
+// heavily overlapping subtrees from scratch on every call, O(folders²)
+// total. `subtreeCountIndex` computes every folder's count in one indexed
+// pass instead.
+describe("subtreeCountIndex — the render-hot-path fix", () => {
+  // A folder CHAIN (each folder's only child is the next), the worst case
+  // for the old per-row call pattern: subtreeCount(id) at the ROOT alone
+  // already walks the whole chain, and the render loop called it once for
+  // EVERY folder in the chain.
+  const chain = (n: number): FolderNode[] =>
+    Array.from({ length: n }, (_, i) => fld(`f${i}`, i === 0 ? null : `f${i - 1}`, 0));
+  const oneDatasetEach = (n: number): Dataset[] => Array.from({ length: n }, (_, i) => ds(`d${i}`, `f${i}`));
+
+  it("matches subtreeCount for every folder, including a branching (non-chain) tree", () => {
+    const folders = [fld("a", null, 0), fld("b", null, 1), fld("a1", "a", 0), fld("a2", "a", 1)];
+    const datasets = [ds("d1", "a"), ds("d2", "a1"), ds("d3", "b"), ds("d4")];
+    const indexed = subtreeCountIndex(folders, datasets);
+    for (const f of folders) {
+      expect(indexed.get(f.id)).toBe(subtreeCount(folders, datasets, f.id));
+    }
+  });
+
+  it("a folder with no datasets anywhere in its subtree counts 0, not missing", () => {
+    const folders = [fld("empty", null, 0)];
+    expect(subtreeCountIndex(folders, []).get("empty")).toBe(0);
+  });
+
+  it("counting fake: the indexed pass touches the datasets/folders arrays a BOUNDED number of times; the old per-row call pattern rescans them quadratically", () => {
+    const N = 40;
+    const folders = chain(N);
+    const datasets = oneDatasetEach(N);
+
+    // Counts every access to Array.prototype.filter on the wrapped array —
+    // folderDatasets/childFolders both do `arr.filter(...)`, so this counts
+    // how many times subtreeCount's recursion rescans the underlying data.
+    let filterCalls = 0;
+    const countingProxy = <T,>(arr: T[]): T[] =>
+      new Proxy(arr, {
+        get(target, prop, receiver) {
+          if (prop === "filter") filterCalls++;
+          return Reflect.get(target, prop, receiver);
+        },
+      });
+
+    // The OLD render-hot-path: LibraryTree.tsx called subtreeCount once per
+    // FOLDER ROW inside its rows.map.
+    filterCalls = 0;
+    for (const f of folders) subtreeCount(countingProxy(folders), countingProxy(datasets), f.id);
+    const oldCalls = filterCalls;
+
+    // The fix: one subtreeCountIndex call for the whole render.
+    filterCalls = 0;
+    subtreeCountIndex(countingProxy(folders), countingProxy(datasets));
+    const newCalls = filterCalls;
+
+    expect(newCalls).toBe(0); // no `.filter` at all — two plain indexed loops
+    expect(oldCalls).toBeGreaterThanOrEqual((N * (N + 1)) / 2); // O(N²) from the per-row call pattern
   });
 });
