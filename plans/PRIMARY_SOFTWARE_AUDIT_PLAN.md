@@ -2740,7 +2740,40 @@ covers a much smaller subset and guards focus on Analyze.
   untouched). Covered by `StatusBar.test.tsx`'s "StatusBar pending-op live
   region (accessibility gap)" describe block. No other icon/plot/tree/dialog
   accessible-name gap was investigated as part of this slice.
-- [ ] Contrast and non-color encodings.
+- [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
+  what does not, stated precisely instead of left as one unchecked line.**
+
+  EXISTS:
+  - Three colour-blind-safe series palettes (`lib/palettes.ts`: Okabe–Ito, Paul
+    Tol "bright", viridis), applied as `--series-1..8` overrides on `<html>`, so
+    they flow to plot, legend, multi-panel, inset, sparkline and export alike.
+  - Real WCAG-style contrast MATH in `lib/contrastColor.ts` (`contrastRatio`,
+    relative luminance), with `MIN_CONTRAST = 2.2`, used at render time to swap
+    a literal series colour for the ink token when it would be invisible against
+    the effective plot background. Unit-tested.
+  - Per-series `line` style (`solid`/`dashed`/`dotted`) and eight marker SHAPES
+    (`lib/types.ts` `MarkerShape`), both settable and both honoured on screen.
+
+  DOES NOT EXIST, and this is the real gap:
+  - **No automatic non-colour differentiator.** Plot five series and touch
+    nothing and they differ ONLY by hue — `uplotOpts.ts`'s dash is applied only
+    when a per-series `style.line` was explicitly set, and markers only when
+    explicitly enabled or via a plot-wide default-trace preference. Dash and
+    marker shape are available but never cycled. A colour-blind reader, or
+    anyone printing greyscale, gets no help by default. Closing this means an
+    opt-in auto dash/marker cycle mirroring the palette mechanism, WITH export
+    parity — booked, not built.
+  - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
+    checks series-vs-SERIES distinguishability under colour-vision deficiency;
+    there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls
+    the palette "color-blind-aware", which is a claim about palette CHOICE, not
+    a check.
+  - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
+    (aps/report/web) have no greyscale variant.
+
+  Two BUGS the audit turned up on the way, both fixed under Group L rather than
+  filed and left: faceted export silently dropped every per-series style, and
+  exported markers were always circles. See that entry for the detail.
 - [ ] Windows/macOS scaling and high-DPI readability.
 - [x] Reduced motion — **verified complete 2026-09-09; the box was simply
   stale.** Two independent sources, either sufficient on its own: the OS
