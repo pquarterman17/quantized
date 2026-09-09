@@ -376,8 +376,25 @@ as a CSS-only tree redesign.
   `lib/dependencyImpact.ts` (PR M slice 1, merged `ab3861a`); move preview
   is `lib/workbookSeparate.ts`'s `computeSeparatePlan` (PR J slice 1, merged
   `abbf0ae`) — both build the affected-item list before the user commits.
-- [ ] Preserve formulas, pipeline parameters, units, exclusions, and provenance
-  through project save/load and workbook copy/paste.
+- [x] Preserve formulas, pipeline parameters, units, exclusions, and provenance
+  through project save/load and workbook copy/paste. **Verification pass
+  (2026-09-09):** all five already rode through both round trips via the
+  existing mechanism (dataset fields serialize/parse verbatim in
+  `lib/workspaceSerialize.ts`/`lib/workspaceDatasetParse.ts`, and ride the
+  spread `Dataset` object untouched through `lib/workbookTransfer.ts`'s
+  `pasteTransferPackage`) — no production code changed. Added combined,
+  sabotage-verified round-trip tests (all five payloads on ONE dataset at
+  once, so a fix to one can't hide a break in another):
+  `lib/workspace.test.ts`'s "derived-data integrity: all five payloads
+  survive save/load together" and `lib/workbookTransfer.test.ts`'s
+  "…survive copy/paste together" (the latter through the REAL
+  buildTransferPackage -> parseTransferPackage -> pasteTransferPackage
+  pipeline, asserting id INEQUALITY alongside payload equality). Also pins
+  the deliberate transfer-scope exclusion (no figureDocs/pages/
+  originFigures/originFidelity in a `WorkbookTransferPackage`) so it can't
+  regress silently. Every carrying line was individually deleted and
+  restored to confirm each assertion actually fails without it (see the
+  session's PR/commit for the full sabotage log).
 - [ ] Keep recalculation deterministic and auditable; never hide an automatic
   correction inside display-only plot state.
 

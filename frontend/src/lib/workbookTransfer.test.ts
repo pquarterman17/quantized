@@ -352,3 +352,101 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
     for (const d of result.datasets) expect(d.workbookId).toBe(result.workbook.id);
   });
 });
+
+// LIBRARY_WORKBOOK_UX_PLAN "Derived-data integrity requirements" box:
+// "Preserve formulas, pipeline parameters, units, exclusions, and provenance
+// through project save/load and workbook copy/paste." This describe covers
+// the copy/paste half, through the SAME pipeline the real Copy/Paste command
+// runs (store/workbookTransfer.ts): buildTransferPackage -> JSON text ->
+// parseTransferPackage -> pasteTransferPackage. workspace.test.ts's
+// identically-named describe covers the save/load half.
+describe("derived-data integrity: all five payloads survive copy/paste together", () => {
+  function fullDataset(): Dataset {
+    return ds("ds-1", "Sheet 1", {
+      workbookId: "wb-1",
+      data: {
+        time: [0, 1, 2],
+        values: [[10, 100], [20, 200], [30, 300]],
+        labels: ["A", "B"],
+        units: ["emu", "Oe"], // UNITS payload
+        metadata: {},
+      },
+      // FORMULAS payload (incl. per-column unit override).
+      formulas: [{ name: "S", expr: "A + B", unit: "emu*Oe", deps: ["A", "B"] }],
+      // PIPELINE PARAMETERS payload — the re-runnable correction recipe.
+      corrections: { xOff: 1.5, bgSlope: 0.2, smoothEnabled: true, smoothWindow: 5 },
+      // EXCLUSIONS payload.
+      excludedRows: [0, 2],
+      filter: [{ col: 1, kind: "range", min: 50, max: 250 }],
+      // PROVENANCE payload — a real external path is NOT an internal id, so
+      // it must ride through byte-identical, unlike dataset/workbook ids.
+      source: { kind: "path", path: "/data/run1.csv", checksum: "sha256:abc", mtime: 1700000000, size: 42 },
+      importedAt: "2026-01-01T00:00:00.000Z",
+    });
+  }
+
+  it("carries formulas, pipeline params, units, and exclusions verbatim through build -> parse -> paste, while ids ARE rewritten", () => {
+    const state = makeState({ datasets: [fullDataset()] });
+    const built = buildTransferPackage("wb-1", state);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const parsed = parseTransferPackage(built.text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const result = pasteTransferPackage(parsed.pkg, emptyExisting(), generators("g"), undefined);
+    expect(result.datasets).toHaveLength(1);
+    const pasted = result.datasets[0];
+    const original = state.datasets[0];
+
+    // Ids are unconditionally fresh — inequality, not equality (frozen-scope
+    // item 3: "a pasted workbook must never alias... the source project").
+    expect(pasted.id).not.toBe(original.id);
+    expect(pasted.workbookId).not.toBe(original.workbookId);
+
+    // The five payloads ride the Dataset object through untouched.
+    expect(pasted.data.units).toEqual(original.data.units); // units
+    expect(pasted.formulas).toEqual(original.formulas); // formulas (incl. unit)
+    expect(pasted.corrections).toEqual(original.corrections); // pipeline parameters
+    expect(pasted.excludedRows).toEqual(original.excludedRows); // exclusions
+    expect(pasted.filter).toEqual(original.filter); // exclusions
+    expect(pasted.source).toEqual(original.source); // provenance — a real path, never rewritten
+    expect(pasted.importedAt).toBe(original.importedAt); // provenance
+  });
+
+  it("rewrites derivedFrom's internal datasetId but preserves its pipeline descriptor (provenance content vs. internal id)", () => {
+    const state = makeState({
+      datasets: [
+        ds("ds-1", "Sheet 1", { workbookId: "wb-1" }),
+        ds("ds-2", "Sheet 2", {
+          workbookId: "wb-1",
+          derivedFrom: { datasetId: "ds-1", pipeline: "flatten + smooth" },
+        }),
+      ],
+    });
+    const built = buildTransferPackage("wb-1", state);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const parsed = parseTransferPackage(built.text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const result = pasteTransferPackage(parsed.pkg, emptyExisting(), generators("g"), undefined);
+    const sheet2 = result.datasets.find((d) => d.name === "Sheet 2")!;
+    expect(sheet2.derivedFrom?.pipeline).toBe("flatten + smooth"); // provenance content preserved
+    expect(sheet2.derivedFrom?.datasetId).not.toBe("ds-1"); // internal ref rewritten, never aliased
+    const pastedIds = new Set(result.datasets.map((d) => d.id));
+    expect(pastedIds.has(sheet2.derivedFrom!.datasetId)).toBe(true);
+  });
+
+  it("pins the deliberate transfer scope (PR I): no figureDocs/pages/originFigures/originFidelity ride along", () => {
+    // LIBRARY_WORKBOOK_UX_PLAN PR I's own plan-doc entry documents this
+    // exclusion explicitly (legacy FigureDoc, multi-panel PageDocuments,
+    // originFigures/originFidelity) — this pins the package's exact key set
+    // so a later change can't silently widen (or narrow) it.
+    const built = buildTransferPackage("wb-1", makeState());
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(Object.keys(built.pkg).sort()).toEqual(
+      ["createdAt", "datasets", "editableFigures", "format", "quickPlotTemplates", "reports", "version", "workbook"].sort(),
+    );
+  });
+});
