@@ -23,6 +23,7 @@
 // y-domain (`sharedYDomain`) and each keep their OWN local x-range.
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { sliceRowSidecars } from "./rowSidecars";
 import { facetComposition, type Composition } from "./composition";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
@@ -57,6 +58,8 @@ export function facetSlices(data: DataStruct, facetCol: number): FacetSlice[] {
     for (let r = 0; r < by.length; r++) if (by[r] === lvl) rows.push(r);
     const sliced: DataStruct = {
       ...data,
+      // BUG-006: row-indexed metadata sidecars follow the same rows.
+      metadata: sliceRowSidecars(data.metadata, rows),
       time: rows.map((r) => data.time[r]),
       values: rows.map((r) => data.values[r]),
     };

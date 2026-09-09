@@ -57,8 +57,15 @@ describe("selection mutual exclusion — every writer that establishes a dataset
     expect(invariantHolds()).toBe(true);
   });
 
-  it("splitDatasetByColumn (context-menu split acts on any row, selected or not)", () => {
-    void useApp.getState().splitDatasetByColumn("d1", 0);
+  it("splitDatasetByColumn (context-menu split acts on any row, selected or not)", async () => {
+    // AWAITED, and that is the fix for two bugs at once. `void`-ing this
+    // fire-and-forget made the assertion VACUOUS — `splitDatasetByColumn`
+    // awaits `resolveDataset` on its first line, so nothing had happened yet —
+    // and worse, its `set()` landed during a LATER test. That leak is what made
+    // an unrelated `await import()` in `store/split.ts` "break"
+    // `restoreFromTrash` (it shifted the leak by one microtask tick): filed as
+    // BUG-007, diagnosed as module-init order, and wrong. It was this line.
+    await useApp.getState().splitDatasetByColumn("d1", 0);
     expect(invariantHolds()).toBe(true);
   });
 

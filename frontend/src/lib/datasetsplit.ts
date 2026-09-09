@@ -33,6 +33,7 @@
 // SplitDatasetDialog picking a suggestion.
 
 import { fmtNum } from "./format";
+import { sliceRowSidecars } from "./rowSidecars";
 import { inferModelingType } from "./modeling";
 import type { DataStruct } from "./types";
 
@@ -301,33 +302,6 @@ export function splitColumn(data: DataStruct, col: number, tolerance?: number): 
   return clusterByGaps(values, tol, unit);
 }
 
-/** The metadata sidecars whose entries are indexed BY ROW, so a row slice has
- *  to slice them too (BUG-006). Everything else in metadata is either
- *  file-level (`comments`, `source`) or channel-indexed (`label_rows`'s
- *  `cells` are per-CHANNEL, `all_column_names` is the column roster) and must
- *  be carried through untouched — slicing those would be the mirror-image
- *  bug. Both spellings are listed because `lib/columnmeta.ts` reads
- *  `text_columns ?? origin_text_columns` and a dataset may carry either. */
-const ROW_INDEXED_SIDECARS = ["text_columns", "origin_text_columns"] as const;
-
-/** Slice one `{column: [cell per row]}` sidecar to the same rows.
- *
- *  A text column may be SHORTER or LONGER than `time` (`columnmeta.ts`'s
- *  `TextColumn` doc: a text-only Origin book has `time.length === 0` and the
- *  text columns ARE the grid), so an index past the end yields `""` — a blank
- *  cell, which is what the worksheet renders for a missing one — rather than
- *  `undefined`, which would serialize as `null` and read back as a hole. */
-function sliceTextColumns(raw: unknown, rowIndexes: readonly number[]): unknown {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
-  const out: Record<string, unknown> = {};
-  for (const [name, cells] of Object.entries(raw as Record<string, unknown>)) {
-    // A non-array value is a corrupted sidecar; carry it through untouched
-    // rather than inventing a shape (the P1.4 degrade-don't-guess rule).
-    out[name] = Array.isArray(cells) ? rowIndexes.map((i) => cells[i] ?? "") : cells;
-  }
-  return out;
-}
-
 /** Slice a DataStruct's time+values rows down to `rowIndexes` (any order —
  *  typically ascending, straight from a `SplitGroup`) into a fresh,
  *  non-aliased DataStruct. labels/units/cat_levels are structural (per-COLUMN,
@@ -346,16 +320,12 @@ function sliceTextColumns(raw: unknown, rowIndexes: readonly number[]): unknown 
  *  different measurement than the one it belonged to. Row-indexed sidecars are
  *  now sliced alongside the rows; channel-indexed ones still are not. */
 export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[]): DataStruct {
-  const metadata: Record<string, unknown> = { ...data.metadata };
-  for (const key of ROW_INDEXED_SIDECARS) {
-    if (key in metadata) metadata[key] = sliceTextColumns(metadata[key], rowIndexes);
-  }
   return {
     time: rowIndexes.map((i) => data.time[i]),
     values: rowIndexes.map((i) => [...data.values[i]]),
     labels: [...data.labels],
     units: [...data.units],
-    metadata,
+    metadata: sliceRowSidecars(data.metadata, rowIndexes),
     ...(data.cat_levels ? { cat_levels: data.cat_levels } : {}),
   };
 }

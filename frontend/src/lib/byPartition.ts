@@ -36,8 +36,9 @@ export interface ByColumnOption {
 /** One level of a By-column partition. `rowIndexes` index into the SOURCE
  *  `data` passed to `partitionByColumn` (the caller's analysis view);
  *  `data` is that level's own sliced DataStruct (rows only — labels/units/
- *  metadata carried through unchanged) ready to feed straight into the same
- *  per-column analysis code the un-partitioned path already uses. */
+ *  metadata carried through, with its row-indexed sidecars sliced to match --
+ *  BUG-006) ready to feed straight into the same per-column analysis code the
+ *  un-partitioned path already uses. */
 export interface ByLevel {
   label: string;
   value: number;

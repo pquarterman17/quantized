@@ -70,7 +70,15 @@
 // Undoing this one transaction therefore restores the complete pre-split
 // organization without leaving an empty folder artifact.
 
-import { splitColumn, sliceDataStruct, tooManyGroups } from "../lib/datasetsplit";
+// LAZY ON PURPOSE (bundle ratchet). `lib/datasetsplit.ts` is ~3.5 kB of pure
+// splitting/slicing math, and this store slice was its ONLY eager consumer —
+// every other importer (SplitDatasetDialog, the worksheet's extractRows, the
+// workshops' byPartition) already sits behind a lazy panel. Splitting a dataset
+// is strictly a post-user-action operation, which is exactly the case the
+// eager-bundle ratchet says to defer, so the whole module now loads on first
+// split instead of at first paint. `splitDatasetByColumn` was already `async`
+// and the await lands BEFORE any `recordHistory`/`set`, so the slice's
+// "build fully, swap once" contract is unchanged.
 import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
@@ -116,6 +124,7 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
       const src = get().datasets.find((d) => d.id === id);
       if (!src) return;
 
+      const { splitColumn, sliceDataStruct, tooManyGroups } = await import("../lib/datasetsplit");
       const { groups } = splitColumn(src.data, col, tolerance);
       if (groups.length < 2) {
         toast(`"${src.name}" doesn't split into more than one group on that column`, "danger");

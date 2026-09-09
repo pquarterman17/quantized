@@ -840,39 +840,41 @@ import { fileURLToPath } from "node:url";
  *  invitation to spend it; this keeps the ratchet as tight as it has been all
  *  session, and the next author still has to do real reduction work.
  *
- *  2026-09-09 (later, same day) — 914,634 -> 914,894. BUG-006's fix (slicing
- *  the row-indexed `text_columns` sidecar in
- *  `lib/datasetsplit.sliceDataStruct`, so an Extract or a Split stops
- *  attributing a sample id to the wrong measurement) costs 236 eager bytes.
+ *  2026-09-09 (later, same day) — 914,634 -> 914,283. BOTH of today's raises
+ *  are REPAID: the pin ends the day 306 bytes TIGHTER than it started (914,589).
  *
- *  A 720-BYTE REPAYMENT EXISTS, IS MEASURED, AND WAS DELIBERATELY WITHHELD.
- *  `store/split.ts` is the ONLY eager consumer of `lib/datasetsplit.ts`
- *  (~3.5 kB of pure splitting/slicing math) — every other importer
- *  (SplitDatasetDialog, the worksheet's `extractRows`, the workshops'
- *  `byPartition`) already sits behind a lazy panel, and splitting is strictly
- *  a post-user-action operation, so `await import(...)` inside the already-
- *  `async` action is exactly the deferral this script's failure message asks
- *  for. Measured: **913,869, i.e. 720 bytes BELOW the pre-raise 914,589.**
+ *  BUG-006 (row-indexed metadata sidecars must be sliced with the rows, or an
+ *  Extract/Split/filter attributes every text cell to the wrong measurement)
+ *  was fixed at FOUR call sites, not one — `lib/datasetsplit.sliceDataStruct`,
+ *  `lib/rowstate.pruneExcluded`, `lib/facet.facetSlices`, and via those the
+ *  worksheet Extract and Split — plus a third sidecar key
+ *  (`origin_report_sheets`) the first attempt missed. That is more code, and it
+ *  still comes out BELOW the starting pin, because the reduction paid for it:
  *
- *  It is not in this commit because it CHANGED OBSERVABLE BEHAVIOUR:
- *  `store/selectionInvariant.test.ts`'s "restoreFromTrash yields the tree
- *  selection only when the restore IS an activation" then failed with
- *  `expected 'ds-<generated>-3' to be 'd1'` — a restore minting a FRESH
- *  dataset id. Bisected to that one import line: revert it alone and the test
- *  passes; every other file in the commit is unchanged. `restoreFromTrash`
- *  already uses the same `await import()` pattern for `store/trashRestore.ts`,
- *  so a second dynamic import in a sibling slice is interacting with module
- *  init order somehow. That is either a latent fragility worth knowing about
- *  or a test-setup artifact, and it deserves its own investigation rather than
- *  a tired one at the end of a long session. A bundle optimization that
- *  changes behaviour is not worth landing inside a bug-fix PR.
+ *  `store/split.ts` was the ONLY eager consumer of `lib/datasetsplit.ts`
+ *  (~3.5 kB of pure splitting math) — SplitDatasetDialog, the worksheet's
+ *  `extractRows` and the workshops' `byPartition` all already sit behind lazy
+ *  panels — and splitting is strictly post-user-action, so the already-`async`
+ *  action now `await import(...)`s it. The shared `lib/rowSidecars.ts` helper
+ *  exists as its own module for the same reason: two of its callers are eager,
+ *  and reaching into `datasetsplit` for it would drag the big module back in.
  *
- *  So: raised to measured + 24 = 914,894, with the repayment written down
- *  above so the next author can collect it after settling the import-order
- *  question. This is the SECOND raise in a day, which is one more than is
- *  comfortable; the standing reduction is the answer, not a third.
+ *  WORTH READING BEFORE THE NEXT RAISE. That deferral was first measured, then
+ *  WITHHELD, because it appeared to break `store/selectionInvariant.test.ts`
+ *  ("restoreFromTrash ... " -> `expected 'ds-<generated>-3' to be 'd1'`). It was
+ *  filed as BUG-007 and diagnosed as store module-init order. WRONG. A review
+ *  found the real cause in one pass: a sibling test did `void
+ *  useApp.getState().splitDatasetByColumn("d1", 0)` — fire-and-forget in a
+ *  SYNCHRONOUS test — so its assertion was vacuous AND the action's `set()`
+ *  landed during a later test. One `await import()` shifted that leak by a
+ *  microtask tick and exposed it. Awaiting the call fixes both, and the
+ *  reduction lands with nothing else changed. A withheld optimization deserves
+ *  re-examination before it is paid for with a pin raise: this one was blocked
+ *  by a phantom, and the raise it justified turned out to be unnecessary.
+ *
+ *  Pinned at measured + 24 = 914,283, the same tight convention.
  */
-const EAGER_JS_BUDGET = 914_894;
+const EAGER_JS_BUDGET = 914_283;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

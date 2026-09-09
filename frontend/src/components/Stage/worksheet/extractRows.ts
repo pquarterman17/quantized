@@ -15,11 +15,11 @@
 // `useWorksheetView`'s stats subset already writes `values[r]?.[c]`. Clamping
 // is what keeps the result a valid DataStruct.
 //
-// NOT solved here, deliberately: the `text_columns` metadata sidecar is carried
-// through UNSLICED by `sliceDataStruct` (it copies `metadata` wholesale), so an
-// extract from a text-bearing sheet gets text cells that no longer line up with
-// its rows. That is a shared `sliceDataStruct` concern (Split-by-column has the
-// same exposure) and is tracked as BUG-006, not papered over here.
+// The `text_columns` sidecar IS sliced now (BUG-006, fixed in
+// `lib/datasetsplit.ts`): it is indexed by row, so a row slice has to slice it
+// or the child's text cells describe different measurements than its numbers.
+// This module still does not solve the text-LONGER-than-numeric case — a slice
+// truncates trailing text-only rows without saying so; see BUG-006's entry.
 
 import { sliceDataStruct } from "../../../lib/datasetsplit";
 import type { DataStruct } from "../../../lib/types";

@@ -10,6 +10,7 @@
 // component mask.
 
 import { filteredOutRows } from "./datafilter";
+import { sliceRowSidecars } from "./rowSidecars";
 import type { DataStruct, Dataset } from "./types";
 
 type HasExcluded = Pick<Dataset, "excludedRows"> | null | undefined;
@@ -66,6 +67,10 @@ export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): Dat
   const keep = activeRowIndices(data.time.length, ex);
   return {
     ...data,
+    // BUG-006: `metadata` is NOT wholly structural — its row-indexed sidecars
+    // must follow the same rows, or the analysis view reads every text cell
+    // against a different measurement than the one it belongs to.
+    metadata: sliceRowSidecars(data.metadata, keep),
     time: keep.map((r) => data.time[r]),
     values: keep.map((r) => data.values[r]),
   };

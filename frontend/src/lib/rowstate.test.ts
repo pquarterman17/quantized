@@ -81,7 +81,13 @@ describe("pruneExcluded", () => {
     ]);
     expect(pruned.labels).toBe(DATA.labels);
     expect(pruned.units).toBe(DATA.units);
-    expect(pruned.metadata).toBe(DATA.metadata);
+    // BUG-006 changed this from reference identity to VALUE equality, and the
+    // distinction is the fix: `metadata` is no longer carried by reference,
+    // because its row-indexed sidecars (`text_columns` &c.) have to be sliced to
+    // the same rows. Content is unchanged for a dataset that carries none —
+    // which is what this asserts. Nothing may rely on the old aliasing; the
+    // codebase is copy-on-write throughout.
+    expect(pruned.metadata).toEqual(DATA.metadata);
   });
 
   it("returns the SAME object when nothing is excluded (identity fast-path)", () => {

@@ -471,6 +471,16 @@ describe("sliceDataStruct — row-indexed metadata sidecars (BUG-006)", () => {
     expect((out.metadata["origin_text_columns"] as Record<string, string[]>).A).toEqual(["z", "x"]);
   });
 
+  it("slices origin_report_sheets too — the sidecar the first fix MISSED", () => {
+    // `{short_name: [cell per row]}` of Origin report-sheet reference strings
+    // (io/origin_project/opj.py). The first version of this fix asserted in its
+    // own comment that nothing else was row-indexed; a review found this.
+    const ds = withText();
+    ds.metadata["origin_report_sheets"] = { A: ["r0", "r1", "r2", "r3"] };
+    const out = sliceDataStruct(ds, [3, 1]);
+    expect((out.metadata["origin_report_sheets"] as Record<string, string[]>).A).toEqual(["r3", "r1"]);
+  });
+
   it("carries an ARRAY-shaped text_columns through untouched (corrupted sidecar)", () => {
     // The shape guard, pinned on its own. `text_columns` must be
     // `{name: cells[]}`; a bare ARRAY there is corrupt. Without the
