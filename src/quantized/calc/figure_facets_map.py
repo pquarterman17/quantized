@@ -31,6 +31,7 @@ from typing import Any
 import matplotlib
 
 matplotlib.use("Agg")  # headless (defensive -- figure_facets already sets this)
+matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402

@@ -17,10 +17,11 @@ from typing import Any
 import matplotlib
 
 matplotlib.use("Agg")  # headless: render to a buffer, never to a display
+matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
 
 import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
-import numpy as np
-from numpy.typing import ArrayLike, NDArray
+import numpy as np  # noqa: E402
+from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
@@ -29,7 +30,7 @@ from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # 
 from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
 
-from .figure_errorbars import apply_error_bars
+from .figure_errorbars import apply_error_bars  # noqa: E402
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 

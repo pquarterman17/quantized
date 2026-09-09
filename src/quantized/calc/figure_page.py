@@ -52,6 +52,7 @@ from typing import Any
 import matplotlib
 
 matplotlib.use("Agg")  # headless: render to a buffer, never to a display
+matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
 
 import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 import numpy as np  # noqa: E402

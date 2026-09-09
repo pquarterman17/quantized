@@ -18,6 +18,7 @@ from typing import Any, Literal
 import matplotlib
 
 matplotlib.use("Agg")  # headless
+matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
@@ -100,7 +101,16 @@ def render_correlation_heatmap_figure(
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            im = ax.imshow(rmat, cmap="RdBu_r", vmin=-1.0, vmax=1.0, aspect="equal")
+            # pcolormesh (not imshow) so the cells export as vector <path>
+            # rects rather than an embedded raster <image> -- a small
+            # correlation grid belongs as editable vector in a publication SVG.
+            # Edges at arange(n+1)-0.5 put cell centres on the integers the
+            # ticks and value annotations below already use; invert_yaxis
+            # restores imshow's origin="upper" (row 0 at the top).
+            edges = np.arange(n + 1, dtype=float) - 0.5
+            im = ax.pcolormesh(edges, edges, rmat, cmap="RdBu_r", vmin=-1.0, vmax=1.0)
+            ax.set_aspect("equal")
+            ax.invert_yaxis()
             ax.set_xticks(range(n))
             ax.set_yticks(range(n))
             ax.set_xticklabels(names, rotation=45, ha="right")
@@ -112,7 +122,9 @@ def render_correlation_heatmap_figure(
                         continue
                     ink = "white" if abs(v) > 0.55 else "black"
                     ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=tick_fs, color=ink)
-            fig.colorbar(im, ax=ax, shrink=0.85, label="r")
+            cbar = fig.colorbar(im, ax=ax, shrink=0.85, label="r")
+            if cbar.solids is not None:
+                cbar.solids.set_rasterized(False)  # vector colorbar swatch in SVG
             if title:
                 ax.set_title(title)
             fig.tight_layout()

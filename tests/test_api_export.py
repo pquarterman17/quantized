@@ -4,6 +4,7 @@ responses, filename sanitization, and error mapping."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -1898,3 +1899,107 @@ def test_figure_transparent_true_reaches_the_renderer() -> None:
     )
     assert resp.status_code == 200
     assert _alpha_at_origin(resp.content) == 0
+
+
+# ── Export-artifact gates ────────────────────────────────────────────────
+# Borrowed verification discipline (origin-plot-factory, 2026-09-09): a 200
+# with the right MIME type does not prove the vector artifact is what a
+# journal needs. A vector export must carry EDITABLE text (real `<text>`, so a
+# reader can select/retype an axis label in Illustrator, Inkscape, or Origin),
+# must NOT smuggle a raster in (an `<image>` would make "SVG" a PNG in
+# disguise), and must declare a physical page size with a viewBox. These
+# assert on the bytes a user actually downloads, across the shared renderer.
+
+
+def _labeled_svg() -> str:
+    """A single-figure SVG whose axis carries a known plain-text label."""
+    dataset = {
+        "time": [1.0, 2.0, 3.0, 4.0],
+        "values": [[10.0], [20.0], [30.0], [40.0]],
+        "labels": ["Counts"],
+        "units": ["cps"],
+        "metadata": {
+            "source_format": "opju",
+            "x_column_name": "A",
+            "x_column_long": "Theta",
+            "x_column_unit": "deg",
+        },
+    }
+    resp = client.post("/api/export/figure", json={"dataset": dataset, "fmt": "svg"})
+    assert resp.status_code == 200, resp.text
+    return resp.content.decode("utf-8", "replace")
+
+
+def _strip_svg_comments(svg: str) -> str:
+    return re.sub(r"<!--.*?-->", "", svg, flags=re.S)
+
+
+def test_exported_svg_keeps_labels_as_editable_text() -> None:
+    """Axis labels export as real `<text>`, not outlined glyph paths. matplotlib
+    still writes the readable string into an SVG *comment* even in glyph-path
+    mode, so the label survives a naive substring check while being uneditable;
+    strip comments first, then require it inside a `<text>` element."""
+    svg = _labeled_svg()
+    assert "<text" in svg
+    body = _strip_svg_comments(svg)
+    assert "Theta (deg)" in body, "axis label is outlined to paths, not editable text"
+    assert re.search(r"<text[^>]*>[^<]*Theta \(deg\)[^<]*</text>", body)
+    # The raw column letter must not leak through as a label either.
+    assert ">A<" not in body
+
+
+def _corr_heatmap_svg() -> str:
+    resp = client.post(
+        "/api/export/correlation-heatmap-figure",
+        json={
+            "labels": ["a", "b", "c"],
+            "r": [[1.0, 0.5, -0.2], [0.5, 1.0, 0.7], [-0.2, 0.7, 1.0]],
+            "fmt": "svg",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.content.decode("utf-8", "replace")
+
+
+def test_discrete_data_svg_exports_embed_no_raster() -> None:
+    """Renderers of DISCRETE data must be pure vector: no `<image>`, so a
+    "vector" export can't smuggle in a raster. This covers the ordinary line
+    figure and the correlation heatmap, whose cells are drawn with
+    ``pcolormesh`` (not ``imshow``) precisely so each cell is an editable
+    `<path>` rect. It deliberately does NOT cover the map/field renderers:
+    matplotlib rasterizes a *continuous* colorbar's gradient by design, and
+    vectorizing a smooth gradient bloats the file for no editability gain
+    (see ``test_map_svg_may_raster_its_continuous_colorbar``)."""
+    assert "<image" not in _labeled_svg()
+    assert "<image" not in _corr_heatmap_svg()
+
+
+def test_map_svg_may_raster_its_continuous_colorbar() -> None:
+    """The boundary of the no-raster contract, stated as a test rather than
+    left implicit: a map SVG legitimately contains a raster — its continuous
+    colorbar gradient, which matplotlib rasterizes by design — while its data
+    grid is a vector ``pcolormesh`` and its labels are editable `<text>`.
+    This documents WHY the discrete-data gate above stops at the figure/heatmap
+    routes, so a future reader does not "fix" the map to all-vector and bloat
+    every exported gradient."""
+    payload = {**_demo_map(), "kind": "heatmap", "fmt": "svg"}
+    resp = client.post("/api/export/map-figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "replace")
+    assert "<image" in svg  # the continuous colorbar gradient
+    assert "<text" in svg  # labels still editable
+
+
+def test_exported_svg_declares_a_physical_page_size() -> None:
+    """Root carries a viewBox and physical width/height, so the figure lands at
+    a defined size on the page rather than an arbitrary pixel box."""
+    svg = _labeled_svg()
+    root = re.search(r"<svg\b[^>]*>", svg)
+    assert root is not None
+    tag = root.group(0)
+    assert re.search(r'viewBox="[\d.\s-]+"', tag)
+    dims = re.search(r'width="([\d.]+)pt"\s+height="([\d.]+)pt"', tag) or re.search(
+        r'width="([\d.]+)(?:pt)?"[^>]*height="([\d.]+)(?:pt)?"', tag
+    )
+    assert dims is not None, f"no physical dimensions on root: {tag[:200]}"
+    assert float(dims.group(1)) > 0 and float(dims.group(2)) > 0
