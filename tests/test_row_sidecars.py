@@ -72,6 +72,24 @@ class TestMatchesTypeScriptCellSemantics:
         out = slice_row_sidecars({"text_columns": {"A": ("a0", "a1", "a2")}}, [2, 0])
         assert out["text_columns"] == {"A": ["a2", "a0"]}
 
+    def test_a_NUMPY_index_is_a_REAL_index_not_a_miss(self) -> None:
+        """The one this module's own guard got wrong, found by probing rather than
+        by review. ``np.int64`` is not a subclass of ``int``, so an
+        ``isinstance(i, int)`` guard made every index from ``np.flatnonzero`` a
+        miss and the empty-column prune then deleted the ENTIRE column. Silent,
+        total data loss — and `np.flatnonzero` is exactly how
+        `calc/corrections.py` derives its surviving rows."""
+        meta = {"text_columns": {"A": ["a0", "a1", "a2"]}}
+        raw = np.flatnonzero(np.array([True, False, True]))
+        assert not isinstance(raw[0], int)  # the premise, so this cannot rot
+        assert slice_row_sidecars(meta, raw)["text_columns"] == {"A": ["a0", "a2"]}
+
+    def test_a_BOOL_index_is_a_miss_even_though_it_has___index__(self) -> None:
+        # `operator.index(True)` is 1, but JS `cells[true]` is a property lookup
+        # yielding undefined -> "". Excluded deliberately to match.
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, [True, 0])
+        assert out["text_columns"] == {"A": ["", "a0"]}
+
     def test_a_NEGATIVE_index_is_a_blank_not_the_last_cell(self) -> None:
         # The TS side pins this (`[0,-1,1]`); the Python mirror's only
         # out-of-range test used a POSITIVE index, so `cells[-1]` returning the

@@ -40,6 +40,7 @@ data contract rather than inside one consumer of it.
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
@@ -52,11 +53,43 @@ __all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "slice_row_sidecars"]
 ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sheets")
 
 
+def _as_index(i: Any) -> int | None:
+    """``i`` as an integer index, or ``None`` when it is not one.
+
+    ``operator.index`` rather than ``isinstance(i, int)``, and this one was NOT
+    found by review -- it was found by doubting the guard and probing it, which is
+    the only reason it is not still in the tree. ``np.int64`` is NOT a subclass of
+    ``int``, so an ``isinstance`` check treated every index from
+    ``np.flatnonzero`` (exactly how ``calc/corrections.py`` derives its surviving
+    rows) as a MISS, and the empty-column prune then deleted the whole column:
+
+        slice_row_sidecars({"text_columns": {"A": [...]}}, np.flatnonzero(mask))
+        -> {"text_columns": {}}          # the entire sidecar, silently gone
+
+    `corrections.py` converts to `int` before calling, so nothing shipped broken
+    -- but a guard that turns a numpy index into total silent data loss is exactly
+    the failure this module exists to prevent, and the next caller would not have
+    known. ``operator.index`` accepts anything implementing ``__index__`` (``int``,
+    ``np.int64``, any integral scalar) without importing numpy into a pure module.
+
+    ``bool`` is excluded deliberately: it implements ``__index__`` (``True`` -> 1),
+    but JS ``cells[true]`` is a property lookup that yields ``undefined``, so
+    treating it as index 1 would be a divergence. A ``float`` raises TypeError and
+    is a miss, matching ``cells[1.5]`` -> ``undefined``.
+    """
+    if isinstance(i, bool):
+        return None
+    try:
+        return operator.index(i)
+    except TypeError:
+        return None
+
+
 def _cell(cells: Sequence[Any], i: Any) -> Any:
     """One cell, or ``""`` for anything that is not a real position in ``cells``.
 
-    Mirrors the TypeScript ``cells[i] ?? ""``, and the three ways it can differ
-    were all found by review after this module was first called a mirror:
+    Mirrors the TypeScript ``cells[i] ?? ""``. Three ways it used to differ, all
+    found by review after this module was first called a mirror:
 
     * ``None`` becomes ``""``. JS ``?? ""`` catches ``null`` as well as
       ``undefined``, and this is not hypothetical -- the TS module's own doc says
@@ -67,14 +100,16 @@ def _cell(cells: Sequence[Any], i: Any) -> Any:
       into ``1`` and returned a real cell where JS returns ``undefined`` -> ``""``.
     * A non-numeric index is a miss rather than a ``TypeError``.
     """
-    if not isinstance(i, int) or isinstance(i, bool):
+    idx = _as_index(i)
+    if idx is None:
         return ""
-    return cells[i] if 0 <= i < len(cells) and cells[i] is not None else ""
+    return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else ""
 
 
 def _is_position(cells: Sequence[Any], i: Any) -> bool:
     """Does ``i`` name a real position in ``cells``? The trailing-trim predicate."""
-    return isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(cells)
+    idx = _as_index(i)
+    return idx is not None and 0 <= idx < len(cells)
 
 
 def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
