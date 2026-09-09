@@ -197,7 +197,15 @@ function addFromPayload(
           name,
           data: bookData,
           ...(bookSource
-            ? { pending: { ...bookSource, bookId: book.id, rows: book.rows, cols: book.cols } }
+            ? {
+                pending: {
+                  ...bookSource,
+                  bookId: book.id,
+                  rows: book.rows,
+                  cols: book.cols,
+                  previewSampled: book.preview_sampled,
+                },
+              }
             : {}),
           ...src,
           ...roles,

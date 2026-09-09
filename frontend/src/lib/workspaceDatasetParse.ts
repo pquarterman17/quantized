@@ -48,11 +48,25 @@ function parsePending(v: unknown): BookSource | null {
   if (typeof o.bookId !== "string" || !o.bookId) return null;
   const rows = typeof o.rows === "number" && Number.isFinite(o.rows) ? o.rows : 0;
   const cols = typeof o.cols === "number" && Number.isFinite(o.cols) ? o.cols : 0;
+  // `previewSampled` is carried through ONLY when the file actually states it, and
+  // is NOT defaulted here. The fail-closed rule ("unknown means it may be a
+  // sample") lives in exactly one place, `lib/pendingRows.rowsAreSampled`, which
+  // treats anything other than an explicit `false` as sampled. Writing a default
+  // here too would be a SECOND copy of that rule — which is the mistake the shared
+  // predicate exists to prevent, and the one the round-3 review caught between
+  // `textColumns.ts` and `store/cellEdit.ts`. It also keeps a legacy `.dwk`
+  // round-tripping byte-identically instead of gaining a field it never had.
+  const common = {
+    bookId: o.bookId,
+    rows,
+    cols,
+    ...(typeof o.previewSampled === "boolean" ? { previewSampled: o.previewSampled } : {}),
+  };
   if (o.kind === "path" && typeof o.path === "string" && o.path) {
-    return { kind: "path", path: o.path, bookId: o.bookId, rows, cols };
+    return { kind: "path", path: o.path, ...common };
   }
   if (o.kind === "upload" && typeof o.token === "string" && o.token) {
-    return { kind: "upload", token: o.token, bookId: o.bookId, rows, cols };
+    return { kind: "upload", token: o.token, ...common };
   }
   return null;
 }

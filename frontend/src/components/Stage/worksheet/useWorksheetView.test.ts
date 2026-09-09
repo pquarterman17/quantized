@@ -261,7 +261,9 @@ describe("text columns are suppressed while a book's full data is still pending"
       // FULL-length sidecar: one cell per real row, not per preview row.
       metadata: { origin_text_columns: { Op: Array.from({ length: fullRows }, (_, i) => `o${i}`) } },
     },
-    pending: { bookId: "b1", rows: fullRows, cols: 1 } as unknown as Dataset["pending"],
+    // EXPLICITLY sampled. Left undefined, this test would have passed on the
+    // fail-closed default instead of the path it claims to exercise.
+    pending: { bookId: "b1", rows: fullRows, cols: 1, previewSampled: true } as unknown as Dataset["pending"],
   };
 
   const seed = (d: Dataset) => {
@@ -302,11 +304,13 @@ describe("text columns are suppressed while a book's full data is still pending"
 // text-only book — the "preview" is the full data and its sidecars are exactly
 // aligned. Blanking those cost the user the whole worksheet.
 describe("a pending book whose preview is NOT decimated still shows its text", () => {
-  // `pending.rows` is the backend's `ds.n_points` = `time.shape[0]`
-  // (datastruct.py), i.e. the NUMERIC row count — not the text row count. So a
-  // text-only book reports `rows: 0`, and `rows > time.length` is `0 > 0`:
-  // false. That is what makes the condition exactly right rather than merely
-  // narrower, and writing this test is what forced the check.
+  // These fixtures carry `previewSampled` — the BACKEND's own answer. The
+  // row-count proxy tried before it (`pending.rows > data.time.length`) was
+  // refuted in round 3: the backend runs `_trim_trailing_padding` BEFORE its
+  // `n <= target_points` early return, so a merely padding-trimmed preview is
+  // shorter than `pending.rows` while still being a strict PREFIX whose cells
+  // line up. That trim is corpus-attested (Book15: 19 of 180 rows), so the proxy
+  // blanked ordinary books — the regression it had been written to remove.
   // THREE counts, deliberately separate — conflating them is what made the first
   // version of this fixture wrong: `numericRows` is what the preview holds,
   // `pending.rows` is the backend's own numeric count for the full book, and
@@ -321,8 +325,31 @@ describe("a pending book whose preview is NOT decimated still shows its text", (
       units: labels.map(() => ""),
       metadata: { origin_text_columns: { Op: Array.from({ length: textCells }, (_, i) => `o${i}`) } },
     },
-    pending: { bookId: "b2", rows: numericRows, cols: labels.length },
+    pending: { bookId: "b2", rows: numericRows, cols: labels.length, previewSampled: false },
   }) as unknown as Dataset;
+
+  it("a PADDING-TRIMMED preview keeps its columns — the row-count proxy blanked it", () => {
+    // The round-3 HIGH, in its corpus shape: a 180-row book with 19 over-allocated
+    // trailing rows previews as 161 ALIGNED prefix rows, while `pending.rows` is
+    // the pre-trim 180. `180 > 161` was true, so the proxy hid text that lined up
+    // perfectly — and permanently, on a failed fetch.
+    const ds = pendingButComplete(161, 180, ["Y"]);
+    (ds.pending as unknown as { rows: number }).rows = 180;
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+  });
+
+  it("an UNKNOWN previewSampled fails CLOSED — a .dwk predating the field", () => {
+    // `parsePending` applies the same `!== false` rule on load. Defaulting the
+    // other way is a silent misalignment: the old proxy read a missing/0 `rows` as
+    // `0 > 200` = false and rendered the very bug it was written to prevent.
+    const ds = pendingButComplete(200, 5000, ["Y"]);
+    delete (ds.pending as unknown as { previewSampled?: boolean }).previewSampled;
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toEqual([]);
+  });
 
   it("a small book (rows <= target_points, so no decimation) keeps its columns", () => {
     const ds = pendingButComplete(5, 5, ["Y"]); // 5 numeric rows, preview == full

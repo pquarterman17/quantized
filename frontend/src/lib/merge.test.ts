@@ -217,6 +217,24 @@ describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
       ]);
     });
 
+    it("each PAD row is its own array, not one shared reference", () => {
+      // The comment in merge.ts promised this ("A fresh row per pad row — never
+      // one shared array"); nothing tested it. Hoisting a single `padRow` shared
+      // by every pad row left 339 files / 6,323 tests green — a doc promise with
+      // no test, which is the exact discipline CLAUDE.md names. Asserted through a
+      // WRITE, so it fails the way a user would see it.
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["a0", "a1", "a2", "a3", "a4"] }), withText([3, 4], {})],
+        ["a", "b"],
+      );
+      const pads = [m.values[2], m.values[3], m.values[4]];
+      expect(pads[0]).not.toBe(pads[1]);
+      expect(pads[1]).not.toBe(pads[2]);
+      pads[0][0] = 42;
+      expect(m.values[3][0]).toBeNaN(); // a shared row would have taken the 42
+      expect(m.values[4][0]).toBeNaN();
+    });
+
     it("a CORRUPTED sidecar on dataset 0 does not survive onto the merged grid", () => {
       // This is the case the strip actually earns its place on, and finding it
       // took a sabotage: with per-part spans in place, every ordinary case emits

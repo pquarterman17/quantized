@@ -734,7 +734,7 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
             units: [""],
             metadata: { origin_text_columns: { Op: Array.from({ length: 12 }, (_, i) => `o${i}`) } },
           },
-          pending: { bookId: "b1", rows: 12, cols: 1 },
+          pending: { bookId: "b1", rows: 12, cols: 1, previewSampled: true },
         },
       ],
       activeId: "p1",
@@ -762,6 +762,37 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
       (d.metadata["origin_text_columns"] as Record<string, string[]>).Op,
     ).toHaveLength(12); // no cell stripped
     expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a pending book whose preview is NOT a sample is still EDITABLE", () => {
+    // The round-3 HIGH: the guard gated on `ds.pending` alone — the very mistake
+    // the same commit had just fixed in `textColumns.ts` — so a text-only book
+    // rendered its rows (that commit's own new test asserts it) and then refused
+    // every row edit, permanently when the fetch failed, while the status bar kept
+    // promising "try again in a moment". Both now read the shared `rowsAreSampled`.
+    useApp.setState({
+      datasets: [
+        {
+          id: "p2",
+          name: "textonly.opj",
+          data: {
+            time: [],
+            values: [],
+            labels: [],
+            units: [],
+            metadata: { origin_text_columns: { Op: ["o0", "o1", "o2", "o3"] } },
+          },
+          pending: { bookId: "b2", rows: 0, cols: 0, previewSampled: false },
+        },
+      ],
+      activeId: "p2",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().deleteRows("p2", [1]);
+    expect(
+      (useApp.getState().datasets[0].data.metadata["origin_text_columns"] as Record<string, string[]>).Op,
+    ).toEqual(["o0", "o2", "o3"]);
+    expect(useApp.getState().history).toHaveLength(1);
   });
 
   it("the SAME edits work once the book has resolved", () => {

@@ -973,8 +973,30 @@ import { fileURLToPath } from "node:url";
  *  Net: the round's ~400 new eager bytes (BUG-006's `withoutRowSidecars`,
  *  per-part spans, and the pending row-edit guard) are more than paid for.
  *  Pinned at measured (912,389) + 64; the day (from 910,711) is **+1,742**.
+ *
+ *  2026-09-09 (Group P, review round 3) — 912,453 -> 912,611, a raise of 158.
+ *
+ *  Against the pin currently on `main` (912,554) this is +57; the intermediate
+ *  912,453 was this branch's own lower, so quoting the raise against it is the
+ *  honest comparison and both numbers are given rather than the flattering one.
+ *
+ *  Buys the fix for two HIGH round-3 findings: a shared `rowsAreSampled`
+ *  predicate (the rule had been copied into three files and two copies were
+ *  wrong), plus the `preview_sampled` wire field it reads — the backend is the
+ *  only side that can distinguish a padding-TRIMMED preview, which is a strict
+ *  prefix and safe to index, from a SAMPLED one, which is not. The row-count
+ *  proxy it replaces blanked the text columns of ordinary corpus books.
+ *
+ *  Reduction taken first, as the rule requires: the predicate started as its own
+ *  `lib/pendingRows.ts` and moved into `lib/rowSidecars.ts`, which already owns
+ *  the row-indexed-sidecar contract and is already eager — a separate module was
+ *  an extra chunk for one function. What remains is the function body and the
+ *  field plumbing, which have no lazy boundary: both readers are a synchronous
+ *  store slice and a render path.
+ *
+ *  Pinned at measured (912,547) + 64, measured AFTER the final edit.
  */
-const EAGER_JS_BUDGET = 912_453;
+const EAGER_JS_BUDGET = 912_611;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

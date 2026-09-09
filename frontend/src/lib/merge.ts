@@ -112,7 +112,6 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
   // same output rows. `d.time.length` and `d.values.length` can themselves
   // differ on a ragged input; one span settles that too.
   const spans = datasets.map((d) => sidecarRowCount(d.metadata, Math.max(d.time.length, d.values.length)));
-  const ncolOut = datasets[0].labels.length;
   const time: number[] = [];
   const values: number[][] = [];
   datasets.forEach((d, di) => {
@@ -122,7 +121,7 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
       // A fresh row per pad row — never one shared array (the aliasing trap
       // `store/cellEdit.ts` documents).
       const src = d.values[r];
-      const out = src ? [...src] : Array.from({ length: ncolOut }, () => Number.NaN);
+      const out = src ? [...src] : Array.from({ length: ncol }, () => Number.NaN);
       for (const [c, plan] of plans) {
         const remap = plan.remaps[di];
         if (remap) out[c] = remap(out[c]);

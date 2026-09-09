@@ -108,6 +108,15 @@ export interface LazyBookEntry {
   rows: number;
   cols: number;
   preview: { time: number[]; values: number[][] };
+  /** Are the preview's rows a SAMPLE rather than a prefix of the book's rows?
+   *  `false` for an untouched or merely padding-trimmed preview (row r IS source
+   *  row r), `true` once the backend's bucketed min/max sampler ran. Only the
+   *  backend can answer it — the trim and the sampler both shorten the data and
+   *  only the sampler breaks row correspondence, so a row-count comparison cannot
+   *  tell them apart. Consumed by the worksheet to decide whether the FULL-length
+   *  row-indexed metadata sidecars may be indexed against these numbers (BUG-006
+   *  site 9). Optional for a `.dwk` written before the field existed. */
+  preview_sampled?: boolean;
 }
 
 /** One `books[]` entry: a full `DataStruct` (under the `full_books=true`
@@ -133,6 +142,11 @@ export interface BookSource extends BookSourceRef {
   bookId: string;
   rows: number;
   cols: number;
+  /** Carried from `LazyBookEntry.preview_sampled` — see there. NOT for display:
+   *  this one is load-bearing for correctness, and `undefined` means "unknown",
+   *  which callers must treat as the unsafe case (see
+   *  `worksheet/textColumns.ts`). */
+  previewSampled?: boolean;
 }
 
 export function isLazyBookEntry(b: BookEntry): b is LazyBookEntry {

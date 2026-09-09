@@ -39,7 +39,7 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
-import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { insertRowIndexes, rowsAreSampled, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -86,13 +86,19 @@ function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
  *  strip a sidecar cell whose row does not exist in the preview.
  *
  *  Same ruling as `useWorksheetView`'s `pendingGuard` (which covers extract and
- *  copy) and for the same reason: a row index against the preview does not name a
+ *  copy) and for the same reason: a row index against a SAMPLE does not name a
  *  real row. Kicks the fetch so the retry the message suggests can succeed.
- *  Suppressing the text-column RENDER while pending removed the phantom rows that
- *  used to hint at this, which is precisely why the edit path needs its own
- *  guard. */
+ *  Suppressing the text-column RENDER removed the phantom rows that used to hint
+ *  at this, which is precisely why the edit path needs its own guard.
+ *
+ *  Gated on the SHARED `rowsAreSampled`, not on `ds.pending`. Gating on `pending`
+ *  alone — which the first version did — refused edits on every book whose preview
+ *  is NOT a sample: a small book, and every text-only book, whose columns the very
+ *  same commit had just stopped hiding. That book rendered its rows and then
+ *  refused to edit them, permanently when the fetch failed, while the status bar
+ *  kept saying "try again in a moment". Two copies of one rule, disagreeing. */
 function refusePendingRowEdit(get: SliceGet, ds: Dataset, action: string): boolean {
-  if (!ds.pending) return false;
+  if (!rowsAreSampled(ds.pending)) return false;
   void get().ensureBookData(ds.id);
   get().setStatus(`"${ds.name}" is still loading its full data — try ${action} again in a moment`);
   return true;

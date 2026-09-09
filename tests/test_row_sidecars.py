@@ -15,6 +15,7 @@ import numpy as np
 from quantized.calc.corrections import apply_corrections
 from quantized.calc.resample import resample_data
 from quantized.datastruct import DataStruct
+from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.row_sidecars import (
     ROW_INDEXED_SIDECARS,
     drop_row_sidecars,
@@ -39,7 +40,17 @@ class TestMirrorsTheTypeScriptModule:
             r"export const ROW_INDEXED_SIDECARS = \[(.*?)\] as const;", src, re.S
         )
         assert block, f"could not find ROW_INDEXED_SIDECARS in {ts}"
-        ts_keys = tuple(re.findall(r'"([^"]+)"', block.group(1)))
+        # Strip comments BEFORE matching string literals: the first version
+        # scanned the raw body, so an ordinary `// the Origin "report sheet"
+        # refs` would have failed this test — a false positive, reported by
+        # review. Single quotes are accepted too, so a Prettier reformat of the
+        # array is not a failure either.
+        body = re.sub(r"//[^\n]*", "", block.group(1))
+        body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)
+        ts_keys = tuple(
+            m.group(1) if m.group(1) is not None else m.group(2)
+            for m in re.finditer(r"\"([^\"]+)\"|'([^']+)'", body)
+        )
         assert ts_keys == ROW_INDEXED_SIDECARS, (
             "row-indexed sidecar keys have DRIFTED between "
             f"{ts.name} ({ts_keys}) and row_sidecars.py ({ROW_INDEXED_SIDECARS}). "
@@ -57,12 +68,33 @@ class TestMatchesTypeScriptCellSemantics:
         out = slice_row_sidecars({"text_columns": {"A": ["a0", None, "a2"]}}, [0, 1, 2])
         assert out["text_columns"] == {"A": ["a0", "", "a2"]}
 
-    def test_a_non_integer_index_is_a_MISS_not_a_truncation(self) -> None:
-        # `int(1.5)` returned cell 1; JS `cells[1.5]` is undefined -> "".
+    def test_a_non_integer_index_yields_a_BLANK_and_is_not_trimmed(self) -> None:
+        # Two separate rules, and an earlier version of this test conflated them.
+        # `cells[1.5]` is `undefined` -> "" (the VALUE), but the trim predicate
+        # `hit(i)` is a bare NUMERIC range check that 1.5 PASSES, so JS keeps the
+        # slot: `["a0", ""]`, length 2. Asserting `["a0"]` here was pinning a
+        # divergence I had introduced, not the contract. Measured against the TS
+        # module directly.
         out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, [0, 1.5])
-        assert out["text_columns"] == {"A": ["a0"]}  # trailing miss trimmed
+        assert out["text_columns"] == {"A": ["a0", ""]}
+
+    def test_an_INTEGRAL_FLOAT_is_a_real_index(self) -> None:
+        # JS stringifies the key, so `cells[2.0]` is `cells["2"]` — the real cell.
+        # A wire/JSON round trip makes every number a double, so this is the shape
+        # an index list actually arrives in.
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1", "a2"]}}, [0, 2.0])
+        assert out["text_columns"] == {"A": ["a0", "a2"]}
+
+    def test_an_out_of_range_or_non_numeric_index_IS_trimmed(self) -> None:
+        # The other half of `hit`: 99 and "x" fail the range check, so the trailing
+        # slot goes away entirely rather than becoming a blank.
+        meta = {"text_columns": {"A": ["a0", "a1"]}}
+        assert slice_row_sidecars(meta, [0, 99])["text_columns"] == {"A": ["a0"]}
+        assert slice_row_sidecars(meta, [0, "x"])["text_columns"] == {"A": ["a0"]}
 
     def test_a_non_numeric_index_is_a_miss_rather_than_raising(self) -> None:
+        # Leading (non-trailing) so the trim doesn't remove it — this pins the
+        # VALUE rule, and the test above pins the TRIM rule.
         out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, ["x", 0])
         assert out["text_columns"] == {"A": ["", "a0"]}
 
@@ -84,11 +116,14 @@ class TestMatchesTypeScriptCellSemantics:
         assert not isinstance(raw[0], int)  # the premise, so this cannot rot
         assert slice_row_sidecars(meta, raw)["text_columns"] == {"A": ["a0", "a2"]}
 
-    def test_a_BOOL_index_is_a_miss_even_though_it_has___index__(self) -> None:
-        # `operator.index(True)` is 1, but JS `cells[true]` is a property lookup
-        # yielding undefined -> "". Excluded deliberately to match.
-        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, [True, 0])
-        assert out["text_columns"] == {"A": ["", "a0"]}
+    def test_a_BOOL_index_is_a_blank_VALUE_but_still_in_RANGE(self) -> None:
+        # `operator.index(True)` is 1, but JS `cells[true]` is `cells["true"]` ->
+        # undefined -> "". Its trim behaviour differs from its value behaviour,
+        # exactly like 1.5: `true >= 0 && true < 2` coerces to `1 < 2` -> in range,
+        # so a TRAILING `true` is NOT trimmed. Both halves asserted.
+        meta = {"text_columns": {"A": ["a0", "a1"]}}
+        assert slice_row_sidecars(meta, [True, 0])["text_columns"] == {"A": ["", "a0"]}
+        assert slice_row_sidecars(meta, [0, True])["text_columns"] == {"A": ["a0", ""]}
 
     def test_a_NEGATIVE_index_is_a_blank_not_the_last_cell(self) -> None:
         # The TS side pins this (`[0,-1,1]`); the Python mirror's only
@@ -200,3 +235,61 @@ class TestResampleDropsSidecars:
         ds = _ds(5, {"source": "run.dat", "text_columns": {"A": ["a"] * 5}})
         out = resample_data(ds, n_points=9)
         assert out.metadata["source"] == "run.dat"
+
+
+class TestDecimateWithAlignment:
+    """The ``sampled`` flag the frontend gates BUG-006 site 9 on.
+
+    Added because a sabotage exposed that nothing pinned it: making
+    ``_decimate`` return ``True`` unconditionally left all 594 preview/parser
+    tests green, so the flag the whole fix depends on was unverified.
+    """
+
+    @staticmethod
+    def _book(rows: int, channels: int = 1, trailing_zero_rows: int = 0) -> DataStruct:
+        n = rows + trailing_zero_rows
+        time = np.arange(float(n))
+        col = np.arange(1.0, n + 1).reshape(n, 1)
+        values = np.tile(col, (1, channels)) if channels else np.zeros((n, 0))
+        if trailing_zero_rows:
+            # Origin's "allocated but unfilled" tail: x == 0 and every y == 0.
+            time[rows:] = 0.0
+            values[rows:, :] = 0.0
+        return DataStruct.create(
+            time,
+            values,
+            labels=[f"Y{i}" for i in range(channels)],
+            units=[""] * channels,
+            metadata={},
+        )
+
+    def test_a_small_book_is_NOT_sampled(self) -> None:
+        preview, sampled = decimate_with_alignment(self._book(50), target_points=200)
+        assert sampled is False
+        assert preview.n_points == 50
+
+    def test_a_book_with_no_channels_is_NOT_sampled(self) -> None:
+        preview, sampled = decimate_with_alignment(self._book(500, channels=0), target_points=200)
+        assert sampled is False
+
+    def test_a_large_book_IS_sampled(self) -> None:
+        preview, sampled = decimate_with_alignment(self._book(1000), target_points=200)
+        assert sampled is True
+        assert preview.n_points < 1000
+
+    def test_a_PADDING_TRIMMED_book_is_NOT_sampled_though_it_SHRANK(self) -> None:
+        """The distinction the whole flag exists for, and the one a row-count
+        comparison cannot make: the trim shortens the preview while leaving it a
+        strict PREFIX, so its sidecar cells still line up."""
+        preview, sampled = decimate_with_alignment(
+            self._book(161, trailing_zero_rows=19), target_points=200
+        )
+        assert sampled is False
+        assert preview.n_points == 161  # it DID shrink from 180 ...
+        # ... and is still a prefix, which is why the cells remain aligned.
+        assert preview.time.tolist() == list(range(161))
+
+    def test_decimate_datastruct_still_returns_just_the_preview(self) -> None:
+        from quantized.io.origin_project.preview import decimate_datastruct
+
+        assert decimate_datastruct(self._book(1000), target_points=200).n_points < 1000

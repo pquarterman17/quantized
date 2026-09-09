@@ -54,62 +54,88 @@ ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sh
 
 
 def _as_index(i: Any) -> int | None:
-    """``i`` as an integer index, or ``None`` when it is not one.
+    """``i`` as a real position in a JS array, or ``None``.
 
-    ``operator.index`` rather than ``isinstance(i, int)``, and this one was NOT
-    found by review -- it was found by doubting the guard and probing it, which is
-    the only reason it is not still in the tree. ``np.int64`` is NOT a subclass of
-    ``int``, so an ``isinstance`` check treated every index from
-    ``np.flatnonzero`` (exactly how ``calc/corrections.py`` derives its surviving
-    rows) as a MISS, and the empty-column prune then deleted the whole column:
+    Derived from a MEASURED table of what the TypeScript side returns, not from
+    what "index" ought to mean -- the previous version guessed, and a test then
+    locked the guess in. JS array access stringifies the key, so:
 
-        slice_row_sidecars({"text_columns": {"A": [...]}}, np.flatnonzero(mask))
-        -> {"text_columns": {}}          # the entire sidecar, silently gone
+    =======================  ===========================  =============
+    index                    JS ``cells[i]``              here
+    =======================  ===========================  =============
+    ``2`` / ``np.int64(2)``  ``cells[2]``                 the cell
+    ``2.0``                  ``cells["2"]`` -> the cell   the cell
+    ``1.5``                  ``cells["1.5"]`` -> undef    ``None``
+    ``True``                 ``cells["true"]`` -> undef   ``None``
+    ``-1`` / ``99``          undefined                    ``None``
+    ``"x"``                  undefined                    ``None``
+    =======================  ===========================  =============
 
-    `corrections.py` converts to `int` before calling, so nothing shipped broken
-    -- but a guard that turns a numpy index into total silent data loss is exactly
-    the failure this module exists to prevent, and the next caller would not have
-    known. ``operator.index`` accepts anything implementing ``__index__`` (``int``,
-    ``np.int64``, any integral scalar) without importing numpy into a pure module.
-
-    ``bool`` is excluded deliberately: it implements ``__index__`` (``True`` -> 1),
-    but JS ``cells[true]`` is a property lookup that yields ``undefined``, so
-    treating it as index 1 would be a divergence. A ``float`` raises TypeError and
-    is a miss, matching ``cells[1.5]`` -> ``undefined``.
+    ``operator.index`` rather than ``isinstance(i, int)``: ``np.int64`` is NOT a
+    subclass of ``int``, so an isinstance check made every index from
+    ``np.flatnonzero`` a miss and the empty-column prune then deleted the WHOLE
+    column -- silent, total loss, in a pure numpy module where index arrays are the
+    native currency. An INTEGRAL FLOAT is accepted because JS treats ``2.0`` and
+    ``2`` as the same key and a wire/JSON round trip makes every number a double.
     """
     if isinstance(i, bool):
         return None
     try:
         return operator.index(i)
     except TypeError:
+        pass
+    try:
+        f = float(i)
+    except (TypeError, ValueError):
         return None
+    return int(f) if f.is_integer() else None
+
+
+def _in_range(cells: Sequence[Any], i: Any) -> bool:
+    """The TRAILING-TRIM predicate, mirroring the TS ``hit(i)``.
+
+    ``hit`` is a bare NUMERIC range check (``i >= 0 && i < cells.length``), NOT an
+    integrality check -- so JS does not trim a ``1.5`` or a ``true``: both compare
+    inside the range, survive the trim, and then yield ``""`` from the lookup.
+    Measured against the TS module:
+
+        [0, 1.5]  -> ["a0", ""]     length 2, NOT trimmed
+        [0, true] -> ["a0", ""]     length 2, NOT trimmed
+        [0, "x"]  -> ["a0"]         trimmed
+        [0, 99]   -> ["a0"]         trimmed
+
+    Requiring integrality here -- which the previous version did -- made the result
+    one shorter than the TS, and the test asserting that was pinning the divergence
+    rather than the contract.
+
+    Deliberate narrower divergence: a NUMERIC STRING. JS ``"1" >= 0 && "1" < 3`` is
+    true by coercion; here it is out of range. No caller can produce one (indices
+    come from ``range``/numpy), and coercing strings to indices is not behaviour
+    worth mirroring.
+    """
+    if isinstance(i, bool):
+        return 0 <= int(i) < len(cells)
+    if isinstance(i, str):
+        return False
+    try:
+        return 0 <= float(i) < len(cells)
+    except (TypeError, ValueError):
+        return False
 
 
 def _cell(cells: Sequence[Any], i: Any) -> Any:
     """One cell, or ``""`` for anything that is not a real position in ``cells``.
 
-    Mirrors the TypeScript ``cells[i] ?? ""``. Three ways it used to differ, all
-    found by review after this module was first called a mirror:
-
-    * ``None`` becomes ``""``. JS ``?? ""`` catches ``null`` as well as
-      ``undefined``, and this is not hypothetical -- the TS module's own doc says
-      ``??`` exists because ``undefined`` "would serialize to ``null`` and read
-      back as a hole", so a ``.dwk``/wire round trip produces exactly this cell.
-      Python was handing the ``None`` straight back.
-    * A NON-INTEGER index is a miss, not a truncation. ``int(i)`` turned ``1.5``
-      into ``1`` and returned a real cell where JS returns ``undefined`` -> ``""``.
-    * A non-numeric index is a miss rather than a ``TypeError``.
+    Mirrors the TypeScript ``cells[i] ?? ""``. ``None`` becomes ``""`` because JS
+    ``?? ""`` catches ``null`` as well as ``undefined``, and this is not
+    hypothetical -- the TS module's own doc says ``??`` exists because
+    ``undefined`` "would serialize to ``null`` and read back as a hole", so a
+    ``.dwk``/wire round trip produces exactly this cell.
     """
     idx = _as_index(i)
     if idx is None:
         return ""
     return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else ""
-
-
-def _is_position(cells: Sequence[Any], i: Any) -> bool:
-    """Does ``i`` name a real position in ``cells``? The trailing-trim predicate."""
-    idx = _as_index(i)
-    return idx is not None and 0 <= idx < len(cells)
 
 
 def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
@@ -125,7 +151,7 @@ def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
     growing every saved copy.
     """
     end = len(row_indexes)
-    while end > 0 and not _is_position(cells, row_indexes[end - 1]):
+    while end > 0 and not _in_range(cells, row_indexes[end - 1]):
         end -= 1
     return [_cell(cells, i) for i in row_indexes[:end]]
 
