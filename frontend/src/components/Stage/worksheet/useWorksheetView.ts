@@ -39,7 +39,8 @@ import { useEffect, useMemo, useState } from "react";
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { channelLetter, compileFormula } from "../../../lib/formula";
-import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
+import type { TextColumn } from "../../../lib/columnmeta";
+import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
@@ -347,13 +348,11 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     [selection, ds.id],
   );
 
-  // Text-sheet columns (item 8): read-only, appended after numeric/computed
-  // columns. A text-only book has zero numeric rows (`ds.data.time.length ===
-  // 0`) but non-empty text rows — the effective row count is the LARGER of
-  // the two so those rows aren't silently dropped ("text columns are the
-  // whole grid" for such a book).
-  const textCols = useMemo(() => originTextColumns(ds.data), [ds.data]);
-  const textRowCount = useMemo(() => textCols.reduce((m, t) => Math.max(m, t.rows.length), 0), [textCols]);
+  // Text-sheet columns (item 8): read-only, appended after the numeric/computed
+  // ones. Both derivations — and why a still-pending book renders NONE of them
+  // (BUG-006 site 9) — live in ./textColumns.ts.
+  const textCols = useMemo(() => worksheetTextColumns(ds), [ds]);
+  const textRowCount = useMemo(() => textColumnRowCount(textCols), [textCols]);
 
   const filtered = useMemo(() => {
     const n = Math.max(ds.data.time.length, textRowCount);

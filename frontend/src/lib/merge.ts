@@ -3,6 +3,7 @@
 // share a column count; labels/units come from the first. Use the worksheet sort
 // afterwards if the merged x needs ordering (concatenation preserves input order).
 
+import { concatRowSidecars } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 /** Two level tables agree only if they're the SAME LENGTH and SAME ORDER —
@@ -119,6 +120,12 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
     units: [...datasets[0].units],
     metadata: {
       ...datasets[0].metadata,
+      // BUG-006 site 8: the ROW-INDEXED sidecars are rebuilt across every input
+      // rather than inherited from dataset 0, whose cells describe only dataset
+      // 0's rows. Spread first, then overwrite — the spread still carries the
+      // file-level metadata (source, comments, instrument fields) that a merge
+      // reasonably inherits from its first input.
+      ...concatRowSidecars(datasets.map((d) => ({ metadata: d.metadata, rowCount: d.time.length }))),
       merged_from: names.join(" + "),
       merged_count: datasets.length,
     },

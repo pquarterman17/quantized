@@ -20,6 +20,7 @@ from scipy.interpolate import (
 )
 
 from ..datastruct import DataStruct
+from ..row_sidecars import drop_row_sidecars
 
 __all__ = ["resample_data"]
 
@@ -133,7 +134,12 @@ def resample_data(
     for c in range(y_old.shape[1]):
         y_new[:, c] = _interp_column(x_old, y_old[:, c], x_new, method, extrapolate)
 
-    meta = dict(data.metadata)
+    # BUG-006: the row-indexed metadata sidecars are DROPPED, not sliced. Every
+    # output row is an INTERPOLATED point on a new x grid, so no output row IS
+    # any input row and there is no index mapping to slice to -- exactly the
+    # reasoning that already governs `cat_levels` below. A per-row text cell
+    # carried onto a row it cannot describe is worse than not carrying it.
+    meta = drop_row_sidecars(data.metadata)
     meta["resampled"] = True
     meta["resampleMethod"] = method
     meta["resamplePoints"] = int(x_new.size)

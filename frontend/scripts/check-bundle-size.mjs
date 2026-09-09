@@ -942,8 +942,36 @@ import { fileURLToPath } from "node:url";
  *  +24 used above on purpose — `__BUILD_SHA__` is baked into the bundle
  *  (vite.config.ts), so a short SHA git extends by a character or two would
  *  otherwise redden CI with no code change at all. 64 covers that, no more.
+ *
+ *  2026-09-09 (Group P) — 912,554 -> 913,130. **This one is a RAISE of 576, and
+ *  calling it anything else would repeat the mistake this block already
+ *  records.**
+ *
+ *  What it buys: `lib/rowSidecars.concatRowSidecars`, which closes the last
+ *  FRONTEND site of BUG-006 (`lib/merge.ts` inherited dataset 0's row-indexed
+ *  sidecars verbatim, silently dropping datasets 1..N's and landing dataset 0's
+ *  overflow cells on dataset 1's rows). It is reached from a merge, so it lives
+ *  eagerly only because `store/useApp.ts` — which owns both merge entry points —
+ *  is eager.
+ *
+ *  TWO reductions were tried and BOTH rejected, which is what makes this the
+ *  last resort rule 2 asks for rather than a shrug:
+ *    1. Defer `lib/merge.ts` behind `await import()`. Wins the bytes, but adds
+ *       four lines to `store/useApp.ts`, which sits AT its architecture.test.ts
+ *       store-size pin with zero headroom — it buys bundle bytes with store
+ *       lines and reddens the other ratchet (measured, earlier today). Paying
+ *       for it properly means extracting another useApp slice, which is real
+ *       work and not this PR's.
+ *    2. Make `mergeDatasets` async so merge.ts can dynamic-import the helper
+ *       (both call sites already `await`, so it costs zero useApp lines). Wins
+ *       the bytes too, and REJECTED on purpose: `lib/` is a pure library layer,
+ *       and making a pure synchronous function async to chase 576 bytes is the
+ *       kind of clever that ages badly.
+ *
+ *  Capped at measured (913,066) + 64, far inside rule 2's measured + 1,024. The
+ *  day (from 910,711) is **+2,419**; still owed to the next extraction.
  */
-const EAGER_JS_BUDGET = 912_554;
+const EAGER_JS_BUDGET = 913_130;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

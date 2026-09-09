@@ -502,7 +502,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/lib/roiMath.ts": 664,
   "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
   "/lib/plotdata.ts": 658,
-  "/components/Stage/worksheet/useWorksheetView.ts": 649,
+  "/components/Stage/worksheet/useWorksheetView.ts": 648,
   "/lib/roi.ts": 638,
   "/lib/plotspec2.ts": 637,
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to

@@ -144,4 +144,84 @@ describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
     const m = mergeDatasets([a, b], ["a", "b"]);
     expect("cat_levels" in m).toBe(false);
   });
+
+  // BUG-006 site 8: `{...datasets[0].metadata}` dropped datasets 1..N's
+  // row-indexed sidecars AND, when dataset 0's ran longer than its own rows,
+  // pushed its trailing cells onto dataset 1's rows.
+  describe("row-indexed metadata sidecars concatenate across every input", () => {
+    const withText = (
+      time: number[],
+      cells: Record<string, string[]>,
+      extra: Record<string, unknown> = {},
+    ): DataStruct => ({
+      time,
+      values: time.map((t) => [t * 10]),
+      labels: ["M"],
+      units: ["emu"],
+      metadata: { text_columns: cells, ...extra },
+    });
+
+    it("keeps every input's cells, in row order", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }), withText([3, 4], { Op: ["r", "s"] })],
+        ["a", "b"],
+      );
+      expect(m.time).toEqual([1, 2, 3, 4]);
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["p", "q", "r", "s"]);
+    });
+
+    it("no longer DROPS the second dataset's sidecar", () => {
+      const m = mergeDatasets([withText([1, 2], {}), withText([3, 4], { Op: ["r", "s"] })], ["a", "b"]);
+      // Before: dataset 0 had no `text_columns`, so the merge had none at all
+      // and "r"/"s" vanished.
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["", "", "r", "s"]);
+    });
+
+    it("does not push dataset 0's OVERFLOW cells onto dataset 1's rows", () => {
+      // The ragged case the previous round's headline was about: A's sidecar has
+      // 5 cells for 2 numeric rows. Before, the merged sidecar was A's array
+      // verbatim, so B's rows displayed a2/a3.
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["a0", "a1", "a2", "a3", "a4"] }), withText([3, 4], { Op: ["b0", "b1"] })],
+        ["a", "b"],
+      );
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["a0", "a1", "b0", "b1"]);
+    });
+
+    it("unions differently-named columns, blank where an input lacks one", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }), withText([3, 4], { Sample: ["x", "y"] })],
+        ["a", "b"],
+      );
+      const cols = m.metadata["text_columns"] as Record<string, string[]>;
+      expect(cols.Op).toEqual(["p", "q", "", ""]);
+      expect(cols.Sample).toEqual(["", "", "x", "y"]);
+    });
+
+    it("covers the origin_* spellings too", () => {
+      const m = mergeDatasets(
+        [
+          { ...a, metadata: { origin_text_columns: { S: ["s0", "s1"] } } },
+          { ...b, metadata: { origin_report_sheets: { R: ["r0", "r1"] } } },
+        ],
+        ["a", "b"],
+      );
+      expect((m.metadata["origin_text_columns"] as Record<string, string[]>).S).toEqual(["s0", "s1", "", ""]);
+      expect((m.metadata["origin_report_sheets"] as Record<string, string[]>).R).toEqual(["", "", "r0", "r1"]);
+    });
+
+    it("still inherits dataset 0's FILE-level metadata", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }, { source: "a.dat" }), withText([3, 4], { Op: ["r", "s"] })],
+        ["a", "b"],
+      );
+      expect(m.metadata["source"]).toBe("a.dat");
+      expect(m.metadata["merged_count"]).toBe(2);
+    });
+
+    it("emits no sidecar key at all when no input carries one", () => {
+      const m = mergeDatasets([a, b], ["a", "b"]);
+      expect("text_columns" in m.metadata).toBe(false);
+    });
+  });
 });

@@ -29,7 +29,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices + row edits | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **6 of 8 sites fixed** 2026-09-09, sabotage-verified; `calc/corrections.py` xTrim and `lib/merge.ts` still open — see the entry. Declared "fixed everywhere" twice and wasn't, both times caught by review, never by the suite |
+| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED at all 9 sites** 2026-09-09, every one sabotage-verified. Declared closed TWICE before it was; sites 7-8 came from review and site 9 from finally searching for the SHAPE rather than re-listing remembered sites |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1153,13 +1153,16 @@ The two hesitations, and what they were actually worth:
   `origin_text_columns: {Source}`, which a surviving stale `text_columns` beat
   in `lib/columnmeta.ts`'s `text_columns ?? origin_text_columns`.
 
-#### STILL OPEN — two sites found by the Group N review, with measured evidence
+#### The last three sites (Group P) — and why the enumeration kept being wrong
 
-The status below is **NOT "fixed everywhere"**, and the earlier claim that the
-slice was "applied at EVERY row-slicing site" was false twice over. Two sites
-remain, both PERSISTED, both reachable without an Origin file:
+The claim "applied at EVERY row-slicing site" was false twice. Group P closed
+the two the Group N review found, plus a NINTH the Group P audit found on its
+own, and the reason the count kept moving is worth recording: each earlier pass
+enumerated the sites it had *thought of* instead of searching for the shape.
+Group P searched for the shape — every producer of a DataStruct whose row count
+differs from its input's — and that is what turned up sites 7-9.
 
-- [ ] **`src/quantized/calc/corrections.py`'s xTrim** (`:122-131` masks rows,
+- [x] **`src/quantized/calc/corrections.py`'s xTrim** (`:122-131` masks rows,
   `:252` returns `metadata=dict(data.metadata)` unsliced). Import a CSV with one
   `label`-role column, so `metadata.text_columns` holds exactly one cell per row
   (`io/import_preview.py:453-458`); apply corrections with `xTrimMin` cutting the
@@ -1170,15 +1173,50 @@ remain, both PERSISTED, both reachable without an Origin file:
   bug started from, which only ever produced a derived copy. The code right
   beside it reasons explicitly about `excludedRows` shifting under an xTrim and
   says nothing about the sidecars.
-- [ ] **`frontend/src/lib/merge.ts:119-123`** — `metadata: { ...datasets[0].metadata,
+- [x] **`frontend/src/lib/merge.ts:119-123`** — `metadata: { ...datasets[0].metadata,
   ... }`. Two harms: datasets 1..N's sidecars are silently DROPPED, and if
   dataset 0's sidecar is longer than its own row count (the ragged case) its
   trailing cells land on dataset 1's rows. Measured shape: A = `time:[10,20,30]`
   with `text_columns:{A:[a0..a5]}`, B = 3 numeric rows -> merge yields 6 rows
   with `A:[a0..a5]` unchanged, so B's rows display `a3,a4,a5`. Reached from
-  `useApp.ts` importAppended + mergeSelected. A correct fix concatenates each
-  dataset's cells padded to its own row count, unioning column names — feasible,
-  not done here.
+  `useApp.ts` importAppended + mergeSelected. FIXED by
+  `lib/rowSidecars.concatRowSidecars`: column names are unioned in
+  first-appearance order, each input contributes EXACTLY its own row count padded
+  with blanks, and an all-blank column is dropped. This is the one place that
+  must NOT trailing-trim — trimming one part would shift every following part.
+  An input whose sidecar runs longer than its own rows has cells for rows the
+  combined grid does not have; those are dropped rather than pushed onto the next
+  input, the honest trade.
+- [x] **Site 9, found by Group P's own audit, NOT by the reviews:
+  `store/importDatasets.ts` + `useWorksheetView.ts`.** A still-pending Origin
+  book's placeholder Dataset pairs the ~200-row min/max-DECIMATED preview
+  (`_book_preview_payload` -> `book.preview.time/values`) with the FULL book's
+  `metadata` (`_slim_metadata` strips only `origin_books`), so its text sidecars
+  hold one cell per REAL row. `GridRow` then rendered `t.rows[r]` beside
+  `values[r]` — and decimation keeps each bucket's extremum, so it is not even a
+  prefix: row r's text belonged to whatever row the sampler picked. It also drove
+  the grid's row count to the FULL length via
+  `max(time.length, textRowCount)`, rendering thousands of rows with no numbers.
+  Visible in the worksheet for as long as the fetch takes, and indefinitely when
+  it fails (`installBookData`'s catch leaves `pending` set). `pendingGuard` in
+  the SAME FILE already refused extract/copy citing this exact reasoning ("a row
+  index computed against the preview doesn't correspond to any real row") — the
+  render simply never got the same treatment. FIXED by suppressing text columns
+  while `ds.pending`; nothing is lost, since `installBookData` swaps data and
+  metadata together and the Inspector's provenance card (which never indexes by
+  row) keeps showing them throughout.
+- [x] **`calc/resample.py`** — DROPS them rather than slicing, because every
+  output row is an interpolated point on a new grid: no output row IS an input
+  row, so there is no mapping. The same reasoning already governed `cat_levels`
+  there. New `drop_row_sidecars` makes the choice explicit and tested.
+- [x] `src/quantized/row_sidecars.py` is the new Python mirror of
+  `lib/rowSidecars.ts` — same module name, same key list, same trailing-trim and
+  empty-column rules, kept in sync BY HAND like
+  `datastruct.is_categorical`/`lib/categorical.isCategoricalChannel`.
+- [x] Checked and NOT sites: `io/origin_project/preview.py`'s
+  `_trim_trailing_padding`/`decimate_datastruct` (their metadata is discarded —
+  the payload sends the full ds's), and `calc/map.py` (builds a 2-D `MapData`
+  grid, where a per-row sidecar has no meaning).
 
 Also booked, not a defect: `lib/worksheetTransforms.ts`'s `stackWorksheet` DOES
 have a recoverable row mapping (output row `k` <- source row

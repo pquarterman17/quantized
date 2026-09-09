@@ -240,3 +240,58 @@ describe("useWorksheetView — window-scoped row selection (GUI_INTERACTION #14)
     expect([...result.current.selected]).toEqual([]);
   });
 });
+
+// BUG-006 site 9: a still-pending Origin book pairs a ~200-row min/max-DECIMATED
+// preview in `.time`/`.values` with the FULL book's `.metadata`, so its text
+// sidecars carry one cell per REAL row. Rendering them would put row r's text
+// beside a completely unrelated row's numbers — and drive the grid's row count
+// to the full length, showing thousands of rows whose numbers don't exist yet.
+// `pendingGuard` already refuses extract/copy for this exact reason.
+describe("text columns are suppressed while a book's full data is still pending", () => {
+  const previewRows = 3;
+  const fullRows = 12;
+  const pendingBook: Dataset = {
+    id: "p1",
+    name: "book.opj",
+    data: {
+      time: Array.from({ length: previewRows }, (_, i) => i * 4), // decimated sample
+      values: Array.from({ length: previewRows }, (_, i) => [i]),
+      labels: ["Y"],
+      units: [""],
+      // FULL-length sidecar: one cell per real row, not per preview row.
+      metadata: { origin_text_columns: { Op: Array.from({ length: fullRows }, (_, i) => `o${i}`) } },
+    },
+    pending: { bookId: "b1", rows: fullRows, cols: 1 } as unknown as Dataset["pending"],
+  };
+
+  const seed = (d: Dataset) => {
+    useApp.setState({ datasets: [d], activeId: d.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+
+  it("renders no text columns, and no phantom rows, while pending", () => {
+    seed(pendingBook);
+    const { result } = renderHook(() => useWorksheetView(pendingBook));
+    expect(result.current.textCols).toEqual([]);
+    // The row count stays the preview's, not the full book's 12 — the phantom
+    // rows came from `textRowCount` feeding `max(time.length, textRowCount)`.
+    expect(result.current.filtered).toHaveLength(previewRows);
+  });
+
+  it("renders them again once the full data has landed", () => {
+    // Same dataset with `pending` cleared and full-length numbers, which is what
+    // `installBookData` swaps in (data and metadata together).
+    const resolved: Dataset = {
+      ...pendingBook,
+      pending: undefined,
+      data: {
+        ...pendingBook.data,
+        time: Array.from({ length: fullRows }, (_, i) => i),
+        values: Array.from({ length: fullRows }, (_, i) => [i]),
+      },
+    };
+    seed(resolved);
+    const { result } = renderHook(() => useWorksheetView(resolved));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.textCols[0].rows).toHaveLength(fullRows);
+  });
+});

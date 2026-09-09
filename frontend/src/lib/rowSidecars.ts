@@ -96,6 +96,70 @@ export function sliceRowSidecars(
   return out;
 }
 
+/** One input to `concatRowSidecars`: a dataset's metadata and how many rows it
+ *  contributes to the combined grid. */
+export interface SidecarPart {
+  metadata: Record<string, unknown>;
+  rowCount: number;
+}
+
+/** Row-CONCATENATION of several datasets' sidecars, for an append/merge
+ *  (BUG-006 site 8).
+ *
+ *  `lib/merge.ts` used to carry `{...datasets[0].metadata}` verbatim, which did
+ *  two wrong things at once: datasets 1..N's sidecars were silently DROPPED, and
+ *  if dataset 0's sidecar ran longer than its own row count its trailing cells
+ *  landed on dataset 1's rows.
+ *
+ *  Column names are UNIONED in first-appearance order, so a text column present
+ *  in only some inputs survives, blank for the rows of the datasets that lack
+ *  it. Each part contributes EXACTLY `rowCount` cells, padded with `""` — the
+ *  blanks are real (those rows genuinely have no cell), and exact-length parts
+ *  are what keeps every later cell aligned with its own row. This is the one
+ *  place that does NOT trailing-trim: trimming a part would shift every
+ *  following part by however much it trimmed. A column that ends up blank for
+ *  every row is dropped, since several readers gate on a key's presence alone.
+ *
+ *  A part whose sidecar is LONGER than its `rowCount` has cells for rows that do
+ *  not exist in the combined grid; there is nowhere to put them, so they are
+ *  dropped rather than pushed onto the next dataset's rows. That is a real (if
+ *  narrow) loss and is the honest trade: a dropped cell beats a cell sitting
+ *  beside another dataset's numbers. */
+export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of ROW_INDEXED_SIDECARS) {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const part of parts) {
+      const raw = part.metadata[key];
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      for (const name of Object.keys(raw)) {
+        if (!seen.has(name)) {
+          seen.add(name);
+          names.push(name);
+        }
+      }
+    }
+    if (!names.length) continue;
+    const merged: Record<string, unknown[]> = {};
+    for (const name of names) {
+      const column: unknown[] = [];
+      for (const part of parts) {
+        const raw = part.metadata[key];
+        const map =
+          raw && typeof raw === "object" && !Array.isArray(raw)
+            ? (raw as Record<string, unknown>)
+            : {};
+        const cells = Array.isArray(map[name]) ? (map[name] as unknown[]) : [];
+        for (let r = 0; r < Math.max(0, part.rowCount); r += 1) column.push(cells[r] ?? "");
+      }
+      if (column.some((cell) => cell !== "")) merged[name] = column;
+    }
+    if (Object.keys(merged).length) out[key] = merged;
+  }
+  return out;
+}
+
 /** How many rows the sidecars in `metadata` actually span, given a grid of
  *  `rowCount` rows — `max(rowCount, longest sidecar column)`.
  *
