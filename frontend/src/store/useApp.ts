@@ -1,13 +1,8 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
-import type { FftSpectralResult, IntegrateResponse } from "../lib/api";
-import { statsDescriptive } from "../lib/api/statsDescriptive";
-import { fftSpectral, fitModel, peaksIntegrate, uploadFile } from "../lib/api";
+import { uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
-import { centralDifference, sortByX, type DerivativeResult } from "../lib/differentiate";
-import { computeCursorReadout } from "../lib/gadgetCursors";
-import type { Measurement } from "../lib/measure";
 import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
@@ -73,6 +68,7 @@ import { createLibraryPanelSlice, type LibraryPanelSlice } from "./libraryPanel"
 import { createToolWindowsSlice, type ToolWindowsSlice } from "./toolwindows";
 import { createGraphBuilderSlice, type GraphBuilderSlice } from "./graphBuilder";
 import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
+import { createGadgetSlice, type GadgetSlice } from "./gadget";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
 import { deleteFolderWithTrash } from "./folderDelete";
@@ -115,9 +111,7 @@ import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { fitStepParams } from "../lib/fitselection";
-import { firstVisiblePlottedChannel, qfitSpec, selectRoiRows, type GadgetMode } from "../lib/quickfit";
-import { analysisData, expandToFull, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
+import { analysisData, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -128,7 +122,6 @@ import type {
   Annotation,
   AxisFormat, AxisScale,
   BaselineOverlay,
-  CalcResult,
   ChannelRole,
   DataFilter,
   Dataset,
@@ -185,9 +178,7 @@ const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
 let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
 let _recalcInProgress = false;
 
-// Quick-fit gadget (#33) internals: a module-level debounce timer, mirroring
-// the recalc scheduler above — a burst of ROI-drag moves triggers ONE fit.
-let _qfitTimer: ReturnType<typeof setTimeout> | null = null;
+// (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
 export type Theme = "dark" | "light";
 export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
@@ -284,7 +275,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -442,40 +433,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
   fwhmResult: FwhmResult | null;
-  // Quick-fit gadget (#33): drag an ROI band; a debounced live fit of that
-  // region's rows (guard #11: rowstate.analysisData ∩ the ROI) overlays the
-  // plot via the shared `fitOverlay` slot (only one fit curve shows at a
-  // time — same slot the Curve Fit workshop/recalc use). The chip's explicit
-  // "Commit" action durably adopts the model as the dataset's fitSpec; the
-  // live drag preview never does (auto-committing every move would spam the
-  // recalc graph). Cleared on tool switch, Escape, dataset change, or ✕.
-  qfitRoi: [number, number] | null;
-  qfitModel: string;
-  qfitBusy: boolean;
-  qfitResult: CalcResult | null;
-  qfitError: string | null;
-  // ROI gadget family (#34): generalizes the #33 frame above with a mode
-  // selector on the SAME chip. `gadgetMode` picks which of the region's rows
-  // gets computed on every ROI move (fit uses the #33 fields above); the other
-  // async modes (integrate/stats/fft) share one busy/error pair since only one
-  // mode runs at a time. `derivOverlay` mirrors `fitOverlay`'s shape but draws
-  // on the secondary axis (a derivative's scale rarely matches the data's).
-  // Cursors mode doesn't use the ROI band at all — see `gadgetCursors` below.
-  gadgetMode: GadgetMode;
-  gadgetBusy: boolean;
-  gadgetError: string | null;
-  gadgetIntegrateResult: IntegrateResponse | null;
-  gadgetStatsResult: CalcResult | null;
-  gadgetDerivResult: DerivativeResult | null;
-  derivOverlay: FitOverlay | null;
-  /** Live FFT preview (recomputed on every ROI move, like the other modes);
-   *  "Commit" turns it into a new library dataset (`commitGadgetFft`) rather
-   *  than a durable per-dataset spec — there's nothing fitSpec-like to write. */
-  gadgetFftPreview: FftSpectralResult | null;
-  /** Paired-cursors mode: two independent x positions (unordered — order
-   *  carries the Δx/slope sign), placed/dragged by `gadgetCursorsPlugin`. */
-  gadgetCursors: [number, number] | null;
-  gadgetCursorResult: Measurement | null;
+  // (qfitRoi/qfitModel/.../gadgetCursorResult — the quick-fit / ROI-gadget
+  // family's state — moved to store/gadget.ts's GadgetSlice.)
   cmdkOpen: boolean; curveFitOpen: boolean;
   hysteresisOpen: boolean; peaksOpen: boolean;
   reflectivityOpen: boolean;
@@ -769,28 +728,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
-  // Quick-fit gadget (#33): set/clear the ROI (debounces a live re-fit —
-  // internal `runQuickFit`), switch the model (re-fits the current ROI, if
-  // any), durably commit the current result as the dataset's fitSpec, or
-  // clear the gadget entirely (roi + result + chip + its fit overlay).
-  setQfitRoi: (roi: [number, number] | null) => void;
-  setQfitModel: (model: string) => void;
-  runQuickFit: () => Promise<void>;
-  commitQfit: () => void;
-  // ROI gadget family (#34): mode switch (retriggers a live ROI, if any),
-  // the per-mode compute dispatcher, each mode's own compute action, FFT's
-  // "commit to a new dataset" ending, and the cursors' own placement setter.
-  // `clearQfit` now clears the whole gadget (ROI band + cursors + every
-  // mode's result) — it's the dismiss action for the generalized chip.
-  setGadgetMode: (mode: GadgetMode) => void;
-  runGadget: () => Promise<void>;
-  runGadgetIntegrate: () => Promise<void>;
-  runGadgetStats: () => Promise<void>;
-  runGadgetDifferentiate: () => void;
-  runGadgetFft: () => Promise<void>;
-  commitGadgetFft: () => void;
-  setGadgetCursors: (cursors: [number, number] | null) => void;
-  clearQfit: () => void;
+  // (the quick-fit / ROI-gadget family's state + actions moved to
+  // store/gadget.ts — composed via createGadgetSlice at the top of this
+  // literal, GadgetSlice added to this interface's extends clause.)
   setCmdk: (open: boolean) => void;
   setCurveFitOpen: (open: boolean) => void;
   setHysteresisOpen: (open: boolean) => void;
@@ -900,6 +840,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createComputedColumnsSlice(set, get),
   ...createDerivedWorksheetsSlice(set, get),
   ...createCellEditSlice(set, get),
+  ...createGadgetSlice(set, get),
   ...createDatasetMetaSlice(set, get),
   ...createDataIntakeSlice(set, get),
   ...createTrashSlice(set, get),
@@ -1005,21 +946,8 @@ export const useApp = create<AppState>((set, get) => ({
   selection: null,
   integral: null,
   fwhmResult: null,
-  qfitRoi: null,
-  qfitModel: "Linear",
-  qfitBusy: false,
-  qfitResult: null,
-  qfitError: null,
-  gadgetMode: "fit",
-  gadgetBusy: false,
-  gadgetError: null,
-  gadgetIntegrateResult: null,
-  gadgetStatsResult: null,
-  gadgetDerivResult: null,
-  derivOverlay: null,
-  gadgetFftPreview: null,
-  gadgetCursors: null,
-  gadgetCursorResult: null,
+  // (qfitRoi/.../gadgetCursorResult initial state now lives in
+  // store/gadget.ts's createGadgetSlice, spread in below.)
   cmdkOpen: false,
   curveFitOpen: false,
   hysteresisOpen: false,
@@ -2281,257 +2209,6 @@ export const useApp = create<AppState>((set, get) => ({
   setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
-  // ── Quick-fit gadget (#33) ────────────────────────────────────────────────
-  setQfitRoi: (roi) => {
-    set({ qfitRoi: roi });
-    if (_qfitTimer) {
-      clearTimeout(_qfitTimer);
-      _qfitTimer = null;
-    }
-    if (!roi) {
-      // A cleared ROI (sub-6px click, or an explicit clear) drops every
-      // region-mode's result + chip; only null the shared fit/deriv overlay if
-      // THIS gadget set it (a result was ever produced) — never clobber an
-      // unrelated overlay (e.g. the Curve Fit workshop's own fitOverlay) just
-      // because the tool was touched.
-      set((s) => ({
-        qfitResult: null,
-        qfitBusy: false,
-        qfitError: null,
-        fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
-        gadgetBusy: false,
-        gadgetError: null,
-        gadgetIntegrateResult: null,
-        gadgetStatsResult: null,
-        gadgetDerivResult: null,
-        derivOverlay: s.gadgetDerivResult != null ? null : s.derivOverlay,
-        gadgetFftPreview: null,
-      }));
-      return;
-    }
-    // Debounced: a burst of drag-move events triggers ONE compute request.
-    _qfitTimer = setTimeout(() => {
-      _qfitTimer = null;
-      void get().runGadget();
-    }, 350);
-  },
-  setQfitModel: (qfitModel) => {
-    set({ qfitModel });
-    // Switching model while an ROI is active refits it (debounced, like a move).
-    if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
-  },
-  runQuickFit: async () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitRoi) return;
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, s.qfitRoi, col);
-    if (sel.x.length < 2) {
-      set({ qfitError: "not enough points in the selected region", qfitBusy: false });
-      return;
-    }
-    set({ qfitBusy: true, qfitError: null });
-    try {
-      const r = await fitModel({ model: s.qfitModel, x: sel.x, y: sel.y });
-      // Guard a stale response: the gadget may have been cleared, or the
-      // active dataset switched, while the request was in flight.
-      const cur = get();
-      if (cur.activeId !== active.id || !cur.qfitRoi) return;
-      set({ qfitResult: r, qfitBusy: false });
-      const yFit = r.yFit as (number | null)[] | undefined;
-      if (Array.isArray(yFit)) {
-        // yFit aligns to the ROI-sliced rows; expand back to the full row
-        // count (null outside the ROI / excluded / filtered) so it overlays
-        // the full-length plot x in register — the expandToFull pattern
-        // useCurveFit uses for the whole-dataset case (rowstate.ts).
-        const y = expandToFull(yFit, sel.rows, active.data.time.length);
-        set({ fitOverlay: { datasetId: active.id, y } });
-      }
-    } catch (e) {
-      set({ qfitBusy: false, qfitError: e instanceof Error ? e.message : "fit failed" });
-    }
-  },
-  commitQfit: () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitResult) return;
-    // Durable fit spec (audit P1 #3): records the plotted channels the gadget
-    // fit (first visible plotted channel + xKey), reused as the step params so
-    // a template batch replays those channels, not time/values[0]. The ROI only
-    // shaped which rows the user previewed (preview-only — never encoded).
-    const spec = qfitSpec(active, s, s.qfitModel, s.qfitResult);
-    get().recordMacro(`Fit ${s.qfitModel}`, `qz.fit(${lit(s.qfitModel)})`, {
-      kind: "fit",
-      params: fitStepParams(s.qfitModel, spec),
-    });
-    get().setFitSpec(active.id, spec);
-  },
-  // ── ROI gadget family (#34) — generalizes the frame above ─────────────────
-  // Mode switch: re-triggers a live ROI's compute for the new mode (mirrors
-  // setQfitModel), and swaps between the ROI-band interaction and the
-  // cursors interaction (they're mutually exclusive — only one is armed).
-  setGadgetMode: (mode) => {
-    const prev = get().gadgetMode;
-    if (prev === mode) return;
-    set({ gadgetMode: mode });
-    if (mode === "cursors") {
-      if (get().qfitRoi) get().setQfitRoi(null);
-      return;
-    }
-    if (prev === "cursors" && get().gadgetCursors) get().setGadgetCursors(null);
-    if (get().qfitRoi) get().setQfitRoi(get().qfitRoi);
-  },
-  runGadget: async () => {
-    switch (get().gadgetMode) {
-      case "fit":
-        return get().runQuickFit();
-      case "integrate":
-        return get().runGadgetIntegrate();
-      case "stats":
-        return get().runGadgetStats();
-      case "differentiate":
-        return get().runGadgetDifferentiate();
-      case "fft":
-        return get().runGadgetFft();
-      case "cursors":
-        return; // cursors don't ride the ROI-band debounce path
-    }
-  },
-  runGadgetIntegrate: async () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitRoi) return;
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, s.qfitRoi, col);
-    if (sel.x.length < 2) {
-      set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetIntegrateResult: null });
-      return;
-    }
-    const lo = Math.min(s.qfitRoi[0], s.qfitRoi[1]);
-    const hi = Math.max(s.qfitRoi[0], s.qfitRoi[1]);
-    set({ gadgetBusy: true, gadgetError: null });
-    try {
-      const r = await peaksIntegrate({ x: sel.x, y: sel.y, regions: [[lo, hi]], baseline: "linear" });
-      const cur = get();
-      if (cur.activeId !== active.id || !cur.qfitRoi) return;
-      set({ gadgetIntegrateResult: r, gadgetBusy: false });
-    } catch (e) {
-      set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "integrate failed" });
-    }
-  },
-  runGadgetStats: async () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitRoi) return;
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, s.qfitRoi, col);
-    if (sel.y.length < 1) {
-      set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetStatsResult: null });
-      return;
-    }
-    set({ gadgetBusy: true, gadgetError: null });
-    try {
-      const r = await statsDescriptive(sel.y);
-      const cur = get();
-      if (cur.activeId !== active.id || !cur.qfitRoi) return;
-      set({ gadgetStatsResult: r, gadgetBusy: false });
-    } catch (e) {
-      set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "stats failed" });
-    }
-  },
-  // Synchronous (client-side central differences) — no busy state, but shares
-  // `gadgetError` with the async modes for a consistent chip error slot.
-  runGadgetDifferentiate: () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitRoi) return;
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, s.qfitRoi, col);
-    const result = centralDifference(sel.x, sel.y);
-    if (!result) {
-      set({ gadgetError: "not enough points in the selected region", gadgetDerivResult: null, derivOverlay: null });
-      return;
-    }
-    set({ gadgetError: null, gadgetDerivResult: result });
-    const y = expandToFull(result.dydx, sel.rows, active.data.time.length);
-    set({ derivOverlay: { datasetId: active.id, y } });
-  },
-  runGadgetFft: async () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active || !s.qfitRoi) return;
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, s.qfitRoi, col);
-    if (sel.x.length < 4) {
-      set({ gadgetError: "need at least 4 points in the selected region", gadgetBusy: false, gadgetFftPreview: null });
-      return;
-    }
-    // FFT assumes evenly-sampled, ascending x (fs = 1/mean(diff(x))); ROI rows
-    // arrive in acquisition order, which may not be monotonic (loops/swept-
-    // back scans) — sort before sending (same discipline as differentiate).
-    const sorted = sortByX(sel.x, sel.y);
-    set({ gadgetBusy: true, gadgetError: null });
-    try {
-      const r = await fftSpectral({ x: sorted.x, y: sorted.y });
-      const cur = get();
-      if (cur.activeId !== active.id || !cur.qfitRoi) return;
-      set({ gadgetFftPreview: r, gadgetBusy: false });
-    } catch (e) {
-      set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "FFT failed" });
-    }
-  },
-  // Ending action for FFT mode: the live preview becomes a new library dataset
-  // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"
-  // for the other modes, but adds to the library instead of writing a spec.
-  commitGadgetFft: () => {
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    const r = s.gadgetFftPreview;
-    if (!active || !r) return;
-    const freq = Array.isArray(r.freq) ? r.freq : [];
-    const magRaw = (r.magnitude ?? r.psd ?? r.phase) as (number | null)[] | undefined;
-    const mag = Array.isArray(magRaw) ? magRaw : [];
-    const label = r.magnitude ? "magnitude" : r.psd ? "psd" : "phase";
-    const data: DataStruct = {
-      time: freq,
-      values: mag.map((v) => [v ?? Number.NaN]),
-      labels: [label],
-      units: [""],
-      metadata: { source: "fft gadget", sourceDataset: active.name, window: r.windowName },
-    };
-    get().addDataset({ id: nextDatasetId(), name: `${active.name} — FFT`, data });
-    get().setStatus("FFT spectrum added to library");
-    toast("FFT spectrum added to library", "ok");
-  },
-  // Paired-cursors mode: recomputed synchronously on every placement/drag
-  // (cheap nearest-sample math, not an API call) against the FULL first
-  // plotted channel — cursors aren't ROI-scoped.
-  setGadgetCursors: (gadgetCursors) => {
-    set({ gadgetCursors });
-    if (!gadgetCursors) {
-      set({ gadgetCursorResult: null });
-      return;
-    }
-    const s = get();
-    const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-    if (!active) {
-      set({ gadgetCursorResult: null });
-      return;
-    }
-    const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
-    const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
-    const sel = selectRoiRows(active, [-Infinity, Infinity], col);
-    set({ gadgetCursorResult: computeCursorReadout(sel.x, sel.y, gadgetCursors) });
-  },
-  clearQfit: () => {
-    get().setQfitRoi(null);
-    get().setGadgetCursors(null);
-  },
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
   setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),

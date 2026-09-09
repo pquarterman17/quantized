@@ -267,13 +267,21 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(screen.getByRole("combobox", { name: "Role for signal" })).toHaveValue("ignore");
   });
 
-  it("Cancel clears only the transient builder target", () => {
+  it("Cancel clears only the transient builder target — no plot, worksheet mutation, or template left behind (LIBRARY_WORKBOOK_UX_PLAN acceptance scenario)", () => {
     const datasetsBefore = useApp.getState().datasets;
     render(<QuickFigureBuilderWorkspace />);
+    // Interact with the mapping BEFORE cancelling (drag a column into an
+    // explicit role zone) — role/style state lives entirely in this
+    // component's own `useState` (`initialQuickFigureMapping`/
+    // `assignQuickFigureColumn`), never written into the store or the
+    // dataset until "Create Editable Figure" is clicked, so even a mid-
+    // session edit must leave nothing behind on Cancel.
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for signal" }), { target: { value: "ignore" } });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
-    expect(useApp.getState().datasets).toBe(datasetsBefore);
-    expect(useApp.getState().editableFigures).toEqual([]);
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull(); // no plot
+    expect(useApp.getState().datasets).toBe(datasetsBefore); // no worksheet mutation (same reference)
+    expect(useApp.getState().editableFigures).toEqual([]); // no plot
+    expect(useApp.getState().quickPlotTemplates).toEqual([]); // no template
   });
 
   it("Escape cancels, but the command palette owns Escape while open", () => {

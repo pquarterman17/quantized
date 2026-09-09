@@ -27,6 +27,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
+| BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 
 ---
 
@@ -602,6 +603,198 @@ undefined` masking makes it fail as expected).
 
 ---
 
+## BUG-004 — a Stat Stage GROUP pick outlives its column's type change
+
+**Scope corrected in review (2026-09-09), same day as filing.** This covers
+`groupCol` ONLY. The first fix also masked `facetCol`, and that was a
+regression: `useGraphBuilder` gates its seeded `groupCol` on
+`isCategorical(...)` but passes `facetCol` through ungated, and `facetSlices`
+has no categorical gate — so faceting on a non-categorical column is a
+SUPPORTED configuration Graph Builder deliberately produces and announces
+("faceted by <label>"). Masking it rendered one unfaceted panel while the
+status line still claimed a facet. The rule that separates them: a pick is
+"stale" only if NO live entry point could have produced it. Every way to set
+`groupCol` is categorical-gated; `facetCol` has an ungated one.
+
+**Priority:** P3 — narrower and lower-friction than BUG-003: the only
+consumer of the stale value is this same hook (no shared row-filtering
+fanout, no scientific-result risk — the fix below closes the gap
+completely, on-screen, the same render cycle the override lands), and the
+override itself (a manual "treat this column as continuous/nominal" action
+on the Channels card) is an infrequent, deliberate user action.
+
+**State:** Verified complete (fix + sabotage-verified regression tests);
+owner sign-off still open.
+
+**Reported:** 2026-09-09, by Claude (PRIMARY_SOFTWARE_AUDIT_PLAN's Tabulate/
+Stat Stage categorical-wiring slice), while checking Stat Stage for the
+same class of bug BUG-003 named for Data Filter, per that slice's own
+prompt: "watch specifically for the analogue of the bug the Data Filter
+slice found."
+
+**Investigated:** 2026-09-09 by Claude (design-time finding, traced through
+the code and pinned by sabotage-verified tests before any user report).
+
+**Suggested implementation owner/model:** — (fix shipped this slice; an
+owner may want to review the "mask the computation too, not just the
+picker" call below against BUG-003's precedent.)
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`'s "Data Filter /
+Tabulate / Stat Stage workbench wiring" box; BUG-003 (same root cause,
+different workbench).
+
+#### User-visible problem
+
+`frontend/src/components/Stage/useStatStage.ts` restricts its "group by"
+and "facet by" `<Select>` option lists to `categoricalCols`
+(`lib/statstage.categoricalChannels`, itself `channelModelingType`-gated —
+override wins first). The PICKED `groupCol`/`facetCol` is separate local
+`useState`, set once on mount/dataset-switch and otherwise left alone. If a
+user:
+
+1. Picks a categorical column as "group by" (or "facet by"), then
+2. Overrides that same column's type to "continuous" via the Channels card
+   (`setChannelType`, which never touches `groupCol`/`facetCol`) —
+
+`categoricalCols` correctly drops the column (it's recomputed fresh every
+render off the dataset's own — now-changed-by-reference — `channelTypes`),
+but the raw `groupCol`/`facetCol` state still held that column's index. The
+`<Select>`'s `value` then names an option no longer in its own `options`
+list — a mismatched control, the same "stale selection invisible in the
+panel that wrote it" symptom BUG-003 named for Data Filter — while, before
+this fix, the actual box/violin/bar grouping and facet-slicing math kept
+partitioning by that same now-uncategorized column regardless, so the
+rendered chart and the toolbar could visibly disagree about what was
+driving the split.
+
+#### Fix implemented (this slice, full — not display-only)
+
+`useStatStage.ts` derives `effectiveGroupCol`/`effectiveFacetCol` (masked
+to `null` whenever the raw pick is no longer in the freshly-computed
+`categoricalCols`) and threads them through EVERY downstream read —
+`resolveGroups`/`resolveGroupsIndexed`, `computeBarData`,
+`computeFacetBarDraws`/`computeFacetGroupDraws`, `facetSlices`, the
+`groupLabel` string, the `showConnectMeans` gate, and the exported picker
+values themselves — not only the `<Select>` display. Raw `groupCol`/
+`facetCol` state is never cleared, so reverting the override brings the
+exact same pick back automatically (the same self-healing property BUG-003
+established for Data Filter's masking).
+
+This goes further than BUG-003's "display-level only" masking, and that
+divergence is deliberate, not an oversight: Data Filter's row-filtering
+(`lib/datafilter.ts`) is shared app-wide (Tabulate, Distribution, every
+`analysisData` consumer), so changing ITS behavior needed an owner call
+and was left open. Stat Stage's `groupCol`/`facetCol` have exactly ONE
+consumer — this same hook — so there is no wider blast radius to defer,
+and leaving the computation unmasked while only fixing the display would
+have created a WORSE, more visible contradiction than BUG-003's original
+bug: the toolbar would read "(per channel)" while the rendered chart kept
+showing per-category boxes labeled with the stale column's levels, on the
+very same screen, at the very same time. An owner may still want to weigh
+this as a data point for BUG-003's own still-open question (whether Data
+Filter's row-filtering should likewise stop applying a stale predicate
+everywhere, not just mask its display) — that call is not made here.
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — a dataset with a ≥2-level
+  categorical "group by" (or "facet by") column, actively picked.
+- [x] Exact actions recorded — `setChannelType(id, col, "continuous")` on
+  the picked group/facet column (same dataset, same id — the active-id
+  reset effect does not fire).
+- [x] Actual result recorded (pre-fix) — `groupCol`/`facetCol` stayed at
+  the stale index; `categoricalCols` no longer listed it; the `<Select>`
+  had a `value` with no matching `<option>`; `resolveGroups`/facet slicing
+  kept using the stale column.
+- [x] Expected result recorded — see "Fix implemented" above.
+- [x] Reproduced by an agent — `useStatStage.test.ts`, sabotage-verified
+  (reverting the `effectiveGroupCol`/`effectiveFacetCol` masking to the raw
+  state makes all three new tests fail).
+
+#### Investigation
+
+- [x] Likely owning components/modules identified —
+  `frontend/src/components/Stage/useStatStage.ts` (fixed this slice).
+- [x] Root cause confirmed rather than inferred — read the hook in full;
+  confirmed `categoricalCols` recomputes fresh (dataset gets a new object
+  reference on every `setChannelType`) while `groupCol`/`facetCol` do not,
+  by direct inspection, then reproduced it with a failing test before
+  fixing.
+- [x] Related workflows and persistence paths checked — neither
+  `groupCol`/`facetCol`/`mode`/`valueCol` persist through `.dwk` at all
+  (only the `statMode` boolean toggling the Stage view does — `PlotView` in
+  `lib/plotview.ts`), so there is no save/reopen angle to this bug
+  specifically; see the PRIMARY_SOFTWARE_AUDIT_PLAN slice notes for the
+  broader persistence finding.
+- [x] Existing plan overlap reconciled — filed against the same
+  PRIMARY_SOFTWARE_AUDIT_PLAN box BUG-003 was filed against.
+
+#### Implementation
+
+- [x] Minimal safe behavior defined — mask to `null` (the documented
+  "per plotted channel"/"no facet" fallback), applied to both display and
+  computation; raw state untouched for self-healing.
+- [x] Failure and ambiguous-data behavior defined — masking degrades to an
+  already-existing, already-tested code path (the `groupCol === null`/
+  `facetCol === null` fallback), not a new failure mode.
+- [x] Data integrity and backward compatibility considered — no stored
+  state changes shape; nothing persists across save/reopen for this
+  picker anyway (see above).
+- [x] UI wording/tooltips/accessibility — none needed; the `<Select>`
+  simply falls back to its existing "(per channel)"/"(none)" option, no new
+  copy.
+
+#### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward —
+  `useStatStage.test.ts`'s "stale channelTypes override on groupCol/
+  facetCol (BUG-004)" describe block, sabotage-verified by reverting the
+  masking and confirming the groupCol tests fail while the rest of the suite
+  stays green. **Review round:** the block's facetCol test originally asserted
+  facet was masked too and has been INVERTED — it now pins that a
+  non-categorical facetCol SURVIVES, with a companion test that a Graph
+  Builder seed faceting on a non-categorical column still facets. A test that
+  pins a regression is worse than no test, and that is what it was.
+- [x] Relevant focused tests pass — full `useStatStage.test.ts` (29 tests)
+  and `lib/statstage.test.ts` green; one PRE-EXISTING test in the same file
+  ("all facet levels dropping → drawFacets null with the empty-groups
+  error") had to be updated — it forced its "no data" edge case via an
+  all-NaN GROUP column, which (correctly, now that classification gates
+  the computation too) started falling back to the per-plotted-channel
+  grouping instead of erroring, since that column was never reachable
+  through the real picker to begin with once it stopped classifying as
+  categorical. Reworked to force the same zero-groups outcome via an
+  all-NaN VALUE column instead, which exercises the same downstream path
+  without depending on a groupCol the UI could never actually offer.
+- [x] Type-check/build/repository gates pass — see the PR/commit that
+  introduces this entry.
+- [ ] Agent verifies acceptance criteria — the fix and its regression tests
+  are agent-verified; a manual click-through was not performed this slice.
+- [ ] Owner verifies when required.
+
+#### Completion record
+
+- PR/commit: — (lands in the commit that adds this entry.)
+- Automated tests: `useStatStage.test.ts` — "de-categorizing the picked
+  groupCol masks the picker AND stops the grouping math from using it",
+  "reverting the override brings the exact same groupCol pick back (raw
+  state was never cleared)", "de-categorizing the picked facetCol masks it
+  the same way".
+- Agent verification: fix + sabotage-verified tests, this slice.
+- Owner verification: —
+- Notes: Tabulate was checked in the same slice and found NOT to have this
+  bug — its "Group by" ZoneWell never filters its option list by
+  classification (any column stays selectable regardless of type), and its
+  one classification-dependent read (`groupIsCategorical`, an informational
+  warning) is recomputed fresh every render rather than cached against
+  stale state, so it self-heals automatically. See
+  `useTabulate.test.ts`'s "a channelTypes override wins for
+  groupIsCategorical, without hiding the stale selection or breaking the
+  table" test (sabotage-verified against `lib/modeling.ts`'s override
+  precedence).
+
+---
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -666,3 +859,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-08 | ChatGPT-Sol | Created living tracker; added BUG-001 and UX-001 from owner screenshots and code inspection | Both open |
 | 2026-09-09 | Claude | BUG-001: parser-declared roles in `io/ncnr.py` + the missing `metadata.error_roles` reader; corrected one investigation line that measurement disproved | BUG-001 partially implemented, still open pending render/round-trip and owner checks |
 | 2026-09-09 | Claude | Added BUG-003 (Data Filter: a stale kind-mismatched predicate survives a column type change invisibly) from the Data Filter categorical-wiring slice | Display-masking half implemented + sabotage-verified; row-filtering half open pending owner call |
+| 2026-09-09 | Claude | Verified Tabulate/Stat Stage `is_categorical` wiring (PRIMARY_SOFTWARE_AUDIT_PLAN); added BUG-004 (Stat Stage: a stale groupCol/facetCol survives a column type change) and fixed it fully (display + computation, self-contained hook) | BUG-004 fixed + sabotage-verified; Tabulate confirmed self-healing (no analogous bug), also sabotage-verified |

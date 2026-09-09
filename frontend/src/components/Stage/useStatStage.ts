@@ -46,6 +46,7 @@ import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
   firstValueChannel,
+  maskStaleCategoricalPicks,
   resolveGroups,
   resolveGroupsIndexed,
   type IndexedGroupSpec,
@@ -233,10 +234,17 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [drawData, setDrawData] = useState<StatDrawData | null>(null);
   const [drawFacets, setDrawFacets] = useState<FacetDraw[] | null>(null);
 
+  // BUG-004 (BUGS_AND_ISSUES.md): mask a stale groupCol/facetCol pick back to null once its column
+  // stops reading as categorical (a channelTypes override landed after the pick was made) — applied
+  // to BOTH the exposed picker value and the grouping/faceting math below, not display-only. See
+  // lib/statstage.ts's maskStaleCategoricalPicks for the full reasoning.
+  const { groupCol: effectiveGroupCol, facetCol: effectiveFacetCol } =
+    maskStaleCategoricalPicks(groupCol, facetCol, categoricalCols);
+
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip")) return [];
-    return resolveGroups(data, groupCol, valueCol, plotted);
-  }, [data, mode, groupCol, valueCol, plotted]);
+    return resolveGroups(data, effectiveGroupCol, valueCol, plotted);
+  }, [data, mode, effectiveGroupCol, valueCol, plotted]);
 
   // Indexed groups (JMP_GAP J5 #1/#3): raw finite values + their ORIGINAL
   // dataset row index, for the jittered points overlay -- only resolved when
@@ -245,14 +253,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const indexedGroups = useMemo<IndexedGroupSpec[]>(() => {
     if (!data) return [];
     if (mode === "strip" || (mode === "box" && showPoints)) {
-      return resolveGroupsIndexed(data, groupCol, valueCol, plotted);
+      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted);
     }
     return [];
-  }, [data, mode, showPoints, groupCol, valueCol, plotted]);
+  }, [data, mode, showPoints, effectiveGroupCol, valueCol, plotted]);
 
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const groupLabel =
-    groupCol != null ? (columns.find((c) => c.index === groupCol)?.label ?? "group") : "channel";
+    effectiveGroupCol != null ? (columns.find((c) => c.index === effectiveGroupCol)?.label ?? "group") : "channel";
 
   // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
   // when a categorical column is picked, every PLOTTED channel becomes its
@@ -274,8 +282,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   );
   const barData = useMemo<BarChartData | null>(() => {
     if (!data || mode !== "bar") return null;
-    return computeBarData(data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
-  }, [data, mode, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
+    return computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
+  }, [data, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,9 +299,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     // level instead of the flat single panel. The flat `draw` stays null
     // while faceted (see the StatStageState doc — `exportFigure` reads
     // `drawFacets` instead, GUI_INTERACTION #12 slice 4b).
-    if (facetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
+    if (effectiveFacetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
       setDrawData(null);
-      const slices = facetSlices(data, facetCol);
+      const slices = facetSlices(data, effectiveFacetCol);
       const finishFacets = (results: FacetDraw[]) => {
         if (cancelled) return;
         if (results.length === 0) {
@@ -310,7 +318,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         finishFacets(
           computeFacetBarDraws(
             slices,
-            groupCol,
+            effectiveGroupCol,
             barValueChannels,
             barLabels,
             valueCol,
@@ -325,7 +333,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      void computeFacetGroupDraws(slices, mode, groupCol, valueCol, plotted, valueLabel, groupLabel)
+      void computeFacetGroupDraws(slices, mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel)
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -349,7 +357,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       // come from an actual picked categorical column, not the per-plotted-
       // channel fallback (JMP_GAP J5 residual) — force off in that case even
       // if the toggle was left on from a previous groupCol.
-      const effectiveConnectMeans = showConnectMeans && groupCol != null;
+      const effectiveConnectMeans = showConnectMeans && effectiveGroupCol != null;
       setBusy(true);
       if (mode === "box") {
         void computeBoxDraw(
@@ -468,8 +476,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barData,
     barValueLabel,
     barStack,
-    facetCol,
-    groupCol,
+    effectiveFacetCol,
+    effectiveGroupCol,
     plotted,
     barValueChannels,
     barLabels,
@@ -513,7 +521,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     }
     const spec = buildExportSpec(
       mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt,
-      showPoints, pointRowIndices, showMeanCI, showConnectMeans && groupCol != null,
+      showPoints, pointRowIndices, showMeanCI, showConnectMeans && effectiveGroupCol != null,
     );
     if (spec) await exportStatplotFigure(spec);
   }
@@ -592,7 +600,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setMode,
     columns,
     categoricalCols,
-    groupCol,
+    groupCol: effectiveGroupCol,
     setGroupCol: setGroupColState,
     valueCol,
     setValueCol,
@@ -610,7 +618,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setShowMeanCI,
     showConnectMeans,
     setShowConnectMeans,
-    facetCol,
+    facetCol: effectiveFacetCol,
     setFacetCol: setFacetColState,
     busy,
     error,

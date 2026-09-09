@@ -40,6 +40,62 @@ export function categoricalChannels(ds: Dataset | null): number[] {
   return out;
 }
 
+/** BUG-004 (BUGS_AND_ISSUES.md): mask Stat Stage's picked categorical
+ *  columns (`groupCol`/`facetCol`) back to `null` once either no longer
+ *  reads as categorical — a `channelTypes` override changed after the pick
+ *  was made,
+ *  and nothing else clears the stored pick (same root cause as BUG-003's
+ *  Data Filter finding: a stored selection outliving its column's
+ *  classification). `categoricalIndex` recomputes fresh every render
+ *  (`categoricalChannels` above), so a stale pick simply falls out of it;
+ *  without this mask, the "group by"/"facet by" `<select>` would show a
+ *  `value` naming no `<option>` in its own list (the same visible symptom
+ *  BUG-003 named) while the chart underneath kept partitioning by the now-
+ *  uncategorized column regardless. Unlike Data Filter's row-filtering
+ *  (`lib/datafilter.ts`, shared app-wide by Tabulate/Distribution/every
+ *  `analysisData` consumer, so BUG-003 left that side an open owner call),
+ *  `groupCol`/`facetCol` have exactly ONE consumer — `useStatStage.ts` —
+ *  so there's no wider blast radius to defer: callers apply this mask to
+ *  BOTH the exposed picker value and the actual grouping/faceting math, so
+ *  the toolbar and the rendered chart can never disagree about which
+ *  column drives the split. The caller's RAW picks are untouched by this
+ *  function (only read through it), so reverting the override brings the
+ *  exact same pick back automatically. */
+export interface EffectiveCategoricalPicks {
+  groupCol: number | null;
+  facetCol: number | null;
+}
+
+/** Applies the mask above to Stat Stage's two categorical picks at once,
+ *  building the lookup Set internally so the caller doesn't need its own
+ *  `useMemo` for it. */
+export function maskStaleCategoricalPicks(
+  groupCol: number | null,
+  facetCol: number | null,
+  categoricalCols: readonly { index: number }[],
+): EffectiveCategoricalPicks {
+  const index = new Set(categoricalCols.map((c) => c.index));
+  return {
+    // groupCol is masked: EVERY way to set it is categorical-gated — the
+    // picker's own option list, and `useGraphBuilder`'s seed, which computes
+    // `x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel :
+    // null`. So a non-categorical groupCol can only be a stale leftover.
+    groupCol: groupCol != null && index.has(groupCol) ? groupCol : null,
+    // facetCol is NOT masked. REVIEW ROUND — masking it was a regression I
+    // introduced. `useGraphBuilder` seeds `facetCol` from
+    // `spec.zones.facet?.channel` with NO categorical gate (unlike groupCol
+    // right above it), and `facetSlices` has no categorical gate either, so
+    // faceting on a non-categorical column is a SUPPORTED configuration that
+    // Graph Builder deliberately produces and announces ("faceted by <label>").
+    // Masking it turned a working faceted plot into one unfaceted panel while
+    // the status line still claimed it was faceted.
+    //
+    // The asymmetry is the point: a pick is only "stale" if no live entry point
+    // could have produced it. That is true of groupCol and false of facetCol.
+    facetCol,
+  };
+}
+
 /** First continuous channel other than `avoid`, else the first channel other
  *  than `avoid`, else 0 — mirrors the Tabulate workshop's default picker
  *  (useTabulate.firstContinuous). */

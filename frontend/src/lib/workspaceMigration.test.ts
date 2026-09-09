@@ -138,6 +138,71 @@ describe("workspace migration — frozen v1-v4 fixtures (P1.2 box 2)", () => {
   });
 });
 
+// LIBRARY_WORKBOOK_UX_PLAN "Acceptance scenarios": "Save/reopen a migrated
+// legacy workspace: workbook membership and source provenance remain
+// intact." The v1-v4 fixtures above cover generic dataset-id/label survival
+// and workbook-count derivation, but none carries real Origin-book
+// provenance (see the "deriveWorkbooks produces exactly one workbook per
+// dataset-group" case's own comment) — this exercises the SPECIFIC case the
+// scenario names: a pre-workbook (v1) document whose two datasets are two
+// sheets of the SAME Origin book, migrated on load into one multi-sheet
+// workbook (lib/workbooks.ts's L0.3), then actually SAVED and REOPENED
+// (not just loaded once) to prove the derived membership and provenance
+// don't drift or get re-derived differently the second time around.
+describe("workspace migration — save/reopen a migrated legacy Origin workbook (LIBRARY_WORKBOOK_UX_PLAN acceptance scenario)", () => {
+  const legacyOriginDoc = {
+    format: WORKSPACE_FORMAT,
+    version: 1,
+    datasets: [
+      {
+        id: "s1",
+        name: "project.opj:Book4/Data1",
+        data: {
+          time: [0, 1],
+          values: [[1], [2]],
+          labels: ["Y"],
+          units: [""],
+          metadata: { origin_book: "Book4" }, // sheet 1 (the base book)
+        },
+      },
+      {
+        id: "s2",
+        name: "project.opj:Book4/Data2",
+        data: {
+          time: [0, 1],
+          values: [[3], [4]],
+          labels: ["Y"],
+          units: [""],
+          metadata: { origin_book: "Book4@2" }, // sheet 2, same book
+        },
+      },
+    ],
+  };
+  const text = JSON.stringify(legacyOriginDoc);
+
+  it("migrates the v1 multi-sheet Origin book into one workbook with membership + provenance", () => {
+    const loaded = parseWorkspace(text, VIEWPORT);
+    expect(loaded.workbooks).toHaveLength(1);
+    expect(loaded.workbooks[0].originBook).toBe("Book4");
+    expect(loaded.datasets.map((d) => d.workbookId)).toEqual([loaded.workbooks[0].id, loaded.workbooks[0].id]);
+  });
+
+  it("save (re-serialize) then reopen (re-parse) preserves that workbook's membership and provenance exactly", () => {
+    const firstLoad = parseWorkspace(text, VIEWPORT);
+    const wbId = firstLoad.workbooks[0].id;
+    const saved = serializeWorkspace(firstLoad);
+    const reopened = parseWorkspace(saved, VIEWPORT);
+
+    expect(reopened.workbooks).toHaveLength(1); // not re-split or re-merged
+    expect(reopened.workbooks[0].id).toBe(wbId); // same identity, not re-derived under a fresh id
+    expect(reopened.workbooks[0].originBook).toBe("Book4"); // provenance intact
+    expect(reopened.datasets.find((d) => d.id === "s1")!.workbookId).toBe(wbId);
+    expect(reopened.datasets.find((d) => d.id === "s2")!.workbookId).toBe(wbId);
+    // Sheet order preserved (L0.16): sheet 1 before sheet 2.
+    expect(reopened.datasets.map((d) => d.id)).toEqual(["s1", "s2"]);
+  });
+});
+
 describe("workspace migration — torn writes (P1.2 box 3)", () => {
   for (const { version, doc } of FIXTURES) {
     const text = JSON.stringify(doc);

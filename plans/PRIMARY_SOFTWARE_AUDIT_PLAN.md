@@ -1163,10 +1163,82 @@ the Graph Builder's own live spec.
   was for Data Filter, but that was not verified here (no test-suite read,
   no override/round-trip check, no sabotage-verified coverage) and must
   not be assumed done from a grep alone.
-- [ ] Tabulate workbench wiring through `is_categorical`/
-  `isCategoricalChannel` — not verified this slice; see the note above.
-- [ ] Stat Stage workbench wiring through `is_categorical`/
-  `isCategoricalChannel` — not verified this slice; see the note above.
+- [x] Tabulate workbench wiring through `is_categorical`/
+  `isCategoricalChannel` — verified: `useTabulate.ts` runs every group-by
+  candidate through `lib/modeling.ts`'s `channelModelingType` (override
+  checked before `isCategoricalChannel`/inference, same chokepoint Data
+  Filter uses) for its default group-column pick (`firstCategorical`), its
+  `groupIsCategorical` warning flag (">30 rows, one group column looks
+  continuous" notice), and Stat Stage's sibling default picker
+  (`lib/statstage.categoricalChannels`/`firstValueChannel` mirror the same
+  functions — see below). Override wins immediately: pinned by
+  `useTabulate.test.ts`'s "a channelTypes override wins for
+  groupIsCategorical, without hiding the stale selection or breaking the
+  table" — sabotage-verified (reverting `lib/modeling.ts`'s override
+  precedence makes it fail; the rest of the suite stays green). The
+  classification does NOT drive the actual bucketing algorithm
+  (`lib/tabulate.ts`'s `tabulateNested` groups by distinct OBSERVED value
+  regardless of type — that's deliberate, matching JMP's own Tabulate,
+  which tabulates whatever column you drop in), only the default pick and
+  the warning; both are recomputed fresh every render (not memoized behind
+  stale state), so an override applied while Tabulate is open self-heals
+  immediately with no BUG-003-style stale-selection risk — the ZoneWell
+  "Group by" well never filters its option list by classification in the
+  first place, unlike Stat Stage's pickers (see below), so there is no
+  control whose option list could stop matching a stored value.
+  **Persistence:** none — `groupCols`/`valueCols`/`statKeys`/`grandTotal`
+  are local `useState` in the hook, not part of `.dwk`/workspace
+  serialization (only the window's open/closed boolean, `tabulateOpen`,
+  persists); the underlying `channelTypes` override itself DOES persist
+  (`lib/workspaceSerialize.ts:213`, `lib/workspaceDatasetParse.ts:173-183`)
+  since it lives on the `Dataset`, not the workbench. This mirrors how
+  Distribution/other on-demand summary panels work in this codebase (a
+  recomputed view, not saved config) and was not treated as a defect.
+- [x] Stat Stage workbench wiring through `is_categorical`/
+  `isCategoricalChannel` — verified, and wired MORE strongly than Tabulate:
+  `useStatStage.ts`'s "group by"/"facet by" `<Select>` OPTION LISTS
+  themselves are restricted to `lib/statstage.categoricalChannels`
+  (`channelModelingType`-gated, override-first), so a non-categorical column
+  is not offered in the pickers — a stronger wiring than merely defaulting
+  away from one. **Corrected in review the same day:** an earlier version of
+  this entry said a non-categorical column "cannot even be picked through the
+  real UI". That is FALSE, and acting on it caused a regression. The pickers
+  are not the only entry point: `useGraphBuilder` seeds the stage directly, and
+  while it gates `groupCol` on `isCategorical(...)`, it passes `facetCol =
+  spec.zones.facet?.channel` through UNGATED — and `facetSlices` has no
+  categorical gate either. Faceting on a non-categorical column is therefore a
+  supported configuration Graph Builder produces deliberately and announces as
+  "faceted by <label>". See BUG-004 for the consequence.
+  Classification genuinely changes behavior, not just defaults: `groupCol
+  != null` vs `null` switches `resolveGroups`/`resolveGroupsIndexed`/
+  `computeBarData` between a real per-category partition
+  (`groupsByCategory`) and the per-plotted-channel fallback
+  (`groupsFromColumns`); `showConnectMeans` ("connect means" interaction-
+  plot line) is force-gated off under the fallback regardless of the
+  toggle state. Override wins (same `channelModelingType` chokepoint).
+  **Found and fixed the exact analogue of BUG-003 this box's own note
+  predicted** ("a stored selection ... can outlive the column's
+  classification"): a picked `groupCol`/`facetCol` survived a
+  `channelTypes` override that de-categorized it, stranding a stale index
+  its own picker no longer offered — filed and fixed as **BUG-004**
+  (`plans/BUGS_AND_ISSUES.md`). Unlike BUG-003's Data Filter finding (left
+  display-only pending an owner call on `lib/datafilter.ts`'s shared
+  row-filtering), this fix masks BOTH the picker display AND the actual
+  grouping/faceting computation, since `groupCol`/`facetCol` have exactly
+  one consumer — this hook — so there's no app-wide blast radius to defer;
+  see BUG-004 for the full reasoning and the cross-reference back to
+  BUG-003's still-open question. Sabotage-verified:
+  `useStatStage.test.ts`'s "stale channelTypes override on groupCol/
+  facetCol (BUG-004)" block (3 tests; reverting the masking makes all
+  three fail, 26 others stay green). One pre-existing test in the same
+  file had to be reworked to force its "zero groups" edge case through a
+  column that stays genuinely categorical (see BUG-004's Tests section for
+  why). **Persistence:** none for `mode`/`groupCol`/`facetCol`/`valueCol`
+  (local `useState`, reset on dataset-id change, no `.dwk` entry) — only
+  the `statMode` boolean (Stage-view-open/closed) persists via `PlotView`
+  in `lib/plotview.ts`; same "recomputed view, not saved config" pattern as
+  Tabulate, and the underlying `channelTypes` override persists via the
+  `Dataset` itself regardless.
 
 ### P1.6 — Import Wizard metadata and error roles [~]
 
