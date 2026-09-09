@@ -753,8 +753,46 @@ import { fileURLToPath } from "node:url";
  *       panel behind it — the case rule 2 permits a raise for.
  *  Full frontend suite (610 files / 9,578 tests), backend 4,639, tsc --noEmit
  *  and eslint green.
+ *
+ *  2026-09-09 (BUGS_AND_ISSUES UX-001, Library Tree compact worksheet row) —
+ *  910,748 -> 912,503 (+1,755). Raised to measured + 1,024 = 913,527.
+ *    1. The feature (DatasetRow.tsx's `treeMode` branch gains an explicit
+ *       type glyph, concise meta text, and DatasetRowPreview.tsx's opt-in
+ *       Sparkline-expand toggle, backed by lib/libraryPreviewPrefs.ts) first
+ *       measured 912,918 — 1,146 over. TRIED AND REJECTED: `React.lazy()`-
+ *       splitting DatasetRowPreview (the one piece used only in Tree, not
+ *       the pre-existing flat-list/Smart-Folders full card) measured as a
+ *       net INCREASE (891.5 -> 892.2 kB local) — its own ~0.9 kB left the
+ *       eager graph, but Sparkline (still eagerly reachable from the
+ *       unmodified full card) is ALSO its dependency, so Rollup extracted
+ *       Sparkline's OWN deps (lib/plotdata.ts, lib/columnmeta.ts — 10.4 kB +
+ *       0.9 kB) into new shared chunks that, being still eagerly reachable,
+ *       got modulepreloaded anyway, on top of real chunk-boundary overhead.
+ *       Same lesson as 2026-08-29's api.ts case, different module. Reverted.
+ *    2. What actually paid for some of it was the 2026-09-09 (BUG-001) lesson
+ *       applied again: duplicated logic, not new logic. The two layouts
+ *       (`treeMode` compact row vs. the full card) each independently
+ *       computed the same `pts`/`ch`/pending-title ternaries and rendered
+ *       identical `<DatasetRowControls>`/`<DatasetRowName>`/folder-caption
+ *       JSX. Hoisting all five into one set of shared locals/elements used by
+ *       both branches (one wrapping `<div>` instead of two, `treeMode`
+ *       switching only the inner content) recovered 415 bytes — 912,918 ->
+ *       912,503 — with no behavior change (DatasetRow.test.tsx/
+ *       LibraryTree.test.tsx pass unmodified). Merging the two extraction
+ *       siblings (DatasetRowControls.tsx + DatasetRowName.tsx) into one
+ *       DatasetRowParts.tsx file measured a WASH (esbuild already elides
+ *       per-module wrapper overhead within a single chunk) — kept anyway for
+ *       one fewer file, not for bytes.
+ *    3. The remaining 731 bytes is the toggle button + persisted-expansion
+ *       state itself — irreducible new interactive logic reachable from the
+ *       Library's default view (Tree) at first paint, with no lazy-able
+ *       boundary per step 1's measurement. The case rule 2 permits a raise
+ *       for.
+ *  Full frontend suite (613 files / 9,604 tests + the new
+ *  DatasetRowCompact.test.tsx/libraryPreviewPrefs.test.ts), tsc --noEmit and
+ *  eslint green.
  */
-const EAGER_JS_BUDGET = 911_772;
+const EAGER_JS_BUDGET = 913_527;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
