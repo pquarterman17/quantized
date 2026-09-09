@@ -2742,7 +2742,25 @@ covers a much smaller subset and guards focus on Analyze.
   accessible-name gap was investigated as part of this slice.
 - [ ] Contrast and non-color encodings.
 - [ ] Windows/macOS scaling and high-DPI readability.
-- [ ] Reduced motion.
+- [x] Reduced motion — **verified complete 2026-09-09; the box was simply
+  stale.** Two independent sources, either sufficient on its own: the OS
+  setting (`@media (prefers-reduced-motion: reduce)`) and the in-app
+  Preferences ▸ Appearance switch (`[data-reduce-motion]`, set by
+  `store/prefs.ts`). Both apply the SAME four declarations
+  (`transition-duration`, `animation-duration`, `animation-iteration-count`,
+  `scroll-behavior`) through the UNIVERSAL selector plus `::before`/`::after`
+  in `styles/index.css` — deliberately universal, since enumerating animated
+  selectors is what left five of the seven motion declarations uncovered
+  originally, and a new transition (or one inside a dependency's stylesheet)
+  is covered without anyone remembering to add it.
+
+  Pinned by `styles/reducedMotion.test.ts`, which asserts on the STYLESHEET
+  SOURCE rather than a rendered page, because jsdom does not evaluate
+  `@media (prefers-reduced-motion)` — a DOM test there would pass whatever the
+  CSS said, which is the kind of vacuous coverage this plan keeps rejecting.
+  It checks both sweeps and that they carry the same declarations, so the two
+  cannot drift apart. `store/diagnostics.ts` also reports the OS setting in the
+  diagnostic bundle.
 
 ### P3.4 — Error/progress/cancel/diagnostics
 
