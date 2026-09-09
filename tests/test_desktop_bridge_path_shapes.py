@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -85,6 +86,34 @@ def _grant_write(api: DesktopApi, dest: Path) -> str:
 # round-trips arbitrary Unicode content unchanged. It does, below, for
 # CJK, combining-mark (NFD), and astral-plane (surrogate-pair-in-JS,
 # single-codepoint-in-Python) filenames.
+
+def _hardlinks_available() -> bool:
+    """Can this filesystem actually make a hard link? Asked, not assumed.
+
+    The three hardlink tests below used to disagree with each other: one was
+    skipped on `os.name == "nt"` with "needs elevated privilege", and two called
+    `os.link` unguarded. CI settled it -- the unguarded pair PASSED on
+    windows-latest, so the platform guess was wrong and was needlessly skipping
+    the BUG-002 reproduction on the very OS where `normcase` adds another
+    respelling axis. Capability detection covers both: it runs wherever hard
+    links work (NTFS included) and skips cleanly where they do not, without
+    anyone predicting which is which.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d) / "src"
+        src.write_text("x", encoding="utf-8")
+        try:
+            os.link(src, Path(d) / "dst")
+        except (OSError, NotImplementedError, AttributeError):
+            return False
+        return True
+
+
+requires_hardlinks = pytest.mark.skipif(
+    not _hardlinks_available(),
+    reason="this filesystem cannot create hard links (probed, not assumed)",
+)
+
 
 UNICODE_NAMES = [
     "運行データ.csv",  # CJK
@@ -238,13 +267,33 @@ def test_write_project_file_round_trips_specially_charactered_names(
     assert dest.read_text(encoding="utf-8") == content
 
 
-@pytest.mark.parametrize("name", ["run#1.csv", "50%-anneal.csv", "what?.csv"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "run#1.csv",
+        "50%-anneal.csv",
+        pytest.param(
+            "what?.csv",
+            marks=pytest.mark.skipif(
+                os.name == "nt",
+                reason="'?' is a RESERVED character in a Windows filename (with "
+                '< > : " | * and \\), so the file cannot be created at all -- '
+                "Windows fails the write with OSError EINVAL before any bridge "
+                "code runs. Verified by CI: this case, and only this case, went "
+                "red on windows-latest.",
+            ),
+        ),
+    ],
+)
 def test_pick_files_consents_a_specially_charactered_name_on_every_platform(
     tmp_path: Path, name: str
 ) -> None:
-    """`#`/`%`/`?` are legal filename characters on every platform this
-    project supports (unlike the newline/leading-space cases above, which
-    are POSIX-only) -- these run unconditionally."""
+    """`#` and `%` are legal filename characters on every platform this project
+    supports, so those run unconditionally.
+
+    `?` is NOT -- this docstring used to claim it was, and CI proved otherwise.
+    It is kept as a POSIX-only case rather than deleted, because `?` reaching a
+    consent check is a real scenario on macOS and Linux."""
     f = tmp_path / name
     f.write_text("data", encoding="utf-8")
     api = DesktopApi()
@@ -427,9 +476,7 @@ def test_write_project_file_refuses_cleanly_when_the_directory_vanishes_after_co
 # shared inode's bytes in place -- confirmed by the second assertion below).
 
 
-@pytest.mark.skipif(
-    os.name == "nt", reason="os.link needs elevated privilege on Windows by default"
-)
+@requires_hardlinks
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -473,6 +520,7 @@ def test_a_hardlinked_alias_of_the_declared_source_is_wrongly_permitted_as_a_wri
     )
 
 
+@requires_hardlinks
 def test_hardlink_bypass_does_not_actually_corrupt_the_shared_inodes_bytes(
     tmp_path: Path,
 ) -> None:
@@ -500,6 +548,7 @@ def test_hardlink_bypass_does_not_actually_corrupt_the_shared_inodes_bytes(
 # === payload_declares_source: the pure-function half of the same finding ===
 
 
+@requires_hardlinks
 def test_payload_declares_source_misses_a_hardlinked_alias(tmp_path: Path) -> None:
     """Same finding, isolated to the pure function
     (desktop_project_file.payload_declares_source) with no DesktopApi/

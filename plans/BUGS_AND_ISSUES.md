@@ -183,6 +183,26 @@ The implementation must use the file format's semantics, not merely the exact di
     binding — confirming the clone gets an independent array with the same
     bindings. Reimport and plot-window-rebinding preservation were NOT
     exercised this pass; still open.
+  - **Review round (same day), two real defects in the above, both fixed:**
+    (1) `_measured_channel_for_uncertainty` rejected a BLANK unit outright, so a
+    dimensionless reflectivity — `R`/`dR` with no units, an ordinary reductus
+    spelling — got no Y binding and `dR` was still drawn as its own curve: the
+    original BUG-001 symptom, and a test had locked it in. Units must now
+    AGREE, and two blanks agree. The asymmetry with `_resolves_to_x_axis`
+    (which still demands a non-empty unit) is deliberate and documented: the
+    uncertainty pairing already has its own name plus adjacency to a non-error
+    column as independent evidence, whereas an x-axis binding has neither, so
+    there the unit is the only evidence. (2) `default_value_channels` listed
+    EVERY unbound channel, and a non-empty hint short-circuits
+    `defaultDenseChannels`' density heuristic (`lib/plotdata.ts:189`, verified)
+    — so a monitor/`Lambda`/unit-mismatched column the parser explicitly
+    declined to reason about was PINNED as a plotted curve where the heuristic
+    used to hide it, turning "I don't know what this is" into a confident
+    plotting decision. It now lists the identified measurement targets only,
+    which is what this item's own acceptance criterion asks for ("only its
+    measured reflectivity/intensity curve selected"); unrecognised columns stay
+    in the worksheet and stay toggleable. Pinned by
+    `test_refl_roles_bind_a_dimensionless_r_dr_dq_file_and_plot_only_r`.
   - Gates run: `uv run ruff check src tests tools`, `uv run mypy src`,
     `uv run pytest tests/test_io_ncnr.py -q` (26 passed) all green;
     `npx tsc --noEmit -p tsconfig.json` clean; `npx eslint <touched files>

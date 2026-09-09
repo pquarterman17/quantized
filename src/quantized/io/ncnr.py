@@ -112,15 +112,28 @@ def _measured_channel_for_uncertainty(
     column -- is what keeps this safe under an omitted or reordered column: an
     ambiguous or absent predecessor means no binding, not a guess at a more
     distant one.
+
+    Units must AGREE, and two blank units agree. That is deliberately unlike
+    `_resolves_to_x_axis` below, which rejects a blank unit outright, and the
+    asymmetry is the point: this pairing already has two independent pieces of
+    evidence -- the channel's own name spells "uncertainty", and it sits
+    immediately after a column that is NOT itself an error column -- so the
+    unit is corroboration. The x-axis pairing has neither (its target is an
+    axis, not a neighbour), so there the unit is the only evidence and has to
+    be real.
+
+    Requiring a NON-blank unit here was a bug, found in review: reflectivity
+    is dimensionless, so a perfectly ordinary reductus `R`/`dR` file carries
+    blank units and got no binding at all -- which is precisely the BUG-001
+    symptom (`dR` drawn as its own curve) that this metadata exists to fix.
     """
     if i == 0:
         return None
     j = i - 1
     if _identified_role(labels, j) is not None:
         return None  # the immediate neighbour is itself an error column
-    unit = value_units[i]
-    if not unit or value_units[j] != unit:
-        return None  # unit agreement is the actual evidence; names alone are not
+    if value_units[i] != value_units[j]:
+        return None  # disagreeing units mean this is not that value's uncertainty
     return j
 
 
@@ -174,9 +187,24 @@ def _refl_role_metadata(
     if not error_roles:
         return {}
 
-    # Only the measurement(s) are curves; a bound uncertainty/resolution stays
-    # in the worksheet and stays toggleable, but is not a series of its own.
-    default_value_channels = [i for i in range(len(labels)) if i not in bound]
+    # Only the MEASUREMENTS are curves. When any uncertainty bound to a value,
+    # those values are what the file is a measurement OF, and they alone are
+    # plotted -- BUG-001's acceptance criterion is that a recognised file opens
+    # with "only its measured reflectivity/intensity curve selected".
+    #
+    # This deliberately does NOT plot a leftover column we declined to reason
+    # about (a monitor, a Lambda, a "resolution" whose unit disagreed). Found in
+    # review: a non-empty hint short-circuits `defaultDenseChannels`' NaN-density
+    # heuristic (`lib/plotdata.ts`), so listing such a column here PINS it as a
+    # curve where the heuristic used to hide it -- turning an honest "I don't
+    # know what this is" into a confident plotting decision. It stays in the
+    # worksheet and stays toggleable; it just is not a default curve.
+    #
+    # With no Y binding at all (a resolution-only match) there is no
+    # "measurement" to name, so every unbound channel is offered instead --
+    # that case has no better signal to go on.
+    measured = sorted({int(b["target"]) for b in error_roles if b["target"] >= 0})
+    default_value_channels = measured or [i for i in range(len(labels)) if i not in bound]
     if not default_value_channels:
         # Every channel bound as an error role and nothing left to plot --
         # should not happen for a real file, but fail closed rather than emit
