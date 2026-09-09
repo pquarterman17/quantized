@@ -43,11 +43,32 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
     expect(container.querySelector(".qzk-ds")).toHaveClass("qzk-ds-compact");
     expect(container.querySelector(".qzk-ds-spark")).not.toBeInTheDocument();
-    // The footer card's always-visible actions strip (▲▼⧉✕) and tag row are
-    // gone from the compact row — reachable through the "⋯"/context menu
-    // instead (datasetRowMenu.ts), not duplicated as a second UI.
+    // The footer card's always-visible actions strip (▲▼⧉✕) is gone from the
+    // compact row — reachable through the "⋯"/context menu instead
+    // (datasetRowMenu.ts), not duplicated as a second UI.
     expect(container.querySelector(".qzk-ds-foot")).not.toBeInTheDocument();
-    expect(container.querySelector(".qzk-ds-tags")).not.toBeInTheDocument();
+    // Tags, however, STAY. This assertion used to require `.qzk-ds-tags` to be
+    // absent, which is what let the regression below ship: with no tag row
+    // rendered in tree mode, "Add tag…" was a dead no-op and existing chips
+    // were unreachable. The row stays visually compact because the tag
+    // container takes no height until it has something in it (shell.css's
+    // `.qzk-ds-tags-compact` is a full-width flex child that wraps).
+    expect(container.querySelector(".qzk-ds-tags")).toBeInTheDocument();
+  });
+
+  // REVIEW ROUND regression guard. Compactness must not cost function: the
+  // context menu's "Add tag…" sets the row's tag-input state, and before the
+  // fix no input rendered in tree mode to receive it, so the menu item did
+  // nothing at all.
+  it("keeps tagging usable in tree mode: existing chips render and Add tag opens an input", () => {
+    const tagged: Dataset = { ...ds, tags: ["anneal"] };
+    const { container } = render(<DatasetRow dataset={tagged} {...baseProps} treeMode />);
+    // An existing tag is visible (and so is its remove control).
+    expect(screen.getByText("anneal")).toBeInTheDocument();
+    expect(screen.getByTitle("Remove tag")).toBeInTheDocument();
+    // The add affordance actually produces an input rather than nothing.
+    fireEvent.click(screen.getByTitle("Add tag"));
+    expect(container.querySelector(".qzk-tag-input")).toBeInTheDocument();
   });
 
   it("carries an explicit, tooltipped Worksheet type glyph", () => {

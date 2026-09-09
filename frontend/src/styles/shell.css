@@ -298,6 +298,11 @@ body {
    100%` can wrap it onto its own full-width line below the name/meta/
    toggle line, instead of squeezing a 180px SVG in among them. */
 .qzk-ds-spark-wrap { flex-basis: 100%; }
+/* Tags are shared by both layouts (UX-001 review round: the compact row must
+   not silently drop tagging). Full-width flex child so chips and the add/edit
+   input wrap onto their own line below name/meta — taking NO height at all
+   when the dataset has no tags and none is being added. */
+.qzk-ds-tags-compact { flex-basis: 100%; }
 .qzk-ds-compact .qzk-ds-spark { height: 22px; }
 /* Footer row: metadata on the left, row actions (badge + ▲▼⧉✕) on the right.
    The name owns its own full-width row above, so long filenames stay readable. */

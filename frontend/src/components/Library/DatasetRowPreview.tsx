@@ -6,8 +6,8 @@
 // per-row expanded state via lib/libraryPreviewPrefs (same localStorage-blob
 // convention as libraryViewPrefs.ts — personal UI state, not project
 // content). Toggling never selects the row or changes the active plot: the
-// button stops propagation and the row's own onClick/onDoubleClick never see
-// the event.
+// button stops propagation on BOTH click and dblclick, so the row's own
+// onClick/onDoubleClick never see either.
 //
 // Self-contained on purpose (LIBRARY_WORKBOOK_UX_PLAN interaction checklist:
 // "optional inline thumbnail expansion without changing selection or opening
@@ -41,6 +41,12 @@ export default function DatasetRowPreview({ dataset: d }: { dataset: Dataset }) 
         title={label}
         aria-label={label}
         aria-pressed={expanded}
+        // Review round: stopping `click` alone was NOT enough. A quick
+        // expand-then-collapse is a DOUBLE click, and `dblclick` is a separate
+        // event that bubbled straight to the row's `onDoubleClick` and opened
+        // the dataset — precisely the one thing this control promises never to
+        // do. Confirmed by probe: `activeId` became the dataset's id.
+        onDoubleClick={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           const next = !expanded;

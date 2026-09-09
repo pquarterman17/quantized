@@ -175,10 +175,16 @@ export default function DatasetRow({
     const r = e.currentTarget.getBoundingClientRect();
     setMenu({ x: r.left + 8, y: r.bottom });
   };
-  // The "⋯" resting-cue button (DatasetRowControls): selects first (matching
-  // right-click/menu-key) when not already selected, then opens at `el`.
+  // The "⋯" resting-cue button (DatasetRowControls): selects first, then opens
+  // at `el`. Review round (UX-001): this used to call `activateFromLibrary`
+  // directly, so opening the menu from "⋯" CHANGED THE ACTIVE PLOT in tree
+  // mode while right-click on the same row did not — and the comment here
+  // claimed the two matched. In tree mode that also broke L0.25 ("never
+  // changes the active plot"), which `selectForMenu` exists to honour. Now it
+  // is genuinely the same gesture through the same helper: `selectIds` in
+  // tree mode, plain-click routing flat.
   const openMenuAt = (el: HTMLElement) => {
-    if (!selected) activateFromLibrary(d.id);
+    selectForMenu();
     const r = el.getBoundingClientRect();
     setMenu({ x: r.left, y: r.bottom });
   };
@@ -202,6 +208,68 @@ export default function DatasetRow({
     onCancel: () => setRename(null),
     onStart: () => setRename(d.name),
   };
+
+  // UX-001 review round: tags are SHARED by both layouts, not owned by the full
+  // card. Leaving them in the card branch made Tree view silently lose real
+  // function — "Add tag…" in the context menu still called `setTag("")` but no
+  // input rendered (a dead no-op), and existing chips, chip-click filtering and
+  // per-tag removal were unreachable. Compactness was never meant to cost
+  // features. In the compact row this is a full-width flex child that wraps onto
+  // its own line, so it occupies NO height unless the dataset actually has tags
+  // or the user is adding one.
+  const tagsEl = (
+  <div className={`qzk-ds-tags${treeMode ? " qzk-ds-tags-compact" : ""}`}>
+    {(d.tags ?? []).map((t) => (
+      <span
+        key={t}
+        className="qzk-tag"
+        title={`Filter by "${t}"`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onFilterTag(t);
+        }}
+      >
+        {t}
+        <button
+          className="qzk-tag-x"
+          title="Remove tag"
+          onClick={(e) => {
+            e.stopPropagation();
+            removeDatasetTag(d.id, t);
+          }}
+        >
+          ×
+        </button>
+      </span>
+    ))}
+    {tag != null ? (
+      <input
+        className="qz-input qzk-tag-input"
+        autoFocus
+        placeholder="tag…"
+        value={tag}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setTag(e.target.value)}
+        onBlur={commitTag}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commitTag();
+          if (e.key === "Escape") setTag(null);
+        }}
+      />
+    ) : (
+      <button
+        className="qzk-tag qzk-tag-add"
+        title="Add tag"
+        onClick={(e) => {
+          e.stopPropagation();
+          setTag("");
+        }}
+      >
+        ＋
+      </button>
+    )}
+  </div>
+  );
 
   const rowClassName = `qzk-ds${treeMode ? " qzk-ds-compact" : ""}${active ? " active" : ""}${selected ? " selected" : ""}${sheetNumber ? " qzk-ds-sheet" : ""}`;
   // #38: a pending dataset's `data` is just the small downsampled preview —
@@ -248,6 +316,7 @@ export default function DatasetRow({
               {pts} pts · {ch}ch{d.pending && " · …"}
             </span>
             <DatasetRowPreview dataset={d} />
+            {tagsEl}
           </div>
           {folderCaptionEl}
         </>
@@ -318,57 +387,7 @@ export default function DatasetRow({
               </button>
             </span>
           </div>
-          <div className="qzk-ds-tags">
-            {(d.tags ?? []).map((t) => (
-              <span
-                key={t}
-                className="qzk-tag"
-                title={`Filter by "${t}"`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onFilterTag(t);
-                }}
-              >
-                {t}
-                <button
-                  className="qzk-tag-x"
-                  title="Remove tag"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeDatasetTag(d.id, t);
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-            {tag != null ? (
-              <input
-                className="qz-input qzk-tag-input"
-                autoFocus
-                placeholder="tag…"
-                value={tag}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => setTag(e.target.value)}
-                onBlur={commitTag}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitTag();
-                  if (e.key === "Escape") setTag(null);
-                }}
-              />
-            ) : (
-              <button
-                className="qzk-tag qzk-tag-add"
-                title="Add tag"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setTag("");
-                }}
-              >
-                ＋
-              </button>
-            )}
-          </div>
+          {tagsEl}
         </>
       )}
     </div>
