@@ -12,23 +12,40 @@ function finiteKey(value: number): string | null {
 }
 
 function provenance(ds: DataStruct, operation: string): Record<string, unknown> {
+  // NB `joinWorksheets` does NOT call this — it builds its own metadata with the
+  // two sides nested under `left_metadata`/`right_metadata`, where no reader
+  // looks (every sidecar reader is top-level only), so nothing there is
+  // misaligned and nothing is lost. The "stack/unstack/join" list below is
+  // therefore about the other three; join's datetime metadata is likewise not
+  // stripped, which is pre-existing and out of scope here.
+  //
   // Every reshape REPLACES the X axis (transpose -> channel index;
-  // stack/unstack/join -> a different key column), so X-axis-identity metadata
+  // stack/unstack -> a different key column), so X-axis-identity metadata
   // carried from the source is stale. Dropping `time_is_datetime` in
   // particular stops the Inspector's date-format gate (TickFormat keys on it)
   // from re-opening on a provably-non-date axis — which would also feed the
   // date tick formatter out-of-range values. Fails closed: a reshaped datetime
   // dataset just won't offer date formatting until re-imported.
   //
-  // The ROW-INDEXED sidecars go too (BUG-006's sixth site). A reshape does not
-  // permute rows, it REPLACES them — transpose turns rows into channels, stack
-  // multiplies them by the channel count, unstack pivots them into distinct
-  // key values — so no index mapping carries a per-row text cell across. There
-  // is nothing to slice them TO, so they fail closed and are dropped rather
-  // than carried at their old length against a grid they no longer describe.
-  // (`stackWorksheet` then sets a FRESH `origin_text_columns`; a stale
-  // `text_columns` surviving here would have shadowed it outright, since
-  // `lib/columnmeta.ts` reads `text_columns ?? origin_text_columns`.)
+  // The ROW-INDEXED sidecars go too (BUG-006's sixth site) — a DELIBERATE
+  // fail-closed choice, which is not the same as "impossible", and an earlier
+  // draft of this comment claimed the latter. Being precise about which:
+  //   * unstack genuinely aggregates rows away (many source rows -> one
+  //     key/category cell), so there is no mapping to slice to at all.
+  //   * transpose maps source row -> output CHANNEL, and there is no
+  //     channel-indexed text-sidecar contract to land it in.
+  //   * stack DOES have a recoverable mapping — output row k comes from source
+  //     row floor(k / selected.length), i.e. [0,0,1,1,2,2,...], which
+  //     `sliceRowSidecars` consumes as-is (repeated indices included). Carrying
+  //     it is a real improvement and is booked, not done here: stack already
+  //     writes its own `origin_text_columns: {Source}`, so the two would have
+  //     to be merged, and that is more than a review round should take on.
+  // Until then, dropping beats carrying at the old length against a grid the
+  // cells no longer describe.
+  // Dropping also unshadows `stackWorksheet`'s OWN fresh
+  // `origin_text_columns`: a stale `text_columns` surviving here beat it
+  // outright, since `lib/columnmeta.ts` reads
+  // `text_columns ?? origin_text_columns`.
   const rest: Record<string, unknown> = { ...ds.metadata };
   for (const k of [
     "time_is_datetime",

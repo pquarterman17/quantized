@@ -60,6 +60,24 @@ export function insertBlanks(column: readonly number[], at: number, count: numbe
   ];
 }
 
+/** Grow a column to `rows` entries with `fill`, or return it unchanged when it
+ *  is already that long (never truncates).
+ *
+ *  Why a ragged dataset needs this (the Group N review's findings 3 and 4): a
+ *  DataStruct's numeric grid and its row-indexed metadata sidecars can carry
+ *  DIFFERENT row counts — a text-only Origin book is `time: []` with a full
+ *  `text_columns` — while the worksheet's row domain is the MAX of the two
+ *  (`useWorksheetView.ts`), so every row it shows is selectable. Clamping an
+ *  edit against `time.length` in one half and the sidecar span in the other put
+ *  the same inserted row at two different indices. Padding the numeric half up
+ *  to the shared span first makes the grid rectangular, so one index means one
+ *  row everywhere. The padding is only ever what the worksheet ALREADY renders
+ *  for those rows (a blank), now made explicit. */
+export function padRows<T>(column: readonly T[], rows: number, fill: T): T[] {
+  if (column.length >= rows) return [...column];
+  return [...column, ...Array.from({ length: rows - column.length }, () => fill)];
+}
+
 /** Drop `deleted` positions from a column. Returns a new array. */
 export function dropRows<T>(column: readonly T[], deleted: ReadonlySet<number>): T[] {
   return column.filter((_, i) => !deleted.has(i));

@@ -906,7 +906,7 @@ import { fileURLToPath } from "node:url";
  *  for 335 bytes. The +3,931 is a debt on the next extraction, and the next
  *  entry here should be a LOWER.
  *
- *  2026-09-09 (the LOWER that entry asked for) — 914,642 -> 912,231.
+ *  2026-09-09 (the LOWER that entry asked for) — 914,642 -> 911,600.
  *
  *  The Group N review round of BUG-006 needed 384 more eager bytes
  *  (`sidecarRowCount` and a trailing-trim in `lib/rowSidecars.ts`, fixing a
@@ -921,11 +921,29 @@ import { fileURLToPath } from "node:url";
  *  defers all of it with no API change — the commands were already async
  *  inside.
  *
- *  Net for the round: -2,435 against the old pin (384 spent, 2,819 recovered).
- *  Pinned at measured + 24 = 912,231, the same tight convention, which brings
- *  the day to +1,520 rather than +3,931.
+ *  A second review round then added ~280 more eager bytes (the ragged-grid
+ *  `padRows` fix and the empty-column prune). NO further reduction was needed
+ *  or taken, and the attempt to take one is worth recording: deferring
+ *  `lib/merge.ts` out of the eager `useApp` chunk worked on bytes but added
+ *  four lines to `store/useApp.ts`, which sits AT its `architecture.test.ts`
+ *  store-size pin with zero headroom — so it bought bundle bytes with store
+ *  lines and reddened a different ratchet. Two ratchets, one budget: check
+ *  both before calling something a reduction. Reverted.
+ *
+ *  QUOTE PIN DELTAS AGAINST PIN, AND MEASURE LAST. The first version of this
+ *  entry said "net -2,435 against the old pin", mixing units: -2,435 is new
+ *  MEASURED vs old PIN, while every other number in this block is pin-to-pin.
+ *  It also claimed "measured + 24" from a measurement taken BEFORE the last
+ *  edit, leaving a real margin of 21; re-measure after the final edit or the
+ *  stated margin is fiction.
+ *
+ *  Pinned at measured (912,490) + 64 = 912,554: pin-to-pin **-2,088** from
+ *  914,642, and the day (from 910,711) **+1,843**. The +64 is wider than the
+ *  +24 used above on purpose — `__BUILD_SHA__` is baked into the bundle
+ *  (vite.config.ts), so a short SHA git extends by a character or two would
+ *  otherwise redden CI with no code change at all. 64 covers that, no more.
  */
-const EAGER_JS_BUDGET = 912_231;
+const EAGER_JS_BUDGET = 912_554;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

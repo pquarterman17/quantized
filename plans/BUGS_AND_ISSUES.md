@@ -29,7 +29,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices + row edits | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED** 2026-09-09, sabotage-verified |
+| BUG-006 | P2 | Row slices + row edits | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **6 of 8 sites fixed** 2026-09-09, sabotage-verified; `calc/corrections.py` xTrim and `lib/merge.ts` still open — see the entry. Declared "fixed everywhere" twice and wasn't, both times caught by review, never by the suite |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1087,7 +1087,9 @@ The two hesitations, and what they were actually worth:
 
 - [x] Slice `text_columns` in `sliceDataStruct` — the only self-consistent
   option for a row-indexed sidecar under a row slice.
-- [x] Applied at EVERY row-slicing site, via one shared `lib/rowSidecars.ts`:
+- [x] Applied at every FRONTEND row-SLICING site (row edits and the backend are
+  separate boxes below; "EVERY row-slicing site" as this originally read was
+  false — see STILL OPEN), via one shared `lib/rowSidecars.ts`:
   `lib/datasetsplit.sliceDataStruct` (Extract, Split-by-column, byPartition),
   `lib/rowstate.pruneExcluded` (the analysis view behind every filter and row
   exclusion — Tabulate and Stat Stage category labels were reading one row off)
@@ -1118,7 +1120,10 @@ The two hesitations, and what they were actually worth:
   `{name: array}` objects), so removing either alone left it green. It is now
   labelled as the characterization test it is, and the shape guard got its own
   test that DOES fail when the `Array.isArray` rejection is removed.
-- [x] Every caller covered — the fix is in one shared helper, and
+- [ ] ~~Every caller covered~~ — SIX of eight, see "STILL OPEN" below. This box
+  was ticked twice on an enumeration that was never verified against a search;
+  the two misses were found by review, not by the suite. The fix is in one
+  shared helper, and
   `rowstate`/`facet`/`datasetsplit`/`selectionInvariant` suites all pass. Two
   pre-existing assertions changed from `toBe` to `toEqual` on `metadata`: it is
   no longer carried by REFERENCE (its sidecars must be sliced), and those tests
@@ -1148,9 +1153,43 @@ The two hesitations, and what they were actually worth:
   `origin_text_columns: {Source}`, which a surviving stale `text_columns` beat
   in `lib/columnmeta.ts`'s `text_columns ?? origin_text_columns`.
 
+#### STILL OPEN — two sites found by the Group N review, with measured evidence
+
+The status below is **NOT "fixed everywhere"**, and the earlier claim that the
+slice was "applied at EVERY row-slicing site" was false twice over. Two sites
+remain, both PERSISTED, both reachable without an Origin file:
+
+- [ ] **`src/quantized/calc/corrections.py`'s xTrim** (`:122-131` masks rows,
+  `:252` returns `metadata=dict(data.metadata)` unsliced). Import a CSV with one
+  `label`-role column, so `metadata.text_columns` holds exactly one cell per row
+  (`io/import_preview.py:453-458`); apply corrections with `xTrimMin` cutting the
+  first 50 of 100 rows. The response has 50 rows and 100 text cells starting at
+  `o0`, so row 0 shows `o0` beside old row 50's numbers — and
+  `routes/_payload.py:131` -> `store/corrections.ts:183-201` writes it straight
+  into `d.data` and thence the `.dwk`. Worse than the Extract/Split cases this
+  bug started from, which only ever produced a derived copy. The code right
+  beside it reasons explicitly about `excludedRows` shifting under an xTrim and
+  says nothing about the sidecars.
+- [ ] **`frontend/src/lib/merge.ts:119-123`** — `metadata: { ...datasets[0].metadata,
+  ... }`. Two harms: datasets 1..N's sidecars are silently DROPPED, and if
+  dataset 0's sidecar is longer than its own row count (the ragged case) its
+  trailing cells land on dataset 1's rows. Measured shape: A = `time:[10,20,30]`
+  with `text_columns:{A:[a0..a5]}`, B = 3 numeric rows -> merge yields 6 rows
+  with `A:[a0..a5]` unchanged, so B's rows display `a3,a4,a5`. Reached from
+  `useApp.ts` importAppended + mergeSelected. A correct fix concatenates each
+  dataset's cells padded to its own row count, unioning column names — feasible,
+  not done here.
+
+Also booked, not a defect: `lib/worksheetTransforms.ts`'s `stackWorksheet` DOES
+have a recoverable row mapping (output row `k` <- source row
+`floor(k / selected.length)`), so its sidecars are dropped by CHOICE, not
+impossibility. Carrying them means merging with the fresh `origin_text_columns:
+{Source}` stack already writes. The comment there previously asserted
+impossibility for all three reshapes; it now distinguishes the three cases.
+
 #### Completion record
 
-- PR/commit: the Group M commit + the Group N review round (both 2026-09-09).
+- PR/commit: the Group M commit + TWO Group N review rounds (all 2026-09-09).
 - Automated tests: `lib/datasetsplit.test.ts` (the eight named above),
   `lib/rowSidecars.test.ts` (the index-list and row-span primitives),
   `store/cellEdit.test.ts` (row edits, including the four truncation

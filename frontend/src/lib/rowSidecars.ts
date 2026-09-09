@@ -65,7 +65,19 @@ function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = {};
   for (const [name, cells] of Object.entries(raw as Record<string, unknown>)) {
-    out[name] = Array.isArray(cells) ? sliceCells(cells, rowIndexes) : cells;
+    if (!Array.isArray(cells)) {
+      out[name] = cells;
+      continue;
+    }
+    const sliced = sliceCells(cells, rowIndexes);
+    // A column the slice emptied is REMOVED, not kept as `[]`. Keeping it made
+    // the key non-empty for no rows, and several readers test only for
+    // presence: `columnmeta.hasOriginReportSheets` gates the worksheet's "see
+    // Inspector" pointer on `Object.keys(raw).length > 0`,
+    // `OriginProvenanceCard` counts it, and `GridHeader` renders an empty
+    // read-only column for it. This completes the module's invariant — a sliced
+    // column is never longer than it needs to be, and never zero-length either.
+    if (sliced.length) out[name] = sliced;
   }
   return out;
 }
@@ -114,11 +126,13 @@ export function sidecarRowCount(metadata: Record<string, unknown>, rowCount: num
  *  drift.
  *
  *  `at`/`count` are TRUNCATED toward zero and `at` is clamped to `[0,
- *  rowCount]`, matching what the numeric insert does with the same arguments:
- *  `values.slice(0, 1.5)` keeps one row, so a `1.5` left un-truncated here
- *  produced a list of length `rowCount + count` whose entries no longer lined
- *  up with the grid at all (`[0, -1, 1.5]` — index `1.5` is a miss). The
- *  returned length is always `rowCount + max(0, trunc(count))`. */
+ *  rowCount]`, matching what the numeric insert does with the same arguments
+ *  (`values.slice(0, 1.5)` keeps one row). Un-truncated, `at = 1.5` produced
+ *  `[0, -1, 1.5]` — one entry short of the grid, with an index that hits no
+ *  cell. This is HARDENING, not a bug that was firing: the only caller passes
+ *  integer selection indices, and the `qz.insertRows(...)` macro text has no
+ *  interpreter today. It earns its place for the day one does. The returned
+ *  length is always `rowCount + max(0, trunc(count))`. */
 export function insertRowIndexes(rowCount: number, at: number, count: number): number[] {
   const n = Math.max(0, Math.trunc(count) || 0); // `|| 0` catches NaN, whose Array.from length is 0 anyway
   const clamped = Math.max(0, Math.min(Math.trunc(at) || 0, rowCount));

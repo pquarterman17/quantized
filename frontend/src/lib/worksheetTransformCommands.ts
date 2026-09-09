@@ -6,12 +6,17 @@ import type { AggregateMode, JoinMode } from "./worksheetTransforms";
 
 /** `lib/worksheetTransforms.ts` holds ~200 lines of reshape math (transpose,
  *  stack, unstack, join, with their own cell-count guards) that nothing needs
- *  before first paint — every entry point below is a Data-menu command that
- *  already `await`s a `ParamDialog` before it can reach the math. Deferring it
- *  behind a dynamic import costs no API change for exactly that reason, and
- *  takes the module out of the eager `index` chunk. Kept as ONE import at the
- *  top of each command rather than four separate ones so a reader sees a single
- *  boundary. */
+ *  before first paint — every entry point below is a Data-menu command — so it
+ *  is deferred behind a dynamic import, which takes it out of the eager `index`
+ *  chunk with no API change (the commands were already async inside).
+ *
+ *  Each command STARTS the fetch before it opens its `ParamDialog` and awaits it
+ *  only after the dialog resolves, so the download overlaps the user's
+ *  think-time instead of landing between OK and the result. A review round
+ *  caught the first version awaiting it after the dialog while its comment
+ *  claimed the dialog covered the fetch — it didn't; this shape makes the claim
+ *  true. A chunk-load failure (offline, evicted asset) is a new possibility and
+ *  surfaces through `withErrors` below as Vite's own message. */
 const transforms = () => import("./worksheetTransforms");
 
 let sequence = 0;
@@ -55,12 +60,14 @@ export function runTransposeWorksheet(s: StoreGet): void {
   void withErrors(s, async () => {
     const source = await activeData(s);
     if (!source) return;
+    const pending = transforms(); // starts downloading while the dialog is open
+    pending.catch(() => {}); // the dialog may be cancelled below and never await it
     const params = await askParams("Transpose worksheet", [{
       key: "confirm", label: "Create one output column per input row", type: "boolean", default: true,
       hint: "The source remains unchanged; original labels and units are kept in provenance.",
     }]);
     if (!params || !params.confirm) return;
-    const { transposeWorksheet } = await transforms();
+    const { transposeWorksheet } = await pending;
     addDerived(s, source.name, "transposed", transposeWorksheet(rowsOf(source)));
   });
 }
@@ -69,6 +76,8 @@ export function runStackWorksheet(s: StoreGet): void {
   void withErrors(s, async () => {
     const source = await activeData(s);
     if (!source) return;
+    const pending = transforms(); // starts downloading while the dialog is open
+    pending.catch(() => {}); // the dialog may be cancelled below and never await it
     const params = await askParams("Stack columns to long form", [{
       key: "channels", label: "Channels (1-based, comma-separated)", type: "text",
       default: source.data.labels.map((_, index) => index + 1).join(","),
@@ -76,7 +85,7 @@ export function runStackWorksheet(s: StoreGet): void {
     }]);
     if (!params) return;
     const channels = String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1);
-    const { stackWorksheet } = await transforms();
+    const { stackWorksheet } = await pending;
     addDerived(s, source.name, "stacked", stackWorksheet(rowsOf(source), channels));
   });
 }
@@ -92,9 +101,11 @@ export function runUnstackWorksheet(s: StoreGet): void {
       { key: "value", label: "Value column", type: "select", default: options[2] ?? options[1] ?? options[0], options },
       { key: "aggregate", label: "Duplicate key/category cells", type: "select", default: "mean", options: ["mean", "first", "last"] },
     ];
+    const pending = transforms(); // starts downloading while the dialog is open
+    pending.catch(() => {}); // the dialog may be cancelled below and never await it
     const params = await askParams("Unstack / pivot to wide form", fields);
     if (!params) return;
-    const { unstackWorksheet } = await transforms();
+    const { unstackWorksheet } = await pending;
     const data = unstackWorksheet(
       rowsOf(source),
       optionIndex(params.key),
@@ -119,6 +130,8 @@ export function runJoinWorksheets(s: StoreGet): void {
       { key: "leftKey", label: "Active dataset key", type: "select", default: leftOptions[0], options: leftOptions },
       { key: "mode", label: "Rows to retain", type: "select", default: "inner", options: ["inner", "left", "right", "full"] },
     ];
+    const pending = transforms(); // starts downloading while the dialog is open
+    pending.catch(() => {}); // the dialog may be cancelled below and never await it
     const first = await askParams("Join datasets by numeric key — step 1 of 2", initial);
     if (!first) return;
     const rightId = candidates[datasetOptions.indexOf(String(first.right))]?.id;
@@ -130,7 +143,7 @@ export function runJoinWorksheets(s: StoreGet): void {
       hint: "Duplicate keys use their first row to avoid an accidental many-to-many expansion.",
     }]);
     if (!second) return;
-    const { joinWorksheets } = await transforms();
+    const { joinWorksheets } = await pending;
     const data = joinWorksheets(
       rowsOf(left),
       rowsOf(right),
