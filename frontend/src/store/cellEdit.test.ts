@@ -463,3 +463,254 @@ describe("insertRows / deleteRows (MAIN #34)", () => {
     expect(() => useApp.getState().deleteRows("nope", [0])).not.toThrow();
   });
 });
+
+// BUG-006's last live site. `insertRows`/`deleteRows` shifted the numeric grid
+// but not the row-indexed metadata sidecars, so every text cell past the edit
+// described a different measurement than the one beside it — and unlike a slice
+// (Extract, Split, a filter view) this is PERSISTED into the dataset.
+describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
+  const seed = () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run.dat",
+          data: {
+            time: [10, 20, 30],
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: {
+              text_columns: { SampleID: ["s0", "s1", "s2"] },
+              all_column_names: ["x", "Y"], // channel-indexed: must NOT move
+            },
+          },
+        },
+      ],
+      activeId: "d1",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+  const cols = () =>
+    (useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>).SampleID;
+
+  it("deleteRows drops the same text cells as the numbers", () => {
+    seed();
+    useApp.getState().deleteRows("d1", [1]);
+    expect(useApp.getState().datasets[0].data.time).toEqual([10, 30]);
+    expect(cols()).toEqual(["s0", "s2"]);
+  });
+
+  it("insertRows pushes the later text cells down, blank-filling the new rows", () => {
+    seed();
+    useApp.getState().insertRows("d1", 1, 2);
+    expect(useApp.getState().datasets[0].data.time.length).toBe(5);
+    expect(cols()).toEqual(["s0", "", "", "s1", "s2"]);
+  });
+
+  it("an insert past the end appends rows but does not pad the text column", () => {
+    seed();
+    useApp.getState().insertRows("d1", 99, 1);
+    expect(useApp.getState().datasets[0].data.time.length).toBe(4);
+    // The appended row genuinely has no text cell, and a sidecar shorter than
+    // the grid already reads as blank there. Materializing the "" would grow
+    // the SAVED dataset by one cell per text column on every append.
+    expect(cols()).toEqual(["s0", "s1", "s2"]);
+  });
+
+  // The two regressions below are the ones that let the first version of this
+  // fix ship a DATA-LOSS bug behind a green suite: both index lists were sized
+  // from `time.length`, so anything a sidecar carried past the numeric grid was
+  // deleted on the next row edit. Nothing here pinned sidecar length against
+  // row count, so nothing failed.
+  it("insertRows keeps a text column that is LONGER than the numeric grid", () => {
+    seed();
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: { text_columns: { SampleID: ["s0", "s1", "s2", "s3", "s4", "s5"] } },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("d1", 1, 2);
+    // Sized from `time.length` (3) this returned ["s0","","","s1","s2"] —
+    // s3/s4/s5 destroyed.
+    expect(cols()).toEqual(["s0", "", "", "s1", "s2", "s3", "s4", "s5"]);
+  });
+
+  it("insertRows on a TEXT-ONLY book (time: []) does not wipe the grid", () => {
+    // How an Origin sheet of pure text imports: no numeric channel at all.
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "text.opj",
+          data: {
+            time: [],
+            values: [],
+            labels: [],
+            units: [],
+            metadata: { text_columns: { A: ["a0", "a1", "a2", "a3", "a4"] } },
+          },
+        },
+      ],
+      activeId: "d1",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("d1", 2, 1);
+    // Sized from `time.length` (0) this returned { A: [""] }: five rows of a
+    // real worksheet replaced by one blank, persisted.
+    expect(
+      (useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>).A,
+    ).toEqual(["a0", "a1", "", "a2", "a3", "a4"]);
+  });
+
+  it("deleteRows keeps the text cells past the end of the numeric grid", () => {
+    seed();
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: { text_columns: { SampleID: ["s0", "s1", "s2", "s3", "s4"] } },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().deleteRows("d1", [1]);
+    expect(useApp.getState().datasets[0].data.time).toEqual([10, 30]);
+    expect(cols()).toEqual(["s0", "s2", "s3", "s4"]);
+  });
+
+  // The Group N review's findings 3 and 4: the first fix taught the SIDECAR
+  // half about ragged grids and left the numeric half clamping against
+  // `time.length`, so one edit meant two different rows. The worksheet's row
+  // domain is max(time.length, sidecar span), so every row it shows is
+  // selectable and must behave.
+  const seedRagged = (cells: string[], time: number[] = [10, 20, 30]) => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "ragged.opj",
+          data: {
+            time,
+            values: time.map((_, i) => [i + 1]),
+            labels: time.length ? ["Y"] : [],
+            units: time.length ? [""] : [],
+            metadata: { text_columns: { A: cells } },
+          },
+        },
+      ],
+      activeId: "d1",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+  const textA = () =>
+    (useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>).A;
+
+  it("an insert past the numeric end lands at the SAME index in both halves", () => {
+    seedRagged(["a0", "a1", "a2", "a3", "a4", "a5"]);
+    useApp.getState().insertRows("d1", 5, 1);
+    const d = useApp.getState().datasets[0].data;
+    // Before: time got its blank at index 3 (clamped to time.length) while the
+    // text column got its blank at index 5. The blank row is now index 5 in both.
+    expect(Number.isNaN(d.time[5])).toBe(true);
+    expect(textA()[5]).toBe("");
+    expect(textA()).toEqual(["a0", "a1", "a2", "a3", "a4", "", "a5"]);
+    expect(d.time.length).toBe(7);
+    expect(d.values.length).toBe(7); // the numeric grid is padded to the shared span
+  });
+
+  it("each padded value row is its own array, not one shared reference", () => {
+    seedRagged(["a0", "a1", "a2", "a3", "a4", "a5"]);
+    useApp.getState().insertRows("d1", 6, 1);
+    const rows = useApp.getState().datasets[0].data.values;
+    // Rows 3..5 are pad rows. `padRows(values, span, blankRow())` takes one
+    // fill VALUE, so all three would alias ONE array and a later single-cell
+    // edit would change all of them — which is why the pad is built with a
+    // fresh `blankRow()` per row instead. Asserted through a real WRITE rather
+    // than by reference identity, so the failure is the user-visible one.
+    expect(rows).toHaveLength(7);
+    useApp.getState().setCellValue("d1", 3, 0, 42);
+    const after = useApp.getState().datasets[0].data.values;
+    expect(after[3][0]).toBe(42);
+    expect(after[4][0]).toBeNaN(); // an alias would have taken the 42 too
+    expect(after[5][0]).toBeNaN();
+  });
+
+  it("a TEXT-ONLY book inserts at the row the user picked, and the grid follows", () => {
+    seedRagged(["a0", "a1", "a2", "a3", "a4"], []);
+    useApp.getState().insertRows("d1", 2, 1);
+    expect(textA()).toEqual(["a0", "a1", "", "a2", "a3", "a4"]);
+    // The text half was already right before the fix; the NUMERIC half was not,
+    // and asserting only `textA()` here could not fail. `time` is padded to the
+    // shared span (5) and then takes its blank, so 6 rows — not the 1 an
+    // unpadded `insertBlanks([], 2, 1)` produced.
+    expect(useApp.getState().datasets[0].data.time).toHaveLength(6);
+    expect(useApp.getState().datasets[0].data.values).toHaveLength(6);
+  });
+
+  it("deleteRows can delete a row a TEXT-ONLY book actually shows", () => {
+    seedRagged(["a0", "a1", "a2"], []);
+    const before = useApp.getState().history.length;
+    useApp.getState().deleteRows("d1", [0]);
+    // Before: `deleted` was filtered against time.length (0), so this returned
+    // early — no mutation, no undo entry — while the status bar said "deleted 1
+    // row".
+    expect(textA()).toEqual(["a1", "a2"]);
+    expect(useApp.getState().history.length).toBe(before + 1);
+  });
+
+  it("deleteRows honours a selection that reaches past the numeric end", () => {
+    seedRagged(["a0", "a1", "a2", "a3", "a4", "a5"]);
+    useApp.getState().deleteRows("d1", [1, 4]);
+    // Before: row 4 was filtered out (4 >= time.length of 3), so only one row
+    // went while the status bar reported two.
+    expect(useApp.getState().datasets[0].data.time).toEqual([10, 30]);
+    expect(textA()).toEqual(["a0", "a2", "a3", "a5"]);
+  });
+
+  it("a sidecar column the delete empties is REMOVED, not left as []", () => {
+    seedRagged(["a0"]); // one cell, three numeric rows
+    useApp.getState().deleteRows("d1", [0]);
+    const cols = useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>;
+    // `{A: []}` kept the key non-empty for zero rows, which several readers gate
+    // presence on (columnmeta.hasOriginReportSheets, OriginProvenanceCard).
+    expect(cols).toEqual({});
+  });
+
+  it("leaves NON-row-indexed metadata alone through both edits", () => {
+    seed();
+    // `all_column_names` is a bare array, which `sliceOneSidecar` rejects on
+    // SHAPE — so on its own this pins nothing about the key allowlist. The
+    // `{name: array}`-shaped key beside it is the real control: it is exactly
+    // what a "slice anything that looks row-indexed" implementation would
+    // corrupt, and the identity assertion below fails the moment the allowlist
+    // stops being the gate. (There is no such key in a real parser's output
+    // today — the mirror-image bug is prevented by enumeration, not by luck,
+    // and this is what holds that line.)
+    const notRowIndexed = { Y: ["ch0-note", "ch1-note"] };
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: {
+              ...useApp.getState().datasets[0].data.metadata,
+              per_channel_notes: notRowIndexed,
+            },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("d1", 0, 1);
+    useApp.getState().deleteRows("d1", [0]);
+    const meta = useApp.getState().datasets[0].data.metadata;
+    expect(meta["all_column_names"]).toEqual(["x", "Y"]);
+    expect(meta["per_channel_notes"]).toBe(notRowIndexed); // same object, untouched
+  });
+});

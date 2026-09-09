@@ -873,8 +873,77 @@ import { fileURLToPath } from "node:url";
  *  by a phantom, and the raise it justified turned out to be unnecessary.
  *
  *  Pinned at measured + 24 = 914,283, the same tight convention.
+ *
+ *  2026-09-09 (last, same day) — 914,283 -> 914,642. BUG-006's FIFTH and final
+ *  call site: `store/cellEdit.ts`'s `insertRows`/`deleteRows`, the worst of
+ *  them, because a slice makes a NEW dataset while a row edit is PERSISTED into
+ *  the existing one — every text cell past the edit permanently describing a
+ *  different measurement than the one beside it.
+ *
+ *  Reduction tried first, and it worked: the bespoke
+ *  `insertBlankRowsInSidecars` helper (~35 lines) is GONE. An insert is just a
+ *  slice with blank slots — `insertRowIndexes` returns `[0..at-1, -1 × count,
+ *  at..n-1]`, `-1` never indexes a real cell, and the slicer already yields
+ *  `""` for a miss. One code path instead of two, which is also why they can no
+ *  longer drift. That took the overage from 473 to 335.
+ *
+ *  The last 335 are a raise. The justification is the work, NOT a day's
+ *  accounting — and the accounting first written here was FALSE, which is the
+ *  more useful thing to record. It read "914,589 at the start, 914,642 now,
+ *  +53 bytes for the whole day ... three raises and two repayments net out to
+ *  approximately flat". It picked the start of the day's LAST raise as the
+ *  start of the day. The real pin history for 2026-09-09 is 910,711 ->
+ *  911,772 -> 913,527 -> 914,589 -> 914,634 -> 914,283 -> 914,642: **+3,931
+ *  for the day**, and this is the FIFTH raise, not the third. A ratchet
+ *  narrated by the number that flatters it is not a ratchet, so: pick the
+ *  window's true start, and count every entry in it.
+ *
+ *  What the 335 buy is a data-integrity bug fixed at five call sites
+ *  (sliceDataStruct, pruneExcluded, facetSlices, insertRows, deleteRows), plus
+ *  a third sidecar key. No lazy boundary exists for this one:
+ *  `insertRows`/`deleteRows` are SYNCHRONOUS store actions called from UI
+ *  handlers, and making them async to defer a helper would be an API change
+ *  for 335 bytes. The +3,931 is a debt on the next extraction, and the next
+ *  entry here should be a LOWER.
+ *
+ *  2026-09-09 (the LOWER that entry asked for) — 914,642 -> 911,600.
+ *
+ *  The Group N review round of BUG-006 needed 384 more eager bytes
+ *  (`sidecarRowCount` and a trailing-trim in `lib/rowSidecars.ts`, fixing a
+ *  sidecar longer than `time` being TRUNCATED by a row edit — data loss, not
+ *  misattribution). Per rule 2 above a raise is the last resort, so the
+ *  reduction came first and it more than paid for itself:
+ *  `lib/worksheetTransforms.ts` (~200 lines of transpose/stack/unstack/join
+ *  math with its own cell-count guards) was sitting in the EAGER `index`
+ *  chunk, reachable only from four Data-menu commands that already `await` a
+ *  `ParamDialog` before touching it. One `const transforms = () =>
+ *  import("./worksheetTransforms")` in `lib/worksheetTransformCommands.ts`
+ *  defers all of it with no API change — the commands were already async
+ *  inside.
+ *
+ *  A second review round then added ~280 more eager bytes (the ragged-grid
+ *  `padRows` fix and the empty-column prune). NO further reduction was needed
+ *  or taken, and the attempt to take one is worth recording: deferring
+ *  `lib/merge.ts` out of the eager `useApp` chunk worked on bytes but added
+ *  four lines to `store/useApp.ts`, which sits AT its `architecture.test.ts`
+ *  store-size pin with zero headroom — so it bought bundle bytes with store
+ *  lines and reddened a different ratchet. Two ratchets, one budget: check
+ *  both before calling something a reduction. Reverted.
+ *
+ *  QUOTE PIN DELTAS AGAINST PIN, AND MEASURE LAST. The first version of this
+ *  entry said "net -2,435 against the old pin", mixing units: -2,435 is new
+ *  MEASURED vs old PIN, while every other number in this block is pin-to-pin.
+ *  It also claimed "measured + 24" from a measurement taken BEFORE the last
+ *  edit, leaving a real margin of 21; re-measure after the final edit or the
+ *  stated margin is fiction.
+ *
+ *  Pinned at measured (912,490) + 64 = 912,554: pin-to-pin **-2,088** from
+ *  914,642, and the day (from 910,711) **+1,843**. The +64 is wider than the
+ *  +24 used above on purpose — `__BUILD_SHA__` is baked into the bundle
+ *  (vite.config.ts), so a short SHA git extends by a character or two would
+ *  otherwise redden CI with no code change at all. 64 covers that, no more.
  */
-const EAGER_JS_BUDGET = 914_283;
+const EAGER_JS_BUDGET = 912_554;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

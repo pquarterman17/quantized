@@ -195,4 +195,40 @@ describe("worksheet transforms", () => {
     expect(unstackWorksheet(long, 0, 1, 2, "last").values).toEqual([[30]]);
     expect(unstackWorksheet(long, 0, 1, 2, "mean").values).toEqual([[20]]);
   });
+
+  // BUG-006's sixth site. A reshape REPLACES the rows (transpose -> channels,
+  // stack -> rows x channels, unstack -> distinct key values), so a per-row
+  // text cell has no row to map to and must not be carried at its old length.
+  it("drops the row-indexed sidecars through every reshape", () => {
+    const withText: DataStruct = {
+      ...wide,
+      metadata: {
+        ...wide.metadata,
+        text_columns: { SampleID: ["r0", "r1"] },
+        origin_text_columns: { Op: ["p", "q"] },
+        origin_report_sheets: { R: ["x", "y"] },
+      },
+    };
+    for (const out of [
+      transposeWorksheet(withText),
+      stackWorksheet(withText, [0, 1]),
+      unstackWorksheet(withText, -1, 0, 1),
+    ]) {
+      expect(out.metadata.text_columns).toBeUndefined();
+      expect(out.metadata.origin_report_sheets).toBeUndefined();
+      expect(out.metadata.sample).toBe("S1"); // file-level metadata still rides along
+    }
+  });
+
+  it("stack's own Source column is not shadowed by the source sheet's text_columns", () => {
+    // `lib/columnmeta.ts` reads `text_columns ?? origin_text_columns`, so a
+    // stale `text_columns` surviving `provenance()` beat the fresh Source
+    // column stack had just built.
+    const out = stackWorksheet(
+      { ...wide, metadata: { text_columns: { SampleID: ["r0", "r1"] } } },
+      [0, 1],
+    );
+    expect(out.metadata.text_columns).toBeUndefined();
+    expect(out.metadata.origin_text_columns).toEqual({ Source: ["A", "B", "A", "B"] });
+  });
 });

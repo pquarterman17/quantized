@@ -39,9 +39,10 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
+import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
-import { dropRows, insertBlanks, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
+import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
@@ -108,13 +109,30 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       set((s) => ({
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
-          const time = insertBlanks(d.data.time, at, count);
+          // ONE row domain for both halves (Group N review finding 4). The
+          // numeric grid is padded up to the sidecar span FIRST, so the
+          // inserted row lands at the same index in `time`, in `values`, and in
+          // every text column. Before this, `at` was clamped against
+          // `time.length` for the numbers and against the sidecar span for the
+          // text: on a ragged grid (`time: [10,20,30]`, a 6-cell text column)
+          // `insertRows(id, 5, 1)` put the blank ROW at index 3 and the blank
+          // CELL at index 5 — the very misalignment BUG-006 is about,
+          // reintroduced by teaching only one half about ragged grids.
+          const span = sidecarRowCount(d.data.metadata, d.data.time.length);
           const blankRow = () => d.data.labels.map(() => Number.NaN);
-          const clamped = Math.max(0, Math.min(at, d.data.values.length));
+          const time = insertBlanks(padRows(d.data.time, span, Number.NaN), at, count);
+          // NOT `padRows` for the value ROWS: it takes one `fill` VALUE, so
+          // every padded row would alias the same array and a later edit to one
+          // would change them all. Each pad row gets its own `blankRow()`.
+          const paddedValues = [
+            ...d.data.values,
+            ...Array.from({ length: Math.max(0, span - d.data.values.length) }, blankRow),
+          ];
+          const clamped = Math.max(0, Math.min(Math.trunc(at) || 0, span));
           const values = [
-            ...d.data.values.slice(0, clamped),
+            ...paddedValues.slice(0, clamped),
             ...Array.from({ length: count }, blankRow),
-            ...d.data.values.slice(clamped),
+            ...paddedValues.slice(clamped),
           ];
           // REMAP rather than clear: an explicit insert knows exactly what
           // moved, so discarding the user's row exclusions would be needless
@@ -124,7 +142,22 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
             : undefined;
           return recompute({
             ...d,
-            data: { ...d.data, time, values },
+            data: {
+              ...d.data,
+              time,
+              values,
+              // BUG-006: the row-indexed metadata sidecars shift with the rows.
+              // Without this every text cell below `at` describes a different
+              // measurement than the one beside it — and unlike a slice, this
+              // is PERSISTED into the dataset.
+              //
+              // Sized from the shared `span`, NOT `time.length`: a sidecar may
+              // legitimately be LONGER than the numeric grid (a text-only
+              // Origin book imports as `time: []` with a full `text_columns`),
+              // and an index list that stops at `time.length` deletes the
+              // excess outright. See the truncation note in rowSidecars.ts.
+              metadata: sliceRowSidecars(d.data.metadata, insertRowIndexes(span, at, count)),
+            },
             ...(excluded ? { excludedRows: excluded } : {}),
           });
         }),
@@ -139,19 +172,37 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     deleteRows: (id, rows) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds || rows.length === 0) return;
-      const deleted = new Set(rows.filter((r) => r >= 0 && r < ds.data.time.length));
+      // Ranged over the SIDECAR SPAN, not `time.length` (Group N review finding
+      // 3). The worksheet's row domain is the max of the two, so every row it
+      // lets the user select must be deletable: filtering against `time.length`
+      // made a text-only book (`time: []`) undeletable entirely — early return,
+      // no undo entry — while the status bar still said "deleted 1 row", and a
+      // mixed selection past the numeric end silently deleted only some of it.
+      const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
+      const deleted = new Set(rows.filter((r) => r >= 0 && r < span));
       if (deleted.size === 0) return;
       get().recordHistory("delete rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
           const excluded = d.excludedRows ? shiftForDelete(d.excludedRows, deleted) : undefined;
+          // The rows that SURVIVE, in order — the same index list a slice
+          // takes, so the sidecars go through the shared helper (BUG-006).
+          // Ranges over the same `span` the request was filtered against, not
+          // `time.length`: rows past the end of the numeric grid can still
+          // carry text cells, and a `kept` list that stops at `time.length`
+          // would drop them permanently. `dropRows` filters by index, so the
+          // out-of-range members of `deleted` simply never match the shorter
+          // numeric arrays — no padding needed on this path.
+          const kept: number[] = [];
+          for (let r = 0; r < span; r++) if (!deleted.has(r)) kept.push(r);
           return recompute({
             ...d,
             data: {
               ...d.data,
               time: dropRows(d.data.time, deleted),
               values: dropRows(d.data.values, deleted),
+              metadata: sliceRowSidecars(d.data.metadata, kept),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
           });
