@@ -5,7 +5,7 @@ import StatusBar from "./StatusBar";
 import { HEALTHY } from "../../lib/autosaveGenerations";
 import { useConnection } from "../../lib/lifecycle";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
-import { beginOp, endOp, usePendingOps } from "../../store/pendingOps";
+import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 
 beforeEach(() => {
@@ -86,6 +86,58 @@ describe("StatusBar pending-op indicator (P3.4 slice 2)", () => {
     useAutosaveStatus.setState({ health: { savedAt: null, error: "disk full", count: 0 } });
     render(<StatusBar />);
     expect(screen.getByRole("alert")).toHaveTextContent("autosave failing");
+  });
+});
+
+describe("StatusBar pending-op live region (accessibility gap)", () => {
+  // A screen-reader user gets no indication the P3.4 progress feed exists or
+  // changes at all without an ARIA live region on the pending-op list itself
+  // (only the Cancel button had a label before this). Progress should not
+  // interrupt whatever the user is doing — `polite`, not `alert` — so this is
+  // deliberately `role="status"`/`aria-live="polite"`, distinct from the
+  // `role="alert"` autosave-failure banner covered above. Queried by the
+  // `.qzk-pending` class (not `getByRole("status", {name})`) because "status"
+  // is a name-from-author role — content alone isn't a reliable accessible
+  // name, so the real fix must not depend on one either.
+  function pendingRegion(): Element | null {
+    return document.querySelector(".qzk-pending");
+  }
+
+  it("exposes the pending-op indicator as a polite live region", () => {
+    render(<StatusBar />);
+    act(() => {
+      beginOp("Export figure…");
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    const region = pendingRegion();
+    expect(region).not.toBeNull();
+    expect(region).toHaveAttribute("role", "status");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region!.textContent).toContain("Export figure…");
+  });
+
+  it("announces the updated label (not just the initial one) as an op's progress changes", () => {
+    render(<StatusBar />);
+    let id = -1;
+    act(() => {
+      id = beginOp("Importing 1/19: a.dat…");
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(pendingRegion()!.textContent).toContain("Importing 1/19");
+    act(() => {
+      updateOp(id, "Importing 2/19: b.dat…");
+    });
+    expect(pendingRegion()!.textContent).toContain("Importing 2/19");
+    expect(pendingRegion()!.textContent).not.toContain("Importing 1/19");
+  });
+
+  it("does not render a status live region when nothing is pending", () => {
+    render(<StatusBar />);
+    expect(pendingRegion()).toBeNull();
   });
 });
 

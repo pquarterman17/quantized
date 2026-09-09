@@ -58,7 +58,17 @@ export default function StatusBar() {
           command now shows here for as long as it runs, past the age-gate,
           instead of firing silently until its completion/failure toast. */}
       {visibleOps.length > 0 && (
-        <span className="qzk-pending" title={visibleOps.map((o) => o.label).join(", ")}>
+        // Progress, not a failure — `polite` so it never interrupts, unlike
+        // the `role="alert"` autosave-failure banner below. `aria-atomic`
+        // re-announces the whole label on each change (e.g. "Importing
+        // 3/19: …" ticking), not just a diff a screen reader could garble.
+        <span
+          className="qzk-pending"
+          title={visibleOps.map((o) => o.label).join(", ")}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <StatusDot tone="accent" />
           {visibleOps[0].label}
           {visibleOps.length > 1 && ` (+${visibleOps.length - 1} more)`}

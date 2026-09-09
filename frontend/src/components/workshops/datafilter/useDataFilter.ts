@@ -23,7 +23,12 @@ export interface FilterColumn {
    *  their imported level table; legacy numeric categories fall back to the
    *  same metadata/numeric resolver used by plots and Tabulate. */
   levelLabels: string[];
-  /** Current predicate for this column (undefined = no constraint). */
+  /** Current predicate for this column (undefined = no constraint), masked
+   *  to `undefined` when a stored predicate's own `kind` no longer matches
+   *  this column's live classification (BUG-003) — a stale entry from
+   *  before a `setChannelType` override or a `cat_levels` change, which
+   *  neither control below can render. Editing the column commits a fresh,
+   *  correctly-kinded predicate and replaces it either way. */
   current?: ColumnFilter;
   /** The column's own finite value range (range columns only) — the domain
    *  a RangeSlider clamps into. Ignores the current filter (it's the full
@@ -93,13 +98,31 @@ export function useDataFilter(): DataFilterState {
       const colVals = active.data.values.map((r) => r[i]);
       const levels = cat ? distinctLevels(colVals) : [];
       const range = cat ? null : dataRange(colVals);
+      const expectedKind = cat ? "set" : "range";
+      const stored = currentOf(i);
       cols.push({
         index: i,
         label: active.data.labels[i],
-        kind: cat ? "set" : "range",
+        kind: expectedKind,
         levels,
         levelLabels: cat ? resolveCategoryLabels(active.data, i, levels) : [],
-        current: currentOf(i),
+        // A stored predicate written under the column's PRIOR classification
+        // (e.g. a "set" level-membership filter left over from before a
+        // `setChannelType` override, or an import that changed whether the
+        // column carries `cat_levels`) is a shape neither control below can
+        // render: a range field can't show `.values`, and the checkbox list
+        // can't show `.min`/`.max`. Rather than garble a control with a
+        // foreign predicate shape, treat it as no constraint here — the
+        // conservative choice, since `filter.some(isActive)` below (which
+        // drives the panel's "Clear" affordance) still sees the raw entry
+        // regardless of this masking, so the user always has a visible way
+        // to discard it. The entry itself is left untouched in the store
+        // (never auto-deleted): reverting the override brings it back
+        // exactly as it was. See BUG-003 (plans/BUGS_AND_ISSUES.md) for the
+        // open question this leaves — the row-filtering side (`kept`/
+        // `total` below, and every OTHER consumer of `dataset.filter` via
+        // `lib/datafilter.ts`) still applies it by its own stored kind.
+        current: stored?.kind === expectedKind ? stored : undefined,
         dataMin: range?.[0],
         dataMax: range?.[1],
       });

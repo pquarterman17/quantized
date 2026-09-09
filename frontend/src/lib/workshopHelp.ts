@@ -48,14 +48,17 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
 };
 
 // DELIBERATELY ABSENT: "relink-sources". Its command is real and carries a
-// description, but `commands/relinkCommands.ts` publishes through a runtime
-// registry (a hook mounted by Stage.tsx) rather than `buildAppActions`, so it
-// never reaches the catalog Help searches — a `?` here would open an empty
-// result list. Three modules use that pattern, hiding four commands from Help
-// and the palette: relink-sources, paste-workbook, take-over-editing and
-// open-as-copy. That is a P3.1 coverage gap in its own right (the existing
-// "no undocumented command ships" guards only see the static set) and is
-// booked rather than papered over here.
+// description, and (2026-09-09) IS now searchable — `HelpDialog.tsx` merges
+// the runtime registry (`useCommands`/`setMenuCommands`, which
+// `commands/relinkCommands.ts`, `workbookTransferCommands.ts`, and
+// `projectLockCommands.ts` publish through, rather than `buildAppActions`) in
+// on open, the same snapshot `CommandPalette.tsx` already took. So a `?` here
+// would now open a non-empty result list — it stays absent from this map
+// because none of these four commands is a WORKSHOP's `ToolWindow` (this
+// map's actual key space: `relink-sources` etc. are File-menu/palette-only
+// actions with no `ToolWindow` id of their own to key off), not because
+// they're unfindable. See `HelpDialog.test.tsx`'s "HelpDialog search
+// includes registry-published commands" for the coverage.
 
 /** The topic for a workshop window, or undefined when it has none. */
 export function workshopHelpTopic(id: string): string | undefined {

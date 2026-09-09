@@ -672,8 +672,14 @@ build, and focused interaction coverage where appropriate.
     per-row **Show in Library** that clears the query and reveals the item
     (the reveal signal generalized to any `kind:id` node key). (Booked
     2026-08-14 — L0.26 previously had no owning slice.)
-5. [ ] **PR E — tile-browser workspace (stacked sub-slices).** Implement the
-   approved wide-surface behavior and interaction parity.
+5. [x] **PR E — tile-browser workspace (stacked sub-slices).** Implement the
+   approved wide-surface behavior and interaction parity. **Reconciled
+   2026-09-09:** E-a/E-a1, E-b (E-b1+E-b2), and E-c (E-c1+E-c2+E-c3) are all
+   `[x]` below — this was PR E's complete stacked-slice list (PR E2 and PR F,
+   items 5b/6, are separate items, already `[x]`); the parent box was simply
+   never flipped. Re-verified: `npx vitest run` over the Library
+   workspace/tile/thumbnail surface (`components/Library/*`,
+   `lib/thumbnail*.ts`) — 34 files, 420 tests passed.
    - [x] ~~**E-a — shell + canonical browsing (ChatGPT-Sol, 2026-08-15)**~~ —
      SHIPPED 2026-08-16 (PR #145, merge `b18471a`, owner-directed merge after
      the Claude review + the owner-decision commit `c6df54a`). **Merged with
@@ -718,11 +724,16 @@ build, and focused interaction coverage where appropriate.
        number formatter and the linear roving surface exposes honest
        list/listitem semantics instead of an invalid ARIA grid. Focused
        regressions cover all three blocking findings.
-   - [ ] **E-b — shared actions and heterogeneous preview polish:** give tiles
+   - [x] **E-b — shared actions and heterogeneous preview polish:** give tiles
      the same context-menu/action registry as Tree/Details (including honest
      disabled reasons), complete per-kind summaries/source links, and close
      the booked L1.4 artifact-context-menu gap. Do not implement Quick Plot
-     inference here; PR F owns that scientific contract.
+     inference here; PR F owns that scientific contract. **Reconciled
+     2026-09-09:** both stacked sub-slices below (E-b1, E-b2) are `[x]` and
+     E-b2's own text says it "closes the booked L1.4 artifact-context-menu
+     gap" — the parent's full scope. Quick Plot inference stays out of scope
+     by design (PR F, item 6, already `[x]`), not because it's unfinished
+     here.
      - [x] **E-b1 — canonical container/data actions (ChatGPT-Sol,
        2026-08-16):** merged as PR #147 (`f3ddc28`) after Claude review found
        and fixed three red-proven defects on the branch (`5616759`): menu
@@ -752,11 +763,17 @@ build, and focused interaction coverage where appropriate.
        Origin artifacts are source-managed, reports cannot yet be duplicated,
        and unified artifact Properties is deferred. This closes the booked
        L1.4 artifact-context-menu gap without pulling Quick Plot forward from F.
-   - [ ] **E-c — canonical thumbnails + scale safeguards:** actual editable/
+   - [x] **E-c — canonical thumbnails + scale safeguards:** actual editable/
      recovered figure thumbnails, natural analysis previews, revision-keyed
      cache, visible-only lazy generation, placeholders, cancellation, and
      large-Library fixtures/virtualization boundary. Claude should review cache
-     invalidation and cancellation reliability before merge.
+     invalidation and cancellation reliability before merge. **Reconciled
+     2026-09-09:** E-c3's own text below already says "E-c is now COMPLETE:
+     E-c1 cache → E-c2 previews → E-c3 scale" — the parent box was never
+     flipped to match. Cancellation is covered (E-c1's `useThumbnail`:
+     AbortController on unmount + fingerprint change, per the 2026-08-16
+     E-c1 change-log entry narrowing the original "scroll-out cancellation"
+     wording to that truth).
      **OWNER SPLIT (Paige, 2026-08-16):** three stacked slices —
      - [x] **E-c1 (Claude): thumbnail/cache infrastructure.** Merged as PR
        #149 (`07ce588`) after one Sol review round (dependency-aware
@@ -865,9 +882,24 @@ build, and focused interaction coverage where appropriate.
    seeded with the same view composition as normal plotting), one history
    entry per gesture, deduped names, and stage-return fires only when a
    plot actually happened.*
-7. [ ] **PR G — Quick Figure Builder mapping slice.** Reuse the canonical
+7. [x] **PR G — Quick Figure Builder mapping slice.** Reuse the canonical
    editable-figure path; ship live preview, mapping, Cancel, and editable
-   creation before advanced template management.
+   creation before advanced template management. **Reconciled 2026-09-09:**
+   G1-G5 are all `[x]` below (matching PR H, item 8, already corrected to
+   `[x]` in its own 2026-08-19 reconciliation) — re-verified: `npx vitest
+   run` over the Quick Figure Builder surface (`quickfigurebuilder/`,
+   `store/quickFigure*`, `store/quickPlot*`, `lib/quickFigure*`,
+   `lib/quickPlot*`) — 15 files, 182 tests passed;
+   `e2e/specs/quick-figure-lifecycle.spec.ts` and
+   `quick-figure-builder.spec.ts` exist as claimed. G5's only remaining line
+   is an explicitly non-automatable release-candidate human visual
+   acceptance pass, not open engineering work. **Scope caveat (do not read
+   this tick as covering more than it does):** this is the MANUAL mapping UI
+   only — drag/drop role assignment the user does by hand. The AUTOMATIC
+   column-role inference described under "Required column-role inference"
+   above (`X, Y, X, Y, X, Y` pattern detection, confidence scoring, etc.) is
+   a separate, unrelated feature and is genuinely still open — every item in
+   that section remains `[ ]`.
    - [x] **G1 — focused shell and transaction (ChatGPT-Sol):** Merged as PR
      #154 (`32f6660`) after the orchestrated review round fixed one P1
      red-first — `loadWorkspace` lacked the transient
