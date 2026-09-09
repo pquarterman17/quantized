@@ -10,6 +10,7 @@ import {
   spatialPanelsOf,
 } from "../lib/composition";
 import { defaultErrKeys } from "../lib/errorbars";
+import type { ErrorBinding } from "../lib/errorRoles";
 import { facetCompositionFromBinding } from "../lib/facet";
 import { createFigureDocument } from "../lib/figureDocument";
 import { saveBlob } from "../lib/download";
@@ -702,6 +703,38 @@ describe("useApp duplicateDataset", () => {
     const m = initialQuickFigureMapping(clone);
     expect(m.yKeys).toEqual([1]);
     expect(m.errorBindings).toEqual([]);
+  });
+
+  // BUGS_AND_ISSUES BUG-001, automated-test checklist item 5 (duplication
+  // half): a RICH binding -- the exact shape the NCNR reductus `.refl` parser
+  // declares, an X-error (`target: -1`) alongside a symmetric Y-error --
+  // must survive duplicateDataset as an independent copy, not just the O1 "[]"
+  // marker the test above pins. A rich binding is exactly the shape
+  // `hasRichErrorBindings` gates on, so a regression here would silently drop
+  // the resolution/X-error whisker on every clone of a reductus import.
+  it("carries a RICH (X-error) binding onto the copy as an independent array (BUG-001)", async () => {
+    const data: DataStruct = {
+      time: [0.01, 0.02],
+      values: [
+        [100, 5, 0.001],
+        [90, 4.5, 0.001],
+      ],
+      labels: ["Intensity", "uncertainty", "resolution"],
+      units: ["counts", "counts", "1/Ang"],
+      metadata: { default_value_channels: [0] },
+    };
+    const roles: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 2, target: -1, axis: "x", side: "both" },
+    ];
+    const src: Dataset = { id: "d1", name: "S3.refl", data, errorRoles: roles };
+    useApp.setState({ datasets: [src], activeId: "d1" });
+
+    await useApp.getState().duplicateDataset("d1");
+
+    const clone = useApp.getState().datasets[1];
+    expect(clone.errorRoles).toEqual(roles);
+    expect(clone.errorRoles).not.toBe(src.errorRoles); // independent copy
   });
 });
 

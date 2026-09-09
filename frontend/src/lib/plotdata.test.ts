@@ -95,6 +95,34 @@ describe("buildColumns", () => {
     expect(p.series.map((s) => s.axis)).toEqual([0, 1]);
   });
 
+  // BUG-001 automated-test checklist item 2: the composed payload itself --
+  // what PlotViewport actually draws -- must carry only the measured series;
+  // uncertainty/resolution must never surface as ordinary plotted series with
+  // their own legend entries. `yChannels` is left `null` (the untouched,
+  // freshly-imported default) so this exercises the exact path a real import
+  // takes: `buildColumns` -> `defaultDenseChannels` -> the parser's
+  // `default_value_channels` hint.
+  it("BUG-001: uncertainty and resolution never appear as their own series in the default payload", () => {
+    const refl: DataStruct = {
+      time: [0.01, 0.02, 0.03],
+      values: [
+        [100, 5, 0.001],
+        [90, 4.5, 0.001],
+        [80, 4, 0.001],
+      ],
+      labels: ["Intensity", "uncertainty", "resolution"],
+      units: ["counts", "counts", "1/Ang"],
+      metadata: { default_value_channels: [0] },
+    };
+    const p = buildColumns(refl);
+    expect(p.series).toEqual([{ label: "Intensity", unit: "counts", axis: 0 }]);
+    expect(p.series.map((s) => s.label)).not.toContain("uncertainty");
+    expect(p.series.map((s) => s.label)).not.toContain("resolution");
+    // The x + one Y column, nothing else -- no stray uncertainty/resolution
+    // columns snuck into the aligned data either.
+    expect(p.data).toHaveLength(2);
+  });
+
   it("maps non-finite values to null", () => {
     const ds: DataStruct = {
       time: [0, NaN, 2],
@@ -275,6 +303,28 @@ describe("defaultDenseChannels / primaryChannel (NaN-sparse default selection)",
       metadata: { default_value_channels: [1, 3] },
     };
     expect(defaultDenseChannels(refl)).toEqual([1, 3]);
+  });
+
+  // BUGS_AND_ISSUES BUG-001, automated-test checklist items 1 & 2: an NCNR
+  // reductus `.refl` import declares its own `default_value_channels`
+  // (`quantized.io.ncnr._refl_role_metadata`), and honoring it is what keeps
+  // the uncertainty/resolution columns from being drawn as their own curves.
+  // Every channel here is EQUALLY dense (no NaN-sparsity to exclude anything
+  // on its own), so this pins that the hint -- not the density heuristic --
+  // is what selects only the measured channel.
+  it("BUG-001: an NCNR .refl import selects only the measured channel by default", () => {
+    const refl: DataStruct = {
+      time: [0.01, 0.02, 0.03],
+      values: [
+        [100, 5, 0.001],
+        [90, 4.5, 0.001],
+        [80, 4, 0.001],
+      ],
+      labels: ["Intensity", "uncertainty", "resolution"],
+      units: ["counts", "counts", "1/Ang"],
+      metadata: { default_value_channels: [0] },
+    };
+    expect(defaultDenseChannels(refl)).toEqual([0]);
   });
 
   it("ignores an out-of-range hint and falls back to the heuristic", () => {

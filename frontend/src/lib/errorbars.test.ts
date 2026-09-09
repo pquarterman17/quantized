@@ -280,4 +280,51 @@ describe("buildErrorSpans (MAIN #36)", () => {
   it("is empty with no bindings", () => {
     expect(buildErrorSpans(data, [0], []).size).toBe(0);
   });
+
+  // BUGS_AND_ISSUES BUG-001, automated-test checklist item 3: the EXACT role
+  // shape `quantized.io.ncnr._refl_role_metadata` declares for a reductus
+  // `.refl` -- symmetric Y error on the measured intensity, symmetric X error
+  // (resolution) on the Q axis (`target: -1`). Pins that the Y binding
+  // produces a VERTICAL span and the X binding a HORIZONTAL one, keyed on the
+  // one plotted column (the measured channel, index 0).
+  describe("NCNR reductus .refl role bindings (BUG-001)", () => {
+    const refl = ds(
+      ["Intensity", "uncertainty", "resolution"],
+      [
+        [100, 5, 0.001],
+        [90, 4.5, 0.001],
+      ],
+    );
+    const bindings = [
+      { channel: 1, target: 0, axis: "y" as const, side: "both" as const },
+      { channel: 2, target: -1, axis: "x" as const, side: "both" as const },
+    ];
+
+    it("binds the uncertainty channel to a VERTICAL (y-axis) span on the measured series", () => {
+      const spans = buildErrorSpans(refl, [0], bindings);
+      const y = spans.get(1)?.find((s) => s.axis === "y");
+      expect(y).toBeDefined();
+      expect(y?.plus).toEqual([5, 4.5]); // the uncertainty column's own values
+      expect(y?.minus).toEqual([5, 4.5]); // symmetric: same magnitude both ways
+    });
+
+    it("binds the resolution channel to a HORIZONTAL (x-axis) span, not a y one", () => {
+      const spans = buildErrorSpans(refl, [0], bindings);
+      const x = spans.get(1)?.find((s) => s.axis === "x");
+      expect(x).toBeDefined();
+      expect(x?.plus).toEqual([0.001, 0.001]);
+      expect(x?.minus).toEqual([0.001, 0.001]);
+    });
+
+    it("draws neither uncertainty nor resolution as a plotted series alongside the spans", () => {
+      // Only channel 0 (Intensity) is ever passed as `plotted` -- exactly what
+      // `defaultDenseChannels`'s parser hint restricts the default view to
+      // (see lib/plotdata.test.ts's BUG-001 case). The spans map has exactly
+      // one column key (1 = uPlot column for the sole plotted series), never
+      // one for a channel that isn't drawn.
+      const spans = buildErrorSpans(refl, [0], bindings);
+      expect([...spans.keys()]).toEqual([1]);
+      expect(spans.get(1)).toHaveLength(2); // one y span + one x span, no more
+    });
+  });
 });

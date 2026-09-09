@@ -580,11 +580,45 @@ the existing remote-IPC security boundary must remain.
   degrades to the pre-existing `openFilePicker`/`saveBlob` path exactly —
   verified by the full existing jsdom suite passing untouched, plus new
   fallback-branch tests.)
-- [ ] Long Unicode/network paths and canceled dialogs work. Cancel semantics
-  ARE covered this slice (`CANCELLED` sentinel, red-first-tested both sides
-  of the bridge). Long Unicode/network-path behavior is **untested this
-  slice** — no packaged app to exercise real OS dialogs against; owner is
-  the packaged E2E item below.
+- [~] Long Unicode/network paths and canceled dialogs work. Cancel semantics
+  ARE covered (`CANCELLED` sentinel, red-first-tested both sides of the
+  bridge). **Updated (this slice, `tests/test_desktop_bridge_path_shapes.py`):**
+  every piece of this that is Python/TypeScript logic reachable with
+  `FakeWindow`/`tmp_path` (no packaged app, no real OS dialog) is now
+  red-first tested: CJK/combining-mark(NFD)/astral-plane filenames round-trip
+  through `pick_files`/`write_project_file`/`path_status`/`probe_source`/
+  `is_declared_source`; a path >260 chars (Windows' legacy MAX_PATH) and a
+  single component near Linux's 255-byte NAME_MAX both round-trip through
+  `write_project_file` (confirming the temp file never incorporates the
+  destination's own name); `#`/`%`/`?`/leading-or-trailing-space/embedded-
+  newline filenames round-trip (newline/`?` POSIX-only, skip-marked on
+  Windows); UNC-shaped-path classification (`volume_present`/
+  `probe_source_path`/`path_status` reachable-share-vs-unreachable-share ->
+  `missing` vs. `offline`) is exercised via a mocked `os.path.splitdrive`/
+  `isdir`/`realpath` — classification logic only, no real SMB/CIFS
+  connection; and quick-save through a mount that vanishes AFTER consent was
+  granted fails cleanly (`ok: False`) rather than recreating the missing
+  directory. **A real defect was found and documented, not fixed (needs a
+  design decision):** `is_declared_source`/`payload_declares_source` key on
+  a path STRING post-`realpath`/`normcase`, never on filesystem identity
+  (dev/ino) — a hard-linked alias of a declared/open source (proven on Linux,
+  `test_a_hardlinked_alias_...` xfail-strict) is NOT recognized as that
+  source, so `write_project_file` wrongly permits a save through it; the
+  same string-keyed design means an NFC/NFD respelling of one file on a
+  normalization-insensitive filesystem (macOS HFS+/APFS — NOT reproducible
+  on this Linux-only gate) is a plausible sibling case. The practical damage
+  is bounded and also locked in by test: `atomic_replace_file`'s
+  temp-plus-`os.replace` severs the alias rather than mutating the shared
+  inode's bytes in place, so the ORIGINAL source file survives byte-for-byte
+  even when the check is bypassed. A real fix means stat-ing every declared
+  source at every quick-save to compare dev/ino against the destination —
+  exactly the extra per-source I/O `payload_declares_source`'s own docstring
+  says was deliberately avoided (an unreachable network source pays a full
+  SMB-timeout stat per save) — so this needs an owner decision, not a silent
+  patch. **Still genuinely untested** (owner: the packaged-E2E item below):
+  a real OS dialog actually returning a long/Unicode/UNC path, real Windows
+  MAX_PATH/`\\?\` enforcement, a real SMB/CIFS mount going offline, and the
+  macOS normalization-insensitive-filesystem case above.
 - [x] Bridge schemas/security assumptions are documented and tested. (The
   "## Bridge contract (P1.1)" section in `desktop_bridge.py`'s module
   docstring; the write-consent security rule is red-first tested in
@@ -1258,7 +1292,12 @@ rationale in that module's doc):
   materially different shape from what box 3 (relink) needed. Named home:
   a future P1.7 follow-up slice.
 - **portable** — **BACKEND COMPLETE (2026-09-06, PRs #305-#308 + this PR
-  5 audit); the visual workflow is NOT shipped.** The raw-file-copying
+  5 audit); the visual workflow SHIPPED the same day in PR 6 (#310) — see
+  below. (Corrected 2026-09-09: this bullet previously said "the visual
+  workflow is NOT shipped" in the same breath as describing PR 6 shipping
+  it two sentences later — stale wording left over from drafting the PR 5
+  audit before PR 6 landed; the sentence never reflected a real gap once
+  both were read together.)** The raw-file-copying
   "Pack Project" packer (`quantized.portable` + `desktop_bridge_pack
   .DesktopPackBridge`) builds a bundle, and the resulting bundle is
   physically MOVED to a new location and reopened, proven in tests: the
@@ -1267,7 +1306,12 @@ rationale in that module's doc):
   (backend) plus `lib/workspace.test.ts`'s "workspace bundle-relative
   source" describe block, including a full `checksum`/`mtime`/`size`/
   `packedFrom` provenance round trip (frontend parse side). The visual
-  "Pack Project" workflow ships in PR 6 (#310, `sol/pack-project-ui-1`):
+  "Pack Project" workflow shipped in PR 6 (2026-09-06, `#310`,
+  `sol/pack-project-ui-1`; verified 2026-09-09 against `main` commit
+  `5b9b89b0` "feat(pack): P1.7 PR 6 — Pack Project workflow UI (#310)",
+  with `frontend/src/components/workshops/packproject/
+  PackProjectPanel.tsx` + its 21-case `PackProjectPanel.test.tsx` present
+  on `main`):
   File → "Pack Project…" opens a lazy `ToolWindow`
   (`components/workshops/packproject/PackProjectPanel.tsx`) driven by PR
   4's state machine — destination picker, review step (per-source
@@ -3643,6 +3687,16 @@ work (its BACKLOG row).
   (wire types only — `lib/importTypes.ts`/`lib/types.ts` gained the new
   optional `header_fields`/`header_field_problems`/`categorical_problems`
   fields, no component changed).
+
+- ~~**Plans reconciliation (Claude)**~~ (2026-09-09) — corrected a
+  self-contradicting P1.7 "portable" mode bullet (line ~1260) that said
+  "the visual workflow is NOT shipped" two sentences before describing PR 6
+  (#310) shipping exactly that; verified PR 6's commit (`5b9b89b0`) is on
+  `main` and `frontend/src/components/workshops/packproject/
+  PackProjectPanel.tsx` + its test file exist, then reworded the bullet to
+  say SHIPPED. Also flipped JMP_GAP_PLAN.md's stale "Worksheet-visible,
+  editable type C/O/N" box (already correctly marked `[x]` here under
+  P1.6b) — see that plan's own 2026-09-09 change-log entry.
 
 ## Reference baseline
 

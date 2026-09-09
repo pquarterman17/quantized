@@ -2018,18 +2018,44 @@ Recommended PR A decomposition:
 
 PR A acceptance gates:
 
-- [ ] A v1, v2, or v3 workspace opens with deterministic workbook membership
-  and saves as v4 without losing dataset IDs or scientific state.
-- [ ] Reopening the same legacy document derives the same logical workbook
+- [x] A v1, v2, or v3 workspace opens with deterministic workbook membership
+  and saves as v4 without losing dataset IDs or scientific state. (verified
+  2026-09-09: `lib/workspaceMigration.test.ts`'s per-version "v${version}:
+  dataset ids/labels/row counts survive" and "re-serializes as a version: 4
+  document" cases over the frozen `__fixtures__/workspace/v1-v3.dwk.json`
+  fixtures; `lib/workbooks.test.ts`'s "is deterministic: identical inputs +
+  a deterministic genId -> identical output".)
+- [x] Reopening the same legacy document derives the same logical workbook
   grouping; unrelated Origin imports containing identically named books never
-  merge.
-- [ ] A multi-sheet Origin book becomes one workbook with ordered worksheets,
+  merge. (verified 2026-09-09: `lib/workbooks.test.ts`'s "is deterministic"
+  case above, plus "two Origin imports each containing 'Book1' (different
+  stems) -> two workbooks, never merged".)
+- [x] A multi-sheet Origin book becomes one workbook with ordered worksheets,
   while a single-sheet source still has a visible workbook container.
-- [ ] Broken/hand-edited workbook references degrade safely with a migration
-  warning and no data loss.
-- [ ] Serialize/parse, autosave restore, explicit open, append, and reset paths
-  all have focused tests.
-- [ ] Existing v1-v3 fixtures remain green; architecture ratchets do not rise.
+  (verified 2026-09-09: `lib/workbooks.test.ts`'s "multi-sheet Origin book ->
+  one workbook, members sheet-ordered, originBook set" and "single-sheet
+  Origin book still gets a visible workbook container".)
+- [x] Broken/hand-edited workbook references degrade safely with a migration
+  warning and no data loss. (verified 2026-09-09: `lib/workbooks.test.ts`'s
+  `reconcileWorkbookRefs` suite — "re-derives a workbook for a dangling
+  workbookId and warns", "totality across a mix of valid and orphaned
+  datasets" — and `sanitizeWorkbooks`'s "drops malformed entries.../clears
+  (but keeps) a workbook whose folderId names no known folder", none of
+  which drop a dataset.)
+- [x] Serialize/parse, autosave restore, explicit open, append, and reset paths
+  all have focused tests. (verified 2026-09-09: serialize/parse and explicit
+  open — `lib/workspaceMigration.test.ts`'s round-trip-idempotent and
+  parseWorkspaceBlob cases; autosave — `lib/autosave.test.ts`'s "round-trips
+  workbooks + per-dataset workbookId (v4)"; append —
+  `store/appendWorkbooks.test.ts`'s whole describe block; reset —
+  `store/useApp.test.ts`'s `clearAll` case asserting `s.workbooks` clears
+  through the same `ws.workbooks ?? []` path as folders.)
+- [x] Existing v1-v3 fixtures remain green; architecture ratchets do not rise.
+  (verified 2026-09-09: `npx vitest run src/lib/workspaceMigration.test.ts
+  src/lib/workbooks.test.ts src/store/appendWorkbooks.test.ts
+  src/store/importWorkbooks.test.ts src/lib/autosave.test.ts
+  src/architecture.test.ts` — 6 files / 165 tests passed, including
+  `architecture.test.ts`'s module-size ratchet checks.)
 
 ## Acceptance scenarios
 
@@ -2434,6 +2460,22 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-09-09 — Claude, plans reconciliation:** flipped all six "PR A
+  acceptance gates" boxes (above, following PR A1-A4's `[x]` entries) from
+  `[ ]` to `[x]`, each against a specific test: v1-v4 migration/dataset-id
+  survival (`lib/workspaceMigration.test.ts`), deterministic derivation +
+  never-merging identically-named Origin books, multi-sheet-one-workbook +
+  single-sheet-visible-container, and broken-reference degrade-safely
+  (`lib/workbooks.test.ts`'s `deriveWorkbooks`/`reconcileWorkbookRefs`/
+  `sanitizeWorkbooks` suites), and serialize/autosave/open/append/reset path
+  coverage (`lib/autosave.test.ts`, `store/appendWorkbooks.test.ts`,
+  `store/useApp.test.ts`'s `clearAll`). Ran the full set plus
+  `architecture.test.ts` (6 files / 165 tests, all green) to confirm the
+  last box's "fixtures remain green; ratchets do not rise" claim rather than
+  taking it on faith. None of the six were overclaims to walk back — all
+  had real, already-committed test coverage; they were simply never ticked
+  after PR A1-A4 landed.
 
 - **2026-08-19 — Claude (QA lane), Day-5 sprint reconciliation:** verified
   every H-N checkbox against `main` (`git log`, direct file reads) rather

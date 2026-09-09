@@ -64,10 +64,19 @@ def is_ncnr_refl(path: str | Path) -> bool:
 # alone: the uncertainty of an intensity carries the intensity's unit, and a Q
 # resolution carries the Q axis's unit. A file whose names match but whose
 # units disagree is a variant this function does not understand, so it emits
-# nothing and the import behaves exactly as it did before. Same for anything
-# other than the canonical measured/uncertainty/resolution triple -- an extra
-# value column, a missing one, or a second uncertainty candidate all fall back
-# to "no declared roles" rather than guessing.
+# nothing for that column and the import behaves exactly as it did before.
+#
+# Real reductus variants do not all carry the same three columns: some
+# instruments omit the resolution column, some omit uncertainty, and some
+# append further value columns (a monitor count, a second detector, ...)
+# after the canonical triple. Recognition is therefore PER-COLUMN, not an
+# all-or-nothing match on a fixed 3-column shape: each candidate uncertainty
+# or resolution column is bound (or left alone) purely on its OWN evidence,
+# so a deviation elsewhere in the file never suppresses a binding that IS
+# unambiguous -- see `_measured_channel_for_uncertainty` and
+# `_resolves_to_x_axis`. A channel's index is whatever it actually is; it is
+# never reassigned or shifted to fit an assumed measured/uncertainty/
+# resolution position.
 _UNCERTAINTY_TOKENS = frozenset({"uncertainty", "error", "sigma", "dr", "di"})
 _RESOLUTION_TOKENS = frozenset({"resolution", "dq"})
 
@@ -76,47 +85,118 @@ def _norm_label(label: str) -> str:
     return "".join(ch for ch in label.lower() if ch.isalnum())
 
 
+def _identified_role(labels: Sequence[str], i: int) -> str | None:
+    """Which role channel ``i``'s OWN label spells ("uncertainty"/"resolution"),
+    or ``None``. A channel is only ever a role CANDIDATE by its own spelling --
+    never inferred from a neighbour's label."""
+    norm = _norm_label(labels[i])
+    if norm in _UNCERTAINTY_TOKENS:
+        return "uncertainty"
+    if norm in _RESOLUTION_TOKENS:
+        return "resolution"
+    return None
+
+
+def _measured_channel_for_uncertainty(
+    labels: Sequence[str], value_units: Sequence[str], i: int
+) -> int | None:
+    """The channel an uncertainty candidate at index ``i`` describes, or
+    ``None`` if the pairing is not unambiguous.
+
+    Reductus places an uncertainty column immediately AFTER the value it
+    describes -- the same "nearest preceding value column" convention Origin's
+    own Y-error designation and the generic label guesser
+    (`lib/errorRoles.ts::inferErrorBindingsFromLabels`) already rely on.
+    Binding to that one specific neighbour -- never scanning further back,
+    and never binding when the neighbour is itself an uncertainty/resolution
+    column -- is what keeps this safe under an omitted or reordered column: an
+    ambiguous or absent predecessor means no binding, not a guess at a more
+    distant one.
+    """
+    if i == 0:
+        return None
+    j = i - 1
+    if _identified_role(labels, j) is not None:
+        return None  # the immediate neighbour is itself an error column
+    unit = value_units[i]
+    if not unit or value_units[j] != unit:
+        return None  # unit agreement is the actual evidence; names alone are not
+    return j
+
+
+def _resolves_to_x_axis(value_units: Sequence[str], x_unit: str, i: int) -> bool:
+    """Does a resolution candidate at index ``i`` carry the x axis's own unit?
+    A blank unit is not evidence of anything (an empty string trivially equals
+    another empty string, which must not read as agreement)."""
+    unit = value_units[i]
+    return bool(unit) and unit == x_unit
+
+
 def _refl_role_metadata(
     labels: Sequence[str], value_units: Sequence[str], x_unit: str
 ) -> dict[str, Any]:
-    """Declared plotting roles for the canonical reductus triple, or ``{}``.
+    """Declared plotting roles for a reductus-style layout, or ``{}``.
 
     ``labels``/``value_units`` describe the VALUE channels only (x excluded),
     so the indices returned are channel indices, matching what
     ``Dataset.errorRoles`` and ``default_value_channels`` both use. A binding
     that targets the x axis uses ``target: -1`` -- the x axis is not a channel.
+
+    Every value channel that is not identified as an uncertainty/resolution
+    binding stays in ``default_value_channels`` -- an unrecognised extra
+    column is plotted like any other data, not hidden and not guessed at.
+    Returns ``{}`` (no declared roles at all) only when NOTHING in the layout
+    is identifiable; a layout with even one unambiguous binding returns that
+    binding, never an all-or-nothing rejection of the whole file.
     """
-    if len(labels) != 3 or len(value_units) != 3:
+    if not labels or len(labels) != len(value_units):
         return {}
-    measured, unc, res = 0, 1, 2
-    if _norm_label(labels[unc]) not in _UNCERTAINTY_TOKENS:
+
+    error_roles: list[dict[str, Any]] = []
+    error_channels: dict[int, int] = {}
+    bound: set[int] = set()  # channels already claimed as an uncertainty/resolution role
+
+    for i, _label in enumerate(labels):
+        role = _identified_role(labels, i)
+        if role == "uncertainty":
+            target = _measured_channel_for_uncertainty(labels, value_units, i)
+            if target is None:
+                continue
+            error_roles.append({"channel": i, "target": target, "axis": "y", "side": "both"})
+            error_channels[target] = i
+            bound.add(i)
+        elif role == "resolution":
+            if not _resolves_to_x_axis(value_units, x_unit, i):
+                continue
+            error_roles.append({"channel": i, "target": -1, "axis": "x", "side": "both"})
+            bound.add(i)
+
+    if not error_roles:
         return {}
-    if _norm_label(labels[res]) not in _RESOLUTION_TOKENS:
+
+    # Only the measurement(s) are curves; a bound uncertainty/resolution stays
+    # in the worksheet and stays toggleable, but is not a series of its own.
+    default_value_channels = [i for i in range(len(labels)) if i not in bound]
+    if not default_value_channels:
+        # Every channel bound as an error role and nothing left to plot --
+        # should not happen for a real file, but fail closed rather than emit
+        # a default that would blank the plot outright.
         return {}
-    # The measured column must not itself look like an uncertainty, or a
-    # reordered/short variant could bind an error to another error.
-    if _norm_label(labels[measured]) in _UNCERTAINTY_TOKENS | _RESOLUTION_TOKENS:
-        return {}
-    # Unit agreement is the actual evidence that these are the roles claimed.
-    if not value_units[unc] or value_units[unc] != value_units[measured]:
-        return {}
-    if not value_units[res] or value_units[res] != x_unit:
-        return {}
-    return {
-        # Only the measurement is a curve; the two uncertainties stay in the
-        # worksheet and stay toggleable, but are not series of their own.
-        "default_value_channels": [measured],
-        # The rich contract (`lib/errorRoles.ts`'s ErrorBinding): symmetric Y
-        # error on the measurement, symmetric X error on the Q axis.
-        "error_roles": [
-            {"channel": unc, "target": measured, "axis": "y", "side": "both"},
-            {"channel": res, "target": -1, "axis": "x", "side": "both"},
-        ],
+
+    meta: dict[str, Any] = {
+        "default_value_channels": default_value_channels,
+        # The rich contract (`lib/errorRoles.ts`'s ErrorBinding).
+        "error_roles": error_roles,
+    }
+    if error_channels:
         # The legacy Y-only projection (`lib/errorbars.defaultErrKeys`), kept
         # so vertical whiskers appear on every surface that still reads it --
         # including the multi-panel stage, which does not render X error.
-        "error_channels": {measured: unc},
-    }
+        # Omitted (not an empty dict) when there is no Y binding at all, e.g.
+        # a resolution-only match, matching `import_ncnr_dat`'s own convention
+        # of only adding this key when it has something to say.
+        meta["error_channels"] = error_channels
+    return meta
 
 
 def import_ncnr_refl(filepath: str | Path) -> DataStruct:
