@@ -376,15 +376,33 @@ as a CSS-only tree redesign.
   `lib/dependencyImpact.ts` (PR M slice 1, merged `ab3861a`); move preview
   is `lib/workbookSeparate.ts`'s `computeSeparatePlan` (PR J slice 1, merged
   `abbf0ae`) — both build the affected-item list before the user commits.
-- [x] Preserve formulas, pipeline parameters, units, exclusions, and provenance
+- [~] Preserve formulas, pipeline parameters, units, exclusions, and provenance
   through project save/load and workbook copy/paste. **Verification pass
-  (2026-09-09):** all five already rode through both round trips via the
-  existing mechanism (dataset fields serialize/parse verbatim in
+  (2026-09-09), corrected in review the same day.** SAVE/LOAD: all five survive
+  in full. COPY/PASTE: four survive in full; PROVENANCE is partial —
+  cross-workbook lineage (`versionOf`, and a `derivedFrom` whose target is
+  outside the copied workbook) is DROPPED, by design, because carrying it would
+  dangle an id into a project the destination may not have open. That is the
+  right call, but it is not "preserved", and the box stays `[~]` until the loss
+  is at least surfaced. `versionOf` is affected on essentially every copy:
+  "Import as new version" (`store/relink.ts:303`) tags the new dataset with the
+  OLD dataset's id while that import created a brand-new workbook
+  (`store/importDatasets.ts:271`), so the link always crosses a workbook
+  boundary. `droppedExternalRefs` counts these, but no non-test code reads it,
+  so the user is told nothing — tracked as **UX-002** in
+  `plans/BUGS_AND_ISSUES.md`. Pinned by `workbookTransfer.test.ts`'s "drops
+  cross-workbook lineage rather than dangling it".
+
+  The rest already rode through both round trips via the existing mechanism
+  (dataset fields serialize/parse verbatim in
   `lib/workspaceSerialize.ts`/`lib/workspaceDatasetParse.ts`, and ride the
   spread `Dataset` object untouched through `lib/workbookTransfer.ts`'s
   `pasteTransferPackage`) — no production code changed. Added combined,
   sabotage-verified round-trip tests (all five payloads on ONE dataset at
-  once, so a fix to one can't hide a break in another):
+  once). NOTE, corrected in review: on the SAVE/LOAD side every carrying line
+  was already covered by a pre-existing isolated test, so the combined test adds
+  documentation value but no new detection there — the COPY/PASTE combined test
+  is the load-bearing one, being the sole detector for all six of its fields:
   `lib/workspace.test.ts`'s "derived-data integrity: all five payloads
   survive save/load together" and `lib/workbookTransfer.test.ts`'s
   "…survive copy/paste together" (the latter through the REAL

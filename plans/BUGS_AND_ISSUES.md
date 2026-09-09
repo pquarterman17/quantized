@@ -25,6 +25,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Unassigned | Owner screenshot, 2026-09-08 |
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Unassigned | Owner screenshot, 2026-09-08 |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
+| UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 
 ---
 
@@ -367,6 +368,67 @@ not a drive-by patch.
 - [ ] Check the macOS NFC/NFD sibling case on real macOS, then either fix or
   explicitly rule it out here.
 - [ ] Re-read the P2 rating above once the write path is settled.
+
+### Completion record
+
+_(empty — open)_
+
+---
+
+## UX-002 — copy/paste drops cross-workbook lineage without saying so
+
+**Priority:** P3 — nothing is corrupted and no scientific value is wrong; the
+user simply is not told that a link was not carried over.
+
+**Found:** 2026-09-09, in the review round of the derived-data provenance
+verification pass (not by a user).
+
+### User-visible problem
+
+Copying or duplicating a workbook drops any lineage link that points OUTSIDE
+that workbook, and says nothing. The pasted worksheet looks complete; its
+"this is version 2 of ..." relationship is simply gone.
+
+### Why the drop itself is correct
+
+`pasteTransferPackage` rewrites every internal reference to the fresh ids it
+mints, and drops any reference whose target is not in the package. The
+alternative is a dangling id pointing into a project the destination may not
+even have open — exactly what the fresh-id rewrite exists to prevent. **The
+drop is not the bug. The silence is.**
+
+### Why it hits `versionOf` essentially every time
+
+"Import as new version" (`store/relink.ts:303`) tags the newly imported dataset
+with the OLD dataset's id, and that import created a brand-new workbook
+(`store/importDatasets.ts:271` — a single-file import is always its own
+workbook). So a version link crosses a workbook boundary **by construction**,
+and is therefore dropped by any single-workbook copy. `derivedFrom` is hit in
+the narrower case where a derived sheet's source was moved out (Separate
+Worksheets sweeps only downstream dependents).
+
+### Confirmed implementation evidence
+
+- `lib/workbookTransfer.ts:375` — `next.versionOf = rewriteRef(d.versionOf)`;
+  `rewriteRef` returns `undefined` for an out-of-package target and increments
+  `droppedExternalRefs` (`:353-357`). The module header (`:70-76`) documents
+  this rule for `bgRef`/`derivedFrom`/`versionOf` explicitly.
+- `droppedExternalRefs` is returned from `pasteTransferPackage` (`:405`) and
+  read by **nothing** outside tests — verified by grep across `frontend/src`.
+- Behaviour pinned by `lib/workbookTransfer.test.ts`'s "drops cross-workbook
+  lineage rather than dangling it — versionOf and an external derivedFrom",
+  which is sabotage-verified (dangling the ref instead of dropping it fails it).
+
+### Fix checklist
+
+- [ ] Surface `droppedExternalRefs` after a paste — a toast or a status line
+  saying how many lineage links could not be carried, not a silent success.
+- [ ] Decide whether a dropped link is worth preserving as inert historical
+  text (e.g. the source dataset's NAME) rather than a resolvable id. This is a
+  semantics call about what lineage means across a transfer boundary — do not
+  invent it silently.
+- [ ] If a "copy with dependents" scope is ever added, revisit: the link would
+  then be internal and would not need dropping at all.
 
 ### Completion record
 

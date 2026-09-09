@@ -327,6 +327,45 @@ describe("pasteTransferPackage — fresh-id rewrite core", () => {
     expect(result.droppedExternalRefs).toBeGreaterThan(0);
   });
 
+  // REVIEW ROUND (#329). The five-payload test above deliberately does NOT
+  // include `versionOf`, and that omission was hiding something: `versionOf` is
+  // the one provenance field copy/paste effectively ALWAYS loses.
+  //
+  // "Import as new version" (`store/relink.ts:303`) tags the freshly imported
+  // dataset with `versionOf: <the OLD dataset's id>`, and that import created a
+  // BRAND NEW workbook (`store/importDatasets.ts:271` — a single-file import is
+  // always its own workbook). So the predecessor lives in a DIFFERENT workbook
+  // by construction, `versionOf` always points outside any single workbook's
+  // transfer package, and `rewriteRef` therefore always drops it.
+  //
+  // Dropping is the RIGHT call — the alternative is a dangling id pointing into
+  // a project the destination may not even have open, which is exactly what
+  // `pasteTransferPackage` exists to prevent. What is NOT right is claiming
+  // provenance "survives copy/paste" without qualification. This pins the real
+  // behaviour so the limitation is visible in the test suite rather than
+  // discovered by a user, and `plans/BUGS_AND_ISSUES.md`'s UX-002 tracks the
+  // fact that the loss is currently SILENT (`droppedExternalRefs` is computed
+  // and returned, but no non-test code reads it).
+  it("drops cross-workbook lineage rather than dangling it — versionOf and an external derivedFrom", () => {
+    const pkg = fullPackage();
+    // Sheet 2's lineage now points at a dataset that is NOT in this package:
+    // the always-case for versionOf, and the Separate-Worksheets case for
+    // derivedFrom.
+    pkg.datasets[1] = {
+      ...pkg.datasets[1],
+      versionOf: "ds-outside-this-workbook",
+      derivedFrom: { datasetId: "ds-outside-this-workbook", pipeline: "flatten + smooth" },
+    };
+    const result = pasteTransferPackage(pkg, emptyExisting(), generators("g"), undefined);
+    const sheet2 = result.datasets.find((d) => d.name === "Sheet 2")!;
+
+    // Dropped outright -- never carried across as a stale id.
+    expect(sheet2.versionOf).toBeUndefined();
+    expect(sheet2.derivedFrom).toBeUndefined();
+    // ...and the drop IS counted, even though nothing surfaces the count yet.
+    expect(result.droppedExternalRefs).toBeGreaterThanOrEqual(2);
+  });
+
   it("drops folderId/order and lands at targetFolderId (destination decides placement)", () => {
     const result = pasteTransferPackage(fullPackage(), emptyExisting(), generators("g"), "fld-dest");
     expect(result.workbook.folderId).toBe("fld-dest");
@@ -436,6 +475,7 @@ describe("derived-data integrity: all five payloads survive copy/paste together"
     const pastedIds = new Set(result.datasets.map((d) => d.id));
     expect(pastedIds.has(sheet2.derivedFrom!.datasetId)).toBe(true);
   });
+
 
   it("pins the deliberate transfer scope (PR I): no figureDocs/pages/originFigures/originFidelity ride along", () => {
     // LIBRARY_WORKBOOK_UX_PLAN PR I's own plan-doc entry documents this
