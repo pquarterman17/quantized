@@ -24,6 +24,7 @@ This is a working document, not a claim that every observation is already reprod
 |---|---:|---|---|---|---|
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Unassigned | Owner screenshot, 2026-09-08 |
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Unassigned | Owner screenshot, 2026-09-08 |
+| BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
 
 ---
 
@@ -79,23 +80,23 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Default the plotted channel set to the measured intensity/reflectivity only.
 - [x] Bind the intensity uncertainty as symmetric Y error.
 - [x] Bind resolution/dQ as symmetric X error using the canonical rich error-role model.
-- [ ] Ensure bound error columns do not appear as independent curves or ordinary legend entries by default.
+- [x] Ensure bound error columns do not appear as independent curves or ordinary legend entries by default.
 - [x] Preserve all imported numeric columns in the worksheet; do not alter raw values.
-- [ ] Keep every role overridable through the import/error-column UI.
-- [ ] Handle files that omit uncertainty, omit resolution, or contain additional value columns without shifting indices incorrectly.
-- [ ] Ensure reimport, workspace save/reopen, duplication, and plot-window rebinding preserve the intended roles.
-- [ ] Verify that user-customized channel visibility is not overwritten after the initial default is established.
+- [ ] Keep every role overridable through the import/error-column UI. (Generic coverage pre-exists in `ErrorRolesCard.test.tsx`; not re-verified against an NCNR `.refl` specifically in this pass.)
+- [x] Handle files that omit uncertainty, omit resolution, or contain additional value columns without shifting indices incorrectly.
+- [x] Ensure workspace save/reopen and duplication preserve the intended roles. Reimport and plot-window rebinding still NOT independently verified — see Completion record.
+- [ ] Verify that user-customized channel visibility is not overwritten after the initial default is established. (Not exercised this pass.)
 
 ### Automated-test checklist
 
 - [x] Backend parser test asserts the semantic hints/roles emitted for `tests/fixtures/ncnr_j395.refl`.
 - [x] Backend tests cover missing and reordered optional columns if the format permits them.
 - [x] Frontend import test asserts the canonical Y- and X-error bindings stored on the dataset.
-- [ ] Default-channel test asserts only the measured series is selected initially.
-- [ ] Rendering/payload test asserts uncertainty and resolution are absent as standalone series.
-- [ ] Overlay test asserts Y uncertainty and X resolution produce vertical and horizontal spans respectively.
-- [ ] Log-axis regression test confirms valid uncertainty rendering without changing the underlying data.
-- [ ] Relevant backend, frontend, type-check, and production-build gates pass.
+- [x] Default-channel test asserts only the measured series is selected initially.
+- [x] Rendering/payload test asserts uncertainty and resolution are absent as standalone series.
+- [x] Overlay test asserts Y uncertainty and X resolution produce vertical and horizontal spans respectively.
+- [x] Log-axis regression test confirms valid uncertainty rendering without changing the underlying data.
+- [ ] Relevant backend, frontend, type-check, and production-build gates pass. (Targeted gates pass -- see Completion record; full frontend suite/`npm run build` intentionally deferred to the requester.)
 
 ### Acceptance criteria
 
@@ -129,6 +130,92 @@ The implementation must use the file format's semantics, not merely the exact di
   reader. `io/ncnr.py`'s `import_ncnr_dat` has the same latent problem for its
   own `dQ` column and is deliberately NOT changed here — out of scope for this
   item, and it needs its own fixture evidence.
+
+- **2026-09-09 (Claude), verification pass closing the remaining automated-test
+  checklist boxes + the omitted/extra-column parser gap:**
+  - `_refl_role_metadata` (`src/quantized/io/ncnr.py`) changed from an
+    all-or-nothing exact-3-column match to PER-COLUMN recognition: each
+    candidate uncertainty/resolution channel binds (or not) purely on its own
+    name+unit evidence (uncertainty: immediate-preceding-channel unit match;
+    resolution: x-unit match), so a real variant that omits one of the pair, or
+    carries extra value columns anywhere in the layout, still gets the
+    bindings that ARE unambiguous, and an unidentifiable column is simply left
+    plotted rather than voiding the whole file's roles. Channel indices are
+    read from wherever the columns actually are — never reassigned to a fixed
+    0/1/2 position. `tests/test_io_ncnr.py` gained 7 new/rewritten tests
+    (omitted resolution, omitted uncertainty, leading/trailing extra columns,
+    two duplicate-"uncertainty" columns beside a valid resolution, an
+    unrecognised-token column beside a valid resolution) plus a rewrite of the
+    unit-mismatch test for the new per-column semantics; all 7 were confirmed
+    to FAIL against the pre-change parser before the rewrite (ncnr.py stayed
+    424 lines, under the 500-line ceiling — no extraction needed).
+  - Default-channel test: `frontend/src/lib/plotdata.test.ts` — a
+    `.refl`-shaped, equal-density 3-channel dataset with
+    `metadata.default_value_channels: [0]` asserts `defaultDenseChannels`
+    returns `[0]` only (the density heuristic alone would have returned all
+    three).
+  - Rendering/payload test: `frontend/src/lib/plotdata.test.ts`'s
+    `buildColumns` case, and `usePlotPayload.errorRoles.test.ts`'s first case
+    (below) — both assert `series`/labels never contain "uncertainty" or
+    "resolution".
+  - Overlay/span test: `frontend/src/lib/errorbars.test.ts`'s new "NCNR
+    reductus .refl role bindings" describe block asserts `buildErrorSpans`
+    produces a y-axis span (vertical) from the uncertainty binding and an
+    x-axis span (horizontal) from the resolution binding, keyed on the one
+    plotted column — plus an end-to-end version through the real hook,
+    `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts` (new
+    file; `fetchPlot` mocked to delegate to the real `buildColumns`, matching
+    the established `usePlotPayload.quickFigureParity.test.ts` pattern).
+  - Log-axis regression: `frontend/src/lib/uplotOverlays.test.ts`'s new
+    `errorSpansPlugin (item 4: log-Y axis, ...)` describe block — a
+    `valToPos` stub mimicking a real log-scale uPlot (NaN for any
+    non-positive input) confirms the plugin hands the RAW, unclamped
+    lower-whisker value through (producing NaN, which a real canvas silently
+    skips) rather than altering the magnitude, and that neither the plotted
+    data nor the span magnitudes are mutated by drawing.
+  - Round-trip test: `frontend/src/lib/workspace.test.ts` gained a
+    BUG-001-labeled case round-tripping the exact declared Y+X shape through
+    `serializeWorkspace`/`parseWorkspace` (the pre-existing generic
+    asymmetric/X-error round-trip test already covered the mechanism; this
+    pins the actual NCNR shape). `frontend/src/store/useApp.test.ts` gained a
+    `duplicateDataset` case for a RICH (X-error) binding specifically — the
+    pre-existing F5 test only covered the `errorRoles: []` marker, not a rich
+    binding — confirming the clone gets an independent array with the same
+    bindings. Reimport and plot-window-rebinding preservation were NOT
+    exercised this pass; still open.
+  - **Review round (same day), two real defects in the above, both fixed:**
+    (1) `_measured_channel_for_uncertainty` rejected a BLANK unit outright, so a
+    dimensionless reflectivity — `R`/`dR` with no units, an ordinary reductus
+    spelling — got no Y binding and `dR` was still drawn as its own curve: the
+    original BUG-001 symptom, and a test had locked it in. Units must now
+    AGREE, and two blanks agree. The asymmetry with `_resolves_to_x_axis`
+    (which still demands a non-empty unit) is deliberate and documented: the
+    uncertainty pairing already has its own name plus adjacency to a non-error
+    column as independent evidence, whereas an x-axis binding has neither, so
+    there the unit is the only evidence. (2) `default_value_channels` listed
+    EVERY unbound channel, and a non-empty hint short-circuits
+    `defaultDenseChannels`' density heuristic (`lib/plotdata.ts:189`, verified)
+    — so a monitor/`Lambda`/unit-mismatched column the parser explicitly
+    declined to reason about was PINNED as a plotted curve where the heuristic
+    used to hide it, turning "I don't know what this is" into a confident
+    plotting decision. It now lists the identified measurement targets only,
+    which is what this item's own acceptance criterion asks for ("only its
+    measured reflectivity/intensity curve selected"); unrecognised columns stay
+    in the worksheet and stay toggleable. Pinned by
+    `test_refl_roles_bind_a_dimensionless_r_dr_dq_file_and_plot_only_r`.
+  - Gates run: `uv run ruff check src tests tools`, `uv run mypy src`,
+    `uv run pytest tests/test_io_ncnr.py -q` (26 passed) all green;
+    `npx tsc --noEmit -p tsconfig.json` clean; `npx eslint <touched files>
+    --max-warnings=0` clean; targeted `npx vitest run` on every touched/new
+    file plus `src/architecture.test.ts` — 757 passed, 0 failed (confirms the
+    weak-wait ratchet and size-ceiling guards are unaffected). Full frontend
+    suite and `npm run build` intentionally NOT run (left to the requester
+    per instructions).
+  - Still open / not verified this pass: owner's Windows visual check on the
+    reported file; the "role overridable through the UI" and
+    "user-customized visibility survives the default" criteria (no NCNR-.refl-
+    specific test written for either); reimport and plot-window-rebinding
+    round-tripping.
 
 ---
 
@@ -208,6 +295,82 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 - Agent verification: —
 - Owner verification: —
 - Notes: —
+
+---
+
+## BUG-002 — a hard-linked alias defeats the declared-source write guard
+
+**Priority:** P2 — substantial, but the worst outcome is a refused-save that
+isn't refused, not lost data. See "Why this is P2 and not P0" below; that
+bounding is itself test-locked, so re-check it before re-rating.
+
+**Found:** 2026-09-09, by the P1.1 path-shape coverage pass (not by a user).
+
+### User-visible problem
+
+The desktop bridge refuses to let a project save overwrite one of the project's
+own raw source files — the guard that stops a "Save" from silently destroying
+the data the project was built from. That check compares path STRINGS, so it
+does not recognise a second name for the same file. Saving through a hard-linked
+alias of a declared source is permitted when it should be refused.
+
+### Confirmed implementation evidence
+
+- `src/quantized/desktop_consent.py:320` (`is_declared_source`) and
+  `src/quantized/desktop_project_file.py:139-190`
+  (`payload_declares_source`) both key the decision on a path string after
+  `realpath`/`normcase`/`normpath` — never on filesystem identity
+  (`st_dev`/`st_ino`).
+- `realpath` resolves SYMLINKS, so a symlinked alias is already handled. A
+  HARD LINK has no link to resolve: two directory entries name one inode and
+  both are "real" paths, so string comparison cannot see them as one file.
+- Reproduced on Linux, and pinned as a **strict** xfail so it converts to a
+  failure the moment the behaviour changes:
+  `tests/test_desktop_bridge_path_shapes.py::test_a_hardlinked_alias_of_the_declared_source_is_wrongly_permitted_as_a_write_target`.
+
+### Why this is P2 and not P0
+
+`portable/publish.py`'s `atomic_replace_file` writes to a temp file and then
+`os.replace`s it into position. That REPLACES the directory entry rather than
+mutating the shared inode, so the alias is severed and the original raw file
+survives byte-for-byte even when the guard is bypassed. That mitigation is not
+incidental to this rating — it is locked in by
+`test_hardlink_bypass_does_not_actually_corrupt_the_shared_inodes_bytes`. If
+any write path is ever changed to write in place, this becomes a data-loss bug
+and must be re-rated P0.
+
+### Suspected sibling case (NOT reproduced)
+
+The same string-keyed design should also miss an NFC/NFD respelling of one
+filename on a normalization-insensitive filesystem (macOS HFS+/APFS), where two
+different byte sequences name one file. This could not be reproduced in the
+Linux-only gate, so it is recorded as a plausible consequence of the same root
+cause, **not** as an established fact. It needs a macOS check before anyone
+acts on it.
+
+### Why it was not fixed on discovery
+
+The obvious fix — stat every declared source on every quick-save and compare
+`(st_dev, st_ino)` against the destination — is exactly the per-source I/O that
+`payload_declares_source`'s own docstring says was deliberately avoided: an
+unreachable network source would pay a full SMB timeout on every save. Choosing
+between a correct guard and a save that cannot hang is an owner design call,
+not a drive-by patch.
+
+### Fix checklist
+
+- [ ] Decide the tradeoff explicitly: identity-based comparison, a bounded/
+  cached stat, or an accepted documented limitation.
+- [ ] If identity-based: ensure an unreachable source cannot make a save hang
+  (a timeout or a skip-on-error path), and test that case.
+- [ ] Flip the strict `xfail` to a passing test in the same commit as the fix.
+- [ ] Check the macOS NFC/NFD sibling case on real macOS, then either fix or
+  explicitly rule it out here.
+- [ ] Re-read the P2 rating above once the write path is settled.
+
+### Completion record
+
+_(empty — open)_
 
 ---
 

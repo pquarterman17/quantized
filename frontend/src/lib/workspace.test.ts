@@ -2058,6 +2058,24 @@ describe("error roles survive save/reapply (MAIN #33)", () => {
     const out = parseWorkspace(serializeWorkspace({ datasets: [ds(["T", "M"])] }));
     expect(out.datasets[0].errorRoles).toBeUndefined();
   });
+
+  // BUGS_AND_ISSUES BUG-001, automated-test checklist item 5: the EXACT role
+  // shape the NCNR reductus `.refl` parser declares
+  // (`quantized.io.ncnr._refl_role_metadata`) -- symmetric Y error on the
+  // measured intensity, symmetric X error on the Q axis -- survives a save
+  // and reopen. `sanitizeBindings` runs on this reload path
+  // (`lib/workspaceDatasetParse.ts`), so this also pins that the validator
+  // does not reject a legitimate `target: -1` binding.
+  it("BUG-001: an NCNR .refl's declared Y+X roles round-trip through a workspace save/reopen", () => {
+    const roles: ErrorBinding[] = [
+      { channel: 1, target: 0, axis: "y", side: "both" }, // uncertainty -> Intensity
+      { channel: 2, target: -1, axis: "x", side: "both" }, // resolution -> Q axis
+    ];
+    const out = parseWorkspace(
+      serializeWorkspace({ datasets: [ds(["Intensity", "uncertainty", "resolution"], roles)] }),
+    );
+    expect(out.datasets[0].errorRoles).toEqual(roles);
+  });
 });
 
 describe("workspace session restoration (LIBRARY_WORKBOOK_UX_PLAN PR E2)", () => {

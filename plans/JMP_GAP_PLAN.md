@@ -217,10 +217,21 @@ replacements and its priority case is now stronger, not different.
      read paths also degrade safely on a structurally corrupted table
      (e.g. `{0: "AB"}`) rather than treating a bare string as if it were a
      string array.
-   - [ ] Worksheet-visible, editable type C/O/N: the MODELING-TYPE half
-     landed (a channel with a level table defaults to "nominal",
-     `lib/modeling.ts`'s `channelModelingType`, user override still wins),
-     but no worksheet UI change shipped this slice (P1.6 territory).
+   - [x] Worksheet-visible, editable type C/O/N (verified 2026-09-09: the
+     worksheet header now carries a `qzk-col-type` `<Select>` per numeric
+     column showing `auto·C`/`auto·O`/`auto·N` or an explicit
+     Cont/Ord/Nom override — `GridHeader.tsx` lines ~78-79, 208-244 — wired
+     through `GridViewport`'s `channelTypes`/`onChangeChannelType` props to
+     `WorksheetPane.tsx`'s `useApp.getState().setChannelType(ds.id, col, t)`,
+     persisted in `DataStruct.channelTypes` and round-tripped by
+     `workspaceSerialize.ts`/`workspaceDatasetParse.ts`. Covered by
+     `GridViewport.test.tsx` ("omits the badge entirely when modelingTypeOf
+     isn't supplied", "shows 'auto·N' for a categorical column with no
+     override", "changing the select calls onChangeChannelType with the new
+     type (or null for auto)") and by `useApp.test.ts`'s `setChannelType`
+     tests (~line 4249, including the non-active-dataset-by-explicit-id
+     case). The MODELING-TYPE half noted below was already landed; this
+     closes the worksheet-UI half (P1.6 territory referenced here).
    - [~] Categorical columns drive Graph Builder X/Group/Facet, Stat Stage
      group/facet, Data Filter level-sets, Tabulate wells, legend labels,
      and `facet-by-column` — with their **string** labels on axes/legends
@@ -347,6 +358,15 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- **2026-09-09 — Claude (plans reconciliation):** flipped J1's "Worksheet-
+  visible, editable type C/O/N" box (Tier 1, line ~220) from `[ ]` to `[x]` —
+  the worksheet-UI half booked to P1.6b there had since shipped (same slice
+  PRIMARY's P1.6b entry already documents), verified against
+  `GridHeader.tsx`'s `qzk-col-type` select and its `GridViewport.test.tsx`/
+  `useApp.test.ts` coverage. See `PRIMARY_SOFTWARE_AUDIT_PLAN.md`'s matching
+  2026-09-09 change-log entry for the full evidence trail (one feature, two
+  plans).
 
 - ~~**J2 — Recode workshop**~~ (2026-08-19, Lane C2,
   `claude/j2-recode-worksheet`) — merge/rename/bin categorical levels with

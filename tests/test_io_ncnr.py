@@ -201,31 +201,94 @@ def test_refl_declares_uncertainty_and_resolution_roles(fixtures_dir: Path) -> N
 
 def test_refl_roles_require_matching_units_not_just_names() -> None:
     """The uncertainty of an intensity carries the intensity's unit and a Q
-    resolution carries the axis's unit. Names alone are not evidence: a variant
-    that spells the columns the same way but means something else must import
-    exactly as it did before, with no declared roles."""
+    resolution carries the axis's unit. Names alone are not evidence -- a
+    column whose unit disagrees with what its name claims does not bind -- but
+    (per-column recognition) that failure is scoped to JUST that column: the
+    other channel's own, independent evidence still binds when it holds up."""
     labels = ["Intensity", "uncertainty", "resolution"]
     assert _refl_role_metadata(labels, ["counts", "counts", "1/Ang"], "1/Ang")
-    # uncertainty in a different unit from the value it supposedly describes
-    assert _refl_role_metadata(labels, ["counts", "1/Ang", "1/Ang"], "1/Ang") == {}
-    # resolution not in the x axis's unit
-    assert _refl_role_metadata(labels, ["counts", "counts", "counts"], "1/Ang") == {}
-    # a blank unit is not evidence of anything
-    assert _refl_role_metadata(labels, ["counts", "", "1/Ang"], "1/Ang") == {}
-    assert _refl_role_metadata(labels, ["", "", "1/Ang"], "1/Ang") == {}
+
+    # uncertainty in a different unit from the value it supposedly describes:
+    # only resolution (independent evidence) binds; uncertainty stays plotted.
+    meta = _refl_role_metadata(labels, ["counts", "1/Ang", "1/Ang"], "1/Ang")
+    assert meta["default_value_channels"] == [0, 1]
+    assert meta["error_roles"] == [{"channel": 2, "target": -1, "axis": "x", "side": "both"}]
+    assert "error_channels" not in meta
+
+    # resolution not in the x axis's unit: only uncertainty binds. The declined
+    # "resolution" column is NOT plotted -- we did not identify it, so we do not
+    # get to assert it is data (review round; see `_refl_role_metadata`).
+    meta = _refl_role_metadata(labels, ["counts", "counts", "counts"], "1/Ang")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+    assert meta["error_channels"] == {0: 1}
+
+    # A unit that DISAGREES with its predecessor is still not an uncertainty:
+    # here "" vs "counts" disagree, so only resolution binds and there is no
+    # measurement to name, so both unbound channels are offered.
+    meta = _refl_role_metadata(labels, ["counts", "", "1/Ang"], "1/Ang")
+    assert meta["default_value_channels"] == [0, 1]
+    assert meta["error_roles"] == [{"channel": 2, "target": -1, "axis": "x", "side": "both"}]
+    assert "error_channels" not in meta
+
+    # But two BLANK units AGREE, and that must bind. Reflectivity is
+    # dimensionless, so an ordinary reductus R/dR file looks exactly like this;
+    # refusing to bind here was a real bug (review round) that reproduced the
+    # original BUG-001 symptom -- dR drawn as its own curve.
+    meta = _refl_role_metadata(labels, ["", "", "1/Ang"], "1/Ang")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+        {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+    ]
+    assert meta["error_channels"] == {0: 1}
+
+    # Blank EVERYWHERE, x unit included: the uncertainty still binds on its own
+    # name plus adjacency, but resolution does NOT -- its target is an axis, not
+    # a neighbour, so a blank unit leaves it with no evidence at all. That
+    # asymmetry is deliberate; see `_measured_channel_for_uncertainty`.
+    meta = _refl_role_metadata(labels, ["", "", ""], "")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+    assert meta["error_channels"] == {0: 1}
+
+
+def test_refl_roles_bind_a_dimensionless_r_dr_dq_file_and_plot_only_r() -> None:
+    """The exact counter-example the review round produced, pinning BOTH fixes
+    at once. Reflectivity is dimensionless, so `R` and `dR` both carry a blank
+    unit, and a real reductus file often trails a `Lambda` column.
+
+    Before the fix this returned `default_value_channels: [0, 1, 3]` -- `dR`
+    unbound and drawn as its own curve (the original BUG-001 symptom, because a
+    blank unit was treated as no evidence) AND `Lambda` pinned as a curve
+    (because a non-empty hint short-circuits the density heuristic). Now `dR`
+    and `dQ` bind, and only `R` is plotted."""
+    meta = _refl_role_metadata(
+        ["R", "dR", "dQ", "Lambda"],
+        ["", "", "1/Ang", "Ang"],
+        "1/Ang",
+    )
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+        {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+    ]
+    assert meta["error_channels"] == {0: 1}
 
 
 @pytest.mark.parametrize(
     "labels",
     [
-        ["Intensity", "resolution", "uncertainty"],  # swapped -> unrecognised order
-        ["Intensity", "uncertainty"],                # missing resolution
-        ["Intensity", "uncertainty", "resolution", "extra"],  # extra value column
-        ["uncertainty", "uncertainty", "resolution"],  # measured looks like an error
-        ["Intensity", "counts", "resolution"],       # uncertainty not a known token
+        ["Intensity", "resolution", "uncertainty"],  # swapped -> breaks BOTH pairings
+        ["Intensity", "B", "C"],                     # no recognisable token at all
     ],
 )
 def test_refl_roles_fail_safe_on_unrecognised_layouts(labels: list[str]) -> None:
+    """A layout where NOTHING is identifiable emits no roles at all. Swapping
+    uncertainty/resolution breaks both pairings at once: resolution's column no
+    longer carries the x unit, and uncertainty's immediate predecessor is
+    itself an error-role column -- so this is still fully unrecognised, not
+    merely "different order"."""
     units = ["counts"] * len(labels)
     units[-1] = "1/Ang"
     assert _refl_role_metadata(labels, units, "1/Ang") == {}
@@ -237,3 +300,93 @@ def test_refl_roles_accept_the_dr_dq_spelling() -> None:
     meta = _refl_role_metadata(["R", "dR", "dQ"], ["counts", "counts", "1/Ang"], "1/Ang")
     assert meta["default_value_channels"] == [0]
     assert meta["error_channels"] == {0: 1}
+
+
+# ── BUG-001 checklist item: omitted/reordered/extra columns (per-column,
+# never-all-or-nothing recognition) ──────────────────────────────────────────
+# Real reductus variants do not all carry the same three columns. Each case
+# below pins the EXACT bindings and default channels -- not just "truthy" --
+# so an index regression (a binding silently shifted to the wrong channel)
+# would fail these even if `_refl_role_metadata` still returned *something*.
+
+
+def test_refl_roles_bind_uncertainty_when_resolution_is_omitted() -> None:
+    meta = _refl_role_metadata(["Intensity", "uncertainty"], ["counts", "counts"], "1/Ang")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+    assert meta["error_channels"] == {0: 1}
+
+
+def test_refl_roles_bind_resolution_when_uncertainty_is_omitted() -> None:
+    meta = _refl_role_metadata(["Intensity", "resolution"], ["counts", "1/Ang"], "1/Ang")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_roles"] == [{"channel": 1, "target": -1, "axis": "x", "side": "both"}]
+    # No Y binding at all -- the legacy key is omitted, not an empty dict.
+    assert "error_channels" not in meta
+
+
+def test_refl_roles_bind_the_triple_around_a_trailing_extra_column() -> None:
+    """A monitor-count column appended after the canonical triple must not
+    suppress the triple's own bindings, and must NOT itself become a default
+    curve: the measured intensity is what the file measures, and the monitor is
+    a column the parser never claimed to understand. It stays in the worksheet
+    and stays toggleable. (Review round: it used to be listed here, which
+    short-circuited the NaN-density heuristic and pinned it as a curve --
+    a confident decision dressed up as a conservative one.)"""
+    meta = _refl_role_metadata(
+        ["Intensity", "uncertainty", "resolution", "monitor"],
+        ["counts", "counts", "1/Ang", "counts"],
+        "1/Ang",
+    )
+    assert meta["default_value_channels"] == [0]  # NOT the monitor at 3
+    assert meta["error_roles"] == [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+        {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+    ]
+    assert meta["error_channels"] == {0: 1}
+
+
+def test_refl_roles_bind_the_triple_around_a_leading_extra_column_without_shifting() -> None:
+    """The same triple, shifted one column right by a leading extra column.
+    The bindings must point at channels 2/3 (where uncertainty/resolution
+    ACTUALLY are), never at the fixed 1/2 the canonical layout would use --
+    that would be exactly the "shifted index" failure mode this exists to
+    rule out."""
+    meta = _refl_role_metadata(
+        ["monitor", "Intensity", "uncertainty", "resolution"],
+        ["counts", "counts", "counts", "1/Ang"],
+        "1/Ang",
+    )
+    assert meta["default_value_channels"] == [1]  # NOT the leading monitor at 0
+    assert meta["error_roles"] == [
+        {"channel": 2, "target": 1, "axis": "y", "side": "both"},
+        {"channel": 3, "target": -1, "axis": "x", "side": "both"},
+    ]
+    assert meta["error_channels"] == {1: 2}
+
+
+def test_refl_roles_bind_resolution_even_when_uncertainty_columns_are_unrecognisable() -> None:
+    """Two columns both spelled "uncertainty" are not a usable pairing for
+    EITHER of them (the first has no predecessor to bind to; the second's
+    immediate predecessor is itself an error-role column) -- so both stay
+    unbound and plotted as ordinary data. Resolution's evidence is
+    independent of its neighbours, so it still binds on its own merits: a
+    weird/ambiguous column elsewhere in the file must not suppress a binding
+    that IS unambiguous."""
+    meta = _refl_role_metadata(
+        ["uncertainty", "uncertainty", "resolution"], ["counts", "counts", "1/Ang"], "1/Ang"
+    )
+    assert meta["default_value_channels"] == [0, 1]
+    assert meta["error_roles"] == [{"channel": 2, "target": -1, "axis": "x", "side": "both"}]
+    assert "error_channels" not in meta
+
+
+def test_refl_roles_leave_an_unknown_token_column_plotted_but_still_bind_resolution() -> None:
+    """"counts" is not a recognised uncertainty token, so that column is left
+    as ordinary plotted data -- but resolution alongside it still binds."""
+    meta = _refl_role_metadata(
+        ["Intensity", "counts", "resolution"], ["counts", "counts", "1/Ang"], "1/Ang"
+    )
+    assert meta["default_value_channels"] == [0, 1]
+    assert meta["error_roles"] == [{"channel": 2, "target": -1, "axis": "x", "side": "both"}]
+    assert "error_channels" not in meta

@@ -15,6 +15,7 @@ import {
   clampPageXY,
   colorScatterPlugin,
   errorBarsPlugin,
+  errorSpansPlugin,
   MAX_ANNOTATION_SIZE,
   MIN_ANNOTATION_SIZE,
   pageXYToCanvasPx,
@@ -400,6 +401,90 @@ describe("errorBarsPlugin (item 3: cap width defaults to zero)", () => {
 
   it("draws no caps when capHalfWidth is explicitly zero (same as the default)", () => {
     expect(draw(0)).toHaveLength(2);
+  });
+});
+
+// BUGS_AND_ISSUES BUG-001, automated-test checklist item 4: reflectometry is
+// ALWAYS plotted log-Y, and a symmetric uncertainty whisker's lower end
+// (`y - minus`) can be <= 0 (e.g. a low-count point whose uncertainty exceeds
+// its own value) -- a position a log axis cannot represent. `errorSpansPlugin`
+// takes no special case for this (see its own header comment): it hands the
+// true, un-clamped value to `valToPos`, and a real log-scale uPlot instance
+// maps a non-positive input to NaN, which the canvas silently skips. This pins
+// exactly that hand-off using a `valToPos` stub that mimics the log-scale NaN
+// behaviour, and confirms the magnitude fed in is never altered to dodge it.
+describe("errorSpansPlugin (item 4: log-Y axis, a whisker end <= 0)", () => {
+  // x: identity. y: log-like -- NaN for any non-positive value (mirrors a
+  // real log-scale uPlot's own valToPos), otherwise 100 - value (same
+  // linear-ish convention as every other stub in this file).
+  function fakeLogU() {
+    const segs: { from: [number, number]; to: [number, number] }[] = [];
+    let pen: [number, number] = [0, 0];
+    const ctx = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      rect() {},
+      clip() {},
+      stroke() {},
+      moveTo(x: number, y: number) {
+        pen = [x, y];
+      },
+      lineTo(x: number, y: number) {
+        segs.push({ from: pen, to: [x, y] });
+      },
+      strokeStyle: "",
+      lineWidth: 0,
+    };
+    const valToPos = (v: number, scale: string) => (scale === "x" ? v : v <= 0 ? NaN : 100 - v);
+    const u = {
+      ctx,
+      bbox: { left: 0, top: 0, width: 200, height: 100 },
+      valToPos,
+      data: [
+        [0, 1], // x
+        [0.5, 5], // the measured series -- point 0 is low enough that y-minus <= 0
+      ],
+      series: [{}, {}],
+    };
+    return { u, segs };
+  }
+
+  it("hands the lower whisker end straight to valToPos, unclamped, even when it goes non-positive", () => {
+    const { u, segs } = fakeLogU();
+    // Symmetric uncertainty of 2 on point 0 (y=0.5): y-minus = -1.5, non-
+    // positive -- would be invalid on a log axis. Point 1 (y=5, magnitude 1)
+    // stays positive on both ends.
+    const spans = new Map([[1, [{ axis: "y" as const, plus: [2, 1], minus: [2, 1] }]]]);
+    const plugin = errorSpansPlugin(spans, "#abc");
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+
+    expect(segs).toHaveLength(2); // one vertical whisker per point, no caps
+    // Point 0: pHi = valToPos(0.5+2)=97.5 (finite); pLo = valToPos(0.5-2) =
+    // valToPos(-1.5) = NaN -- the log-scale-invalid end, passed through AS
+    // NaN rather than silently clamped to 0 or flipped positive.
+    expect(segs[0].to[0]).toBe(0); // px
+    expect(Number.isFinite(segs[0].to[1])).toBe(true); // pHi, finite
+    expect(Number.isNaN(segs[0].from[1])).toBe(true); // pLo, NaN — the <=0 end
+    // Point 1: both ends stay positive and finite (4 and 6 -> pos 96 and 94).
+    expect(segs[1].from[1]).toBe(96);
+    expect(segs[1].to[1]).toBe(94);
+  });
+
+  it("never mutates the plotted data or the span magnitudes while drawing", () => {
+    const { u, segs } = fakeLogU();
+    const spans = new Map([[1, [{ axis: "y" as const, plus: [2, 1], minus: [2, 1] }]]]);
+    const dataSnapshot = JSON.parse(JSON.stringify(u.data));
+    const spansSnapshot = JSON.parse(JSON.stringify([...spans]));
+
+    const plugin = errorSpansPlugin(spans, "#abc");
+    // @ts-expect-error — minimal stub stands in for a real uPlot instance
+    plugin.hooks.draw?.(u);
+
+    expect(segs.length).toBeGreaterThan(0); // sanity: the plugin actually ran
+    expect(u.data).toEqual(dataSnapshot); // the measured/uncertainty values themselves
+    expect([...spans]).toEqual(spansSnapshot); // the magnitudes handed to the plugin
   });
 });
 

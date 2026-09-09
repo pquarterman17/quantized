@@ -253,8 +253,18 @@ decisions are merged.
         (`line: "none"` vs the `width: 0` scatter sentinel), and the exact
         array is F2.1a's own contract. `region_shades` stays raw pending
         the owner call. See the 2026-08-12 round-2 log entry.
-- [ ] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
+- [x] **F2.2 Add Apply/Cancel semantics.** Preview changes live; Apply commits
       one undoable edit and Cancel restores the pre-dialog document.
+      (Reconciled 2026-09-09: all four sub-items below are shipped, and they
+      cover every `figurePublicationSession.target` the app actually mints —
+      `"window"` (a), `"new-editable"` (b/c), `"library"` (d), per
+      `store/figureLifecycle.ts`'s `beginFigurePublicationEdit`/
+      `beginDetachedFigurePublicationEdit`/`beginFigurePublicationEditForFigure`
+      — so no further entry point remains open. Covered by
+      `store/figureLifecycle.test.ts` (36 tests) and
+      `store/figurePublicationLibrary.test.ts` (7 tests), 43/43 passing
+      (`npx vitest run src/store/figureLifecycle.test.ts
+      src/store/figurePublicationLibrary.test.ts`).)
   - [x] **F2.2a Focused-window transaction.** Apply replaces one verified
         focused window document and Cancel is mutation-free; broader entry
         points and parity remain open.
@@ -1508,6 +1518,22 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-09-09 — Plans reconciliation: F2.2 parent box flipped (Claude)
+
+Reconciled F2.1/F2.2/F2.3 against later P1.3/P1.5 grouping work
+(PRIMARY_SOFTWARE_AUDIT_PLAN.md). F2.1 and F2.3 stay `[ ]` as written — their
+own sub-items (F2.1f/g, F2.3i) are still explicitly BLOCKED per this doc's
+own header, and PRIMARY's P1.5 "Live Graph Builder grouping parity" slice
+covers the interactive-Stage GROUP-well binding, not the multi-panel
+Publication Preview facet contract F2.3i is blocked on — no unblock found.
+F2.2 flipped `[ ]` -> `[x]`: its four sub-items (a-d) are all shipped, and
+between them they cover every `figurePublicationSession.target` the app
+mints (`"window"`, `"new-editable"`, `"library"` —
+`store/figureLifecycle.ts`), so no further Apply/Cancel entry point remains
+open. Ran `store/figureLifecycle.test.ts` + `store/
+figurePublicationLibrary.test.ts` (43/43 passing) to confirm rather than
+trust the sub-item prose alone.
 
 ### 2026-08-13 — F2.3j region-shade editing: Stage card + preview panel + override decomposition (Claude Sonnet 5)
 
