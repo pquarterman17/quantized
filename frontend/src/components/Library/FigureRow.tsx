@@ -9,6 +9,7 @@
 // with many graph windows.
 
 import { useState } from "react";
+import { plural } from "../../lib/plural";
 
 import { recordWorkbookOpen } from "./libraryOpen";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
@@ -59,7 +60,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
     ? `${originFidelityStatusLabel(fidelity.status)}; missing ${fidelity.omissions.map(originFidelityLabel).join(", ")}`
     : "Fidelity not assessed";
   const title = resolved
-    ? `${entry.stem} — restore axis ranges (${n} curve${n === 1 ? "" : "s"}); ${fidelityText}`
+    ? `${entry.stem} — restore axis ranges (${n} curve${plural(n)}); ${fidelityText}`
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div className="qzk-origin-figure-row">
@@ -103,7 +104,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
       <button
         className="qz-icon-btn"
         title={sourceResolution.sources.length
-          ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${sourceResolution.unresolved.length === 1 ? "" : "s"})` : ""}`
+          ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${plural(sourceResolution.unresolved.length)})` : ""}`
           : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
         disabled={sourceResolution.sources.length === 0}
         onClick={() => void remakeOriginFigure(entry.id)}

@@ -1072,8 +1072,41 @@ output, not a caught error).
   UX yet to prevent, flag, or guide the edit (a level-picker/dropdown, a
   Recode-and-extend-the-table flow) — P1.6's worksheet-UI slice owns
   closing that gap, not this contract.
-- [ ] Keep ignored instrumental metadata searchable — unchanged (pre-
-  existing `text_columns`/`comments` sidecars; still stand).
+- [~] Keep ignored instrumental metadata searchable — **this box was FALSE as
+  written, and saying so is the finding.** It read "unchanged (pre-existing
+  `text_columns`/`comments` sidecars; still stand)". The sidecars did stand and
+  the data in them was preserved; it was never SEARCHABLE, which is what the box
+  claimed. `lib/projectSearch.ts`'s `metadataEntries` emits only SCALAR metadata
+  values and skips `origin_books`/`text_columns`/`label_rows` by name — and
+  every sidecar carrying metadata a parser declined to make a channel is a
+  COLLECTION, so all four fell through: `comments` (`list[str]`),
+  `text_columns` (`{header: [cells]}`), `label_rows` (`list[dict]`) and
+  `all_column_names` (`list[str]`). Nothing in any of them was reachable from
+  Find in project. Preserving data nobody can find is not the same as keeping it
+  searchable, and only a check would have caught the difference.
+
+  **Now searchable (2026-09-09, Group K)** via `lib/projectSearchSidecars.ts`,
+  one hit per (dataset, column) or (dataset, row) so a wide sheet cannot flood
+  the results: text-column NAMES (revealed in the worksheet, with no `channel`
+  claimed — a text column has no channel index); `all_column_names`, minus any
+  name that is already a searchable channel label; `label_rows` CELLS, which is
+  where sample ids live; and the `comments` preamble, one hit per dataset with a
+  count of the other matching lines. Ranked below scalar metadata — someone
+  typing "Rxy" means the column, not a mention of it in a discarded header row.
+  `origin_books` stays skipped for the original, correct reason. The
+  corrupted-sidecar hazard is guarded (a bare string where a string ARRAY
+  belongs reads as truthy and JS indexes it character by character);
+  sabotage-verified.
+
+  **`[~]`, not `[x]`, because text-column CELL contents are deliberately NOT
+  searched, and that is a measured decision rather than an oversight.**
+  `searchProject` runs in a `useMemo` on every keystroke; a full substring scan
+  of text-column cells measured (node, this repo, 2026-09-09) at 322 ms for 2.0M
+  cells and 2560 ms for 15.0M, in the common NO-MATCH case. A capped scan would
+  be silent incompleteness — the exact failure class this plan keeps closing —
+  so row-level full-text search over data columns is booked as its own feature
+  needing an index, not faked here. What ships searches metadata ABOUT the file,
+  bounded by the header block, not by the data.
 - [ ] Sample ID, field, or temperature can independently label the legend —
   the representation supports it (any categorical channel can be the group
   column); the Graph Builder wiring to pick ANY such channel as the legend

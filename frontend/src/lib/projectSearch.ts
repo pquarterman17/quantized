@@ -13,6 +13,7 @@
 // No store import, no React — the ranking is the part that can be wrong, and it
 // is testable on its own.
 
+import { RANK_SIDECAR, sidecarHits } from "./projectSearchSidecars";
 import type { Dataset, FolderNode } from "./types";
 
 /** Which surface can reveal a hit — the Library tree, the worksheet grid, or a
@@ -55,6 +56,7 @@ const RANK = {
   nameSubstring: 4,
   note: 5,
   metadata: 6,
+  sidecar: RANK_SIDECAR,
 } as const;
 
 function score(haystack: string, needle: string): number | null {
@@ -67,7 +69,15 @@ function score(haystack: string, needle: string): number | null {
 
 /** Flatten metadata to searchable "key: value" strings, skipping the bulky
  *  decoded-Origin blobs — matching inside a 10 kB book inventory produces hits
- *  nobody can act on and drowns the ones they can. */
+ *  nobody can act on and drowns the ones they can.
+ *
+ *  This handles only SCALAR values. `text_columns` and `label_rows` are skipped
+ *  here by name and `comments`/`all_column_names` fall through as non-scalars —
+ *  all four are collections needing a per-column/per-row hit shape rather than
+ *  one "key: value" line, and `lib/projectSearchSidecars.ts` is where that
+ *  lives. Before it existed, they were simply unsearchable, which is what
+ *  P1.4's "keep ignored instrumental metadata searchable" box had assumed was
+ *  already true. `origin_books` remains skipped everywhere. */
 function metadataEntries(meta: Record<string, unknown> | undefined): [string, string][] {
   if (!meta) return [];
   const out: [string, string][] = [];
@@ -151,6 +161,21 @@ export function searchProject(query: string, src: SearchSources, limit = 50): Se
         reveal: "library",
         datasetId: ds.id,
         rank: RANK.metadata,
+      });
+    }
+
+    // The collection-shaped sidecars — see projectSearchSidecars.ts for what is
+    // and (deliberately) is not searched there.
+    for (const h of sidecarHits(ds, needle)) {
+      hits.push({
+        id: h.id,
+        label: h.label,
+        context: h.context,
+        kind: "metadata",
+        reveal: h.revealInWorksheet ? "worksheet" : "library",
+        datasetId: ds.id,
+        ...(h.channel != null ? { channel: h.channel } : {}),
+        rank: RANK.sidecar,
       });
     }
   }

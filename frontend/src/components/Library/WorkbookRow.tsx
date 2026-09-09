@@ -22,6 +22,7 @@
 // start from `.qzk-drag-handle`, never the row body's select/open click.
 
 import { useState } from "react";
+import { plural } from "../../lib/plural";
 
 import { WORKBOOK_DND } from "./dnd";
 import { openLibraryNode } from "./libraryOpen";
@@ -159,7 +160,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
       )}
       <span
         className="qzk-group-count"
-        title={`${worksheetCount} worksheet${worksheetCount === 1 ? "" : "s"}`}
+        title={`${worksheetCount} worksheet${plural(worksheetCount)}`}
       >
         {worksheetCount}
       </span>
