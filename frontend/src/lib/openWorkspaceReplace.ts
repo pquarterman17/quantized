@@ -5,6 +5,7 @@
 // already carries a command's body out of the curated command list.
 
 import { canRelease, type LockRecord } from "../lib/lockState";
+import { plural } from "./plural";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
@@ -214,7 +215,7 @@ export function hasWorkspaceContent(s: StoreGet): boolean {
 export function replaceConfirmMessage(n: number, extra = ""): string {
   const subject =
     n > 0
-      ? `the ${n} dataset${n === 1 ? "" : "s"} currently loaded, plus every folder, report and saved figure`
+      ? `the ${n} dataset${plural(n)} currently loaded, plus every folder, report and saved figure`
       : `the current session's folders, workbooks, and saved figures, reports, and pages`;
   return `Opening this file discards ${subject}.${extra} Save your work first if you need it.`;
 }

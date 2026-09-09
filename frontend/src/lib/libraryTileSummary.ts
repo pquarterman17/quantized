@@ -3,6 +3,7 @@
 // reinterpret these artifact/source facts.
 
 import { dimensionsOf } from "./libraryDetails";
+import { plural } from "./plural";
 import type { LibraryNode } from "./libraryHierarchy";
 
 export interface LibraryTileSummary {
@@ -12,7 +13,7 @@ export interface LibraryTileSummary {
 }
 
 const count = (value: number, singular: string): string =>
-  `${value.toLocaleString()} ${singular}${value === 1 ? "" : "s"}`;
+  `${value.toLocaleString()} ${singular}${plural(value)}`;
 
 export function libraryTileSummary(node: LibraryNode): LibraryTileSummary {
   const missing = node.source.missingDatasetIds.length > 0 ? "Source unavailable" : null;

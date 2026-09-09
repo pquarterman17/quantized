@@ -8,6 +8,7 @@
 // lib/contextActions.ts already imports ConfirmDialog.
 
 import { askParams } from "../components/overlays/ParamDialog";
+import { plural } from "./plural";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
@@ -23,12 +24,12 @@ export function requestDatasetRemoval(ids: readonly string[]): void {
   const doRemove = () => {
     const st = useApp.getState();
     st.removeDatasets(live);
-    const msg = `removed ${n} dataset${n === 1 ? "" : "s"}`;
+    const msg = `removed ${n} dataset${plural(n)}`;
     st.setStatus(msg);
     toast(msg);
   };
   if (s.confirmRemove) {
-    void askParams(`Remove ${n} dataset${n === 1 ? "" : "s"}?`, []).then((ok) => {
+    void askParams(`Remove ${n} dataset${plural(n)}?`, []).then((ok) => {
       if (ok) doRemove();
     });
   } else {

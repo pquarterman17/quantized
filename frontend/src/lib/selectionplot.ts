@@ -11,6 +11,7 @@
 // lib/dragaxis.ts's resolveAxisDrop / useAxisDrop split).
 
 import { columnMetaList } from "./columnmeta";
+import { plural } from "./plural";
 import { defaultDenseChannels } from "./plotdata";
 import type { PlotSpec } from "./plotspec";
 import type { DataStruct } from "./types";
@@ -104,7 +105,7 @@ export function resolveSelectionPlot(
   const summary =
     yList.length === 0
       ? "nothing plottable in the selection"
-      : `${verb}: ${yList.length} channel${yList.length === 1 ? "" : "s"}${xKey !== undefined ? ", X updated" : ""}`;
+      : `${verb}: ${yList.length} channel${plural(yList.length)}${xKey !== undefined ? ", X updated" : ""}`;
   return { actions, summary };
 }
 
