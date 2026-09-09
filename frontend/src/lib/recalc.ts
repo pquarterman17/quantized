@@ -209,3 +209,49 @@ export function markStale(
   const missing = add.filter((id) => !current.includes(id));
   return missing.length ? [...current, ...missing] : (current as string[]);
 }
+
+/** LIBRARY_WORKBOOK_UX_PLAN's "recalculation ... order independence" —
+ *  `staleDatasets` is NOT itself a topological order: `markStale` only
+ *  APPENDS ids as separate `touchDataset` gestures discover them (see its
+ *  own doc), so two gestures touching different sources can leave a
+ *  downstream id sitting BEFORE its own upstream in the array (e.g. edit B
+ *  directly first — stales only C — then edit A — stales B too, appended
+ *  AFTER the already-present C: ["c","b"]). A caller that walked that array
+ *  in raw order would rebuild C from B's PRE-recompute data. This sorts a
+ *  set of stale dataset ids into true dependency order (upstream before
+ *  downstream) from the CURRENT ds-level graph (bgRef + derivedFrom edges —
+ *  the same edges `buildEdges` derives, collapsed past their `sheet:`/`fit:`/
+ *  `col:` hops since only relative ds-to-ds order matters here), via a
+ *  depth-first post-order traversal reversed into ancestors-first. `Array
+ *  .prototype.sort` is stable (ES2019+), so ids the graph doesn't order
+ *  relative to each other (no path between them) keep their original
+ *  relative position. A `visiting`-guard breaks a cycle defensively (should
+ *  be unreachable — `wouldCreateCycle` refuses one at write time) rather
+ *  than recursing forever. */
+export function sortForRecalc(datasets: readonly Dataset[], ids: readonly string[]): string[] {
+  const edges = new Map<string, string[]>();
+  const addEdge = (from: string, to: string): void => {
+    const arr = edges.get(from);
+    if (arr) arr.push(to);
+    else edges.set(from, [to]);
+  };
+  for (const d of datasets) {
+    if (d.bgRef && d.corrections && d.raw) addEdge(d.bgRef.datasetId, d.id);
+    if (d.derivedFrom) addEdge(d.derivedFrom.datasetId, d.id);
+  }
+  const order: string[] = [];
+  const visited = new Set<string>();
+  const visiting = new Set<string>();
+  const visit = (id: string): void => {
+    if (visited.has(id) || visiting.has(id)) return;
+    visiting.add(id);
+    for (const next of edges.get(id) ?? []) visit(next);
+    visiting.delete(id);
+    visited.add(id);
+    order.push(id); // post-order: descendants land before their ancestor
+  };
+  for (const d of datasets) visit(d.id);
+  order.reverse(); // ancestors before descendants
+  const pos = new Map(order.map((id, i) => [id, i]));
+  return [...ids].sort((a, b) => (pos.get(a) ?? -1) - (pos.get(b) ?? -1));
+}

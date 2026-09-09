@@ -632,6 +632,12 @@ describe("row-state model guard (#50 universal linking)", () => {
       "/store/useApp.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",
+      // recalcNow's dataset-recompute loop, extracted out of useApp.ts
+      // (2026-09-09, LIBRARY_WORKBOOK_UX_PLAN recalc determinism/auditability
+      // pass, same store-size-pin reason as corrections.ts's own extraction
+      // above) — still calls rowsChangedGuard on the SAME
+      // recompute-invalidates-excludedRows path, just relocated.
+      "/store/recalcDatasets.ts",
     ];
     expect(
       offenders(/\.excludedRows\b/, allow),

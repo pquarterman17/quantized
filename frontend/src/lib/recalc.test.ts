@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { downstreamOf, markStale, recalcNodes, wouldCreateCycle } from "./recalc";
+import { downstreamOf, markStale, recalcNodes, sortForRecalc, wouldCreateCycle } from "./recalc";
 import type { ComputedColumn, Dataset, DataStruct } from "./types";
 
 const data: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
@@ -234,5 +234,61 @@ describe("wouldCreateCycle", () => {
     });
     expect(reason).not.toBeNull();
     expect(reason).toMatch(/circular dependency/);
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN "recalculation ... order independence": staleness
+// is tracked as an APPEND-order list (markStale), not a topological one —
+// this is the sort a consumer (useApp.ts's recalcNow) must run before
+// walking it so a downstream id never gets processed ahead of its own
+// upstream.
+describe("sortForRecalc", () => {
+  it("sorts a bgRef chain into dependency order even when the input is reverse/scrambled", () => {
+    const datasets = [
+      ds("a"),
+      ds("b", { raw: data, corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ds("c", { raw: data, corrections: {}, bgRef: { datasetId: "b", interp: "linear" } }),
+    ];
+    expect(sortForRecalc(datasets, ["c", "b"])).toEqual(["b", "c"]);
+    expect(sortForRecalc(datasets, ["b", "c"])).toEqual(["b", "c"]); // already right — stays right
+  });
+
+  // The concrete adversarial case: touch B directly first (stales only C,
+  // since C is downstream of B), THEN touch A (stales B AND C — markStale
+  // only APPENDS the missing one, B, so the array becomes ["c","b"]). A
+  // naive per-item loop over that raw array would rebuild C from B's
+  // PRE-recompute data. This is exactly the shape markStale's own doc
+  // constructs (`markStale(["c"], ["b","c"])` -> `["c","b"]`).
+  it("recovers the correct order from markStale's own worked adversarial append case", () => {
+    const datasets = [
+      ds("a"),
+      ds("b", { raw: data, corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ds("c", { raw: data, corrections: {}, bgRef: { datasetId: "b", interp: "linear" } }),
+    ];
+    const scrambled = markStale(["c"], ["b", "c"]);
+    expect(scrambled).toEqual(["c", "b"]); // confirms the adversarial input is real, not contrived
+    expect(sortForRecalc(datasets, scrambled)).toEqual(["b", "c"]);
+  });
+
+  it("sorts a derivedFrom chain the same way", () => {
+    const datasets = [
+      ds("a"),
+      ds("b", { derivedFrom: { datasetId: "a", pipeline: "x" } }),
+      ds("c", { derivedFrom: { datasetId: "b", pipeline: "y" } }),
+    ];
+    expect(sortForRecalc(datasets, ["c", "b"])).toEqual(["b", "c"]);
+  });
+
+  it("leaves unrelated ids in their original relative order (stable sort, no false ordering)", () => {
+    const datasets = [ds("x"), ds("y"), ds("z")]; // no edges among them at all
+    expect(sortForRecalc(datasets, ["z", "y", "x"])).toEqual(["z", "y", "x"]);
+  });
+
+  it("is a no-op on an already-correct order", () => {
+    const datasets = [
+      ds("a"),
+      ds("b", { raw: data, corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+    ];
+    expect(sortForRecalc(datasets, ["b"])).toEqual(["b"]);
   });
 });

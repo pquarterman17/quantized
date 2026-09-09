@@ -32,7 +32,7 @@ const baseProps = {
 };
 
 beforeEach(() => {
-  useApp.setState({ datasets: [], activeId: null, selectedIds: [] });
+  useApp.setState({ datasets: [], activeId: null, selectedIds: [], staleDatasets: [], staleFits: [] });
 });
 
 describe("DatasetRow sheet affordance", () => {
@@ -52,6 +52,32 @@ describe("DatasetRow sheet affordance", () => {
     const { container } = render(<DatasetRow dataset={sheet1} {...baseProps} sheetNumber={2} />);
     expect(screen.getByText(/sheet 2/)).toBeInTheDocument();
     expect(container.querySelector(".qzk-ds")).toHaveClass("qzk-ds-sheet");
+  });
+});
+
+// LIBRARY_WORKBOOK_UX_PLAN "auditable ... a stale/failed state is VISIBLE
+// rather than silently serving old numbers as if current" — the Library row
+// is the DATA-layer surface for staleDatasets/staleFits (a plain top-level
+// AppState field, not something nested under plot-only state); this locks
+// that the dot actually renders from it rather than the wiring silently
+// rotting.
+describe("DatasetRow staleness visibility (#4 / K5c)", () => {
+  it("renders the stale dot when this row's id is in staleDatasets", () => {
+    useApp.setState({ staleDatasets: ["plain"], staleFits: [] });
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(document.querySelector(".qzk-stale-dot")).toBeInTheDocument();
+  });
+
+  it("renders the stale dot when this row's id is in staleFits instead", () => {
+    useApp.setState({ staleDatasets: [], staleFits: ["plain"] });
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(document.querySelector(".qzk-stale-dot")).toBeInTheDocument();
+  });
+
+  it("renders no dot for a clean dataset, and none for a DIFFERENT dataset's staleness", () => {
+    useApp.setState({ staleDatasets: ["someone-else"], staleFits: [] });
+    render(<DatasetRow dataset={plain} {...baseProps} />);
+    expect(document.querySelector(".qzk-stale-dot")).not.toBeInTheDocument();
   });
 });
 

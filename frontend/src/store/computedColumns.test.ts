@@ -124,6 +124,30 @@ describe("addFormula (K1/K2/K4/K5b)", () => {
     // No history entry for a refused write.
     expect(useApp.getState().history.length).toBe(beforeHistory);
   });
+
+  // LIBRARY_WORKBOOK_UX_PLAN "recalculation ... convergence": a diamond —
+  // B and C both derive from A, D derives from BOTH B and C — must settle
+  // correctly in ONE evaluation pass. addFormula always APPENDS (never
+  // inserts), and a formula may only reference a channel letter that
+  // already exists, so the append order IS the dependency order by
+  // construction — this locks that invariant with an actual diamond rather
+  // than assuming it from the single-column tests above.
+  it("a diamond (B=2A, C=3A, D=B+C) converges correctly in one addFormula pass", () => {
+    useApp.setState({ datasets: [baseDs("a")] }); // A = [1,2,3]
+    useApp.getState().addFormula("a", "B", "A * 2"); // letter B
+    useApp.getState().addFormula("a", "C", "A * 3"); // letter C
+    useApp.getState().addFormula("a", "D", "B + C"); // letter D — the diamond's merge point
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.formulaErrors).toBeUndefined();
+    // labels: A, B, C, D — D reads BOTH B's and C's already-materialized
+    // columns from the SAME pass, not a stale/zero value from re-entry.
+    expect(ds.data.values).toEqual([
+      [1, 2, 3, 5],
+      [2, 4, 6, 10],
+      [3, 6, 9, 15],
+    ]);
+  });
 });
 
 describe("updateFormula (K4)", () => {
