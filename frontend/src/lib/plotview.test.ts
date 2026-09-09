@@ -45,6 +45,10 @@ describe("defaultPlotView", () => {
     expect(v.y2Scale).toBeNull();
     expect(v.y2Fmt).toBeNull();
     expect(v.panelFit).toBe("frames");
+    // A new plot is BOXED on all four sides by default (owner call,
+    // 2026-09-08). Pinned here because the flag lives in two places that
+    // must not drift: this fallback and the store's initial state.
+    expect(v.showAxisBox).toBe(true);
   });
 });
 
