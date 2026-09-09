@@ -15,6 +15,7 @@
 // — that is exactly the eager-bundle regression this split exists to avoid.
 
 import { hasDesktopShell, pathState, probeSource, type SourceProbe } from "../lib/desktopBridge";
+import { plural } from "../lib/plural";
 import { importFile } from "../lib/api";
 import { resolveFreshData } from "../lib/reimport";
 import { applyReimportMerge, computeReimportMerge } from "./reimport";
@@ -373,7 +374,7 @@ async function runCommitInner(
       if (hasDependencyImpact(impact)) {
         const n = wouldCommitIds.length;
         const ok = await askConfirm(
-          `Re-import ${n} source${n === 1 ? "" : "s"}?`,
+          `Re-import ${n} source${plural(n)}?`,
           formatDependencyImpact(impact),
           "Re-import",
         );
@@ -406,7 +407,7 @@ async function runCommitInner(
     // refreshing the report with whatever revalidation just found
     // (including a freshly-detected mid-stage race).
     set({ reimportAllRows: revalidated, reimportAllCommitted: null });
-    toast(`reimport all: ${failed.length} problem${failed.length === 1 ? "" : "s"} — nothing changed`, "danger");
+    toast(`reimport all: ${failed.length} problem${plural(failed.length)} — nothing changed`, "danger");
     return;
   }
   if (committable.length === 0) {
@@ -420,13 +421,13 @@ async function runCommitInner(
   // commit() and store/workbookSeparate.ts's commitSeparateWorksheets --
   // every applyReimportMerge call below forwards the SAME token so its own
   // recordHistory call folds in instead of pushing its own.
-  await get().withHistoryBatch(`re-import ${n} source${n === 1 ? "" : "s"}`, async (token) => {
+  await get().withHistoryBatch(`re-import ${n} source${plural(n)}`, async (token) => {
     for (const row of committable) {
       applyReimportMerge(set, get, row.dsRef!, row.merge!, token);
     }
   });
   const skippedNote = failed.length > 0 ? ` — ${failed.length} skipped` : "";
-  toast(`re-imported ${n} source${n === 1 ? "" : "s"}${skippedNote}`, "ok");
+  toast(`re-imported ${n} source${plural(n)}${skippedNote}`, "ok");
   // Coordinator review G8: `withHistoryBatch`'s own OUTER promise still
   // resolves through at least one real microtask hop even though `fn`'s
   // body already ran synchronously above -- so a report-closing `set()`

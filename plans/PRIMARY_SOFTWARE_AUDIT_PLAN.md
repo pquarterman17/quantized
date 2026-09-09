@@ -962,8 +962,106 @@ output, not a caught error).
   they disagree) SHIPPED under P1.5 (2026-08-18): `lib/merge.ts`'s
   `planChannel`/`remapFor` now do exactly that; the one remaining drop case
   (a channel missing its table on even one input) is unchanged, since there
-  is nothing to remap FROM. Filter/recipes/
-  export propagation is still unaudited. Also found this round, booked (not
+  is nothing to remap FROM.
+
+  **Filter/recipes/export propagation AUDITED 2026-09-09 (Group J)** — a
+  read-only sweep of DataStruct-deriving and -serializing sites in both
+  languages, then each finding verified by reading the code rather than
+  trusting the sweep — and then the whole diff put through a high-effort
+  adversarial review, which found the sweep had MISSED sites and that two of
+  the "fixes" rested on overstated claims (both corrected below; the review
+  round is the honest part of this record, not a footnote). Result: **three
+  real drops fixed, two deliberate strips documented**; two categories that do
+  not exist yet; one open owner question; and one bug the fix itself surfaced.
+
+  Fixed, each sabotage-verified:
+  - `lib/dataset.ts`'s `cloneDataStruct` was a hand-written ALLOWLIST of the
+    five required fields, so it dropped every optional one — `duplicateDataset`
+    (store/useApp.ts) and `freezeCopy` (store/derivedWorksheets.ts) turned a
+    categorical dataset into a plain numeric one — doubly odd next to
+    `duplicateDataset`'s careful copying of `channelTypes`/`channelRoles`/
+    `errorRoles`. Duplicate is an everyday action, and the allowlist would have
+    failed again for the NEXT field added, so it is now spread-first: a new
+    field is carried by default, and only the arrays callers mutate get an
+    explicit deep copy. **Review-round correction:** the first version of this
+    entry also claimed the allowlist stripped an Origin import's
+    `books`/`book_source`/`figures`/`origin_fidelity`. It does not — and cannot:
+    `store/importDatasets.ts` deletes all four (`:166-167`, `:249-250`) before
+    `data` ever becomes a stored `Dataset.data`, so they never reach
+    `cloneDataStruct`. `cat_levels` is the only demonstrated loss; the rest is
+    the CONTRACT being future-proofed, which is what its test actually pins.
+  - `useWorksheetView.ts`'s `extractSubset` (the Extract action — the ONE place
+    a Data-Filter-narrowed row set becomes a real dataset) built its subset by
+    hand and dropped the level table. It now delegates to
+    `lib/datasetsplit.ts`'s `sliceDataStruct`, the one row-slice primitive, via
+    a new pure sibling `components/Stage/worksheet/extractRows.ts`.
+    **Review-round correction, and the most valuable thing this slice found:**
+    that delegation was NOT the behaviour-preserving swap the first version
+    claimed. Extract's row indices run over `max(numeric rows, TEXT rows)` — an
+    Origin book can carry more inline-text rows than numeric ones, and a
+    text-only book has `time.length === 0` with the text columns as the whole
+    grid — so an index can point PAST `values`. The hand-built literal wrote
+    `undefined` into the child for such a row (silent corruption, and the reason
+    the sibling stats subset already writes `values[r]?.[c]`); `sliceDataStruct`
+    spreads it, so the same input became a `TypeError`. Both were wrong.
+    `planExtract` now clamps to rows that have numeric data, refuses when none
+    do, and the status line NAMES the rows left behind. Sabotage-verified: the
+    clamp removed, the test fails with exactly that `TypeError`.
+  - `routes/export.py`'s `export_opj` rebuilt the dataclass by hand to stamp
+    `origin_book`, naming five of six fields. Now `dataclasses.replace`, the
+    pattern `io/technique.py` and `io/origin_project/__init__.py` already use.
+  - `calc/corrections.py` and `calc/resample.py` drop `cat_levels`, and the drop
+    is now explicit and documented in both modules rather than reading like the
+    accidental omission the sweep took it for, pinned by tests that also assert
+    the codes really are invalidated for the parameters they use. **Review-round
+    correction:** the first version called the drop simply "CORRECT". It is
+    CONSERVATIVE, which is not the same claim. Both functions drop the table
+    whenever they run, including identity-parameter paths (an empty correction
+    set, a resample onto a grid coincident with the input) where the codes come
+    back exactly intact and the table would still have been valid. The strip is
+    right for the transforms that change values and over-broad for the ones that
+    do not. Both halves — that a categorical channel is transformed at all, and
+    that the table is dropped even when nothing changed — are filed as
+    **BUG-005**, not papered over.
+
+  Ruled out by direct inspection, worth recording so it is not re-audited:
+  - **No key-shifting mis-map exists** (the worst class, where a column
+    insert/delete would slide `cat_levels`' integer keys onto the wrong
+    channel). There is no base-column insert/delete/reorder feature; formula
+    columns only ever APPEND and `computeFormulas` rebuilds the table from
+    scratch on every recompute, including on `removeFormula`. This becomes a
+    live risk the day a column-reorder feature lands.
+  - **Recipes construct no datasets** — `store/plotRecipes.ts`,
+    `globalPlotRecipes.ts`, `plotRecipeApply.ts` and `lib/plotRecipe*.ts` carry
+    channel-selection and styling specs only. There is no transformation-recipe
+    feature producing derived data, so there is nothing here to propagate
+    through yet.
+  - Correct already: `lib/facet.ts` (spread row-slice), `store/cellEdit.ts`'s
+    `setCategoricalCell`, `store/recode.ts`, `store/split.ts`,
+    `store/workbookCombine.ts` (constructs no DataStruct at all).
+
+  **Sites the sweep MISSED, found by the review round** — recorded rather than
+  quietly fixed, because they are latent, not live:
+  `io/origin_project/preview.py:69` and `io/origin_project/opj.py:332` are two
+  more hand-listed `DataStruct(...)` row-slice rebuilds of exactly the allowlist
+  shape this slice calls the bug. They cannot drop a level table TODAY because
+  OPJ/OPJU import never produces one (the sweep established that separately —
+  neither file mentions `cat_levels` or `categorical` anywhere), so fixing them
+  now would be a change with no test able to observe it. They become real the
+  day OPJ import gains categorical detection, and that is the moment to convert
+  them to `dataclasses.replace`. The lesson for the audit record: "every
+  DataStruct-deriving site" was a claim the sweep could not support, and a
+  second reader found the gap in one pass.
+
+  **Open owner question, not a defect:** every data-export writer
+  (`io/xrd_csv.py`, `io/consolidated.py`, `io/origin.py`,
+  `io/origin_project/writer.py`, `io/hdf5.py`) and every clipboard/worksheet
+  copy path (`lib/clipboardGrid.ts`, `useWorksheetBlockOps.ts`,
+  `useWorksheetView.ts`'s row-copy) emits the **raw numeric code**, never the
+  level label — uniformly, so it reads as deliberate rather than scattered.
+  But it is undocumented and untested for the categorical case, and it is the
+  one place the app's otherwise-absolute "never show a raw code" rule does not
+  hold. Needs a ruling, then a test either way. Also found this round, booked (not
   fixed) for P1.6/the worksheet-UI slice: `store/cellEdit.ts`'s
   `setCellValue`/`setCellBlock` write a raw `number` into any cell,
   categorical channels included, with NO awareness that the channel is

@@ -285,3 +285,39 @@ def test_rescale_composes_with_offset_and_trim_in_scaled_units() -> None:
     # scale -> 0..10, trim -> 2..4, then subtract the offset -> 0..2.
     assert out.time[0] == pytest.approx(0.0)
     assert out.time[-1] == pytest.approx(2.0)
+
+
+def test_corrections_strips_cat_levels_because_codes_are_transformed():
+    """Group J: the strip is DELIBERATE, and this locks the reasoning in place.
+
+    ``apply_corrections`` transforms every channel unconditionally (``for k in
+    range(values.shape[1])`` plus whole-matrix ``smooth_data``/``normalize``/
+    ``derivative`` calls). A categorical channel's values are level CODES
+    (0..n-1); smoothing or differentiating them yields fractional numbers that
+    index nothing, so carrying the level table forward would make the output
+    claim labels for values that cannot have them.
+
+    This test exists so that a future author who "fixes the drop" by adding
+    ``cat_levels=data.cat_levels`` gets a failure that explains why that is
+    wrong. The real fix -- corrections not touching a categorical channel at all
+    -- is tracked as BUG-005 in plans/BUGS_AND_ISSUES.md.
+    """
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+    assert data.cat_levels == {1: ("alpha", "beta")}  # the input really is categorical
+
+    out = apply_corrections(
+        data, {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 3}
+    )
+
+    assert out.cat_levels is None
+    # And the reason: the codes themselves no longer index the table.
+    codes = out.values[:, 1]
+    assert not np.all(
+        np.isin(codes, [0.0, 1.0])
+    ), "smoothing left the codes intact -- revisit the strip"

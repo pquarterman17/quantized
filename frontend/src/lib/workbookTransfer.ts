@@ -316,12 +316,24 @@ export interface PasteResult {
   reports: ReportEntry[];
   quickPlotTemplates: QuickPlotTemplate[];
   /** `bgRef`/`derivedFrom`/`versionOf` links that named an id OUTSIDE the
-   *  pasted set and were dropped rather than aliased — always 0 for a
-   *  package `buildTransferPackage` produced (every internal ref in a
-   *  correctly-built package targets another member of the same workbook);
-   *  only a hand-edited/corrupted package can make this positive, and even
-   *  then the paste still succeeds with everything else intact. */
+   *  pasted set and were dropped rather than aliased.
+   *
+   *  This was documented as "always 0 for a package `buildTransferPackage`
+   *  produced", on the reasoning that every internal ref in a correctly-built
+   *  package targets another member of the same workbook. **That was wrong**,
+   *  and UX-002 is the correction: a `versionOf` link crosses a workbook
+   *  boundary BY CONSTRUCTION — "import as new version" (`store/relink.ts`)
+   *  tags the new dataset with the old one's id, and a single-file import is
+   *  always its own workbook (`store/importDatasets.ts`), so any single-workbook
+   *  copy of the newer version drops it. Routinely positive on perfectly valid
+   *  packages, in other words, which is why the count is now surfaced to the
+   *  user (`store/workbookTransfer.ts`'s `refNote`) instead of assumed absent.
+   *  The paste still succeeds with everything else intact. */
   droppedExternalRefs: number;
+  /** How many of `droppedExternalRefs` were `bgRef` — a dropped BACKGROUND
+   *  reference changes the plotted data (a subtraction input is gone), unlike a
+   *  dropped provenance link, so callers report it separately. */
+  droppedBackgroundRefs: number;
 }
 
 function freshId(gen: () => string, used: Set<string>): string {
@@ -351,10 +363,14 @@ export function pasteTransferPackage(
   for (const d of pkg.datasets) datasetIdMap.set(d.id, freshId(gen.dataset, usedDatasetIds));
 
   let droppedExternalRefs = 0;
-  const rewriteRef = (targetId: string | undefined): string | undefined => {
+  let droppedBackgroundRefs = 0;
+  const rewriteRef = (targetId: string | undefined, isBackground = false): string | undefined => {
     if (targetId === undefined) return undefined;
     const mapped = datasetIdMap.get(targetId);
-    if (mapped === undefined) droppedExternalRefs++;
+    if (mapped === undefined) {
+      droppedExternalRefs++;
+      if (isBackground) droppedBackgroundRefs++;
+    }
     return mapped;
   };
 
@@ -368,7 +384,7 @@ export function pasteTransferPackage(
     }
     usedNames.add(name);
     const next: Dataset = { ...d, id, name, workbookId, folderId: targetFolderId };
-    const bgTarget = rewriteRef(d.bgRef?.datasetId);
+    const bgTarget = rewriteRef(d.bgRef?.datasetId, true);
     next.bgRef = d.bgRef && bgTarget ? { ...d.bgRef, datasetId: bgTarget } : undefined;
     const derivedTarget = rewriteRef(d.derivedFrom?.datasetId);
     next.derivedFrom = d.derivedFrom && derivedTarget ? { ...d.derivedFrom, datasetId: derivedTarget } : undefined;
@@ -402,5 +418,13 @@ export function pasteTransferPackage(
     scope: { kind: "workbook", workbookId },
   }));
 
-  return { workbook, datasets, editableFigures, reports, quickPlotTemplates, droppedExternalRefs };
+  return {
+    workbook,
+    datasets,
+    editableFigures,
+    reports,
+    quickPlotTemplates,
+    droppedExternalRefs,
+    droppedBackgroundRefs,
+  };
 }

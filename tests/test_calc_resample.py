@@ -132,3 +132,29 @@ def test_resample_clean_data_untouched_by_sanitizer() -> None:
     out = resample_data(DataStruct.create(x, y), n_points=11, method="linear")
     assert_allclose(out.time, x)
     assert_allclose(out.values[:, 0], y)
+
+
+def test_resample_strips_cat_levels_because_interpolation_breaks_codes():
+    """Group J: same deliberate strip as ``calc/corrections.py`` -- see its test.
+
+    Resampling INTERPOLATES every channel onto a new grid, so a categorical
+    channel's integer level codes come back fractional and index nothing in the
+    table. Keeping the table would attach labels to values that cannot have
+    them. Tracked with corrections as BUG-005.
+    """
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+    assert data.cat_levels == {1: ("alpha", "beta")}
+
+    out = resample_data(data, n_points=7, method="linear")
+
+    assert out.cat_levels is None
+    codes = out.values[:, 1]
+    assert not np.all(
+        np.isin(codes, [0.0, 1.0])
+    ), "interpolation left the codes intact -- revisit the strip"

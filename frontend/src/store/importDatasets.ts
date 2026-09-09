@@ -26,6 +26,7 @@
 // `batchOverlayOffer` below.
 
 import { create } from "zustand";
+import { plural } from "../lib/plural";
 
 import { importFile, uploadFile } from "../lib/api";
 import type { HistoryBatchToken } from "./history";
@@ -395,7 +396,7 @@ async function runImport<T>(
   const hint = " — try the Import wizard (⌘K → Import wizard…)";
   const summary = lastError
     ? `imported ${added}/${items.length} — failed ${lastError}${hint}`
-    : `imported ${added} file${added === 1 ? "" : "s"}`;
+    : `imported ${added} file${plural(added)}`;
   get().setStatus(summary);
   // P2 review fix: `added` (files actually imported), not createdIds.length
   // (datasets created) — a multi-book Origin file inflates the latter. The

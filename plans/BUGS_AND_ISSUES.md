@@ -28,6 +28,8 @@ This is a working document, not a claim that every observation is already reprod
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
+| BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
+| BUG-006 | P2 | Worksheet Extract / Split | A row slice carries the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer line up with its rows | Unassigned | Found by review of the Group J fix, 2026-09-09 |
 
 ---
 
@@ -423,8 +425,26 @@ Worksheets sweeps only downstream dependents).
 
 ### Fix checklist
 
-- [ ] Surface `droppedExternalRefs` after a paste — a toast or a status line
+- [x] Surface `droppedExternalRefs` after a paste — a toast or a status line
   saying how many lineage links could not be carried, not a silent success.
+  **Shipped 2026-09-09 (Group J).** `store/workbookTransfer.ts`'s `refNote()`
+  appends "— N reference(s) to data outside the copy not carried" to BOTH the
+  persistent status line and the toast, for Paste AND Duplicate; the toast drops
+  from `"ok"` to `"info"` when anything was dropped, because a green check reads
+  as "clean". **"reference", not "lineage link", after the review round:**
+  `rewriteRef` counts `bgRef` alongside `derivedFrom`/`versionOf`, and a dropped
+  BACKGROUND reference is not provenance — it is a subtraction input, so losing
+  it changes the plotted data, not just the history. It is therefore counted
+  separately (`droppedBackgroundRefs`) and named in the message. Six tests in
+  `store/workbookTransfer.test.ts`, all sabotage-verified, including a negative
+  control ("does NOT annotate a transfer that carried everything") that fails
+  when the note is forced ON.
+
+  The same round found four of Paste's refusals toasted WITHOUT setting the
+  status line, so a refused paste left the previous action's success message
+  standing on the status bar. All nine refusal sites in the slice now go through
+  one `fail()` helper; pinned by "a refused paste replaces the status line
+  instead of leaving the last success standing".
 - [ ] Decide whether a dropped link is worth preserving as inert historical
   text (e.g. the source dataset's NAME) rather than a resolvable id. This is a
   semantics call about what lineage means across a transfer boundary — do not
@@ -434,7 +454,21 @@ Worksheets sweeps only downstream dependents).
 
 ### Completion record
 
-_(empty — open)_
+- PR/commit: the Group J commit (2026-09-09) — surfacing half only.
+- Automated tests: `store/workbookTransfer.test.ts` — "names the dropped link
+  count after a paste, and uses info rather than a clean ok", "names the
+  dropped link count after a duplicate too", "pluralizes honestly — two dropped
+  refs say 'references'", "names a dropped BACKGROUND reference separately — it
+  is not provenance", "a refused paste replaces the status line instead of
+  leaving the last success standing", "does NOT annotate a transfer that carried
+  everything — ok stays ok".
+- Agent verification: fix + four sabotage-verified tests.
+- Owner verification: —
+- Notes: **still open**, because box 2 is an owner semantics call, not work
+  that was skipped: whether a dropped link should be preserved as inert
+  historical text (the source dataset's NAME) rather than a resolvable id is a
+  decision about what lineage MEANS across a transfer boundary. Only the count
+  is surfaced; nothing about the drop rule itself changed.
 
 ---
 
@@ -778,8 +812,12 @@ everywhere, not just mask its display) — that call is not made here.
 - Automated tests: `useStatStage.test.ts` — "de-categorizing the picked
   groupCol masks the picker AND stops the grouping math from using it",
   "reverting the override brings the exact same groupCol pick back (raw
-  state was never cleared)", "de-categorizing the picked facetCol masks it
-  the same way".
+  state was never cleared)". The facet side is covered by the two tests that
+  assert the OPPOSITE, and deliberately so: "a non-categorical facetCol
+  SURVIVES — faceting is not restricted to categorical columns" and "a Graph
+  Builder seed faceting on a NON-categorical column still facets" (see the
+  scope note above — masking `facetCol` was a regression caught in this
+  entry's own review round, not part of the fix).
 - Agent verification: fix + sabotage-verified tests, this slice.
 - Owner verification: —
 - Notes: Tabulate was checked in the same slice and found NOT to have this
@@ -792,6 +830,267 @@ everywhere, not just mask its display) — that call is not made here.
   groupIsCategorical, without hiding the stale selection or breaking the
   table" test (sabotage-verified against `lib/modeling.ts`'s override
   precedence).
+
+---
+
+## BUG-005 — Corrections and Resample transform a categorical channel like numeric data
+
+**Priority:** P2 — nothing is destroyed (the source dataset is untouched; the
+result is a NEW DataStruct) and the degradation is not silent in the worst
+sense: the level table is correctly discarded rather than left attached to
+values that no longer index it, so the output shows honest raw numbers instead
+of confidently wrong labels. It is P2 rather than P3 because the numbers it
+does show are meaningless — a smoothed "phase code" of 0.37 is not a
+measurement of anything — and nothing warns the user that a column was
+transformed that should not have been.
+
+**Reported:** 2026-09-09, by Claude, in the Group J `cat_levels` propagation
+audit (a delegated read-only sweep of every DataStruct-deriving site).
+
+**Investigated:** — (design-time finding, confirmed by reading both modules;
+not surfaced by a user report.)
+
+**Suggested implementation owner/model:** a backend slice with golden-parity
+care — the change touches `calc/corrections.py`'s whole pipeline.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P1.4's "Preserve
+factors through derived data, filter/join, reopen, recipes, and export" box.
+
+#### User-visible problem
+
+`calc/corrections.py`'s `apply_corrections` and `calc/resample.py`'s
+`resample_data` both transform **every channel unconditionally** — the
+corrections pipeline with `for k in range(values.shape[1])` loops plus
+whole-matrix `smooth_data`/`normalize`/`derivative` calls, and resample by
+interpolating each column onto a new grid. Neither has any notion of a channel
+being categorical.
+
+A categorical channel's values are level CODES (0..n-1) that index
+`cat_levels`. Smoothing, differentiating, normalizing or interpolating them
+produces fractional numbers that index nothing. So a dataset carrying, say,
+`[Moment (numeric), Phase (categorical)]` comes out of Corrections with a
+`Phase` column of arbitrary decimals.
+
+#### Why the current drop is CONSERVATIVE — not simply correct
+
+Both functions discard `cat_levels`. That is now **explicit and documented in
+both modules** (it used to be an accidental omission that read like a bug in
+the propagation audit). For a transform that actually changes values, keeping
+the table would be strictly worse: the output would claim level labels for
+values that cannot have them. The drop is damage control there, not a solution
+— the column is still garbage, just honestly-typed garbage.
+
+**But the drop is over-broad, which is the second half of this bug.** Both
+functions drop the table whenever they run, including paths where nothing
+happened to the codes:
+
+- `apply_corrections` with a parameter set that touches only x (or is empty)
+  returns the codes bit-identical, and drops the table anyway.
+- `resample_data` onto a grid COINCIDENT with the input x is an identity
+  interpolation — the codes come back exact, and the table is dropped anyway.
+
+So a user who resamples "onto the same grid to normalize a batch", or applies an
+x-offset-only correction, silently loses labelling that was never invalidated.
+The two tests below assert the codes are invalidated only for the parameters
+they use; they do NOT establish that the strip is always warranted, and this
+entry no longer claims they do.
+
+#### What the real fix requires
+
+Corrections must not transform a categorical channel at all: carry such a
+channel through untouched, and carry its level table with it. That needs a
+channel mask threaded through every step of the pipeline (offset, background,
+reference subtraction, unit conversion, smoothing, normalization, derivative)
+plus the whole-matrix helpers, and it carries real golden-parity regression
+risk against the frozen MATLAB outputs. It was deliberately NOT attempted
+inside the audit slice that found it.
+
+Open sub-questions for whoever takes it:
+
+- Should Resample *refuse* a categorical channel rather than pass it through?
+  Nearest-neighbour resampling of a code column is defensible and would
+  preserve valid codes, but it is a different interpolation than the one the
+  user picked for the numeric channels — silently mixing methods within one
+  operation needs a deliberate ruling.
+- Should the UI warn before running a correction on a mixed dataset, or should
+  the pass-through be silent because it is now correct?
+
+#### Reproduction
+
+- [x] Starting state identified — any `DataStruct` with `cat_levels` on at
+  least one channel and at least one numeric channel.
+- [x] Exact actions recorded — `apply_corrections(data, {"smoothEnabled":
+  True, ...})`, or `resample_data(data, n_points=N)`.
+- [x] Actual result recorded — the categorical channel's codes come back
+  fractional; `cat_levels` is `None` on the result.
+- [x] Reproduced by an agent — the two strip tests below assert exactly this,
+  including that the codes really are no longer valid.
+- [ ] Reproduced through the UI on real owner data.
+
+#### Investigation
+
+- [x] Likely owning modules identified — `src/quantized/calc/corrections.py`
+  (`apply_corrections`), `src/quantized/calc/resample.py` (`resample_data`).
+- [x] Root cause confirmed rather than inferred — both were read directly; the
+  unconditional per-channel loops and whole-matrix calls are visible in the
+  source, and `routes/corrections.py` pipes the result straight to
+  `datastruct_payload` with no client-side re-stitching (`store/corrections.ts`
+  uses the response as-is), so nothing downstream repairs it.
+- [x] Related paths checked — `calc/aggregate.py`'s dataset algebra is n/a (its
+  output is a single new arithmetic column unrelated to either source's channel
+  indices).
+
+#### Implementation
+
+- [x] Minimal safe behavior defined and shipped — the strip is explicit and
+  documented in both modules, with the reasoning inline so a future author
+  cannot "fix" it by re-adding `cat_levels=` without reading why.
+- [ ] Channel-mask pass-through for categorical channels — the actual fix.
+- [ ] Stop dropping the table on paths that do not change the codes (an
+  identity/x-only correction, a resample onto a coincident grid). Cheaper than
+  the channel mask and independently valuable; needs a "did the codes survive"
+  predicate rather than a per-transform allowlist, so that a new transform is
+  conservative by default.
+- [ ] Resample's nearest-neighbour-vs-refuse ruling.
+- [ ] Any user-facing warning.
+
+#### Tests and acceptance
+
+- [x] The deliberate strip is pinned, with the reasoning in the docstring —
+  `test_corrections_strips_cat_levels_because_codes_are_transformed`,
+  `test_resample_strips_cat_levels_because_interpolation_breaks_codes`. Each
+  also asserts the codes are genuinely no longer valid FOR THE PARAMETERS IT
+  USES (a moving-average smooth; a 7-point resample of a 4-point input) — that
+  is the honest scope: they prove the strip fires and that these particular
+  transforms invalidate the codes. They do NOT prove the strip is always
+  warranted, and the identity-parameter cases above are exactly where it is not.
+- [ ] A test for an identity-parameter path (codes survive, table still dropped)
+  — deliberately NOT added as a passing test, since it would lock in the
+  over-broad behavior. It belongs with the fix, as the test that goes green.
+- [ ] Pass-through behavior tested — blocked on the fix.
+- [ ] Owner verifies on real mixed data.
+
+#### Completion record
+
+- PR/commit: the Group J commit (2026-09-09) — documentation + test-locking of
+  the existing behavior only. **The bug itself is open.**
+- Automated tests: the two strip tests named above.
+- Agent verification: strip behavior only.
+- Owner verification: —
+
+---
+
+## BUG-006 — a row slice carries `text_columns` through unsliced, so text cells stop matching their rows
+
+**Priority:** P2 — the numeric data in the child is correct and the parent is
+untouched, so nothing is destroyed. But every text cell shown against an
+extracted row belongs to a DIFFERENT row of the parent, which is a wrong value
+displayed as if it were right: a sample id, operator or run label read off the
+child's grid can be silently attributed to the wrong measurement. That is the
+"can escape notice" class, capped at P2 only because it requires a sheet that
+carries inline text columns at all.
+
+**Reported:** 2026-09-09, by Claude, in the adversarial review round of the
+Group J `cat_levels` propagation fix — the review was asked whether
+`sliceDataStruct(ds.data, rows)` was truly equivalent to the literal it
+replaced, and following that question through the row-index domain surfaced this
+separate, older defect.
+
+**Investigated:** — (design-time finding, confirmed by reading the code.)
+
+**Suggested implementation owner/model:** a frontend slice; the decision half
+needs a ruling before the code half.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P1.4's
+"Preserve factors through derived data, filter/join, reopen, recipes, and
+export" box.
+
+#### User-visible problem
+
+`lib/datasetsplit.ts`'s `sliceDataStruct` copies `metadata` wholesale
+(`metadata: { ...data.metadata }`). The `text_columns` sidecar lives IN metadata
+and is row-indexed — `{ columnHeader: [cell per row] }` (`io/delimited.py:411`,
+`io/import_preview.py:455`, `io/sqlite_query.py:169`; read in the frontend by
+`lib/columnmeta.ts`'s `originTextColumns`).
+
+So slicing rows `[1, 5, 9]` out of a sheet gives a child whose numeric rows are
+the right three, and whose text columns are still the parent's FULL cell lists.
+The worksheet renders text columns positionally alongside the numeric grid, so
+the child's row 0 shows the parent's row-0 text against the parent's row-1
+numbers.
+
+Both consumers of `sliceDataStruct` are exposed:
+
+- **Extract** (`components/Stage/worksheet/extractRows.ts` ->
+  `useWorksheetView`'s `extractSubset`) — the Data-Filter-narrowed row set.
+- **Split by column** (`store/split.ts`'s `splitDatasetByColumn`) — each child
+  gets one group's rows.
+
+`label_rows` is NOT affected: it is indexed by CHANNEL, not by row, so a row
+slice leaves it correct.
+
+#### Why it was not fixed on discovery
+
+Two reasons, both about not guessing:
+
+1. `sliceDataStruct` is shared. Slicing the sidecar inside it fixes Extract and
+   Split together, which is right — but it also means the primitive stops being
+   a pure column-layout-preserving row map and starts knowing about a specific
+   metadata key. That is a deliberate widening of a contract several callers
+   depend on.
+2. There is a real question underneath about what a text column MEANS in a
+   child: a text-only Origin book has `time.length === 0` and the text columns
+   ARE the grid (`lib/columnmeta.ts`'s `TextColumn` doc), so for such a sheet
+   "slice the numeric rows" and "slice the text rows" are not the same
+   operation, and Extract already refuses that case entirely (see the
+   `planExtract` refusal). Deciding this needs the owner's view of whether
+   Extract should carry text columns at all, or drop them and say so.
+
+#### Reproduction
+
+- [x] Starting state identified — any dataset whose `metadata.text_columns` is
+  non-empty (a generic CSV with a text column, any Origin "Text & Numeric"
+  sheet, a SQLite import with a text column) plus an active filter or a
+  Split-by-column.
+- [x] Exact actions recorded — filter to a row subset, press Extract; or Split
+  by any column.
+- [x] Actual result recorded — the child's `metadata.text_columns` is the
+  parent's, unsliced; every text cell is off by the filter's own offsets.
+- [ ] Reproduced by a test — deliberately not added yet: a passing test would
+  lock in the wrong behavior, and a failing one belongs with the fix.
+- [ ] Confirmed visually on real owner data.
+
+#### Investigation
+
+- [x] Likely owning module identified — `frontend/src/lib/datasetsplit.ts`
+  (`sliceDataStruct`), with `extractRows.ts` and `store/split.ts` as the two
+  callers.
+- [x] Root cause confirmed rather than inferred — read `sliceDataStruct` (it
+  spreads `metadata` and names no sidecar), `io/delimited.py`'s
+  `text_columns` construction (row-indexed by definition) and
+  `lib/columnmeta.ts`'s reader.
+- [x] Scope bounded — `label_rows` is channel-indexed and unaffected;
+  `cat_levels` is channel-indexed and already handled.
+
+#### Implementation
+
+- [ ] Decide: slice `text_columns` in `sliceDataStruct`, or drop it from a
+  child and say so in the status line. Do not invent this silently.
+- [ ] Whichever is chosen, apply it once in the shared primitive so Extract and
+  Split cannot diverge.
+- [ ] Handle the text-longer-than-numeric case explicitly rather than by
+  truncation (see `extractRows.ts`'s module doc).
+
+#### Tests and acceptance
+
+- [ ] A fixture whose text columns are LONGER than its numeric columns, and one
+  where they are shorter — the asymmetric cases are where a naive slice goes
+  wrong.
+- [ ] Both callers covered, since the fix lands in shared code.
+
+#### Completion record
+
+_(empty — open)_
 
 ---
 

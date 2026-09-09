@@ -10,6 +10,7 @@
 // inline below, unchanged from where it lived in the store.
 
 import { probeSource } from "../lib/desktopBridge";
+import { plural } from "../lib/plural";
 import { evaluateCommitProbe, findCandidateCollisions, isCommittableRow } from "../lib/relink";
 import type { Dataset } from "../lib/types";
 import type { RelinkState } from "./relink";
@@ -225,7 +226,7 @@ export async function commitRelink(
   }
   // ONE recordHistory call for the whole batch — undo restores every
   // relinked dataset's old path in a single step (box 3).
-  useApp.getState().recordHistory(`relink ${n} source${n === 1 ? "" : "s"}`);
+  useApp.getState().recordHistory(`relink ${n} source${plural(n)}`);
   useApp.setState((state) => ({
     datasets: state.datasets.map((d) => {
       const source = pending.get(d.id)?.source;
@@ -233,7 +234,7 @@ export async function commitRelink(
       return { ...d, source };
     }),
   }));
-  toast(`relinked ${n} dataset${n === 1 ? "" : "s"}${joined}`, "ok");
+  toast(`relinked ${n} dataset${plural(n)}${joined}`, "ok");
   get().closePanel(); // also revokes the C1 directory grant, if any
   set({ preview: [] });
 }

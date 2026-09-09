@@ -137,6 +137,12 @@ def resample_data(
     meta["resampled"] = True
     meta["resampleMethod"] = method
     meta["resamplePoints"] = int(x_new.size)
+    # `cat_levels` is deliberately dropped, for the same reason as
+    # `calc/corrections.py`'s strip (see its comment): resampling INTERPOLATES,
+    # so a categorical channel's integer level codes become fractional and index
+    # nothing in the table. Carrying it forward would attach labels to values
+    # that cannot have them. Booked with corrections as BUG-005; pinned by
+    # `test_resample_strips_cat_levels_because_interpolation_breaks_codes`.
     return DataStruct.create(
         x_new, y_new, labels=data.labels, units=data.units, metadata=meta
     )

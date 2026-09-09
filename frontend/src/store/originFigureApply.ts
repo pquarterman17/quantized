@@ -2,6 +2,7 @@
 // source resolution and latest-request-wins coordination out of useApp.ts.
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
+import { plural } from "../lib/plural";
 import { figureLayerFamily, type OriginFigureEntry } from "../lib/originFigures";
 import { loadOriginApplyLibs } from "./originApplyLibs";
 import { excludedSet } from "../lib/rowstate";
@@ -62,7 +63,7 @@ export function deferOriginFigureApply(
   );
   if (pendingIds.length === 0) return false;
 
-  get().setStatus(`loading ${pendingIds.length} Origin source book${pendingIds.length === 1 ? "" : "s"}…`);
+  get().setStatus(`loading ${pendingIds.length} Origin source book${plural(pendingIds.length)}…`);
   void get()
     .resolveDatasets(pendingIds)
     .then(() => {
@@ -122,7 +123,7 @@ function discardedEdits(d: Dataset): string[] | null {
   const parts: string[] = [];
   if (d.corrections || d.bgRef) parts.push("corrections");
   if (d.formulas?.length) {
-    parts.push(`${d.formulas.length} formula${d.formulas.length === 1 ? "" : "s"}`);
+    parts.push(`${d.formulas.length} formula${plural(d.formulas.length)}`);
   }
   if (d.filter?.length) parts.push("row filter");
   if (excludedSet(d).size > 0) parts.push("excluded rows"); // via rowstate — guard #50

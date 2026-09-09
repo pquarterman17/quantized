@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import tempfile
 import zipfile
+from dataclasses import replace
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -204,13 +205,13 @@ def export_opj(req: OpjRequest) -> Response:
             if item.name and "origin_book" not in ds.metadata:
                 meta = dict(ds.metadata)
                 meta["origin_book"] = item.name
-                ds = DataStruct(
-                    time=ds.time,
-                    values=ds.values,
-                    labels=ds.labels,
-                    units=ds.units,
-                    metadata=meta,
-                )
+                # `replace`, not a hand-listed `DataStruct(...)`: the manual
+                # form named five of the six fields and so silently dropped
+                # `cat_levels`, exporting a categorical column's level table
+                # into oblivion on every named-workbook .opj export. It would
+                # drop the next field added too. This is the pattern
+                # io/technique.py and io/origin_project/__init__.py already use.
+                ds = replace(ds, metadata=meta)
             books.append(ds)
         payload = opj_bytes(books)
     except CALC_ERRORS as exc:

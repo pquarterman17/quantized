@@ -23,6 +23,7 @@
 //     await-all-pending-before-save).
 
 import { guessImportSettings, parseImportText } from "../lib/api";
+import { plural } from "../lib/plural";
 import { installBookData } from "../lib/bookData";
 import { lit } from "../lib/macro";
 import type { Dataset } from "../lib/types";
@@ -148,7 +149,7 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
           kind: "import",
           params: { name },
         });
-        const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${data.labels.length === 1 ? "" : "s"}`;
+        const msg = `${name} — ${data.time.length} rows, ${data.labels.length} column${plural(data.labels.length)}`;
         get().setStatus(msg);
         toast(msg, "ok");
       } catch (e) {

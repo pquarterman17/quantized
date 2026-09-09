@@ -47,6 +47,7 @@ import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
+import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
 
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
@@ -449,16 +450,15 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   function extractSubset() {
     if (!canExtract) return;
     if (pendingGuard("Extract")) return;
-    const data: DataStruct = {
-      time: analysisRows.map((r) => time[r]),
-      values: analysisRows.map((r) => values[r]),
-      labels,
-      units,
-      metadata,
-    };
-    const stem = ds.name.replace(/\.[^.]+$/, "");
-    addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data });
-    setStatus(`extracted ${analysisRows.length} of ${time.length} rows`);
+    // Row clamping, the DataStruct build and the wording all live in
+    // ./extractRows.ts, which carries the reasoning and the BUG-006 booking:
+    // an index here can run past `values` on a text-heavy Origin sheet.
+    const plan = planExtract(ds.data, analysisRows);
+    if (plan) {
+      const stem = ds.name.replace(/\.[^.]+$/, "");
+      addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data: plan.data });
+    }
+    setStatus(describeExtract(plan, time.length));
   }
 
   function tsvHeaders(): string[] {

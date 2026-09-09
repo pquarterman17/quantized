@@ -40,3 +40,59 @@ describe("cloneDataStruct", () => {
     expect(copy.values[1]).toEqual([20, 200]);
   });
 });
+
+// The allowlist-copy bug (Group J audit): `cloneDataStruct` named the five
+// required fields and silently dropped every optional one, so `duplicateDataset`
+// and `freezeCopy` de-categorized a dataset. These assert the SPREAD contract —
+// "a new field is carried by default" — not just the one field that was noticed.
+describe("cloneDataStruct — optional fields survive the copy", () => {
+  const categorical: DataStruct = {
+    ...src,
+    values: [
+      [10, 0],
+      [20, 1],
+      [30, 0],
+    ],
+    cat_levels: { 1: ["Pass", "Fail"] },
+  };
+
+  it("carries cat_levels forward — a duplicated categorical dataset stays categorical", () => {
+    const copy = cloneDataStruct(categorical);
+    expect(copy.cat_levels).toEqual({ 1: ["Pass", "Fail"] });
+  });
+
+  it("deep-copies each level array, so extending a level on the copy cannot reach the source", () => {
+    const copy = cloneDataStruct(categorical);
+    // What store/cellEdit.ts's "+ Add new level" does, applied to the copy.
+    copy.cat_levels![1].push("Marginal");
+    expect(categorical.cat_levels![1]).toEqual(["Pass", "Fail"]);
+  });
+
+  it("omits cat_levels entirely for a plain numeric dataset (byte-identical to before the field existed)", () => {
+    const copy = cloneDataStruct(src);
+    expect("cat_levels" in copy).toBe(false);
+  });
+
+  it("carries EVERY other optional field — the spread contract, not a per-field allowlist", () => {
+    // SYNTHETIC ON PURPOSE, and this is what it does and does not prove. The
+    // `books`/`book_source`/`figures`/`origin_fidelity` fields cannot reach
+    // `cloneDataStruct` today — `store/importDatasets.ts` deletes all four
+    // before `data` becomes a stored `Dataset.data` — so this is NOT evidence of
+    // a real-world loss of them. It pins the CONTRACT: an optional key this
+    // module has never heard of survives the copy, which is exactly what makes
+    // the next field added to `DataStruct` safe by default. `some_future_field`
+    // is the honest version of that claim.
+    const rich = {
+      ...src,
+      books: [{ id: "bk1", name: "Book1" }],
+      book_source: { kind: "path", path: "/x/p.opju" },
+      figures: [{ id: "fig1" }],
+      origin_fidelity: { version: 1, figures: {} },
+      some_future_field: { anything: true },
+    } as unknown as DataStruct;
+    const copy = cloneDataStruct(rich) as unknown as Record<string, unknown>;
+    for (const key of ["books", "book_source", "figures", "origin_fidelity", "some_future_field"]) {
+      expect(copy[key]).toEqual((rich as unknown as Record<string, unknown>)[key]);
+    }
+  });
+});
