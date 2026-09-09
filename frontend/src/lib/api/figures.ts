@@ -93,8 +93,22 @@ export interface FigureSpec {
    *  Mirrors `StatplotFigureSpec.facets`/`CategoricalFigureSpec.facets`'s
    *  established shape: every other field on this spec stays present but
    *  UNUSED server-side once `facets` is set (`x_key`/`y_keys`/`overrides`/
-   *  `series_styles`/... are not applied to the facet-grid render path). */
+   *  `series_styles`/... are not applied to the facet-grid render path — the
+   *  facet grid's own styles travel in `facet_series_styles` below). */
   facets?: FigureFacetSpec[] | null;
+  /** The FACET grid's per-series styles, 1:1 with every panel's own `series`
+   *  list. A separate field from `series_styles` on purpose, and the reason is
+   *  a live misalignment rather than tidiness: `series_styles` is indexed by
+   *  `y_keys`, which `buildFigureSpecForView` sends as `plotted` —
+   *  hidden-channel-FILTERED and `seriesOrder`-REORDERED — while `facets` is
+   *  deliberately built from the RAW `st.yKeys`, because the on-screen facet
+   *  grid ignores both. One hidden or reordered channel makes the two lists
+   *  diverge in length AND order (`figureSpec.test.ts`'s all-hidden facet case
+   *  pins exactly that: `y_keys` comes back `[]` while `facets` still carries
+   *  every series), so feeding `series_styles` to the facet renderer would put
+   *  a chosen dash on the wrong curve. This list is built from the facet's own
+   *  channel order, so it is aligned by construction. */
+  facet_series_styles?: (ExportSeriesStyle | null)[];
   fmt?: string;
   style?: string;
   dpi?: number;

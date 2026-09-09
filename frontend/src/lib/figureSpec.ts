@@ -29,6 +29,7 @@ import type { ErrorPair } from "./api";
 import type { FigureSpec } from "./api/figures";
 import { buildErrorSpans } from "./errorbars";
 import { buildExportStyles } from "./exportStyles";
+import { defaultDenseChannels } from "./plotdata";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
 import { resolveFacetsOrThrow } from "./figureSpecFacets";
@@ -167,6 +168,15 @@ function buildFigureSpecForView(
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
   const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
 
+  // The facet grid's OWN style list, built from the facet's OWN channel order.
+  // It cannot reuse `series_styles` (built from `plotted` just above): the two
+  // lists diverge the moment a channel is hidden or the series order is
+  // changed while faceting, because the grid deliberately honours neither. A
+  // positional reuse would then draw a chosen dash on the wrong curve, which is
+  // worse than drawing none — see `FigureSpec.facet_series_styles`'s doc and
+  // `routes/export_figures_facets.render_facet_bytes`.
+  const facetChannels = st.yKeys ?? defaultDenseChannels(dataset, st.xKey);
+
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
   // subset marker, not a replacement), plus that subset in display order, so
@@ -216,6 +226,7 @@ function buildFigureSpecForView(
     title: o.title,
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
+    ...(facets ? { facet_series_styles: buildExportStyles(facetChannels, st.seriesStyles) } : {}),
     ...(extras.publicationSeriesStyles === undefined
       ? { series_styles: buildExportStyles(plotted, st.seriesStyles) }
       : extras.publicationSeriesStyles === null

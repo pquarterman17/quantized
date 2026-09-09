@@ -27,10 +27,10 @@ from quantized.routes._export_common import (
 )
 from quantized.routes.export_figures import (
     FigureRequest,
-    _facet_panels,
     _figure_series,
     _tick_fmt,
 )
+from quantized.routes.export_figures_facets import facet_panels
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -126,7 +126,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                 # REAL VECTOR sub-grid inside its page cell (calc.figure_
                 # page_facets.draw_facet_panel_cell) instead of a pre-
                 # rendered raster embed -- reshape via the SAME helper
-                # `/figure`'s facet branch uses (`_facet_panels`) so this
+                # `/figure`'s facet branch uses (`facet_panels`) so this
                 # route can never drift on how a facet panel's wire payload
                 # turns into panel dicts. `_figure_series` still resolves
                 # just the axis labels (C4 -- "explicit override, else
@@ -154,7 +154,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                         x_fmt=_tick_fmt(f.x_fmt), y_fmt=_tick_fmt(f.y_fmt),
                         overrides=facet_ov,
                         label=spec.label, page_rect=spec.page_rect,
-                        facets=_facet_panels(f),
+                        facets=facet_panels(f),
                     )
                 )
                 continue

@@ -297,6 +297,70 @@ def test_figure_facets_renders_grid_not_single_panel() -> None:
     assert "level 1" in svg
 
 
+def test_figure_facets_route_forwards_facet_series_styles(monkeypatch) -> None:
+    """Group L: a dashed series in a FACETED export used to come out solid.
+
+    `calc.figure_facets.draw_facet_grid` passed a hardcoded `None` where the
+    flat path passes the per-series style spec, and the route never forwarded
+    one, so every dash/width/colour a user set was silently discarded on the
+    publication artifact.
+
+    Styles travel in `facet_series_styles`, NOT `series_styles`: the latter is
+    indexed by `y_keys` == the frontend's hidden-filtered, reordered `plotted`
+    list, while facet panels are built from the RAW `st.yKeys`, so the two
+    diverge whenever a channel is hidden or reordered.
+
+    Patches `render_facets_figure` on `calc.figure_facets`, which
+    `routes.export_figures_facets` imports INSIDE the function -- so the patch
+    is resolved at call time and always applies. Patching `draw_facet_grid`
+    there does NOT work: `calc.figure_facets_map` binds that name at module
+    import, so a patch only lands if this test happens to run before that
+    module is first imported. It passed alone and failed under `-n auto` for
+    exactly that reason; the artist-level assertion lives in
+    `tests/test_calc_figure_facets.py`, which calls the drawing code directly.
+    """
+    from quantized.calc import figure_facets
+
+    seen: dict[str, Any] = {}
+    real = figure_facets.render_facets_figure
+
+    def capture(*args: Any, **kwargs: Any) -> Any:
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(figure_facets, "render_facets_figure", capture)
+
+    styles = [{"line": "dashed", "width": 3.5}]
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "facets": _xy_facets(),
+            "facet_series_styles": styles,
+            "filename": "facetstyled",
+        },
+    )
+    assert resp.status_code == 200
+    assert seen, "render_facets_figure was never called -- the facet branch did not run"
+    assert seen["series_styles"] == styles
+
+
+def test_figure_facets_absent_styles_still_render(monkeypatch) -> None:
+    """The bounds guard: no `facet_series_styles` at all is today's behaviour,
+    and a SHORT list must degrade the trailing series to the preset default
+    rather than raising -- `resolve_style_channels`'s "an export must never 500
+    on a bad style hint"."""
+    for styles in (None, [], [{"line": "dotted"}]):
+        body: dict[str, Any] = {
+            "dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets(), "filename": "f",
+        }
+        if styles is not None:
+            body["facet_series_styles"] = styles
+        resp = client.post("/api/export/figure", json=body)
+        assert resp.status_code == 200, f"styles={styles!r} should render, not 500"
+
+
 def test_figure_facets_pdf_and_png_render() -> None:
     for fmt, magic in (("pdf", b"%PDF-"), ("png", b"\x89PNG\r\n\x1a\n")):
         resp = client.post(

@@ -29,7 +29,7 @@ what's on screen.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from io import BytesIO
 from typing import Any
 
@@ -91,6 +91,33 @@ def draw_facet_grid(
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
     overrides: Mapping[str, Any] | None = None,
+    # Per-series style (MAIN #13/#14's dict shape), 1:1 with EVERY panel's
+    # own `series` list -- panel.series[si] <-> series_styles[si]. Every
+    # panel shares one series order, so one list serves the whole grid.
+    #
+    # THIS IS NOT `series_styles` FROM THE FLAT PATH, and conflating the two
+    # is a live hazard rather than a theoretical one. The request's own
+    # `series_styles` is indexed by `y_keys`, which the frontend sends as
+    # `plotted` -- hidden-channel-FILTERED and `seriesOrder`-REORDERED
+    # (`lib/figureSpec.ts`). Facet panels are deliberately built from the
+    # RAW `st.yKeys` instead, because the screen's facet grid ignores both
+    # (same file, `resolveFacetsOrThrow`). So the two lists diverge in
+    # length AND order the moment a channel is hidden or reordered while
+    # faceting -- an existing frontend test ("does not throw for an
+    # all-hidden FACETED view") pins exactly that divergence. Feeding the
+    # flat list in here would draw a scientist's chosen dash on the wrong
+    # curve, which is worse than drawing none. The caller must pass a list
+    # built from the FACET's own channel order; `routes.export_figures`
+    # takes it from the request's separate `facet_series_styles` field.
+    #
+    # Keyword-only, defaulting to `None` so every existing caller
+    # (`render_facets_figure_map`'s preview path, any pre-fix test) is
+    # unaffected. Bounds-guarded EXACTLY like the flat renderer's
+    # `draw_series_axes`: a short or absent list degrades a trailing series
+    # to the style-preset default rather than raising --
+    # `calc.plotting.resolve_style_channels`'s own doc: "an export must
+    # never 500 on a bad style hint."
+    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> list[list[Any]]:
     """The shared per-panel facet drawing core (F4.4 follow-up): draws
     ``panels`` INTO caller-provided ``axes`` -- line plot, facet-level title
@@ -128,7 +155,8 @@ def draw_facet_grid(
         series = panel.get("series", [])
         artists: list[Any] = []
         for si, s in enumerate(series):
-            kw = _plot_kwargs(st.line_width, st.marker_size, None)
+            spec = series_styles[si] if series_styles and si < len(series_styles) else None
+            kw = _plot_kwargs(st.line_width, st.marker_size, spec)
             (line,) = ax.plot(
                 x, np.asarray(s.get("y", []), dtype=float),
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
@@ -198,6 +226,10 @@ def render_facets_figure(
     # `buildOpts` at all. Applying the FULL override set here (as the flat
     # path does) would render things the screen's facet grid never shows.
     overrides: Mapping[str, Any] | None = None,
+    # Per-series style, forwarded verbatim to `draw_facet_grid` -- see that
+    # function's own `series_styles` doc for the alignment contract and
+    # bounds guard. `None` (default) is today's behaviour, byte-identical.
+    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> bytes:
     """Render one small-multiples panel per facet level.
 
@@ -234,7 +266,7 @@ def render_facets_figure(
         panels, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label, style=style,
         width_in=width_in, height_in=height_in, x_fmt=x_fmt, y_fmt=y_fmt,
-        overrides=overrides,
+        overrides=overrides, series_styles=series_styles,
     ) as built:
         buf = BytesIO()
         built.fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)

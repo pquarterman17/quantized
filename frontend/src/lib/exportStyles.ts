@@ -26,6 +26,11 @@ export function buildExportStyles(
     if (st?.marker) {
       spec.marker = true;
       if (st.markerSize != null) spec.marker_size = st.markerSize;
+      // Without this the backend's marker-shape table is dead code and every
+      // exported marker is a filled circle, whatever the eight on-screen
+      // shapes said (`calc/figure.py`'s `_MARKER`). An unknown value falls
+      // back to a circle there, so sending it unvalidated is safe.
+      if (st.markerShape) spec.marker_shape = st.markerShape;
     }
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;
     if (st?.step) spec.step = st.step;

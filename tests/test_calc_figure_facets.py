@@ -264,6 +264,71 @@ def test_panels_share_one_x_domain_but_keep_independent_y_autoscale() -> None:
     assert axes[0].get_ylim()[1] < 100
 
 
+# ── Per-series style threading (backend-fix pass, verification item 1):
+# `render_facets_figure`/`draw_facet_grid` now accept an optional
+# `series_styles` list, 1:1 with EVERY panel's own `series` list. NOT yet
+# wired from `routes.export_figures._render_facets_bytes` -- see that
+# function's own docstring for the confirmed y_keys/facets index-alignment
+# hazard (hiddenChannels / seriesOrder) that blocks it. These tests exercise
+# the calc-layer capability directly, the same way a future, correctly-
+# aligned caller would. ───────────────────────────────────────────────────
+
+
+def _two_series_panels(n: int) -> list[dict]:
+    return [
+        {
+            "label": f"level {i}",
+            "x": [0, 1, 2, 3],
+            "series": [
+                {"label": "a", "y": [0, 1, 2, 3]},
+                {"label": "b", "y": [3, 2, 1, 0]},
+            ],
+        }
+        for i in range(n)
+    ]
+
+
+def test_series_styles_apply_dash_width_and_color_to_every_panel() -> None:
+    styles = [
+        {"color": "#ff0000", "width": 3.0, "line": "dashed"},
+        {"color": "#0000ff", "width": 1.0, "line": "dotted"},
+    ]
+    fig = _rendered_figure(_two_series_panels(3), fmt="pdf", series_styles=styles)
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    assert len(axes) == 3
+    for ax in axes:
+        line_a, line_b = ax.get_lines()
+        assert line_a.get_linestyle() == "--"
+        assert line_a.get_linewidth() == 3.0
+        assert line_a.get_color() == "#ff0000"
+        assert line_b.get_linestyle() == ":"
+        assert line_b.get_linewidth() == 1.0
+        assert line_b.get_color() == "#0000ff"
+
+
+def test_series_styles_short_list_degrades_to_default_without_raising() -> None:
+    # Only ONE style for a TWO-series panel: the second series must fall
+    # back to the style preset's default line kwargs, never raise (the
+    # "an export must never 500 on a bad style hint" contract).
+    styles = [{"color": "#ff0000", "line": "dashed"}]
+    fig = _rendered_figure(_two_series_panels(2), fmt="pdf", series_styles=styles)
+    axes = [ax for ax in fig.axes if ax.get_visible()]
+    line_a, line_b = axes[0].get_lines()
+    assert line_a.get_linestyle() == "--"
+    assert line_a.get_color() == "#ff0000"
+    # Second series: no style entry at all -> matplotlib/style-preset default,
+    # definitely not the first series' dashed red.
+    assert line_b.get_linestyle() != "--"
+    assert line_b.get_color() != "#ff0000"
+
+
+def test_absent_series_styles_degrades_to_todays_behaviour() -> None:
+    # series_styles=None (the default -- every pre-fix caller) must render
+    # identically to the pre-fix code path: no raise, default line kwargs.
+    out = render_facets_figure(_two_series_panels(2), fmt="pdf")
+    assert out[:4] == b"%PDF"
+
+
 # ── render_stat_facets_figure (GUI_INTERACTION #12 slice 4b: box/violin) ────
 
 _GROUP_A = [1.0, 2.0, 3.0, 4.0, 5.0]

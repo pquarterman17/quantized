@@ -863,8 +863,8 @@ export interface paths {
          *     FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
          *     request (``req.facets`` set) renders the SAME small-multiples grid
          *     ``/figure`` exports (via ``calc.figure_facets_map.render_facets_figure_map``,
-         *     sharing ``_render_facets_bytes``'s own ``_figure_series``-derived label
-         *     resolution below) and now returns REAL per-panel geometry: ``panels``
+         *     sharing this module's own ``_figure_series``-derived label resolution)
+         *     and now returns REAL per-panel geometry: ``panels``
          *     (one axes entry per panel -- pixel rect + data limits + facet label,
          *     replacing the flat path's single ``axes`` dict, which is absent here)
          *     and ``elements`` tagged with a ``panel`` index (each panel's facet
@@ -6381,6 +6381,10 @@ export interface components {
             dpi?: number;
             /** Error Spans */
             error_spans?: ({
+                [key: string]: unknown;
+            } | null)[] | null;
+            /** Facet Series Styles */
+            facet_series_styles?: ({
                 [key: string]: unknown;
             } | null)[] | null;
             /** Facets */

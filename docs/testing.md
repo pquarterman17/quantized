@@ -30,3 +30,40 @@ loose order-of-magnitude backstop. Never lower an existing budget.
 and still flaked under concurrent load. Load does not scale predictably — a
 worker can stall for whole seconds. An old bound that has never failed is
 evidence that bound is survivable; keep it.
+
+## Patch where the name is RESOLVED, not where it is defined
+
+A monkeypatch that passes alone and fails under `pytest -n auto` is usually not
+a race at all — it is a patch that never applied, and only appeared to work
+because of import ordering.
+
+`from x import f` **binds `f` into the importing module at import time.**
+Patching `x.f` afterwards does not change that already-bound name. Whether the
+patch lands then depends on whether the importing module had been imported yet
+when the patch ran — which single-file runs and sharded parallel runs decide
+differently, and neither decides deliberately.
+
+Worked example (2026-09-09, Group L). A route test patched
+`quantized.calc.figure_facets.draw_facet_grid` to capture the styles reaching
+the facet renderer. But `calc/figure_facets_map.py` does
+`from quantized.calc.figure_facets import draw_facet_grid` at module level, so
+the running code called the ORIGINAL. Alone the test passed (the map module had
+not been imported yet, so its later import picked up the patched attribute);
+under `-n auto` its shard imported that module first and the test failed. The
+count-only gate line said "1 failed" — the name came from re-running with
+`FAILED` in the grep, which is why the raw log is authoritative.
+
+The fix is not to retry or to reorder tests:
+
+- **Patch a name the target resolves at CALL time.** The route imports
+  `render_facets_figure` *inside* the function, so patching
+  `calc.figure_facets.render_facets_figure` always applies. That test now
+  asserts the route forwards `series_styles`, which is the route's actual claim.
+- **Assert the rendering claim where the rendering happens.** The
+  "a dashed series really draws dashed" assertion belongs in the calc-level
+  test, which calls the drawing function directly and inspects the matplotlib
+  artist — no patching at all, so nothing can silently not apply.
+
+Rule of thumb: if a test needs a patch to observe its subject, patch the
+narrowest name the subject looks up when it runs, and prefer restructuring the
+assertion to need no patch at all.

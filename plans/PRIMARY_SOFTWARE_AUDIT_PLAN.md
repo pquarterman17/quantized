@@ -2771,9 +2771,51 @@ covers a much smaller subset and guards focus on Analyze.
   - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
     (aps/report/web) have no greyscale variant.
 
-  Two BUGS the audit turned up on the way, both fixed under Group L rather than
-  filed and left: faceted export silently dropped every per-series style, and
-  exported markers were always circles. See that entry for the detail.
+  Two BUGS the audit turned up on the way, both FIXED (2026-09-09, Group L)
+  rather than filed and left:
+
+  - **A faceted export silently dropped every per-series style.**
+    `calc/figure_facets.py`'s `draw_facet_grid` passed a hardcoded `None` where
+    the flat path passes the style spec, and the route forwarded nothing, so a
+    dash, width or colour a user set came out of a small-multiples PDF as
+    matplotlib's default. Publication-artifact integrity, not accessibility
+    polish.
+
+    **The fix is NOT "forward `series_styles`", and this is the interesting
+    part.** A delegated agent was told to wire it and to stop if the index
+    alignment was unsafe — it stopped, and it was right to. `series_styles` is
+    indexed by `y_keys`, which the frontend sends as `plotted`: hidden-channel-
+    FILTERED and `seriesOrder`-REORDERED. Facet panels are deliberately built
+    from the RAW `st.yKeys`, because the on-screen facet grid honours neither.
+    The two lists therefore diverge in length AND order the moment a channel is
+    hidden or reordered while faceting — an existing passing test
+    (`figureSpec.test.ts`'s all-hidden facet case) already demonstrated it:
+    `y_keys` comes back `[]` while `facets` still carries every series. Wiring
+    the flat list through would have drawn a scientist's chosen dash on the
+    WRONG curve, which is worse than drawing none. (My own first analysis said
+    the alignment was exact; I had conflated `st.yKeys` with `plotted`.)
+
+    Shipped instead: a separate `facet_series_styles` wire field, built on the
+    frontend from the FACET's own channel order so it is aligned by
+    construction and the backend needs no channel index to match. Both sides
+    carry the reasoning; the frontend test fails precisely when the misaligned
+    list is substituted.
+
+  - **Exported markers were always filled circles.** `calc/figure.py` hardcoded
+    `"o"`, so all eight on-screen `MarkerShape` glyphs collapsed on export. Now
+    a `_MARKER` table, with `marker_shape` actually sent by
+    `lib/exportStyles.ts` — the backend half alone would have been dead code.
+    An unrecognized shape falls back to a circle, matching `line`/`step`'s
+    existing degrade-gracefully contract.
+
+  Housekeeping this required: `routes/export_figures.py` hit its 500-line
+  ceiling, so the facet branch moved to a cohesive `export_figures_facets.py`
+  sibling that takes its collaborators as ARGUMENTS rather than importing back
+  (which would be a cycle). A new lesson also went into `docs/testing.md`: a
+  monkeypatch that passes alone and fails under `-n auto` is usually a patch
+  that never applied, because `from x import f` binds at import time — patch
+  the name the subject resolves at CALL time, or restructure so no patch is
+  needed.
 - [ ] Windows/macOS scaling and high-DPI readability.
 - [x] Reduced motion — **verified complete 2026-09-09; the box was simply
   stale.** Two independent sources, either sufficient on its own: the OS

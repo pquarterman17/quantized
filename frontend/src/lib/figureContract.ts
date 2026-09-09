@@ -185,6 +185,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   x_label: derived("axes.x.label"),
   y_label: derived("axes.y.label"),
   series_styles: derived("series.styles"),
+  facet_series_styles: derived(
+    "series.styles",
+    "The same canonical series styles, re-indexed to the FACET grid's own channel order — `series_styles` is indexed by the hidden-filtered/reordered `plotted` list, which diverges from `facets` the moment a channel is hidden or reordered. Not a second source of the styles themselves.",
+  ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
 } satisfies FieldContractMap<FigureSpec>;
