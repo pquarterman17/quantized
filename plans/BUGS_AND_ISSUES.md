@@ -29,7 +29,8 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Worksheet Extract / Split | A row slice carries the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer line up with its rows | Unassigned | Found by review of the Group J fix, 2026-09-09 |
+| BUG-006 | P2 | Worksheet Extract / Split | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED** 2026-09-09, sabotage-verified |
+| BUG-007 | P2 | Store module init order | A second dynamic `import()` in a store slice makes `restoreFromTrash` mint a fresh dataset id; blocks a measured 720 B bundle reduction | Unassigned | Bisected to one line, root cause open, 2026-09-09 |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1030,22 +1031,31 @@ Both consumers of `sliceDataStruct` are exposed:
 `label_rows` is NOT affected: it is indexed by CHANNEL, not by row, so a row
 slice leaves it correct.
 
-#### Why it was not fixed on discovery
+#### Why it was not fixed on discovery, and why that was over-cautious
 
-Two reasons, both about not guessing:
+It was filed needing "a ruling" on whether to slice the sidecar or drop it.
+**On revisiting, there is no ruling to make.** The sidecar is row-indexed by
+construction; the operation is a row slice; slicing it is the only
+self-consistent answer. Dropping the text columns would LOSE data, and keeping
+them unsliced MISATTRIBUTES it — there is no third option worth an owner's
+time. Filing it as a decision was the wrong call, and it is recorded that way
+rather than quietly re-scoped.
 
-1. `sliceDataStruct` is shared. Slicing the sidecar inside it fixes Extract and
-   Split together, which is right — but it also means the primitive stops being
-   a pure column-layout-preserving row map and starts knowing about a specific
-   metadata key. That is a deliberate widening of a contract several callers
-   depend on.
-2. There is a real question underneath about what a text column MEANS in a
-   child: a text-only Origin book has `time.length === 0` and the text columns
-   ARE the grid (`lib/columnmeta.ts`'s `TextColumn` doc), so for such a sheet
-   "slice the numeric rows" and "slice the text rows" are not the same
-   operation, and Extract already refuses that case entirely (see the
-   `planExtract` refusal). Deciding this needs the owner's view of whether
-   Extract should carry text columns at all, or drop them and say so.
+The two hesitations, and what they were actually worth:
+
+1. `sliceDataStruct` is shared, so the primitive stops being a pure
+   column-layout-preserving row map and starts knowing about specific metadata
+   keys. Real, and the fix leans into it: an explicit `ROW_INDEXED_SIDECARS`
+   allowlist naming exactly which keys are per-row, with the reason that
+   everything else (`label_rows`' per-CHANNEL cells, `all_column_names`,
+   file-level `comments`) must NOT be sliced written next to it. Slicing those
+   would be the mirror-image bug.
+2. A text-only Origin book (`time.length === 0`, text columns ARE the grid) is
+   genuinely different — but Extract already refuses that case outright
+   (`planExtract` returns null when no row carries numeric data), so it never
+   reaches this code, and Split partitions by a numeric column so it cannot
+   arise there either. The edge was real; its reachability was not checked
+   before letting it block the fix.
 
 #### Reproduction
 
@@ -1075,23 +1085,41 @@ Two reasons, both about not guessing:
 
 #### Implementation
 
-- [ ] Decide: slice `text_columns` in `sliceDataStruct`, or drop it from a
-  child and say so in the status line. Do not invent this silently.
-- [ ] Whichever is chosen, apply it once in the shared primitive so Extract and
-  Split cannot diverge.
-- [ ] Handle the text-longer-than-numeric case explicitly rather than by
-  truncation (see `extractRows.ts`'s module doc).
+- [x] Slice `text_columns` in `sliceDataStruct` — the only self-consistent
+  option for a row-indexed sidecar under a row slice.
+- [x] Applied ONCE in the shared primitive, so Extract and Split cannot
+  diverge. Both spellings (`text_columns`, `origin_text_columns`) are handled,
+  matching `lib/columnmeta.ts`'s own `??` read order.
+- [x] A row past a SHORT text column yields `""` — a blank cell, which is what
+  the worksheet renders — rather than `undefined`, which would serialize to
+  `null` and read back as a hole.
+- [x] A structurally corrupted sidecar (a bare array where `{name: cells[]}`
+  belongs) is carried through UNTOUCHED rather than reshaped.
 
 #### Tests and acceptance
 
-- [ ] A fixture whose text columns are LONGER than its numeric columns, and one
-  where they are shorter — the asymmetric cases are where a naive slice goes
-  wrong.
-- [ ] Both callers covered, since the fix lands in shared code.
+- [x] Eight tests in `lib/datasetsplit.test.ts` ("row-indexed metadata sidecars
+  (BUG-006)"): same-rows slicing, a NON-ASCENDING slice (the signature accepts
+  any order, so text must follow the same permutation as the numbers), the
+  SHORT-column blank cell, the `origin_text_columns` spelling, the corrupted
+  array shape, and a no-sidecar dataset unchanged.
+- [x] Sabotage-verified, and the first attempt was WEAK — worth recording. The
+  "channel-indexed sidecars are not sliced" test could not fail: TWO
+  independent mechanisms protect them (not in the allowlist, and not
+  `{name: array}` objects), so removing either alone left it green. It is now
+  labelled as the characterization test it is, and the shape guard got its own
+  test that DOES fail when the `Array.isArray` rejection is removed.
+- [x] Both callers covered by construction — the fix is in the shared
+  primitive, and each caller's own suite still passes.
 
 #### Completion record
 
-_(empty — open)_
+- PR/commit: the Group M commit (2026-09-09).
+- Automated tests: `lib/datasetsplit.test.ts` — the eight named above.
+- Agent verification: fix + sabotage-verified tests, including the correction
+  of the weak one.
+- Owner verification: — (worth a look on a real Origin "Text & Numeric" sheet;
+  the fix is shape-driven, not corpus-driven, so no specimen was needed.)
 
 ---
 
@@ -1170,6 +1198,90 @@ this entry.
 
 _(empty — open. The reverted attempt is commit-logged; `docs/testing.md` kept
 the monkeypatch lesson it produced.)_
+
+---
+
+## BUG-007 — a second dynamic `import()` in a store slice changes an unrelated restore's dataset id
+
+**Priority:** P2 — nothing is wrong in the shipped app today (the change that
+triggers it was not landed), but it blocks a MEASURED 720-byte eager-bundle
+reduction, and if the mechanism is what it looks like — module init order
+deciding observable store behaviour — it is a latent fragility that will bite
+something else eventually.
+
+**Reported:** 2026-09-09, by Claude, while paying for BUG-006's fix out of the
+bundle budget rather than raising the pin a second time.
+
+**Investigated:** bisected to a single line; root cause NOT established.
+
+#### Reproduction (exact, one line)
+
+In `store/split.ts`, replace the static
+
+```ts
+import { splitColumn, sliceDataStruct, tooManyGroups } from "../lib/datasetsplit";
+```
+
+with the equivalent dynamic import inside the already-`async`
+`splitDatasetByColumn`:
+
+```ts
+const { splitColumn, sliceDataStruct, tooManyGroups } = await import("../lib/datasetsplit");
+```
+
+Then `npx vitest run src/store/selectionInvariant.test.ts` fails:
+
+```
+× restoreFromTrash yields the tree selection only when the restore IS an activation
+  AssertionError: expected 'ds-<generated>-3' to be 'd1'
+```
+
+`restoreFromTrash("dataset:d1")` restores a dataset carrying a FRESHLY MINTED
+id instead of `d1`. Revert that one line and it passes; every other file in the
+same working tree is unchanged either way. It fails when the file is run ALONE,
+so it is not a cross-file ordering artifact of the parallel runner.
+
+#### Why this is odd
+
+`restoreFromTrash` ALREADY uses exactly this pattern — it `await import()`s
+`store/trashRestore.ts` (see `store/trash.ts`'s header, which documents the
+deferral as a deliberate bundle win). So a dynamic import in a store slice is
+established practice here; adding a SECOND one in a sibling slice is what
+changes behaviour, which is the part that makes no obvious sense.
+
+Candidate mechanisms, none confirmed:
+- Two module instances of something (`store/useApp.ts`'s id counters live at
+  module scope), so `nextDatasetId` is not the counter the test's expectation
+  was built against.
+- The restore's workbook self-heal (`trashRestore.ts`'s
+  `deriveWorkbooks([restored], s.folders, nextWorkbookId)`) taking a different
+  branch, cascading into a new dataset id.
+- A test-setup assumption about which modules are already evaluated.
+
+#### What is blocked by it
+
+A measured **720-byte** eager-bundle reduction — `lib/datasetsplit.ts` (~3.5 kB
+of pure splitting/slicing math) leaving the eager graph entirely, since
+`store/split.ts` is its only eager consumer and every other importer already
+sits behind a lazy panel. Measured 913,869 with the change vs 914,894 without:
+bigger than BOTH of today's pin raises combined, so collecting it would put the
+ratchet tighter than it has been all session. Full rationale in
+`frontend/scripts/check-bundle-size.mjs`'s history block.
+
+#### Investigation checklist
+
+- [x] Bisected to the single import line.
+- [x] Confirmed it fails with the file run alone (not a parallel-run artifact).
+- [ ] Root cause established — duplicate module instances, or a real ordering
+  dependency in the restore path?
+- [ ] Decide whether the TEST's expectation or the STORE's behaviour is wrong.
+  A restore minting a new id may itself be a bug the static import hides.
+- [ ] Once settled, collect the 720 bytes and lower the pin.
+
+#### Completion record
+
+_(empty — open. The reduction is withheld, not lost; see the bundle script's
+history block for the measurement.)_
 
 ---
 

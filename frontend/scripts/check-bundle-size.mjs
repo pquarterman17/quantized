@@ -839,8 +839,40 @@ import { fileURLToPath } from "node:url";
  *  set to measured + 24 = 914,634 instead. A full kB of new headroom is an
  *  invitation to spend it; this keeps the ratchet as tight as it has been all
  *  session, and the next author still has to do real reduction work.
+ *
+ *  2026-09-09 (later, same day) — 914,634 -> 914,894. BUG-006's fix (slicing
+ *  the row-indexed `text_columns` sidecar in
+ *  `lib/datasetsplit.sliceDataStruct`, so an Extract or a Split stops
+ *  attributing a sample id to the wrong measurement) costs 236 eager bytes.
+ *
+ *  A 720-BYTE REPAYMENT EXISTS, IS MEASURED, AND WAS DELIBERATELY WITHHELD.
+ *  `store/split.ts` is the ONLY eager consumer of `lib/datasetsplit.ts`
+ *  (~3.5 kB of pure splitting/slicing math) — every other importer
+ *  (SplitDatasetDialog, the worksheet's `extractRows`, the workshops'
+ *  `byPartition`) already sits behind a lazy panel, and splitting is strictly
+ *  a post-user-action operation, so `await import(...)` inside the already-
+ *  `async` action is exactly the deferral this script's failure message asks
+ *  for. Measured: **913,869, i.e. 720 bytes BELOW the pre-raise 914,589.**
+ *
+ *  It is not in this commit because it CHANGED OBSERVABLE BEHAVIOUR:
+ *  `store/selectionInvariant.test.ts`'s "restoreFromTrash yields the tree
+ *  selection only when the restore IS an activation" then failed with
+ *  `expected 'ds-<generated>-3' to be 'd1'` — a restore minting a FRESH
+ *  dataset id. Bisected to that one import line: revert it alone and the test
+ *  passes; every other file in the commit is unchanged. `restoreFromTrash`
+ *  already uses the same `await import()` pattern for `store/trashRestore.ts`,
+ *  so a second dynamic import in a sibling slice is interacting with module
+ *  init order somehow. That is either a latent fragility worth knowing about
+ *  or a test-setup artifact, and it deserves its own investigation rather than
+ *  a tired one at the end of a long session. A bundle optimization that
+ *  changes behaviour is not worth landing inside a bug-fix PR.
+ *
+ *  So: raised to measured + 24 = 914,894, with the repayment written down
+ *  above so the next author can collect it after settling the import-order
+ *  question. This is the SECOND raise in a day, which is one more than is
+ *  comfortable; the standing reduction is the answer, not a third.
  */
-const EAGER_JS_BUDGET = 914_634;
+const EAGER_JS_BUDGET = 914_894;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
