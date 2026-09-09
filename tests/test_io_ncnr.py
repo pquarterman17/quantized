@@ -169,3 +169,71 @@ def test_ncnr_dat_hints_absent_when_columns_missing(tmp_path: Path) -> None:
     assert list(ds.labels) == ["dQ", "R"]
     assert ds.metadata["default_value_channels"] == [1]  # R only
     assert "error_channels" not in ds.metadata  # no dR column
+
+# ── BUG-001: reductus uncertainty/resolution roles ───────────────────────────
+# The measured intensity, its uncertainty and the Q resolution arrive as three
+# ordinary numeric columns; nothing in the file marks the latter two as
+# uncertainties, so they used to import as independent Y series and be drawn
+# as their own curves. The generic label guesser does not rescue it either.
+# These pin the parser-declared roles AND the fail-safe: recognition is gated
+# on name AND unit, and anything unrecognised emits nothing rather than
+# guessing.
+
+from quantized.io.ncnr import _refl_role_metadata  # noqa: E402
+
+
+def test_refl_declares_uncertainty_and_resolution_roles(fixtures_dir: Path) -> None:
+    ds = import_ncnr_refl(fixtures_dir / "ncnr_j395.refl")
+    # Only the measurement is a curve.
+    assert ds.metadata["default_value_channels"] == [0]
+    # Rich contract: symmetric Y error on the intensity, symmetric X error on
+    # the Q axis (`target: -1` -- the x axis is not a channel).
+    assert ds.metadata["error_roles"] == [
+        {"channel": 1, "target": 0, "axis": "y", "side": "both"},
+        {"channel": 2, "target": -1, "axis": "x", "side": "both"},
+    ]
+    # Legacy Y-only projection, for the surfaces that still read it.
+    assert ds.metadata["error_channels"] == {0: 1}
+    # Every imported column is still present and untouched.
+    assert ds.labels == ("Intensity", "uncertainty", "resolution")
+    assert ds.values.shape == (325, 3)
+
+
+def test_refl_roles_require_matching_units_not_just_names() -> None:
+    """The uncertainty of an intensity carries the intensity's unit and a Q
+    resolution carries the axis's unit. Names alone are not evidence: a variant
+    that spells the columns the same way but means something else must import
+    exactly as it did before, with no declared roles."""
+    labels = ["Intensity", "uncertainty", "resolution"]
+    assert _refl_role_metadata(labels, ["counts", "counts", "1/Ang"], "1/Ang")
+    # uncertainty in a different unit from the value it supposedly describes
+    assert _refl_role_metadata(labels, ["counts", "1/Ang", "1/Ang"], "1/Ang") == {}
+    # resolution not in the x axis's unit
+    assert _refl_role_metadata(labels, ["counts", "counts", "counts"], "1/Ang") == {}
+    # a blank unit is not evidence of anything
+    assert _refl_role_metadata(labels, ["counts", "", "1/Ang"], "1/Ang") == {}
+    assert _refl_role_metadata(labels, ["", "", "1/Ang"], "1/Ang") == {}
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        ["Intensity", "resolution", "uncertainty"],  # swapped -> unrecognised order
+        ["Intensity", "uncertainty"],                # missing resolution
+        ["Intensity", "uncertainty", "resolution", "extra"],  # extra value column
+        ["uncertainty", "uncertainty", "resolution"],  # measured looks like an error
+        ["Intensity", "counts", "resolution"],       # uncertainty not a known token
+    ],
+)
+def test_refl_roles_fail_safe_on_unrecognised_layouts(labels: list[str]) -> None:
+    units = ["counts"] * len(labels)
+    units[-1] = "1/Ang"
+    assert _refl_role_metadata(labels, units, "1/Ang") == {}
+
+
+def test_refl_roles_accept_the_dr_dq_spelling() -> None:
+    """Reductus also writes the triple as R/dR/dQ. Same semantics, so the same
+    roles -- recognition is by token plus unit, not one file's display names."""
+    meta = _refl_role_metadata(["R", "dR", "dQ"], ["counts", "counts", "1/Ang"], "1/Ang")
+    assert meta["default_value_channels"] == [0]
+    assert meta["error_channels"] == {0: 1}

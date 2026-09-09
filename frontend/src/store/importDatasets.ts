@@ -31,7 +31,6 @@ import { importFile, uploadFile } from "../lib/api";
 import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
-import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
@@ -43,6 +42,7 @@ import {
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
 import { presentBatchOutcome } from "./importBatchOffers";
+import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { toast } from "./toasts";
@@ -95,42 +95,8 @@ interface ImportOrigin {
   source?: Dataset["source"];
 }
 
-interface ErrorRolesActions {
-  /** Replace a dataset's error roles with a DELIBERATE answer -- `[]` means
-   *  "checked: none" and is stored literally (Round 7 / O1), never collapsed
-   *  to `undefined` (which reads as "never determined" and re-guesses). */
-  setErrorRoles: (id: string, roles: readonly ErrorBinding[]) => void;
-  /** Re-run name inference ("suggested, never forced"); a null GUESS collapses to `undefined` (re-guessable), unlike `setErrorRoles`. */
-  detectErrorRoles: (id: string) => number;
-}
-
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesActions {
-  // `exact` (setErrorRoles): store literally, even `[]` -- O1's "checked:
-  // none". `!exact` (detectErrorRoles): collapse an empty GUESS to `undefined`.
-  const write = (id: string, roles: readonly ErrorBinding[], label: string, exact: boolean) => {
-    get().recordHistory(label);
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, errorRoles: exact || roles.length ? [...roles] : undefined } : d,
-      ),
-    }));
-  };
-
-  return {
-    setErrorRoles: (id, roles) => write(id, roles, "edit error roles", true),
-
-    detectErrorRoles: (id) => {
-      const ds = get().datasets.find((d) => d.id === id);
-      if (!ds) return 0;
-      const found = inferErrorBindings(ds.data);
-      write(id, found, "detect error roles", false);
-      return found.length;
-    },
-  };
-}
 
 /** R6 F1/F2 (POST_SPRINT_INDEPENDENT_REVIEW.md code-review round): options
  *  for a batched, self-reporting caller — today only
@@ -289,7 +255,7 @@ function addFromPayload(
     // designations here too; a genuinely non-Origin file (`null`) is unchanged.
     const dsInput: Dataset = {
       id, name: origin.name, data, ...src,
-      ...(originBookErrorRoles(data) ?? importRoles(data)),
+      ...seedErrorRoles(data),
       importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
@@ -485,15 +451,3 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
       }, opts?.historyToken, opts?.presentOutcome ?? true),
   };
 }
-
-/** Seed the canonical error-column roles from the parsed labels (MAIN #33).
- *
- *  Inference SUGGESTS — it only binds where the pairing is unambiguous or
- *  follows the instrument convention, and everything stays overridable. Omitted
- *  entirely when nothing is inferable, so an ordinary two-column file carries
- *  no empty role list. */
-function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
-  const roles = inferErrorBindings(data);
-  return roles.length ? { errorRoles: roles } : {};
-}
-

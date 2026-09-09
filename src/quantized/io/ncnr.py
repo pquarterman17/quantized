@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -46,6 +47,76 @@ def is_ncnr_refl(path: str | Path) -> bool:
             if match is not None and match.group(1) == "columns":
                 return True
     return False
+
+
+# ── Reductus uncertainty-role semantics (BUGS_AND_ISSUES BUG-001) ────────────
+# A reductus `.refl` carries its measured intensity, that intensity's
+# uncertainty, and the Q resolution as three ordinary numeric columns. Nothing
+# in the file marks the latter two as uncertainties, so before this they were
+# imported as independent Y series and drawn as their own curves: a
+# plausible-looking figure in which two of the three "measurements" are error
+# estimates. The generic label guesser does not rescue it either --
+# `classifyErrorLabelInLabels(["Intensity","uncertainty","resolution"])`
+# returns no binding for any column (measured 2026-09-09), so the roles have to
+# come from the parser, which is the only layer that knows the format.
+#
+# Recognition is deliberately EVIDENCE-GATED on name AND unit, never on name
+# alone: the uncertainty of an intensity carries the intensity's unit, and a Q
+# resolution carries the Q axis's unit. A file whose names match but whose
+# units disagree is a variant this function does not understand, so it emits
+# nothing and the import behaves exactly as it did before. Same for anything
+# other than the canonical measured/uncertainty/resolution triple -- an extra
+# value column, a missing one, or a second uncertainty candidate all fall back
+# to "no declared roles" rather than guessing.
+_UNCERTAINTY_TOKENS = frozenset({"uncertainty", "error", "sigma", "dr", "di"})
+_RESOLUTION_TOKENS = frozenset({"resolution", "dq"})
+
+
+def _norm_label(label: str) -> str:
+    return "".join(ch for ch in label.lower() if ch.isalnum())
+
+
+def _refl_role_metadata(
+    labels: Sequence[str], value_units: Sequence[str], x_unit: str
+) -> dict[str, Any]:
+    """Declared plotting roles for the canonical reductus triple, or ``{}``.
+
+    ``labels``/``value_units`` describe the VALUE channels only (x excluded),
+    so the indices returned are channel indices, matching what
+    ``Dataset.errorRoles`` and ``default_value_channels`` both use. A binding
+    that targets the x axis uses ``target: -1`` -- the x axis is not a channel.
+    """
+    if len(labels) != 3 or len(value_units) != 3:
+        return {}
+    measured, unc, res = 0, 1, 2
+    if _norm_label(labels[unc]) not in _UNCERTAINTY_TOKENS:
+        return {}
+    if _norm_label(labels[res]) not in _RESOLUTION_TOKENS:
+        return {}
+    # The measured column must not itself look like an uncertainty, or a
+    # reordered/short variant could bind an error to another error.
+    if _norm_label(labels[measured]) in _UNCERTAINTY_TOKENS | _RESOLUTION_TOKENS:
+        return {}
+    # Unit agreement is the actual evidence that these are the roles claimed.
+    if not value_units[unc] or value_units[unc] != value_units[measured]:
+        return {}
+    if not value_units[res] or value_units[res] != x_unit:
+        return {}
+    return {
+        # Only the measurement is a curve; the two uncertainties stay in the
+        # worksheet and stay toggleable, but are not series of their own.
+        "default_value_channels": [measured],
+        # The rich contract (`lib/errorRoles.ts`'s ErrorBinding): symmetric Y
+        # error on the measurement, symmetric X error on the Q axis.
+        "error_roles": [
+            {"channel": unc, "target": measured, "axis": "y", "side": "both"},
+            {"channel": res, "target": -1, "axis": "x", "side": "both"},
+        ],
+        # The legacy Y-only projection (`lib/errorbars.defaultErrKeys`), kept
+        # so vertical whiskers appear on every surface that still reads it --
+        # including the multi-panel stage, which does not render X error.
+        "error_channels": {measured: unc},
+    }
 
 
 def import_ncnr_refl(filepath: str | Path) -> DataStruct:
@@ -122,6 +193,7 @@ def import_ncnr_refl(filepath: str | Path) -> DataStruct:
         "instrument_type": instrument_type,
         "wavelengths": wavelength,
     }
+    metadata.update(_refl_role_metadata(labels, out_units, metadata["x_column_unit"]))
     return DataStruct.create(qz, values, labels=labels, units=out_units, metadata=metadata)
 
 

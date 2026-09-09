@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { groupLevelLabel } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
 import {
@@ -92,25 +93,6 @@ export interface PlotPayloadParams {
  *  one of them IS a listed dependency, so toggling an overlay ON while a
  *  decimated payload is showing triggers a fresh, full-resolution fetch
  *  instead of leaving the overlay silently unaligned. */
-function hasOverlayCompanions(args: {
-  fitOverlay: FitOverlay | null;
-  baselineOverlay: BaselineOverlay | null;
-  peakOverlay: PeakOverlay | null;
-  derivOverlay: FitOverlay | null;
-  selection: { datasetId: string; rows: number[] } | null;
-  excludedDisplay: "hide" | "grey";
-  activeId: string;
-  dropped: Set<number>;
-}): boolean {
-  if (args.fitOverlay?.datasetId === args.activeId) return true;
-  if (args.baselineOverlay?.datasetId === args.activeId) return true;
-  if (args.peakOverlay?.datasetId === args.activeId) return true;
-  if (args.derivOverlay?.datasetId === args.activeId) return true;
-  if (args.selection?.datasetId === args.activeId) return true;
-  if (args.excludedDisplay === "grey" && args.dropped.size > 0) return true;
-  return false;
-}
-
 export interface PlotPayloadResult {
   /** The raw fetched payload (pre-compose) — most consumers want
    *  `displayPayload` instead; kept for anything that needs the un-composed
@@ -459,9 +441,15 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // an X-error or an asymmetric `+`/`-` half. A document whose errors are
   // entirely y/both is indistinguishable from what `errKeys` already
   // carries, so it takes this branch only when there is something genuinely
-  // richer to show; every ORDINARY window's document derives its errors
-  // FROM `errKeys` (`figureDocument.ts`'s `legacyErrorBindings`), so it can
-  // never be rich and this can never flip an existing window's rendering.
+  // richer to show.
+  //
+  // An ordinary window's document CAN be rich (corrected 2026-09-09 — the
+  // previous claim that only Quick Figure / Graph Builder produce rich
+  // documents was false): `createPlotWindowDocument` seeds `bindings.errors`
+  // from `dataset.errorRoles`, so a parser-declared X binding makes a fresh
+  // ordinary window's document rich. The invariant this branch actually relies
+  // on is that dataset roles and every bound window's document errors are kept
+  // in sync by the single write chokepoint in `store/importErrorRoles.ts`.
   //
   // Double-render check (investigated, not just assumed): `errorBars` above
   // is built from `p.errKeys` regardless of which path wins here, and

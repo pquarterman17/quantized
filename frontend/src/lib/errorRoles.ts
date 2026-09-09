@@ -175,19 +175,38 @@ export function symmetricBinding(
  *  treating a FigureDocument's own `bindings.errors` as authoritative over
  *  `Dataset.errorRoles` when rendering: a document whose errors are entirely
  *  legacy-expressible (y/both) is indistinguishable from what `errKeys`
- *  already carries, so ordinary windows (whose documents only ever derive
- *  their errors FROM `errKeys` -- see `figureDocument.ts`'s
- *  `legacyErrorBindings`) never flip to the document-authoritative path.
- *  Only a document seeded with genuinely richer error data (Quick Figure
- *  Builder's mapping, or a Graph Builder error well) does. */
+ *  already carries.
+ *
+ *  CORRECTED 2026-09-09: this used to claim ordinary windows "never flip to
+ *  the document-authoritative path" because their documents only derive
+ *  errors FROM `errKeys`. That is not true — `createPlotWindowDocument`
+ *  seeds a fresh document's `bindings.errors` straight from
+ *  `dataset.errorRoles`, so a parser-declared rich binding (an X error from
+ *  `DataStruct.metadata["error_roles"]`, e.g. NCNR reductus `.refl`) makes an
+ *  ordinary window's document rich the moment it is created, with no Quick
+ *  Figure / Graph Builder involvement. Acting on the old claim is what let an
+ *  Inspector edit silently fail to reach an open plot. What IS true: dataset
+ *  roles and every bound window's document errors are kept in sync by the
+ *  single write chokepoint in `store/importErrorRoles.ts`. */
 export function hasRichErrorBindings(errors: readonly ErrorBinding[] | undefined): boolean {
   return !!errors?.some((binding) => binding.axis === "x" || binding.side !== "both");
 }
 
-/** Validate bindings read back from a `.dwk` / template — never trust the slot.
+/** Validate bindings from any UNTRUSTED slot — a `.dwk`/template being read
+ *  back, or a parser's `DataStruct.metadata["error_roles"]` declaration
+ *  (`store/importErrorRoles.ts`). THE one validator for the shape, so the two
+ *  entry points cannot drift: a review of the parser-declared path found it had
+ *  grown a second, stricter copy of these rules, which meant a self-targeting
+ *  binding was rejected on import but accepted on reload.
+ *
  *  Drops anything referencing a channel the dataset no longer has, which is
  *  what keeps a reapplied template from binding error bars to the wrong column
- *  after the source's shape changed. */
+ *  after the source's shape changed. Also drops, per that review:
+ *   - NON-INTEGER indices. A channel is an array position; `1.5` cannot name
+ *     one, and `values[1.5]` is `undefined` rather than an error.
+ *   - a binding whose `target` IS its own `channel` — that would draw a
+ *     channel's whiskers from its own values, which is never what any slot
+ *     means, and is silently wrong rather than visibly broken. */
 export function sanitizeBindings(
   raw: unknown,
   channelCount: number,
@@ -197,12 +216,13 @@ export function sanitizeBindings(
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const b = item as Partial<ErrorBinding>;
-    if (typeof b.channel !== "number" || typeof b.target !== "number") continue;
-    if (b.channel < 0 || b.channel >= channelCount) continue;
-    if (b.target < -1 || b.target >= channelCount) continue;
+    if (!Number.isInteger(b.channel) || !Number.isInteger(b.target)) continue;
+    if (b.channel! < 0 || b.channel! >= channelCount) continue;
+    if (b.target! < -1 || b.target! >= channelCount) continue;
+    if (b.target === b.channel) continue;
     if (b.axis !== "x" && b.axis !== "y") continue;
     if (b.side !== "both" && b.side !== "+" && b.side !== "-") continue;
-    out.push({ channel: b.channel, target: b.target, axis: b.axis, side: b.side });
+    out.push({ channel: b.channel!, target: b.target!, axis: b.axis, side: b.side });
   }
   return out;
 }

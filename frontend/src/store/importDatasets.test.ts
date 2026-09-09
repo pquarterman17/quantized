@@ -13,6 +13,7 @@ import { usePendingOps } from "./pendingOps";
 import { isImportRunning, pathBasename, useImportBatch } from "./importDatasets";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
+import { plotWindowView } from "./windowDocuments";
 
 vi.mock("../lib/api", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -248,6 +249,79 @@ describe("import roles and provenance (MAIN #33)", () => {
       });
   });
 
+  // BUGS_AND_ISSUES BUG-001. A parser that knows its format declares roles in
+  // `metadata.error_roles`; before this the key was written by the backend and
+  // read by nobody, so an NCNR reductus `.refl` drew its uncertainty and Q
+  // resolution as ordinary curves.
+  const withMetadata = (labels: string[], metadata: Record<string, unknown>) => ({
+    ...withLabels(labels),
+    metadata,
+  });
+
+  it("honours parser-DECLARED error roles, including an X-axis binding", () => {
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["Intensity", "uncertainty", "resolution"], {
+        error_roles: [
+          { channel: 1, target: 0, axis: "y", side: "both" },
+          { channel: 2, target: -1, axis: "x", side: "both" },
+        ],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/j395.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 0, axis: "y", side: "both" },
+          { channel: 2, target: -1, axis: "x", side: "both" },
+        ]);
+      });
+  });
+
+  it("prefers the parser's declaration over the label guess", () => {
+    // `dR` would be guessed onto `R`; the parser says it belongs to the SECOND
+    // channel. A parser knows its format, the guesser only knows spellings.
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["R", "dR", "theory"], {
+        error_roles: [{ channel: 1, target: 2, axis: "y", side: "both" }],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/declared.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 2, axis: "y", side: "both" },
+        ]);
+      });
+  });
+
+  it("drops malformed declared entries and falls back to the guess", () => {
+    // The hint comes from a parsed FILE, so it is validated, not trusted. With
+    // nothing valid left the `??` chain must still reach the label guesser —
+    // a bad hint must not silently suppress inference.
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["R", "dR"], {
+        error_roles: [
+          { channel: 9, target: 0, axis: "y", side: "both" },      // out of range
+          { channel: 1, target: 1, axis: "y", side: "both" },      // own target
+          { channel: 1, target: 0, axis: "z", side: "both" },      // bad axis
+          { channel: 1, target: 0, axis: "y", side: "maybe" },     // bad side
+          { channel: 1.5, target: 0, axis: "y", side: "both" },    // non-integer
+          "not an object",
+        ],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/bad.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 0, axis: "y", side: "both" }, // the guess
+        ]);
+      });
+  });
+
   it("stamps import provenance on the dataset, since the file is never written", () => {
     vi.mocked(importFile).mockResolvedValue(withLabels(["T", "M"]));
     return useApp
@@ -300,6 +374,72 @@ describe("setErrorRoles preserves a deliberate empty array (Round 7, BLOCKER 2)"
     // reload -- proving this is really the sticky "checked: none" marker,
     // not merely "not yet re-guessed".
     expect(reloaded.datasets[0].errorRoles).toEqual([]);
+  });
+});
+
+// Code-review defect repro (2026-09-09): a parser-declared X-error binding
+// (NCNR reductus `.refl`, `target: -1`) seeds `createWindow`'s
+// `createPlotWindowDocument` call with a binding `errKeys` cannot express, so
+// the window's `document` is "rich" (`hasRichErrorBindings`) and
+// `usePlotPayload` renders error spans from `document.bindings.errors`
+// instead of `dataset.errorRoles`. `setErrorRoles`/`detectErrorRoles`
+// wrote ONLY `dataset.errorRoles` -- the window's already-seeded document
+// never heard about the edit, so clearing/editing roles in the Inspector
+// (ErrorRolesCard) had no effect on the plot, and the next focused-window
+// commit (`updateFigureDocumentFromPlotView`'s `richErrors` preservation)
+// would have restored the stale bindings permanently.
+describe("setErrorRoles/detectErrorRoles keep a bound window's rich document in sync (defect repro)", () => {
+  const withXErrorRole = () => ({
+    id: "d1",
+    name: "refl.dat",
+    data: {
+      time: [0, 1],
+      values: [[1, 2], [0.1, 0.1], [0.01, 0.01]],
+      labels: ["R", "dR", "dQ"],
+      units: ["", "", ""],
+      metadata: {},
+    },
+    // A symmetric Y error (expressible by legacy errKeys) PLUS a symmetric
+    // X error (target: -1 -- NOT expressible by errKeys) -- exactly the
+    // reductus `.refl` shape from the parser's `error_roles` declaration.
+    errorRoles: [
+      { channel: 1, target: 0, axis: "y" as const, side: "both" as const },
+      { channel: 2, target: -1, axis: "x" as const, side: "both" as const },
+    ],
+  });
+
+  it("setErrorRoles(id, []) also clears the bound window's document.bindings.errors, not just the dataset's", () => {
+    useApp.setState({ datasets: [withXErrorRole()], activeId: "d1", plotWindows: [], focusedWindowId: null });
+    const winId = useApp.getState().createWindow("d1");
+    const win = () => useApp.getState().plotWindows.find((w) => w.id === winId)!;
+
+    // Precondition: the X-error role made the window's document rich, and
+    // it's what's actually driving the plot (PlotStage's `focusedDocumentErrors`
+    // reads this exact field).
+    expect(win().document?.bindings.errors).toEqual(withXErrorRole().errorRoles);
+
+    useApp.getState().setErrorRoles("d1", []);
+
+    expect(useApp.getState().datasets[0].errorRoles).toEqual([]);
+    // THE DEFECT: the window's own document (and its errKeys projection)
+    // used to keep holding the stale bindings forever -- removing roles in
+    // the Inspector had no visible effect on the plot.
+    expect(win().document?.bindings.errors).toEqual([]);
+    expect(plotWindowView(win()).errKeys).toEqual({});
+  });
+
+  it("detectErrorRoles re-syncs the bound window's document too", () => {
+    useApp.setState({ datasets: [withXErrorRole()], activeId: "d1", plotWindows: [], focusedWindowId: null });
+    const winId = useApp.getState().createWindow("d1");
+    const win = () => useApp.getState().plotWindows.find((w) => w.id === winId)!;
+
+    // Clear first (setErrorRoles), then re-detect from names -- dR/dQ should
+    // be found again, and the window's document must reflect the NEW roles,
+    // not whatever it was seeded with at creation.
+    useApp.getState().setErrorRoles("d1", []);
+    const n = useApp.getState().detectErrorRoles("d1");
+    expect(n).toBeGreaterThan(0);
+    expect(win().document?.bindings.errors).toEqual(useApp.getState().datasets[0].errorRoles);
   });
 });
 
