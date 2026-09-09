@@ -1948,10 +1948,46 @@ def test_exported_svg_keeps_labels_as_editable_text() -> None:
     assert ">A<" not in body
 
 
-def test_exported_svg_embeds_no_raster_image() -> None:
-    """A vector export must be vector: no `<image>` (a raster masquerading as
-    SVG defeats infinite-resolution publication output)."""
+def _corr_heatmap_svg() -> str:
+    resp = client.post(
+        "/api/export/correlation-heatmap-figure",
+        json={
+            "labels": ["a", "b", "c"],
+            "r": [[1.0, 0.5, -0.2], [0.5, 1.0, 0.7], [-0.2, 0.7, 1.0]],
+            "fmt": "svg",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.content.decode("utf-8", "replace")
+
+
+def test_discrete_data_svg_exports_embed_no_raster() -> None:
+    """Renderers of DISCRETE data must be pure vector: no `<image>`, so a
+    "vector" export can't smuggle in a raster. This covers the ordinary line
+    figure and the correlation heatmap, whose cells are drawn with
+    ``pcolormesh`` (not ``imshow``) precisely so each cell is an editable
+    `<path>` rect. It deliberately does NOT cover the map/field renderers:
+    matplotlib rasterizes a *continuous* colorbar's gradient by design, and
+    vectorizing a smooth gradient bloats the file for no editability gain
+    (see ``test_map_svg_may_raster_its_continuous_colorbar``)."""
     assert "<image" not in _labeled_svg()
+    assert "<image" not in _corr_heatmap_svg()
+
+
+def test_map_svg_may_raster_its_continuous_colorbar() -> None:
+    """The boundary of the no-raster contract, stated as a test rather than
+    left implicit: a map SVG legitimately contains a raster — its continuous
+    colorbar gradient, which matplotlib rasterizes by design — while its data
+    grid is a vector ``pcolormesh`` and its labels are editable `<text>`.
+    This documents WHY the discrete-data gate above stops at the figure/heatmap
+    routes, so a future reader does not "fix" the map to all-vector and bloat
+    every exported gradient."""
+    payload = {**_demo_map(), "kind": "heatmap", "fmt": "svg"}
+    resp = client.post("/api/export/map-figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "replace")
+    assert "<image" in svg  # the continuous colorbar gradient
+    assert "<text" in svg  # labels still editable
 
 
 def test_exported_svg_declares_a_physical_page_size() -> None:
