@@ -57,11 +57,38 @@ export default function StatusBar() {
           named ("every command-palette export runs untracked") — an async
           command now shows here for as long as it runs, past the age-gate,
           instead of firing silently until its completion/failure toast. */}
-      {visibleOps.length > 0 && (
-        <span className="qzk-pending" title={visibleOps.map((o) => o.label).join(", ")}>
-          <StatusDot tone="accent" />
-          {visibleOps[0].label}
-          {visibleOps.length > 1 && ` (+${visibleOps.length - 1} more)`}
+      {/* The live region is rendered UNCONDITIONALLY and only its CONTENT is
+          toggled. Review round: the first cut rendered the whole span only
+          when an operation existed, so the region entered the DOM in the same
+          commit as its first text — and screen readers commonly do not
+          announce a live region created together with its content, losing the
+          first (often the only) announcement. An empty region that is already
+          present when text arrives is what actually gets announced.
+
+          Progress, not a failure — `polite` so it never interrupts, unlike the
+          `role="alert"` autosave-failure banner below. `aria-atomic`
+          re-announces the whole label on each change (e.g. "Importing 3/19: …"
+          ticking) rather than a diff a reader would garble.
+
+          `aria-label` gives it a NAME, so it is distinguishable from the other
+          `role="status"` elements in the app (Stage/ToolHud, the WhatIsThis
+          badge). That helps a screen-reader user, who otherwise hears an
+          announcement with no idea which region produced it — and it is why a
+          bare `getByRole("status")` is no longer a safe locator, which is how
+          this landed CI-red once (see region-tool-escape.spec.ts). */}
+      <span
+        className={visibleOps.length > 0 ? "qzk-pending" : undefined}
+        title={visibleOps.length > 0 ? visibleOps.map((o) => o.label).join(", ") : undefined}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        aria-label="Background operations"
+      >
+        {visibleOps.length > 0 && (
+          <>
+            <StatusDot tone="accent" />
+            {visibleOps[0].label}
+            {visibleOps.length > 1 && ` (+${visibleOps.length - 1} more)`}
           {/* P3.4 slice 1: only the op(s) that opted in (import batches) carry
               a `cancel` — everything else renders exactly as slice 2 left it.
               Only the FIRST op gets the control, matching the "+N more"
@@ -76,9 +103,10 @@ export default function StatusBar() {
             >
               ✕
             </button>
-          )}
-        </span>
-      )}
+            )}
+          </>
+        )}
+      </span>
       <span className="qzk-spacer" style={{ flex: 1 }} />
       {/* MAIN #32: autosave health. A FAILING save stays visible until the next
           success — the pre-#32 warning was a status line that scrolled away,

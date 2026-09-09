@@ -8,7 +8,7 @@
 // existing shortcut data rather than duplicating it. The importing/origin tabs
 // are added by later slices; the store's HelpSection type already lists them.
 
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   actionToHelpItem,
@@ -27,6 +27,7 @@ import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
 import { useApp } from "../../store/useApp";
+import { mergeCommands, useCommands, type Action } from "../../store/commands";
 
 const IS_MAC = isMacPlatform();
 
@@ -38,12 +39,21 @@ const TABS: { id: HelpSection; label: string }[] = [
   { id: "jmp", label: "From JMP" },
 ];
 
-const COMMAND_HELP_ITEMS = buildAppActions(useApp.getState)
-  .filter((action) => action.description)
-  .map(actionToHelpItem);
+// Curated actions (store setters are stable, so this builds once — same
+// discipline appCommands.ts documents for buildAppActions callers).
+const CURATED_ACTIONS = buildAppActions(useApp.getState);
+const COMMAND_HELP_ITEMS = CURATED_ACTIONS.filter((action) => action.description).map(
+  actionToHelpItem,
+);
 
-// The one searchable index — every curated command, formats, Origin tips, and JMP tips.
-const SEARCH_ITEMS = [
+// The static part of the searchable index — every curated command, formats,
+// Origin tips, and JMP tips. Registry-published commands (relink-sources,
+// paste-workbook, take-over-editing, open-as-copy, and any future command
+// published the same way) are NOT curated — see `registryHelpItems` in the
+// component below, merged in live from `useCommands` the same way
+// CommandPalette already merges it into the ⌘K palette, so a new registry
+// command reaches Help automatically instead of needing a hand-edit here.
+const STATIC_SEARCH_ITEMS = [
   ...COMMAND_HELP_ITEMS,
   ...IMPORT_FORMATS.map(formatToHelpItem),
   ...ORIGIN_TIPS.map(originTipToHelpItem),
@@ -69,6 +79,7 @@ export default function HelpDialog() {
   const query = useHelp((s) => s.query);
   const setQuery = useHelp((s) => s.setQuery);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [menuCmds, setMenuCmds] = useState<Action[]>([]);
 
   // Esc closes even when focus isn't inside the dialog (ShortcutsDialog rule).
   useEffect(() => {
@@ -88,7 +99,37 @@ export default function HelpDialog() {
     if (open && section === "search") inputRef.current?.focus();
   }, [open, section]);
 
-  const results = useMemo(() => searchHelpItems(SEARCH_ITEMS, query), [query]);
+  // Snapshot the runtime command registry on open — the same non-reactive
+  // discipline CommandPalette uses for `useCommands.getState().menuCommands`
+  // (see store/commands.ts's header comment), so a command a hook publishes
+  // AFTER Help was already open still shows up the next time it's opened.
+  useEffect(() => {
+    if (open) setMenuCmds(useCommands.getState().menuCommands);
+  }, [open]);
+
+  // Described registry commands (relink-sources, paste-workbook,
+  // take-over-editing, open-as-copy, …) merged in on top of the curated set,
+  // deduped the same way the palette dedupes (curated wins on a label
+  // collision). A registry command with no description is dropped rather
+  // than reaching `actionToHelpItem`, which throws on a missing description.
+  const registryHelpItems = useMemo(() => {
+    // `perEntity` commands are excluded: they name the user's DATA (one row per
+    // recent project, with its absolute path as the description) rather than a
+    // capability of the app. Caught in review — the first cut merged them.
+    const described = menuCmds.filter((a) => a.description && !a.perEntity);
+    const merged = mergeCommands(CURATED_ACTIONS, described);
+    return merged.slice(CURATED_ACTIONS.length).map(actionToHelpItem);
+  }, [menuCmds]);
+
+  const searchItems = useMemo(
+    () => [...STATIC_SEARCH_ITEMS, ...registryHelpItems],
+    [registryHelpItems],
+  );
+
+  const results = useMemo(
+    () => searchHelpItems(searchItems, query),
+    [query, searchItems],
+  );
 
   if (!open) return null;
 

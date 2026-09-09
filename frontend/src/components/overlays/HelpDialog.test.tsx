@@ -1,8 +1,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HelpDialog from "./HelpDialog";
 import { useHelp } from "../../store/help";
+import { useCommands } from "../../store/commands";
+import { useRelinkCommands } from "../../commands/relinkCommands";
+import { useWorkbookTransferCommands } from "../../commands/workbookTransferCommands";
+import { useProjectLockCommands } from "../../commands/projectLockCommands";
+import { renderHook } from "@testing-library/react";
 
 /** Match a help row by its title's FULL text — a highlighted title is split
  *  into per-character <mark> nodes, so getByText("full string") can't see it. */
@@ -10,9 +15,10 @@ function titleShown(name: string): boolean {
   return [...document.querySelectorAll(".qzk-help-title")].some((el) => el.textContent === name);
 }
 
-beforeEach(() =>
-  useHelp.setState({ open: false, section: "search", query: "" }),
-);
+beforeEach(() => {
+  useHelp.setState({ open: false, section: "search", query: "" });
+  useCommands.setState({ menuCommands: [] });
+});
 afterEach(() => act(() => useHelp.getState().closeHelp()));
 
 describe("HelpDialog", () => {
@@ -181,6 +187,107 @@ describe("HelpDialog", () => {
   });
 });
 
+describe("HelpDialog search includes registry-published commands (P3.1 gap)", () => {
+  // relinkCommands.ts, workbookTransferCommands.ts, and projectLockCommands.ts
+  // publish through the runtime registry (store/commands.ts's useCommands),
+  // not buildAppActions — the same pattern CommandPalette already merges on
+  // open. Help must merge it too, or these commands are real but unfindable.
+
+  it("finds 'Relink sources…' once its command hook has mounted", () => {
+    renderHook(() => useRelinkCommands());
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "relink" },
+    });
+    expect(titleShown("Relink sources")).toBe(true);
+  });
+
+  it("finds 'Paste workbook' once its command hook has mounted", () => {
+    renderHook(() => useWorkbookTransferCommands());
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "cross-instance" },
+    });
+    expect(titleShown("Paste workbook")).toBe(true);
+  });
+
+  it("finds 'Take Over Editing' and 'Open as Copy' once their command hook has mounted", () => {
+    renderHook(() => useProjectLockCommands());
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "stale" },
+    });
+    expect(titleShown("Take Over Editing")).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "read-only" },
+    });
+    expect(titleShown("Open as Copy")).toBe(true);
+  });
+
+  it("merges the registry only on open (snapshot discipline, matching CommandPalette)", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "relink" },
+    });
+    expect(titleShown("Relink sources")).toBe(false);
+
+    // Published only after Help is already open — a later re-open should pick it up.
+    renderHook(() => useRelinkCommands());
+    act(() => useHelp.getState().closeHelp());
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "relink" },
+    });
+    expect(titleShown("Relink sources")).toBe(true);
+  });
+
+  // Regression guard (Part A instruction): any FUTURE command published
+  // through the registry with a description must reach Help automatically,
+  // without a code change here — this is what actually prevents a repeat of
+  // the P3.1 gap (a hand-listed catalog silently missing a new command).
+  it("guard: an arbitrary described registry command becomes searchable with no HelpDialog change", () => {
+    useCommands.getState().setMenuCommands("test-guard", [
+      {
+        id: "future-registry-command",
+        group: "File",
+        label: "Frobnicate the widget",
+        description: "A hypothetical future command published only through the registry.",
+        run: vi.fn(),
+      },
+    ]);
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "frobnicate" },
+    });
+    expect(titleShown("Frobnicate the widget")).toBe(true);
+  });
+
+  // Safety: a registry command with no description must not crash Help
+  // (actionToHelpItem throws on a missing description) or otherwise appear.
+  it("a registry command with no description is silently skipped, not thrown", () => {
+    useCommands.getState().setMenuCommands("test-guard", [
+      {
+        id: "no-desc",
+        group: "File",
+        label: "Undocumented registry command",
+        run: vi.fn(),
+      },
+    ]);
+    render(<HelpDialog />);
+    expect(() => act(() => useHelp.getState().openHelp())).not.toThrow();
+    fireEvent.change(screen.getByLabelText("Search help"), {
+      target: { value: "Undocumented registry command" },
+    });
+    expect(titleShown("Undocumented registry command")).toBe(false);
+  });
+});
+
 describe("HelpDialog startup boundary", () => {
   const overlaysSrc = Object.values(
     import.meta.glob("../../AppOverlays.tsx", {
@@ -195,5 +302,55 @@ describe("HelpDialog startup boundary", () => {
       'const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"))',
     );
     expect(overlaysSrc).toContain("{helpOpen && <HelpDialog />}");
+  });
+});
+
+// REVIEW ROUND. The registry merge is deliberately open-ended so a FUTURE
+// capability command reaches Help with no edit here — which also means a future
+// PER-ENTITY publisher would silently pour one row per object into Help, with
+// whatever it uses as `description` (Recent Projects uses the absolute path).
+// That is exactly what the first cut did. Enforce the rule rather than trusting
+// the next author to remember it.
+describe("Help search excludes per-entity commands (review round)", () => {
+  function searchFor(term: string): void {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), { target: { value: term } });
+  }
+
+  it("does not list a per-entity command, even though it has a description", () => {
+    act(() =>
+      useCommands.getState().setMenuCommands("perEntityGuard", [
+        {
+          id: "recent-project-/Users/x/proj/Anneal.dwk",
+          group: "File",
+          label: "Open recent project: Anneal",
+          description: "/Users/x/proj/Anneal.dwk",
+          perEntity: true,
+          run: () => {},
+        },
+      ]),
+    );
+    searchFor("Anneal");
+    expect(titleShown("Open recent project: Anneal")).toBe(false);
+  });
+
+  // POSITIVE CONTROL — without this, the exclusion above would also pass if the
+  // registry merge were broken outright, which is the failure mode this whole
+  // slice exists to prevent.
+  it("still lists a described CAPABILITY command from the same registry", () => {
+    act(() =>
+      useCommands.getState().setMenuCommands("perEntityGuard", [
+        {
+          id: "guard-capability",
+          group: "File",
+          label: "Do a guarded thing",
+          description: "Does the guarded thing to the current dataset.",
+          run: () => {},
+        },
+      ]),
+    );
+    searchFor("guarded");
+    expect(titleShown("Do a guarded thing")).toBe(true);
   });
 });

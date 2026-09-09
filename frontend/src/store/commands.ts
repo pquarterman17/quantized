@@ -22,6 +22,15 @@ export interface Action {
    *  searched, not browsed. Omit it and the command renders flat, exactly as
    *  before. See lib/menuSections.ts. */
   section?: string;
+  /** True for a PER-ENTITY command — one published per recent project, per
+   *  dataset, and so on. It names a piece of the user's DATA, not a capability
+   *  of the app. The ⌘K palette wants these; searchable HELP does not: Help
+   *  documents what the application can do, and a topic row per recent project
+   *  carrying its absolute path as the "explanation" is both noise and a
+   *  needless path disclosure. Set it on any publisher that mints one command
+   *  per object; `helpContent.test.ts`'s prose guard now covers the merged Help
+   *  index, so forgetting it fails the build rather than shipping quietly. */
+  perEntity?: boolean;
   /** Extra space-separated search terms for the ⌘K palette (not displayed).
    *  Lets a command stay findable by names/aliases not in its visible label
    *  (e.g. "diraculator", or domain terms dropped to keep the label short). */

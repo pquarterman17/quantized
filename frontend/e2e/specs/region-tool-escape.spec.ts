@@ -28,7 +28,10 @@ test.describe("Region-tool arm / drag / Esc-cancel @core", () => {
     await integrateBtn.click();
     await expect(integrateBtn).toHaveAttribute("aria-pressed", "true");
 
-    const hud = page.getByRole("status");
+    // The tool HUD, by its own class — see the note at the other assertion
+    // below: a bare `getByRole("status")` is ambiguous now that the app has
+    // more than one live region.
+    const hud = page.locator(".qzk-tool-hud");
     await expect(hud).toContainText("Integrate");
 
     await page.keyboard.press("Escape");
@@ -60,7 +63,13 @@ test.describe("Region-tool arm / drag / Esc-cancel @core", () => {
     // ...and the tool is still armed (first Esc during a drag only cancels
     // the gesture — see lib/gestureCancel.ts) so the HUD is still showing.
     await expect(integrateBtn).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("status")).toContainText("Integrate");
+    // Target the HUD specifically. A bare `getByRole("status")` only ever
+    // worked because the tool HUD happened to be the sole live region on
+    // screen; the app has several (`Stage/ToolHud`, the WhatIsThis badge, and
+    // StatusBar's "Background operations" feed), so the loose selector was one
+    // new region away from a strict-mode violation — which is exactly how it
+    // broke. Naming what this assertion means is more precise, not weaker.
+    await expect(page.locator(".qzk-tool-hud")).toContainText("Integrate");
 
     // Sanity control: completing the SAME drag without Esc commits a result
     // chip — proves the earlier absence was a real cancel, not a tool that

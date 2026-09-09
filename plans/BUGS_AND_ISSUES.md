@@ -26,6 +26,7 @@ This is a working document, not a claim that every observation is already reprod
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Unassigned | Owner screenshot, 2026-09-08 |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
+| BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 
 ---
 
@@ -436,6 +437,171 @@ _(empty — open)_
 
 ---
 
+## BUG-003 — a Data Filter predicate outlives a column's type change, invisibly
+
+**Priority:** P2 — no data is lost and no scientific result is silently
+wrong for the common case (the underlying `dataset.filter` entry is left
+completely untouched, so nothing is destroyed and the row-filtering answer
+is deterministic), but a user CAN end up staring at a Data Filter panel
+that looks unconstrained while rows are still narrowed by a predicate they
+can no longer see or edit through that panel. That is exactly the kind of
+"can escape notice" mismatch the P0/P1 bar is written around, capped at P2
+here only because the escape hatch (Clear) stays reachable — see
+"Conservative behaviour implemented" below.
+
+**Reported:** 2026-09-09, by Claude (PRIMARY_SOFTWARE_AUDIT_PLAN's Data
+Filter categorical-wiring slice), while verifying the workbench's
+`is_categorical`/`isCategoricalChannel` path per the task's own prompt:
+"what a filter should do for a column whose type changes while a filter is
+active" — the prompt's own example of a question prior art does not
+settle.
+
+**Investigated:** — (design-time finding: traced through the code and
+pinned by a sabotage-verified test, not surfaced by a user report yet.)
+
+**Suggested implementation owner/model:** — (needs an owner product
+decision; see "What is NOT decided" below.)
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`'s "Data Filter /
+Tabulate / Stat Stage workbench wiring" box (P1.4/P1.5-adjacent).
+
+#### User-visible problem
+
+`frontend/src/components/workshops/datafilter/useDataFilter.ts` classifies
+each column as `"range"` (continuous) or `"set"` (categorical/level-
+membership) via `lib/modeling.ts`'s `channelModelingType` — which honors a
+user's `setChannelType` override FIRST, before the `isCategoricalChannel`/
+numeric-shape inference. That override can change independently of any
+existing filter predicate on the same column (`setChannelType` never
+touches `dataset.filter`). If a user:
+
+1. Filters a categorical column down to a level subset (a `kind: "set"`
+   predicate), then
+2. Overrides that same column's type to "continuous" (or the reverse:
+   filters a continuous column by range, then overrides it to "nominal", or
+   a reimport changes whether the column carries `cat_levels` at all) —
+
+the STORED predicate keeps its original `kind` forever (nothing rewrites
+it), but the panel now renders the OTHER control for that column. A range
+field cannot show `.values`; a checkbox list cannot show `.min`/`.max`. The
+`Dataset.filter` entry (`lib/datafilter.ts`'s `rowPasses`/`filteredOutRows`,
+which every downstream consumer — Tabulate, Distribution, `analysisData` —
+reads) evaluates a predicate purely by ITS OWN stored `kind`, with zero
+awareness of the column's now-different live classification, so the
+predicate keeps narrowing rows exactly as before — just no longer
+representable in the UI that wrote it.
+
+#### Conservative behaviour implemented (this slice, Data Filter only)
+
+`useDataFilter.ts`'s `columns` memo now only reports a stored predicate as
+a column's `current` (the value the checkbox/range controls read from) when
+its `.kind` matches the column's freshly-computed classification; a
+mismatched leftover is treated as absent for DISPLAY. It is deliberately
+NOT deleted from `dataset.filter` — reverting the override brings the exact
+same predicate back as `current`, so no work is lost — and `useDataFilter`'s
+`active` flag (which drives the panel's "Clear" button) still reads the RAW
+filter array regardless of the mask, so a user who notices "showing fewer
+rows than the checkboxes suggest" always has a one-click way to remove
+everything. Editing the affected column (any `setRange`/`toggleLevel` call)
+replaces whatever was stored for that column outright, so normal use
+self-heals on the next interaction. Sabotage-verified:
+`useDataFilter.test.ts`'s "a stale kind-mismatched predicate is masked, not
+deleted" test (see the PR that introduced this entry for the sabotage
+transcript — reverting the `stored?.kind === expectedKind ? stored :
+undefined` masking makes it fail as expected).
+
+#### What is NOT decided (needs an owner call)
+
+- Should `lib/datafilter.ts`'s row-filtering (`rowPasses`/`filteredOutRows`
+  — shared by Tabulate/Distribution/every `analysisData` consumer, all out
+  of scope for this slice) keep applying a kind-mismatched predicate at
+  all, or should it stop counting a predicate that no longer matches its
+  column's live classification as active anywhere in the app, not just in
+  this one panel's display?
+- If it should stop being applied everywhere: should the stale entry then
+  be auto-dropped from `dataset.filter` (simplest, but a silent auto-
+  mutation of saved state with no user action) or just made globally inert
+  while still stored (matches this slice's local masking, but means
+  `lib/datafilter.ts` itself needs to know about column classification —
+  a `DataStruct`/`Dataset`-level concern it currently has zero dependency
+  on)?
+- Should the panel instead surface the mismatch explicitly (a small
+  "N hidden filter(s) don't match this column's current type" notice) so
+  the inconsistency is visible rather than merely non-corrupting?
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — a 2-level categorical
+  column (`cat_levels`-backed or `channelTypes` override to "nominal") with
+  an active `kind: "set"` filter predicate.
+- [x] Exact actions recorded — call `setChannelType(id, col, "continuous")`
+  (or, for the reverse case, override a continuous column to "nominal")
+  while a filter predicate already exists on that column.
+- [x] Actual result recorded — the panel now renders the OTHER control
+  type for that column with no visible constraint; the stored predicate is
+  untouched and (before this slice's fix) was surfaced as `current` on the
+  wrong-shaped control.
+- [x] Expected result recorded — see "Conservative behaviour implemented"
+  above for what ships now; see "What is NOT decided" for the open
+  question about `lib/datafilter.ts`'s row-filtering side.
+- [x] Reproduced by an agent (`useDataFilter.test.ts`, sabotage-verified).
+
+#### Investigation
+
+- [x] Likely owning components/modules identified —
+  `frontend/src/components/workshops/datafilter/useDataFilter.ts` (display
+  masking, fixed this slice); `frontend/src/lib/datafilter.ts`
+  (`rowPasses`/`filteredOutRows`, the row-filtering side, unresolved).
+- [x] Root cause confirmed rather than inferred — read both modules; the
+  kind-blind evaluation in `lib/datafilter.ts` and the lack of any
+  filter-clearing side effect in `store/useApp.ts`'s `setChannelType` were
+  both confirmed by direct inspection, not assumed.
+- [x] Related workflows and persistence paths checked — `setChannelType`
+  (`store/useApp.ts`), the filter round trip (`lib/workspaceSerialize.ts`/
+  `lib/workspaceDatasetParse.ts`).
+- [x] Existing plan overlap reconciled — filed against the
+  PRIMARY_SOFTWARE_AUDIT_PLAN box this slice closed for Data Filter.
+
+#### Implementation
+
+- [x] Minimal safe behavior defined — see "Conservative behaviour
+  implemented" above.
+- [ ] Failure and ambiguous-data behavior defined for the UNRESOLVED
+  `lib/datafilter.ts` row-filtering side — owner call needed.
+- [x] Data integrity and backward compatibility considered — no auto-
+  deletion; a saved project with a now-mismatched predicate still opens and
+  round-trips it unchanged.
+- [ ] UI wording/tooltips/accessibility for a "hidden filter" notice — not
+  built; see "What is NOT decided."
+
+#### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward —
+  `useDataFilter.test.ts`, sabotage-verified.
+- [x] Relevant focused tests pass — full `datafilter` workshop suite green.
+- [x] Type-check/build/repository gates pass — see the PR that introduced
+  this entry.
+- [ ] Agent verifies acceptance criteria for the unresolved half — blocked
+  on the owner call above.
+- [ ] Owner verifies when required.
+
+#### Completion record
+
+- PR/commit: — (Data Filter's display-masking half shipped in the commit
+  that added this entry; the `lib/datafilter.ts` row-filtering half is
+  still open.)
+- Automated tests: `useDataFilter.test.ts` — "a stale kind-mismatched
+  predicate is masked, not deleted (BUG-003)".
+- Agent verification: display-masking half only.
+- Owner verification: —
+- Notes: Tabulate and Stat Stage were out of scope for the slice that filed
+  this — worth checking whether either has the same
+  `channelModelingType`-vs-stored-state staleness risk in its own state
+  (e.g. Tabulate's group-column selection) when they get their own wiring
+  slice.
+
+---
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -499,3 +665,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 |---|---|---|---|
 | 2026-09-08 | ChatGPT-Sol | Created living tracker; added BUG-001 and UX-001 from owner screenshots and code inspection | Both open |
 | 2026-09-09 | Claude | BUG-001: parser-declared roles in `io/ncnr.py` + the missing `metadata.error_roles` reader; corrected one investigation line that measurement disproved | BUG-001 partially implemented, still open pending render/round-trip and owner checks |
+| 2026-09-09 | Claude | Added BUG-003 (Data Filter: a stale kind-mismatched predicate survives a column type change invisibly) from the Data Filter categorical-wiring slice | Display-masking half implemented + sabotage-verified; row-filtering half open pending owner call |

@@ -1,7 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import type { DataStruct } from "../../../lib/types";
+import type { DataStruct, Dataset } from "../../../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../../../lib/workspace";
 import { useApp } from "../../../store/useApp";
 import { useDataFilter } from "./useDataFilter";
 
@@ -140,5 +141,112 @@ describe("useDataFilter", () => {
     const { result } = renderHook(() => useDataFilter());
     act(() => result.current.setRange(1, undefined, undefined));
     expect(filterOf("d1")).toBeUndefined();
+  });
+});
+
+// The classification above (`kind: cat ? "set" : "range"`) already runs
+// through `channelModelingType`, whose own documented precedence checks a
+// `channelTypes` override BEFORE the `isCategoricalChannel` signal. These
+// pin that precedence through the Data Filter workbench's own path (not just
+// `lib/modeling.ts`'s unit tests), per PRIMARY_SOFTWARE_AUDIT_PLAN's
+// instruction to verify the override rule holds through this workbench.
+describe("useDataFilter — explicit channelTypes override wins over inference", () => {
+  it("overriding a genuinely categorical column (cat_levels) to continuous renders it as a range", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "samples.csv",
+        data: { ...DATA, cat_levels: { 0: ["Reference", "Annealed"] } },
+        channelTypes: { 0: "continuous" },
+      }],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useDataFilter());
+    const grp = result.current.columns.find((c) => c.index === 0)!;
+    expect(grp.kind).toBe("range");
+    expect(grp.dataMin).toBe(0);
+    expect(grp.dataMax).toBe(1);
+  });
+
+  it("overriding a plain numeric column to nominal renders it as a level checklist", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: DATA, channelTypes: { 1: "nominal" } }],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useDataFilter());
+    const val = result.current.columns.find((c) => c.index === 1)!;
+    expect(val.kind).toBe("set");
+    expect(val.levels).toEqual([10, 12, 14, 16, 18, 20, 30, 32, 34, 36, 38, 40]);
+  });
+});
+
+// BUG-003 (plans/BUGS_AND_ISSUES.md): a predicate written under a column's
+// PRIOR classification becomes unrepresentable once `setChannelType` (or a
+// reimport that changes `cat_levels`) reclassifies it. The conservative
+// choice implemented in useDataFilter.ts: mask it from `current` (so neither
+// control renders a foreign predicate shape) without deleting it from the
+// store, and keep the raw filter's `active` flag (the "Clear" affordance)
+// honest about it.
+describe("useDataFilter — a stale kind-mismatched predicate is masked, not deleted (BUG-003)", () => {
+  it("a set filter on a categorical column survives an override to continuous, hidden from `current`", () => {
+    const { result, rerender } = renderHook(() => useDataFilter());
+    act(() => result.current.toggleLevel(0, 1)); // keep grp={0} -> a "set" predicate on col 0
+    expect(filterOf("d1")).toEqual([{ col: 0, kind: "set", values: [0] }]);
+
+    act(() => useApp.getState().setChannelType("d1", 0, "continuous"));
+    rerender();
+
+    const grp = result.current.columns.find((c) => c.index === 0)!;
+    expect(grp.kind).toBe("range"); // reclassified
+    expect(grp.current).toBeUndefined(); // the stale "set" predicate can't render here
+    // Not deleted: the raw store entry is untouched...
+    expect(filterOf("d1")).toEqual([{ col: 0, kind: "set", values: [0] }]);
+    // ...and still visibly active, so "Clear" stays reachable.
+    expect(result.current.active).toBe(true);
+
+    // Reverting the override brings the SAME predicate back as `current`.
+    act(() => useApp.getState().setChannelType("d1", 0, null));
+    rerender();
+    const grpAgain = result.current.columns.find((c) => c.index === 0)!;
+    expect(grpAgain.kind).toBe("set");
+    expect(grpAgain.current).toEqual({ col: 0, kind: "set", values: [0] });
+  });
+});
+
+// Persisted filter state must round-trip: a categorical column's level-set
+// filter, saved into a project (`Dataset.filter` via
+// `lib/workspaceSerialize.ts`/`lib/workspace.ts`), has to come back wired
+// the same way through this workbench after reopen — not just as a bare
+// `ColumnFilter[]` shape (workspace.test.ts already pins that), but with the
+// SAME kind/levels/labels/current a live session would show.
+describe("useDataFilter — a categorical filter round-trips through project save/reopen", () => {
+  it("survives serializeWorkspace -> parseWorkspace with its kind, level labels, and predicate intact", () => {
+    const saved: Dataset = {
+      id: "d1",
+      name: "samples.csv",
+      data: {
+        time: [0, 1, 2, 3],
+        values: [[0], [0], [1], [1]],
+        labels: ["Treatment"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["Reference", "Annealed"] },
+      },
+      filter: [{ col: 0, kind: "set", values: [1] }], // keep only "Annealed"
+    };
+    const reopened = parseWorkspace(serializeWorkspace({ datasets: [saved] })).datasets[0];
+
+    // The round trip itself: not a mutated copy of the pre-save object.
+    expect(reopened.data.cat_levels).toEqual({ 0: ["Reference", "Annealed"] });
+    expect(reopened.filter).toEqual([{ col: 0, kind: "set", values: [1] }]);
+
+    useApp.setState({ datasets: [reopened], activeId: reopened.id });
+    const { result } = renderHook(() => useDataFilter());
+    const treatment = result.current.columns.find((c) => c.index === 0)!;
+    expect(treatment.kind).toBe("set");
+    expect(treatment.levelLabels).toEqual(["Reference", "Annealed"]);
+    expect(treatment.current).toEqual({ col: 0, kind: "set", values: [1] });
+    expect(result.current.kept).toBe(2); // only the two "Annealed" (code 1) rows
+    expect(result.current.total).toBe(4);
   });
 });

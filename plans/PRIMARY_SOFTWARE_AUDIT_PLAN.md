@@ -922,10 +922,21 @@ output, not a caught error).
   Import Wizard's `parse_import` (`io/import_preview.py`, new `categorical`
   role + `label` role no longer drops raw strings). Metadata semantics
   (multiple comment rows) were already stable pre-slice and are unchanged.
-- [ ] Display multiple header/comment rows with clear roles — unchanged this
+- [x] Display multiple header/comment rows with clear roles — unchanged this
   slice (P1.6's Import Wizard UI territory; the backend `label_rows`/
   `text_columns` sidecars this depends on already existed and are untouched
   except for staying aligned to the (possibly larger) final channel list).
+  **Reconciled 2026-09-09:** this line and P1.6's "Preview/select multiple
+  header/comment/metadata rows" (below, already `[x]`) describe the SAME
+  capability, not two different ones — verified against the code:
+  `ImportWizardPanel.tsx` renders exactly the three independently-settable
+  `header_line`/`units_line`/`label_line` fields P1.6 describes, with every
+  other preamble row retained as `comments` metadata automatically (no
+  separate "clear roles" display was ever missing; P1.4 just hadn't been
+  pointed at where P1.6 had already shipped it). Re-verified: `npx vitest
+  run` over `components/workshops/importwizard` + `lib/importwizard.ts` —
+  9 files, 126 tests passed. See P1.6's item below for the shipped detail
+  and rulings; do not duplicate tracking here going forward.
 - [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
   X — the REPRESENTATION and the Group-label rendering path
   (`calc/plotting.build_grouped_series`, `lib/plotspec.ts` `buildXY`) are
@@ -1121,10 +1132,41 @@ the Graph Builder's own live spec.
   `.dwk` reopen, and recipe application, and reaches every export/page/hitmap
   path. Background-window and restored-single-series regressions are pinned
   too. The older slice note claiming `facetKey` remained unwired was stale.
-- [ ] Data Filter / Tabulate / Stat Stage workbench wiring through
-  `is_categorical`/`isCategoricalChannel` — booked to a future slice, named
-  home not yet assigned (P1.4's own booking, restated here since it's
-  P1.5-adjacent territory the dispatch explicitly named but scoped out).
+- [x] Data Filter workbench wiring through `is_categorical`/
+  `isCategoricalChannel` — verified: `useDataFilter.ts` already ran every
+  column through `lib/modeling.ts`'s `channelModelingType` (itself gated on
+  `isCategoricalChannel` as its strongest signal, checked before the
+  numeric-shape heuristic and after a `channelTypes` override) since the
+  workbench's original creation (#53) — a categorical column already got a
+  level-membership ("set") predicate + imported level labels
+  (`fix(filter): show categorical level labels`, #321), not a numeric
+  range, and a continuous one already got a range. The `datafilter`
+  directory carrying no *direct* import of `isCategoricalChannel`/
+  `is_categorical` (the grep this box was written from) reflected the
+  correct chokepoint discipline — go through `channelModelingType`, not the
+  raw accessor — not a missing wire. What this slice actually added: test
+  coverage pinning the override-wins rule THROUGH this workbench (not just
+  `lib/modeling.test.ts`), a categorical filter's save/reopen round trip
+  through `lib/workspaceSerialize.ts`/`workspace.ts` (`useDataFilter.test.ts`),
+  and a fix for a real gap the review surfaced — a filter predicate written
+  under a column's prior classification is now masked from display (not
+  silently misrendered) rather than left to garble whichever control can't
+  represent it; see BUG-003 (`plans/BUGS_AND_ISSUES.md`) for the still-open
+  question that leaves about `lib/datafilter.ts`'s row-filtering side.
+  **Tabulate and Stat Stage are OUT OF SCOPE for this slice** (one
+  workbench per PR) — their halves of this box stay open below. NOTE for
+  whoever picks either up: a quick grep while scoping this slice shows
+  `useTabulate.ts` and `lib/statstage.ts` ALSO already import
+  `channelModelingType`/`isCategorical` (group-column auto-selection,
+  category-label resolution via `resolveCategoryLabels`) — this box's
+  "never consume it" premise may be stale for them too, the same way it
+  was for Data Filter, but that was not verified here (no test-suite read,
+  no override/round-trip check, no sabotage-verified coverage) and must
+  not be assumed done from a grep alone.
+- [ ] Tabulate workbench wiring through `is_categorical`/
+  `isCategoricalChannel` — not verified this slice; see the note above.
+- [ ] Stat Stage workbench wiring through `is_categorical`/
+  `isCategoricalChannel` — not verified this slice; see the note above.
 
 ### P1.6 — Import Wizard metadata and error roles [~]
 
@@ -2356,7 +2398,7 @@ violin, bar, strip, or summary plots.
 - [ ] Preserve existing H/V/segment slices and link positions.
 - [ ] Add ROI statistics/export only from real need.
 - [ ] Persist color limits/scale/map/slices/annotations.
-- [ ] Fix profiled rendering/memory bottlenecks — **profile delivered
+- [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid
   runs `scipy griddata` (full Delaunay) over ALL input points on every
@@ -2365,7 +2407,17 @@ violin, bar, strip, or summary plots.
   grid; the class fix is a gridded-input fast path (detect + bin/decimate,
   no triangulation), falling back to griddata only for genuinely
   scattered input. This sub-item is defect-class and actionable now; the
-  rest of P2.8 stays Gate D-sequenced.
+  rest of P2.8 stays Gate D-sequenced. **The gridded-input fast path
+  shipped** (see the "P2.8 defect-class: map-regrid gridded-input fast
+  path" Completed-log entry below, `231a1b8`) — `calc/_grid_detect.py`
+  (jitter-vs-pitch axis clustering, ≥0.9 coverage) + `interp2d.py`'s
+  `_query_grid_linear`/`_thin_scattered` route a detected grid through
+  `RegularGridInterpolator` (1M points: 37.0 → 1.24 s, 30×) with a
+  griddata fallback for genuinely scattered input. Re-verified 2026-09-09:
+  `tests/test_calc_interp2d.py` + `tests/test_calc_grid_detect.py` — 54
+  passed. Left `[~]`, not `[x]`: this box is the WHOLE P2.8 bottleneck
+  list and the `natural`/`cubic` Delaunay paths (same cost class, no
+  measured evidence) are deliberately untouched, per that same log entry.
 - [ ] Interactive 3-D remains gated by GOTO Q4; static 3-D is adequate now.
 
 ### P2.9 — Signal-processing UI
@@ -2406,10 +2458,26 @@ covers a much smaller subset and guards focus on Analyze.
   contract; the separate 17-item Analyze help catalog was deleted
   (2026-07-25).
 - [ ] Extend the same source to Inspector cards, context actions, and
-  workshops, then add contextual `?` links.
+  workshops, then add contextual `?` links. Still open: the contextual `?`
+  links on workshops/context actions themselves — see the (separate,
+  narrower) fix below, which only closed the *search-coverage* half.
 - [x] Channels, Error columns, Corrections, Series style, and Axes Inspector
   cards have compact `?` actions that open Help with a relevant search already
   applied (2026-07-25).
+- [x] Help's search index now also merges the runtime command registry
+  (`useCommands`/`setMenuCommands`), not just `buildAppActions` — closing the
+  gap `lib/workshopHelp.ts`'s header comment named ("relink-sources,
+  paste-workbook, take-over-editing, open-as-copy" were real, described
+  commands invisible to Help search). `HelpDialog.tsx` snapshots
+  `useCommands.getState().menuCommands` on open (the same non-reactive
+  discipline `CommandPalette.tsx` already uses) and merges described entries
+  in via `mergeCommands`, so a *future* registry-published command reaches
+  Help automatically instead of needing another hand-edit here — verified by
+  a guard test (`HelpDialog.test.tsx`, "guard: an arbitrary described
+  registry command becomes searchable with no HelpDialog change") (2026-09-09).
+  This is deliberately narrower than the box above: it fixes *search
+  coverage* for registry commands, not the still-open "contextual `?` links
+  on workshops/context actions" UI work, which is untouched.
 
 ### P3.2 — First-plot onboarding/Home
 
@@ -2427,7 +2495,19 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [ ] Keyboard reachability, focus, order, cancel.
-- [ ] Accessible names/state for icons, plots, trees, dialogs, progress.
+- [~] Accessible names/state for icons, plots, trees, dialogs, progress.
+  ~143 `aria-label`s already exist app-wide; this box has NOT had a full
+  audit and stays `[~]` for that reason. What was verified and fixed
+  (2026-09-09): `Shell/StatusBar.tsx`'s P3.4 pending-op feed (import/export/
+  fit progress) rendered with only `aria-label="Cancel"` on its cancel
+  button and no live-region semantics on the progress text itself — a
+  screen-reader user was never told progress changed. Added
+  `role="status" aria-live="polite" aria-atomic="true"` to the `.qzk-pending`
+  span (`polite` because progress should not interrupt, unlike the adjacent
+  `role="alert"` autosave-failure banner, which was already correct and is
+  untouched). Covered by `StatusBar.test.tsx`'s "StatusBar pending-op live
+  region (accessibility gap)" describe block. No other icon/plot/tree/dialog
+  accessible-name gap was investigated as part of this slice.
 - [ ] Contrast and non-color encodings.
 - [ ] Windows/macOS scaling and high-DPI readability.
 - [ ] Reduced motion.
@@ -2500,7 +2580,7 @@ Prioritized slices (in pain order):
   Honest anomaly flagged: TTFP varied 89 ms vs ~2,300 ms between runs —
   suspected save-time focused-window nondeterminism in the harness, being
   settled by the final measurement wave.
-- [ ] **Server-side plot-payload decimation** (the pre-authorized second
+- [x] **Server-side plot-payload decimation** (the pre-authorized second
   half of the point-reduction follow-up — "server-side payload decimation
   second only if still needed": it IS needed): `/api/plot/series` ships
   **78 MB of JSON** for 1M×7, whose network+encode+parse (~2–5 s) is now
@@ -2509,7 +2589,17 @@ Prioritized slices (in pain order):
   to what the client will draw (the min/max bucketing contract
   `lib/downsample.ts`/`plotDecimate.ts` already define), with a
   full-resolution opt-out for analysis consumers — audit who reads the
-  payload besides the plot before changing the default.
+  payload besides the plot before changing the default. **SHIPPED** (see
+  the "P3.4 second half: server-side plot-payload decimation"
+  Completed-log entry below, `ca80a4c`/`d775100`, zoom residual closed
+  `232cf4f`): `routes/plot.py` takes `decimate_width` + `full_resolution`
+  and refuses non-ascending x; pure `calc/decimate.py` mirrors
+  `plotDecimate.ts`'s min/max-bucket semantics; consumed by
+  `Stage/usePlotPayload.ts`, `Stage/useMultiPanelStage.ts`, and
+  `lib/plotdata.ts`'s `fetchPlot`. 147.5 → 3.49 MB JSON at 1M×7 (~93×).
+  Re-verified 2026-09-09: `tests/test_calc_decimate.py` +
+  `tests/test_api_plot.py` — 54 passed, 1 skipped;
+  `usePlotPayload.test.ts` + `lib/plotdata.test.ts` — 116 passed.
 
 Original acceptance criteria (unchanged):
 
