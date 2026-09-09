@@ -223,7 +223,7 @@ The implementation must use the file format's semantics, not merely the exact di
 ## UX-001 — Origin workbook worksheet cards are oversized and unclear
 
 **Priority:** P1 — major friction parsing imported Origin projects  
-**State:** Open  
+**State:** In progress — compact Tree row implemented and test-verified; owner visual verification still required before this can be marked complete  
 **Reported:** 2026-09-08 by owner  
 **Investigated:** 2026-09-08 by ChatGPT-Sol  
 **Suggested implementation owner/model:** ChatGPT-Sol or a lower-cost Codex frontend model for interaction/CSS; Claude Sonnet for integration/reliability review  
@@ -247,27 +247,27 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 
 ### Research and decision checklist
 
-- [ ] Inventory every row/card type that can appear beneath an imported Origin folder and workbook.
-- [ ] Document what each existing icon and badge means and which actions are duplicated elsewhere.
-- [ ] Determine why the reported worksheets render as large cards while Graph2/Graph8/Graph9 render as compact rows.
-- [ ] Check whether the current Tree/Tiles/Details preference already provides a compact alternative for these exact nodes.
-- [ ] Reconcile this item against unfinished work in `LIBRARY_WORKBOOK_UX_PLAN.md`; do not create a second competing hierarchy model.
-- [ ] Test hierarchy comprehension with a project containing several books, sheets, and saved graphs with similar names.
+- [x] Inventory every row/card type that can appear beneath an imported Origin folder and workbook. — `LibraryTree.tsx`'s dispatcher: `worksheet`→`DatasetRow`, `origin-figure`→`FigureRow`, `workbook`→`WorkbookRow`, `folder`→`FolderRow`, everything else→`ArtifactRow`.
+- [ ] Document what each existing icon and badge means and which actions are duplicated elsewhere. — done only for the worksheet row's own icons (relocated, not re-audited tree-wide); a full icon/badge audit across every row kind is still open.
+- [x] Determine why the reported worksheets render as large cards while Graph2/Graph8/Graph9 render as compact rows. — a component choice, not CSS: `DatasetRow.tsx` rendered a 4-part stacked card with an always-mounted `Sparkline`; `FigureRow.tsx` was already a single-line `.qzk-fig-item`.
+- [x] Check whether the current Tree/Tiles/Details preference already provides a compact alternative for these exact nodes. — `LibraryDetails.tsx` already renders every kind as a uniform compact `<tr>`; this was a Tree-view component gap, not a missing capability.
+- [x] Reconcile this item against unfinished work in `LIBRARY_WORKBOOK_UX_PLAN.md`; do not create a second competing hierarchy model. — the fix changes only how a `worksheet` node renders inside Tree; `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy`/`flattenLibraryHierarchy` is untouched and still the single structural truth.
+- [ ] Test hierarchy comprehension with a project containing several books, sheets, and saved graphs with similar names. — needs a real user/owner session; not exercised here.
 
 ### Interaction checklist
 
-- [ ] Make the node type explicit: Folder, Workbook, Worksheet/Data, or Graph/Figure.
-- [ ] Use compact worksheet rows by default in Tree view.
-- [ ] Allow an optional inline thumbnail expansion without changing selection or opening a plot.
-- [ ] Keep richer thumbnails in Tiles view.
-- [ ] Show the complete name through resizing and a short hover tooltip when truncation is unavoidable.
-- [ ] Give icon-only actions one-sentence tooltips and accessible names.
-- [ ] Make the primary row click behavior consistent and discoverable.
-- [ ] Put secondary actions in a consistent right-click/overflow menu; avoid a permanent strip of unexplained icons.
-- [ ] Clearly distinguish selection from the item currently open in a plot or worksheet.
-- [ ] Preserve keyboard navigation, multiselect, drag/drop, and context-menu behavior.
-- [ ] Ensure large projects remain performant when thumbnails are collapsed.
-- [ ] Do not lose Origin book/sheet provenance or saved-graph relationships when simplifying the presentation.
+- [x] Make the node type explicit: Folder, Workbook, Worksheet/Data, or Graph/Figure. — Folder (▦)/Workbook (▤) already had glyphs; added Worksheet (▥, `DatasetRow.tsx`) and Graph (⌁, `FigureRow.tsx`), same aria-hidden+title convention.
+- [x] Use compact worksheet rows by default in Tree view. — `DatasetRow.tsx`'s `treeMode` branch is now a single `.qzk-ds-compact-row` line; the flat/search-list and Smart Folders card is unchanged (they never pass `treeMode`).
+- [x] Allow an optional inline thumbnail expansion without changing selection or opening a plot. — `DatasetRowPreview.tsx`'s toggle mounts/unmounts the existing `Sparkline`; `stopPropagation` keeps it out of the row's select/open handlers. Test-verified (see Automated tests).
+- [x] Keep richer thumbnails in Tiles view. — Tiles/`TilePreview.tsx`/`useThumbnail.ts` untouched.
+- [x] Show the complete name through resizing and a short hover tooltip when truncation is unavoidable. — `DatasetRowParts.tsx`'s `DatasetRowName` keeps the pre-existing `.qzk-ds-name` (flex:1/min-width:0/ellipsis) + full-name title tooltip, shared by both row layouts.
+- [x] Give icon-only actions one-sentence tooltips and accessible names. — within the rows touched: added `aria-label` to Duplicate/Move up/Move down (previously title-only); the preview toggle and every relocated `DatasetRowControls` icon carry both. Not a full tree-wide icon audit (see the open research item above).
+- [x] Make the primary row click behavior consistent and discoverable. — click/dblclick/selection semantics (L0.25) are unchanged, just relocated behind the same handlers.
+- [x] Put secondary actions in a consistent right-click/overflow menu; avoid a permanent strip of unexplained icons. — the compact row drops the always-visible ▲▼⧉✕ strip; Duplicate/Remove/Add tag/etc. stay reachable through the existing "⋯"/context menu (`datasetRowMenu.ts`), unchanged.
+- [ ] Clearly distinguish selection from the item currently open in a plot or worksheet. — pre-existing `.active`/`.selected` styling carried over as-is; not newly addressed by this pass.
+- [x] Preserve keyboard navigation, multiselect, drag/drop, and context-menu behavior. — `LibraryTree.test.tsx` (705 lines) and `DatasetRow.test.tsx` (538 lines) pass unmodified against the new layout.
+- [x] Ensure large projects remain performant when thumbnails are collapsed. — the always-mounted `Sparkline` (~120+ synchronous SVG builds per Tree render) is now opt-in per row.
+- [x] Do not lose Origin book/sheet provenance or saved-graph relationships when simplifying the presentation. — sheet chip, Origin routing, `DerivedWorksheetMark`, drag/drop all preserved verbatim in `DatasetRowParts.tsx`'s `DatasetRowControls`.
 
 ### Suggested compact row contents
 
@@ -281,21 +281,21 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 
 ### Acceptance criteria
 
-- [ ] A new user can identify folders, workbooks, worksheets, and saved graphs without trial-and-error clicking.
-- [ ] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews.
-- [ ] A user can reveal a plot thumbnail when desired without opening or replacing the active plot.
-- [ ] Names and action meanings are recoverable even when the Library is narrow.
-- [ ] Tree, Tiles, and Details views retain consistent selection and activation behavior.
-- [ ] The reported Origin project remains navigable with no missing or duplicated nodes.
-- [ ] Owner verifies the revised workflow on the reported project.
+- [ ] A new user can identify folders, workbooks, worksheets, and saved graphs without trial-and-error clicking. — glyphs now exist for all four kinds; a real judgment call needs an actual new-user/owner session.
+- [ ] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews. — very likely true (a compact row is one ~20-24px line vs. the prior ~90-110px card) but not visually confirmed against a rendered viewport — no screenshot taken this pass.
+- [x] A user can reveal a plot thumbnail when desired without opening or replacing the active plot. — test-verified: `selectedIds`/`activeId` unchanged after toggling the preview.
+- [ ] Names and action meanings are recoverable even when the Library is narrow. — the tooltip/ellipsis mechanism is preserved, not re-tested at a narrow panel width.
+- [x] Tree, Tiles, and Details views retain consistent selection and activation behavior. — Tiles/Details untouched; Tree's selection/activation logic is unchanged (only the worksheet row's markup changed), and `LibraryTree.test.tsx` passes unmodified.
+- [ ] The reported Origin project remains navigable with no missing or duplicated nodes. — not tested against the owner's actual reported project (not available here).
+- [ ] Owner verifies the revised workflow on the reported project. — pending; required before this item can be marked complete.
 
 ### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- PR/commit: committed locally in this worktree (not pushed, no PR opened per task instructions).
+- Automated tests: `frontend/src/components/Library/DatasetRowCompact.test.tsx` (new, 7 cases — compact-row shape, glyph, meta text, opt-in preview mount/unmount, no-selection-change, localStorage persistence, flat-mode regression guard) and `frontend/src/lib/libraryPreviewPrefs.test.ts` (new, 3 cases) all pass and were individually sabotage-verified (broke the code path each covers, confirmed the test failed, restored). Full existing suite green (see Agent verification) — `DatasetRow.test.tsx` and `LibraryTree.test.tsx` pass with ZERO changes to their assertions.
+- Agent verification: worksheet Tree rows are now a single compact line (glyph + name + `N pts · Mch` + opt-in preview toggle), matching `FigureRow`'s existing compact shape; the sparkline no longer mounts unconditionally; expanding/collapsing it never touches `selectedIds`/`activeId`; all pre-existing keyboard/drag/context-menu/roving-focus behavior is unchanged (same tests, same assertions, all passing). `tsc --noEmit`, `eslint src`, and the full `vitest run` suite are clean; `npm run build` + the bundle-size ratchet are clean (see gate numbers in the implementation session's own report).
+- Owner verification: pending — required for this item (visual review of the reported Origin project, real-viewport row-count check, narrow-panel truncation check).
+- Notes: scope was deliberately narrow — only `DatasetRow.tsx`'s `treeMode` (Tree) branch changed; the flat/search-list and Smart Folders card, Tiles, Details, and `LIBRARY_WORKBOOK_UX_PLAN.md`'s hierarchy model are all untouched. A full tree-wide icon/badge audit and the "distinguish selection from the item open in a plot" item remain open — out of this pass's scope, not forgotten. The eager-bundle ratchet (`frontend/scripts/check-bundle-size.mjs`) needed a raise — 910,748 → 912,503 bytes (+1,755, budget raised to measured + 1,024 = 913,527) — after a measured `React.lazy()` split of the preview toggle came back WORSE (fragmented Sparkline's own shared chunks) and was reverted, and deduplicating the two row layouts' shared JSX/logic recovered 415 of the original 1,146-byte overage; the dated history entry in that file has the full measurement trail.
 
 ---
 

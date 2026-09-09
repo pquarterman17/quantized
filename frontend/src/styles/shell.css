@@ -281,6 +281,29 @@ body {
 .qzk-ds-top { display: flex; align-items: center; gap: 7px; }
 .qzk-ds-name { flex: 1; min-width: 0; font-size: var(--font-size-sm); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-ds-spark { width: 100%; height: 26px; display: block; }
+/* UX-001: the Tree's compact single-line worksheet row — a peer of
+   .qzk-folder-head/.qzk-workbook-row's one-line layout instead of the full
+   stacked card above (still used by the flat/search list and Smart
+   Folders, which keep .qzk-ds-top/-spark/-foot/-tags unmodified). Tighter
+   vertical padding than the card so several rows fit without scrolling
+   past large previews (UX-001 acceptance criterion). */
+.qzk-ds.qzk-ds-compact { padding: 3px 4px; gap: 0; }
+.qzk-ds-compact-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+/* Node-type glyph, shared class with FigureRow's Graph glyph — same
+   aria-hidden+title convention as Folder's/Workbook's own icons. */
+.qzk-ds-icon { flex-shrink: 0; width: 12px; text-align: center; color: var(--text-dim); }
+.qzk-ds-compact-meta { flex-shrink: 0; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); white-space: nowrap; }
+/* DatasetRowPreview's expanded Sparkline: a DIRECT flex child of
+   .qzk-ds-compact-row (not nested inside a wrapper span) so `flex-basis:
+   100%` can wrap it onto its own full-width line below the name/meta/
+   toggle line, instead of squeezing a 180px SVG in among them. */
+.qzk-ds-spark-wrap { flex-basis: 100%; }
+/* Tags are shared by both layouts (UX-001 review round: the compact row must
+   not silently drop tagging). Full-width flex child so chips and the add/edit
+   input wrap onto their own line below name/meta — taking NO height at all
+   when the dataset has no tags and none is being added. */
+.qzk-ds-tags-compact { flex-basis: 100%; }
+.qzk-ds-compact .qzk-ds-spark { height: 22px; }
 /* Footer row: metadata on the left, row actions (badge + ▲▼⧉✕) on the right.
    The name owns its own full-width row above, so long filenames stay readable. */
 /* Non-first sheet of a multi-sheet Origin pseudo-book (lib/grouping's

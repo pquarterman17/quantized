@@ -74,6 +74,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
         onDoubleClick={treeMode ? () => openAndRemember() : undefined}
         onContextMenu={treeMode ? select : undefined}
       >
+        {/* Node-type glyph (UX-001): same aria-hidden+title convention as
+         *  Tree's Folder (▦)/Workbook (▤)/Worksheet (▥) glyphs. */}
+        <span className="qzk-ds-icon" aria-hidden="true" title="Graph">⌁</span>
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
         <span className="qzk-fig-meta">
           {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
