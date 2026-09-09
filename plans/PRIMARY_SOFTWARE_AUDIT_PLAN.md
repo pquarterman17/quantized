@@ -1072,8 +1072,70 @@ output, not a caught error).
   UX yet to prevent, flag, or guide the edit (a level-picker/dropdown, a
   Recode-and-extend-the-table flow) — P1.6's worksheet-UI slice owns
   closing that gap, not this contract.
-- [ ] Keep ignored instrumental metadata searchable — unchanged (pre-
-  existing `text_columns`/`comments` sidecars; still stand).
+- [~] Keep ignored instrumental metadata searchable — **this box was FALSE as
+  written, and saying so is the finding.** It read "unchanged (pre-existing
+  `text_columns`/`comments` sidecars; still stand)". The sidecars did stand and
+  the data in them was preserved; it was never SEARCHABLE, which is what the box
+  claimed. `lib/projectSearch.ts`'s `metadataEntries` emits only SCALAR metadata
+  values and skips `origin_books`/`text_columns`/`label_rows` by name — and
+  every sidecar carrying metadata a parser declined to make a channel is a
+  COLLECTION, so all four fell through: `comments` (`list[str]`),
+  `text_columns` (`{header: [cells]}`), `label_rows` (`list[dict]`) and
+  `all_column_names` (`list[str]`). Nothing in any of them was reachable from
+  Find in project. Preserving data nobody can find is not the same as keeping it
+  searchable, and only a check would have caught the difference.
+
+  **Now searchable (2026-09-09, Group K)** via `lib/projectSearchSidecars.ts`,
+  one hit per (dataset, column) or (dataset, row) so a wide sheet cannot flood
+  the results: text-column NAMES (revealed in the worksheet, with no `channel`
+  claimed — a text column has no channel index); `all_column_names`, minus any
+  name that is already a searchable channel label; `label_rows` CELLS, which is
+  where sample ids live; and the `comments` preamble, one hit per dataset with a
+  count of the other matching lines. Ranked below scalar metadata — someone
+  typing "Rxy" means the column, not a mention of it in a discarded header row.
+  `origin_books` stays skipped for the original, correct reason. The
+  corrupted-sidecar hazard is guarded (a bare string where a string ARRAY
+  belongs reads as truthy and JS indexes it character by character);
+  sabotage-verified.
+  **Review round (same day), eight findings, all real** — recorded because they
+  are the substance of this slice, not a footnote:
+  - The module **undercut its own performance argument**: it read text-column
+    NAMES through `columnmeta.ts`'s `originTextColumns`, which materializes every
+    cell (`rows.map(String)`), so it re-materialized every text cell per
+    keystroke while claiming to refuse that cost. Measured **55.6 ms** at
+    20x2x50k versus **0.0 ms** reading the keys. Now reads the keys.
+  - The `all_column_names`-vs-channel-label dedupe compared RAW headers to
+    unit-STRIPPED labels (`io/delimited.py`'s `_extract_units` turns
+    "Rxy (Ohm)" into "Rxy"), so it no-opped for any header carrying a unit — the
+    common case. **The original test could not have caught it: its fixture used
+    unit-free headers, which no real `import_csv` output produces.**
+  - A text column is listed in BOTH `text_columns` and `all_column_names`;
+    reading them independently emitted the same name twice with contradictory
+    reveal targets. Now one deduped pass.
+  - `labelRows()` also returns the header and units rows, whose cells ARE the
+    column names and units — a third near-identical hit for one query. Now only
+    `role === "label"` rows, the descriptive ones this feature is about.
+  - `colname:<ds>:<name>` was not a unique id (duplicate non-blank headers
+    survive the parser), so React keys could collide. Now indexed.
+  - An x-cell label-row hit revealed to the plot tab while its row-siblings went
+    to the worksheet. The x column renders in the worksheet like any other; that
+    was an inconsistency, not a decision.
+  - A comment hit showed the HEAD of the matching line, so a long instrument
+    line truncated the match away. Now `excerpt()`, like a note hit.
+  - The `channel`-index rationale claimed a hit naming the wrong channel "would
+    scroll to the wrong place". Nothing scrolls today — `SearchPanel` uses
+    `channel` only for status phrasing. The index is still carried correctly,
+    but the justification described a consequence that does not exist.
+
+  **`[~]`, not `[x]`, because text-column CELL contents are deliberately NOT
+  searched, and that is a measured decision rather than an oversight.**
+  `searchProject` runs in a `useMemo` on every keystroke; a full substring scan
+  of text-column cells measured (node, this repo, 2026-09-09) at 322 ms for 2.0M
+  cells and 2560 ms for 15.0M, in the common NO-MATCH case. A capped scan would
+  be silent incompleteness — the exact failure class this plan keeps closing —
+  so row-level full-text search over data columns is booked as its own feature
+  needing an index, not faked here. What ships searches metadata ABOUT the file,
+  bounded by the header block, not by the data.
 - [ ] Sample ID, field, or temperature can independently label the legend —
   the representation supports it (any categorical channel can be the group
   column); the Graph Builder wiring to pick ANY such channel as the legend
@@ -2680,7 +2742,25 @@ covers a much smaller subset and guards focus on Analyze.
   accessible-name gap was investigated as part of this slice.
 - [ ] Contrast and non-color encodings.
 - [ ] Windows/macOS scaling and high-DPI readability.
-- [ ] Reduced motion.
+- [x] Reduced motion — **verified complete 2026-09-09; the box was simply
+  stale.** Two independent sources, either sufficient on its own: the OS
+  setting (`@media (prefers-reduced-motion: reduce)`) and the in-app
+  Preferences ▸ Appearance switch (`[data-reduce-motion]`, set by
+  `store/prefs.ts`). Both apply the SAME four declarations
+  (`transition-duration`, `animation-duration`, `animation-iteration-count`,
+  `scroll-behavior`) through the UNIVERSAL selector plus `::before`/`::after`
+  in `styles/index.css` — deliberately universal, since enumerating animated
+  selectors is what left five of the seven motion declarations uncovered
+  originally, and a new transition (or one inside a dependency's stylesheet)
+  is covered without anyone remembering to add it.
+
+  Pinned by `styles/reducedMotion.test.ts`, which asserts on the STYLESHEET
+  SOURCE rather than a rendered page, because jsdom does not evaluate
+  `@media (prefers-reduced-motion)` — a DOM test there would pass whatever the
+  CSS said, which is the kind of vacuous coverage this plan keeps rejecting.
+  It checks both sweeps and that they carry the same declarations, so the two
+  cannot drift apart. `store/diagnostics.ts` also reports the OS setting in the
+  diagnostic bundle.
 
 ### P3.4 — Error/progress/cancel/diagnostics
 

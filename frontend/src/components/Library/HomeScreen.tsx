@@ -15,6 +15,7 @@
 // share that is merely unmounted must never be treated as a deleted file.
 
 import { useEffect, useState, useRef } from "react";
+import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
 import { relativeTime, type RecentFile } from "../../lib/recentFiles";
@@ -173,7 +174,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
         ) : health.savedAt != null ? (
           <>
             Autosave healthy · {health.count} recovery point
-            {health.count === 1 ? "" : "s"}
+            {plural(health.count)}
           </>
         ) : (
           "Nothing autosaved yet"

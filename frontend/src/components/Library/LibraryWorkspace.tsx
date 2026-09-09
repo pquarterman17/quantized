@@ -3,6 +3,7 @@
 // a second Library model or mutates the active plot merely by browsing.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { plural } from "../../lib/plural";
 
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
@@ -279,7 +280,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
       </header>
 
       <div className="qzk-library-workspace-summary">
-        <span>{items.length} item{items.length === 1 ? "" : "s"}</span>
+        <span>{items.length} item{plural(items.length)}</span>
         <span>Single-click selects or browses · Double-click or Enter opens</span>
       </div>
 

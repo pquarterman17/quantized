@@ -8,6 +8,7 @@
 // see useThumbnail's header for what that means for in-flight generation.
 
 import { useRef } from "react";
+import { plural } from "../../lib/plural";
 
 import { fmtNum } from "../../lib/format";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
@@ -112,7 +113,7 @@ export default function TilePreview({ node }: { node: LibraryNode }) {
     return (
       <div className="qzk-tile-placeholder">
         <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
-        <small>{children} item{children === 1 ? "" : "s"}</small>
+        <small>{children} item{plural(children)}</small>
       </div>
     );
   }

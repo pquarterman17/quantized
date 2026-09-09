@@ -2,6 +2,7 @@
 // autosave health + active dataset + count.
 
 import { useEffect, useState } from "react";
+import { plural } from "../../lib/plural";
 
 import { StatusDot } from "../primitives";
 import { useConnection } from "../../lib/lifecycle";
@@ -126,7 +127,7 @@ export default function StatusBar() {
         health.savedAt != null && (
           <span
             style={{ color: "var(--text-faint)" }}
-            title={`Last autosave ${new Date(health.savedAt).toLocaleString()} · ${health.count} recovery point${health.count === 1 ? "" : "s"}`}
+            title={`Last autosave ${new Date(health.savedAt).toLocaleString()} · ${health.count} recovery point${plural(health.count)}`}
           >
             saved {savedAtLabel(health.savedAt)}
           </span>
@@ -138,7 +139,7 @@ export default function StatusBar() {
         </span>
       )}
       <span>
-        {count} dataset{count === 1 ? "" : "s"}
+        {count} dataset{plural(count)}
       </span>
     </footer>
   );
