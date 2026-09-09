@@ -233,6 +233,57 @@ describe("workspace PR K fields (deps/derivedFrom/formulaErrors)", () => {
   });
 });
 
+// LIBRARY_WORKBOOK_UX_PLAN "Derived-data integrity requirements" box:
+// "Preserve formulas, pipeline parameters, units, exclusions, and provenance
+// through project save/load and workbook copy/paste." This describe covers
+// the save/load half — one dataset carrying all five payloads AT ONCE,
+// round-tripped through the real serializeWorkspace/parseWorkspace pair (not
+// five separate single-field fixtures, so a regression that clobbers one
+// payload while "fixing" another can't hide behind isolated tests passing).
+// The copy/paste half is workbookTransfer.test.ts's identically-named describe.
+describe("derived-data integrity: all five payloads survive save/load together", () => {
+  function makeFullDataset(): Dataset {
+    const ds = makeDataset("src", "full");
+    ds.data = {
+      time: [0, 1, 2],
+      values: [[10, 100], [20, 200], [30, 300]],
+      labels: ["A", "B"],
+      units: ["emu", "Oe"], // UNITS payload — base channel units
+      metadata: { source: "test" },
+    };
+    // FORMULAS payload — a computed column, including its own unit override.
+    ds.formulas = [{ name: "S", expr: "A + B", unit: "emu*Oe", deps: ["A", "B"] }];
+    // PIPELINE PARAMETERS payload — the re-runnable correction recipe
+    // (store/derivedWorksheets.ts: "`.corrections` IS its re-runnable
+    // pipeline recipe").
+    ds.corrections = { xOff: 1.5, bgSlope: 0.2, smoothEnabled: true, smoothWindow: 5 };
+    // EXCLUSIONS payload — excluded rows + a non-destructive column filter.
+    ds.excludedRows = [0, 2];
+    ds.filter = [{ col: 1, kind: "range", min: 50, max: 250 }];
+    // PROVENANCE payload — import source (+ checksum/mtime/size), the
+    // derived-worksheet lineage link, the version lineage, and import time.
+    ds.source = { kind: "path", path: "/data/run1.csv", checksum: "sha256:abc", mtime: 1700000000, size: 42 };
+    ds.derivedFrom = { datasetId: "raw1", pipeline: "flatten + smooth" };
+    ds.versionOf = "raw1";
+    ds.importedAt = "2026-01-01T00:00:00.000Z";
+    return ds;
+  }
+
+  it("round-trips formulas (incl. unit), pipeline params, units, exclusions, and provenance together", () => {
+    const ds = makeFullDataset();
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.units).toEqual(ds.data.units); // units
+    expect(restored.formulas).toEqual(ds.formulas); // formulas (incl. per-column unit)
+    expect(restored.corrections).toEqual(ds.corrections); // pipeline parameters
+    expect(restored.excludedRows).toEqual(ds.excludedRows); // exclusions
+    expect(restored.filter).toEqual(ds.filter); // exclusions
+    expect(restored.source).toEqual(ds.source); // provenance
+    expect(restored.derivedFrom).toEqual(ds.derivedFrom); // provenance
+    expect(restored.versionOf).toBe(ds.versionOf); // provenance
+    expect(restored.importedAt).toBe(ds.importedAt); // provenance
+  });
+});
+
 describe("workspace v2 folder tree", () => {
   it("round-trips the folder tree, active/selection, and expansion", () => {
     const a = { ...makeDataset("a", "in-f1"), folderId: "f1", order: 0 };
