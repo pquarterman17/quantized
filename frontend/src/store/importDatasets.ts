@@ -31,7 +31,6 @@ import { importFile, uploadFile } from "../lib/api";
 import type { HistoryBatchToken } from "./history";
 import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
-import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
@@ -43,6 +42,8 @@ import {
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
 import { presentBatchOutcome } from "./importBatchOffers";
+import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
+import { seedErrorRoles } from "./importErrorRoles";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { toast } from "./toasts";
@@ -289,7 +290,7 @@ function addFromPayload(
     // designations here too; a genuinely non-Origin file (`null`) is unchanged.
     const dsInput: Dataset = {
       id, name: origin.name, data, ...src,
-      ...(originBookErrorRoles(data) ?? importRoles(data)),
+      ...seedErrorRoles(data),
       importedAt,
       ...(targetFolderId ? { folderId: targetFolderId } : {}),
     };
@@ -485,15 +486,3 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
       }, opts?.historyToken, opts?.presentOutcome ?? true),
   };
 }
-
-/** Seed the canonical error-column roles from the parsed labels (MAIN #33).
- *
- *  Inference SUGGESTS — it only binds where the pairing is unambiguous or
- *  follows the instrument convention, and everything stays overridable. Omitted
- *  entirely when nothing is inferable, so an ordinary two-column file carries
- *  no empty role list. */
-function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
-  const roles = inferErrorBindings(data);
-  return roles.length ? { errorRoles: roles } : {};
-}
-

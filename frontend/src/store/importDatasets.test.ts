@@ -248,6 +248,79 @@ describe("import roles and provenance (MAIN #33)", () => {
       });
   });
 
+  // BUGS_AND_ISSUES BUG-001. A parser that knows its format declares roles in
+  // `metadata.error_roles`; before this the key was written by the backend and
+  // read by nobody, so an NCNR reductus `.refl` drew its uncertainty and Q
+  // resolution as ordinary curves.
+  const withMetadata = (labels: string[], metadata: Record<string, unknown>) => ({
+    ...withLabels(labels),
+    metadata,
+  });
+
+  it("honours parser-DECLARED error roles, including an X-axis binding", () => {
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["Intensity", "uncertainty", "resolution"], {
+        error_roles: [
+          { channel: 1, target: 0, axis: "y", side: "both" },
+          { channel: 2, target: -1, axis: "x", side: "both" },
+        ],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/j395.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 0, axis: "y", side: "both" },
+          { channel: 2, target: -1, axis: "x", side: "both" },
+        ]);
+      });
+  });
+
+  it("prefers the parser's declaration over the label guess", () => {
+    // `dR` would be guessed onto `R`; the parser says it belongs to the SECOND
+    // channel. A parser knows its format, the guesser only knows spellings.
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["R", "dR", "theory"], {
+        error_roles: [{ channel: 1, target: 2, axis: "y", side: "both" }],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/declared.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 2, axis: "y", side: "both" },
+        ]);
+      });
+  });
+
+  it("drops malformed declared entries and falls back to the guess", () => {
+    // The hint comes from a parsed FILE, so it is validated, not trusted. With
+    // nothing valid left the `??` chain must still reach the label guesser —
+    // a bad hint must not silently suppress inference.
+    vi.mocked(importFile).mockResolvedValue(
+      withMetadata(["R", "dR"], {
+        error_roles: [
+          { channel: 9, target: 0, axis: "y", side: "both" },      // out of range
+          { channel: 1, target: 1, axis: "y", side: "both" },      // own target
+          { channel: 1, target: 0, axis: "z", side: "both" },      // bad axis
+          { channel: 1, target: 0, axis: "y", side: "maybe" },     // bad side
+          { channel: 1.5, target: 0, axis: "y", side: "both" },    // non-integer
+          "not an object",
+        ],
+      }),
+    );
+    return useApp
+      .getState()
+      .importPaths(["/d/bad.refl"])
+      .then(() => {
+        expect(useApp.getState().datasets[0].errorRoles).toEqual([
+          { channel: 1, target: 0, axis: "y", side: "both" }, // the guess
+        ]);
+      });
+  });
+
   it("stamps import provenance on the dataset, since the file is never written", () => {
     vi.mocked(importFile).mockResolvedValue(withLabels(["T", "M"]));
     return useApp

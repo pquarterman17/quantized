@@ -726,8 +726,30 @@ import { fileURLToPath } from "node:url";
  *  spread from memory is also unsafe -- it was first estimated at ~450 B
  *  for this entry and corrected to ~900 B once the CI number was actually
  *  read, so re-measure the base rather than trusting this figure. Full
- *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. */
-const EAGER_JS_BUDGET = 910_711;
+ *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. *
+ *  2026-09-09 (BUGS_AND_ISSUES BUG-001, NCNR `.refl` uncertainty roles) —
+ *  910,531 -> 911,000 bytes (+469). What grew: `store/importErrorRoles.ts`,
+ *  extracted from `importDatasets.ts` (which had hit the 500-line ceiling) and
+ *  carrying the new `parserErrorRoles` reader for
+ *  `DataStruct.metadata["error_roles"]`. That key was written by the backend
+ *  and read by NOTHING, so no parser could declare an X-axis error at all and
+ *  a reductus `.refl` drew its uncertainty and Q resolution as ordinary
+ *  curves. Raised to measured + 1,024 per rule 2, after trying both
+ *  alternatives:
+ *    - LAZY SPLIT rejected on evidence, not preference: the only consumer is
+ *      `addFromPayload`, which is SYNCHRONOUS, so deferring the module means
+ *      making dataset construction async and adding a chunk-fetch failure mode
+ *      to the core import path — for 469 bytes. This is the "new store code
+ *      with no lazy-able panel behind it" case rule 2 names.
+ *    - SIZE REDUCTION tried: rewriting the validator as a single filter+map
+ *      recovered only ~100 bytes (911,000 measured either way at kB
+ *      resolution), and the shortest form passed raw metadata objects straight
+ *      through as bindings — extra keys would then be stored on the dataset
+ *      and serialized into the `.dwk`, so the explicit construction stayed.
+ *  Full frontend suite (610 files / 9,576 tests), backend 4,639, tsc --noEmit
+ *  and eslint green.
+ */
+const EAGER_JS_BUDGET = 912_024;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
