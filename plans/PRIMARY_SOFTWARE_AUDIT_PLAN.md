@@ -1097,6 +1097,35 @@ output, not a caught error).
   corrupted-sidecar hazard is guarded (a bare string where a string ARRAY
   belongs reads as truthy and JS indexes it character by character);
   sabotage-verified.
+  **Review round (same day), eight findings, all real** — recorded because they
+  are the substance of this slice, not a footnote:
+  - The module **undercut its own performance argument**: it read text-column
+    NAMES through `columnmeta.ts`'s `originTextColumns`, which materializes every
+    cell (`rows.map(String)`), so it re-materialized every text cell per
+    keystroke while claiming to refuse that cost. Measured **55.6 ms** at
+    20x2x50k versus **0.0 ms** reading the keys. Now reads the keys.
+  - The `all_column_names`-vs-channel-label dedupe compared RAW headers to
+    unit-STRIPPED labels (`io/delimited.py`'s `_extract_units` turns
+    "Rxy (Ohm)" into "Rxy"), so it no-opped for any header carrying a unit — the
+    common case. **The original test could not have caught it: its fixture used
+    unit-free headers, which no real `import_csv` output produces.**
+  - A text column is listed in BOTH `text_columns` and `all_column_names`;
+    reading them independently emitted the same name twice with contradictory
+    reveal targets. Now one deduped pass.
+  - `labelRows()` also returns the header and units rows, whose cells ARE the
+    column names and units — a third near-identical hit for one query. Now only
+    `role === "label"` rows, the descriptive ones this feature is about.
+  - `colname:<ds>:<name>` was not a unique id (duplicate non-blank headers
+    survive the parser), so React keys could collide. Now indexed.
+  - An x-cell label-row hit revealed to the plot tab while its row-siblings went
+    to the worksheet. The x column renders in the worksheet like any other; that
+    was an inconsistency, not a decision.
+  - A comment hit showed the HEAD of the matching line, so a long instrument
+    line truncated the match away. Now `excerpt()`, like a note hit.
+  - The `channel`-index rationale claimed a hit naming the wrong channel "would
+    scroll to the wrong place". Nothing scrolls today — `SearchPanel` uses
+    `channel` only for status phrasing. The index is still carried correctly,
+    but the justification described a consequence that does not exist.
 
   **`[~]`, not `[x]`, because text-column CELL contents are deliberately NOT
   searched, and that is a measured decision rather than an oversight.**

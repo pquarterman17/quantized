@@ -31,6 +31,7 @@ describe("sidecarHits — the four collection-shaped sidecars", () => {
     const hits = sidecarHits(withMeta({ text_columns: { SampleID: ["A", "B"] } }), "sample");
     expect(hits).toHaveLength(1);
     expect(hits[0].label).toBe("SampleID");
+    expect(hits[0].context).toContain("text column");
     expect(hits[0].revealInWorksheet).toBe(true);
     expect(hits[0].channel).toBeUndefined();
   });
@@ -52,6 +53,68 @@ describe("sidecarHits — the four collection-shaped sidecars", () => {
     // rank; a second sidecar hit for the same string is noise.
     const hits = sidecarHits(withMeta({ all_column_names: ["Field", "Rxy"] }), "rxy");
     expect(hits).toHaveLength(0);
+  });
+
+  it("dedupes against a channel label even when the raw header carries its UNIT", () => {
+    // REVIEW ROUND. The first version compared raw headers to `labels` and so
+    // no-opped for every header with a unit — which is the common case, since
+    // `io/delimited.py`'s `_extract_units` strips "(Ohm)" to make the label.
+    // The original test could not catch it: its fixture used unit-free headers,
+    // which no real `import_csv` output has.
+    const hits = sidecarHits(withMeta({ all_column_names: ["Field (T)", "Rxy (Ohm)"] }), "rxy");
+    expect(hits).toHaveLength(0);
+  });
+
+  it("emits ONE hit for a text column, not one per sidecar that names it", () => {
+    // A text column is listed in `text_columns` AND in `all_column_names`.
+    // Reading them independently gave two hits for one column with
+    // contradictory reveal targets.
+    const hits = sidecarHits(
+      withMeta({ text_columns: { SampleID: ["A"] }, all_column_names: ["Field", "Rxy", "SampleID"] }),
+      "sample",
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].revealInWorksheet).toBe(true);
+    expect(hits[0].context).toContain("text column");
+  });
+
+  it("gives duplicate headers distinct ids (React keys must not collide)", () => {
+    const hits = sidecarHits(withMeta({ all_column_names: ["Aux", "Aux"] }), "aux");
+    expect(new Set(hits.map((h) => h.id)).size).toBe(hits.length);
+  });
+
+  it("does NOT re-emit the header/units rows as label-row hits", () => {
+    // Their cells ARE the column names and units, already covered by the
+    // column-name hits above and by searchProject's own column hits.
+    const hits = sidecarHits(
+      withMeta({
+        label_rows: [
+          { index: 0, role: "header", x: "H", cells: ["Field", "Rxy"] },
+          { index: 1, role: "units", x: "T", cells: ["Ohm", "Ohm"] },
+        ],
+      }),
+      "ohm",
+    );
+    expect(hits).toHaveLength(0);
+  });
+
+  it("excerpts a comment AROUND the match rather than showing the head of the line", () => {
+    const long = "# " + "x".repeat(120) + " calibrated-2026 " + "y".repeat(120);
+    const hits = sidecarHits(withMeta({ comments: [long] }), "calibrated-2026");
+    expect(hits[0].label).toContain("calibrated-2026");
+  });
+
+  it("reveals an x-cell label-row hit in the worksheet too, with no channel claimed", () => {
+    // The x column renders in the worksheet like any other; sending this one
+    // hit to the plot tab while its row-siblings went to the worksheet was an
+    // inconsistency, not a decision.
+    const hits = sidecarHits(
+      withMeta({ label_rows: [{ index: 2, role: "label", x: "SweepUp", cells: ["a", "b"] }] }),
+      "sweepup",
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].revealInWorksheet).toBe(true);
+    expect(hits[0].channel).toBeUndefined();
   });
 
   it("searches label-row CELLS — this is where sample ids live", () => {
@@ -131,7 +194,9 @@ describe("searchProject — sidecars reach the real search", () => {
   });
 
   it("sends a text-column hit to the worksheet, since that is where it renders", () => {
-    const hit = searchProject("sampleid", project).find((h) => h.id.startsWith("text:"))!;
+    // One unified `colname:` hit per name now (a text column is listed in both
+    // `text_columns` and `all_column_names`); the context says which kind it is.
+    const hit = searchProject("sampleid", project).find((h) => h.context.includes("text column"))!;
     expect(hit.reveal).toBe("worksheet");
     expect(hit.channel).toBeUndefined();
   });
