@@ -43,9 +43,8 @@ describe("cloneDataStruct", () => {
 
 // The allowlist-copy bug (Group J audit): `cloneDataStruct` named the five
 // required fields and silently dropped every optional one, so `duplicateDataset`
-// and `freezeCopy` de-categorized a dataset and stripped an Origin import's
-// decode products. These assert the SPREAD contract — "a new field is carried by
-// default" — not just the one field that was noticed.
+// and `freezeCopy` de-categorized a dataset. These assert the SPREAD contract —
+// "a new field is carried by default" — not just the one field that was noticed.
 describe("cloneDataStruct — optional fields survive the copy", () => {
   const categorical: DataStruct = {
     ...src,
@@ -75,9 +74,14 @@ describe("cloneDataStruct — optional fields survive the copy", () => {
   });
 
   it("carries EVERY other optional field — the spread contract, not a per-field allowlist", () => {
-    // Deliberately includes a field this module has no knowledge of: the point
-    // is that an unknown key survives, which is what makes the next added
-    // DataStruct field safe by default.
+    // SYNTHETIC ON PURPOSE, and this is what it does and does not prove. The
+    // `books`/`book_source`/`figures`/`origin_fidelity` fields cannot reach
+    // `cloneDataStruct` today — `store/importDatasets.ts` deletes all four
+    // before `data` becomes a stored `Dataset.data` — so this is NOT evidence of
+    // a real-world loss of them. It pins the CONTRACT: an optional key this
+    // module has never heard of survives the copy, which is exactly what makes
+    // the next field added to `DataStruct` safe by default. `some_future_field`
+    // is the honest version of that claim.
     const rich = {
       ...src,
       books: [{ id: "bk1", name: "Book1" }],

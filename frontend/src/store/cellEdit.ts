@@ -39,6 +39,7 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
+import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
@@ -233,7 +234,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     if (usable.length === 0) {
       if (skipped > 0) {
         get().setStatus(
-          `${label}: nothing pasted — all ${skipped} cell${skipped === 1 ? "" : "s"} were read-only/out-of-range or not a valid level code for a categorical column.`,
+          `${label}: nothing pasted — all ${skipped} cell${plural(skipped)} were read-only/out-of-range or not a valid level code for a categorical column.`,
         );
       }
       return;
@@ -266,7 +267,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     get().touchDataset(id);
     if (skipped > 0) {
       get().setStatus(
-        `${label}: pasted ${usable.length} cell${usable.length === 1 ? "" : "s"}, skipped ${skipped} (read-only/out-of-range or not a valid level code for a categorical column).`,
+        `${label}: pasted ${usable.length} cell${plural(usable.length)}, skipped ${skipped} (read-only/out-of-range or not a valid level code for a categorical column).`,
       );
     }
   },

@@ -42,12 +42,12 @@ import { channelLetter, compileFormula } from "../../../lib/formula";
 import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
-import { sliceDataStruct } from "../../../lib/datasetsplit";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
 import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
+import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
 
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
@@ -450,15 +450,15 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   function extractSubset() {
     if (!canExtract) return;
     if (pendingGuard("Extract")) return;
-    // The ONE row-slice primitive (already used by Split-by-column). Built by
-    // hand here, it dropped `cat_levels`, so a filtered subset of a categorical
-    // dataset came out showing raw float codes instead of level labels — even
-    // though a row slice cannot change column layout. `ds.data` is what the
-    // locals above destructure, so behaviour is otherwise identical.
-    const data: DataStruct = sliceDataStruct(ds.data, analysisRows);
-    const stem = ds.name.replace(/\.[^.]+$/, "");
-    addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data });
-    setStatus(`extracted ${analysisRows.length} of ${time.length} rows`);
+    // Row clamping, the DataStruct build and the wording all live in
+    // ./extractRows.ts, which carries the reasoning and the BUG-006 booking:
+    // an index here can run past `values` on a text-heavy Origin sheet.
+    const plan = planExtract(ds.data, analysisRows);
+    if (plan) {
+      const stem = ds.name.replace(/\.[^.]+$/, "");
+      addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data: plan.data });
+    }
+    setStatus(describeExtract(plan, time.length));
   }
 
   function tsvHeaders(): string[] {

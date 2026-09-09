@@ -230,9 +230,9 @@ describe("workbookTransfer slice — dropped cross-workbook lineage is surfaced 
     await useApp.getState().copyWorkbookToClipboard("w2");
     await useApp.getState().pasteWorkbookFromClipboard(undefined);
 
-    expect(useApp.getState().status).toContain("1 lineage link not carried");
+    expect(useApp.getState().status).toContain("1 reference to data outside the copy not carried");
     const last = useToasts.getState().toasts.at(-1)!;
-    expect(last.msg).toContain("1 lineage link not carried");
+    expect(last.msg).toContain("1 reference to data outside the copy not carried");
     expect(last.kind).toBe("info");
     // The paste itself still succeeded — the worksheet is there.
     expect(useApp.getState().datasets.filter((d) => d.name.startsWith("run1_v2")).length).toBe(2);
@@ -243,11 +243,11 @@ describe("workbookTransfer slice — dropped cross-workbook lineage is surfaced 
     mockClipboard();
     await useApp.getState().duplicateWorkbook("w2");
 
-    expect(useApp.getState().status).toContain("1 lineage link not carried");
+    expect(useApp.getState().status).toContain("1 reference to data outside the copy not carried");
     expect(useToasts.getState().toasts.at(-1)!.kind).toBe("info");
   });
 
-  it("pluralizes honestly — two dropped links say 'links'", async () => {
+  it("pluralizes honestly — two dropped refs say 'references'", async () => {
     useApp.setState({
       workbooks: [wb("w1", "run1"), wb("w2", "derived")],
       datasets: [
@@ -258,7 +258,36 @@ describe("workbookTransfer slice — dropped cross-workbook lineage is surfaced 
     } as Partial<AppState>);
     mockClipboard();
     await useApp.getState().duplicateWorkbook("w2");
-    expect(useApp.getState().status).toContain("2 lineage links not carried");
+    expect(useApp.getState().status).toContain("2 references to data outside the copy not carried");
+  });
+
+  it("names a dropped BACKGROUND reference separately — it is not provenance", async () => {
+    // A dropped bgRef means a subtraction input is gone, so the pasted
+    // worksheet's PLOTTED DATA differs from the source's. Folding it into a
+    // generic "lineage" count would understate that.
+    useApp.setState({
+      workbooks: [wb("w1", "bg"), wb("w2", "sample")],
+      datasets: [
+        ds("d1", "background.dat", "w1"),
+        ds("d2", "sample.dat", "w2", { bgRef: { datasetId: "d1", interp: "linear" } }),
+      ],
+    } as unknown as Partial<AppState>);
+    mockClipboard();
+    await useApp.getState().duplicateWorkbook("w2");
+    const status = useApp.getState().status;
+    expect(status).toContain("1 reference to data outside the copy not carried");
+    expect(status).toContain("1 of them a background reference");
+  });
+
+  it("a refused paste replaces the status line instead of leaving the last success standing", async () => {
+    // Four of Paste's refusals used to toast only, so the status bar still read
+    // e.g. 'duplicated "run1"' while the paste had in fact failed.
+    useApp.getState().setStatus('duplicated "run1" as "run1 copy"');
+    const { contents } = mockClipboard();
+    contents.text = "not a quantized package";
+    await useApp.getState().pasteWorkbookFromClipboard(undefined);
+    expect(useApp.getState().status).toMatch(/^paste workbook: /);
+    expect(useToasts.getState().toasts.at(-1)!.kind).toBe("danger");
   });
 
   it("does NOT annotate a transfer that carried everything — ok stays ok", async () => {
@@ -270,9 +299,9 @@ describe("workbookTransfer slice — dropped cross-workbook lineage is surfaced 
     mockClipboard();
     await useApp.getState().duplicateWorkbook("w2");
 
-    expect(useApp.getState().status).not.toContain("lineage");
+    expect(useApp.getState().status).not.toContain("not carried");
     const last = useToasts.getState().toasts.at(-1)!;
     expect(last.kind).toBe("ok");
-    expect(last.msg).not.toContain("lineage");
+    expect(last.msg).not.toContain("not carried");
   });
 });

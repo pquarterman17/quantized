@@ -49,6 +49,7 @@
 // the project list alone didn't already prove there's a candidate.
 
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
+import { plural } from "../lib/plural";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Technique } from "../lib/types";
 import { batchFolderOffer, createFolderForBatch } from "./importTargetFolder";
@@ -154,7 +155,7 @@ export async function presentBatchOutcome(
       if (recipe && dataset) {
         // FINDING 7: lead with "imported N file(s)" like every other
         // candidate toast in this cascade, not a silent exception.
-        toast(`imported ${added} file${added === 1 ? "" : "s"} — apply recipe "${recipe.name}"?`, "ok", {
+        toast(`imported ${added} file${plural(added)} — apply recipe "${recipe.name}"?`, "ok", {
           action: { label: "Apply", onClick: () => void get().applyPlotRecipeObject(recipe, dataset.id) },
           ttlMs: TOAST_ACTION_TTL,
         });
@@ -164,5 +165,5 @@ export async function presentBatchOutcome(
       // Fall through to the plain toast below.
     }
   }
-  toast(`imported ${added} file${added === 1 ? "" : "s"}`, "ok");
+  toast(`imported ${added} file${plural(added)}`, "ok");
 }

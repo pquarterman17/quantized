@@ -43,6 +43,7 @@
 // pre-paste project in one step.
 
 import { copyText } from "../lib/clipboard";
+import { plural } from "../lib/plural";
 import {
   buildTransferPackage,
   parseTransferPackage,
@@ -58,6 +59,7 @@ import { toast } from "./toasts";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
+type PasteResult = ReturnType<typeof pasteTransferPackage>;
 
 let _reportSeq = 0;
 /** Own generator (not useApp.ts's private `nextReportId`, which is
@@ -102,15 +104,37 @@ function existingIds(s: AppState): TransferExistingIds {
  *  inert historical text (the source dataset's NAME, say) is a semantics call
  *  about what lineage means across a transfer boundary and is still an open
  *  owner decision (BUGS_AND_ISSUES.md UX-002, box 2) — inventing it here
- *  would be inventing it silently. */
-function lineageNote(n: number): string {
-  return n > 0 ? ` — ${n} lineage link${n === 1 ? "" : "s"} not carried (source outside the copy)` : "";
+ *  would be inventing it silently.
+ *
+ *  "reference", not "lineage link": `rewriteRef` counts `bgRef` alongside
+ *  `derivedFrom`/`versionOf`, and a dropped BACKGROUND reference is not
+ *  provenance — it is a subtraction input, so losing it changes the plotted
+ *  data, not just the history. That is the more serious of the two, so it is
+ *  named separately rather than folded into a generic count. */
+function refNote(n: number, background: number): string {
+  if (n <= 0) return "";
+  const bg = background > 0 ? `, ${background} of them a background reference` : "";
+  return ` — ${n} reference${plural(n)} to data outside the copy not carried${bg}`;
+}
+
+/** Report a COMPLETED transfer: one message, one status line, one toast — and
+ *  `"info"` rather than `"ok"` whenever a reference was dropped, because a
+ *  green check on a result that lost something reads as "clean". Paste and
+ *  Duplicate differ only in their headline. */
+function succeed(get: SliceGet, result: PasteResult, headline: string): void {
+  const note = refNote(result.droppedExternalRefs, result.droppedBackgroundRefs);
+  const msg = headline + note;
+  get().setStatus(msg);
+  toast(msg, note ? "info" : "ok");
 }
 
 /** Every refusal in this slice reports the SAME way — the persistent status
- *  line AND a danger toast, one message built once. Five sites open-coded the
- *  pair and three of them built their message string twice, which is both
- *  duplicated logic and duplicated bytes in an eager module. */
+ *  line AND a danger toast, one message built once. Nine sites open-coded some
+ *  part of that: five repeated the pair (three of them building their message
+ *  string TWICE — duplicated logic and duplicated bytes in an eager module),
+ *  and four of Paste's refusals toasted WITHOUT touching the status line, so a
+ *  refused paste left the previous action's success message standing on the
+ *  status bar. All nine go through here now. */
 function fail(get: SliceGet, msg: string): void {
   get().setStatus(msg);
   toast(msg, "danger");
@@ -119,7 +143,7 @@ function fail(get: SliceGet, msg: string): void {
 /** Merge a paste result into the store's arrays in ONE `set()` — the "swap
  *  once" half of the failure-safe contract; `recordHistory` must already
  *  have been called by the caller, immediately before this. */
-function applyPasteResult(set: SliceSet, result: ReturnType<typeof pasteTransferPackage>): void {
+function applyPasteResult(set: SliceSet, result: PasteResult): void {
   set((s) => ({
     workbooks: [...s.workbooks, result.workbook],
     datasets: [...s.datasets, ...result.datasets],
@@ -178,7 +202,8 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         fail(get, `copy "${name}" failed: clipboard unavailable`);
         return;
       }
-      get().setStatus(`copied "${name}" (${built.pkg.datasets.length} worksheet${built.pkg.datasets.length === 1 ? "" : "s"})`);
+      const copied = built.pkg.datasets.length;
+      get().setStatus(`copied "${name}" (${copied} worksheet${plural(copied)})`);
       toast(`copied "${name}"`, "ok");
     },
 
@@ -197,17 +222,17 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       try {
         const read = await navigator.clipboard?.readText();
         if (typeof read !== "string") {
-          toast("paste workbook: clipboard unavailable", "danger");
+          fail(get, "paste workbook: clipboard unavailable");
           return;
         }
         text = read;
       } catch {
-        toast("paste workbook: clipboard read denied", "danger");
+        fail(get, "paste workbook: clipboard read denied");
         return;
       }
       const parsed = parseTransferPackage(text);
       if (!parsed.ok) {
-        toast(`paste workbook: ${parsed.reason}`, "danger");
+        fail(get, `paste workbook: ${parsed.reason}`);
         return;
       }
       // Build fully BEFORE touching history/state (frozen-scope item 5) —
@@ -216,12 +241,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       get().recordHistory(`paste workbook "${parsed.pkg.workbook.name}"`);
       applyPasteResult(set, result);
       const n = result.datasets.length;
-      const note = lineageNote(result.droppedExternalRefs);
-      const msg = `pasted "${result.workbook.name}" (${n} worksheet${n === 1 ? "" : "s"})${note}`;
-      get().setStatus(msg);
-      // "info", not "ok", when something was dropped: the paste succeeded but
-      // the result is not what was copied, and a green check reads as "clean".
-      toast(msg, note ? "info" : "ok");
+      succeed(get, result, `pasted "${result.workbook.name}" (${n} worksheet${plural(n)})`);
     },
 
     duplicateWorkbook: async (workbookId) => {
@@ -248,7 +268,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       if (!parsed.ok) {
         // Unreachable in practice (buildTransferPackage's own output always
         // parses) — defensive, never silently duplicates something broken.
-        toast(`duplicate "${name}" failed: ${parsed.reason}`, "danger");
+        fail(get, `duplicate "${name}" failed: ${parsed.reason}`);
         return null;
       }
       const raw = pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), workbook?.folderId);
@@ -260,10 +280,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       const result = { ...raw, workbook: { ...raw.workbook, name: `${name} copy` } };
       get().recordHistory(`duplicate workbook "${name}"`);
       applyPasteResult(set, result);
-      const note = lineageNote(result.droppedExternalRefs);
-      const msg = `duplicated "${name}" as "${result.workbook.name}"${note}`;
-      get().setStatus(msg);
-      toast(msg, note ? "info" : "ok");
+      succeed(get, result, `duplicated "${name}" as "${result.workbook.name}"`);
       return result.workbook.id;
     },
   };

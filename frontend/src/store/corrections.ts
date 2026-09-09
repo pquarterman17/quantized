@@ -33,6 +33,7 @@
 // cross-dataset case — see its module doc — and never reaches this slice.)
 
 import { applyCorrections as applyCorrectionsApi, type CorrectionsRequest } from "../lib/api";
+import { plural } from "../lib/plural";
 import { baseColumns } from "../lib/formula";
 import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
@@ -276,7 +277,7 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         await get().applyCorrections(id, transferable, useBg);
         n += 1;
       }
-      get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${n === 1 ? "" : "s"}`);
+      get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${plural(n)}`);
     },
   };
 }

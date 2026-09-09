@@ -2,6 +2,7 @@
 // Graph Builder seeding. Composed into useApp to keep the root store bounded.
 
 import { resolveOriginFigureSources, resolveOriginSourceManually } from "../lib/originSources";
+import { plural } from "../lib/plural";
 import { ORIGIN_OVERLAY_VERSION } from "../lib/originOverlay";
 import type { PlotSpec } from "../lib/plotspec";
 import type { AppState } from "./useApp";
@@ -60,7 +61,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         worksheetId: source.datasetId,
         stageTab: "worksheet",
         originWorksheetSeed: { datasetId: source.datasetId, columns: source.columns },
-        status: `opened ${source.book}; selected ${source.columns.length} bound column${source.columns.length === 1 ? "" : "s"}`,
+        status: `opened ${source.book}; selected ${source.columns.length} bound column${plural(source.columns.length)}`,
       });
     },
     remakeOriginFigure: async (figureId) => {
@@ -133,7 +134,7 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
         ) ? "line" : "scatter",
       };
       get().openGraphBuilderSeeded(spec);
-      set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${resolution.unresolved.length === 1 ? "" : "s"} unresolved` : ""}` });
+      set({ status: `opened ${entry.figure.name || "Origin graph"} layer ${entry.figure.layer ?? 1} in Graph Builder${resolution.unresolved.length ? `; ${resolution.unresolved.length} binding${plural(resolution.unresolved.length)} unresolved` : ""}` });
     },
   };
 }
