@@ -12,7 +12,7 @@ import {
 describe("effectiveFigureOverrides", () => {
   it("falls back to the view-derived overrides when publication is absent", () => {
     const view = defaultPlotView();
-    const expected = { legend: { show: true, loc: "upper right" }, grid: true, spines: { top: false, right: false } };
+    const expected = { legend: { show: true, loc: "upper right" }, grid: true, spines: { top: true, right: true } };
     expect(effectiveFigureOverrides(view, undefined)).toEqual(expected);
     expect(effectiveFigureOverrides(view, null)).toEqual(expected);
   });

@@ -6,6 +6,15 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+- Plots are now drawn with a full axis box by default — a border on all four
+  sides (left y, bottom x, right y2 and top) rather than just the left-and-
+  bottom "L". This matches Origin's own default and the convention most
+  journals expect, and it applies to the main stage, pop-out plot windows,
+  panel cells and multi-panel overlays alike. Exported figures follow: they
+  previously drew tick marks along the top and right edges with no border for
+  those ticks to sit on. Turn it off per plot with **Axis box (frame)** in the
+  Inspector; a saved project that had it off keeps it off.
+
 ## [0.25.0] - 2026-09-08
 
 A **minor** release: the window since `v0.24.0` adds new user-facing

@@ -261,7 +261,7 @@ describe("useFigurePage", () => {
     expect(p1.figure.overrides).toEqual({
       legend: { show: true, loc: "upper right" },
       grid: true,
-      spines: { top: false, right: false },
+      spines: { top: true, right: true },
       ticks: { minor: true },
     });
     // MAIN #24: both sources default to auto (no saved fmt on a doc, no

@@ -435,7 +435,7 @@ describe("MultiPanelStage — per-panel axis box (item 4)", () => {
     }
   });
 
-  it("adds no axis-box plugin when showAxisBox is off (default)", async () => {
+  it("adds no axis-box plugin when showAxisBox is off", async () => {
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(2));
     for (const c of created as { opts: { plugins: unknown[] } }[]) {

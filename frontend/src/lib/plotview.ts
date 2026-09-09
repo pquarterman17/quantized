@@ -196,7 +196,7 @@ export function defaultPlotView(): PlotView {
     axisLabelOffsets: {},
     axisLabelStyles: {},
     plotTemplate: "screen",
-    showAxisBox: false,
+    showAxisBox: true,
     stackMode: false,
     insetMode: false,
     polarMode: false,

@@ -91,6 +91,27 @@ describe("useApp plot tool default (MAIN #18)", () => {
   });
 });
 
+describe("useApp axis-box default", () => {
+  it("defaults showAxisBox on — a plot is framed on all four sides (x, y, right-y, top)", () => {
+    expect(useApp.getState().showAxisBox).toBe(true);
+  });
+
+  // The flag has TWO independent default sites: the store's initial state and
+  // `defaultPlotView()` (which seeds every plot WINDOW, panel cell and overlay).
+  // They drifting apart is the real risk here -- a boxed stage with unboxed
+  // pop-out windows -- so pin that they agree, not just their values.
+  it("the store default and defaultPlotView() agree", () => {
+    expect(defaultPlotView().showAxisBox).toBe(useApp.getState().showAxisBox);
+  });
+
+  it("setShowAxisBox still round-trips", () => {
+    useApp.getState().setShowAxisBox(false);
+    expect(useApp.getState().showAxisBox).toBe(false);
+    useApp.getState().setShowAxisBox(true);
+    expect(useApp.getState().showAxisBox).toBe(true);
+  });
+});
+
 describe("useApp reflectivity seed (SLD→reflectivity hook)", () => {
   beforeEach(() => useApp.setState({ reflectivitySeed: null, reflectivityOpen: false }));
 

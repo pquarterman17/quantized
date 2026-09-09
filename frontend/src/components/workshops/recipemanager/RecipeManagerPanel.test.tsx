@@ -1,12 +1,13 @@
 // P1.3 wave 3, Lane D: the Recipe Manager panel view.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { captureRecipe, type PlotRecipe } from "../../../lib/plotRecipe";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
+import { recipeLibs } from "../../../store/plotRecipeApply";
 import type { PendingPlotRecipeApplication } from "../../../store/plotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -30,6 +31,22 @@ function recipe(id: string, name: string): PlotRecipe {
   const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
   return captureRecipe(dataset(), view, null, { id, name, appVersion: "0" });
 }
+
+// The apply path awaits `recipeLibs()` (`store/plotRecipeApply.ts`), a
+// module-memoized `Promise.all` over two REAL dynamic `import()`s. The tests
+// below rightly wait on STATE rather than on a call, but `waitFor`'s budget is
+// 1 s by default and the FIRST caller in this module pays the whole cold
+// transform+import inside that budget -- measured at ~89 ms on an idle machine
+// here, against a full 610-file parallel run whose reported environment time
+// alone was ~700 s. That is the shape of the two intermittent
+// `expected [] to have a length of 1` failures seen while landing the axis-box
+// default (green in isolation, green on re-run), so the chunk load is hoisted
+// OUT of every test's budget instead of the budget being widened. `_recipeLibs`
+// is module-scoped and memoized, so one await here serves the whole file, and
+// what each test then measures is the apply logic alone.
+beforeAll(async () => {
+  await recipeLibs();
+});
 
 beforeEach(() => {
   localStorage.clear();
