@@ -39,6 +39,7 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
+import { insertRowIndexes, sliceRowSidecars } from "../lib/rowSidecars";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -124,7 +125,19 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
             : undefined;
           return recompute({
             ...d,
-            data: { ...d.data, time, values },
+            data: {
+              ...d.data,
+              time,
+              values,
+              // BUG-006: the row-indexed metadata sidecars shift with the rows.
+              // Without this every text cell below `at` describes a different
+              // measurement than the one beside it — and unlike a slice, this
+              // is PERSISTED into the dataset.
+              metadata: sliceRowSidecars(
+                d.data.metadata,
+                insertRowIndexes(d.data.time.length, at, count),
+              ),
+            },
             ...(excluded ? { excludedRows: excluded } : {}),
           });
         }),
@@ -146,12 +159,17 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
           const excluded = d.excludedRows ? shiftForDelete(d.excludedRows, deleted) : undefined;
+          // The rows that SURVIVE, in order — the same index list a slice
+          // takes, so the sidecars go through the shared helper (BUG-006).
+          const kept: number[] = [];
+          for (let r = 0; r < d.data.time.length; r++) if (!deleted.has(r)) kept.push(r);
           return recompute({
             ...d,
             data: {
               ...d.data,
               time: dropRows(d.data.time, deleted),
               values: dropRows(d.data.values, deleted),
+              metadata: sliceRowSidecars(d.data.metadata, kept),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
           });

@@ -873,8 +873,31 @@ import { fileURLToPath } from "node:url";
  *  by a phantom, and the raise it justified turned out to be unnecessary.
  *
  *  Pinned at measured + 24 = 914,283, the same tight convention.
+ *
+ *  2026-09-09 (last, same day) — 914,283 -> 914,642. BUG-006's FIFTH and final
+ *  call site: `store/cellEdit.ts`'s `insertRows`/`deleteRows`, the worst of
+ *  them, because a slice makes a NEW dataset while a row edit is PERSISTED into
+ *  the existing one — every text cell past the edit permanently describing a
+ *  different measurement than the one beside it.
+ *
+ *  Reduction tried first, and it worked: the bespoke
+ *  `insertBlankRowsInSidecars` helper (~35 lines) is GONE. An insert is just a
+ *  slice with blank slots — `insertRowIndexes` returns `[0..at-1, -1 × count,
+ *  at..n-1]`, `-1` never indexes a real cell, and the slicer already yields
+ *  `""` for a miss. One code path instead of two, which is also why they can no
+ *  longer drift. That took the overage from 473 to 335.
+ *
+ *  The last 335 are a raise, and the day's accounting is the justification:
+ *  914,589 at the start, 914,642 now — **+53 bytes for the whole day**, against
+ *  a data-integrity bug fixed at FIVE call sites (sliceDataStruct,
+ *  pruneExcluded, facetSlices, insertRows, deleteRows), a third sidecar key,
+ *  marker-shape export parity, and a 1 kB lazy boundary collected along the
+ *  way. Three raises and two repayments net out to approximately flat. No lazy
+ *  boundary exists for this one: `insertRows`/`deleteRows` are SYNCHRONOUS
+ *  store actions called from UI handlers, and making them async to defer a
+ *  helper would be an API change for 335 bytes.
  */
-const EAGER_JS_BUDGET = 914_283;
+const EAGER_JS_BUDGET = 914_642;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

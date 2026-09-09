@@ -463,3 +463,60 @@ describe("insertRows / deleteRows (MAIN #34)", () => {
     expect(() => useApp.getState().deleteRows("nope", [0])).not.toThrow();
   });
 });
+
+// BUG-006's last live site. `insertRows`/`deleteRows` shifted the numeric grid
+// but not the row-indexed metadata sidecars, so every text cell past the edit
+// described a different measurement than the one beside it — and unlike a slice
+// (Extract, Split, a filter view) this is PERSISTED into the dataset.
+describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
+  const seed = () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run.dat",
+          data: {
+            time: [10, 20, 30],
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: {
+              text_columns: { SampleID: ["s0", "s1", "s2"] },
+              all_column_names: ["x", "Y"], // channel-indexed: must NOT move
+            },
+          },
+        },
+      ],
+      activeId: "d1",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+  const cols = () =>
+    (useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>).SampleID;
+
+  it("deleteRows drops the same text cells as the numbers", () => {
+    seed();
+    useApp.getState().deleteRows("d1", [1]);
+    expect(useApp.getState().datasets[0].data.time).toEqual([10, 30]);
+    expect(cols()).toEqual(["s0", "s2"]);
+  });
+
+  it("insertRows pushes the later text cells down, blank-filling the new rows", () => {
+    seed();
+    useApp.getState().insertRows("d1", 1, 2);
+    expect(useApp.getState().datasets[0].data.time.length).toBe(5);
+    expect(cols()).toEqual(["s0", "", "", "s1", "s2"]);
+  });
+
+  it("an insert past the end appends rather than throwing", () => {
+    seed();
+    useApp.getState().insertRows("d1", 99, 1);
+    expect(cols()).toEqual(["s0", "s1", "s2", ""]);
+  });
+
+  it("leaves CHANNEL-indexed metadata alone through both edits", () => {
+    seed();
+    useApp.getState().insertRows("d1", 0, 1);
+    useApp.getState().deleteRows("d1", [0]);
+    expect(useApp.getState().datasets[0].data.metadata["all_column_names"]).toEqual(["x", "Y"]);
+  });
+});

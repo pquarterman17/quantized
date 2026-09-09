@@ -66,3 +66,18 @@ export function sliceRowSidecars(
   }
   return out;
 }
+
+/** An index list that turns a row INSERT into a slice: the rows before `at`,
+ *  then `count` slots that resolve to blanks, then the rest. `-1` never indexes
+ *  a real cell, and `sliceRowSidecars` already yields `""` for a miss, so an
+ *  insert needs no separate code path — which is the point, since the two must
+ *  not drift. Clamped like the numeric insert, so an out-of-range `at`
+ *  appends. */
+export function insertRowIndexes(rowCount: number, at: number, count: number): number[] {
+  const clamped = Math.max(0, Math.min(at, rowCount));
+  return [
+    ...Array.from({ length: clamped }, (_, i) => i),
+    ...Array.from({ length: Math.max(0, count) }, () => -1),
+    ...Array.from({ length: rowCount - clamped }, (_, i) => clamped + i),
+  ];
+}

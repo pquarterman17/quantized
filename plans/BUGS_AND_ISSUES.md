@@ -29,7 +29,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Worksheet Extract / Split | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED** 2026-09-09, sabotage-verified |
+| BUG-006 | P2 | Row slices + row edits | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED** 2026-09-09, sabotage-verified |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1124,10 +1124,14 @@ The two hesitations, and what they were actually worth:
   no longer carried by REFERENCE (its sidecars must be sliced), and those tests
   had been pinning that aliasing rather than any contract. Content is unchanged
   for a dataset carrying no row-indexed sidecar.
-- [ ] `store/cellEdit.ts`'s `insertRows`/`deleteRows` shift the numeric rows but
-  not the sidecars — the same misattribution, in an EDIT rather than a slice, so
-  it needs a shift rather than this helper. Found by the same review; filed as
-  the remaining half of this entry rather than rushed in.
+- [x] `store/cellEdit.ts`'s `insertRows`/`deleteRows` — the last live site, and
+  the worst of them, because a slice produces a NEW dataset while a row edit is
+  PERSISTED into the existing one. `deleteRows` is a slice in disguise (it now
+  builds the surviving row list and uses the same `sliceRowSidecars`);
+  `insertRows` needed the counterpart `insertBlankRowsInSidecars`, since an
+  insert grows the grid and pushes later rows down. Both mirror what the file
+  already does for `excludedRows` ("REMAP rather than clear: an explicit insert
+  knows exactly what moved"). Four tests, both directions sabotage-verified.
 
 #### Completion record
 
