@@ -943,35 +943,38 @@ import { fileURLToPath } from "node:url";
  *  (vite.config.ts), so a short SHA git extends by a character or two would
  *  otherwise redden CI with no code change at all. 64 covers that, no more.
  *
- *  2026-09-09 (Group P) — 912,554 -> 913,130. **This one is a RAISE of 576, and
- *  calling it anything else would repeat the mistake this block already
- *  records.**
+ *  2026-09-09 (Group P) — 912,554 -> 912,453, a LOWER of 101.
  *
- *  What it buys: `lib/rowSidecars.concatRowSidecars`, which closes the last
- *  FRONTEND site of BUG-006 (`lib/merge.ts` inherited dataset 0's row-indexed
- *  sidecars verbatim, silently dropping datasets 1..N's and landing dataset 0's
- *  overflow cells on dataset 1's rows). It is reached from a merge, so it lives
- *  eagerly only because `store/useApp.ts` — which owns both merge entry points —
- *  is eager.
+ *  This entry was first written as a RAISE to 913,130, justified at length by two
+ *  reductions "tried and rejected". A review round then made the raise
+ *  unnecessary, and the reason is the useful part: **rejected-reduction claim #1
+ *  was simply false.** It said deferring `lib/merge.ts` "adds four lines to
+ *  store/useApp.ts, which sits AT its store-size pin" — true only of the shape I
+ *  happened to write,
  *
- *  TWO reductions were tried and BOTH rejected, which is what makes this the
- *  last resort rule 2 asks for rather than a shrug:
- *    1. Defer `lib/merge.ts` behind `await import()`. Wins the bytes, but adds
- *       four lines to `store/useApp.ts`, which sits AT its architecture.test.ts
- *       store-size pin with zero headroom — it buys bundle bytes with store
- *       lines and reddens the other ratchet (measured, earlier today). Paying
- *       for it properly means extracting another useApp slice, which is real
- *       work and not this PR's.
- *    2. Make `mergeDatasets` async so merge.ts can dynamic-import the helper
- *       (both call sites already `await`, so it costs zero useApp lines). Wins
- *       the bytes too, and REJECTED on purpose: `lib/` is a pure library layer,
- *       and making a pure synchronous function async to chase 576 bytes is the
- *       kind of clever that ages badly.
+ *      const { mergeDatasets } = await import("../lib/merge");   // +1 line
+ *      const merged = mergeDatasets(...)                          // each site
  *
- *  Capped at measured (913,066) + 64, far inside rule 2's measured + 1,024. The
- *  day (from 910,711) is **+2,419**; still owed to the next extraction.
+ *  when the inlined form costs ZERO lines, and −1 once the static top-level
+ *  import goes away:
+ *
+ *      const merged = (await import("../lib/merge")).mergeDatasets(...)
+ *
+ *  So the ratchet-vs-ratchet conflict I documented as a hard constraint was an
+ *  artifact of one formatting choice. `useApp.ts` went 2,448 -> 2,447 lines and
+ *  `lib/merge.ts` (127 lines of row-concatenation math, reachable only from two
+ *  already-async user actions) left the eager chunk. Check whether a constraint
+ *  is real before writing it down as one.
+ *
+ *  Rejected reduction #2 still stands as written: making `mergeDatasets` async
+ *  to defer a helper would turn a pure synchronous library function async for
+ *  bytes, and `lib/` is a pure library layer. It is also now moot.
+ *
+ *  Net: the round's ~400 new eager bytes (BUG-006's `withoutRowSidecars`,
+ *  per-part spans, and the pending row-edit guard) are more than paid for.
+ *  Pinned at measured (912,389) + 64; the day (from 910,711) is **+1,742**.
  */
-const EAGER_JS_BUDGET = 913_130;
+const EAGER_JS_BUDGET = 912_453;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

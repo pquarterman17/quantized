@@ -177,15 +177,79 @@ describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
       expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["", "", "r", "s"]);
     });
 
-    it("does not push dataset 0's OVERFLOW cells onto dataset 1's rows", () => {
-      // The ragged case the previous round's headline was about: A's sidecar has
-      // 5 cells for 2 numeric rows. Before, the merged sidecar was A's array
-      // verbatim, so B's rows displayed a2/a3.
+    it("keeps dataset 0's OVERFLOW cells AND keeps them off dataset 1's rows", () => {
+      // The ragged case: A's sidecar has 5 cells for 2 numeric rows. Two wrong
+      // answers were shipped before this one. First, A's array verbatim, so B's
+      // rows displayed a2/a3. Then, sized by `time.length`, which put B's cells
+      // at index 2 and DELETED a2/a3/a4 — the truncation `store/cellEdit.ts`
+      // already forbade. A's span is 5, so it contributes 5 rows to both halves.
       const m = mergeDatasets(
         [withText([1, 2], { Op: ["a0", "a1", "a2", "a3", "a4"] }), withText([3, 4], { Op: ["b0", "b1"] })],
         ["a", "b"],
       );
-      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["a0", "a1", "b0", "b1"]);
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual([
+        "a0", "a1", "a2", "a3", "a4", "b0", "b1",
+      ]);
+      // The numeric half is padded to the same span, so B's numbers are at 5/6 —
+      // the same rows as b0/b1, which is the whole point.
+      expect(m.time).toHaveLength(7);
+      expect(m.time[5]).toBe(3);
+      expect(m.time[6]).toBe(4);
+      expect(m.time.slice(2, 5).every((t) => Number.isNaN(t))).toBe(true);
+    });
+
+    it("two TEXT-ONLY books keep both books' cells", () => {
+      // Review-round regression. Both have zero numeric rows, so under
+      // `time.length` sizing both spans were 0, every rebuilt column came out
+      // empty, `concatRowSidecars` omitted the key — and the spread-then-
+      // overwrite then left dataset 0's ORIGINAL sidecar standing. Book 2's
+      // cells were simply gone: the pre-fix behaviour, shipped green.
+      const textOnly = (cells: string[]): DataStruct => ({
+        time: [],
+        values: [],
+        labels: [],
+        units: [],
+        metadata: { origin_text_columns: { A: cells } },
+      });
+      const m = mergeDatasets([textOnly(["b0-r0", "b0-r1"]), textOnly(["b1-r0", "b1-r1"])], ["one", "two"]);
+      expect((m.metadata["origin_text_columns"] as Record<string, string[]>).A).toEqual([
+        "b0-r0", "b0-r1", "b1-r0", "b1-r1",
+      ]);
+    });
+
+    it("a CORRUPTED sidecar on dataset 0 does not survive onto the merged grid", () => {
+      // This is the case the strip actually earns its place on, and finding it
+      // took a sabotage: with per-part spans in place, every ordinary case emits
+      // the key and the overwrite alone would have sufficed. A corrupted
+      // (non-`{name: array}`) sidecar is skipped for NAME collection, so no key
+      // is emitted — and a plain spread then carried dataset 0's bare array
+      // through onto a grid with twice its rows. Measured: without the strip,
+      // `text_columns: ["bare","array","corrupted"]` survives on a 4-row merge.
+      const corrupted: DataStruct = {
+        ...a,
+        metadata: { text_columns: ["bare", "array", "corrupted"] as unknown as Record<string, string[]> },
+      };
+      const m = mergeDatasets([corrupted, { ...b, metadata: {} }], ["a", "b"]);
+      expect(m.metadata["text_columns"]).toBeUndefined();
+    });
+
+    it("a stale sidecar cannot survive when the rebuild contributes nothing", () => {
+      // The other half of the same bug, and the nastier one: dataset 0's
+      // IN-RANGE cells are blank while an overflow cell is not. The all-blank
+      // prune dropped the rebuilt column, the key was omitted, and dataset 0's
+      // untouched array came through — putting "SAMPLE-B7" on what is now
+      // dataset 1's first row. Dataset 0's keys are stripped before the rebuild
+      // now, so an omitted key means ABSENT, never "inherited".
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["", "", "SAMPLE-B7"] }), withText([3, 4], {})],
+        ["a", "b"],
+      );
+      const cols = m.metadata["text_columns"] as Record<string, string[]> | undefined;
+      // Whatever survives, "SAMPLE-B7" must not be sitting on dataset 1's rows
+      // (indices 3 and 4 of the 5-row output: span 3 for A, then B's two).
+      expect(cols?.Op?.[3]).not.toBe("SAMPLE-B7");
+      expect(cols?.Op?.[4]).not.toBe("SAMPLE-B7");
+      expect(cols?.Op?.[2]).toBe("SAMPLE-B7"); // still on its OWN row
     });
 
     it("unions differently-named columns, blank where an input lacks one", () => {

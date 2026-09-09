@@ -96,6 +96,18 @@ export function sliceRowSidecars(
   return out;
 }
 
+/** A copy of `metadata` with every row-indexed sidecar key REMOVED.
+ *
+ *  For a caller that is about to REBUILD them (merge) or that has no rows to
+ *  describe. `concatRowSidecars` omits a key no input contributes a cell for, so
+ *  a spread-then-overwrite left the old sidecar standing in exactly that case —
+ *  strip first, then add back what the rebuild produced. */
+export function withoutRowSidecars(metadata: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...metadata };
+  for (const key of ROW_INDEXED_SIDECARS) delete out[key];
+  return out;
+}
+
 /** One input to `concatRowSidecars`: a dataset's metadata and how many rows it
  *  contributes to the combined grid. */
 export interface SidecarPart {
@@ -120,11 +132,13 @@ export interface SidecarPart {
  *  following part by however much it trimmed. A column that ends up blank for
  *  every row is dropped, since several readers gate on a key's presence alone.
  *
- *  A part whose sidecar is LONGER than its `rowCount` has cells for rows that do
- *  not exist in the combined grid; there is nowhere to put them, so they are
- *  dropped rather than pushed onto the next dataset's rows. That is a real (if
- *  narrow) loss and is the honest trade: a dropped cell beats a cell sitting
- *  beside another dataset's numbers. */
+ *  `rowCount` is the caller's per-part SPAN, not its `time.length`. An earlier
+ *  version took `time.length` and called the resulting truncation "the honest
+ *  trade" — it was neither honest nor necessary: `store/cellEdit.ts` had already
+ *  ruled that a sidecar may run longer than the numeric grid and that sizing
+ *  from `time.length` destroys the excess. `mergeDatasets` now pads each part's
+ *  numeric rows out to the same span, so nothing is dropped and part k's numbers
+ *  and text land on the same output rows. */
 export function concatRowSidecars(parts: readonly SidecarPart[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const key of ROW_INDEXED_SIDECARS) {

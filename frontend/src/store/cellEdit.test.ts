@@ -714,3 +714,69 @@ describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
     expect(meta["per_channel_notes"]).toBe(notRowIndexed); // same object, untouched
   });
 });
+
+// Review round 2 of BUG-006 site 9. Row edits on a still-pending book sized
+// everything from `sidecarRowCount`, which reports the FULL book's span against
+// the DECIMATED preview's numbers — so one "insert row" padded the grid to the
+// full book's length in NaN and persisted it, and `installBookData` then replaced
+// `data` wholesale so the edit vanished without a word.
+describe("row edits refuse a dataset whose full data is still pending", () => {
+  const seedPending = () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "p1",
+          name: "book.opj",
+          data: {
+            time: [0, 40, 90], // a 3-row DECIMATED sample of a 12-row book
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: { origin_text_columns: { Op: Array.from({ length: 12 }, (_, i) => `o${i}`) } },
+          },
+          pending: { bookId: "b1", rows: 12, cols: 1 },
+        },
+      ],
+      activeId: "p1",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+
+  it("insertRows does nothing, records no undo entry, and says why", () => {
+    seedPending();
+    useApp.getState().insertRows("p1", 1, 1);
+    const d = useApp.getState().datasets[0].data;
+    // Before: 13 rows, 10 of them all-NaN, written into d.data.
+    expect(d.time).toEqual([0, 40, 90]);
+    expect(d.values).toHaveLength(3);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+  });
+
+  it("deleteRows does nothing either — the request is filtered against the FULL span", () => {
+    seedPending();
+    useApp.getState().deleteRows("p1", [7]); // a row the preview does not have
+    const d = useApp.getState().datasets[0].data;
+    expect(d.time).toEqual([0, 40, 90]);
+    expect(
+      (d.metadata["origin_text_columns"] as Record<string, string[]>).Op,
+    ).toHaveLength(12); // no cell stripped
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("the SAME edits work once the book has resolved", () => {
+    seedPending();
+    const resolved = {
+      ...useApp.getState().datasets[0],
+      pending: undefined,
+      data: {
+        ...useApp.getState().datasets[0].data,
+        time: Array.from({ length: 12 }, (_, i) => i),
+        values: Array.from({ length: 12 }, (_, i) => [i]),
+      },
+    };
+    useApp.setState({ datasets: [resolved] } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("p1", 1, 1);
+    expect(useApp.getState().datasets[0].data.time).toHaveLength(13);
+  });
+});

@@ -351,7 +351,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   // Text-sheet columns (item 8): read-only, appended after the numeric/computed
   // ones. Both derivations — and why a still-pending book renders NONE of them
   // (BUG-006 site 9) — live in ./textColumns.ts.
-  const textCols = useMemo(() => worksheetTextColumns(ds), [ds]);
+  const textCols = useMemo(() => worksheetTextColumns(ds.data, ds.pending), [ds.data, ds.pending]);
   const textRowCount = useMemo(() => textColumnRowCount(textCols), [textCols]);
 
   const filtered = useMemo(() => {

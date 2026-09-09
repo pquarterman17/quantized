@@ -7,6 +7,9 @@ plus the two `calc/` sites that change a row count.
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import numpy as np
 
 from quantized.calc.corrections import apply_corrections
@@ -17,6 +20,64 @@ from quantized.row_sidecars import (
     drop_row_sidecars,
     slice_row_sidecars,
 )
+
+
+class TestMirrorsTheTypeScriptModule:
+    """The claim "kept in sync BY HAND" needs something that FAILS on drift.
+
+    The Group P review pointed out there was no such check anywhere — not for
+    this pair and not for the `is_categorical`/`isCategoricalChannel` precedent
+    it cited — so "cannot drift silently" was unsupported. The key list is the
+    part that matters (an added row-indexed sidecar that only one side slices is
+    the bug this module exists to prevent), and it is mechanically comparable.
+    """
+
+    def test_the_key_list_matches_lib_rowsidecars_ts(self) -> None:
+        ts = Path(__file__).resolve().parents[1] / "frontend/src/lib/rowSidecars.ts"
+        src = ts.read_text(encoding="utf-8")
+        block = re.search(
+            r"export const ROW_INDEXED_SIDECARS = \[(.*?)\] as const;", src, re.S
+        )
+        assert block, f"could not find ROW_INDEXED_SIDECARS in {ts}"
+        ts_keys = tuple(re.findall(r'"([^"]+)"', block.group(1)))
+        assert ts_keys == ROW_INDEXED_SIDECARS, (
+            "row-indexed sidecar keys have DRIFTED between "
+            f"{ts.name} ({ts_keys}) and row_sidecars.py ({ROW_INDEXED_SIDECARS}). "
+            "Both sides must slice the same keys."
+        )
+
+
+class TestMatchesTypeScriptCellSemantics:
+    """The three divergences the Group P review measured. Each of these returned
+    something different from the TypeScript `cells[i] ?? ""` before the fix."""
+
+    def test_a_none_cell_becomes_a_blank_like_js_nullish_coalescing(self) -> None:
+        # `?? ""` catches null as well as undefined, and a .dwk/wire round trip
+        # really does produce None here. Python was returning None.
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", None, "a2"]}}, [0, 1, 2])
+        assert out["text_columns"] == {"A": ["a0", "", "a2"]}
+
+    def test_a_non_integer_index_is_a_MISS_not_a_truncation(self) -> None:
+        # `int(1.5)` returned cell 1; JS `cells[1.5]` is undefined -> "".
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, [0, 1.5])
+        assert out["text_columns"] == {"A": ["a0"]}  # trailing miss trimmed
+
+    def test_a_non_numeric_index_is_a_miss_rather_than_raising(self) -> None:
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, ["x", 0])
+        assert out["text_columns"] == {"A": ["", "a0"]}
+
+    def test_a_TUPLE_column_is_sliced_like_a_list(self) -> None:
+        # A `list`-only check handed a tuple back UNSLICED at its original
+        # length — misaligned cells, silently, for a pure-Python-API caller.
+        out = slice_row_sidecars({"text_columns": {"A": ("a0", "a1", "a2")}}, [2, 0])
+        assert out["text_columns"] == {"A": ["a2", "a0"]}
+
+    def test_a_NEGATIVE_index_is_a_blank_not_the_last_cell(self) -> None:
+        # The TS side pins this (`[0,-1,1]`); the Python mirror's only
+        # out-of-range test used a POSITIVE index, so `cells[-1]` returning the
+        # LAST cell would have gone unnoticed. Sabotage-verified.
+        out = slice_row_sidecars({"text_columns": {"A": ["a0", "a1"]}}, [0, -1, 1])
+        assert out["text_columns"] == {"A": ["a0", "", "a1"]}
 
 
 def _ds(rows: int, meta: dict[str, object]) -> DataStruct:

@@ -23,7 +23,6 @@ import {
   renameFolder as treeRenameFolder,
 } from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
-import { mergeDatasets } from "../lib/merge";
 import type { SmartFolder } from "../lib/smartfolders";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
@@ -1066,7 +1065,7 @@ export const useApp = create<AppState>((set, get) => ({
     }
     if (!failReason && uploaded.length === files.length) {
       try {
-        const merged = mergeDatasets(
+        const merged = (await import("../lib/merge")).mergeDatasets( // lazy: bundle ratchet
           uploaded.map((u) => u.data),
           uploaded.map((u) => u.name),
         );
@@ -1745,7 +1744,7 @@ export const useApp = create<AppState>((set, get) => ({
         get().setStatus("select ≥2 datasets to merge");
         return;
       }
-      const data = mergeDatasets(
+      const data = (await import("../lib/merge")).mergeDatasets( // lazy: see importAppended
         picks.map((d) => d.data),
         picks.map((d) => d.name),
       );

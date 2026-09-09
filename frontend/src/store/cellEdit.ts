@@ -72,6 +72,32 @@ function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
   };
 }
 
+/** Refuse a row edit on a dataset whose full data has not arrived yet, and say
+ *  why (review round 2 of BUG-006 site 9).
+ *
+ *  A still-pending Origin book's `.time`/`.values` are the DECIMATED preview
+ *  while its `.metadata` is the full book's, so `sidecarRowCount` reports the
+ *  full book's span against the preview's numbers. Both row edits below size
+ *  everything from that span, so one "insert row" on a 200-row preview of a
+ *  5,000-row book padded the grid to ~5,000 rows of NaN and wrote them into
+ *  `d.data` — and then `lib/bookData.installBookData` replaces `data` wholesale
+ *  when the fetch lands, so the user's edit vanishes without a word. `deleteRows`
+ *  mirrors it: the request is filtered against the full book's span, so it can
+ *  strip a sidecar cell whose row does not exist in the preview.
+ *
+ *  Same ruling as `useWorksheetView`'s `pendingGuard` (which covers extract and
+ *  copy) and for the same reason: a row index against the preview does not name a
+ *  real row. Kicks the fetch so the retry the message suggests can succeed.
+ *  Suppressing the text-column RENDER while pending removed the phantom rows that
+ *  used to hint at this, which is precisely why the edit path needs its own
+ *  guard. */
+function refusePendingRowEdit(get: SliceGet, ds: Dataset, action: string): boolean {
+  if (!ds.pending) return false;
+  void get().ensureBookData(ds.id);
+  get().setStatus(`"${ds.name}" is still loading its full data — try ${action} again in a moment`);
+  return true;
+}
+
 /** Is `value` a code the categorical level table at `col` already has an
  *  entry for? NaN (missing) is handled by the CALLER, not here — this only
  *  judges a real, finite candidate code. */
@@ -105,6 +131,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     insertRows: (id, at, count) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds || count <= 0) return;
+      if (refusePendingRowEdit(get, ds, "inserting rows")) return;
       get().recordHistory("insert rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -181,6 +208,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
       const deleted = new Set(rows.filter((r) => r >= 0 && r < span));
       if (deleted.size === 0) return;
+      if (refusePendingRowEdit(get, ds, "deleting rows")) return;
       get().recordHistory("delete rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {

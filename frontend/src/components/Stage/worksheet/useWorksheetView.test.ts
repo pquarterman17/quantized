@@ -268,7 +268,7 @@ describe("text columns are suppressed while a book's full data is still pending"
     useApp.setState({ datasets: [d], activeId: d.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
   };
 
-  it("renders no text columns, and no phantom rows, while pending", () => {
+  it("renders no text columns, and no phantom rows, while pending AND decimated", () => {
     seed(pendingBook);
     const { result } = renderHook(() => useWorksheetView(pendingBook));
     expect(result.current.textCols).toEqual([]);
@@ -293,5 +293,54 @@ describe("text columns are suppressed while a book's full data is still pending"
     const { result } = renderHook(() => useWorksheetView(resolved));
     expect(result.current.textCols).toHaveLength(1);
     expect(result.current.textCols[0].rows).toHaveLength(fullRows);
+  });
+});
+
+// Review round 2 of site 9: the first condition was `ds.pending` alone, which
+// over-suppressed badly. `decimate_datastruct` returns its input UNCHANGED when
+// the book has <= 200 rows or no channels, so for a small book — and for EVERY
+// text-only book — the "preview" is the full data and its sidecars are exactly
+// aligned. Blanking those cost the user the whole worksheet.
+describe("a pending book whose preview is NOT decimated still shows its text", () => {
+  // `pending.rows` is the backend's `ds.n_points` = `time.shape[0]`
+  // (datastruct.py), i.e. the NUMERIC row count — not the text row count. So a
+  // text-only book reports `rows: 0`, and `rows > time.length` is `0 > 0`:
+  // false. That is what makes the condition exactly right rather than merely
+  // narrower, and writing this test is what forced the check.
+  // THREE counts, deliberately separate — conflating them is what made the first
+  // version of this fixture wrong: `numericRows` is what the preview holds,
+  // `pending.rows` is the backend's own numeric count for the full book, and
+  // `textCells` is the sidecar length, which for a text-only book exceeds BOTH.
+  const pendingButComplete = (numericRows: number, textCells: number, labels: string[]) => ({
+    id: "p2",
+    name: "small.opj",
+    data: {
+      time: Array.from({ length: numericRows }, (_, i) => i),
+      values: Array.from({ length: numericRows }, (_, i) => labels.map(() => i)),
+      labels,
+      units: labels.map(() => ""),
+      metadata: { origin_text_columns: { Op: Array.from({ length: textCells }, (_, i) => `o${i}`) } },
+    },
+    pending: { bookId: "b2", rows: numericRows, cols: labels.length },
+  }) as unknown as Dataset;
+
+  it("a small book (rows <= target_points, so no decimation) keeps its columns", () => {
+    const ds = pendingButComplete(5, 5, ["Y"]); // 5 numeric rows, preview == full
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.textCols[0].rows).toHaveLength(5);
+  });
+
+  it("a TEXT-ONLY book is not blanked — its text columns ARE the grid", () => {
+    // `decimate_datastruct` returns early on `n_channels === 0`, so this book's
+    // preview is its full data. Under `ds.pending` alone the worksheet rendered
+    // COMPLETELY EMPTY, and permanently so when the fetch failed
+    // (`installBookData`'s catch leaves `pending` set).
+    const ds = pendingButComplete(0, 4, []); // n_points 0, but four TEXT rows
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.filtered).toHaveLength(4); // the text rows are the grid
   });
 });

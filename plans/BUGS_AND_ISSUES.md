@@ -29,7 +29,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **FIXED at all 9 sites** 2026-09-09, every one sabotage-verified. Declared closed TWICE before it was; sites 7-8 came from review and site 9 from finally searching for the SHAPE rather than re-listing remembered sites |
+| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 sites fixed** 2026-09-09, each sabotage-verified; `lib/barlayout.ts` open (see entry). Declared closed THREE times before it was — each time a review found either an unfixed site or a defect in the fix itself, and a fully green suite caught neither. Treat a "closed" here as unproven until a search for the SHAPE backs it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1216,7 +1216,63 @@ differs from its input's — and that is what turned up sites 7-9.
 - [x] Checked and NOT sites: `io/origin_project/preview.py`'s
   `_trim_trailing_padding`/`decimate_datastruct` (their metadata is discarded —
   the payload sends the full ds's), and `calc/map.py` (builds a 2-D `MapData`
-  grid, where a per-row sidecar has no meaning).
+  grid, where a per-row sidecar has no meaning). Both independently re-verified
+  in the second review round.
+- [ ] **Site 10, STILL OPEN: `frontend/src/lib/barlayout.ts`'s `textLabelsFor`
+  (`:69-73`).** It indexes `rows[r]` against `colValues(data, channel)[r]` to
+  derive categorical bar labels, and it takes a bare `DataStruct` — so it
+  structurally CANNOT apply site 9's condition, which needs `pending`/`rows` off
+  the `Dataset`. A pending book routed through the figure builder therefore pairs
+  full-length sidecar cells with preview values: the same class of bug, one layer
+  below where the fix can reach. Transient (activation kicks `ensureBookData`),
+  exactly as the worksheet render was before it was fixed. Fixing it means
+  threading the row span (or a "these rows are a sample" flag) into the pure
+  layer, a contract change deliberately not bolted on here.
+  `lib/projectSearchSidecars.ts` reads keys only and is fine.
+
+#### Second review round, on the fix itself — all fixed here
+
+Ten more issues, two HIGH, and both HIGH ones were in the round-1 FIX rather than
+in code it had missed:
+
+- [x] `concatRowSidecars` sized parts by `time.length`, TRUNCATING an input's
+  overflow cells — the very thing `store/cellEdit.ts` had ruled against one
+  commit earlier, and its doc called that truncation "the honest trade" without
+  mentioning the honest option. Parts are now sized by `sidecarRowCount` and the
+  numeric rows padded to match, so nothing is dropped and part k's numbers and
+  text land on the same output rows.
+- [x] `mergeDatasets` spread dataset 0's metadata and relied on the rebuild to
+  OVERWRITE it; `concatRowSidecars` omits a key no input contributes to, and an
+  omitted key left dataset 0's sidecar standing. Now stripped first
+  (`withoutRowSidecars`). Recorded precisely because it matters: with the span fix
+  in place, a sabotage showed the strip is load-bearing ONLY for a corrupted
+  sidecar — it does not fix the two headline reproductions, and the comment says
+  so rather than taking credit for them.
+- [x] Row EDITS on a pending book were unguarded, so `sidecarRowCount` reported
+  the full book's span against the preview's numbers: one "insert row" padded the
+  grid to the full length in NaN, persisted it, and `installBookData` then wiped
+  it silently. `refusePendingRowEdit` mirrors `pendingGuard`. Site 9's render fix
+  had just removed the phantom rows that used to hint at this.
+- [x] Site 9's condition was `ds.pending` alone, which OVER-suppressed:
+  `decimate_datastruct` returns its input unchanged for a book of ≤ 200 rows or
+  no channels, so a small book — and EVERY text-only book — has a perfectly
+  aligned "preview". A text-only book (where the text columns ARE the grid) went
+  completely blank while pending, permanently when the fetch failed. Now
+  conditioned on the real mismatch, `pending.rows > data.time.length`.
+- [x] The Python module diverged from the TS on three measured cases: a `None`
+  cell (which a `.dwk` round trip really produces), a non-integer index, and a
+  tuple-valued column (silently returned UNSLICED to a pure-API caller).
+- [x] "name-for-name" and "cannot drift silently" were both false — nothing
+  compared the two modules at all. The key list is now mechanically enforced by a
+  test that parses the `.ts` file; cell semantics are pinned case-by-case.
+- [x] Every `concatRowSidecars` branch was untested, including the all-blank
+  prune whose deletion left the whole suite green while keeping site 8 open.
+  Covered, plus the negative-index guard the Python side had never pinned.
+- [x] A `useMemo` keyed on the whole `Dataset` re-materialized every text cell on
+  any unrelated change (rename, tag, exclusion toggle); back to the two fields it
+  reads.
+- [x] `corrections.py`'s comment cited `excludedRows` reasoning that lives in the
+  FRONTEND, not in that module.
 
 Also booked, not a defect: `lib/worksheetTransforms.ts`'s `stackWorksheet` DOES
 have a recoverable row mapping (output row `k` <- source row

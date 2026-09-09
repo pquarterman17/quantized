@@ -138,8 +138,10 @@ def apply_corrections(
         # copy, while this response is written straight back into the dataset and
         # the .dwk. Trim the first 50 of 100 rows and `text_columns` still held
         # 100 cells starting at row 0, so every visible text cell described a
-        # row 50 places away. The code below already reasons about `excludedRows`
-        # shifting under this same trim; the sidecars were simply missed.
+        # row 50 places away. (An earlier version of this comment said "the code
+        # below already reasons about `excludedRows` shifting under this same
+        # trim" -- there is no `excludedRows` anywhere in this module; that
+        # reasoning is in the FRONTEND, `store/corrections.ts`.)
         kept_rows = [int(i) for i in np.flatnonzero(mask)]
 
     # 2. X offset.
