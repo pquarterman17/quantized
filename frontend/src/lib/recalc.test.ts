@@ -279,9 +279,24 @@ describe("sortForRecalc", () => {
     expect(sortForRecalc(datasets, ["c", "b"])).toEqual(["b", "c"]);
   });
 
-  it("leaves unrelated ids in their original relative order (stable sort, no false ordering)", () => {
+  // REVIEW ROUND: this used to assert that unrelated ids kept the CALLER's
+  // relative order ("stable sort"), and passed only because that one input
+  // already equalled the traversal's own output — a coincidence, not a
+  // property. The comparator sorts on a total order derived from the
+  // traversal, so stability never comes into play and caller order is not
+  // preserved.
+  //
+  // What the function actually owes its caller is DETERMINISM: the result is a
+  // function of the graph, not of the order ids happened to be appended in.
+  // That is the property recalculation correctness rests on, and it is exactly
+  // what the old assertion could not have caught — under the false "preserves
+  // input order" claim these two permutations would produce DIFFERENT outputs.
+  it("orders unrelated ids from the graph alone — two input permutations, one result", () => {
     const datasets = [ds("x"), ds("y"), ds("z")]; // no edges among them at all
-    expect(sortForRecalc(datasets, ["z", "y", "x"])).toEqual(["z", "y", "x"]);
+    const one = sortForRecalc(datasets, ["z", "y", "x"]);
+    const two = sortForRecalc(datasets, ["x", "z", "y"]);
+    expect(one).toEqual(two);
+    expect([...one].sort()).toEqual(["x", "y", "z"]); // all present, none duplicated
   });
 
   it("is a no-op on an already-correct order", () => {

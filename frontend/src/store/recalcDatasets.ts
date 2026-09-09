@@ -16,8 +16,8 @@
 //    upstream-first regardless of which gesture happened to append which id
 //    when.
 // 2. AUDITABILITY ("never hide ... a stale/failed state"): `applyCorrections`
-//    NEVER throws — every failure path (a deleted background reference, a
-//    write-time cycle rejection, an API error) is caught INSIDE it and
+//    NEVER throws — its failure paths (a write-time cycle rejection, an API
+//    error) are caught INSIDE it and
 //    surfaced as a `false` return + `setStatus`, never a rejected promise
 //    (see store/corrections.ts). A bare `try/await/catch` around that call
 //    can therefore never see the failure: it would clear `id` from
@@ -26,6 +26,15 @@
 //    recalc would silently go "clean" while the dataset kept serving its
 //    stale value as if it were current. Check the boolean instead; only a
 //    genuine success clears the stale mark.
+//
+//    REVIEW ROUND correction: this list used to include "a deleted background
+//    reference", and that was WRONG — a dangling `bgRef` does not return
+//    `false` at all. `resolveDataset` yields undefined, so the correction
+//    re-runs WITHOUT the background subtraction, `bgRef` is written back as
+//    undefined, and it returns `true` (`store/corrections.ts:149-151,189`).
+//    That is a real hidden correction, and the boolean check here cannot see
+//    it — it is fixed at its own layer, in `applyCorrections`, which now says
+//    so via `setStatus`. Cite only what a mechanism actually covers.
 
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
@@ -35,13 +44,41 @@ import type { AppState } from "./useApp";
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** Does `d` depend, directly, on a dataset that failed to re-derive this pass?
+ *  Only the direct edges are checked because `sortForRecalc` guarantees an
+ *  upstream-first walk: a failure two hops up has already propagated into
+ *  `failed` via the intermediate node by the time we reach `d`. */
+function upstreamFailed(
+  d: { bgRef?: { datasetId: string }; derivedFrom?: { datasetId: string } },
+  failed: ReadonlySet<string>,
+): boolean {
+  return (
+    (d.bgRef != null && failed.has(d.bgRef.datasetId)) ||
+    (d.derivedFrom != null && failed.has(d.derivedFrom.datasetId))
+  );
+}
+
 /** Re-derive every stale dataset (bgRef corrections + derived-worksheet
  *  pipelines), clearing each from `staleDatasets` only on a genuine success.
  *  Called ONLY from useApp.ts's `recalcNow`, BEFORE `recomputeStaleFits` —
  *  corrections change the data fits consume, so datasets settle first. */
 export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Promise<void> {
+  // Ids that FAILED to re-derive in this pass. Anything downstream of one is
+  // left stale too — see `upstreamFailed` below.
+  const failed = new Set<string>();
   for (const id of sortForRecalc(get().datasets, get().staleDatasets)) {
     const d = get().datasets.find((x) => x.id === id);
+    // REVIEW ROUND: clearing only the FAILING id was not enough — the same bug
+    // this function exists to fix simply moved one hop downstream. With a->b->c,
+    // if b fails, b correctly stays stale, but c was still recomputed from b's
+    // now-stale `.data` and then marked clean: no stale dot, holding numbers
+    // derived from data that no longer exists. Because `sortForRecalc` walks
+    // upstream-first, every upstream of `id` has already been attempted by the
+    // time we get here, so one membership test is enough — no second pass.
+    if (d && upstreamFailed(d, failed)) {
+      failed.add(id);
+      continue; // stays stale, and so does anything downstream of IT
+    }
     // A derived worksheet (K2) recomputes through its OWN pipeline-against-
     // source executor, never the plain bgRef/corrections path below —
     // checked FIRST since a derived sheet also carries `.corrections`/`.raw`
@@ -68,13 +105,27 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
         if (statusMsg) get().setStatus(statusMsg);
       } catch (e) {
         get().setStatus(`derived worksheet recompute failed: ${e instanceof Error ? e.message : "error"}`);
-        /* stays stale */
+        failed.add(id); /* stays stale, and so does anything downstream */
       }
     } else if (d?.corrections && d.raw) {
-      const ok = await get().applyCorrections(id, d.corrections, d.bgRef);
+      // REVIEW ROUND: the per-item try/catch was dropped when this moved out of
+      // useApp.ts. `applyCorrections` does not throw TODAY, but its own
+      // `refuseDerived` guard sits outside its internal try, so a future throw
+      // would abort the whole remaining loop, skip `recomputeStaleFits`
+      // entirely, and surface as an unhandled rejection from auto mode's
+      // `void recalcNow()`. One dataset failing must not silently cancel
+      // everyone else's recalculation.
+      let ok = false;
+      try {
+        ok = await get().applyCorrections(id, d.corrections, d.bgRef);
+      } catch (e) {
+        get().setStatus(`recalculation failed: ${e instanceof Error ? e.message : "error"}`);
+      }
       if (ok) {
         set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
-      } /* else: stays stale; applyCorrections already surfaced the error via setStatus */
+      } else {
+        failed.add(id); /* stays stale; applyCorrections already set a status */
+      }
     } else {
       set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
     }

@@ -149,6 +149,16 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         const bgDs =
           bg && bg.datasetId !== id ? await get().resolveDataset(bg.datasetId) : undefined;
         const bgRef = bgDs ? { datasetId: bgDs.id, interp: bg!.interp } : undefined;
+        // AUDITABILITY (review round, #331): a `bgRef` that no longer resolves
+        // — its background dataset was deleted — used to be handled in total
+        // silence: the correction re-ran WITHOUT the background subtraction,
+        // `bgRef` was written back as undefined below, and this returned
+        // `true`. The user's numbers changed and their background reference
+        // vanished with no indication either had happened. That is exactly the
+        // "never hide an automatic correction" case, so say it out loud. The
+        // correction still proceeds (refusing would leave the dataset
+        // permanently un-recalculable once a background is deleted); it is the
+        // SILENCE that was the defect, not the fallback.
         // LIBRARY_WORKBOOK_UX_PLAN PR K (K4): write-time cycle rejection —
         // refuse BEFORE calling the API, with zero mutation, when picking
         // `bgDs` as this dataset's background would close a loop (the
@@ -191,6 +201,13 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
             ...guard.statePatch,
           };
         });
+        // Folded into the ONE existing status call, and the single-use flag
+        // inlined: same message, one call site, no extra branch or const. The
+        // extra branch put the eager bundle 0.1 kB over budget, and a pin raise
+        // is the last resort — this is what recovered it.
+        if (bg && bg.datasetId !== id && !bgDs) {
+          statusMsg = `Background "${ds.name}" is missing — recalculated without it.`;
+        }
         if (statusMsg) get().setStatus(statusMsg);
         get().recordMacro(
           `Corrections → ${ds.name}`,

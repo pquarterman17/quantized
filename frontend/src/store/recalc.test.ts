@@ -549,3 +549,43 @@ describe("derived worksheets (K5c/K5d)", () => {
     expect(useApp.getState().history.length).toBe(before + 1);
   });
 });
+
+// REVIEW ROUND (#331). Clearing only the FAILING id was not enough: with
+// a -> b -> c, a failure at b left c recomputed from b's stale `.data` and
+// then marked CLEAN — the same "serving stale numbers with no stale mark" bug
+// this file's other tests pin, moved one hop downstream.
+describe("recalcNow — a failure propagates downstream (review round)", () => {
+  it("leaves a dataset stale when its UPSTREAM refused, instead of rebuilding it from stale data", async () => {
+    const data = { time: [0, 1], values: [[1], [2]], labels: ["v"], units: [""], metadata: {} };
+    useApp.setState({
+      datasets: [
+        { id: "a", name: "a", data },
+        {
+          id: "b",
+          name: "b",
+          data,
+          raw: data,
+          corrections: {},
+          bgRef: { datasetId: "a", interp: "linear" },
+        },
+        {
+          id: "c",
+          name: "c",
+          data,
+          raw: data,
+          corrections: {},
+          bgRef: { datasetId: "b", interp: "linear" },
+        },
+      ],
+      staleDatasets: ["b", "c"],
+      // b's correction is refused; c's would succeed on its own.
+      applyCorrections: async (id: string) => id !== "b",
+    } as never);
+
+    await useApp.getState().recalcNow();
+
+    const stale = useApp.getState().staleDatasets;
+    expect(stale).toContain("b"); // the refusal itself
+    expect(stale).toContain("c"); // and everything downstream of it
+  });
+});

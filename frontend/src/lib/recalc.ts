@@ -222,10 +222,15 @@ export function markStale(
  *  downstream) from the CURRENT ds-level graph (bgRef + derivedFrom edges —
  *  the same edges `buildEdges` derives, collapsed past their `sheet:`/`fit:`/
  *  `col:` hops since only relative ds-to-ds order matters here), via a
- *  depth-first post-order traversal reversed into ancestors-first. `Array
- *  .prototype.sort` is stable (ES2019+), so ids the graph doesn't order
- *  relative to each other (no path between them) keep their original
- *  relative position. A `visiting`-guard breaks a cycle defensively (should
+ *  depth-first post-order traversal reversed into ancestors-first. Ids the graph does
+ *  not order relative to each other (no path between them) come out in a
+ *  deterministic but ARBITRARY order — the traversal's, not the caller's.
+ *  (Review round: this used to claim `Array.prototype.sort`'s stability
+ *  preserved the caller's relative order for unrelated ids. It does not: the
+ *  comparator sorts on a total order derived from the traversal, so stability
+ *  never comes into play. Determinism is what this function owes its caller,
+ *  and determinism is what it delivers; "unchanged for unrelated ids" was
+ *  never true and nothing depends on it.) A `visiting`-guard breaks a cycle defensively (should
  *  be unreachable — `wouldCreateCycle` refuses one at write time) rather
  *  than recursing forever. */
 export function sortForRecalc(datasets: readonly Dataset[], ids: readonly string[]): string[] {
