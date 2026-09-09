@@ -501,7 +501,15 @@ describe("useStatStage — stale channelTypes override on groupCol/facetCol (BUG
     expect(result.current.groupCol).toBe(0);
   });
 
-  it("de-categorizing the picked facetCol masks it the same way", () => {
+  // REVIEW ROUND — this test asserted the OPPOSITE, and the behaviour it pinned
+  // was a regression I introduced. facetCol must NOT be masked: unlike groupCol,
+  // `useGraphBuilder` seeds it from `spec.zones.facet?.channel` with no
+  // categorical gate, and `facetSlices` has no categorical gate either, so a
+  // non-categorical facet is a SUPPORTED configuration Graph Builder produces
+  // deliberately and announces as "faceted by <label>". Masking it turned a
+  // working faceted plot into a single unfaceted panel while the status line
+  // still claimed otherwise.
+  it("a non-categorical facetCol SURVIVES — faceting is not restricted to categorical columns", () => {
     const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
       initialProps: baseParams(),
     });
@@ -512,7 +520,18 @@ describe("useStatStage — stale channelTypes override on groupCol/facetCol (BUG
     rerender(baseParams({ active: overridden }));
 
     expect(result.current.categoricalCols.map((c) => c.index)).not.toContain(2);
-    expect(result.current.facetCol).toBeNull();
+    expect(result.current.facetCol).toBe(2); // kept, not masked
+  });
+
+  it("a Graph Builder seed faceting on a NON-categorical column still facets", () => {
+    const nonCategorical: Dataset = { ...DS, channelTypes: { 2: "continuous" } };
+    const seed: StatStageSeed = { mode: "box", groupCol: 0, valueCol: 1, facetCol: 2 };
+    const { result } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: baseParams({ active: nonCategorical, seed }),
+    });
+    // Graph Builder's status line promises "faceted by <label>"; the stage must
+    // deliver it rather than silently rendering one unfaceted panel.
+    expect(result.current.facetCol).toBe(2);
   });
 });
 

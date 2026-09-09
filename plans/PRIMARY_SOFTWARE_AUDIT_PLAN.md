@@ -1198,8 +1198,17 @@ the Graph Builder's own live spec.
   `isCategoricalChannel` — verified, and wired MORE strongly than Tabulate:
   `useStatStage.ts`'s "group by"/"facet by" `<Select>` OPTION LISTS
   themselves are restricted to `lib/statstage.categoricalChannels`
-  (`channelModelingType`-gated, override-first) — a non-categorical column
-  cannot even be picked through the real UI, not just defaulted away from.
+  (`channelModelingType`-gated, override-first), so a non-categorical column
+  is not offered in the pickers — a stronger wiring than merely defaulting
+  away from one. **Corrected in review the same day:** an earlier version of
+  this entry said a non-categorical column "cannot even be picked through the
+  real UI". That is FALSE, and acting on it caused a regression. The pickers
+  are not the only entry point: `useGraphBuilder` seeds the stage directly, and
+  while it gates `groupCol` on `isCategorical(...)`, it passes `facetCol =
+  spec.zones.facet?.channel` through UNGATED — and `facetSlices` has no
+  categorical gate either. Faceting on a non-categorical column is therefore a
+  supported configuration Graph Builder produces deliberately and announces as
+  "faceted by <label>". See BUG-004 for the consequence.
   Classification genuinely changes behavior, not just defaults: `groupCol
   != null` vs `null` switches `resolveGroups`/`resolveGroupsIndexed`/
   `computeBarData` between a real per-category partition

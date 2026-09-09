@@ -27,7 +27,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
-| BUG-004 | P3 | Stat Stage workbench | A picked "group by"/"facet by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
+| BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 
 ---
 
@@ -603,7 +603,18 @@ undefined` masking makes it fail as expected).
 
 ---
 
-## BUG-004 — a Stat Stage group/facet pick outlives its column's type change
+## BUG-004 — a Stat Stage GROUP pick outlives its column's type change
+
+**Scope corrected in review (2026-09-09), same day as filing.** This covers
+`groupCol` ONLY. The first fix also masked `facetCol`, and that was a
+regression: `useGraphBuilder` gates its seeded `groupCol` on
+`isCategorical(...)` but passes `facetCol` through ungated, and `facetSlices`
+has no categorical gate — so faceting on a non-categorical column is a
+SUPPORTED configuration Graph Builder deliberately produces and announces
+("faceted by <label>"). Masking it rendered one unfaceted panel while the
+status line still claimed a facet. The rule that separates them: a pick is
+"stale" only if NO live entry point could have produced it. Every way to set
+`groupCol` is categorical-gated; `facetCol` has an ungated one.
 
 **Priority:** P3 — narrower and lower-friction than BUG-003: the only
 consumer of the stale value is this same hook (no shared row-filtering
@@ -737,9 +748,13 @@ everywhere, not just mask its display) — that call is not made here.
 
 - [x] Regression test fails before the fix and passes afterward —
   `useStatStage.test.ts`'s "stale channelTypes override on groupCol/
-  facetCol (BUG-004)" describe block (3 tests), sabotage-verified by
-  reverting the masking and confirming all three fail while the rest of the
-  suite (29 tests) stays green.
+  facetCol (BUG-004)" describe block, sabotage-verified by reverting the
+  masking and confirming the groupCol tests fail while the rest of the suite
+  stays green. **Review round:** the block's facetCol test originally asserted
+  facet was masked too and has been INVERTED — it now pins that a
+  non-categorical facetCol SURVIVES, with a companion test that a Graph
+  Builder seed faceting on a non-categorical column still facets. A test that
+  pins a regression is worse than no test, and that is what it was.
 - [x] Relevant focused tests pass — full `useStatStage.test.ts` (29 tests)
   and `lib/statstage.test.ts` green; one PRE-EXISTING test in the same file
   ("all facet levels dropping → drawFacets null with the empty-groups

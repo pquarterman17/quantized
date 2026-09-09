@@ -76,8 +76,23 @@ export function maskStaleCategoricalPicks(
 ): EffectiveCategoricalPicks {
   const index = new Set(categoricalCols.map((c) => c.index));
   return {
+    // groupCol is masked: EVERY way to set it is categorical-gated — the
+    // picker's own option list, and `useGraphBuilder`'s seed, which computes
+    // `x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel :
+    // null`. So a non-categorical groupCol can only be a stale leftover.
     groupCol: groupCol != null && index.has(groupCol) ? groupCol : null,
-    facetCol: facetCol != null && index.has(facetCol) ? facetCol : null,
+    // facetCol is NOT masked. REVIEW ROUND — masking it was a regression I
+    // introduced. `useGraphBuilder` seeds `facetCol` from
+    // `spec.zones.facet?.channel` with NO categorical gate (unlike groupCol
+    // right above it), and `facetSlices` has no categorical gate either, so
+    // faceting on a non-categorical column is a SUPPORTED configuration that
+    // Graph Builder deliberately produces and announces ("faceted by <label>").
+    // Masking it turned a working faceted plot into one unfaceted panel while
+    // the status line still claimed it was faceted.
+    //
+    // The asymmetry is the point: a pick is only "stale" if no live entry point
+    // could have produced it. That is true of groupCol and false of facetCol.
+    facetCol,
   };
 }
 
