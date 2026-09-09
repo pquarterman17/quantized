@@ -120,6 +120,23 @@ describe("BackgroundPlotWindow", () => {
     expect(opts.plugins).toHaveLength(0);
   });
 
+  // The COUNTERPART to `noBoxView()` above, and the only end-to-end pin that a
+  // plot is actually boxed with NO configuration at all: `defaultPlotView()` is
+  // passed through untouched, so this fails if the default flips back, if the
+  // view→`axisBox` prop wiring breaks, or if `buildOpts` stops pushing the
+  // plugin. `useApp.test.ts` pins the default VALUE and that the store agrees
+  // with `defaultPlotView()`; this pins that the value reaches a real render.
+  // (`PlotStage` is deliberately never mounted in jsdom — see its test's
+  // header — so a background window is the closest mountable stand-in.)
+  it("a window taking defaultPlotView() unmodified is boxed — one plugin, the axis box", async () => {
+    expect(defaultPlotView().showAxisBox).toBe(true); // guard the guard
+    render(<BackgroundPlotWindow dataset={DATASET} view={defaultPlotView()} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+    const opts = created[0].opts as { plugins: unknown[] };
+    // Exactly one, and it is the decoration — no tool plugin came along.
+    expect(opts.plugins).toHaveLength(1);
+  });
+
   it("ignores the singleton store's tool overlays entirely (decision #2 — focused-window-only)", async () => {
     // A background window must NEVER show a fit/peak/baseline/deriv overlay
     // even if the LIVE singleton happens to have one set (e.g. from whatever
