@@ -4,9 +4,24 @@
 # Every entry is a dated, deliberate decision. A red sweep run means a NEW
 # advisory appeared that no entry covers — triage it (fix / book a plan row /
 # add an entry here with a dated rationale), never leave the sweep red.
-# All current entries clear automatically when Tauri's Linux stack moves off
-# the gtk3 / glib 0.18 line (gtk-rs 0.20+): the ordinary lockfile bump drops
-# the affected crates.
+# The entries clear on TWO INDEPENDENT upstream conditions — do not treat one
+# as retiring all 17 (2026-09-08, corrected after this file's own dependency
+# tracing contradicted the previous blanket claim):
+#
+#   1. The twelve GTK/glib entries (RUSTSEC-2024-0429 and RUSTSEC-2024-0411
+#      through -0420, plus RUSTSEC-2024-0370 proc-macro-error, which is
+#      reached only via glib-macros/gtk3-macros) clear when Tauri's Linux
+#      stack moves off the gtk3 / glib 0.18 line (gtk-rs 0.20+): the ordinary
+#      lockfile bump drops the affected crates.
+#   2. The five unic-* entries (RUSTSEC-2025-0075, -0080, -0081, -0098,
+#      -0100) do NOT clear with that migration. They are reached only through
+#      urlpattern 0.3.0, pinned by `tauri-utils`'s `urlpattern = "^0.3"`;
+#      urlpattern dropped the unic-* dependencies in 0.4.0. They clear when
+#      tauri-utils widens that requirement — independently of the GTK move,
+#      and not by any `cargo update` this repo can run.
+#
+# So a future GTK/gtk-rs upgrade retires group 1 only; re-check group 2
+# against tauri-utils' published `urlpattern` requirement separately.
 
 # glib unsoundness (VariantStrIter Iterator/DoubleEndedIterator impls).
 # Mirrors the 2026-07-25 Dependabot dismissal as tolerable_risk: patched in
