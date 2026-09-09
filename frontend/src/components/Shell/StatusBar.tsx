@@ -68,13 +68,21 @@ export default function StatusBar() {
           Progress, not a failure — `polite` so it never interrupts, unlike the
           `role="alert"` autosave-failure banner below. `aria-atomic`
           re-announces the whole label on each change (e.g. "Importing 3/19: …"
-          ticking) rather than a diff a reader would garble. */}
+          ticking) rather than a diff a reader would garble.
+
+          `aria-label` gives it a NAME, so it is distinguishable from the other
+          `role="status"` elements in the app (Stage/ToolHud, the WhatIsThis
+          badge). That helps a screen-reader user, who otherwise hears an
+          announcement with no idea which region produced it — and it is why a
+          bare `getByRole("status")` is no longer a safe locator, which is how
+          this landed CI-red once (see region-tool-escape.spec.ts). */}
       <span
         className={visibleOps.length > 0 ? "qzk-pending" : undefined}
         title={visibleOps.length > 0 ? visibleOps.map((o) => o.label).join(", ") : undefined}
         role="status"
         aria-live="polite"
         aria-atomic="true"
+        aria-label="Background operations"
       >
         {visibleOps.length > 0 && (
           <>
