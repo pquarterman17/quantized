@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-08  
+**Updated:** 2026-09-09  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -50,7 +50,7 @@ That default is wrong. The latter two columns describe uncertainty; they are not
 
 - [x] The NCNR Reductus parser currently maps Qz to the independent axis and puts every remaining file column into `DataStruct.values`.
 - [x] Unlike the NCNR refl1d-style parser, `import_ncnr_refl` supplies no `default_value_channels` or `error_channels` plotting hints.
-- [x] Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.
+- [ ] ~~Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.~~ **Corrected 2026-09-09 (Claude): this is not what happens for this file.** Measured against the fixture's own labels: `inferErrorBindings({labels: ["Intensity","uncertainty","resolution"]})` returns `[]`. The context-free classifier does return a spurious hit on `uncertainty` — it strips a leading `unc` and reports base `"ertainty"` — and the sibling-evidence gate then correctly rejects it, since no `ertainty` column exists. So no binding was produced by inference, and the roles had to come from the parser.
 - [x] Generic default channel selection does not hide inferred error-role channels from the initial plot.
 - [x] `resolution` is not a generic error token, so label inference does not identify its scientific role.
 - [x] The existing fixture declares columns `[Qz, Intensity, uncertainty, resolution]` with units `[1/Ang, counts, counts, 1/Ang]`, which provides a stable regression case.
@@ -75,12 +75,12 @@ The implementation must use the file format's semantics, not merely the exact di
 
 ### Implementation checklist
 
-- [ ] Define parser-owned default semantics for a recognized four-column Reductus reflectometry layout.
-- [ ] Default the plotted channel set to the measured intensity/reflectivity only.
-- [ ] Bind the intensity uncertainty as symmetric Y error.
-- [ ] Bind resolution/dQ as symmetric X error using the canonical rich error-role model.
+- [x] Define parser-owned default semantics for a recognized four-column Reductus reflectometry layout.
+- [x] Default the plotted channel set to the measured intensity/reflectivity only.
+- [x] Bind the intensity uncertainty as symmetric Y error.
+- [x] Bind resolution/dQ as symmetric X error using the canonical rich error-role model.
 - [ ] Ensure bound error columns do not appear as independent curves or ordinary legend entries by default.
-- [ ] Preserve all imported numeric columns in the worksheet; do not alter raw values.
+- [x] Preserve all imported numeric columns in the worksheet; do not alter raw values.
 - [ ] Keep every role overridable through the import/error-column UI.
 - [ ] Handle files that omit uncertainty, omit resolution, or contain additional value columns without shifting indices incorrectly.
 - [ ] Ensure reimport, workspace save/reopen, duplication, and plot-window rebinding preserve the intended roles.
@@ -88,9 +88,9 @@ The implementation must use the file format's semantics, not merely the exact di
 
 ### Automated-test checklist
 
-- [ ] Backend parser test asserts the semantic hints/roles emitted for `tests/fixtures/ncnr_j395.refl`.
-- [ ] Backend tests cover missing and reordered optional columns if the format permits them.
-- [ ] Frontend import test asserts the canonical Y- and X-error bindings stored on the dataset.
+- [x] Backend parser test asserts the semantic hints/roles emitted for `tests/fixtures/ncnr_j395.refl`.
+- [x] Backend tests cover missing and reordered optional columns if the format permits them.
+- [x] Frontend import test asserts the canonical Y- and X-error bindings stored on the dataset.
 - [ ] Default-channel test asserts only the measured series is selected initially.
 - [ ] Rendering/payload test asserts uncertainty and resolution are absent as standalone series.
 - [ ] Overlay test asserts Y uncertainty and X resolution produce vertical and horizontal spans respectively.
@@ -109,11 +109,26 @@ The implementation must use the file format's semantics, not merely the exact di
 
 ### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- PR/commit: in progress on `claude/repo-evaluation-l7y7k9` (parser roles + the
+  frontend consumer they needed)
+- Automated tests: `tests/test_io_ncnr.py` (declared roles, unit-gating,
+  fail-safe layouts, the `R`/`dR`/`dQ` spelling);
+  `frontend/src/store/importDatasets.test.ts` (declared roles honoured
+  including the X binding, precedence over the label guess, malformed entries
+  dropped with fallback intact). The two behavioural frontend tests were
+  verified to fail without the change.
+- Agent verification: partial — the parser emits the roles and the store now
+  stores them. NOT yet verified: that the rendered plot actually draws
+  horizontal whiskers from an X binding on this dataset, reimport/save/reopen
+  round-tripping of the declared roles, or the "user-customized visibility is
+  not overwritten" criterion. Those remain open below.
+- Owner verification: pending — required for this item (Windows, reported file)
+- Notes: the fix needed a contract gap closed first. `metadata["error_roles"]`
+  was written by the backend and read by NOTHING, so no parser could express an
+  X error at all; `store/importErrorRoles.ts::parserErrorRoles` is that missing
+  reader. `io/ncnr.py`'s `import_ncnr_dat` has the same latent problem for its
+  own `dQ` column and is deliberately NOT changed here — out of scope for this
+  item, and it needs its own fixture evidence.
 
 ---
 
@@ -258,3 +273,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | Date | Author | Change | Evidence/status |
 |---|---|---|---|
 | 2026-09-08 | ChatGPT-Sol | Created living tracker; added BUG-001 and UX-001 from owner screenshots and code inspection | Both open |
+| 2026-09-09 | Claude | BUG-001: parser-declared roles in `io/ncnr.py` + the missing `metadata.error_roles` reader; corrected one investigation line that measurement disproved | BUG-001 partially implemented, still open pending render/round-trip and owner checks |

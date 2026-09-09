@@ -324,13 +324,18 @@ def binding_metadata(
     binding goes stale. Dropping it with no record anywhere would leave
     nothing anywhere to explain why the error bars are missing.
 
-    Both keys are BACKEND CONTRACT ONLY today: no frontend code reads
-    `error_binding_problems` from a preview yet, and nothing maps
-    `metadata["error_roles"]` onto `Dataset.errorRoles` at import, so a
-    packed pairing does not yet produce bars on a plot. Rendering both is the
-    Import Wizard UI slice (P1.6, Sol's lane) building on this contract --
-    said plainly here so the next reader does not mistake "recorded" for
-    "surfaced".
+    `error_roles` IS read now: `store/importErrorRoles.ts`'s `parserErrorRoles`
+    maps it onto `Dataset.errorRoles` at import, validating every entry
+    (indices in range, a channel never its own target, known axis/side) since
+    it arrives from a parsed file. It outranks the label guesser and is
+    outranked by Origin's own column designations. Added for BUG-001, where
+    `io/ncnr.py` needed a way to say that a reductus `.refl`'s uncertainty and
+    Q resolution are uncertainties rather than curves.
+
+    `error_binding_problems` remains BACKEND CONTRACT ONLY: no frontend code
+    reads it from a preview yet, so a binding this module drops still explains
+    itself nowhere -- said plainly here so the next reader does not mistake
+    "recorded" for "surfaced".
     """
     raw_to_channel = {raw: chan for chan, raw in enumerate(channel_order)}
     out: dict[str, Any] = {}

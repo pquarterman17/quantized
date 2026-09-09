@@ -726,8 +726,35 @@ import { fileURLToPath } from "node:url";
  *  spread from memory is also unsafe -- it was first estimated at ~450 B
  *  for this entry and corrected to ~900 B once the CI number was actually
  *  read, so re-measure the base rather than trusting this figure. Full
- *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. */
-const EAGER_JS_BUDGET = 910_711;
+ *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. *
+ *  2026-09-09 (BUGS_AND_ISSUES BUG-001, NCNR `.refl` uncertainty roles) —
+ *  910,531 -> 910,748 (+217). Raised to measured + 1,024 = 911,772. The whole
+ *  arc, because the middle of it is the reusable lesson:
+ *    1. The new eager code (`store/importErrorRoles.ts`, carrying the
+ *       `parserErrorRoles` reader for `DataStruct.metadata["error_roles"]`)
+ *       first measured 911,000 — 289 over. A lazy split was rejected on
+ *       evidence: its only consumer, `addFromPayload`, is synchronous, so
+ *       deferring means making dataset construction async and adding a
+ *       chunk-fetch failure mode to the core import path. A size-only rewrite
+ *       recovered ~100 bytes and, in its shortest form, leaked raw metadata
+ *       objects into stored bindings, so it was reverted.
+ *    2. What actually paid for it was a code-review finding: the new reader had
+ *       grown its OWN copy of `lib/errorRoles.sanitizeBindings`. Deleting the
+ *       duplicate and delegating to the shared validator landed at 910,700 —
+ *       11 bytes UNDER the then-current pin, needing no raise at all. LESSON
+ *       WORTH KEEPING: an over-budget measurement is often duplicated logic;
+ *       look for the duplicate before reaching for the pin.
+ *    3. The same review then found a real defect that had to be fixed:
+ *       clearing error roles in the Inspector never reached an already-open
+ *       plot, because a parser-declared X binding makes a window's document
+ *       "rich" and only the dataset was being written. Routing that write
+ *       through `syncDatasetWindowDocuments` costs the remaining 37 bytes.
+ *       That is irreducible store logic on a correctness path with no lazy-able
+ *       panel behind it — the case rule 2 permits a raise for.
+ *  Full frontend suite (610 files / 9,578 tests), backend 4,639, tsc --noEmit
+ *  and eslint green.
+ */
+const EAGER_JS_BUDGET = 911_772;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
