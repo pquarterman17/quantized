@@ -151,7 +151,13 @@ describe("facetSlices", () => {
     const slices = facetSlices(ds, 0);
     expect(slices[0].data.labels).toBe(ds.labels);
     expect(slices[0].data.units).toBe(ds.units);
-    expect(slices[0].data.metadata).toBe(ds.metadata);
+    // BUG-006 changed this from reference identity to VALUE equality, and the
+    // distinction is the fix: `metadata` is no longer carried by reference,
+    // because its row-indexed sidecars (`text_columns` &c.) have to be sliced to
+    // the same rows. Content is unchanged for a dataset that carries none —
+    // which is what this asserts. Nothing may rely on the old aliasing; the
+    // codebase is copy-on-write throughout.
+    expect(slices[0].data.metadata).toEqual(ds.metadata);
   });
 });
 

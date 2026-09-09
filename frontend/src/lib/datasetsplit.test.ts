@@ -414,3 +414,114 @@ describe("sliceDataStruct", () => {
     expect(source.labels).toEqual(["A", "B"]);
   });
 });
+
+// BUG-006. `sliceDataStruct` copied `metadata` whole, but the `text_columns`
+// sidecar inside it is indexed BY ROW — so an Extract or a Split-by-column gave
+// the child the right numeric rows and the PARENT's full text-cell lists. Every
+// sample id, operator and run label then read against a different measurement
+// than the one it belonged to: a wrong value displayed as if it were right.
+describe("sliceDataStruct — row-indexed metadata sidecars (BUG-006)", () => {
+  const withText = (extra: Record<string, unknown> = {}): DataStruct => ({
+    time: [10, 20, 30, 40],
+    values: [[1], [2], [3], [4]],
+    labels: ["Y"],
+    units: [""],
+    metadata: {
+      text_columns: { SampleID: ["s0", "s1", "s2", "s3"], Operator: ["a", "b", "c", "d"] },
+      ...extra,
+    },
+  });
+
+  it("slices text-column cells to the SAME rows as the numbers", () => {
+    const out = sliceDataStruct(withText(), [1, 3]);
+    expect(out.values).toEqual([[2], [4]]);
+    const cols = out.metadata["text_columns"] as Record<string, string[]>;
+    expect(cols.SampleID).toEqual(["s1", "s3"]);
+    expect(cols.Operator).toEqual(["b", "d"]);
+  });
+
+  it("keeps row order, including a non-ascending slice", () => {
+    // Split groups are usually ascending, but the signature accepts any order
+    // and the text cells must follow the SAME permutation as the numbers.
+    const out = sliceDataStruct(withText(), [3, 0]);
+    expect(out.values).toEqual([[4], [1]]);
+    expect((out.metadata["text_columns"] as Record<string, string[]>).SampleID).toEqual(["s3", "s0"]);
+  });
+
+  it("reads a row past a SHORT text column as a blank cell, not undefined", () => {
+    // A text column may be shorter than `time` (columnmeta.ts's TextColumn
+    // doc). `undefined` would serialize to null and read back as a hole.
+    const ds = withText();
+    (ds.metadata["text_columns"] as Record<string, string[]>).Operator = ["a"];
+    const out = sliceDataStruct(ds, [0, 2]);
+    const cols = out.metadata["text_columns"] as Record<string, string[]>;
+    expect(cols.Operator).toEqual(["a", ""]);
+    expect(cols.Operator.every((c) => typeof c === "string")).toBe(true);
+  });
+
+  it("slices the origin_text_columns spelling too", () => {
+    const ds: DataStruct = {
+      time: [1, 2, 3],
+      values: [[1], [2], [3]],
+      labels: ["Y"],
+      units: [""],
+      metadata: { origin_text_columns: { A: ["x", "y", "z"] } },
+    };
+    const out = sliceDataStruct(ds, [2, 0]);
+    expect((out.metadata["origin_text_columns"] as Record<string, string[]>).A).toEqual(["z", "x"]);
+  });
+
+  it("slices origin_report_sheets too — the sidecar the first fix MISSED", () => {
+    // `{short_name: [cell per row]}` of Origin report-sheet reference strings
+    // (io/origin_project/opj.py). The first version of this fix asserted in its
+    // own comment that nothing else was row-indexed; a review found this.
+    const ds = withText();
+    ds.metadata["origin_report_sheets"] = { A: ["r0", "r1", "r2", "r3"] };
+    const out = sliceDataStruct(ds, [3, 1]);
+    expect((out.metadata["origin_report_sheets"] as Record<string, string[]>).A).toEqual(["r3", "r1"]);
+  });
+
+  it("carries an ARRAY-shaped text_columns through untouched (corrupted sidecar)", () => {
+    // The shape guard, pinned on its own. `text_columns` must be
+    // `{name: cells[]}`; a bare ARRAY there is corrupt. Without the
+    // `Array.isArray(raw)` rejection, `Object.entries` would happily walk the
+    // array's INDICES and hand back an object — silently changing the shape of
+    // data we failed to understand, instead of leaving it alone.
+    const ds = withText();
+    ds.metadata["text_columns"] = ["a", "b"] as unknown as Record<string, string[]>;
+    const out = sliceDataStruct(ds, [0]);
+    expect(out.metadata["text_columns"]).toEqual(["a", "b"]);
+  });
+
+  it("does NOT slice CHANNEL-indexed or file-level sidecars", () => {
+    // `label_rows[].cells` is one cell per CHANNEL and `all_column_names` is the
+    // column roster; both are unaffected by which rows survive.
+    //
+    // A characterization test, and worth naming as one: TWO independent
+    // mechanisms keep these safe — they are not in `ROW_INDEXED_SIDECARS`, and
+    // they are not `{name: array}` objects — so removing either alone leaves
+    // this passing. It pins the user-visible contract, not a single guard; the
+    // guards have their own tests above and beside it.
+    const labelRows = [{ index: 0, role: "label", x: "H", cells: ["Y"] }];
+    const out = sliceDataStruct(withText({ label_rows: labelRows, all_column_names: ["H", "Y"], comments: ["# hi"] }), [1]);
+    expect(out.metadata["label_rows"]).toEqual(labelRows);
+    expect(out.metadata["all_column_names"]).toEqual(["H", "Y"]);
+    expect(out.metadata["comments"]).toEqual(["# hi"]); // file-level, untouched
+  });
+
+  it("carries a structurally corrupted sidecar through rather than inventing a shape", () => {
+    const ds = withText();
+    ds.metadata["text_columns"] = { Bad: "not an array" } as unknown as Record<string, string[]>;
+    const out = sliceDataStruct(ds, [0]);
+    expect((out.metadata["text_columns"] as Record<string, unknown>).Bad).toBe("not an array");
+  });
+
+  it("leaves a dataset with no text sidecar byte-identical to before", () => {
+    const plain: DataStruct = {
+      time: [1, 2], values: [[1], [2]], labels: ["Y"], units: [""], metadata: { source: "/x.dat" },
+    };
+    const out = sliceDataStruct(plain, [1]);
+    expect(out.metadata).toEqual({ source: "/x.dat" });
+    expect("text_columns" in out.metadata).toBe(false);
+  });
+});

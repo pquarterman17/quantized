@@ -33,6 +33,7 @@
 // SplitDatasetDialog picking a suggestion.
 
 import { fmtNum } from "./format";
+import { sliceRowSidecars } from "./rowSidecars";
 import { inferModelingType } from "./modeling";
 import type { DataStruct } from "./types";
 
@@ -303,20 +304,28 @@ export function splitColumn(data: DataStruct, col: number, tolerance?: number): 
 
 /** Slice a DataStruct's time+values rows down to `rowIndexes` (any order —
  *  typically ascending, straight from a `SplitGroup`) into a fresh,
- *  non-aliased DataStruct. labels/units/metadata/cat_levels are structural
- *  (per-COLUMN, not per-row) so they're copied whole, unaffected by which
- *  rows survive -- a row slice preserves column LAYOUT (P1.4 review P2-2:
- *  a categorical child dataset must stay categorical, since its level table
- *  and codes are untouched by which rows remain) -- this is the
- *  "per-row-safe fields" the store's `splitDatasetByColumn` action builds
- *  each child dataset's `data` from. */
+ *  non-aliased DataStruct. labels/units/cat_levels are structural (per-COLUMN,
+ *  not per-row) so they're copied whole, unaffected by which rows survive -- a
+ *  row slice preserves column LAYOUT (P1.4 review P2-2: a categorical child
+ *  dataset must stay categorical, since its level table and codes are
+ *  untouched by which rows remain) -- this is the "per-row-safe fields" the
+ *  store's `splitDatasetByColumn` action builds each child dataset's `data`
+ *  from.
+ *
+ *  METADATA IS NOT WHOLLY STRUCTURAL, which is what BUG-006 was: this copied
+ *  `metadata` whole, but the `text_columns` sidecar inside it is indexed BY
+ *  ROW. So an Extract or a Split-by-column produced a child whose numeric rows
+ *  were the right ones and whose text cells were still the PARENT's full
+ *  lists — every sample id, operator and run label silently attributed to a
+ *  different measurement than the one it belonged to. Row-indexed sidecars are
+ *  now sliced alongside the rows; channel-indexed ones still are not. */
 export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[]): DataStruct {
   return {
     time: rowIndexes.map((i) => data.time[i]),
     values: rowIndexes.map((i) => [...data.values[i]]),
     labels: [...data.labels],
     units: [...data.units],
-    metadata: { ...data.metadata },
+    metadata: sliceRowSidecars(data.metadata, rowIndexes),
     ...(data.cat_levels ? { cat_levels: data.cat_levels } : {}),
   };
 }
