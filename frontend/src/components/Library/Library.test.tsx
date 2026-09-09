@@ -5,15 +5,17 @@
 // and that it reappears in the flat no-folders mode.
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useRef, useState } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
+import LibraryWorkspace from "./LibraryWorkspace";
 import { createFigureDocument } from "../../lib/figureDocument";
 import type { OriginFigureEntry } from "../../lib/originFigures";
 import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
-import { LIBRARY_VIEW_PREFS_KEY } from "../../lib/libraryViewPrefs";
+import { LIBRARY_VIEW_PREFS_KEY, type LibraryViewMode } from "../../lib/libraryViewPrefs";
 import { useApp } from "../../store/useApp";
 
 const dsWith = (id: string, folderId?: string): Dataset => ({
@@ -405,6 +407,74 @@ describe("Library — Tree / Details renderer continuity (PR D)", () => {
   });
 });
 
+// A faithful mirror of App.tsx's own libraryViewMode wiring (the isolated
+// <Library/> renders above never engage it: an uncontrolled "Tiles" click
+// there just flips the sidebar's internal mode, since Library.tsx itself
+// never mounts LibraryWorkspace — only App.tsx does, conditionally, next to
+// it). Library (the narrow sidebar, always mounted) and LibraryWorkspace
+// (the wide Tiles browser, mounted only while `viewMode === "tiles"`) share
+// ONE controlled mode + the same previousBrowseMode bookkeeping App.tsx
+// uses on close, so a "Tree -> Tiles -> Details" click sequence here
+// exercises the real selector -> App -> both-components path.
+function AppLibraryHarness() {
+  const [viewMode, setViewMode] = useState<LibraryViewMode>("tree");
+  const previousBrowseMode = useRef<Exclude<LibraryViewMode, "tiles">>("tree");
+  const changeViewMode = (next: LibraryViewMode): void => {
+    if (next !== "tiles") previousBrowseMode.current = next;
+    setViewMode(next);
+  };
+  return (
+    <>
+      <Library viewMode={viewMode} onViewModeChange={changeViewMode} />
+      {viewMode === "tiles" && (
+        <LibraryWorkspace onClose={() => changeViewMode(previousBrowseMode.current)} />
+      )}
+    </>
+  );
+}
+
+describe("Library — Tree -> Tiles -> Details selection continuity (LIBRARY_WORKBOOK_UX_PLAN acceptance scenario)", () => {
+  it("selection remains stable across Tree -> Tiles -> Details, with no duplicated Library objects once back to one panel", () => {
+    const dataset = { ...dsWith("beta.csv"), workbookId: "w1" };
+    useApp.setState({
+      datasets: [dataset],
+      workbooks: [{ id: "w1", name: "Run" }],
+      expandedWorkbookIds: ["w1"], // the worksheet row is visible in Tree without a manual expand click
+      originFigures: [],
+      editableFigures: [],
+      figureDocs: [],
+      pages: [],
+      reports: [],
+      revealTarget: null,
+      workbookLastChild: {},
+      figurePageOpen: false,
+      cmdkOpen: false,
+      confirmRemove: false,
+    });
+    render(<AppLibraryHarness />);
+
+    // Tree: select the worksheet.
+    expect(screen.getByRole("button", { name: "Tree" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByText("beta.csv").closest("[data-ds-id]")!);
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+
+    // Tiles: opens LibraryWorkspace as a SECOND panel alongside the sidebar
+    // (by design — not the duplication this scenario guards against) without
+    // disturbing the selection made in Tree.
+    fireEvent.click(screen.getByRole("button", { name: "Tiles" }));
+    expect(screen.getByLabelText("Library workspace")).toBeInTheDocument();
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+
+    // Details: Tiles closes (back to one panel), selection is still the
+    // worksheet chosen in Tree, and it renders exactly ONCE — no stale row
+    // left behind by either prior renderer.
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(screen.queryByLabelText("Library workspace")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Details" })).toHaveAttribute("aria-pressed", "true");
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+    expect(screen.getAllByText("beta.csv")).toHaveLength(1);
+  });
+});
 
 // FU-2 (provenance-disclosure follow-ups): OriginFidelitySection used to hold
 // its collapsed flag in a per-mount useState, and Library.tsx unmounts the

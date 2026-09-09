@@ -370,12 +370,19 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
   });
 
   it("all facet levels dropping → drawFacets null with the empty-groups error", async () => {
-    // Force the GROUP column entirely non-finite (grp=NaN dataset-wide) so
+    // Force the VALUE column entirely non-finite (y=NaN dataset-wide) so
     // every facet slice groups to nothing, regardless of the facet column.
-    const empty: DataStruct = { ...DATA, values: DATA.values.map((r) => [NaN, r[1], r[2]]) };
+    // (Not the GROUP column: since BUG-004's fix, an all-NaN group column no
+    // longer classifies as categorical, so it would just get masked to the
+    // per-plotted-channel fallback instead of forcing a "no data" edge case —
+    // that fallback still has finite y values here, so it would no longer
+    // error. Emptying the VALUE column instead forces the same zero-groups
+    // outcome without relying on a groupCol the real picker could never
+    // offer in the first place.)
+    const empty: DataStruct = { ...DATA, values: DATA.values.map((r) => [r[0], NaN, r[2]]) };
     const emptyDs: Dataset = { id: "empty", name: "empty.dat", data: empty };
     const { result } = renderHook(() => useStatStage(baseParams({ active: emptyDs })));
-    act(() => result.current.setGroupCol(0));
+    expect(result.current.groupCol).toBe(0); // "grp" — still genuinely categorical
     act(() => result.current.setFacetCol(2));
     await waitFor(() => expect(result.current.error).toBe("no finite values to group"));
     expect(result.current.drawFacets).toBeNull();
@@ -423,6 +430,89 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     act(() => result.current.setFacetCol(null));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     expect(result.current.drawFacets).toBeNull();
+  });
+});
+
+describe("useStatStage — stale channelTypes override on groupCol/facetCol (BUG-004)", () => {
+  const BOX_RESPONSE = {
+    n_groups: 2,
+    boxes: [
+      { label: "grp = 0", q1: 10, median: 12, q3: 14, iqr: 4, whislo: 10, whishi: 114, mean: 62, n: 6, fliers: [], whis: 1.5 },
+      { label: "grp = 1", q1: 30, median: 32, q3: 34, iqr: 4, whislo: 30, whishi: 134, mean: 82, n: 6, fliers: [], whis: 1.5 },
+    ],
+  };
+
+  it("de-categorizing the picked groupCol masks the picker AND stops the grouping math from using it", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: baseParams(),
+    });
+
+    // Default pick: "grp" (channel 0) auto-selected as groupCol since it
+    // reads as categorical (2 levels, 12 finite samples).
+    expect(result.current.groupCol).toBe(0);
+    expect(result.current.categoricalCols.map((c) => c.index)).toContain(0);
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    const callsBefore = vi.mocked(statsBox).mock.calls.length;
+    expect(callsBefore).toBeGreaterThan(0);
+    expect(vi.mocked(statsBox).mock.calls.at(-1)?.[1]).toEqual(["grp = 0", "grp = 1"]);
+
+    // setChannelType(id, 0, "continuous") in store/useApp.ts spreads the
+    // dataset with a new channelTypes map — same object-identity-changing
+    // shape reproduced here directly against the params-based hook. The
+    // dataset's own id is unchanged, so the active-id reset effect does
+    // NOT fire; groupCol's raw state is never touched by setChannelType.
+    const overridden: Dataset = { ...DS, channelTypes: { 0: "continuous" } };
+    rerender(baseParams({ active: overridden }));
+
+    // The column no longer classifies as categorical...
+    expect(result.current.categoricalCols.map((c) => c.index)).not.toContain(0);
+    // ...and the picker's exposed value is masked to null (matches the
+    // "(per channel)" option actually rendered), not left as a stale "0"
+    // with no corresponding <option> in the <select> — the analogue of
+    // BUG-003's Data Filter finding, applied to Stat Stage's groupCol.
+    expect(result.current.groupCol).toBeNull();
+
+    // The actual box-grouping math also stopped partitioning by column 0 —
+    // it now uses the per-plotted-channel fallback, not a silent continued
+    // group-by on a column the toolbar shows as unselected (unlike Data
+    // Filter's row-filtering, Stat Stage's groupCol has exactly one
+    // consumer — this hook — so display and computation can't disagree).
+    await waitFor(() => expect(vi.mocked(statsBox).mock.calls.length).toBeGreaterThan(callsBefore));
+    const lastLabels = vi.mocked(statsBox).mock.calls.at(-1)?.[1];
+    expect(lastLabels).not.toEqual(["grp = 0", "grp = 1"]);
+  });
+
+  it("reverting the override brings the exact same groupCol pick back (raw state was never cleared)", async () => {
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: baseParams(),
+    });
+    expect(result.current.groupCol).toBe(0);
+
+    const overridden: Dataset = { ...DS, channelTypes: { 0: "continuous" } };
+    rerender(baseParams({ active: overridden }));
+    expect(result.current.groupCol).toBeNull();
+
+    // Same dataset id, override cleared — this is NOT a fresh dataset, so
+    // the active-id reset effect still doesn't fire; the pick must come
+    // back from the raw state the mask hid, not from a re-derived default.
+    rerender(baseParams({ active: DS }));
+    expect(result.current.groupCol).toBe(0);
+  });
+
+  it("de-categorizing the picked facetCol masks it the same way", () => {
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: baseParams(),
+    });
+    act(() => result.current.setFacetCol(2));
+    expect(result.current.facetCol).toBe(2);
+
+    const overridden: Dataset = { ...DS, channelTypes: { 2: "continuous" } };
+    rerender(baseParams({ active: overridden }));
+
+    expect(result.current.categoricalCols.map((c) => c.index)).not.toContain(2);
+    expect(result.current.facetCol).toBeNull();
   });
 });
 

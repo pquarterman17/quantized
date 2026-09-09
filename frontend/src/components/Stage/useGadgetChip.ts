@@ -1,6 +1,7 @@
 // ROI gadget family chip state hook (gap #33 fit → #34 the rest). The live
 // ROI-drag/cursors-drag → debounced-compute → overlay wiring lives in the
-// store (setQfitRoi/setGadgetCursors/runGadget* — see useApp.ts) so it's
+// store (setQfitRoi/setGadgetCursors/runGadget* — see store/gadget.ts, the
+// slice extracted from useApp.ts) so it's
 // reachable straight from the uPlot plugins' callbacks without a React
 // round-trip; this hook owns only what the CHIP itself needs: the mode
 // picker, each mode's live result for display, the fit model picker, the

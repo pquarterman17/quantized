@@ -204,6 +204,38 @@ describe("useTabulate", () => {
     expect(lines[2].startsWith("Treated\t")).toBe(true);
   });
 
+  it("a channelTypes override wins for groupIsCategorical, without hiding the stale selection or breaking the table (PRIMARY_SOFTWARE_AUDIT_PLAN Tabulate wiring check)", () => {
+    const { result } = renderHook(() => useTabulate());
+    expect(result.current.groupCols).toEqual([0]);
+    expect(result.current.groupIsCategorical).toBe(true);
+    const rowsBefore = result.current.rows;
+
+    // setChannelType (store/useApp.ts) is what a user's explicit type
+    // override calls — it spreads the dataset with a new channelTypes map,
+    // exactly like BUG-003/BUG-004's setChannelType-driven scenarios.
+    act(() => {
+      useApp.getState().setChannelType("d1", 0, "continuous");
+    });
+
+    // Override wins immediately (lib/modeling.ts's channelModelingType
+    // checks it before isCategoricalChannel/inference) — and unlike Stat
+    // Stage's groupCol/facetCol pickers (BUG-004), Tabulate's ZoneWell
+    // "Group by" well options (`columns`) are never filtered by
+    // classification, so the now-uncategorized column stays visibly
+    // selected rather than becoming a stale value hidden from its own
+    // control.
+    expect(result.current.groupCols).toEqual([0]);
+    expect(result.current.columns.some((c) => c.index === 0)).toBe(true);
+    // Only the informational "looks continuous" warning flips — it's
+    // recomputed fresh every render (not memoized/gated behind stale
+    // state), so it tracks the override immediately.
+    expect(result.current.groupIsCategorical).toBe(false);
+    // The summary math itself never depended on the classification read:
+    // tabulateNested buckets by distinct OBSERVED value regardless of
+    // whether the column reads as categorical, so the table is unchanged.
+    expect(result.current.rows).toEqual(rowsBefore);
+  });
+
   it("exposes the active dataset id for the ZoneWell drop-target guard", () => {
     const { result } = renderHook(() => useTabulate());
     expect(result.current.datasetId).toBe("d1");

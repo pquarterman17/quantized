@@ -221,7 +221,32 @@ const STORE_PINS: Record<string, number> = {
   // of silent headroom for the next feature, which is the exact drift this
   // ratchet exists to prevent. (Review round caught this; the extraction had
   // shrunk the file without lowering the pin.)
-  "/store/useApp.ts": 2772,
+  // 2772 -> 2449 (2026-09-09, PRIMARY_SOFTWARE_AUDIT_PLAN "characterization
+  // tests before moves" / store-size ratchet, zero headroom): the ROI-gadget
+  // / quick-fit family — qfitRoi/qfitModel/.../gadgetCursorResult state plus
+  // setQfitRoi/runQuickFit/commitQfit/setGadgetMode/runGadget*/
+  // commitGadgetFft/setGadgetCursors/clearQfit (#33/#34) — moved verbatim to
+  // the new store/gadget.ts (GadgetSlice), composed in exactly like
+  // store/windows.ts: this slice owns its OWN state, not just shared
+  // `datasets` mutation (corrections.ts's shape). Chosen by cohesion, not
+  // size: before the move, grep across store/*.ts found NOTHING outside
+  // useApp.ts calling any of these actions or writing any of these fields
+  // (windows.ts's focusTransientReset and useApp's own addDataset reset a
+  // few of them back to their initial values on a focus/dataset switch, the
+  // same plain-object-literal pattern corrections.ts already uses for the
+  // shared overlay fields — not a functional dependency on the slice). The
+  // two pre-existing dedicated test files, store/quickfit.test.ts and
+  // store/gadget.test.ts, already exercised exactly this boundary before the
+  // extraction — independent evidence it was already a natural module. New
+  // store/gadgetHistory.characterization.test.ts pins the one behavior
+  // neither file covered: none of these actions call `recordHistory`
+  // (transient tool state, per history.ts's own exclusion list) except
+  // indirectly through `commitGadgetFft` -> `addDataset`, which records
+  // exactly one entry attributable to `addDataset`, not to the gadget
+  // action. 323 lines came out in one slice — no headroom deliberately left;
+  // the whole point of the pin sitting at zero slack is that a slice this
+  // size gets extracted the moment it exists, not banked for later.
+  "/store/useApp.ts": 2449,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
