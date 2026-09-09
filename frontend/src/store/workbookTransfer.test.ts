@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
 import { useApp, type AppState } from "./useApp";
+import { useToasts } from "./toasts";
 
 const wb = (id: string, name: string, extra: Partial<WorkbookNode> = {}): WorkbookNode => ({ id, name, ...extra });
 const ds = (id: string, name: string, workbookId: string | undefined, extra: Partial<Dataset> = {}): Dataset => ({
@@ -196,5 +197,82 @@ describe("workbookTransfer slice — duplicate (same-project fast path)", () => 
     const after = useApp.getState();
     expect(after.workbooks).toEqual(before.workbooks);
     expect(after.history.length).toBe(before.history.length);
+  });
+});
+
+// UX-002: the drop of a cross-workbook lineage link is correct (a dangling id
+// into a project the destination may not have open is exactly what the
+// fresh-id rewrite exists to prevent) — the BUG was that
+// `droppedExternalRefs` was computed, returned, and read by nothing, so the
+// pasted worksheet looked complete. These assert the count reaches the user
+// through BOTH surfaces (the persistent status line and the toast) and that a
+// clean transfer is not annotated.
+describe("workbookTransfer slice — dropped cross-workbook lineage is surfaced (UX-002)", () => {
+  beforeEach(() => {
+    resetState();
+    useToasts.setState({ toasts: [] });
+  });
+
+  /** w1/d1 is the OLD version; w2/d2 was imported as a new version of it, so
+   *  its `versionOf` crosses a workbook boundary by construction (see
+   *  store/relink.ts's "import as new version" + importDatasets.ts's
+   *  one-file-one-workbook rule). Copying w2 alone therefore cannot carry it. */
+  function twoWorkbooksWithACrossLink(): void {
+    useApp.setState({
+      workbooks: [wb("w1", "run1"), wb("w2", "run1 v2")],
+      datasets: [ds("d1", "run1.dat", "w1"), ds("d2", "run1_v2.dat", "w2", { versionOf: "d1" })],
+    } as Partial<AppState>);
+  }
+
+  it("names the dropped link count after a paste, and uses info rather than a clean ok", async () => {
+    twoWorkbooksWithACrossLink();
+    mockClipboard();
+    await useApp.getState().copyWorkbookToClipboard("w2");
+    await useApp.getState().pasteWorkbookFromClipboard(undefined);
+
+    expect(useApp.getState().status).toContain("1 lineage link not carried");
+    const last = useToasts.getState().toasts.at(-1)!;
+    expect(last.msg).toContain("1 lineage link not carried");
+    expect(last.kind).toBe("info");
+    // The paste itself still succeeded — the worksheet is there.
+    expect(useApp.getState().datasets.filter((d) => d.name.startsWith("run1_v2")).length).toBe(2);
+  });
+
+  it("names the dropped link count after a duplicate too", async () => {
+    twoWorkbooksWithACrossLink();
+    mockClipboard();
+    await useApp.getState().duplicateWorkbook("w2");
+
+    expect(useApp.getState().status).toContain("1 lineage link not carried");
+    expect(useToasts.getState().toasts.at(-1)!.kind).toBe("info");
+  });
+
+  it("pluralizes honestly — two dropped links say 'links'", async () => {
+    useApp.setState({
+      workbooks: [wb("w1", "run1"), wb("w2", "derived")],
+      datasets: [
+        ds("d1", "run1.dat", "w1"),
+        ds("d2", "a.dat", "w2", { versionOf: "d1" }),
+        ds("d3", "b.dat", "w2", { derivedFrom: { datasetId: "d1", pipeline: "smooth" } }),
+      ],
+    } as Partial<AppState>);
+    mockClipboard();
+    await useApp.getState().duplicateWorkbook("w2");
+    expect(useApp.getState().status).toContain("2 lineage links not carried");
+  });
+
+  it("does NOT annotate a transfer that carried everything — ok stays ok", async () => {
+    // d2's versionOf points INSIDE w2, so the fresh-id rewrite resolves it.
+    useApp.setState({
+      workbooks: [wb("w2", "pair")],
+      datasets: [ds("d1", "a.dat", "w2"), ds("d2", "b.dat", "w2", { versionOf: "d1" })],
+    } as Partial<AppState>);
+    mockClipboard();
+    await useApp.getState().duplicateWorkbook("w2");
+
+    expect(useApp.getState().status).not.toContain("lineage");
+    const last = useToasts.getState().toasts.at(-1)!;
+    expect(last.kind).toBe("ok");
+    expect(last.msg).not.toContain("lineage");
   });
 });

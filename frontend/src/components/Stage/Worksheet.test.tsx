@@ -174,6 +174,32 @@ describe("Worksheet row filter", () => {
     expect(ds[1].data.values).toEqual([[40, 50]]);
   });
 
+  // Group J: `extractSubset` built its subset DataStruct by hand and so dropped
+  // `cat_levels` — a filtered subset of a categorical dataset came out
+  // de-categorized, showing raw float codes where the parent showed level
+  // labels. It now delegates to lib/datasetsplit.ts's `sliceDataStruct`, the
+  // one row-slice primitive, which carries the table forward unchanged (a row
+  // slice cannot change column layout).
+  it("Extract carries cat_levels forward — the subset stays categorical", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: { ...data, values: [[10, 0], [40, 1], [11, 0]], cat_levels: { 1: ["Pass", "Fail"] } },
+        },
+      ],
+    });
+    render(<Worksheet />);
+    applyFilter("0", "15"); // keep only row index 1 → A=40, B code 1 ("Fail")
+    fireEvent.click(screen.getByRole("button", { name: /Extract/ }));
+    const out = useApp.getState().datasets;
+    expect(out).toHaveLength(2);
+    expect(out[1].data.cat_levels).toEqual({ 1: ["Pass", "Fail"] });
+    // The surviving code still indexes the SAME level it did in the parent.
+    expect(out[1].data.values).toEqual([[40, 1]]);
+  });
+
   it("supports a between range on the x column", () => {
     render(<Worksheet />);
     applyFilter("-1", "1.5", "between"); // x between 1.5 and …

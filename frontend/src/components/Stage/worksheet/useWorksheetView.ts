@@ -42,6 +42,7 @@ import { channelLetter, compileFormula } from "../../../lib/formula";
 import { originTextColumns, type TextColumn } from "../../../lib/columnmeta";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
 import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
+import { sliceDataStruct } from "../../../lib/datasetsplit";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
@@ -449,13 +450,12 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   function extractSubset() {
     if (!canExtract) return;
     if (pendingGuard("Extract")) return;
-    const data: DataStruct = {
-      time: analysisRows.map((r) => time[r]),
-      values: analysisRows.map((r) => values[r]),
-      labels,
-      units,
-      metadata,
-    };
+    // The ONE row-slice primitive (already used by Split-by-column). Built by
+    // hand here, it dropped `cat_levels`, so a filtered subset of a categorical
+    // dataset came out showing raw float codes instead of level labels — even
+    // though a row slice cannot change column layout. `ds.data` is what the
+    // locals above destructure, so behaviour is otherwise identical.
+    const data: DataStruct = sliceDataStruct(ds.data, analysisRows);
     const stem = ds.name.replace(/\.[^.]+$/, "");
     addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data });
     setStatus(`extracted ${analysisRows.length} of ${time.length} rows`);

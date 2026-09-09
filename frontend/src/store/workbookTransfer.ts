@@ -90,6 +90,32 @@ function existingIds(s: AppState): TransferExistingIds {
   };
 }
 
+/** UX-002: `pasteTransferPackage` DROPS any lineage reference whose target is
+ *  outside the copied package (`versionOf`, an external `derivedFrom`, a
+ *  dangling `bgRef`) rather than leaving a dangling id — see
+ *  lib/workbookTransfer.ts's header for why the drop itself is correct. The
+ *  BUG was the silence: the count was computed and returned, and read by
+ *  nothing. Both gestures below now name it, so a pasted worksheet that lost
+ *  its "version 2 of ..." link says so instead of looking complete.
+ *
+ *  Only the COUNT is surfaced, deliberately. Preserving a dropped link as
+ *  inert historical text (the source dataset's NAME, say) is a semantics call
+ *  about what lineage means across a transfer boundary and is still an open
+ *  owner decision (BUGS_AND_ISSUES.md UX-002, box 2) — inventing it here
+ *  would be inventing it silently. */
+function lineageNote(n: number): string {
+  return n > 0 ? ` — ${n} lineage link${n === 1 ? "" : "s"} not carried (source outside the copy)` : "";
+}
+
+/** Every refusal in this slice reports the SAME way — the persistent status
+ *  line AND a danger toast, one message built once. Five sites open-coded the
+ *  pair and three of them built their message string twice, which is both
+ *  duplicated logic and duplicated bytes in an eager module. */
+function fail(get: SliceGet, msg: string): void {
+  get().setStatus(msg);
+  toast(msg, "danger");
+}
+
 /** Merge a paste result into the store's arrays in ONE `set()` — the "swap
  *  once" half of the failure-safe contract; `recordHistory` must already
  *  have been called by the caller, immediately before this. */
@@ -138,22 +164,18 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         try {
           await get().resolvePendingDatasets();
         } catch (e) {
-          const msg = `copy "${name}" failed — couldn't load every worksheet: ${e instanceof Error ? e.message : "error"}`;
-          get().setStatus(msg);
-          toast(msg, "danger");
+          fail(get, `copy "${name}" failed — couldn't load every worksheet: ${e instanceof Error ? e.message : "error"}`);
           return;
         }
       }
       const built = buildTransferPackage(workbookId, get());
       if (!built.ok) {
-        get().setStatus(`copy "${name}" unavailable: ${built.reason}`);
-        toast(`copy "${name}" unavailable: ${built.reason}`, "danger");
+        fail(get, `copy "${name}" unavailable: ${built.reason}`);
         return;
       }
       const wrote = await copyText(built.text);
       if (!wrote) {
-        get().setStatus(`copy "${name}" failed: clipboard unavailable`);
-        toast(`copy "${name}" failed: clipboard unavailable`, "danger");
+        fail(get, `copy "${name}" failed: clipboard unavailable`);
         return;
       }
       get().setStatus(`copied "${name}" (${built.pkg.datasets.length} worksheet${built.pkg.datasets.length === 1 ? "" : "s"})`);
@@ -194,9 +216,12 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       get().recordHistory(`paste workbook "${parsed.pkg.workbook.name}"`);
       applyPasteResult(set, result);
       const n = result.datasets.length;
-      const msg = `pasted "${result.workbook.name}" (${n} worksheet${n === 1 ? "" : "s"})`;
+      const note = lineageNote(result.droppedExternalRefs);
+      const msg = `pasted "${result.workbook.name}" (${n} worksheet${n === 1 ? "" : "s"})${note}`;
       get().setStatus(msg);
-      toast(msg, "ok");
+      // "info", not "ok", when something was dropped: the paste succeeded but
+      // the result is not what was copied, and a green check reads as "clean".
+      toast(msg, note ? "info" : "ok");
     },
 
     duplicateWorkbook: async (workbookId) => {
@@ -208,16 +233,13 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         try {
           await get().resolvePendingDatasets();
         } catch (e) {
-          const msg = `duplicate "${name}" failed — couldn't load every worksheet: ${e instanceof Error ? e.message : "error"}`;
-          get().setStatus(msg);
-          toast(msg, "danger");
+          fail(get, `duplicate "${name}" failed — couldn't load every worksheet: ${e instanceof Error ? e.message : "error"}`);
           return null;
         }
       }
       const built = buildTransferPackage(workbookId, get());
       if (!built.ok) {
-        get().setStatus(`duplicate "${name}" unavailable: ${built.reason}`);
-        toast(`duplicate "${name}" unavailable: ${built.reason}`, "danger");
+        fail(get, `duplicate "${name}" unavailable: ${built.reason}`);
         return null;
       }
       // Same core as Paste (frozen-scope item 6) — round-tripped through the
@@ -238,9 +260,10 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       const result = { ...raw, workbook: { ...raw.workbook, name: `${name} copy` } };
       get().recordHistory(`duplicate workbook "${name}"`);
       applyPasteResult(set, result);
-      const msg = `duplicated "${name}" as "${result.workbook.name}"`;
+      const note = lineageNote(result.droppedExternalRefs);
+      const msg = `duplicated "${name}" as "${result.workbook.name}"${note}`;
       get().setStatus(msg);
-      toast(msg, "ok");
+      toast(msg, note ? "info" : "ok");
       return result.workbook.id;
     },
   };

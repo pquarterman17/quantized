@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
+from quantized.routes import export as export_mod
 
 client = TestClient(app)
 
@@ -2003,3 +2004,56 @@ def test_exported_svg_declares_a_physical_page_size() -> None:
     )
     assert dims is not None, f"no physical dimensions on root: {tag[:200]}"
     assert float(dims.group(1)) > 0 and float(dims.group(2)) > 0
+
+
+def test_export_opj_preserves_cat_levels_when_stamping_the_book_name(monkeypatch):
+    """Group J: the named-workbook path rebuilt the DataStruct by hand.
+
+    ``export_opj`` stamps ``metadata["origin_book"]`` when an item carries a
+    ``name`` (the normal case for every multi-workbook export). It did so with a
+    literal ``DataStruct(time=..., values=..., labels=..., units=...,
+    metadata=meta)`` that named five of the six fields, so ``cat_levels`` was
+    silently discarded on the way out -- and would drop the next field added to
+    the dataclass too. It now uses ``dataclasses.replace``, the pattern
+    ``io/technique.py`` and ``io/origin_project/__init__.py`` already use.
+
+    Observed by intercepting what the route hands the WRITER, not by asserting
+    that ``dataclasses.replace`` works: the whole point is which construction
+    ``export.py`` itself performs. Reverting the fix fails this.
+
+    The .opj file format carries no level table, so this deliberately does NOT
+    claim the levels reach the file -- raw codes vs level strings on export is a
+    separate open semantics question (BUGS_AND_ISSUES.md). What is pinned is
+    that the route no longer destroys the field before the writer sees it.
+    """
+    from quantized.datastruct import DataStruct
+
+    seen: list[DataStruct] = []
+    real = export_mod.opj_bytes
+
+    def capture(books):
+        seen.extend(books)
+        return real(books)
+
+    monkeypatch.setattr(export_mod, "opj_bytes", capture)
+
+    ds = DataStruct.create(
+        [1.0, 2.0],
+        [[10.0, 0.0], [20.0, 1.0]],
+        labels=["Moment", "Phase"],
+        units=["emu", ""],
+        metadata={},
+        cat_levels={1: ("alpha", "beta")},
+    )
+    resp = client.post(
+        "/api/export/opj",
+        json={"datasets": [{"dataset": ds.to_dict(), "name": "LoopA"}], "filename": "proj"},
+    )
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"CPYA")
+
+    assert len(seen) == 1
+    # The stamp happened (so the rebuild branch really ran) AND the level table
+    # survived it.
+    assert seen[0].metadata["origin_book"] == "LoopA"
+    assert seen[0].cat_levels == {1: ("alpha", "beta")}

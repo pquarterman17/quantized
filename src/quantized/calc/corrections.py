@@ -232,6 +232,22 @@ def apply_corrections(
     elif deriv == "dlog/dlog":
         values = log_derivative(time, values)
 
+    # `cat_levels` IS DELIBERATELY NOT CARRIED FORWARD — and that is a strip,
+    # not an oversight, so it is written down rather than left to look like the
+    # accidental omission it used to be.
+    #
+    # Every step above transforms EVERY channel unconditionally (`for k in
+    # range(values.shape[1])`, plus whole-matrix `smooth_data`/`normalize`/
+    # `derivative` calls). A categorical channel's values are level CODES
+    # (0..n-1); smoothing or differentiating them yields fractional numbers with
+    # no level, so keeping the table would make the output claim labels for
+    # values that no longer index it — worse than showing the raw numbers.
+    #
+    # The RIGHT fix is for corrections not to transform a categorical channel at
+    # all, which needs a channel mask threaded through every step above and
+    # carries real golden-parity regression risk. That is booked as BUG-005 in
+    # plans/BUGS_AND_ISSUES.md, not faked here. Pinned by
+    # `test_corrections_strips_cat_levels_because_codes_are_transformed`.
     return DataStruct.create(
         time, values, labels=labels, units=list(data.units), metadata=dict(data.metadata)
     )

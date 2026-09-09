@@ -962,8 +962,65 @@ output, not a caught error).
   they disagree) SHIPPED under P1.5 (2026-08-18): `lib/merge.ts`'s
   `planChannel`/`remapFor` now do exactly that; the one remaining drop case
   (a channel missing its table on even one input) is unchanged, since there
-  is nothing to remap FROM. Filter/recipes/
-  export propagation is still unaudited. Also found this round, booked (not
+  is nothing to remap FROM.
+
+  **Filter/recipes/export propagation AUDITED 2026-09-09 (Group J)** — a
+  read-only sweep of every DataStruct-deriving and -serializing site in both
+  languages, then each finding verified by reading the code rather than
+  trusting the sweep. Result: **five real drops, all fixed or explicitly
+  ruled**; two categories that do not exist yet; one open owner question.
+
+  Fixed, each sabotage-verified:
+  - `lib/dataset.ts`'s `cloneDataStruct` was a hand-written ALLOWLIST of the
+    five required fields, so it dropped every optional one — `duplicateDataset`
+    (store/useApp.ts) and `freezeCopy` (store/derivedWorksheets.ts) turned a
+    categorical dataset into a plain numeric one AND stripped an Origin
+    import's `books`/`book_source`/`figures`/`origin_fidelity`. This was the
+    worst find: Duplicate is an everyday action, and the allowlist would have
+    failed again for the NEXT field added. Now spread-first, so a new field is
+    carried by default; only the arrays callers actually mutate get an explicit
+    deep copy.
+  - `useWorksheetView.ts`'s `extractSubset` (the Extract action — the ONE place
+    a Data-Filter-narrowed row set becomes a real dataset) built its subset by
+    hand and dropped the level table. It now delegates to
+    `lib/datasetsplit.ts`'s `sliceDataStruct`, the one row-slice primitive.
+  - `routes/export.py`'s `export_opj` rebuilt the dataclass by hand to stamp
+    `origin_book`, naming five of six fields. Now `dataclasses.replace`, the
+    pattern `io/technique.py` and `io/origin_project/__init__.py` already use.
+  - `calc/corrections.py` and `calc/resample.py` drop `cat_levels` — and that
+    drop is CORRECT, since both transform every channel unconditionally and a
+    smoothed/interpolated level code indexes nothing. The drop is now explicit
+    and documented in both modules with the reasoning inline, and pinned by
+    tests that also assert the codes really are invalidated (so the test fires
+    if a future change makes the transform code-preserving). **The underlying
+    bug — that a categorical channel is transformed at all — is filed as
+    BUG-005**, not papered over.
+
+  Ruled out by direct inspection, worth recording so it is not re-audited:
+  - **No key-shifting mis-map exists** (the worst class, where a column
+    insert/delete would slide `cat_levels`' integer keys onto the wrong
+    channel). There is no base-column insert/delete/reorder feature; formula
+    columns only ever APPEND and `computeFormulas` rebuilds the table from
+    scratch on every recompute, including on `removeFormula`. This becomes a
+    live risk the day a column-reorder feature lands.
+  - **Recipes construct no datasets** — `store/plotRecipes.ts`,
+    `globalPlotRecipes.ts`, `plotRecipeApply.ts` and `lib/plotRecipe*.ts` carry
+    channel-selection and styling specs only. There is no transformation-recipe
+    feature producing derived data, so there is nothing here to propagate
+    through yet.
+  - Correct already: `lib/facet.ts` (spread row-slice), `store/cellEdit.ts`'s
+    `setCategoricalCell`, `store/recode.ts`, `store/split.ts`,
+    `store/workbookCombine.ts` (constructs no DataStruct at all).
+
+  **Open owner question, not a defect:** every data-export writer
+  (`io/xrd_csv.py`, `io/consolidated.py`, `io/origin.py`,
+  `io/origin_project/writer.py`, `io/hdf5.py`) and every clipboard/worksheet
+  copy path (`lib/clipboardGrid.ts`, `useWorksheetBlockOps.ts`,
+  `useWorksheetView.ts`'s row-copy) emits the **raw numeric code**, never the
+  level label — uniformly, so it reads as deliberate rather than scattered.
+  But it is undocumented and untested for the categorical case, and it is the
+  one place the app's otherwise-absolute "never show a raw code" rule does not
+  hold. Needs a ruling, then a test either way. Also found this round, booked (not
   fixed) for P1.6/the worksheet-UI slice: `store/cellEdit.ts`'s
   `setCellValue`/`setCellBlock` write a raw `number` into any cell,
   categorical channels included, with NO awareness that the channel is
