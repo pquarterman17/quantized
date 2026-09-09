@@ -728,28 +728,33 @@ import { fileURLToPath } from "node:url";
  *  read, so re-measure the base rather than trusting this figure. Full
  *  vitest (578 files / 8,866 tests), tsc --noEmit and eslint green. *
  *  2026-09-09 (BUGS_AND_ISSUES BUG-001, NCNR `.refl` uncertainty roles) —
- *  910,531 -> 911,000 bytes (+469). What grew: `store/importErrorRoles.ts`,
- *  extracted from `importDatasets.ts` (which had hit the 500-line ceiling) and
- *  carrying the new `parserErrorRoles` reader for
- *  `DataStruct.metadata["error_roles"]`. That key was written by the backend
- *  and read by NOTHING, so no parser could declare an X-axis error at all and
- *  a reductus `.refl` drew its uncertainty and Q resolution as ordinary
- *  curves. Raised to measured + 1,024 per rule 2, after trying both
- *  alternatives:
- *    - LAZY SPLIT rejected on evidence, not preference: the only consumer is
- *      `addFromPayload`, which is SYNCHRONOUS, so deferring the module means
- *      making dataset construction async and adding a chunk-fetch failure mode
- *      to the core import path — for 469 bytes. This is the "new store code
- *      with no lazy-able panel behind it" case rule 2 names.
- *    - SIZE REDUCTION tried: rewriting the validator as a single filter+map
- *      recovered only ~100 bytes (911,000 measured either way at kB
- *      resolution), and the shortest form passed raw metadata objects straight
- *      through as bindings — extra keys would then be stored on the dataset
- *      and serialized into the `.dwk`, so the explicit construction stayed.
- *  Full frontend suite (610 files / 9,576 tests), backend 4,639, tsc --noEmit
+ *  910,531 -> 910,748 (+217). Raised to measured + 1,024 = 911,772. The whole
+ *  arc, because the middle of it is the reusable lesson:
+ *    1. The new eager code (`store/importErrorRoles.ts`, carrying the
+ *       `parserErrorRoles` reader for `DataStruct.metadata["error_roles"]`)
+ *       first measured 911,000 — 289 over. A lazy split was rejected on
+ *       evidence: its only consumer, `addFromPayload`, is synchronous, so
+ *       deferring means making dataset construction async and adding a
+ *       chunk-fetch failure mode to the core import path. A size-only rewrite
+ *       recovered ~100 bytes and, in its shortest form, leaked raw metadata
+ *       objects into stored bindings, so it was reverted.
+ *    2. What actually paid for it was a code-review finding: the new reader had
+ *       grown its OWN copy of `lib/errorRoles.sanitizeBindings`. Deleting the
+ *       duplicate and delegating to the shared validator landed at 910,700 —
+ *       11 bytes UNDER the then-current pin, needing no raise at all. LESSON
+ *       WORTH KEEPING: an over-budget measurement is often duplicated logic;
+ *       look for the duplicate before reaching for the pin.
+ *    3. The same review then found a real defect that had to be fixed:
+ *       clearing error roles in the Inspector never reached an already-open
+ *       plot, because a parser-declared X binding makes a window's document
+ *       "rich" and only the dataset was being written. Routing that write
+ *       through `syncDatasetWindowDocuments` costs the remaining 37 bytes.
+ *       That is irreducible store logic on a correctness path with no lazy-able
+ *       panel behind it — the case rule 2 permits a raise for.
+ *  Full frontend suite (610 files / 9,578 tests), backend 4,639, tsc --noEmit
  *  and eslint green.
  */
-const EAGER_JS_BUDGET = 912_024;
+const EAGER_JS_BUDGET = 911_772;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

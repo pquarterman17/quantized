@@ -1,4 +1,6 @@
-// Which error-column roles a freshly imported dataset gets, and from where.
+// Error-column roles, end to end: which ones a freshly imported dataset GETS
+// and from where, plus the actions that EDIT them afterwards.
+//
 //
 // Extracted from importDatasets.ts (which had reached the 500-line module
 // ceiling) because the three sources form one cohesive decision with a
@@ -17,8 +19,10 @@
 // Nothing inferable at all yields NO key, so an ordinary numeric file carries
 // no empty role list (the `[]` value is meaningful — see originBookRoles' O1).
 
-import { inferErrorBindings, type ErrorBinding } from "../lib/errorRoles";
+import { inferErrorBindings, sanitizeBindings, type ErrorBinding } from "../lib/errorRoles";
 import { originBookErrorRoles } from "../lib/originBookRoles";
+import type { AppState } from "./useApp";
+import { syncDatasetWindowDocuments } from "./windowDocuments";
 import type { DataStruct } from "../lib/types";
 
 /** Roles a PARSER declared for its own format, via
@@ -34,38 +38,19 @@ import type { DataStruct } from "../lib/types";
  *  guesser only knows spellings — but is still ranked BELOW Origin's own
  *  column designations, which are the file's explicit statement of role.
  *
- *  The metadata comes from a parsed FILE, so every entry is validated rather
- *  than trusted: non-integer indices, out-of-range channels, a channel that is
- *  its own target, and unknown axis/side values are dropped. Returns `null`
- *  (not `{}`) when nothing survives, so the `??` chain falls through to the
- *  guesser exactly as it did before — an unrecognised or malformed hint must
- *  not silently suppress inference. */
+ *  The metadata comes from a parsed FILE, so it is validated rather than
+ *  trusted — through `lib/errorRoles.sanitizeBindings`, the SAME validator the
+ *  `.dwk`/template read-back path uses. A review of an earlier draft found this
+ *  function carrying its own stricter copy of those rules, which meant a
+ *  self-targeting binding was rejected here but accepted on reload; the strict
+ *  rules moved into the shared validator instead.
+ *
+ *  Returns `null` (not `{}`) when nothing survives, so the `??` chain falls
+ *  through to the guesser exactly as it did before — an unrecognised or
+ *  malformed hint must not silently suppress inference. */
 function parserErrorRoles(data: DataStruct): { errorRoles: ErrorBinding[] } | null {
-  const raw = (data.metadata ?? {})["error_roles"];
-  if (!Array.isArray(raw)) return null;
-  const n = data.labels?.length ?? 0;
-  const chan = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
-  const roles = (raw as Record<string, unknown>[])
-    .filter(
-      (r) =>
-        !!r &&
-        typeof r === "object" &&
-        chan(r.channel) &&
-        (r.target === -1 || chan(r.target)) &&
-        r.target !== r.channel && // a column cannot be its own error
-        (r.axis === "x" || r.axis === "y") &&
-        (r.side === "both" || r.side === "+" || r.side === "-"),
-    )
-    // Constructed explicitly, never passed through: the metadata object may
-    // carry extra keys, and those would otherwise be stored on the dataset and
-    // serialized into the `.dwk`.
-    .map((r) => ({
-      channel: r.channel as number,
-      target: r.target as number,
-      axis: r.axis as ErrorBinding["axis"],
-      side: r.side as ErrorBinding["side"],
-    }));
-  return roles.length ? { errorRoles: roles } : null;
+  const roles = sanitizeBindings((data.metadata ?? {})["error_roles"], data.labels?.length ?? 0);
+  return roles?.length ? { errorRoles: roles } : null;
 }
 
 /** Seed the canonical error-column roles from the parsed labels (MAIN #33).
@@ -83,4 +68,68 @@ function importRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
  *  at the top of this module. Spread into the `Dataset` under construction. */
 export function seedErrorRoles(data: DataStruct): { errorRoles?: ErrorBinding[] } {
   return originBookErrorRoles(data) ?? parserErrorRoles(data) ?? importRoles(data);
+}
+
+// ── Editing roles after import ───────────────────────────────────────────────
+// Kept in THIS module rather than the import slice so the seed above and the
+// edits below cannot drift: they are two halves of one contract, and the
+// 2026-09-09 review defect (an Inspector edit that never reached an already-
+// open plot) was exactly a drift between them.
+
+type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+type SliceGet = () => AppState;
+
+export interface ErrorRolesActions {
+  /** Replace a dataset's error roles with a DELIBERATE answer -- `[]` means
+   *  "checked: none" and is stored literally (Round 7 / O1), never collapsed
+   *  to `undefined` (which reads as "never determined" and re-guesses). */
+  setErrorRoles: (id: string, roles: readonly ErrorBinding[]) => void;
+  /** Re-run name inference ("suggested, never forced"); a null GUESS collapses to `undefined` (re-guessable), unlike `setErrorRoles`. */
+  detectErrorRoles: (id: string) => number;
+}
+
+export function createErrorRolesActions(set: SliceSet, get: SliceGet): ErrorRolesActions {
+  // `exact` (setErrorRoles): store literally, even `[]` -- O1's "checked:
+  // none". `!exact` (detectErrorRoles): collapse an empty GUESS to `undefined`.
+  const write = (id: string, roles: readonly ErrorBinding[], label: string, exact: boolean) => {
+    get().recordHistory(label);
+    set((s) => {
+      const errorRoles = exact || roles.length ? [...roles] : undefined;
+      return {
+        datasets: s.datasets.map((d) => (d.id === id ? { ...d, errorRoles } : d)),
+        // Code-review fix (2026-09-09, G4 follow-up): `dataset.errorRoles` is
+        // the canonical source, but `createWindow` only READS it once, at
+        // window-creation time (`createPlotWindowDocument`'s `errors` seed) --
+        // any window already bound to this dataset keeps whatever bindings it
+        // was seeded with in its OWN `document.bindings.errors`, forever,
+        // because `updateFigureDocumentFromPlotView` deliberately preserves a
+        // document's non-legacy-expressible ("rich") bindings across every
+        // later commit (see that function's `richErrors` filter). A parser-
+        // declared X-error binding (NCNR reductus `.refl`, `target: -1`) is
+        // exactly such a rich binding, so before this fix, editing/clearing
+        // roles here in the Inspector (ErrorRolesCard) silently had NO effect
+        // on an already-open plot: `usePlotPayload` renders from the rich
+        // document, not the dataset, once one exists (`hasRichErrorBindings`).
+        // `syncDatasetWindowDocuments` is the SAME chokepoint
+        // `computedColumns.ts` already uses to push a dataset-level error
+        // change out to every bound window (not just the focused one --
+        // several windows, including background ones, can show one dataset),
+        // so this reuses it rather than growing a second, focused-window-only
+        // copy of the same rule.
+        plotWindows: syncDatasetWindowDocuments(s.plotWindows, id, errorRoles),
+      };
+    });
+  };
+
+  return {
+    setErrorRoles: (id, roles) => write(id, roles, "edit error roles", true),
+
+    detectErrorRoles: (id) => {
+      const ds = get().datasets.find((d) => d.id === id);
+      if (!ds) return 0;
+      const found = inferErrorBindings(ds.data);
+      write(id, found, "detect error roles", false);
+      return found.length;
+    },
+  };
 }

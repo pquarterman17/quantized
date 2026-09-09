@@ -324,7 +324,7 @@ def binding_metadata(
     binding goes stale. Dropping it with no record anywhere would leave
     nothing anywhere to explain why the error bars are missing.
 
-    `error_roles` IS read now: `store/importDatasets.ts`'s `parserErrorRoles`
+    `error_roles` IS read now: `store/importErrorRoles.ts`'s `parserErrorRoles`
     maps it onto `Dataset.errorRoles` at import, validating every entry
     (indices in range, a channel never its own target, known axis/side) since
     it arrives from a parsed file. It outranks the label guesser and is

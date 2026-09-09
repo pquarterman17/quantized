@@ -125,7 +125,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - Owner verification: pending — required for this item (Windows, reported file)
 - Notes: the fix needed a contract gap closed first. `metadata["error_roles"]`
   was written by the backend and read by NOTHING, so no parser could express an
-  X error at all; `store/importDatasets.ts::parserErrorRoles` is that missing
+  X error at all; `store/importErrorRoles.ts::parserErrorRoles` is that missing
   reader. `io/ncnr.py`'s `import_ncnr_dat` has the same latent problem for its
   own `dQ` column and is deliberately NOT changed here — out of scope for this
   item, and it needs its own fixture evidence.
