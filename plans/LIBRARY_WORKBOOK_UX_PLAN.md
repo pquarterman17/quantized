@@ -413,8 +413,32 @@ as a CSS-only tree redesign.
   regress silently. Every carrying line was individually deleted and
   restored to confirm each assertion actually fails without it (see the
   session's PR/commit for the full sabotage log).
-- [ ] Keep recalculation deterministic and auditable; never hide an automatic
-  correction inside display-only plot state.
+- [x] Keep recalculation deterministic and auditable; never hide an automatic
+  correction inside display-only plot state. **Verification pass
+  (2026-09-09):** both halves now hold, sabotage-verified.
+  DETERMINISM — idempotence (`store/recalc.test.ts` "recalcNow is
+  idempotent"), convergence (`store/computedColumns.test.ts` "a diamond
+  (B=2A, C=3A, D=B+C) converges..."), and cycle safety (a runtime bgRef
+  cycle terminates via the existing BFS `wouldCreateCycle` check with a
+  visible status, never a hang) all held as-is. ORDER INDEPENDENCE did
+  NOT hold: `staleDatasets` is an append-order list, not a topological
+  one, so two separate `touchDataset` gestures could leave a downstream
+  id ahead of its own upstream — fixed via `lib/recalc.ts`'s new
+  `sortForRecalc` (`store/recalc.test.ts` "...ADVERSARIAL order").
+  AUDITABILITY — every render-time numeric adjustment found (uPlot's
+  non-finite→null gap, log/reciprocal-axis positive-only extents, the
+  waterfall offset, drag/annotation clamps) is presentation, not a
+  correction to the user's data (`lib/plotdata.test.ts` "never mutates
+  the source DataStruct..."); stale/error state is visible at the DATA
+  layer (`Dataset.formulaErrors`, the Library row's `.qzk-stale-dot`,
+  `components/Library/DatasetRow.test.tsx`). One real violation was
+  found and fixed: `recalcNow`'s bgRef/corrections branch cleared
+  `staleDatasets` unconditionally after `applyCorrections`, which never
+  throws — a refused/failed recalculation (a runtime cycle, a deleted
+  background reference, an API error) silently went "clean" while the
+  dataset kept serving its stale value as current. Fixed in
+  `store/recalcDatasets.ts` (checks the boolean return); see
+  `store/recalc.test.ts`'s "recalcNow leaves a dataset stale..." tests.
 
 ### Required large-Library engineering safeguards
 

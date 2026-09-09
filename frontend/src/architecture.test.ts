@@ -214,7 +214,14 @@ const STORE_PINS: Record<string, number> = {
   // week's lanes instead of being immediately reclaimed; the NEXT
   // extraction after the sprint should ratchet the pin back down to
   // whatever useApp.ts actually is then, per the iron rule above.
-  "/store/useApp.ts": 2818,
+  // 2818 -> 2772 (2026-09-09, recalc determinism/auditability #331): the
+  // `recalcNow` dataset loop moved to store/recalcDatasets.ts, mirroring the
+  // existing recalcFits.ts split. Ratcheted DOWN with the extraction rather
+  // than left at the old number — a pin kept above the real size is 47 lines
+  // of silent headroom for the next feature, which is the exact drift this
+  // ratchet exists to prevent. (Review round caught this; the extraction had
+  // shrunk the file without lowering the pin.)
+  "/store/useApp.ts": 2772,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -632,6 +639,12 @@ describe("row-state model guard (#50 universal linking)", () => {
       "/store/useApp.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",
+      // recalcNow's dataset-recompute loop, extracted out of useApp.ts
+      // (2026-09-09, LIBRARY_WORKBOOK_UX_PLAN recalc determinism/auditability
+      // pass, same store-size-pin reason as corrections.ts's own extraction
+      // above) — still calls rowsChangedGuard on the SAME
+      // recompute-invalidates-excludedRows path, just relocated.
+      "/store/recalcDatasets.ts",
     ];
     expect(
       offenders(/\.excludedRows\b/, allow),

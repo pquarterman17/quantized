@@ -136,6 +136,30 @@ describe("buildColumns", () => {
     expect(p.data[1]).toEqual([1, 2, null]);
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN "never hide an automatic correction inside
+  // display-only plot state": the non-finite -> null mapping above is a
+  // PRESENTATION decision (uPlot can't draw a NaN/Infinity point, so it's
+  // left as a gap) — not a correction to the user's data. The dividing line
+  // is whether the DATA layer's own DataStruct is touched. It must not be:
+  // this locks that the source `ds` a caller hands in survives buildColumns
+  // byte-identical (still NaN/Infinity), so a reader of `ds.time`/`ds.values`
+  // anywhere else (the worksheet grid, an export, a formula) sees the real
+  // value — only the PLOT's own derived payload gets the null gap.
+  it("never mutates the source DataStruct — the null gap lives only in the plot's OWN payload", () => {
+    const ds: DataStruct = {
+      time: [0, NaN, 2],
+      values: [[1], [2], [Infinity]],
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const before = structuredClone(ds);
+    buildColumns(ds);
+    expect(ds).toEqual(before); // byte-identical: NaN/Infinity survive untouched
+    expect(Number.isNaN(ds.time[1])).toBe(true);
+    expect(ds.values[2][0]).toBe(Infinity);
+  });
+
   it("handles the demo dataset", () => {
     const p = buildColumns(makeDemoDataset());
     expect(p.data).toHaveLength(2); // x + 1 channel

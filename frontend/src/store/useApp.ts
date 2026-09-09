@@ -82,13 +82,14 @@ import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workboo
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
 import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
 import { recomputeStaleFits } from "./recalcFits";
+import { recomputeStaleDatasets } from "./recalcDatasets";
 import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
-import { createDerivedWorksheetsSlice, recomputeDerivedSheet, type DerivedWorksheetsSlice } from "./derivedWorksheets";
-import { createCorrectionsSlice, rowsChangedGuard, type CorrectionsSlice } from "./corrections";
+import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
+import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
 import { createQuickPlotActionSlice, type QuickPlotActionSlice } from "./quickPlotAction";
 import { createQuickFigureCreateSlice, type QuickFigureCreateSlice } from "./quickFigureCreate";
@@ -2681,49 +2682,11 @@ export const useApp = create<AppState>((set, get) => ({
     if (_recalcInProgress) return;
     _recalcInProgress = true;
     try {
-      // Corrections first (they change the data fits consume), then fits.
-      // PR K slice 2 (K5c/K5d "real executor"): a derived worksheet (K2)
-      // recomputes through its OWN pipeline-against-source executor, never
-      // the plain bgRef/corrections path below — checked FIRST since a
-      // derived sheet also carries `.corrections`/`.raw` (its pipeline
-      // recipe + a cache of the SOURCE's data), which would otherwise match
-      // the generic branch and silently re-run against its own stale cache
-      // instead of the source's current data.
-      for (const id of [...get().staleDatasets]) {
-        const d = get().datasets.find((x) => x.id === id);
-        if (d?.derivedFrom) {
-          try {
-            const updated = await recomputeDerivedSheet(get, d);
-            // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
-            // invalidates excludedRows + the four overlays — the SAME shared
-            // helper applyCorrections uses, so the two call sites can't drift.
-            const rowsChanged = updated.data.time.length !== d.data.time.length;
-            let statusMsg: string | undefined;
-            set((s) => {
-              const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
-              statusMsg = guard.statusMessage;
-              return {
-                datasets: s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x)),
-                staleDatasets: s.staleDatasets.filter((x) => x !== id),
-                ...guard.statePatch,
-              };
-            });
-            if (statusMsg) get().setStatus(statusMsg);
-          } catch (e) {
-            get().setStatus(`derived worksheet recompute failed: ${e instanceof Error ? e.message : "error"}`);
-            /* stays stale */
-          }
-        } else if (d?.corrections && d.raw) {
-          try {
-            await get().applyCorrections(id, d.corrections, d.bgRef);
-            set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
-          } catch {
-            /* stays stale; applyCorrections already surfaced the error */
-          }
-        } else {
-          set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
-        }
-      }
+      // Datasets first (corrections/derived-worksheet pipelines — they
+      // change the data fits consume), then fits. Both halves — dependency-
+      // order sorting and "only a genuine success clears the stale mark" —
+      // live in recalcDatasets.ts's own doc.
+      await recomputeStaleDatasets(set, get);
       await recomputeStaleFits(set, get);
     } finally {
       _recalcInProgress = false;

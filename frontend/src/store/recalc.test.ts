@@ -407,6 +407,132 @@ describe("derived worksheets (K5c/K5d)", () => {
     expect(useApp.getState().status).toMatch(/hasn't fully loaded yet/);
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN "recalculation ... order independence" —
+  // the store-level integration of lib/recalc.test.ts's sortForRecalc: two
+  // SEPARATE gestures (edit B directly, THEN edit A upstream of B) leave
+  // staleDatasets in the WRONG append order (["c","b"]) per markStale's own
+  // doc. Without sorting, recalcNow would process "c" first — reading B's
+  // PRE-recompute .data via applyCorrections' live resolveDataset(bgRef) —
+  // then recompute "b" too late for c to see it, silently freezing c on a
+  // stale intermediate value while marking it clean.
+  it("a bgRef chain (a->b->c) recomputes upstream-first even when staleDatasets accumulates in the ADVERSARIAL order (order-independence)", async () => {
+    // Traceable fake: c's background input becomes visible in its OWN
+    // recomputed value (bg_dataset's first value + 1), so we can tell
+    // whether c was built from b's fresh output or its stale one.
+    vi.mocked(applyCorrectionsApi).mockImplementation(async (req) => ({
+      ...data(),
+      values: [[(req.bg_dataset?.values[0]?.[0] ?? req.dataset.values[0][0]) + 1]],
+    }));
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+        ds("c", { raw: data(), corrections: {}, bgRef: { datasetId: "b", interp: "linear" } }),
+      ],
+    });
+
+    useApp.getState().setCellValue("b", 0, 0, 40); // gesture 1: edit b directly — stales only c
+    expect(useApp.getState().staleDatasets).toEqual(["c"]);
+    useApp.getState().setCellValue("a", 0, 0, 5); // gesture 2: edit a — stales b too
+    // The adversarial append order this bug needs: c sits BEFORE b.
+    expect(useApp.getState().staleDatasets).toEqual(["c", "b"]);
+
+    await useApp.getState().recalcNow();
+
+    const b = useApp.getState().datasets.find((d) => d.id === "b")!;
+    const c = useApp.getState().datasets.find((d) => d.id === "c")!;
+    // b recomputes from its background a's POST-EDIT value (5) -> b = 6.
+    expect(b.data.values[0][0]).toBe(6);
+    // c MUST be built from b's FRESH post-recompute value (6 -> c = 7), never
+    // b's stale PRE-recompute .data (values[0][0] === 2, the fixture default)
+    // — which is exactly what a naive unsorted pass (c processed before b)
+    // would read, giving c = 3 instead.
+    expect(c.data.values[0][0]).toBe(7);
+    expect(useApp.getState().staleDatasets).toEqual([]);
+  });
+
+  // LIBRARY_WORKBOOK_UX_PLAN "auditable ... never hide ... a stale/failed
+  // state": `applyCorrections` never throws — every refusal (a write-time
+  // cycle rejection included) resolves to `false` + a status message, never
+  // a rejected promise. recalcNow's bgRef/corrections branch must check that
+  // boolean, or a refused/failed recalculation silently goes "clean" while
+  // the dataset keeps serving its OLD data as if it were current — the exact
+  // prohibition this plan item names.
+  //
+  // The runtime cycle case: a bgRef cycle a<->b that bypassed the write-time
+  // guard (e.g. loaded from an older save, or any other state mutation the
+  // UI's wouldCreateCycle checks don't intercept) must terminate visibly —
+  // never hang, never silently serve a's stale value as freshly recomputed.
+  it("recalcNow leaves a dataset stale (never silently clears it) when applyCorrections REFUSES — a runtime bgRef cycle terminates with a visible status, not a silent success", async () => {
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        // A cycle that bypassed the write-time guard (hand-constructed state,
+        // the same shape lib/recalc.test.ts's traversal-safety fixture uses):
+        // a subtracts b, b subtracts a.
+        ds("a", { raw: data(), corrections: {}, bgRef: { datasetId: "b", interp: "linear" } }),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ],
+      staleDatasets: ["a"],
+      status: "",
+    });
+    const dataBefore = useApp.getState().datasets;
+
+    await useApp.getState().recalcNow(); // must terminate (cycle-safe BFS under the hood)
+
+    expect(applyCorrectionsApi).not.toHaveBeenCalled(); // refused before the API call
+    expect(useApp.getState().status).toMatch(/circular/); // the refusal is VISIBLE
+    // "a" stays stale — the bug this regresses cleared it unconditionally.
+    expect(useApp.getState().staleDatasets).toEqual(["a"]);
+    // Zero mutation: the dataset's data was never silently touched.
+    expect(useApp.getState().datasets).toBe(dataBefore);
+  });
+
+  // Same boolean-check bug, the OTHER refusal path through applyCorrections:
+  // its own outer try/catch swallows an API-level failure (never rethrows)
+  // and resolves to `false` + a status. recalcNow must honor that too.
+  it("recalcNow leaves a dataset stale when the corrections API call itself fails", async () => {
+    vi.mocked(applyCorrectionsApi).mockRejectedValue(new Error("backend unavailable"));
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ],
+      staleDatasets: ["b"],
+      status: "",
+    });
+    await useApp.getState().recalcNow();
+    expect(useApp.getState().staleDatasets).toEqual(["b"]); // stays stale, not silently cleared
+    expect(useApp.getState().status).toMatch(/corrections failed/);
+  });
+
+  // LIBRARY_WORKBOOK_UX_PLAN idempotence: recalcNow run twice over an
+  // unchanged (already-clean) dataset set produces the identical result and
+  // does not keep marking anything stale or re-invoking the API.
+  it("recalcNow is idempotent: a second call with nothing stale is a true no-op", async () => {
+    vi.mocked(applyCorrectionsApi).mockResolvedValue({ ...data(), values: [[42]] });
+    useApp.setState({
+      recalcMode: "manual",
+      datasets: [
+        ds("a"),
+        ds("b", { raw: data(), corrections: {}, bgRef: { datasetId: "a", interp: "linear" } }),
+      ],
+      staleDatasets: ["b"],
+    });
+    await useApp.getState().recalcNow();
+    expect(applyCorrectionsApi).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().staleDatasets).toEqual([]);
+    const afterFirst = useApp.getState().datasets;
+
+    await useApp.getState().recalcNow(); // nothing stale — must not touch anything
+
+    expect(applyCorrectionsApi).toHaveBeenCalledTimes(1); // NOT called again
+    expect(useApp.getState().staleDatasets).toEqual([]); // still clean, not re-marked
+    expect(useApp.getState().datasets).toBe(afterFirst); // byte-identical (same reference)
+  });
+
   it("staleDatasets/staleFits accumulation is one recordHistory per triggering gesture (K5e)", () => {
     useApp.setState({
       recalcMode: "manual",
@@ -421,5 +547,45 @@ describe("derived worksheets (K5c/K5d)", () => {
     // the triggering cell edit is) — exactly one entry for the whole
     // propagation (bgRef chain, sheet stale-marking, fit stale-marking).
     expect(useApp.getState().history.length).toBe(before + 1);
+  });
+});
+
+// REVIEW ROUND (#331). Clearing only the FAILING id was not enough: with
+// a -> b -> c, a failure at b left c recomputed from b's stale `.data` and
+// then marked CLEAN — the same "serving stale numbers with no stale mark" bug
+// this file's other tests pin, moved one hop downstream.
+describe("recalcNow — a failure propagates downstream (review round)", () => {
+  it("leaves a dataset stale when its UPSTREAM refused, instead of rebuilding it from stale data", async () => {
+    const data = { time: [0, 1], values: [[1], [2]], labels: ["v"], units: [""], metadata: {} };
+    useApp.setState({
+      datasets: [
+        { id: "a", name: "a", data },
+        {
+          id: "b",
+          name: "b",
+          data,
+          raw: data,
+          corrections: {},
+          bgRef: { datasetId: "a", interp: "linear" },
+        },
+        {
+          id: "c",
+          name: "c",
+          data,
+          raw: data,
+          corrections: {},
+          bgRef: { datasetId: "b", interp: "linear" },
+        },
+      ],
+      staleDatasets: ["b", "c"],
+      // b's correction is refused; c's would succeed on its own.
+      applyCorrections: async (id: string) => id !== "b",
+    } as never);
+
+    await useApp.getState().recalcNow();
+
+    const stale = useApp.getState().staleDatasets;
+    expect(stale).toContain("b"); // the refusal itself
+    expect(stale).toContain("c"); // and everything downstream of it
   });
 });

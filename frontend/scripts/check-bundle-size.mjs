@@ -791,8 +791,29 @@ import { fileURLToPath } from "node:url";
  *  Full frontend suite (613 files / 9,604 tests + the new
  *  DatasetRowCompact.test.tsx/libraryPreviewPrefs.test.ts), tsc --noEmit and
  *  eslint green.
+ *
+ *  2026-09-09 (#331, recalc determinism/auditability) — 913,527 -> 914,589.
+ *  Measured 913,565, i.e. 38 bytes over, raised to measured + 1,024.
+ *    1. The cost is ONE user-facing status string. A `bgRef` whose background
+ *       dataset was deleted used to re-run the correction WITHOUT the
+ *       background subtraction, wipe the reference, and return success in total
+ *       silence (`store/corrections.ts`) — the user's numbers changed and their
+ *       reference vanished with no indication. That is precisely the "never
+ *       hide an automatic correction" case the PR closes, so the fix is to say
+ *       it out loud, in the store layer that owns the decision.
+ *    2. NO LAZY BOUNDARY EXISTS. `corrections.ts` is core store logic reachable
+ *       at first paint; there is no panel behind it to defer. Rule 2's case.
+ *    3. REDUCTIONS TRIED FIRST, and they worked, twice: the status started as a
+ *       second `if/else` branch with its own `setStatus` call (0.1 kB over),
+ *       folded into the ONE existing status call; then the single-use
+ *       `bgDropped` const was inlined at its only use site; and the review
+ *       round's `upstreamFailed` helper lost a parameter it never read.
+ *       Together ~150 bytes. The last 38 are the message text itself.
+ *  Measured by bisecting this script's own budget (it prints kB, not bytes):
+ *  913,560 FAIL / 913,565 OK. Full frontend suite 613 files, tsc and eslint
+ *  green.
  */
-const EAGER_JS_BUDGET = 913_527;
+const EAGER_JS_BUDGET = 914_589;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
