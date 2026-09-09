@@ -40,6 +40,10 @@ _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 # per-series `step` ("pre"/"post"/"mid" — SeriesStyle.step / ExportSeriesStyle
 # .step) maps 1:1 onto matplotlib's own `Line2D.drawstyle` vocabulary.
 _DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
+# 8 `MarkerShape` glyphs -> matplotlib codes; wire key `marker_shape` (sent by
+# `lib/exportStyles`; was hardcoded "o", so every shape exported as a circle).
+_MARKER = {"circle": "o", "square": "s", "triangle": "^", "downtriangle": "v",
+           "diamond": "D", "plus": "+", "cross": "x", "star": "*"}
 # Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.
@@ -57,7 +61,7 @@ def _plot_kwargs(
     silently ignored (no ``drawstyle``/``linestyle`` key added) rather than
     raising -- same degrade-gracefully contract as every other style field
     here (see ``calc.plotting.resolve_style_channels``'s doc: "an export must
-    never 500 on a bad style hint")."""
+    never 500 on a bad style hint") -- ``marker_shape`` included."""
     kw: dict[str, Any] = {"linewidth": default_lw}
     if not spec:
         return kw
@@ -74,7 +78,8 @@ def _plot_kwargs(
     if step in _DRAWSTYLE:
         kw["drawstyle"] = _DRAWSTYLE[step]
     if spec.get("marker"):
-        kw["marker"] = "o"
+        shape = spec.get("marker_shape")
+        kw["marker"] = _MARKER.get(shape, "o") if isinstance(shape, str) else "o"
         kw["markersize"] = spec.get("marker_size") or default_marker_size
     return kw
 

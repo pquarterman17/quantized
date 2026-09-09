@@ -2740,7 +2740,91 @@ covers a much smaller subset and guards focus on Analyze.
   untouched). Covered by `StatusBar.test.tsx`'s "StatusBar pending-op live
   region (accessibility gap)" describe block. No other icon/plot/tree/dialog
   accessible-name gap was investigated as part of this slice.
-- [ ] Contrast and non-color encodings.
+- [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
+  what does not, stated precisely instead of left as one unchecked line.**
+
+  EXISTS:
+  - Three colour-blind-safe series palettes (`lib/palettes.ts`: Okabe–Ito, Paul
+    Tol "bright", viridis), applied as `--series-1..8` overrides on `<html>`, so
+    they flow to plot, legend, multi-panel, inset, sparkline and export alike.
+  - Real WCAG-style contrast MATH in `lib/contrastColor.ts` (`contrastRatio`,
+    relative luminance), with `MIN_CONTRAST = 2.2`, used at render time to swap
+    a literal series colour for the ink token when it would be invisible against
+    the effective plot background. Unit-tested.
+  - Per-series `line` style (`solid`/`dashed`/`dotted`) and eight marker SHAPES
+    (`lib/types.ts` `MarkerShape`), both settable and both honoured on screen.
+
+  DOES NOT EXIST, and this is the real gap:
+  - **No automatic non-colour differentiator.** Plot five series and touch
+    nothing and they differ ONLY by hue — `uplotOpts.ts`'s dash is applied only
+    when a per-series `style.line` was explicitly set, and markers only when
+    explicitly enabled or via a plot-wide default-trace preference. Dash and
+    marker shape are available but never cycled. A colour-blind reader, or
+    anyone printing greyscale, gets no help by default. Closing this means an
+    opt-in auto dash/marker cycle mirroring the palette mechanism, WITH export
+    parity — booked, not built.
+  - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
+    checks series-vs-SERIES distinguishability under colour-vision deficiency;
+    there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls
+    the palette "color-blind-aware", which is a claim about palette CHOICE, not
+    a check.
+  - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
+    (aps/report/web) have no greyscale variant.
+
+  Two things the audit turned up on the way. One was a real bug and is FIXED;
+  the other looked like a bug, was investigated properly, and turned out to be a
+  MISSING FEATURE whose "fix" would have made things worse. Both are recorded
+  because the second is the more useful record.
+
+  **FIXED — exported markers were always filled circles.** `calc/figure.py`
+  hardcoded `kw["marker"] = "o"`, so all eight on-screen `MarkerShape` glyphs
+  collapsed on export while the canvas drew them correctly
+  (`uplotOpts.ts`'s `markerPaths`). That is a genuine screen-vs-export parity
+  break. Now a `_MARKER` table, with `marker_shape` actually SENT by
+  `lib/exportStyles.ts` — the backend half alone would have been dead code. It
+  is emitted inside `buildExportStyles`, so every producer (spatialPageExport,
+  legacyFigure, useGraphTemplates, plotSpecFigure) gets it. An unrecognized
+  shape falls back to a circle, matching `line`/`step`'s existing
+  degrade-gracefully contract.
+
+  **NOT a bug — per-series styling is unimplemented for facets END TO END, and
+  the export was consistent with the screen.** The audit reported that a faceted
+  export "silently dropped every per-series style"
+  (`calc/figure_facets.py` passes a hardcoded `None` where the flat path passes
+  the style spec). True, and I built the fix. Two rounds of review then
+  established that shipping it would have been a regression:
+
+  1. **The first fix was misaligned.** `series_styles` is indexed by `y_keys` ==
+     the frontend's hidden-FILTERED, `seriesOrder`-REORDERED `plotted` list,
+     while facet panels are built from the RAW `st.yKeys`. An existing passing
+     test (`figureSpec.test.ts`'s all-hidden facet case) already showed them
+     diverging. A delegated agent caught this and refused to wire it — correctly.
+  2. **The second fix was ALSO misaligned, and worse than expected.** Sending a
+     separate list built from the facet's own channels still fails when
+     `st.yKeys` is null, because `buildColumns` re-runs the `defaultDenseChannels`
+     DENSITY heuristic on each row-sliced panel. Measured directly on a
+     QD-shaped fixture (M_DC finite only on level-0 rows, M_AC only on level-1):
+     panel 0 resolved `[level, M_DC]`, panel 1 resolved `[level, M_AC]` — the
+     panels differ from the whole-dataset list AND from each other, so no single
+     style list can serve the grid at all.
+  3. **And the premise was inverted.** `useMultiPanelStage.ts`'s facet branch
+     passes NO `seriesStyles` to `buildOpts`, so the ON-SCREEN facet grid draws
+     default lines too. The export was not losing something the screen showed;
+     both ignore per-series styling. Making only the export honour it would
+     create a NEW screen-vs-export divergence — the exact invariant
+     `figureSpecFacets.ts` documents ("renders the SAME faceted grid Stage
+     shows").
+
+  So the work was reverted rather than shipped, and the real item is filed as
+  **FEATURE-001: per-series styling for faceted plots**, which must land on the
+  screen and the export together and must first decide what a small-multiples
+  grid does when panels resolve different channels (arguably it should pin one
+  channel set for every panel — comparing like with like is the point of small
+  multiples — but that is a product decision, not a silent one).
+
+  Kept from the attempt: the `docs/testing.md` lesson it produced (a monkeypatch
+  that passes alone and fails under `-n auto` is usually a patch that never
+  applied, because `from x import f` binds at import time).
 - [ ] Windows/macOS scaling and high-DPI readability.
 - [x] Reduced motion — **verified complete 2026-09-09; the box was simply
   stale.** Two independent sources, either sufficient on its own: the OS

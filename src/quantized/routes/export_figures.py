@@ -163,6 +163,9 @@ class FigureRequest(BaseModel):
     # by `calc.plotting.resolve_style_channels`, called from `_figure_series`),
     # and GAP_PLOTTYPES's `step` ("pre"/"post"/"mid" — the Graph Builder "step"
     # mark; mapped to matplotlib's `drawstyle` by `calc.figure._plot_kwargs`).
+    # `marker_shape` (a `MarkerShape` name -> `_plot_kwargs`'s `_MARKER` table,
+    # falling back to "o"); before it existed all eight on-screen marker shapes
+    # exported as filled circles while the canvas drew them correctly.
     # An entry is a loose dict (never a strict pydantic sub-model): a bad/
     # unrecognized value in ANY of these keys degrades gracefully (dropped,
     # rendered with matplotlib's default) rather than 422ing the whole export.

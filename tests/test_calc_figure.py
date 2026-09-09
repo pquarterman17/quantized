@@ -165,6 +165,52 @@ def test_step_style_renders() -> None:
         assert out[:5] == b"%PDF-"
 
 
+# ── Marker-shape export parity (`lib/exportStyles.ts` sends `marker_shape` —
+# see routes.export_figures.FigureRequest.series_styles's own `marker_shape`
+# doc) ────────────────────────────────────────────────────────────────────
+
+
+def test_marker_shape_maps_to_matplotlib_code() -> None:
+    # circle/square/triangle/downtriangle/diamond/plus/cross/star — the 8
+    # frontend `MarkerShape` names (frontend/src/lib/types.ts) — each maps to
+    # its matplotlib marker code.
+    expected = {
+        "circle": "o",
+        "square": "s",
+        "triangle": "^",
+        "downtriangle": "v",
+        "diamond": "D",
+        "plus": "+",
+        "cross": "x",
+        "star": "*",
+    }
+    for shape, code in expected.items():
+        kwargs = _plot_kwargs(1.5, 5.0, {"marker": True, "marker_shape": shape})
+        assert kwargs["marker"] == code, f"{shape} -> expected {code!r}, got {kwargs['marker']!r}"
+
+
+def test_unknown_marker_shape_falls_back_to_circle() -> None:
+    # Same degrade-gracefully contract as an unrecognized `line`/`step` value.
+    kwargs = _plot_kwargs(1.5, 5.0, {"marker": True, "marker_shape": "hexagon"})
+    assert kwargs["marker"] == "o"
+
+
+def test_absent_marker_shape_defaults_to_circle() -> None:
+    # No `marker_shape` key at all (an older client, or a series with no shape
+    # chosen) must
+    # still degrade to the pre-existing filled-circle default.
+    kwargs = _plot_kwargs(1.5, 5.0, {"marker": True})
+    assert kwargs["marker"] == "o"
+
+
+def test_marker_shape_renders_in_svg() -> None:
+    x = np.linspace(0, 10, 10)
+    out = render_figure(
+        x, [("y", x)], fmt="svg", series_styles=[{"marker": True, "marker_shape": "star"}]
+    )
+    assert out[:5] == b"<?xml"
+
+
 # ── Fill under/between curves (MAIN #13) ─────────────────────────────────────
 def test_fill_under_renders_and_changes_output() -> None:
     x = np.linspace(0, 10, 30)

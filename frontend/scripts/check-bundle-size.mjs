@@ -812,8 +812,35 @@ import { fileURLToPath } from "node:url";
  *  Measured by bisecting this script's own budget (it prints kB, not bytes):
  *  913,560 FAIL / 913,565 OK. Full frontend suite 613 files, tsc and eslint
  *  green.
+ *
+ *  2026-09-09 — 914,589 -> 914,634. Marker-shape export parity.
+ *  `calc/figure.py` hardcoded matplotlib's `"o"`, so all EIGHT on-screen
+ *  `MarkerShape` glyphs exported as filled circles while the canvas drew them
+ *  correctly (`uplotOpts.ts`'s `markerPaths`). Sending the shape costs 39
+ *  eager bytes: one line in `lib/exportStyles.ts`'s shared `buildExportStyles`
+ *  (`a.markerShape&&(o.marker_shape=a.markerShape)` minified).
+ *    1. IT IS A REAL BUG, not a feature. A publication figure disagreed with
+ *       the screen it was exported from, silently.
+ *    2. NO LAZY BOUNDARY EXISTS. `buildExportStyles` is a pure builder called
+ *       from `lib/figureSpec.ts`, which Stage's eagerly-registered copy/export
+ *       commands reach synchronously. Deferring it would mean making
+ *       `buildFigureSpecForView` async — an API change to a pure function for
+ *       39 bytes, which is worse than this raise.
+ *    3. REDUCTIONS TRIED FIRST, and one worked: six remaining eager
+ *       `x === 1 ? "" : "s"` ternaries in `lib/` went through `lib/plural.ts`
+ *       (datasetRemoval, workbookTransfer, openWorkspaceReplace,
+ *       libraryTileSummary, selectionplot) — 18 bytes, measured. Extending the
+ *       same conversion to LAZY modules was tried and REVERSED: it made the
+ *       eager total WORSE (914,610 -> 914,667) by pulling `plural.ts` across
+ *       more chunk boundaries. No eager ternaries remain; the earlier sweep
+ *       (2026-09-09, `lib/plural.ts`'s own header) had already taken the rest.
+ *  So 39 needed, 18 reclaimed, 18 of headroom existed, 21 genuinely short.
+ *  Raised per the rule (measured 914,610 + 1,024 = 915,634)? NO — deliberately
+ *  set to measured + 24 = 914,634 instead. A full kB of new headroom is an
+ *  invitation to spend it; this keeps the ratchet as tight as it has been all
+ *  session, and the next author still has to do real reduction work.
  */
-const EAGER_JS_BUDGET = 914_589;
+const EAGER_JS_BUDGET = 914_634;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

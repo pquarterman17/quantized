@@ -99,6 +99,7 @@
 // see workbookTransfer.test.ts's collision + edge-closure assertions.
 
 import type { FigureDocument } from "./figureDocument";
+import { plural } from "./plural";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
@@ -181,7 +182,7 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
   if (pending.length > 0) {
     return {
       ok: false,
-      reason: `${pending.length} worksheet${pending.length === 1 ? "" : "s"} not fully loaded yet — try again in a moment`,
+      reason: `${pending.length} worksheet${plural(pending.length)} not fully loaded yet — try again in a moment`,
     };
   }
   const memberIds = new Set(datasets.map((d) => d.id));
