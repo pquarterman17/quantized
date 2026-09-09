@@ -448,15 +448,26 @@ describe("sliceDataStruct — row-indexed metadata sidecars (BUG-006)", () => {
     expect((out.metadata["text_columns"] as Record<string, string[]>).SampleID).toEqual(["s3", "s0"]);
   });
 
-  it("reads a row past a SHORT text column as a blank cell, not undefined", () => {
+  it("reads a gap INSIDE a short text column as a blank cell, not undefined", () => {
     // A text column may be shorter than `time` (columnmeta.ts's TextColumn
     // doc). `undefined` would serialize to null and read back as a hole.
     const ds = withText();
+    (ds.metadata["text_columns"] as Record<string, string[]>).Operator = ["a", "b"];
+    const out = sliceDataStruct(ds, [0, 2, 1]);
+    const cols = out.metadata["text_columns"] as Record<string, string[]>;
+    expect(cols.Operator).toEqual(["a", "", "b"]);
+    expect(cols.Operator.every((c) => typeof c === "string")).toBe(true);
+  });
+
+  it("does not pad a short text column out to the slice length", () => {
+    // TRAILING misses are dropped rather than materialized: the column already
+    // reads as blank for the rows it doesn't cover, so padding it changes
+    // nothing on screen while growing every derived dataset (and, on the
+    // `store/cellEdit.ts` path, the SAVED one) by a cell per edit.
+    const ds = withText();
     (ds.metadata["text_columns"] as Record<string, string[]>).Operator = ["a"];
     const out = sliceDataStruct(ds, [0, 2]);
-    const cols = out.metadata["text_columns"] as Record<string, string[]>;
-    expect(cols.Operator).toEqual(["a", ""]);
-    expect(cols.Operator.every((c) => typeof c === "string")).toBe(true);
+    expect((out.metadata["text_columns"] as Record<string, string[]>).Operator).toEqual(["a"]);
   });
 
   it("slices the origin_text_columns spelling too", () => {

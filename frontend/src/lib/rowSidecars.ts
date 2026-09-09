@@ -33,12 +33,29 @@ export const ROW_INDEXED_SIDECARS = [
   "origin_report_sheets",
 ] as const;
 
-/** Slice one `{column: [cell per row]}` sidecar to `rowIndexes`.
+/** Slice ONE column's cells to `rowIndexes`.
  *
- *  A cell past the end yields `""` — a blank, which is what the worksheet
- *  renders for a missing one — rather than `undefined`, which would serialize
- *  to `null` and read back as a hole. `??` not `||`, so a legitimate `0` or
- *  empty-string cell survives as itself.
+ *  A gap inside the kept range yields `""` — a blank, which is what the
+ *  worksheet renders for a missing cell — rather than `undefined`, which would
+ *  serialize to `null` and read back as a hole. `??` not `||`, so a legitimate
+ *  `0` or empty-string cell survives as itself.
+ *
+ *  TRAILING misses are dropped instead of materialized. A column shorter than
+ *  the grid already reads as blank for the rows it doesn't cover, so padding it
+ *  out changes nothing on screen while growing the SAVED dataset on every row
+ *  edit — and `insertRows` at the end would otherwise append a blank cell to
+ *  every text column forever. This also gives the whole module one checkable
+ *  invariant: a sliced column is never longer than it needs to be. */
+function sliceCells(cells: readonly unknown[], rowIndexes: readonly number[]): unknown[] {
+  const hit = (i: number): boolean => i >= 0 && i < cells.length;
+  let end = rowIndexes.length;
+  while (end > 0 && !hit(rowIndexes[end - 1])) end -= 1;
+  const out: unknown[] = [];
+  for (let i = 0; i < end; i += 1) out.push(cells[rowIndexes[i]] ?? "");
+  return out;
+}
+
+/** Slice one `{column: [cell per row]}` sidecar to `rowIndexes`.
  *
  *  A non-`{name: array}` value is a corrupted sidecar and is returned
  *  UNTOUCHED: without the `Array.isArray` rejection `Object.entries` walks an
@@ -48,7 +65,7 @@ function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const out: Record<string, unknown> = {};
   for (const [name, cells] of Object.entries(raw as Record<string, unknown>)) {
-    out[name] = Array.isArray(cells) ? rowIndexes.map((i) => cells[i] ?? "") : cells;
+    out[name] = Array.isArray(cells) ? sliceCells(cells, rowIndexes) : cells;
   }
   return out;
 }
@@ -67,17 +84,47 @@ export function sliceRowSidecars(
   return out;
 }
 
+/** How many rows the sidecars in `metadata` actually span, given a grid of
+ *  `rowCount` rows — `max(rowCount, longest sidecar column)`.
+ *
+ *  A sidecar CAN be longer than `time`, and sizing an index list from
+ *  `time.length` alone silently TRUNCATES the excess on the next row edit. That
+ *  is not misattribution, it is destruction: a text-only Origin book imports as
+ *  `time: []` with a populated `text_columns`, so a single `insertRows` sized
+ *  from `time.length` would have persisted an empty grid over the whole
+ *  worksheet. Callers that build an index list for a PERSISTED edit must size
+ *  it from here; a read-only slice (Extract, Split, a filter view) may keep
+ *  using the grid's own row count because it discards rows either way. */
+export function sidecarRowCount(metadata: Record<string, unknown>, rowCount: number): number {
+  let n = rowCount;
+  for (const key of ROW_INDEXED_SIDECARS) {
+    const raw = metadata[key];
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    for (const cells of Object.values(raw as Record<string, unknown>)) {
+      if (Array.isArray(cells) && cells.length > n) n = cells.length;
+    }
+  }
+  return n;
+}
+
 /** An index list that turns a row INSERT into a slice: the rows before `at`,
  *  then `count` slots that resolve to blanks, then the rest. `-1` never indexes
- *  a real cell, and `sliceRowSidecars` already yields `""` for a miss, so an
- *  insert needs no separate code path — which is the point, since the two must
- *  not drift. Clamped like the numeric insert, so an out-of-range `at`
- *  appends. */
+ *  a real cell, and `sliceCells` already yields `""` for a miss, so an insert
+ *  needs no separate code path — which is the point, since the two must not
+ *  drift.
+ *
+ *  `at`/`count` are TRUNCATED toward zero and `at` is clamped to `[0,
+ *  rowCount]`, matching what the numeric insert does with the same arguments:
+ *  `values.slice(0, 1.5)` keeps one row, so a `1.5` left un-truncated here
+ *  produced a list of length `rowCount + count` whose entries no longer lined
+ *  up with the grid at all (`[0, -1, 1.5]` — index `1.5` is a miss). The
+ *  returned length is always `rowCount + max(0, trunc(count))`. */
 export function insertRowIndexes(rowCount: number, at: number, count: number): number[] {
-  const clamped = Math.max(0, Math.min(at, rowCount));
+  const n = Math.max(0, Math.trunc(count) || 0); // `|| 0` catches NaN, whose Array.from length is 0 anyway
+  const clamped = Math.max(0, Math.min(Math.trunc(at) || 0, rowCount));
   return [
     ...Array.from({ length: clamped }, (_, i) => i),
-    ...Array.from({ length: Math.max(0, count) }, () => -1),
+    ...Array.from({ length: n }, () => -1),
     ...Array.from({ length: rowCount - clamped }, (_, i) => clamped + i),
   ];
 }

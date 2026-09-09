@@ -2,14 +2,17 @@ import { askParams, type ParamField, type ParamValues } from "../components/over
 import type { StoreGet } from "./exportActive";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
-import {
-  joinWorksheets,
-  stackWorksheet,
-  transposeWorksheet,
-  unstackWorksheet,
-  type AggregateMode,
-  type JoinMode,
-} from "./worksheetTransforms";
+import type { AggregateMode, JoinMode } from "./worksheetTransforms";
+
+/** `lib/worksheetTransforms.ts` holds ~200 lines of reshape math (transpose,
+ *  stack, unstack, join, with their own cell-count guards) that nothing needs
+ *  before first paint — every entry point below is a Data-menu command that
+ *  already `await`s a `ParamDialog` before it can reach the math. Deferring it
+ *  behind a dynamic import costs no API change for exactly that reason, and
+ *  takes the module out of the eager `index` chunk. Kept as ONE import at the
+ *  top of each command rather than four separate ones so a reader sees a single
+ *  boundary. */
+const transforms = () => import("./worksheetTransforms");
 
 let sequence = 0;
 
@@ -57,6 +60,7 @@ export function runTransposeWorksheet(s: StoreGet): void {
       hint: "The source remains unchanged; original labels and units are kept in provenance.",
     }]);
     if (!params || !params.confirm) return;
+    const { transposeWorksheet } = await transforms();
     addDerived(s, source.name, "transposed", transposeWorksheet(rowsOf(source)));
   });
 }
@@ -72,6 +76,7 @@ export function runStackWorksheet(s: StoreGet): void {
     }]);
     if (!params) return;
     const channels = String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1);
+    const { stackWorksheet } = await transforms();
     addDerived(s, source.name, "stacked", stackWorksheet(rowsOf(source), channels));
   });
 }
@@ -89,6 +94,7 @@ export function runUnstackWorksheet(s: StoreGet): void {
     ];
     const params = await askParams("Unstack / pivot to wide form", fields);
     if (!params) return;
+    const { unstackWorksheet } = await transforms();
     const data = unstackWorksheet(
       rowsOf(source),
       optionIndex(params.key),
@@ -124,6 +130,7 @@ export function runJoinWorksheets(s: StoreGet): void {
       hint: "Duplicate keys use their first row to avoid an accidental many-to-many expansion.",
     }]);
     if (!second) return;
+    const { joinWorksheets } = await transforms();
     const data = joinWorksheets(
       rowsOf(left),
       rowsOf(right),

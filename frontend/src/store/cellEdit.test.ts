@@ -507,16 +507,113 @@ describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
     expect(cols()).toEqual(["s0", "", "", "s1", "s2"]);
   });
 
-  it("an insert past the end appends rather than throwing", () => {
+  it("an insert past the end appends rows but does not pad the text column", () => {
     seed();
     useApp.getState().insertRows("d1", 99, 1);
-    expect(cols()).toEqual(["s0", "s1", "s2", ""]);
+    expect(useApp.getState().datasets[0].data.time.length).toBe(4);
+    // The appended row genuinely has no text cell, and a sidecar shorter than
+    // the grid already reads as blank there. Materializing the "" would grow
+    // the SAVED dataset by one cell per text column on every append.
+    expect(cols()).toEqual(["s0", "s1", "s2"]);
   });
 
-  it("leaves CHANNEL-indexed metadata alone through both edits", () => {
+  // The two regressions below are the ones that let the first version of this
+  // fix ship a DATA-LOSS bug behind a green suite: both index lists were sized
+  // from `time.length`, so anything a sidecar carried past the numeric grid was
+  // deleted on the next row edit. Nothing here pinned sidecar length against
+  // row count, so nothing failed.
+  it("insertRows keeps a text column that is LONGER than the numeric grid", () => {
     seed();
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: { text_columns: { SampleID: ["s0", "s1", "s2", "s3", "s4", "s5"] } },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("d1", 1, 2);
+    // Sized from `time.length` (3) this returned ["s0","","","s1","s2"] —
+    // s3/s4/s5 destroyed.
+    expect(cols()).toEqual(["s0", "", "", "s1", "s2", "s3", "s4", "s5"]);
+  });
+
+  it("insertRows on a TEXT-ONLY book (time: []) does not wipe the grid", () => {
+    // How an Origin sheet of pure text imports: no numeric channel at all.
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "text.opj",
+          data: {
+            time: [],
+            values: [],
+            labels: [],
+            units: [],
+            metadata: { text_columns: { A: ["a0", "a1", "a2", "a3", "a4"] } },
+          },
+        },
+      ],
+      activeId: "d1",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("d1", 2, 1);
+    // Sized from `time.length` (0) this returned { A: [""] }: five rows of a
+    // real worksheet replaced by one blank, persisted.
+    expect(
+      (useApp.getState().datasets[0].data.metadata["text_columns"] as Record<string, string[]>).A,
+    ).toEqual(["a0", "a1", "", "a2", "a3", "a4"]);
+  });
+
+  it("deleteRows keeps the text cells past the end of the numeric grid", () => {
+    seed();
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: { text_columns: { SampleID: ["s0", "s1", "s2", "s3", "s4"] } },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().deleteRows("d1", [1]);
+    expect(useApp.getState().datasets[0].data.time).toEqual([10, 30]);
+    expect(cols()).toEqual(["s0", "s2", "s3", "s4"]);
+  });
+
+  it("leaves NON-row-indexed metadata alone through both edits", () => {
+    seed();
+    // `all_column_names` is a bare array, which `sliceOneSidecar` rejects on
+    // SHAPE — so on its own this pins nothing about the key allowlist. The
+    // `{name: array}`-shaped key beside it is the real control: it is exactly
+    // what a "slice anything that looks row-indexed" implementation would
+    // corrupt, and the identity assertion below fails the moment the allowlist
+    // stops being the gate. (There is no such key in a real parser's output
+    // today — the mirror-image bug is prevented by enumeration, not by luck,
+    // and this is what holds that line.)
+    const notRowIndexed = { Y: ["ch0-note", "ch1-note"] };
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            metadata: {
+              ...useApp.getState().datasets[0].data.metadata,
+              per_channel_notes: notRowIndexed,
+            },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
     useApp.getState().insertRows("d1", 0, 1);
     useApp.getState().deleteRows("d1", [0]);
-    expect(useApp.getState().datasets[0].data.metadata["all_column_names"]).toEqual(["x", "Y"]);
+    const meta = useApp.getState().datasets[0].data.metadata;
+    expect(meta["all_column_names"]).toEqual(["x", "Y"]);
+    expect(meta["per_channel_notes"]).toBe(notRowIndexed); // same object, untouched
   });
 });

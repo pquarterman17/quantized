@@ -1124,21 +1124,41 @@ The two hesitations, and what they were actually worth:
   no longer carried by REFERENCE (its sidecars must be sliced), and those tests
   had been pinning that aliasing rather than any contract. Content is unchanged
   for a dataset carrying no row-indexed sidecar.
-- [x] `store/cellEdit.ts`'s `insertRows`/`deleteRows` — the last live site, and
-  the worst of them, because a slice produces a NEW dataset while a row edit is
-  PERSISTED into the existing one. `deleteRows` is a slice in disguise (it now
-  builds the surviving row list and uses the same `sliceRowSidecars`);
-  `insertRows` needed the counterpart `insertBlankRowsInSidecars`, since an
-  insert grows the grid and pushes later rows down. Both mirror what the file
-  already does for `excludedRows` ("REMAP rather than clear: an explicit insert
-  knows exactly what moved"). Four tests, both directions sabotage-verified.
+- [x] `store/cellEdit.ts`'s `insertRows`/`deleteRows` — the worst site, because
+  a slice produces a NEW dataset while a row edit is PERSISTED into the
+  existing one. Both are slices in disguise and share `sliceRowSidecars`:
+  `deleteRows` builds the surviving row list, `insertRows` builds the same kind
+  of list with `-1` in the new slots (a miss already yields a blank, so an
+  insert needs no second code path — an earlier draft's separate
+  `insertBlankRowsInSidecars` was the thing most likely to drift). Both mirror
+  what the file already does for `excludedRows` ("REMAP rather than clear: an
+  explicit insert knows exactly what moved").
+- [x] Both index lists are sized from `sidecarRowCount`, NOT `time.length`.
+  Sizing from the numeric grid was a DATA-LOSS bug found in the Group N review
+  after the fix had been declared closed: a sidecar longer than `time` was
+  truncated on the next row edit, and a text-only Origin book (`time: []` with
+  a populated `text_columns`) lost its entire grid to one `insertRows`. Green
+  on the whole suite, because nothing pinned sidecar length against row count.
+  Four regression tests now do, insert and delete, including the `time: []`
+  case.
+- [x] `lib/worksheetTransforms.ts`'s `provenance()` — the sixth site, also
+  found in the Group N review. Transpose/stack/unstack REPLACE the rows rather
+  than permuting them, so no index mapping exists; the sidecars fail closed and
+  are dropped. This also unshadowed `stackWorksheet`'s fresh
+  `origin_text_columns: {Source}`, which a surviving stale `text_columns` beat
+  in `lib/columnmeta.ts`'s `text_columns ?? origin_text_columns`.
 
 #### Completion record
 
-- PR/commit: the Group M commit (2026-09-09).
-- Automated tests: `lib/datasetsplit.test.ts` — the eight named above.
+- PR/commit: the Group M commit + the Group N review round (both 2026-09-09).
+- Automated tests: `lib/datasetsplit.test.ts` (the eight named above),
+  `lib/rowSidecars.test.ts` (the index-list and row-span primitives),
+  `store/cellEdit.test.ts` (row edits, including the four truncation
+  regressions), `lib/worksheetTransforms.test.ts` (the reshape drop).
 - Agent verification: fix + sabotage-verified tests, including the correction
-  of the weak one.
+  of TWO weak ones (the channel-indexed control was re-written a second time in
+  the Group N round — `all_column_names` is a bare array, so the shape guard
+  alone kept it green regardless of the allowlist).
 - Owner verification: — (worth a look on a real Origin "Text & Numeric" sheet;
   the fix is shape-driven, not corpus-driven, so no specimen was needed.)
 

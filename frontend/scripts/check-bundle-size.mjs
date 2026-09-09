@@ -887,17 +887,45 @@ import { fileURLToPath } from "node:url";
  *  `""` for a miss. One code path instead of two, which is also why they can no
  *  longer drift. That took the overage from 473 to 335.
  *
- *  The last 335 are a raise, and the day's accounting is the justification:
- *  914,589 at the start, 914,642 now — **+53 bytes for the whole day**, against
- *  a data-integrity bug fixed at FIVE call sites (sliceDataStruct,
- *  pruneExcluded, facetSlices, insertRows, deleteRows), a third sidecar key,
- *  marker-shape export parity, and a 1 kB lazy boundary collected along the
- *  way. Three raises and two repayments net out to approximately flat. No lazy
- *  boundary exists for this one: `insertRows`/`deleteRows` are SYNCHRONOUS
- *  store actions called from UI handlers, and making them async to defer a
- *  helper would be an API change for 335 bytes.
+ *  The last 335 are a raise. The justification is the work, NOT a day's
+ *  accounting — and the accounting first written here was FALSE, which is the
+ *  more useful thing to record. It read "914,589 at the start, 914,642 now,
+ *  +53 bytes for the whole day ... three raises and two repayments net out to
+ *  approximately flat". It picked the start of the day's LAST raise as the
+ *  start of the day. The real pin history for 2026-09-09 is 910,711 ->
+ *  911,772 -> 913,527 -> 914,589 -> 914,634 -> 914,283 -> 914,642: **+3,931
+ *  for the day**, and this is the FIFTH raise, not the third. A ratchet
+ *  narrated by the number that flatters it is not a ratchet, so: pick the
+ *  window's true start, and count every entry in it.
+ *
+ *  What the 335 buy is a data-integrity bug fixed at five call sites
+ *  (sliceDataStruct, pruneExcluded, facetSlices, insertRows, deleteRows), plus
+ *  a third sidecar key. No lazy boundary exists for this one:
+ *  `insertRows`/`deleteRows` are SYNCHRONOUS store actions called from UI
+ *  handlers, and making them async to defer a helper would be an API change
+ *  for 335 bytes. The +3,931 is a debt on the next extraction, and the next
+ *  entry here should be a LOWER.
+ *
+ *  2026-09-09 (the LOWER that entry asked for) — 914,642 -> 912,231.
+ *
+ *  The Group N review round of BUG-006 needed 384 more eager bytes
+ *  (`sidecarRowCount` and a trailing-trim in `lib/rowSidecars.ts`, fixing a
+ *  sidecar longer than `time` being TRUNCATED by a row edit — data loss, not
+ *  misattribution). Per rule 2 above a raise is the last resort, so the
+ *  reduction came first and it more than paid for itself:
+ *  `lib/worksheetTransforms.ts` (~200 lines of transpose/stack/unstack/join
+ *  math with its own cell-count guards) was sitting in the EAGER `index`
+ *  chunk, reachable only from four Data-menu commands that already `await` a
+ *  `ParamDialog` before touching it. One `const transforms = () =>
+ *  import("./worksheetTransforms")` in `lib/worksheetTransformCommands.ts`
+ *  defers all of it with no API change — the commands were already async
+ *  inside.
+ *
+ *  Net for the round: -2,435 against the old pin (384 spent, 2,819 recovered).
+ *  Pinned at measured + 24 = 912,231, the same tight convention, which brings
+ *  the day to +1,520 rather than +3,931.
  */
-const EAGER_JS_BUDGET = 914_642;
+const EAGER_JS_BUDGET = 912_231;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

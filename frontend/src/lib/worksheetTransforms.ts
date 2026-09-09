@@ -1,3 +1,4 @@
+import { ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 export type JoinMode = "inner" | "left" | "right" | "full";
@@ -18,8 +19,24 @@ function provenance(ds: DataStruct, operation: string): Record<string, unknown> 
   // from re-opening on a provably-non-date axis — which would also feed the
   // date tick formatter out-of-range values. Fails closed: a reshaped datetime
   // dataset just won't offer date formatting until re-imported.
+  //
+  // The ROW-INDEXED sidecars go too (BUG-006's sixth site). A reshape does not
+  // permute rows, it REPLACES them — transpose turns rows into channels, stack
+  // multiplies them by the channel count, unstack pivots them into distinct
+  // key values — so no index mapping carries a per-row text cell across. There
+  // is nothing to slice them TO, so they fail closed and are dropped rather
+  // than carried at their old length against a grid they no longer describe.
+  // (`stackWorksheet` then sets a FRESH `origin_text_columns`; a stale
+  // `text_columns` surviving here would have shadowed it outright, since
+  // `lib/columnmeta.ts` reads `text_columns ?? origin_text_columns`.)
   const rest: Record<string, unknown> = { ...ds.metadata };
-  for (const k of ["time_is_datetime", "time_timezone", "x_column_name", "x_column_unit"]) {
+  for (const k of [
+    "time_is_datetime",
+    "time_timezone",
+    "x_column_name",
+    "x_column_unit",
+    ...ROW_INDEXED_SIDECARS,
+  ]) {
     delete rest[k];
   }
   return { ...rest, worksheet_transform: operation };

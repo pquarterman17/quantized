@@ -39,7 +39,7 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
-import { insertRowIndexes, sliceRowSidecars } from "../lib/rowSidecars";
+import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -133,9 +133,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
               // Without this every text cell below `at` describes a different
               // measurement than the one beside it — and unlike a slice, this
               // is PERSISTED into the dataset.
+              //
+              // Sized from `sidecarRowCount`, NOT `time.length`: a sidecar may
+              // legitimately be LONGER than the numeric grid (a text-only
+              // Origin book imports as `time: []` with a full `text_columns`),
+              // and an index list that stops at `time.length` deletes the
+              // excess outright. See the truncation note in rowSidecars.ts.
               metadata: sliceRowSidecars(
                 d.data.metadata,
-                insertRowIndexes(d.data.time.length, at, count),
+                insertRowIndexes(sidecarRowCount(d.data.metadata, d.data.time.length), at, count),
               ),
             },
             ...(excluded ? { excludedRows: excluded } : {}),
@@ -161,8 +167,13 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
           const excluded = d.excludedRows ? shiftForDelete(d.excludedRows, deleted) : undefined;
           // The rows that SURVIVE, in order — the same index list a slice
           // takes, so the sidecars go through the shared helper (BUG-006).
+          // Ranges over `sidecarRowCount`, not `time.length`, for the same
+          // reason `insertRows` above does: rows past the end of the numeric
+          // grid can still carry text cells, and a `kept` list that stops at
+          // `time.length` would drop them permanently.
           const kept: number[] = [];
-          for (let r = 0; r < d.data.time.length; r++) if (!deleted.has(r)) kept.push(r);
+          const rowSpan = sidecarRowCount(d.data.metadata, d.data.time.length);
+          for (let r = 0; r < rowSpan; r++) if (!deleted.has(r)) kept.push(r);
           return recompute({
             ...d,
             data: {
