@@ -113,7 +113,10 @@ export default function HelpDialog() {
   // collision). A registry command with no description is dropped rather
   // than reaching `actionToHelpItem`, which throws on a missing description.
   const registryHelpItems = useMemo(() => {
-    const described = menuCmds.filter((a) => a.description);
+    // `perEntity` commands are excluded: they name the user's DATA (one row per
+    // recent project, with its absolute path as the description) rather than a
+    // capability of the app. Caught in review — the first cut merged them.
+    const described = menuCmds.filter((a) => a.description && !a.perEntity);
     const merged = mergeCommands(CURATED_ACTIONS, described);
     return merged.slice(CURATED_ACTIONS.length).map(actionToHelpItem);
   }, [menuCmds]);

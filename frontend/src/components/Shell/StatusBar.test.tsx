@@ -103,6 +103,20 @@ describe("StatusBar pending-op live region (accessibility gap)", () => {
     return document.querySelector(".qzk-pending");
   }
 
+  // REVIEW ROUND. The live region must already EXIST while idle. A region
+  // inserted into the DOM in the same commit as its first text is commonly not
+  // announced at all by screen readers — so a conditionally-rendered region
+  // loses the first announcement, which for a short operation is the only one.
+  // The class-based queries above cannot see this: `.qzk-pending` is still
+  // absent while idle (only the class is dropped, not the element), so this
+  // asserts on the region itself.
+  it("keeps the live region mounted while idle, so the first op is announced", () => {
+    render(<StatusBar />);
+    const region = document.querySelector('[role="status"][aria-live="polite"]');
+    expect(region).not.toBeNull();
+    expect(region!.textContent).toBe(""); // present, but announcing nothing yet
+  });
+
   it("exposes the pending-op indicator as a polite live region", () => {
     render(<StatusBar />);
     act(() => {

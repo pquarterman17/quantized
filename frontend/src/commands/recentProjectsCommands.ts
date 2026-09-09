@@ -171,6 +171,11 @@ export function useRecentProjectsCommands(): void {
       section: "Recent Projects",
       label: `Open recent project: ${entry.name}`,
       description: entry.path,
+      // One command per recent project: data, not a capability. Keeps these
+      // out of searchable Help (which would otherwise list a row per project
+      // with its absolute path as the explanation) while leaving them in ⌘K,
+      // where finding a specific project by name is the whole point.
+      perEntity: true,
       keywords: "recent project workspace reopen dwk",
       run: () => void openRecentProject(entry.name, entry.path),
     }));

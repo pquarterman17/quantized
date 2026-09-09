@@ -304,3 +304,53 @@ describe("HelpDialog startup boundary", () => {
     expect(overlaysSrc).toContain("{helpOpen && <HelpDialog />}");
   });
 });
+
+// REVIEW ROUND. The registry merge is deliberately open-ended so a FUTURE
+// capability command reaches Help with no edit here — which also means a future
+// PER-ENTITY publisher would silently pour one row per object into Help, with
+// whatever it uses as `description` (Recent Projects uses the absolute path).
+// That is exactly what the first cut did. Enforce the rule rather than trusting
+// the next author to remember it.
+describe("Help search excludes per-entity commands (review round)", () => {
+  function searchFor(term: string): void {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    fireEvent.change(screen.getByLabelText("Search help"), { target: { value: term } });
+  }
+
+  it("does not list a per-entity command, even though it has a description", () => {
+    act(() =>
+      useCommands.getState().setMenuCommands("perEntityGuard", [
+        {
+          id: "recent-project-/Users/x/proj/Anneal.dwk",
+          group: "File",
+          label: "Open recent project: Anneal",
+          description: "/Users/x/proj/Anneal.dwk",
+          perEntity: true,
+          run: () => {},
+        },
+      ]),
+    );
+    searchFor("Anneal");
+    expect(titleShown("Open recent project: Anneal")).toBe(false);
+  });
+
+  // POSITIVE CONTROL — without this, the exclusion above would also pass if the
+  // registry merge were broken outright, which is the failure mode this whole
+  // slice exists to prevent.
+  it("still lists a described CAPABILITY command from the same registry", () => {
+    act(() =>
+      useCommands.getState().setMenuCommands("perEntityGuard", [
+        {
+          id: "guard-capability",
+          group: "File",
+          label: "Do a guarded thing",
+          description: "Does the guarded thing to the current dataset.",
+          run: () => {},
+        },
+      ]),
+    );
+    searchFor("guarded");
+    expect(titleShown("Do a guarded thing")).toBe(true);
+  });
+});

@@ -81,6 +81,7 @@ export function useDataFilter(): DataFilterState {
     if (!active) return [];
     const xName = String(active.data.metadata?.["x_column_name"] ?? "x");
     const xRange = dataRange(active.data.time);
+    const xStored = currentOf(-1);
     const cols: FilterColumn[] = [
       {
         index: -1,
@@ -88,7 +89,14 @@ export function useDataFilter(): DataFilterState {
         kind: "range",
         levels: [],
         levelLabels: [],
-        current: currentOf(-1),
+        // Masked on the SAME rule as the real columns below. Review round: this
+        // was left unmasked, so `FilterColumn.current`'s documented invariant
+        // ("never a predicate of a different kind than `kind`") simply did not
+        // hold for the x pseudo-column — and `sanitizeFilter` will happily
+        // accept a `{col: -1, kind: "set"}` entry out of a hand-edited `.dwk`,
+        // which would then reach a consumer as a foreign shape. The x axis is
+        // always a range, so anything else here is exactly that stale case.
+        current: xStored?.kind === "range" ? xStored : undefined,
         dataMin: xRange?.[0],
         dataMax: xRange?.[1],
       },
@@ -107,21 +115,30 @@ export function useDataFilter(): DataFilterState {
         levels,
         levelLabels: cat ? resolveCategoryLabels(active.data, i, levels) : [],
         // A stored predicate written under the column's PRIOR classification
-        // (e.g. a "set" level-membership filter left over from before a
-        // `setChannelType` override, or an import that changed whether the
-        // column carries `cat_levels`) is a shape neither control below can
-        // render: a range field can't show `.values`, and the checkbox list
-        // can't show `.min`/`.max`. Rather than garble a control with a
-        // foreign predicate shape, treat it as no constraint here — the
-        // conservative choice, since `filter.some(isActive)` below (which
-        // drives the panel's "Clear" affordance) still sees the raw entry
-        // regardless of this masking, so the user always has a visible way
-        // to discard it. The entry itself is left untouched in the store
-        // (never auto-deleted): reverting the override brings it back
-        // exactly as it was. See BUG-003 (plans/BUGS_AND_ISSUES.md) for the
-        // open question this leaves — the row-filtering side (`kept`/
-        // `total` below, and every OTHER consumer of `dataset.filter` via
-        // `lib/datafilter.ts`) still applies it by its own stored kind.
+        // (a "set" level filter left from before a `setChannelType` override,
+        // or an import that changed whether the column carries `cat_levels`)
+        // is a shape neither control can render. Masking it here makes
+        // `FilterColumn.current` actually honour the invariant its type
+        // documents: never a predicate of a different kind than `kind`.
+        //
+        // BE PRECISE ABOUT WHAT THIS DOES AND DOES NOT CHANGE (review round —
+        // the first version of this comment overstated it). It changes NO
+        // rendered output today: `DataFilterPanel` already coped, because the
+        // range slider reads `c.current?.min ?? c.dataMin` (a "set" predicate
+        // has no `.min`, so it already fell back) and the level list already
+        // gates on `c.current?.kind === "set"`. The user-visible oddity —
+        // rows filtered out while the controls look unconstrained — is
+        // UNCHANGED by this, and is the part BUG-003 tracks. What this buys
+        // is that a FUTURE consumer of `current` cannot be handed a foreign
+        // shape and quietly misread it, which is exactly how the panel's two
+        // independent fallbacks would have been easy to get wrong.
+        //
+        // The entry is never auto-deleted: reverting the override brings it
+        // back as it was, and `filter.some(isActive)` still sees the raw entry
+        // so the panel's "Clear" affordance remains available. The row
+        // filtering itself (`kept`/`total`, and every other consumer via
+        // `lib/datafilter.ts`) still applies the predicate by its stored kind
+        // — the open question in BUG-003.
         current: stored?.kind === expectedKind ? stored : undefined,
         dataMin: range?.[0],
         dataMax: range?.[1],
