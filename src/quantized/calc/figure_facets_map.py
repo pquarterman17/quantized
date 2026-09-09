@@ -23,7 +23,7 @@ every other ``calc.figure_facets`` renderer.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -83,11 +83,6 @@ def _facet_grid(
     x_fmt: Mapping[str, Any] | None,
     y_fmt: Mapping[str, Any] | None,
     overrides: Mapping[str, Any] | None,
-    # Forwarded verbatim to `draw_facet_grid` -- see `figure_facets.
-    # render_facets_figure`'s own `series_styles` doc. Optional (default
-    # `None`) so `render_facets_figure_map` (which doesn't pass it) is
-    # unaffected.
-    series_styles: Sequence[Mapping[str, Any] | None] | None = None,
 ) -> Iterator[_BuiltFacetGrid]:
     """The figure-building core shared by ``figure_facets
     .render_facets_figure`` (savefig only) and ``render_facets_figure_map``
@@ -141,7 +136,7 @@ def _facet_grid(
             panel_artists = draw_facet_grid(
                 flat, panels, st=st,
                 resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
-                x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov, series_styles=series_styles,
+                x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
             )
 
             # J2: capture the real Text artists `fig.suptitle`/`supxlabel`/

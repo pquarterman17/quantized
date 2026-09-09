@@ -31,7 +31,6 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
-from quantized.routes.export_figures_facets import facet_panels, render_facet_bytes
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -164,23 +163,13 @@ class FigureRequest(BaseModel):
     # by `calc.plotting.resolve_style_channels`, called from `_figure_series`),
     # and GAP_PLOTTYPES's `step` ("pre"/"post"/"mid" — the Graph Builder "step"
     # mark; mapped to matplotlib's `drawstyle` by `calc.figure._plot_kwargs`).
-    # `marker_shape` (a `MarkerShape` name -> `_plot_kwargs`'s `_MARKER`
-    # table, falls back to "o"); before it existed every one of the eight
-    # on-screen marker shapes exported as a filled circle.
+    # `marker_shape` (a `MarkerShape` name -> `_plot_kwargs`'s `_MARKER` table,
+    # falling back to "o"); before it existed all eight on-screen marker shapes
+    # exported as filled circles while the canvas drew them correctly.
     # An entry is a loose dict (never a strict pydantic sub-model): a bad/
     # unrecognized value in ANY of these keys degrades gracefully (dropped,
     # rendered with matplotlib's default) rather than 422ing the whole export.
     series_styles: list[dict[str, Any] | None] | None = None
-    # The facet grid's OWN per-series styles, 1:1 with each panel's `series`
-    # list. A SEPARATE field from `series_styles` on purpose: that one is
-    # indexed by `y_keys` (the frontend's hidden-filtered, reordered `plotted`
-    # list) while facet panels are built from the RAW `st.yKeys`, so the two
-    # diverge the moment a channel is hidden or reordered while faceting.
-    # Sending one list and hoping would put a chosen dash on the wrong curve.
-    # The frontend builds this from the facet's own channel order, so it is
-    # aligned BY CONSTRUCTION and the backend needs no channel index to match.
-    # Absent (an older client, or a non-faceted request) = today's behaviour.
-    facet_series_styles: list[dict[str, Any] | None] | None = None
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
@@ -300,6 +289,62 @@ def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
     return spec.model_dump() if spec is not None else None
 
 
+def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
+    """Reshape ``req.facets`` into ``calc.figure_facets``' panel-dict shape
+    (``{"label": str, "x": [...], "series": [{"label": str, "y": [...]}]}``)
+    -- the ONE reshape, shared by ``_render_facets_bytes`` (the standalone
+    ``/figure``/``/figure-hitmap`` facet branches) and ``routes.export_page``
+    (a faceted page panel -- F4.4 follow-up, a real vector sub-grid instead
+    of the earlier pre-rendered raster embed), so the two routes can never
+    drift on how a facet-bound panel's wire payload turns into the
+    renderer's input. Kept here (not calc/) because it moves ``req.facets``'
+    pydantic model instances into plain dicts -- exactly the route-layer job
+    the calc/routes split reserves for routes/."""
+    assert req.facets
+    return [
+        {
+            "label": f.label,
+            "x": f.x,
+            "series": [{"label": s.label, "y": s.y} for s in f.series],
+        }
+        for f in req.facets
+    ]
+
+
+def _render_facets_bytes(req: FigureRequest, *, dpi: int, fmt: str | None = None) -> bytes:
+    """Render ``req.facets`` to image bytes -- the standalone facet-branch
+    renderer used by ``export_figure``/``export_figure_hitmap`` (R2, fix
+    round 3). Derives axis labels via ``_figure_series`` (C4 --
+    ``resolved.x_label``/``resolved.y_label`` already apply the "explicit
+    override, else derive from the dataset" rule), and forwards scale/tick-
+    format/transparent/overrides the SAME way the flat branch does
+    (C1/C3/R3). ``fmt`` overrides ``req.fmt`` when given -- ``export_figure_
+    hitmap`` forces ``fmt="png"`` (the preview render is always a raster
+    PNG). (``title``/``style`` override params were dropped in fix round 3,
+    W2 -- dead since ``routes.export_page`` stopped calling this function
+    at all in fix round 1, and neither remaining caller ever passed them.)"""
+    from quantized.calc.figure_facets import render_facets_figure
+
+    resolved = _figure_series(req)
+    return render_facets_figure(
+        _facet_panels(req),
+        x_log=req.x_log,
+        y_log=req.y_log,
+        x_scale=req.x_scale,
+        y_scale=req.y_scale,
+        title=req.title,
+        x_label=resolved.x_label,
+        y_label=resolved.y_label,
+        fmt=fmt or req.fmt,
+        style=req.style,
+        width_in=req.width_in,
+        height_in=req.height_in,
+        dpi=dpi,
+        transparent=req.transparent,
+        x_fmt=_tick_fmt(req.x_fmt),
+        y_fmt=_tick_fmt(req.y_fmt),
+        overrides=req.overrides,
+    )
 
 
 @router.post("/figure")
@@ -315,23 +360,12 @@ def export_figure(req: FigureRequest) -> Response:
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
-        # ONE label/style resolution for both branches -- the facet branch used
-        # to run its own copy inside `_render_facets_bytes`; hoisting it is what
-        # lets that helper live in `export_figures_facets` without importing
-        # back into this module.
-        resolved = _figure_series(req)
         if req.facets:
-            data = render_facet_bytes(
-                req,
-                dpi=dpi,
-                x_label=resolved.x_label,
-                y_label=resolved.y_label,
-                x_fmt=_tick_fmt(req.x_fmt),
-                y_fmt=_tick_fmt(req.y_fmt),
-            )
+            data = _render_facets_bytes(req, dpi=dpi)
         else:
             from quantized.calc.figure import render_figure
 
+            resolved = _figure_series(req)
             data = render_figure(
                 resolved.x,
                 resolved.series,
@@ -380,8 +414,8 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     FU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound
     request (``req.facets`` set) renders the SAME small-multiples grid
     ``/figure`` exports (via ``calc.figure_facets_map.render_facets_figure_map``,
-    sharing this module's own ``_figure_series``-derived label resolution)
-    and now returns REAL per-panel geometry: ``panels``
+    sharing ``_render_facets_bytes``'s own ``_figure_series``-derived label
+    resolution below) and now returns REAL per-panel geometry: ``panels``
     (one axes entry per panel -- pixel rect + data limits + facet label,
     replacing the flat path's single ``axes`` dict, which is absent here)
     and ``elements`` tagged with a ``panel`` index (each panel's facet
@@ -406,7 +440,7 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
 
             resolved = _figure_series(req)
             return render_facets_figure_map(
-                facet_panels(req),
+                _facet_panels(req),
                 x_log=req.x_log,
                 y_log=req.y_log,
                 x_scale=req.x_scale,

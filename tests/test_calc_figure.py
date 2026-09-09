@@ -165,7 +165,7 @@ def test_step_style_renders() -> None:
         assert out[:5] == b"%PDF-"
 
 
-# ── Marker-shape export parity (backend plumbing; frontend not wired yet —
+# ── Marker-shape export parity (`lib/exportStyles.ts` sends `marker_shape` —
 # see routes.export_figures.FigureRequest.series_styles's own `marker_shape`
 # doc) ────────────────────────────────────────────────────────────────────
 
@@ -196,7 +196,8 @@ def test_unknown_marker_shape_falls_back_to_circle() -> None:
 
 
 def test_absent_marker_shape_defaults_to_circle() -> None:
-    # No `marker_shape` key at all (today's actual frontend payload) must
+    # No `marker_shape` key at all (an older client, or a series with no shape
+    # chosen) must
     # still degrade to the pre-existing filled-circle default.
     kwargs = _plot_kwargs(1.5, 5.0, {"marker": True})
     assert kwargs["marker"] == "o"

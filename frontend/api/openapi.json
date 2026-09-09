@@ -3655,28 +3655,6 @@
             ],
             "title": "Error Spans"
           },
-          "facet_series_styles": {
-            "anyOf": [
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "additionalProperties": true,
-                      "type": "object"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Facet Series Styles"
-          },
           "facets": {
             "anyOf": [
               {
@@ -11404,7 +11382,7 @@
     },
     "/api/export/figure-hitmap": {
       "post": {
-        "description": "Preview render + element hit-map (gap #13): base64 PNG, per-artist\npixel boxes (title/labels/legend/series/annotations), and the axes rect\nwith data limits \u2014 the client hit-tests the preview and maps drags back\nto data coordinates. ``fmt`` is ignored (always PNG at ``dpi``).\n\nFU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound\nrequest (``req.facets`` set) renders the SAME small-multiples grid\n``/figure`` exports (via ``calc.figure_facets_map.render_facets_figure_map``,\nsharing this module's own ``_figure_series``-derived label resolution)\nand now returns REAL per-panel geometry: ``panels``\n(one axes entry per panel -- pixel rect + data limits + facet label,\nreplacing the flat path's single ``axes`` dict, which is absent here)\nand ``elements`` tagged with a ``panel`` index (each panel's facet\ntitle, series lines, and -- since fix round 4 -- its legend, when that\npanel drew one). The whole-figure ``title``/``xlabel``/``ylabel`` are\nALSO harvested (fix round 3), emitted with the flat path's own ids and\nno ``panel`` key, so they stay editable exactly as on a flat preview.\nSee ``calc.figure_hitmap.collect_facet_map`` for exactly what is/isn't\nharvested and why (facets genuinely draw no annotation/reference-line/\nshape into a panel today, so there is nothing to harvest for those ids;\na panel's series line and legend ARE harvested but gated client-side,\nsince per-panel style edits aren't wired through the facet render path\n-- full per-panel drag-edit is still future work, not silently faked\nhere). The flat (non-facet) response below is\nUNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``\nkey at all.",
+        "description": "Preview render + element hit-map (gap #13): base64 PNG, per-artist\npixel boxes (title/labels/legend/series/annotations), and the axes rect\nwith data limits \u2014 the client hit-tests the preview and maps drags back\nto data coordinates. ``fmt`` is ignored (always PNG at ``dpi``).\n\nFU-facet-hitmap (closes the former R1/fix-round-3 gap): a facet-bound\nrequest (``req.facets`` set) renders the SAME small-multiples grid\n``/figure`` exports (via ``calc.figure_facets_map.render_facets_figure_map``,\nsharing ``_render_facets_bytes``'s own ``_figure_series``-derived label\nresolution below) and now returns REAL per-panel geometry: ``panels``\n(one axes entry per panel -- pixel rect + data limits + facet label,\nreplacing the flat path's single ``axes`` dict, which is absent here)\nand ``elements`` tagged with a ``panel`` index (each panel's facet\ntitle, series lines, and -- since fix round 4 -- its legend, when that\npanel drew one). The whole-figure ``title``/``xlabel``/``ylabel`` are\nALSO harvested (fix round 3), emitted with the flat path's own ids and\nno ``panel`` key, so they stay editable exactly as on a flat preview.\nSee ``calc.figure_hitmap.collect_facet_map`` for exactly what is/isn't\nharvested and why (facets genuinely draw no annotation/reference-line/\nshape into a panel today, so there is nothing to harvest for those ids;\na panel's series line and legend ARE harvested but gated client-side,\nsince per-panel style edits aren't wired through the facet render path\n-- full per-panel drag-edit is still future work, not silently faked\nhere). The flat (non-facet) response below is\nUNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``\nkey at all.",
         "operationId": "export_figure_hitmap_api_export_figure_hitmap_post",
         "requestBody": {
           "content": {

@@ -55,14 +55,17 @@ count-only gate line said "1 failed" — the name came from re-running with
 
 The fix is not to retry or to reorder tests:
 
-- **Patch a name the target resolves at CALL time.** The route imports
+- **Patch a name the target resolves at CALL time.** That route imported
   `render_facets_figure` *inside* the function, so patching
-  `calc.figure_facets.render_facets_figure` always applies. That test now
-  asserts the route forwards `series_styles`, which is the route's actual claim.
-- **Assert the rendering claim where the rendering happens.** The
-  "a dashed series really draws dashed" assertion belongs in the calc-level
-  test, which calls the drawing function directly and inspects the matplotlib
-  artist — no patching at all, so nothing can silently not apply.
+  `calc.figure_facets.render_facets_figure` would always apply.
+- **Better: assert the claim where it happens, and need no patch.** The
+  "a dashed series really draws dashed" assertion belongs in a calc-level test
+  that calls the drawing function directly and inspects the matplotlib artist —
+  nothing can silently fail to apply.
+
+(The feature those tests covered was itself reverted the same day, for unrelated
+reasons — see `plans/BUGS_AND_ISSUES.md` FEATURE-001. The lesson stands on its
+own; it is about where to patch, not about that feature.)
 
 Rule of thumb: if a test needs a patch to observe its subject, patch the
 narrowest name the subject looks up when it runs, and prefer restructuring the

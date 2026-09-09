@@ -54,14 +54,14 @@ def _plot_kwargs(
     default_lw: float, default_marker_size: float, spec: Mapping[str, Any] | None
 ) -> dict[str, Any]:
     """Translate a per-series style spec (color/width/line/marker[/marker_size]
-    /marker_shape/step) into matplotlib ``plot`` kwargs, so the export matches
-    the on-screen styling. ``default_marker_size`` is the active preset's
+    /step) into matplotlib ``plot`` kwargs, so the export matches the
+    on-screen styling. ``default_marker_size`` is the active preset's
     calibrated marker size, used only when a marker is requested without an
-    explicit per-series size. An unrecognized ``step``/``line``/``marker_shape``
-    value is silently ignored/defaulted rather than raising -- same
-    degrade-gracefully contract as every other style field here (see
-    ``calc.plotting.resolve_style_channels``'s doc: "an export must never 500
-    on a bad style hint")."""
+    explicit per-series size. An unrecognized ``step``/``line`` value is
+    silently ignored (no ``drawstyle``/``linestyle`` key added) rather than
+    raising -- same degrade-gracefully contract as every other style field
+    here (see ``calc.plotting.resolve_style_channels``'s doc: "an export must
+    never 500 on a bad style hint") -- ``marker_shape`` included."""
     kw: dict[str, Any] = {"linewidth": default_lw}
     if not spec:
         return kw

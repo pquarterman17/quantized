@@ -429,19 +429,9 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(faceted.facets?.map((f) => f.label)).toEqual(["100", "200", "300"]);
     expect(faceted.facets?.every((f) => f.series.length === 2)).toBe(true); // yKeys: [1, 2]
 
-    // Every OTHER field is untouched by faceting -- the facet fields are
-    // additive, not a replacement for the rest of the wire shape. Group L
-    // added a SECOND additive field: `facet_series_styles`, the grid's own
-    // style list, which exists precisely because it must NOT reuse
-    // `series_styles` (different channel indexing -- see this file's
-    // "sends facet_series_styles indexed by the FACET's channels" test).
-    expect(faceted).toEqual({
-      ...flat,
-      facets: faceted.facets,
-      facet_series_styles: faceted.facet_series_styles,
-    });
-    // …and it really is the grid's own list, not a copy of the flat one.
-    expect(faceted.facet_series_styles).toHaveLength(2); // yKeys: [1, 2]
+    // Every OTHER field is untouched by faceting -- `facets` is additive,
+    // not a replacement for the rest of the wire shape.
+    expect(faceted).toEqual({ ...flat, facets: faceted.facets });
   });
 
   // Fix-round C2: an excluded row must drop out of the exported facet
@@ -516,35 +506,6 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
 
     expect(() => buildFigureSpecFromDocument(flat, dataset, "hidden-flat"))
       .toThrow("no visible series to export");
-  });
-
-  // Group L. The test ABOVE is the evidence for these: it proves `y_keys` and
-  // `facets` diverge (y_keys `[]`, facets still 3 panels of series). So the
-  // facet renderer must NOT be fed `series_styles`, which is indexed by
-  // `y_keys` — a positional reuse would draw a chosen dash on the wrong curve.
-  it("sends facet_series_styles indexed by the FACET's channels, not by the hidden-filtered plotted list", () => {
-    const allHidden = { ...richView(), hiddenChannels: [1, 2] };
-    const faceted = createFigureDocument({
-      id: "styled-faceted", name: "Styled faceted", datasetId: dataset.id, view: allHidden, facetKey: 1,
-    });
-    const spec = buildFigureSpecFromDocument(faceted, dataset, "styled-faceted");
-
-    // The divergence, restated here so this test stands on its own.
-    expect(spec.y_keys).toEqual([]);
-    expect(spec.series_styles).toEqual([]);
-    // …and the facet list is NOT empty: it matches the panels' own series.
-    const perPanel = spec.facets![0].series.length;
-    expect(perPanel).toBeGreaterThan(0);
-    expect(spec.facet_series_styles).toHaveLength(perPanel);
-  });
-
-  it("omits facet_series_styles entirely when the view is not faceted", () => {
-    const flat = createFigureDocument({
-      id: "flat-nostyles", name: "Flat", datasetId: dataset.id, view: richView(),
-    });
-    const spec = buildFigureSpecFromDocument(flat, dataset, "flat-nostyles");
-    expect(spec.facets).toBeFalsy();
-    expect(spec.facet_series_styles).toBeUndefined();
   });
 
   it("applies extra.transparent LAST, winning even on the fallback (no-document) path", () => {

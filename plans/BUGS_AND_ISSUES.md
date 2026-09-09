@@ -30,6 +30,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
 | BUG-006 | P2 | Worksheet Extract / Split | A row slice carries the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer line up with its rows | Unassigned | Found by review of the Group J fix, 2026-09-09 |
+| FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
 
@@ -1091,6 +1092,84 @@ Two reasons, both about not guessing:
 #### Completion record
 
 _(empty — open)_
+
+---
+
+## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
+
+**Priority:** P3 — nothing is lost or corrupted, and screen and export AGREE
+today (both ignore it). It is a missing capability, not a defect: a user who
+styles a series and then facets sees their styling quietly stop mattering, with
+no warning. P3 rather than P2 because the data and the analysis are untouched.
+
+**Reported:** 2026-09-09, by Claude, while auditing PRIMARY_SOFTWARE_AUDIT_PLAN
+P3.3's "contrast and non-color encodings" box. Filed AFTER a fix was built,
+reviewed twice, and deliberately reverted — the reasons are the valuable part of
+this entry.
+
+#### What is actually true
+
+- `calc/figure_facets.py`'s `draw_facet_grid` calls
+  `_plot_kwargs(st.line_width, st.marker_size, None)` — a hardcoded `None`
+  where the flat renderer passes the per-series style spec.
+- `components/Stage/useMultiPanelStage.ts`'s facet branch passes NO
+  `seriesStyles` to `buildOpts` either, unlike its sibling branches.
+- So the export is CONSISTENT with the screen. This was originally reported as
+  "faceted export silently drops styles", which framed a missing feature as an
+  export regression.
+
+#### Why the obvious fix is wrong (two rounds of review)
+
+1. **`series_styles` cannot be forwarded.** It is indexed by `y_keys`, which
+   `lib/figureSpec.ts` sends as `plotted` — hidden-channel-FILTERED and
+   `seriesOrder`-REORDERED. Facet panels are built from the RAW `st.yKeys`,
+   because the on-screen grid honours neither. An existing passing test
+   (`figureSpec.test.ts`, "does not throw for an all-hidden FACETED view")
+   already demonstrates the divergence: `y_keys` comes back `[]` while `facets`
+   still carries every series. Forwarding would draw a chosen dash on the WRONG
+   curve.
+2. **A separate facet-indexed list is ALSO insufficient.** Building one from
+   `st.yKeys ?? defaultDenseChannels(...)` fails whenever `yKeys` is null,
+   because `lib/plotdata.ts`'s `buildColumns` re-runs the `defaultDenseChannels`
+   DENSITY heuristic on each ROW-SLICED panel. Measured on a QD-shaped fixture
+   (M_DC finite only on level-0 rows, M_AC only on level-1 rows): panel 0
+   resolved `[level, M_DC]`, panel 1 resolved `[level, M_AC]`. The panels differ
+   from the whole-dataset list AND FROM EACH OTHER.
+3. **Therefore `draw_facet_grid`'s "every panel shares one series order"
+   assumption is false**, and no single style list can serve the grid.
+
+#### What a real fix has to decide first
+
+- **Should every panel show the same channel set?** Comparing like with like is
+  the point of small multiples, so pinning one channel list for the whole grid
+  is defensible — and would make one style list valid. But it changes what the
+  screen renders (panels would show empty series), so it is a product decision,
+  not an implementation detail to settle silently.
+- Otherwise the wire needs per-PANEL styles, or a channel index per facet
+  series so styles can be matched by channel rather than position.
+- Either way the fix must land on the SCREEN and the EXPORT together, or it
+  breaks the parity invariant `lib/figureSpecFacets.ts` documents ("renders the
+  SAME faceted grid Stage shows").
+
+#### Reproduction
+
+- [x] Confirmed by reading both renderers (`figure_facets.py`,
+  `useMultiPanelStage.ts`).
+- [x] The per-panel channel divergence measured directly with a throwaway probe
+  over the real `facetPayloads`, not inferred.
+- [ ] Confirmed visually on owner data.
+
+#### Implementation
+
+- [ ] Product decision: one channel set per grid, or per-panel styles.
+- [ ] Screen and export together.
+- [ ] A fixture where panels WOULD resolve different channels, so whichever rule
+  is chosen is pinned against the case that broke the first two attempts.
+
+#### Completion record
+
+_(empty — open. The reverted attempt is commit-logged; `docs/testing.md` kept
+the monkeypatch lesson it produced.)_
 
 ---
 

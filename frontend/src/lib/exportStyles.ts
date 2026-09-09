@@ -26,10 +26,12 @@ export function buildExportStyles(
     if (st?.marker) {
       spec.marker = true;
       if (st.markerSize != null) spec.marker_size = st.markerSize;
-      // Without this the backend's marker-shape table is dead code and every
-      // exported marker is a filled circle, whatever the eight on-screen
-      // shapes said (`calc/figure.py`'s `_MARKER`). An unknown value falls
-      // back to a circle there, so sending it unvalidated is safe.
+      // Without this the backend's marker-shape table is unreachable and every
+      // exported marker is a filled circle, whatever shape the canvas drew
+      // (`uplotOpts.ts` honours `markerShape`; `calc/figure.py` did not).
+      // Emitted here rather than at a call site so every producer of export
+      // styles gets it — spatialPageExport, legacyFigure, useGraphTemplates
+      // and plotSpecFigure all route through this one builder.
       if (st.markerShape) spec.marker_shape = st.markerShape;
     }
     if (st?.fill && st.fill !== "none") spec.fill = st.fill;

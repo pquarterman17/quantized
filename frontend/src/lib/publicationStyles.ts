@@ -10,7 +10,8 @@ export interface ExportSeriesStyle {
   marker_size?: number;
   /** The wire form of `SeriesStyle.markerShape`, mapped to a matplotlib marker
    *  code by `calc.figure._MARKER`. Before this existed the backend hardcoded
-   *  `"o"`, so all eight on-screen shapes exported as filled circles. An
+   *  `"o"`, so all eight on-screen shapes exported as filled circles while the
+   *  canvas drew them correctly (`uplotOpts.ts`'s `markerPaths`). An
    *  unrecognized value falls back to a circle rather than raising, matching
    *  `line`/`step`'s existing degrade-gracefully contract. */
   marker_shape?: string;
