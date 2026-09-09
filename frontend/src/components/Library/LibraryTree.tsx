@@ -15,7 +15,7 @@
 // no established "return focus to the stage" affordance exists yet to
 // match, per the plan's C brief).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import ArtifactRow from "./ArtifactRows";
 import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
@@ -23,14 +23,16 @@ import DatasetRow from "./DatasetRow";
 import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
 import WorkbookRow from "./WorkbookRow";
-import { openLibraryNode, selectLibraryNode } from "./libraryOpen";
-import { subtreeCount } from "../../lib/foldertree";
+import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import { focusRowWhenRendered, useListVirtualization } from "./useListVirtualization";
+import { subtreeCount, subtreeCountIndex } from "../../lib/foldertree";
 import { folderDeleteActions, isContextMenuKeyEvent, runContextAction } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
 import { workbookDeleteActions } from "../../lib/workbookContextActions";
 import { useApp } from "../../store/useApp";
+import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import ContextMenu from "../overlays/ContextMenu";
 
 const NAV_KEYS: Record<string, NavDirection> = {
@@ -105,21 +107,42 @@ interface Props {
   rows: FlatLibraryNode[];
   /** Tag-chip click inside a nested DatasetRow — Library.tsx owns the query. */
   onFilterTag: (tag: string) => void;
+  /** The real scrolling ancestor (Library.tsx's `<aside>`) — E-c3
+   *  virtualization measures/scrolls THIS, not the row container, since the
+   *  header/search/sections above the tree share its one scrollbar. Absent
+   *  in standalone test harnesses; the virtualization hook degrades to the
+   *  row container itself (see useListVirtualization's header). */
+  panelRef?: RefObject<HTMLElement | null>;
 }
 
-export default function LibraryTree({ rows, onFilterTag }: Props) {
+export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
+  const librarySelection = useLibraryStore((s) => s.librarySelection);
   const folders = useApp((s) => s.folders);
   const datasets = useApp((s) => s.datasets);
   const containerRef = useRef<HTMLDivElement>(null);
   const focusedKeyRef = useRef<string | null>(null);
   const prevRowsRef = useRef(rows);
+  // Set by the focus-recovery effect to claim the scroll window for one render,
+  // so the selection effect below cannot override it (review round).
+  const recoveringRef = useRef(false);
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
+  const folderCounts = useMemo(() => subtreeCountIndex(folders, datasets), [folders, datasets]);
+  // E-c3 "keep selection operations indexed": built once per render, not
+  // once per row — see isSelected's doc in libraryOpen.ts.
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const virt = useListVirtualization(rows.length, panelRef, containerRef, "[data-lib-row], [data-ds-id]");
+  const rendered = virt.virtualized ? rows.slice(virt.start, virt.end) : rows;
 
-  const focusRow = (row: FlatLibraryNode | undefined): void => {
+  const focusRow = (row: FlatLibraryNode | undefined, index: number, fromSelector?: string): void => {
     if (!row) return;
-    (containerRef.current?.querySelector(rowSelector(row)) as HTMLElement | null)?.focus();
+    if (!virt.virtualized) {
+      (containerRef.current?.querySelector(rowSelector(row)) as HTMLElement | null)?.focus();
+      return;
+    }
+    virt.ensureVisible(index);
+    focusRowWhenRendered(rowSelector(row), fromSelector ? [fromSelector] : [], containerRef.current);
   };
 
   // Focus survives removal/move of the focused row: if the row that had
@@ -133,10 +156,44 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
     if (key != null && indexOfKey(rows, key) < 0 && document.activeElement === document.body) {
       const prevIdx = indexOfKey(prevRowsRef.current, key);
       const clamped = Math.min(Math.max(prevIdx, 0), rows.length - 1);
-      focusRow(rows[clamped]);
+      recoveringRef.current = true; // claim the window; see the selection effect below
+      focusRow(rows[clamped], clamped);
     }
     prevRowsRef.current = rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focusRow closes over virt, stable per render intent
   }, [rows]);
+
+  // E-c3: "Show in Library" (and any ordinary selection change) keeps the
+  // now-selected row inside the rendered window — selectLibraryNode runs
+  // BEFORE the reveal effect's scrollIntoView retry (Library.tsx), so
+  // without this the retry's target row never mounts under virtualization
+  // and the reveal silently fails to scroll.
+  //
+  // REVIEW ROUND, two defects here. (a) This was keyed on the selectedRow
+  // OBJECT, and `flattenLibraryHierarchy` allocates fresh row wrappers on every
+  // rebuild — so it re-fired on ANY unrelated model change and yanked the window
+  // back to the selection while the user was reading somewhere else (measured:
+  // renaming an unrelated dataset moved the window from d278..d312 to d0..d33).
+  // Keyed on the row's stable KEY now, so it fires when the SELECTION changes,
+  // which is what it is for. (b) It runs after the focus-recovery effect above
+  // and called `ensureVisible` unconditionally, overriding that effect's window
+  // — so deleting the focused row while a DIFFERENT row was selected left
+  // `document.activeElement` on <body>. Body focus plus the Delete keybinding is
+  // exactly the data-loss path `lib/focusGuard.ts` exists to prevent, so the
+  // recovery wins: it sets `recoveringRef` and this effect stands down for that
+  // render.
+  const selectedRow = rows.find((r) => isSelected(r.node, selectedIdSet, librarySelection));
+  const selectedKey = selectedRow?.node.key ?? null;
+  useEffect(() => {
+    if (recoveringRef.current) {
+      recoveringRef.current = false;
+      return;
+    }
+    if (!virt.virtualized || selectedKey == null) return;
+    const idx = indexOfKey(rows, selectedKey);
+    if (idx >= 0) virt.ensureVisible(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the STABLE selection key; `rows`/`ensureVisible` are read, not tracked (see the note above)
+  }, [selectedKey, virt.virtualized]);
 
   const onFocusCapture = (e: React.FocusEvent) => {
     focusedKeyRef.current = keyOfRow(e.target as Element);
@@ -247,7 +304,7 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
     e.preventDefault();
     const result = navigate(rows, idx, dir);
     if (result.toggleIndex != null) toggleExpand(rows[result.toggleIndex].node);
-    else focusRow(result.focusIndex != null ? rows[result.focusIndex] : undefined);
+    else if (result.focusIndex != null) focusRow(rows[result.focusIndex], result.focusIndex, rowSelector(rows[idx]));
   };
 
   return (
@@ -264,8 +321,9 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
         setArtifactMenu({ x: event.clientX, y: event.clientY, node });
       }}
       ref={containerRef}
+      style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
     >
-      {rows.map(({ node, expanded, hasChildren }) => {
+      {rendered.map(({ node, expanded, hasChildren }) => {
         switch (node.kind) {
           case "folder":
             return (
@@ -273,7 +331,7 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
                 key={node.key}
                 folder={node.entity}
                 depth={node.depth}
-                count={subtreeCount(folders, datasets, node.entityId)}
+                count={folderCounts.get(node.entityId) ?? 0}
                 expanded={expanded}
               />
             );
@@ -285,7 +343,7 @@ export default function LibraryTree({ rows, onFilterTag }: Props) {
                 key={node.key}
                 dataset={node.entity}
                 active={node.entity.id === activeId}
-                selected={selectedIds.includes(node.entity.id)}
+                selected={selectedIdSet.has(node.entity.id)}
                 showReorder={false}
                 canMoveUp={false}
                 canMoveDown={false}

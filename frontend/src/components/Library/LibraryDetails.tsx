@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 
-import { openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import DetailsHeaderRow from "./DetailsHeaderRow";
+import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import { useLibraryDetailsVirtualization } from "./useLibraryDetailsVirtualization";
 import {
   detailsNavIndex,
   libraryDetailsRows,
@@ -35,6 +37,9 @@ interface Props {
   /** Clears the search and reveals the row's node in its hierarchy (L0.26's
    *  "Show in Library"). Wired by Library.tsx to the store's reveal signal. */
   onShowInLibrary?: (node: LibraryNode) => void;
+  /** The real scrolling ancestor — see LibraryTree's identical prop doc.
+   *  Absent in standalone test harnesses. */
+  panelRef?: RefObject<HTMLElement | null>;
 }
 
 // PR L (L0.56) — Name is the one mandatory, non-toggleable column; every
@@ -57,14 +62,11 @@ function batchPatchFrom(picked: Record<string, unknown>): BatchMetadataPatch {
   return patch;
 }
 
-function isSelected(node: LibraryNode, selectedIds: readonly string[], selection: { kind: string; id: string } | null) {
-  return node.kind === "worksheet"
-    ? selectedIds.includes(node.entityId)
-    : selection?.kind === node.kind && selection.id === node.entityId;
-}
-
-export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary }: Props) {
+export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary, panelRef }: Props) {
   const selectedIds = useApp((s) => s.selectedIds);
+  // E-c3 "keep selection operations indexed": built once per render, not
+  // once per row — see isSelected's doc in libraryOpen.ts.
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selection = useLibraryStore((s) => s.librarySelection);
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
@@ -89,6 +91,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
     }
     return sortLibraryDetailsRows(projected, sortKey, direction);
   }, [hierarchy, searching, searchQuery, sortKey, direction]);
+  const colSpan = columns.length + (searching ? 1 : 0);
 
   // Roving tabindex (plan follow-up 4a): exactly ONE row is in the Tab order
   // at a time — the last-focused row, else the current-item row, else the
@@ -96,7 +99,6 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   // row order via detailsNavIndex; a re-sort moves the focused <tr> element,
   // and the browser keeps focus on a moved element, so `focusKey` survives a
   // sort untouched.
-  const scrollRef = useRef<HTMLDivElement>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   // Sol's PR #141 follow-on: the EIGHT sort headers were eight more Tab
   // stops. Same roving pattern as the rows — one header in the Tab order
@@ -117,14 +119,14 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   };
   const prevRowsRef = useRef(rows);
   const keyIndex = (key: string | null): number => (key == null ? -1 : rows.findIndex((r) => r.node.key === key));
-  const selectedRow = rows.find((r) => isSelected(r.node, selectedIds, selection));
+  const selectedRow = rows.find((r) => isSelected(r.node, selectedIdSet, selection));
   const rovingKey = (focusKey != null && keyIndex(focusKey) >= 0 ? focusKey : null) ?? selectedRow?.node.key ?? rows[0]?.node.key ?? null;
-
-  const focusRowAt = (index: number): void => {
-    const key = rows[index]?.node.key;
-    if (key == null) return;
-    (scrollRef.current?.querySelector(`[data-lib-row="${CSS.escape(key)}"]`) as HTMLElement | null)?.focus();
-  };
+  // E-c3 large-Library safeguard: windowed rendering above VIRTUALIZE_ABOVE,
+  // the fallback tab stop when the model one scrolls out, and the
+  // virtualization-aware focusRowAt/"keep selection visible" effect all live
+  // in this sibling hook — see its header.
+  const { scrollRef, virt, rendered, effectiveRovingKey, focusRowAt } =
+    useLibraryDetailsVirtualization(rows, panelRef, rovingKey, selectedRow);
 
   // Focus survives removal of the focused row (same contract as
   // LibraryTree.tsx): when the row that held focus is gone after a re-render
@@ -154,12 +156,13 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
     }
     // 4a booking: NO Left/Right — disclosure is a hierarchy gesture and this
     // is a flat (possibly sorted) table; those keys bubble on untouched.
-    const next = detailsNavIndex(rows.length, keyIndex(target.getAttribute("data-lib-row")), event.key);
+    const fromKey = target.getAttribute("data-lib-row");
+    const next = detailsNavIndex(rows.length, keyIndex(fromKey), event.key);
     if (next == null) return;
     // preventDefault also gates the window-level single-key handlers (the
     // global prev/next-dataset arrows honor defaultPrevented) and page scroll.
     event.preventDefault();
-    focusRowAt(next);
+    focusRowAt(next, fromKey ?? undefined);
   };
 
   const sortBy = (key: LibraryDetailsSortKey) => {
@@ -228,41 +231,50 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
        *  the global dataset navigator. The accessible name lives on the
        *  <table> itself, where it labels a real role. */}
       <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
-        <table className="qzk-details-table" aria-label="Library details table">
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column.key} data-col={column.key} className={column.className} scope="col" aria-sort={sortKey === column.key ? (direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    tabIndex={column.key === rovingHeader ? 0 : -1}
-                    onFocus={() => setHeaderKey(column.key)}
-                    onKeyDown={onHeaderKeyDown}
-                    onClick={() => sortBy(column.key)}
-                  >
-                    {column.label}{sortKey === column.key ? (direction === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                </th>
-              ))}
-              {/* D2: the reveal-action column — a header cell with no sort
-               *  button, so the header roving arithmetic (COLUMNS-indexed)
-               *  never sees it. The class is load-bearing (review round 2):
-               *  table-layout:fixed takes COLUMN widths from the first row,
-               *  so the actions width must live on this th, not the tds. */}
-              {searching && <th scope="col" className="qzk-details-actions" aria-label="Show in Library" />}
-            </tr>
-          </thead>
+        {/* REVIEW ROUND: a VIRTUALIZED table must declare its true size. Without
+            `aria-rowcount` a screen reader announces only the rendered window
+            (~40 rows) as the entire table, so a 5,000-row Library sounds like a
+            40-row one — an accessibility regression introduced BY the
+            windowing. Each row carries its absolute `aria-rowindex` (1-based,
+            header row = 1) so "row 3,214 of 5,000" stays truthful while
+            scrolling. Unvirtualized, the DOM already tells the whole truth, so
+            the attributes are omitted rather than asserted redundantly. */}
+        <table
+          className="qzk-details-table"
+          aria-label="Library details table"
+          {...(virt.virtualized ? { "aria-rowcount": rows.length } : {})}
+        >
+          <DetailsHeaderRow
+            columns={columns}
+            sortKey={sortKey}
+            direction={direction}
+            rovingHeader={rovingHeader}
+            searching={searching}
+            onFocusColumn={setHeaderKey}
+            onHeaderKeyDown={onHeaderKeyDown}
+            onSort={sortBy}
+          />
           <tbody>
-            {rows.map((row) => {
-              const selected = isSelected(row.node, selectedIds, selection);
+            {/* E-c3: leading spacer — see useListVirtualization's header.
+             *  aria-hidden keeps it out of getAllByRole("row") the same way
+             *  it's kept out of a screen reader's row count. */}
+            {virt.padTop > 0 && (
+              <tr aria-hidden="true" style={{ height: virt.padTop }}><td colSpan={colSpan} /></tr>
+            )}
+            {rendered.map((row, i) => {
+              const selected = isSelected(row.node, selectedIdSet, selection);
+              // Absolute position in the FULL model, not the window: 1-based
+              // with the header row occupying index 1 (see the table's note).
+              const absoluteRowIndex = (virt.virtualized ? virt.start + i : i) + 2;
               const title = `${row.node.name} — ${row.type}; ${row.location}; ${row.dimensions}; ${row.source}`;
               return (
                 <tr
                   key={row.node.key}
                   className={selected ? "selected" : undefined}
                   data-lib-row={row.node.key}
+                  {...(virt.virtualized ? { "aria-rowindex": absoluteRowIndex } : {})}
                   data-ds-id={row.node.kind === "worksheet" ? row.node.entityId : undefined}
-                  tabIndex={row.node.key === rovingKey ? 0 : -1}
+                  tabIndex={row.node.key === effectiveRovingKey ? 0 : -1}
                   aria-selected={selected}
                   title={title}
                   onFocus={() => setFocusKey(row.node.key)}
@@ -338,7 +350,7 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                         className="qzk-details-reveal"
                         aria-label="Show in Library"
                         title="Show in Library"
-                        tabIndex={row.node.key === rovingKey ? 0 : -1}
+                        tabIndex={row.node.key === effectiveRovingKey ? 0 : -1}
                         onClick={(event) => {
                           event.stopPropagation(); // never also select/open the row
                           onShowInLibrary?.(row.node);
@@ -357,6 +369,9 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                 </tr>
               );
             })}
+            {virt.padBottom > 0 && (
+              <tr aria-hidden="true" style={{ height: virt.padBottom }}><td colSpan={colSpan} /></tr>
+            )}
           </tbody>
         </table>
         {searching && rows.length === 0 && (

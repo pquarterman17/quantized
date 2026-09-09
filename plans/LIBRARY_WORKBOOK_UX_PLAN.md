@@ -4,7 +4,15 @@
 H shipped and reviewed, J/K/L each have slice 1 landed (K also has slice 2),
 M slice 1 landed, N deferred with evidence (see item 14), I/I2 not started
 **Created:** 2026-08-12  
-**Updated:** 2026-08-19 — Day-5 sprint reconciliation (QA lane): corrected H
+**Updated:** 2026-09-09 — Claude closed 4 of the 6 "Required large-Library
+engineering safeguards" boxes with evidence: Tree/Details virtualization
+(`useListVirtualization.ts`/`useLibraryDetailsVirtualization.ts`, mirroring
+Tiles' E-c3 hook), indexed folder counts (`subtreeCountIndex`) and indexed
+selection tests (`isSelected` now takes a `Set`), keyboard nav + Show in
+Library preserved across the new virtualization boundary, and 17 new
+sabotage-verified scale tests. The two thumbnail boxes in that section
+remain open (out of scope for this pass). Prior: 2026-08-19 — Day-5 sprint
+reconciliation (QA lane): corrected H
 (`[~]`→`[x]`, merged+reviewed since 2026-08-17), M (`[ ]`→`[~]`, slice 1
 landed 2026-08-18 as PR #179 was never reflected here), two derived-data
 integrity requirements flipped to `[x]` with evidence, the stale L1.4 booking
@@ -442,18 +450,113 @@ as a CSS-only tree redesign.
 
 ### Required large-Library engineering safeguards
 
-- [ ] Virtualize long Tree, Details, search-result, and tile collections so DOM
-  size remains bounded with thousands of items.
+- [x] Virtualize long Tree, Details, search-result, and tile collections so DOM
+  size remains bounded with thousands of items. **Verification pass
+  (2026-09-09).** Tiles was already virtualized (E-c3,
+  `useTileVirtualization.ts`). Tree and Details were NOT — both did a plain
+  `rows.map` over the full flattened array, and search results render
+  through Details too (so they were unvirtualized by the same gap). Added
+  `components/Library/useListVirtualization.ts` — the one-column analogue of
+  the tile hook (no column-width math, only a row height), delegating to the
+  same `lib/gridwindow.ts computeAxisWindow` and reusing its uniform-row-
+  approximation/deterministic-jsdom-fallback tradeoffs verbatim. Wired into
+  both renderers: `LibraryTree.tsx` (window padding via container
+  `padding-top`/`padding-bottom`) and `LibraryDetails.tsx` (leading/trailing
+  spacer `<tr>`s; the windowing/roving-tab-stop-fallback glue itself lives in
+  the new sibling `useLibraryDetailsVirtualization.ts` to keep the component
+  under the 400-line ceiling). `VIRTUALIZE_ABOVE = 150`; below it every row
+  renders exactly as before (byte-identical DOM/tests). Proven with
+  `LibraryTree.scale.test.tsx`/`LibraryDetails.scale.test.tsx`: a 5,000-item
+  workbook renders <60 DOM rows (was 5,001), and a 149/150-item library is
+  unchanged.
+  **Why `[~]` and not `[x]` (review round).** Two focus paths were found that
+  this entry's original text did not cover, and one of them was a genuine
+  defect rather than a gap:
+  (1) The "keep the selected row visible" effect was keyed on the selected ROW
+  OBJECT, which `flattenLibraryHierarchy` reallocates on every rebuild, so it
+  re-fired on unrelated model changes AND overrode the focus-recovery effect —
+  deleting the focused row while another row was selected left focus on
+  `<body>`, which with the Delete keybinding is the data-loss path
+  `lib/focusGuard.ts` exists to prevent. Fixed (keyed on the stable row key;
+  recovery claims the window for its render).
+  (2) `useLibraryViewTransition`'s Tree↔Details focus retry still assumes every
+  model row is mounted. Under windowing it can legitimately run out of retries
+  when the target sits outside the new renderer's window; it now gives up
+  explicitly instead of leaving `pendingFocusKey` set for a later swap to
+  resurrect, but focus continuity ACROSS A RENDERER SWAP to an off-window row
+  is NOT restored and is not demonstrated. That is what keeps this box open.
+
 - [ ] Generate plot/result thumbnails lazily, prioritize visible tiles, cache
   them by canonical item revision, and cancel obsolete off-screen work.
 - [ ] Render immediate placeholders and metadata so opening the Library does
   not wait for thumbnails.
-- [ ] Keep folder counts and selection operations indexed; avoid rescanning all
-  workbook payloads on every render or keystroke.
-- [ ] Preserve keyboard navigation and **Show in Library** across virtualization
-  boundaries.
-- [ ] Add scale fixtures covering deep folders, wide folders, large search
-  result sets, stale thumbnails, and rapid view switching.
+- [x] Keep folder counts and selection operations indexed; avoid rescanning all
+  workbook payloads on every render or keystroke. **Verification pass
+  (2026-09-09), MEASURED before claiming.** FOLDER COUNTS: `LibraryTree.tsx`'s
+  `rows.map` called `subtreeCount` (a recursive whole-subtree walk) once PER
+  FOLDER ROW — for a folder chain, overlapping subtrees were re-walked from
+  scratch on every render, O(folders²) worst case. Fixed via
+  `lib/foldertree.ts`'s new `subtreeCountIndex`: one direct-count pass over
+  `datasets` plus a memoized post-order fold over the folder tree, O(folders +
+  datasets) total, computed once per render (`useMemo`) instead of once per
+  row. `foldertree.test.ts`'s "counting fake" test proves it: for a 40-folder
+  chain the old per-row call pattern touches the underlying arrays ≥820
+  times (`.filter` calls), the indexed pass touches them 0 times (two plain
+  loops). SELECTION: `isSelected` (shared by both renderers, called once per
+  RENDERED row) used `Array.includes` against the live `selectedIds` —
+  O(rendered rows × selection size) per render. Changed its signature to a
+  `ReadonlySet<string>`, built once per render via `useMemo` in each
+  renderer; `libraryOpen.test.ts`'s counting-fake test proves each call now
+  costs exactly one `Set.has` regardless of selection size (200 calls against
+  a 5,000-id selection → exactly 200 `.has` invocations). The event-driven
+  (non-render-loop) `subtreeCount`/`.includes` call sites — a folder's Delete
+  keydown, tile/menu builders — were left as-is; they run once per user
+  action, not once per row per render, so they were never the concern this
+  box names.
+- [~] Preserve keyboard navigation and **Show in Library** across virtualization
+  boundaries. **Verification pass (2026-09-09), downgraded from `[x]` in review
+  the same day** — see the Tree↔Details swap caveat at the end of this entry. Arrow-key navigation
+  (`LibraryTree`) and Up/Down/Home/End (`LibraryDetails`) call the window's
+  `ensureVisible(index)` before focusing an off-window target, then retry
+  focus across a few animation frames (`focusRowWhenRendered`, the tree
+  hook's `focusTileWhenRendered` sibling) until the row mounts — proven by
+  `LibraryTree.scale.test.tsx`/`LibraryDetails.scale.test.tsx`'s "Down
+  navigation crosses the rendered-window boundary" tests (a 5,000-row
+  library, arrow from the last rendered row, the NEXT model row ends up
+  focused). Both renderers also gained a "keep the selected row visible"
+  effect (`ensureVisible` on the current `selectedRow`) so **Show in
+  Library**'s reveal — which selects the node BEFORE Library.tsx's own
+  `scrollIntoView` retry runs — has something to scroll to; proven by the
+  "Show in Library reveals... outside the rendered window" tests. Details
+  additionally needed a fallback tab stop (`effectiveRovingKey`, mirroring
+  LibraryWorkspace's `effectiveTabStop`) since its roving-tabindex model
+  (exactly one row in the Tab order) would otherwise lose ALL Tab-key entry
+  once the model-level roving row scrolled out of the window — proven by
+  "every rendered window carries exactly ONE tabbable row". **Known gap,
+  not required by the above but adjacent:** neither renderer reproduces
+  Tile's `data-tile-grid-focus` fallback for a literal DOM focus loss from an
+  ORGANIC (non-keyboard) scroll — e.g. a mouse-wheel scroll that unmounts the
+  currently-focused row with no keyboard interaction at all. Tab/click/arrow
+  keys all recover normally; this narrower case is undemonstrated either way
+  and left as a documented limitation rather than silently claimed.
+- [x] Add scale fixtures covering deep folders, wide folders, large search
+  result sets, stale thumbnails, and rapid view switching. **Verification
+  pass (2026-09-09).** `LibraryTree.scale.test.tsx` (9 tests) and
+  `LibraryDetails.scale.test.tsx` (8 tests): wide (5,000-item single
+  workbook) and deep (500-folder chain) fixtures, a 3,000-row search-result
+  set through `LibraryDetails`'s `searchQuery` prop, rapid mount/scroll/
+  unmount/remount cycles, and a clamped-window-under-shrink fixture (deep
+  scroll, then most rows vanish without a scroll reset — `lib/gridwindow`'s
+  clamping, not blank). "Stale thumbnails" has no direct analogue in Tree/
+  Details (neither renders thumbnail images — that is Tiles-only, and
+  already covered by Tiles' own pre-existing E-c3 scale tests); the closest
+  applicable risk here is a row growing taller mid-window
+  (`DatasetRowPreview`'s opt-in Sparkline expansion, the source of the
+  uniform-row-approximation tradeoff), which
+  "expanding a row's optional preview... doesn't break crossing into the
+  unrendered rows" exercises directly. Every test in both files was
+  sabotage-verified (a targeted regression introduced, confirmed to fail the
+  test, reverted) — see the PR/session record for the full log.
 
 ### Cross-session workbook transfer requirements
 

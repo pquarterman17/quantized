@@ -37,6 +37,47 @@ export function subtreeCount(folders: FolderNode[], datasets: Dataset[], folderI
   return n;
 }
 
+/** Every folder's `subtreeCount` at once, in O(folders + datasets) total
+ *  instead of `subtreeCount`'s O(subtree) PER folder (LIBRARY_WORKBOOK_UX_PLAN
+ *  "keep folder counts... indexed"): the Tree's row badge used to call
+ *  `subtreeCount` once per FOLDER ROW inside its render loop, so a deep/wide
+ *  tree re-walked overlapping subtrees from scratch on every render — O(F²)
+ *  in the worst case (a folder chain). One bottom-up pass instead: direct
+ *  dataset counts per folder (one loop over `datasets`), then a memoized
+ *  post-order fold over the folder tree (each folder visited exactly once).
+ *  Equal to `subtreeCount(folders, datasets, id)` for every folder id. */
+export function subtreeCountIndex(folders: FolderNode[], datasets: Dataset[]): Map<string, number> {
+  const direct = new Map<string, number>();
+  for (const d of datasets) {
+    const fid = d.folderId ?? null;
+    if (fid != null) direct.set(fid, (direct.get(fid) ?? 0) + 1);
+  }
+  // Push into the existing list; never spread-copy it. REVIEW ROUND: this was
+  // `childrenOf.set(p, [...(childrenOf.get(p) ?? []), f])`, which reallocates
+  // and re-copies the whole sibling list on every insert — O(siblings²) for a
+  // WIDE folder, while this function's docstring claimed O(folders + datasets).
+  // Its entire purpose is removing a quadratic from the render path, so
+  // shipping a different quadratic inside it was self-defeating. `subtreeIds`
+  // below already built its lists this way.
+  const childrenOf = new Map<string | null, FolderNode[]>();
+  for (const f of folders) {
+    const siblings = childrenOf.get(f.parentId);
+    if (siblings) siblings.push(f);
+    else childrenOf.set(f.parentId, [f]);
+  }
+  const totals = new Map<string, number>();
+  const visit = (f: FolderNode): number => {
+    const cached = totals.get(f.id);
+    if (cached !== undefined) return cached;
+    let n = direct.get(f.id) ?? 0;
+    for (const c of childrenOf.get(f.id) ?? []) n += visit(c);
+    totals.set(f.id, n);
+    return n;
+  };
+  for (const f of folders) visit(f);
+  return totals;
+}
+
 /** All ids in the subtree rooted at `id` (inclusive). */
 export function subtreeIds(folders: FolderNode[], id: string): Set<string> {
   const childrenOf = new Map<string | null, FolderNode[]>();
