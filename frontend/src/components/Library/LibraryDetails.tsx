@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 
+import DetailsHeaderRow from "./DetailsHeaderRow";
 import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import { useLibraryDetailsVirtualization } from "./useLibraryDetailsVirtualization";
 import {
@@ -230,30 +231,29 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
        *  the global dataset navigator. The accessible name lives on the
        *  <table> itself, where it labels a real role. */}
       <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
-        <table className="qzk-details-table" aria-label="Library details table">
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column.key} data-col={column.key} className={column.className} scope="col" aria-sort={sortKey === column.key ? (direction === "asc" ? "ascending" : "descending") : "none"}>
-                  <button
-                    type="button"
-                    tabIndex={column.key === rovingHeader ? 0 : -1}
-                    onFocus={() => setHeaderKey(column.key)}
-                    onKeyDown={onHeaderKeyDown}
-                    onClick={() => sortBy(column.key)}
-                  >
-                    {column.label}{sortKey === column.key ? (direction === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                </th>
-              ))}
-              {/* D2: the reveal-action column — a header cell with no sort
-               *  button, so the header roving arithmetic (COLUMNS-indexed)
-               *  never sees it. The class is load-bearing (review round 2):
-               *  table-layout:fixed takes COLUMN widths from the first row,
-               *  so the actions width must live on this th, not the tds. */}
-              {searching && <th scope="col" className="qzk-details-actions" aria-label="Show in Library" />}
-            </tr>
-          </thead>
+        {/* REVIEW ROUND: a VIRTUALIZED table must declare its true size. Without
+            `aria-rowcount` a screen reader announces only the rendered window
+            (~40 rows) as the entire table, so a 5,000-row Library sounds like a
+            40-row one — an accessibility regression introduced BY the
+            windowing. Each row carries its absolute `aria-rowindex` (1-based,
+            header row = 1) so "row 3,214 of 5,000" stays truthful while
+            scrolling. Unvirtualized, the DOM already tells the whole truth, so
+            the attributes are omitted rather than asserted redundantly. */}
+        <table
+          className="qzk-details-table"
+          aria-label="Library details table"
+          {...(virt.virtualized ? { "aria-rowcount": rows.length } : {})}
+        >
+          <DetailsHeaderRow
+            columns={columns}
+            sortKey={sortKey}
+            direction={direction}
+            rovingHeader={rovingHeader}
+            searching={searching}
+            onFocusColumn={setHeaderKey}
+            onHeaderKeyDown={onHeaderKeyDown}
+            onSort={sortBy}
+          />
           <tbody>
             {/* E-c3: leading spacer — see useListVirtualization's header.
              *  aria-hidden keeps it out of getAllByRole("row") the same way
@@ -261,14 +261,18 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
             {virt.padTop > 0 && (
               <tr aria-hidden="true" style={{ height: virt.padTop }}><td colSpan={colSpan} /></tr>
             )}
-            {rendered.map((row) => {
+            {rendered.map((row, i) => {
               const selected = isSelected(row.node, selectedIdSet, selection);
+              // Absolute position in the FULL model, not the window: 1-based
+              // with the header row occupying index 1 (see the table's note).
+              const absoluteRowIndex = (virt.virtualized ? virt.start + i : i) + 2;
               const title = `${row.node.name} — ${row.type}; ${row.location}; ${row.dimensions}; ${row.source}`;
               return (
                 <tr
                   key={row.node.key}
                   className={selected ? "selected" : undefined}
                   data-lib-row={row.node.key}
+                  {...(virt.virtualized ? { "aria-rowindex": absoluteRowIndex } : {})}
                   data-ds-id={row.node.kind === "worksheet" ? row.node.entityId : undefined}
                   tabIndex={row.node.key === effectiveRovingKey ? 0 : -1}
                   aria-selected={selected}

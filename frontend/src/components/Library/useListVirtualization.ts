@@ -151,13 +151,24 @@ export function useListVirtualization(
  *  selectors (the row focus is transitioning FROM, a scroll-out fallback
  *  holder) besides `selector` itself that are legitimate places for focus to
  *  sit mid-retry without aborting it. */
-export function focusRowWhenRendered(selector: string, owned: readonly string[] = []): void {
+export function focusRowWhenRendered(
+  selector: string,
+  owned: readonly string[] = [],
+  // REVIEW ROUND: scope the lookup to the list that owns the row. This used an
+  // unscoped `document.querySelector` where the code it replaced searched
+  // `containerRef.current` — and `SmartFoldersSection` renders `DatasetRow`
+  // with the SAME `data-ds-id` above the tree, so arrow-navigation could focus
+  // the smart-folder copy of a dataset and walk focus straight out of the tree.
+  // Optional so the fallback is the old behaviour rather than a crash if a
+  // caller has no container yet.
+  root?: ParentNode | null,
+): void {
   let attempts = 0;
   const ownedSelector = [selector, ...owned].join(",");
   const tryFocus = (): void => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && active !== document.body && !active.matches(ownedSelector)) return;
-    const row = document.querySelector<HTMLElement>(selector);
+    const row = (root ?? document).querySelector<HTMLElement>(selector);
     if (row) row.focus();
     else if (++attempts < 8) requestAnimationFrame(tryFocus);
   };

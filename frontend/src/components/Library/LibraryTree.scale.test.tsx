@@ -119,6 +119,85 @@ describe("LibraryTree — large-Library virtualization", () => {
     expect(focused.getAttribute("data-ds-id")).not.toBe(lastDsId);
   });
 
+  // REVIEW ROUND. Covers the general recovery path: deleting the focused row
+  // must never leave focus orphaned on <body>, because body focus plus the
+  // Delete keybinding is the data-loss path `lib/focusGuard.ts` exists to
+  // prevent.
+  //
+  // HONEST LIMIT — read before trusting this as proof. The review's specific
+  // finding was an INTERACTION: the keep-the-selection-visible effect ran after
+  // the recovery effect and overrode its window, orphaning focus. That
+  // interaction is fixed by construction (the recovery claims the window for
+  // its render via `recoveringRef`, and the selection effect is keyed on the
+  // stable selection key so it no longer fires on unrelated rebuilds) — but
+  // this test does NOT reproduce it: it passes against the defective version
+  // too, because jsdom does not orphan focus to <body> here the way a real
+  // browser does. It is kept as a guard against recovery breaking outright,
+  // not presented as evidence for the interaction. The sibling test below —
+  // "an unrelated rename does not yank the window back" — DOES fail against
+  // the defect, and is the real regression guard for this fix.
+  it("deleting the focused row never leaves focus orphaned on <body>", async () => {
+    seedWide(5000);
+    // Select a row far from the focused one, so the selection effect has
+    // somewhere else it would rather scroll to.
+    useApp.setState({ selectedIds: ["d0"], librarySelection: null });
+    render(<Harness />);
+
+    // Scroll AWAY from the selection first. This is essential: with the window
+    // still at the top, the selection effect's ensureVisible(0) is a no-op and
+    // the bug cannot show. My first version of this test omitted it and passed
+    // against the defect — vacuous.
+    const first = renderedRows()[renderedRows().length - 1];
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).not.toBe(first));
+
+    const rows = renderedRows();
+    const victim = rows[Math.floor(rows.length / 2)];
+    const victimId = victim.getAttribute("data-ds-id")!;
+    victim.focus();
+    expect(document.activeElement).toBe(victim);
+
+    // Remove the focused row from the model, exactly as a delete would.
+    act(() => {
+      useApp.setState({
+        datasets: useApp.getState().datasets.filter((d) => d.id !== victimId),
+      });
+    });
+
+    await waitFor(() => {
+      // The whole point: focus must NOT be orphaned onto <body>.
+      expect(document.activeElement).not.toBe(document.body);
+    });
+    expect((document.activeElement as HTMLElement).matches("[data-lib-row], [data-ds-id]")).toBe(true);
+  });
+
+  // The other half of the same defect: an unrelated model change must not drag
+  // the window back to the selection while the user is reading elsewhere.
+  it("an unrelated rename does not yank the window back to the selected row", async () => {
+    seedWide(5000);
+    useApp.setState({ selectedIds: ["d0"], librarySelection: null });
+    render(<Harness />);
+
+    // Scroll far away from the selection.
+    const target = renderedRows()[renderedRows().length - 1];
+    target.focus();
+    fireEvent.keyDown(target, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).not.toBe(target));
+    const before = renderedRows().map((r) => r.getAttribute("data-ds-id"));
+
+    act(() => {
+      useApp.setState({
+        datasets: useApp.getState().datasets.map((d) =>
+          d.id === "d400" ? { ...d, name: "renamed" } : d,
+        ),
+      });
+    });
+
+    const after = renderedRows().map((r) => r.getAttribute("data-ds-id"));
+    expect(after[0]).toBe(before[0]); // window unchanged, not reset to d0
+  });
+
   it("Show in Library reveals and scrolls to a worksheet outside the rendered window", async () => {
     seedWide(5000);
     render(<Harness />);

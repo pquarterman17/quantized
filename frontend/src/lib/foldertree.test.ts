@@ -392,6 +392,45 @@ describe("subtreeCountIndex — the render-hot-path fix", () => {
     expect(subtreeCountIndex(folders, []).get("empty")).toBe(0);
   });
 
+  // REVIEW ROUND. The counting fake below covers a DEEP chain. Nothing covered
+  // a WIDE folder — and the first implementation built its sibling lists with a
+  // spread-copy per insert, O(siblings²), inside the very function written to
+  // remove a quadratic. Depth and width are different shapes; the deep test
+  // cannot see this one.
+  //
+  // Counting `Map.set` is what actually distinguishes the two builds, and it is
+  // deterministic: the spread version re-`set`s the sibling list once per
+  // FOLDER, the push version once per DISTINCT PARENT (one, for a wide tree).
+  // My first attempt at this test counted `Array.prototype.slice` and was
+  // VACUOUS — a spread iterates via `Symbol.iterator`, never touching `slice`,
+  // so it passed against the quadratic build too. Sabotage-verified this time.
+  it("stays linear for a WIDE folder: 500 siblings do not re-copy the sibling list per insert", () => {
+    const N = 500;
+    const folders: FolderNode[] = [{ id: "root", name: "root", parentId: null, order: 0 }];
+    for (let i = 0; i < N; i++) folders.push({ id: `w${i}`, name: `w${i}`, parentId: "root", order: i });
+    const datasets = Array.from({ length: N }, (_, i) => ds(`d${i}`, `w${i}`));
+
+    let sets = 0;
+    const realSet = Map.prototype.set;
+    Map.prototype.set = function (this: Map<unknown, unknown>, k: unknown, v: unknown) {
+      sets++;
+      return realSet.call(this, k, v) as never;
+    } as typeof Map.prototype.set;
+    let idx: Map<string, number>;
+    try {
+      idx = subtreeCountIndex(folders, datasets);
+    } finally {
+      Map.prototype.set = realSet;
+    }
+
+    expect(idx.get("root")).toBe(N); // correctness first
+    for (let i = 0; i < N; i++) expect(idx.get(`w${i}`)).toBe(1);
+
+    // direct(N) + totals(N+1) + childrenOf: 1 with push, N with spread.
+    // 2N+2 = 1002 vs 3N+1 = 1501 — the midpoint separates them unambiguously.
+    expect(sets).toBeLessThan(2 * N + N / 2);
+  });
+
   it("counting fake: the indexed pass touches the datasets/folders arrays a BOUNDED number of times; the old per-row call pattern rescans them quadratically", () => {
     const N = 40;
     const folders = chain(N);

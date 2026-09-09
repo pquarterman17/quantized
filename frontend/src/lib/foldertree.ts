@@ -52,8 +52,19 @@ export function subtreeCountIndex(folders: FolderNode[], datasets: Dataset[]): M
     const fid = d.folderId ?? null;
     if (fid != null) direct.set(fid, (direct.get(fid) ?? 0) + 1);
   }
+  // Push into the existing list; never spread-copy it. REVIEW ROUND: this was
+  // `childrenOf.set(p, [...(childrenOf.get(p) ?? []), f])`, which reallocates
+  // and re-copies the whole sibling list on every insert — O(siblings²) for a
+  // WIDE folder, while this function's docstring claimed O(folders + datasets).
+  // Its entire purpose is removing a quadratic from the render path, so
+  // shipping a different quadratic inside it was self-defeating. `subtreeIds`
+  // below already built its lists this way.
   const childrenOf = new Map<string | null, FolderNode[]>();
-  for (const f of folders) childrenOf.set(f.parentId, [...(childrenOf.get(f.parentId) ?? []), f]);
+  for (const f of folders) {
+    const siblings = childrenOf.get(f.parentId);
+    if (siblings) siblings.push(f);
+    else childrenOf.set(f.parentId, [f]);
+  }
   const totals = new Map<string, number>();
   const visit = (f: FolderNode): number => {
     const cached = totals.get(f.id);

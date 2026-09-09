@@ -46,10 +46,19 @@ export function useLibraryDetailsVirtualization(
   // now-selected row inside the rendered window — selectLibraryNode runs
   // BEFORE Library.tsx's reveal-effect scrollIntoView retry, so without this
   // the retry's target row never mounts under virtualization.
+  // REVIEW ROUND — the same defect as LibraryTree's twin of this effect: keyed
+  // on the selectedRow OBJECT, which is reallocated on every `rows` rebuild, so
+  // it re-fired on each filter keystroke, sort change and dataset mutation and
+  // dragged the panel back to the selection while the user was scrolled
+  // somewhere else. Keyed on the stable row KEY now, so it fires when the
+  // SELECTION changes.
+  const selectedKey = selectedRow?.node.key ?? null;
   useEffect(() => {
-    if (virt.virtualized && selectedRow) virt.ensureVisible(rows.indexOf(selectedRow));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureVisible/rows stability mirrors the tile hook's identical effect
-  }, [selectedRow, virt.virtualized]);
+    if (!virt.virtualized || selectedKey == null) return;
+    const idx = rows.findIndex((r) => r.node.key === selectedKey);
+    if (idx >= 0) virt.ensureVisible(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the STABLE selection key; `rows`/`ensureVisible` are read, not tracked
+  }, [selectedKey, virt.virtualized]);
 
   const focusRowAt = (index: number, fromKey?: string): void => {
     const key = rows[index]?.node.key;
@@ -60,7 +69,11 @@ export function useLibraryDetailsVirtualization(
       return;
     }
     virt.ensureVisible(index);
-    focusRowWhenRendered(selector, fromKey != null ? [`[data-lib-row="${CSS.escape(fromKey)}"]`] : []);
+    focusRowWhenRendered(
+      selector,
+      fromKey != null ? [`[data-lib-row="${CSS.escape(fromKey)}"]`] : [],
+      scrollRef.current,
+    );
   };
 
   return { scrollRef, virt, rendered, effectiveRovingKey, focusRowAt };

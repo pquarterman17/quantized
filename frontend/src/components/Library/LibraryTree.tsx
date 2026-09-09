@@ -124,6 +124,9 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const focusedKeyRef = useRef<string | null>(null);
   const prevRowsRef = useRef(rows);
+  // Set by the focus-recovery effect to claim the scroll window for one render,
+  // so the selection effect below cannot override it (review round).
+  const recoveringRef = useRef(false);
   const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
   const folderCounts = useMemo(() => subtreeCountIndex(folders, datasets), [folders, datasets]);
   // E-c3 "keep selection operations indexed": built once per render, not
@@ -139,7 +142,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
       return;
     }
     virt.ensureVisible(index);
-    focusRowWhenRendered(rowSelector(row), fromSelector ? [fromSelector] : []);
+    focusRowWhenRendered(rowSelector(row), fromSelector ? [fromSelector] : [], containerRef.current);
   };
 
   // Focus survives removal/move of the focused row: if the row that had
@@ -153,6 +156,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
     if (key != null && indexOfKey(rows, key) < 0 && document.activeElement === document.body) {
       const prevIdx = indexOfKey(prevRowsRef.current, key);
       const clamped = Math.min(Math.max(prevIdx, 0), rows.length - 1);
+      recoveringRef.current = true; // claim the window; see the selection effect below
       focusRow(rows[clamped], clamped);
     }
     prevRowsRef.current = rows;
@@ -164,11 +168,32 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
   // BEFORE the reveal effect's scrollIntoView retry (Library.tsx), so
   // without this the retry's target row never mounts under virtualization
   // and the reveal silently fails to scroll.
+  //
+  // REVIEW ROUND, two defects here. (a) This was keyed on the selectedRow
+  // OBJECT, and `flattenLibraryHierarchy` allocates fresh row wrappers on every
+  // rebuild — so it re-fired on ANY unrelated model change and yanked the window
+  // back to the selection while the user was reading somewhere else (measured:
+  // renaming an unrelated dataset moved the window from d278..d312 to d0..d33).
+  // Keyed on the row's stable KEY now, so it fires when the SELECTION changes,
+  // which is what it is for. (b) It runs after the focus-recovery effect above
+  // and called `ensureVisible` unconditionally, overriding that effect's window
+  // — so deleting the focused row while a DIFFERENT row was selected left
+  // `document.activeElement` on <body>. Body focus plus the Delete keybinding is
+  // exactly the data-loss path `lib/focusGuard.ts` exists to prevent, so the
+  // recovery wins: it sets `recoveringRef` and this effect stands down for that
+  // render.
   const selectedRow = rows.find((r) => isSelected(r.node, selectedIdSet, librarySelection));
+  const selectedKey = selectedRow?.node.key ?? null;
   useEffect(() => {
-    if (virt.virtualized && selectedRow) virt.ensureVisible(rows.indexOf(selectedRow));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- ensureVisible/rows stability mirrors the tile hook's identical effect
-  }, [selectedRow, virt.virtualized]);
+    if (recoveringRef.current) {
+      recoveringRef.current = false;
+      return;
+    }
+    if (!virt.virtualized || selectedKey == null) return;
+    const idx = indexOfKey(rows, selectedKey);
+    if (idx >= 0) virt.ensureVisible(idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the STABLE selection key; `rows`/`ensureVisible` are read, not tracked (see the note above)
+  }, [selectedKey, virt.virtualized]);
 
   const onFocusCapture = (e: React.FocusEvent) => {
     focusedKeyRef.current = keyOfRow(e.target as Element);

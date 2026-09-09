@@ -83,6 +83,16 @@ export function useLibraryViewTransition(options: Options) {
         target.focus();
         pendingFocusKey.current = null;
       } else if (++attempts < 5) frame = requestAnimationFrame(tryFocus);
+      else {
+        // REVIEW ROUND: give up EXPLICITLY. This retry predates virtualization
+        // and assumed every model row is mounted; under windowing the target
+        // row may simply be outside the new renderer's window, so the retries
+        // legitimately run out. Leaving `pendingFocusKey` set meant a later,
+        // unrelated view swap could resurrect it and steal focus to a row the
+        // user had long since navigated away from. Clearing it keeps the
+        // failure local to the swap that caused it.
+        pendingFocusKey.current = null;
+      }
     };
     frame = requestAnimationFrame(tryFocus);
     return () => cancelAnimationFrame(frame);

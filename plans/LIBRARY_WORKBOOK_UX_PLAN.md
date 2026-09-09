@@ -469,6 +469,23 @@ as a CSS-only tree redesign.
   `LibraryTree.scale.test.tsx`/`LibraryDetails.scale.test.tsx`: a 5,000-item
   workbook renders <60 DOM rows (was 5,001), and a 149/150-item library is
   unchanged.
+  **Why `[~]` and not `[x]` (review round).** Two focus paths were found that
+  this entry's original text did not cover, and one of them was a genuine
+  defect rather than a gap:
+  (1) The "keep the selected row visible" effect was keyed on the selected ROW
+  OBJECT, which `flattenLibraryHierarchy` reallocates on every rebuild, so it
+  re-fired on unrelated model changes AND overrode the focus-recovery effect —
+  deleting the focused row while another row was selected left focus on
+  `<body>`, which with the Delete keybinding is the data-loss path
+  `lib/focusGuard.ts` exists to prevent. Fixed (keyed on the stable row key;
+  recovery claims the window for its render).
+  (2) `useLibraryViewTransition`'s Tree↔Details focus retry still assumes every
+  model row is mounted. Under windowing it can legitimately run out of retries
+  when the target sits outside the new renderer's window; it now gives up
+  explicitly instead of leaving `pendingFocusKey` set for a later swap to
+  resurrect, but focus continuity ACROSS A RENDERER SWAP to an off-window row
+  is NOT restored and is not demonstrated. That is what keeps this box open.
+
 - [ ] Generate plot/result thumbnails lazily, prioritize visible tiles, cache
   them by canonical item revision, and cancel obsolete off-screen work.
 - [ ] Render immediate placeholders and metadata so opening the Library does
@@ -496,8 +513,9 @@ as a CSS-only tree redesign.
   keydown, tile/menu builders — were left as-is; they run once per user
   action, not once per row per render, so they were never the concern this
   box names.
-- [x] Preserve keyboard navigation and **Show in Library** across virtualization
-  boundaries. **Verification pass (2026-09-09).** Arrow-key navigation
+- [~] Preserve keyboard navigation and **Show in Library** across virtualization
+  boundaries. **Verification pass (2026-09-09), downgraded from `[x]` in review
+  the same day** — see the Tree↔Details swap caveat at the end of this entry. Arrow-key navigation
   (`LibraryTree`) and Up/Down/Home/End (`LibraryDetails`) call the window's
   `ensureVisible(index)` before focusing an off-window target, then retry
   focus across a few animation frames (`focusRowWhenRendered`, the tree
