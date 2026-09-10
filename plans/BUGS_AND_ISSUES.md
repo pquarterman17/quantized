@@ -875,9 +875,9 @@ produces fractional numbers that index nothing. So a dataset carrying, say,
 `[Moment (numeric), Phase (categorical)]` comes out of Corrections with a
 `Phase` column of arbitrary decimals.
 
-#### Why the current drop is CONSERVATIVE — not simply correct
+#### Why the drop WAS conservative (superseded — see the CLOSED entry below) — not simply correct
 
-Both functions discard `cat_levels`. That is now **explicit and documented in
+Both functions used to discard `cat_levels` unconditionally; they now discard it unless the codes provably survived (see the CLOSED entry below). Both functions discard `cat_levels`. That is now **explicit and documented in
 both modules** (it used to be an accidental omission that read like a bug in
 the propagation audit). For a transform that actually changes values, keeping
 the table would be strictly worse: the output would claim level labels for
@@ -950,11 +950,33 @@ Open sub-questions for whoever takes it:
   documented in both modules, with the reasoning inline so a future author
   cannot "fix" it by re-adding `cat_levels=` without reading why.
 - [ ] Channel-mask pass-through for categorical channels — the actual fix.
-- [ ] Stop dropping the table on paths that do not change the codes (an
-  identity/x-only correction, a resample onto a coincident grid). Cheaper than
-  the channel mask and independently valuable; needs a "did the codes survive"
-  predicate rather than a per-transform allowlist, so that a new transform is
-  conservative by default.
+- [x] **DONE 2026-09-10 — stop dropping the table on paths that do not change
+  the codes.** `quantized/cat_levels.py`'s `surviving_cat_levels` is the
+  predicate, and it is EVIDENCE not inference: it compares each channel's column
+  before and after, elementwise, rather than keeping a per-transform allowlist —
+  so a transform added later is conservative by default and no existing golden
+  output can change (the function can only PRESERVE a table where the numbers are
+  bit-identical). PER CHANNEL, because `cat_levels` is: correcting one channel
+  must not cost a different, untouched one its labels. It takes `kept_rows` so a
+  TRIM compares surviving rows instead of reading the shape difference as a
+  change. NaN compares equal — a NaN code is already unresolvable by `level_of`,
+  so a NaN that stays a NaN changes nothing the table can describe.
+  Three real preservation cases now covered, each measured, not assumed: an
+  IDENTITY correction (`{}`), a pure row TRIM, and an X-ONLY shift (`xOff` moves
+  the grid, never a value); plus a resample onto a COINCIDENT grid. The drop
+  still happens whenever the numbers move — pinned by the smoothing and
+  interpolation tests that predate this, which still pass unchanged.
+  The per-channel property is demonstrated in the real pipeline by the
+  beam-footprint scale, which deliberately SKIPS `dq`-labelled channels: ch0 moves
+  (1.0 -> 114.59...), the `dq` channel does not, and only its table survives.
+  Seven sabotages verified, including both "always keep" and "always drop".
+  New home rather than a new function in `datastruct.py`, for COHESION:
+  `row_sidecars.py` owns "which metadata keys are row-indexed", this one owns
+  "when does a value transform invalidate a level table". (A line-count reason was
+  also cited and was WRONG — 506 was measured against a draft that was then
+  rewritten; the shipped single function would have left `datastruct.py` at 496,
+  under the ceiling. With `surviving_level_order` it would now be 514, but the
+  argument was always cohesion.)
 - [ ] Resample's nearest-neighbour-vs-refuse ruling.
 - [ ] Any user-facing warning.
 

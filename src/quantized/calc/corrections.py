@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from ..cat_levels import surviving_cat_levels, surviving_level_order
 from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
 from .backgrounds import anchor_baseline, footprint_factor
@@ -97,6 +98,45 @@ def apply_corrections(
     """
     time = np.asarray(data.time, dtype=float).copy()
     values = np.asarray(data.values, dtype=float).copy()
+    # BUG-005: kept to decide, at the end, which `cat_levels` entries the
+    # pipeline actually invalidated. `values` above is mutated in place from here
+    # on, so the comparison needs its own reference.
+    values_in = np.asarray(data.values, dtype=float)
+    # BUG-005 review, HIGH 1. Bit-identity of a column is NOT evidence that its
+    # level codes survived: a transform can map codes to themselves by
+    # ARITHMETIC ACCIDENT. Measured on a single-level channel (every code 0,
+    # which is the commonest real case — a Sample/Phase/Status column constant
+    # within one file): dY/dX, ∫Y dx, a moving-average smooth, all four
+    # normalizations, a unit conversion and yScale=1000 each left it
+    # [0, 0, 0] and so kept the table, and `level_of` then returned the LABEL
+    # for a dY/dX channel. That is precisely the "labels for values that cannot
+    # have them" failure the strip exists to prevent.
+    #
+    # So the survival test is a CONJUNCTION: no step may have redefined what the
+    # channel IS (this flag), AND the numbers must be unchanged
+    # (`surviving_cat_levels`). Each half covers the other's blind spot — the
+    # flag catches an arithmetic coincidence, and the value comparison catches a
+    # step added later that forgets to set the flag.
+    #
+    # WHICH STEPS SET IT: those that REDEFINE THE QUANTITY — a derivative,
+    # integral, smooth, any normalization, a unit conversion, a mass/volume
+    # normalization, the footprint or neutron scale. After any of those the
+    # channel is no longer the thing its level table names, whatever the numbers
+    # happen to be.
+    #
+    # WHICH DO NOT: same-units arithmetic that is a genuine identity when its
+    # parameters are zero — the background/y-offset subtraction and the reference-
+    # dataset subtraction. Those run on EVERY call (`values - y_bg - y_off` is
+    # unconditional, with zeros by default), so flagging them made the flag always
+    # true and silently reverted this whole fix; the first version of it did
+    # exactly that and the identity/trim tests caught it. For these the value
+    # comparison IS the right test: subtract a real background and the codes move
+    # and are dropped; subtract zero and the channel is untouched.
+    #
+    # A NEW QUANTITY-REDEFINING STEP MUST SET THIS. `test_calc_corrections.py::
+    # test_corrections_drops_cat_levels_for_every_y_transforming_step` enumerates
+    # the current ones against a single-level channel.
+    y_touched = False
     labels = list(data.labels)
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
@@ -118,6 +158,7 @@ def apply_corrections(
         time = time * x_scale
     if y_scale != 1.0:
         values = values * y_scale
+        y_touched = True
 
     # 1. Trim on x.
     x_min = params.get("xTrimMin", float("nan"))
@@ -159,6 +200,7 @@ def apply_corrections(
         for k in range(values.shape[1]):
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] / factor
+                y_touched = True
 
     # 3. Neutron R-scale, or background subtraction + y-offset.
     y_off = params.get("yOff", 0.0)
@@ -166,6 +208,7 @@ def apply_corrections(
         for k in range(values.shape[1]):
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] * y_off
+                y_touched = True
     else:
         # An anchor-point baseline (GOTO #2) beats the polynomial/slope forms.
         bg_anchors = params.get("bgAnchors")
@@ -211,44 +254,54 @@ def apply_corrections(
         m_unit = params.get("momentUnit", "")
         if m_unit == "emu/g" and params.get("sampleMass", 0.0) > 0:
             values = values / params["sampleMass"]
+            y_touched = True
         elif m_unit in ("emu/cm³", "kA/m") and params.get("sampleVolume", 0.0) > 0:
             values = values / params["sampleVolume"]
+            y_touched = True
         elif m_unit == "A·m²":
             values = values * 1e-3
+            y_touched = True
 
     # 6. Smoothing.
     if params.get("smoothEnabled", False):
         win = max(1, _matlab_round(params.get("smoothWindow", 5)))
         values = smooth_data(values, method=str(params["smoothMethod"]).lower(), window=win)
+        y_touched = True
 
     # 7. Normalization.
     norm = params.get("normMethod", "None")
     if norm == "Range [0,1]":
         values = normalize(values, method="range")
+        y_touched = True
     elif norm == "Peak (max=1)":
         values = normalize(values, method="peak")
+        y_touched = True
     elif norm == "Z-score":
         values = normalize(values, method="zscore")
+        y_touched = True
     elif norm == "Area (integral=1)":
         for k in range(values.shape[1]):
             area = float(np.trapezoid(values[:, k], time))
             if area != 0:
                 values[:, k] = values[:, k] / area
+                y_touched = True
 
     # 8. Derivative / integral transforms.
     deriv = params.get("derivativeMode", "None")
     if deriv == "dY/dX":
         values = derivative(time, values, order=1)
+        y_touched = True
     elif deriv == "d²Y/dX²":
         values = derivative(time, values, order=2)
+        y_touched = True
     elif deriv == "∫Y dx":
         values = cumulative_integral(time, values)
+        y_touched = True
     elif deriv == "dlog/dlog":
         values = log_derivative(time, values)
+        y_touched = True
 
-    # `cat_levels` IS DELIBERATELY NOT CARRIED FORWARD — and that is a strip,
-    # not an oversight, so it is written down rather than left to look like the
-    # accidental omission it used to be.
+    # `cat_levels` IS CARRIED FORWARD ONLY WHERE THE CODES SURVIVED (BUG-005).
     #
     # Every step above transforms EVERY channel unconditionally (`for k in
     # range(values.shape[1])`, plus whole-matrix `smooth_data`/`normalize`/
@@ -257,14 +310,36 @@ def apply_corrections(
     # no level, so keeping the table would make the output claim labels for
     # values that no longer index it — worse than showing the raw numbers.
     #
-    # The RIGHT fix is for corrections not to transform a categorical channel at
-    # all, which needs a channel mask threaded through every step above and
-    # carries real golden-parity regression risk. That is booked as BUG-005 in
-    # plans/BUGS_AND_ISSUES.md, not faked here. Pinned by
-    # `test_corrections_strips_cat_levels_because_codes_are_transformed`.
+    # That was why this dropped the table. But it dropped it UNCONDITIONALLY,
+    # including when the codes demonstrably did not move: an identity correction
+    # (every step off) or a pure row TRIM, which selects rows and never touches a
+    # value. `surviving_cat_levels` (see `quantized/cat_levels.py`) now decides
+    # per channel by COMPARING the numbers, so a table is kept exactly when it
+    # still describes the output and dropped otherwise. Evidence, not inference
+    # about which parameters are identities — which is also why it cannot change
+    # any existing golden output.
+    #
+    # STILL BOOKED as BUG-005: corrections should not TRANSFORM a categorical
+    # channel at all. That needs a channel mask threaded through every step above
+    # and carries real golden-parity regression risk, so it is not faked here.
     metadata = (
         dict(data.metadata)
         if kept_rows is None
         else slice_row_sidecars(data.metadata, kept_rows)
     )
-    return DataStruct.create(time, values, labels=labels, units=list(data.units), metadata=metadata)
+    surviving = (
+        None
+        if y_touched
+        else surviving_cat_levels(data.cat_levels, values_in, values, kept_rows)
+    )
+    return DataStruct.create(
+        time,
+        values,
+        labels=labels,
+        units=list(data.units),
+        metadata=metadata,
+        cat_levels=surviving,
+        level_order=surviving_level_order(
+            data.level_order, surviving, np.array_equal(time, np.asarray(data.time, dtype=float))
+        ),
+    )

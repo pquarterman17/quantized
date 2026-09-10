@@ -158,3 +158,55 @@ def test_resample_strips_cat_levels_because_interpolation_breaks_codes():
     assert not np.all(
         np.isin(codes, [0.0, 1.0])
     ), "interpolation left the codes intact -- revisit the strip"
+
+
+def test_resample_keeps_cat_levels_on_a_coincident_grid():
+    """BUG-005: interpolation onto the SAME x grid returns its input, so the
+    level codes are untouched and the table still describes the output. The
+    unconditional drop discarded it anyway."""
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0], [40.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = resample_data(data, grid=[0.0, 1.0, 2.0, 3.0], method="linear")
+
+    assert out.cat_levels == {1: ("alpha", "beta")}
+    np.testing.assert_array_equal(out.values[:, 1], [0.0, 1.0, 0.0, 1.0])
+
+
+def test_resample_drops_cat_levels_on_a_NEW_grid_even_if_the_codes_come_back_intact():
+    """Review MEDIUM 4: without gating the keep on a genuinely coincident grid,
+    interpolation onto a BRAND-NEW grid kept the table whenever it happened to
+    reproduce the codes — a constant categorical column, or new points that all
+    land inside flat regions. Those codes are valid, so it was not a wrong label,
+    but it silently SETTLED the refuse-vs-nearest-neighbour product decision that
+    is still booked, by shipping a third answer. Every comment and test here
+    describes the keep as coincident-grid-only, so the code is too.
+    """
+    # A CONSTANT categorical column: linear interpolation reproduces it exactly.
+    constant = DataStruct.create(
+        [0.0, 1.0, 2.0],
+        [[10.0, 2.0], [20.0, 2.0], [30.0, 2.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("a", "b", "c")},
+    )
+    out = resample_data(constant, grid=[0.5, 1.0, 1.5], method="linear")
+    np.testing.assert_array_equal(out.values[:, 1], [2.0, 2.0, 2.0])  # codes intact
+    assert out.cat_levels is None, "a new grid must not keep the table"
+
+    # A STEP-like column whose new points all land in flat regions.
+    stepped = DataStruct.create(
+        [0.0, 1.0, 10.0, 11.0],
+        [[1.0, 0.0], [2.0, 0.0], [3.0, 1.0], [4.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("a", "b")},
+    )
+    out2 = resample_data(stepped, grid=[0.5, 0.9, 10.2, 10.8], method="linear")
+    np.testing.assert_array_equal(out2.values[:, 1], [0.0, 0.0, 1.0, 1.0])
+    assert out2.cat_levels is None
