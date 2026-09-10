@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { useRecode } from "../../../store/recode";
+import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import { useApp } from "../../../store/useApp";
 import WorksheetPane from "./WorksheetPane";
 
@@ -108,6 +109,52 @@ describe("WorksheetPane column context menu — Recode entry (J2)", () => {
     render(<WorksheetPane datasetId="cat1" />);
     fireEvent.contextMenu(headerFor("Field"));
     expect(screen.queryByText("Recode…")).not.toBeInTheDocument();
+  });
+});
+
+// Group O-2b: the "Reorder levels…" entry, same guard as Recode's above.
+// This entry sets the TINY store/levelOrderPanel.ts directly (bundle-size
+// split — see that store's header): it never touches the heavy store/
+// levelOrder.ts, so these assertions read the tiny store's flag+identity,
+// not the heavy store's (which store/levelOrder.test.ts already covers).
+describe("WorksheetPane column context menu — Reorder levels entry (Group O-2b)", () => {
+  const withCategorical: Dataset = {
+    id: "cat1",
+    name: "grades.dat",
+    data: {
+      time: [0, 1],
+      values: [
+        [10, 0],
+        [20, 1],
+      ],
+      labels: ["Field", "Grade"],
+      units: ["Oe", ""],
+      metadata: {},
+      cat_levels: { 1: ["Pass", "Fail"] },
+    },
+  };
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [withCategorical], activeId: "cat1" });
+    useLevelOrderPanel.setState({ open: false, datasetId: null, channel: null });
+  });
+
+  const headerFor = (label: string) =>
+    screen.getAllByRole("columnheader").find((h) => h.textContent?.startsWith(label))!;
+
+  it("offers Reorder levels… on a categorical column header, setting the tiny panel-flag store on that column", () => {
+    render(<WorksheetPane datasetId="cat1" />);
+    fireEvent.contextMenu(headerFor("Grade"));
+    fireEvent.click(screen.getByText("Reorder levels…"));
+    expect(useLevelOrderPanel.getState().open).toBe(true);
+    expect(useLevelOrderPanel.getState().datasetId).toBe("cat1");
+    expect(useLevelOrderPanel.getState().channel).toBe(1);
+  });
+
+  it("offers no Reorder levels… entry on a plain (non-categorical) column header", () => {
+    render(<WorksheetPane datasetId="cat1" />);
+    fireEvent.contextMenu(headerFor("Field"));
+    expect(screen.queryByText("Reorder levels…")).not.toBeInTheDocument();
   });
 });
 

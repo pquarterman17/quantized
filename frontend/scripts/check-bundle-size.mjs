@@ -45,6 +45,38 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-10 — pin RAISED 914,015 -> 915,421 for Group O-2b (the categorical
+ *  level REORDER UI, JMP_GAP J1). The raise is the documented last resort and
+ *  a lazy split was tried FIRST, as required; all four numbers below were
+ *  measured on one `npm ci`'d node_modules, in this file's own printout:
+ *    main (f5209c19)          913,951
+ *    O-2b, no split           916,377   (+2,426 — over the old pin by 2,362)
+ *    O-2b, panel-flag split   914,397   (+446 — over the old pin by 382)
+ *    O-2b as landed           914,353   (+402 — the review round dropped a
+ *                                        dead `openLabel` field from the flag
+ *                                        store, worth 44 bytes, and added the
+ *                                        DEFECT-B read-side resolution)
+ *    new pin                  915,377   (= 914,353 + 1,024, the capped margin)
+ *  THE SPLIT (recovered 1,980 bytes, the bulk of the feature's eager weight):
+ *  `store/levelOrder.ts` holds the whole feature — `lib/recode.ts`'s
+ *  `resolveRecodeChannel`, the draft/permutation/commit logic — and was being
+ *  pulled into the ENTRY chunk by two eager importers, `AppOverlays.tsx`'s
+ *  open-flag subscription and `WorksheetPane.tsx`'s context-menu entry. It now
+ *  loads only from the already-lazy `LevelOrderPanel` chunk, because both of
+ *  those read the new `store/levelOrderPanel.ts` instead — the
+ *  `store/packProjectPanel.ts` precedent from the 2026-09-07 entry below,
+ *  applied verbatim.
+ *  WHAT THE REMAINING 402 BYTES ARE, and why they cannot be deferred: they are
+ *  that flag store's own definition. The
+ *  flag is the thing that DECIDES whether to fetch the lazy chunk, so it is
+ *  eager by construction — making it lazy would require something eager to
+ *  decide when to load it, which is the same byte in a different file. This is
+ *  the "measured, irreducible eager logic ... with no lazy-able panel or module
+ *  behind it" case rule 2 above names, and the panel behind it IS already lazy.
+ *  Note the old pin sat only 64 bytes above main, so ANY new eager byte failed
+ *  the gate — the ratchet did its job by forcing this measurement instead of
+ *  letting a 2.4 kB version through.
+ *
  *  2026-09-07 — pin UNCHANGED at 910,711; one split funds the Pack Project
  *  UI (P1.7 PR 6, sol/pack-project-ui-1). Giving the "pack-project" command
  *  its required `description` (every registered command needs one — CI's
@@ -1118,7 +1150,7 @@ import { fileURLToPath } from "node:url";
  *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
  *  recorded above all still stand; only the arithmetic was fiction.
  */
-const EAGER_JS_BUDGET = 914_015;
+const EAGER_JS_BUDGET = 915_377;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

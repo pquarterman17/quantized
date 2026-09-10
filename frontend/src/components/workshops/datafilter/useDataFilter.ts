@@ -8,7 +8,7 @@
 import { useMemo } from "react";
 
 import { resolveCategoryLabels } from "../../../lib/barlayout";
-import { levelsOf } from "../../../lib/categorical";
+import { categoryLevels } from "../../../lib/categorical";
 import { filteredOutRows, isActive } from "../../../lib/datafilter";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { ColumnFilter, DataFilter } from "../../../lib/types";
@@ -55,10 +55,12 @@ export interface DataFilterState {
 // dep for every unfiltered dataset — the overwhelmingly common case).
 const NO_FILTER: DataFilter = [];
 
-// Group O-1: was its own copy of "distinct finite values, ascending". The
-// checkbox list a user picks levels from and the axis those levels are drawn on
-// must never order them differently, so both now come from one accessor.
-const distinctLevels = levelsOf;
+// Group O-1: was its own copy of "distinct finite values, ascending". Group
+// O-2b: "ascending" stopped being the whole story — a channel can now carry
+// a user-chosen `level_order` (JMP_GAP J1), and the axis those levels are
+// drawn on honours it (`lib/categorical.ts`'s `categoryLevels`). The
+// checkbox list a user picks levels from must show the SAME order, so both
+// come from the one order-aware accessor rather than the plain-ascending one.
 
 /** [min, max] of the finite values in `col`, or null if none are finite. */
 const dataRange = (col: number[]): [number, number] | null => {
@@ -107,7 +109,7 @@ export function useDataFilter(): DataFilterState {
     for (let i = 0; i < active.data.labels.length; i++) {
       const cat = isCategorical(channelModelingType(active, i));
       const colVals = active.data.values.map((r) => r[i]);
-      const levels = cat ? distinctLevels(colVals) : [];
+      const levels = cat ? categoryLevels(active.data, i) : [];
       const range = cat ? null : dataRange(colVals);
       const expectedKind = cat ? "set" : "range";
       const stored = currentOf(i);

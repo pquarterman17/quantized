@@ -250,3 +250,53 @@ describe("useDataFilter — a categorical filter round-trips through project sav
     expect(result.current.total).toBe(4);
   });
 });
+
+// Group O-2b: the checkbox list a user picks levels from must show the SAME
+// order the axis draws them in (`lib/categorical.ts`'s `categoryLevels`) —
+// this used to be a private plain-ascending copy (`distinctLevels`), which
+// would have silently disagreed with an axis honouring a stored
+// `level_order`. `levelLabels` must stay aligned 1:1 with the REORDERED
+// `levels`, not the ascending list `cat_levels` itself is written in.
+describe("useDataFilter — honours a stored level_order (Group O-2b)", () => {
+  it("returns levels in the stored display order, with levelLabels aligned 1:1", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "samples.csv",
+        data: {
+          ...DATA,
+          cat_levels: { 0: ["Reference", "Annealed"] }, // code 0 -> Reference, code 1 -> Annealed
+          level_order: { 0: [1, 0] }, // user put Annealed first
+        },
+      }],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useDataFilter());
+    const group = result.current.columns.find((c) => c.index === 0)!;
+    expect(group.levels).toEqual([1, 0]);
+    expect(group.levelLabels).toEqual(["Annealed", "Reference"]); // aligned to `levels`, not code order
+  });
+
+  it("fails open: a level_order naming only some levels still lists all of them, unnamed ones ascending at the end", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "3level.csv",
+        data: {
+          time: [0, 1, 2],
+          values: [[0], [1], [2]],
+          labels: ["grp"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["Low", "Mid", "High"] },
+          level_order: { 0: [2] }, // only "High" has an opinion
+        },
+      }],
+      activeId: "d1",
+    });
+    const { result } = renderHook(() => useDataFilter());
+    const group = result.current.columns.find((c) => c.index === 0)!;
+    expect(group.levels).toEqual([2, 0, 1]); // High first, then Low/Mid ascending
+    expect(group.levelLabels).toEqual(["High", "Low", "Mid"]);
+  });
+});
