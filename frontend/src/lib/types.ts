@@ -16,6 +16,19 @@ export interface DataStruct {
   units: string[];
   metadata: Record<string, unknown>;
   cat_levels?: Record<number, string[]>; // P1.4: channel idx -> ordered level strings; values carry float codes 0..n-1 (lib/categorical.ts)
+  /** JMP_GAP J1 (Group O-2): channel idx -> the level CODES in the user's
+   *  chosen DISPLAY order. Purely presentational — read only through
+   *  `lib/categorical.ts`'s `categoryLevels`.
+   *
+   *  WHY A SEPARATE FIELD RATHER THAN REORDERING `cat_levels`: a level's CODE
+   *  is its identity. Reordering `cat_levels` would renumber the codes, and
+   *  codes are referenced from places nothing can rewrite — most sharply, a
+   *  computed column's formula text, where a literal like `A==1` binds to the
+   *  raw code (measured) with no detector, no remap and no warning anywhere in
+   *  the codebase. Persisted `ColumnFilter.values` and recorded macro literals
+   *  are in the same position. So codes never move; only the order they are
+   *  DISPLAYED in does, and every persisted code keeps its meaning. */
+  level_order?: Record<number, number[]>;
   /** Origin projects only: every workbook, when the file holds more than one. Each entry is EITHER
    *  a full `DataStruct` (the `full_books=true` escape hatch, or any entry under it) OR one of the
    *  two lazy-transport shapes below (ORIGIN_FILE_DECODE_PLAN #38, the default) — see `BookEntry`. */

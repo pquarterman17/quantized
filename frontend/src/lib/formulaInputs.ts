@@ -88,14 +88,38 @@ export function recomputeFromBaseOrEmpty(
  *  at its 500-line ceiling) purely for headroom. Returns `undefined` for an
  *  absent or now-empty table — `baseColumns` must never carry forward a
  *  stale `{}`. */
-export function stripCatLevels(
-  levels: Record<number, string[]> | undefined,
+/** Generic because `cat_levels` stopped being the only channel-index-keyed map
+ *  on a DataStruct when JMP_GAP J1 added `level_order` (Group O-2) — and a
+ *  second hand-written copy is exactly how the FIRST one came to be needed.
+ *  Every such field routes here so there is one place to get it right.
+ *  (Replaced the `stripCatLevels` name this used to carry: with two callers
+ *  passing different value types, a `cat_levels`-specific alias was one more
+ *  thing to keep in step for no benefit.) */
+export function stripChannelKeyed<T>(
+  byChannel: Record<number, T> | undefined,
   keep: number,
-): Record<number, string[]> | undefined {
-  if (!levels) return undefined;
-  const out: Record<number, string[]> = {};
-  for (const [key, list] of Object.entries(levels)) {
-    if (Number(key) < keep) out[Number(key)] = list;
+): Record<number, T> | undefined {
+  if (!byChannel) return undefined;
+  const out: Record<number, T> = {};
+  for (const [key, v] of Object.entries(byChannel)) {
+    if (Number(key) < keep) out[Number(key)] = v;
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/** Strip the last `n` columns (the computed ones) from a DataStruct, returning
+ *  the base (`n <= 0` = unchanged); also strips stale `cat_levels` (#8) and,
+ *  in lockstep, `level_order` (Group O-2) — both are channel-index-keyed, so a
+ *  surviving entry re-lands on whatever column next takes that index. */
+export function baseColumns(data: DataStruct, n: number): DataStruct {
+  if (n <= 0) return data;
+  const keep = Math.max(0, data.labels.length - n);
+  return {
+    ...data,
+    labels: data.labels.slice(0, keep),
+    units: data.units.slice(0, keep),
+    values: data.values.map((row) => row.slice(0, keep)),
+    cat_levels: stripChannelKeyed(data.cat_levels, keep),
+    level_order: stripChannelKeyed(data.level_order, keep),
+  };
 }

@@ -831,3 +831,33 @@ describe("computeFormulas — recode columns (J2)", () => {
     expect(out.values.map((r) => r[2])).toEqual([0, 0, 1, 0]);
   });
 });
+
+// Group O-2: `level_order` is channel-index-keyed, exactly like `cat_levels`,
+// so it must be stripped by the same column strip. SILENT_STATE_CORRUPTION_PLAN
+// #8 is what happens otherwise: a channel-keyed entry survives the strip and
+// re-lands on whatever column next takes that index.
+describe("baseColumns strips level_order with the columns", () => {
+  const withOrder: DataStruct = {
+    time: [1, 2],
+    values: [
+      [0, 1, 9],
+      [1, 0, 8],
+    ],
+    labels: ["a", "b", "computed"],
+    units: ["", "", ""],
+    metadata: {},
+    cat_levels: { 0: ["X", "Y"], 2: ["P", "Q"] },
+    level_order: { 0: [1, 0], 2: [1, 0] },
+  };
+
+  it("drops entries at or beyond the kept column count", () => {
+    const base = baseColumns(withOrder, 1); // strip the 1 computed column
+    expect(base.level_order).toEqual({ 0: [1, 0] }); // channel 2's entry is gone
+    expect(base.cat_levels).toEqual({ 0: ["X", "Y"] }); // in lockstep
+  });
+
+  it("drops the field entirely when nothing survives the strip", () => {
+    const onlyHigh: DataStruct = { ...withOrder, cat_levels: { 2: ["P", "Q"] }, level_order: { 2: [1, 0] } };
+    expect(baseColumns(onlyHigh, 1).level_order).toBeUndefined();
+  });
+});

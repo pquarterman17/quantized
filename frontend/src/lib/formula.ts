@@ -94,7 +94,7 @@
 
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
-import { stripCatLevels, type StrippableData } from "./formulaInputs";
+import { baseColumns, type StrippableData } from "./formulaInputs";
 import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
@@ -357,19 +357,14 @@ export function referencedColumns(expr: string): { letters: string[]; valid: boo
   }
 }
 
-/** Strip the last `n` columns (the computed ones) from a DataStruct, returning
- *  the base (`n <= 0` = unchanged); also strips stale `cat_levels` (#8). */
-export function baseColumns(data: DataStruct, n: number): DataStruct {
-  if (n <= 0) return data;
-  const keep = Math.max(0, data.labels.length - n);
-  return {
-    ...data,
-    labels: data.labels.slice(0, keep),
-    units: data.units.slice(0, keep),
-    values: data.values.map((row) => row.slice(0, keep)),
-    cat_levels: stripCatLevels(data.cat_levels, keep),
-  };
-}
+// `baseColumns` MOVED to ./formulaInputs (Group O-2): it grew a second
+// channel-index-keyed strip when `level_order` joined `cat_levels`, and this
+// module sits AT its 500-line ceiling — the same reason `stripChannelKeyed`
+// itself already lives there ("purely for headroom", per its own doc). The two
+// belong together anyway: one strips the columns, the other strips the
+// channel-keyed maps that index them. Re-exported so the 16 call sites across
+// the store and workshops need no churn.
+export { baseColumns };
 
 /** The shared computation `applyFormulas`/`formulaErrors` both delegate to
  *  (K5b): ONE pass over the formula list, producing the resulting DataStruct

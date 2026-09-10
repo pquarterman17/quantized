@@ -131,6 +131,31 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
   });
   const cat_levels: Record<number, string[]> = {};
   for (const [c, plan] of plans) cat_levels[c] = plan.levels;
+  // Group O-2: a `level_order` names CODES, so it is only safe to carry across
+  // a merge if dataset 0's codes do not move. They don't, and that is a
+  // PROPERTY OF `planChannel` rather than a happy accident: the union is built
+  // starting from `tables[0]` in its own order, so every one of dataset 0's
+  // levels keeps its index and `remapFor(tables[0], union)` is an identity.
+  //
+  // The first version of this ran each code through `plan.remaps[0]` anyway,
+  // "defensively". Sabotage exposed that as dead code — deleting the remap left
+  // every test green, because it cannot change a value. Rather than keep a line
+  // no test can hold honest, the invariant it was guarding is asserted directly
+  // in merge.test.ts ("dataset 0's codes are never renumbered"), so a future
+  // change to the union construction fails THERE, loudly, pointing at exactly
+  // the code that would then need a remap.
+  //
+  // Only dataset 0's preference survives, matching how this merge treats every
+  // other non-row-indexed field (labels, units, metadata): there is no
+  // defensible way to reconcile two users' orderings, and inventing one would
+  // be worse than deterministically picking the first.
+  const level_order: Record<number, number[]> = {};
+  for (const [c] of plans) {
+    const own = datasets[0].level_order?.[c];
+    if (!Array.isArray(own)) continue;
+    const codes = own.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    if (codes.length) level_order[c] = codes;
+  }
   return {
     time,
     values,
@@ -159,5 +184,6 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
       merged_count: datasets.length,
     },
     ...(plans.size ? { cat_levels } : {}),
+    ...(Object.keys(level_order).length ? { level_order } : {}),
   };
 }
