@@ -19,6 +19,7 @@ from scipy.interpolate import (
     interp1d,
 )
 
+from ..cat_levels import surviving_cat_levels
 from ..datastruct import DataStruct
 from ..row_sidecars import drop_row_sidecars
 
@@ -143,12 +144,23 @@ def resample_data(
     meta["resampled"] = True
     meta["resampleMethod"] = method
     meta["resamplePoints"] = int(x_new.size)
-    # `cat_levels` is deliberately dropped, for the same reason as
-    # `calc/corrections.py`'s strip (see its comment): resampling INTERPOLATES,
-    # so a categorical channel's integer level codes become fractional and index
-    # nothing in the table. Carrying it forward would attach labels to values
-    # that cannot have them. Booked with corrections as BUG-005; pinned by
-    # `test_resample_strips_cat_levels_because_interpolation_breaks_codes`.
+    # `cat_levels` survives only where the codes did (BUG-005). Resampling
+    # INTERPOLATES, so a categorical channel's integer level codes normally
+    # become fractional and index nothing — carrying the table forward would
+    # attach labels to values that cannot have them, which is why this dropped it
+    # outright. But a resample onto a COINCIDENT grid returns its input
+    # unchanged, and there the table still describes the output exactly.
+    # `surviving_cat_levels` decides per channel by comparing the numbers, so the
+    # drop still happens whenever interpolation actually moved them.
+    #
+    # STILL BOOKED as BUG-005: what Resample SHOULD do with a categorical channel
+    # on a genuinely new grid (refuse, or nearest-neighbour it) is a product
+    # decision, not something to settle here.
     return DataStruct.create(
-        x_new, y_new, labels=data.labels, units=data.units, metadata=meta
+        x_new,
+        y_new,
+        labels=data.labels,
+        units=data.units,
+        metadata=meta,
+        cat_levels=surviving_cat_levels(data.cat_levels, y_old, y_new),
     )

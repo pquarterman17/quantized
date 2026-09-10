@@ -321,3 +321,104 @@ def test_corrections_strips_cat_levels_because_codes_are_transformed():
     assert not np.all(
         np.isin(codes, [0.0, 1.0])
     ), "smoothing left the codes intact -- revisit the strip"
+
+
+def test_corrections_keeps_cat_levels_when_the_codes_did_not_move():
+    """BUG-005: the strip above is right for a transform, and was WRONG for an
+    identity. The pipeline used to drop the table unconditionally, so an
+    all-defaults correction silently degraded every label to a bare number even
+    though it had not touched a single value."""
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(data, {})
+
+    assert out.cat_levels == {1: ("alpha", "beta")}
+    np.testing.assert_array_equal(out.values, data.values)  # nothing moved
+
+
+def test_corrections_keeps_cat_levels_through_a_pure_row_trim():
+    """A trim SELECTS rows; it never touches a value, so every surviving code
+    still indexes the table. This is the case the unconditional drop got most
+    obviously wrong — and the one the shape difference made easy to miss, which
+    is why `surviving_cat_levels` takes `kept_rows` rather than comparing whole
+    matrices."""
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(data, {"xTrimMin": 1.0, "xTrimMax": 2.0})
+
+    assert out.values.shape[0] == 2, "the trim really did drop rows"
+    assert out.cat_levels == {1: ("alpha", "beta")}
+    np.testing.assert_array_equal(out.values[:, 1], [1.0, 0.0])
+
+
+def test_corrections_drops_only_the_channel_whose_codes_moved():
+    """`cat_levels` is per CHANNEL, so the decision has to be too — a correction
+    that moves one channel must not cost a DIFFERENT, untouched channel its
+    labels.
+
+    The beam-footprint scale is the real per-channel path: it deliberately skips
+    channels labelled ``dq`` (like the neutron R-scale), so channel 0 moves and
+    channel 1 does not. Measured: ch0 1.0 -> 114.59..., ch1 unchanged.
+    """
+    data = DataStruct.create(
+        [0.5, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["R", "dq"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(
+        data, {"footprintW": 10.0, "footprintL": 20.0, "footprintTwoTheta": True}
+    )
+
+    assert not np.array_equal(out.values[:, 0], data.values[:, 0]), "ch0 really moved"
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
+    assert out.cat_levels == {1: ("alpha", "beta")}
+
+
+def test_corrections_keeps_cat_levels_for_an_x_only_shift():
+    """An x offset moves the GRID, never a value, so every code still indexes the
+    table. Third of the three real preservation cases, alongside the identity and
+    the trim."""
+    data = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(data, {"xOff": 2.0})
+
+    np.testing.assert_array_equal(out.time, [-2.0, -1.0])  # xOff SUBTRACTS, measured
+    assert out.cat_levels == {1: ("alpha", "beta")}
+
+
+def test_corrections_drops_cat_levels_when_a_y_offset_moves_the_codes():
+    """The complement: yOff SUBTRACTS from every channel (measured: 0.0 -> -5.0),
+    so the codes no longer index the table and it must go."""
+    data = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(data, {"yOff": 5.0})
+
+    np.testing.assert_array_equal(out.values[:, 1], [-5.0, -4.0])
+    assert out.cat_levels is None

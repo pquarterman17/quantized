@@ -158,3 +158,21 @@ def test_resample_strips_cat_levels_because_interpolation_breaks_codes():
     assert not np.all(
         np.isin(codes, [0.0, 1.0])
     ), "interpolation left the codes intact -- revisit the strip"
+
+
+def test_resample_keeps_cat_levels_on_a_coincident_grid():
+    """BUG-005: interpolation onto the SAME x grid returns its input, so the
+    level codes are untouched and the table still describes the output. The
+    unconditional drop discarded it anyway."""
+    data = DataStruct.create(
+        [0.0, 1.0, 2.0, 3.0],
+        [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0], [40.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = resample_data(data, grid=[0.0, 1.0, 2.0, 3.0], method="linear")
+
+    assert out.cat_levels == {1: ("alpha", "beta")}
+    np.testing.assert_array_equal(out.values[:, 1], [0.0, 1.0, 0.0, 1.0])

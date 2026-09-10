@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from ..cat_levels import surviving_cat_levels
 from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
 from .backgrounds import anchor_baseline, footprint_factor
@@ -97,6 +98,10 @@ def apply_corrections(
     """
     time = np.asarray(data.time, dtype=float).copy()
     values = np.asarray(data.values, dtype=float).copy()
+    # BUG-005: kept to decide, at the end, which `cat_levels` entries the
+    # pipeline actually invalidated. `values` above is mutated in place from here
+    # on, so the comparison needs its own reference.
+    values_in = np.asarray(data.values, dtype=float)
     labels = list(data.labels)
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
@@ -246,9 +251,7 @@ def apply_corrections(
     elif deriv == "dlog/dlog":
         values = log_derivative(time, values)
 
-    # `cat_levels` IS DELIBERATELY NOT CARRIED FORWARD — and that is a strip,
-    # not an oversight, so it is written down rather than left to look like the
-    # accidental omission it used to be.
+    # `cat_levels` IS CARRIED FORWARD ONLY WHERE THE CODES SURVIVED (BUG-005).
     #
     # Every step above transforms EVERY channel unconditionally (`for k in
     # range(values.shape[1])`, plus whole-matrix `smooth_data`/`normalize`/
@@ -257,14 +260,28 @@ def apply_corrections(
     # no level, so keeping the table would make the output claim labels for
     # values that no longer index it — worse than showing the raw numbers.
     #
-    # The RIGHT fix is for corrections not to transform a categorical channel at
-    # all, which needs a channel mask threaded through every step above and
-    # carries real golden-parity regression risk. That is booked as BUG-005 in
-    # plans/BUGS_AND_ISSUES.md, not faked here. Pinned by
-    # `test_corrections_strips_cat_levels_because_codes_are_transformed`.
+    # That was why this dropped the table. But it dropped it UNCONDITIONALLY,
+    # including when the codes demonstrably did not move: an identity correction
+    # (every step off) or a pure row TRIM, which selects rows and never touches a
+    # value. `surviving_cat_levels` (see `quantized/cat_levels.py`) now decides
+    # per channel by COMPARING the numbers, so a table is kept exactly when it
+    # still describes the output and dropped otherwise. Evidence, not inference
+    # about which parameters are identities — which is also why it cannot change
+    # any existing golden output.
+    #
+    # STILL BOOKED as BUG-005: corrections should not TRANSFORM a categorical
+    # channel at all. That needs a channel mask threaded through every step above
+    # and carries real golden-parity regression risk, so it is not faked here.
     metadata = (
         dict(data.metadata)
         if kept_rows is None
         else slice_row_sidecars(data.metadata, kept_rows)
     )
-    return DataStruct.create(time, values, labels=labels, units=list(data.units), metadata=metadata)
+    return DataStruct.create(
+        time,
+        values,
+        labels=labels,
+        units=list(data.units),
+        metadata=metadata,
+        cat_levels=surviving_cat_levels(data.cat_levels, values_in, values, kept_rows),
+    )
