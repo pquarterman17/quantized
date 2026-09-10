@@ -6,8 +6,12 @@
 // prerequisite for overlays/panels/waterfalls/batch fits.
 //
 // Two grouping strategies, dispatched by the column's MODELING TYPE
-// (lib/modeling.ts's inferModelingType — the same continuous/nominal/ordinal
-// inference the worksheet's categorical-axis logic already uses):
+// (lib/modeling.ts's `channelModelingType` — the SANCTIONED accessor, which
+// honours the user's `channelTypes` override first, then an explicit
+// `cat_levels` table, then the numeric-shape heuristic; BUG-008 was this
+// module reaching past it straight to the raw `inferModelingType` heuristic,
+// so a column `lib/byPartition.ts` OFFERS as categorical could still be
+// gap-clustered here — two code paths, two answers to the same question):
 //   - continuous (a real measurement, e.g. a setpoint temperature/field):
 //     GAP-CLUSTERING (`clusterByGaps`) — sort the values, start a new group
 //     whenever the gap to the previous value exceeds `tolerance`. A PPMS/
@@ -16,10 +20,14 @@
 //     APPROXIMATELY, so exact-value grouping would produce one group per
 //     row; gap-clustering with a tolerance derived from the column's own
 //     spacing (`autoTolerance`) closes that gap.
-//   - nominal/ordinal (few discrete levels, each used many times — a run
-//     index, a 0/1 flag, a sample id encoded as a small integer): EXACT-
-//     VALUE grouping (`groupByExactValue`) — no tolerance needed or shown,
-//     every occurrence of the same number is the same group by definition.
+//   - nominal/ordinal (a level table, a user override, or few discrete
+//     levels each used many times — a run index, a 0/1 flag, a sample id
+//     encoded as a small integer): EXACT-VALUE grouping
+//     (`groupByExactValue`) — no tolerance needed or shown, every
+//     occurrence of the same number is the same group by definition. A
+//     categorical column's groups are labelled with their LEVEL NAMES
+//     (`lib/categorical.ts`'s `labelForCode`), not their raw float codes,
+//     so the child datasets read "run.dat (B456)" and not "run.dat (1)".
 // Both return the SAME `SplitGroup[]` shape (`SplitResult`) so the dialog
 // and the store action never need to know which strategy produced a group.
 //
@@ -32,10 +40,11 @@
 // `splitColumn`/`tooManyGroups`/`sliceDataStruct` chain, only the (lazy)
 // SplitDatasetDialog picking a suggestion.
 
+import { categoricalLevels, labelForCode } from "./categorical";
 import { fmtNum } from "./format";
 import { sliceRowSidecars } from "./rowSidecars";
-import { inferModelingType } from "./modeling";
-import type { DataStruct } from "./types";
+import { channelModelingType, isCategorical } from "./modeling";
+import type { DataStruct, Dataset } from "./types";
 
 export interface SplitGroup {
   /** Display + dataset-naming label: the group's representative value
@@ -232,8 +241,23 @@ export function clusterByGaps(
  *  math: groups are emitted in FIRST-APPEARANCE order (the natural "level
  *  order" a user recognizes, e.g. run 1 before run 2 before run 3, not an
  *  arbitrary numeric sort). NaN rows still collect into a trailing
- *  "(other)" group, the same convention `clusterByGaps` uses. */
-export function groupByExactValue(values: readonly number[], unit = ""): SplitResult {
+ *  "(other)" group, the same convention `clusterByGaps` uses.
+ *
+ *  `levels` (BUG-008) is the column's `cat_levels` table when it HAS one:
+ *  each group's label then resolves through `lib/categorical.ts`'s
+ *  `labelForCode`, so a sample-id column groups into "A123"/"B456"/"C789"
+ *  rather than "0"/"1"/"2". `unit` is dropped for a resolved level — a level
+ *  NAME takes no physical unit — but is still applied to any code the table
+ *  can't resolve (out of range, non-integer), which keeps such a value
+ *  visible as the number it is instead of inventing a name for it. Passing
+ *  no `levels` (or `null`) keeps the numeric labels, which is CORRECT for a
+ *  small-integer numeric column routed here by the shape heuristic: that
+ *  column's values ARE numbers, and "run 3" must not become "run C". */
+export function groupByExactValue(
+  values: readonly number[],
+  unit = "",
+  levels?: readonly string[] | null,
+): SplitResult {
   const order: number[] = [];
   const byValue = new Map<number, number[]>();
   const other: number[] = [];
@@ -249,7 +273,7 @@ export function groupByExactValue(values: readonly number[], unit = ""): SplitRe
     byValue.get(v)!.push(i);
   });
   const groups: SplitGroup[] = order.map((v) => ({
-    label: formatGroupLabel(v, unit),
+    label: (levels ? labelForCode(levels, v) : null) ?? formatGroupLabel(v, unit),
     value: v,
     rowIndexes: byValue.get(v)!,
   }));
@@ -273,10 +297,18 @@ export function columnUnit(data: DataStruct, col: number): string {
 /** True when `col` should use exact-value grouping (nominal/ordinal
  *  modeling type) rather than gap-clustering. The x/time column is always
  *  treated as continuous — a categorical x is not a modeled scenario
- *  today (lib/modeling.ts only infers types for value channels). */
-export function isCategoricalColumn(data: DataStruct, col: number): boolean {
+ *  today (lib/modeling.ts only infers types for value channels).
+ *
+ *  Takes a `Dataset`, not a bare `DataStruct` (BUG-008): the answer depends
+ *  on the dataset-level `channelTypes` override and on `data.cat_levels`,
+ *  neither of which the raw `inferModelingType` heuristic can see. All three
+ *  consumers of this decision hold a full `Dataset` — `SplitDatasetDialog`,
+ *  `store/split.ts`, and `lib/datasetsplitDefault.ts` (whose only caller is
+ *  that same dialog) — so there is no DataStruct-only fallback and no
+ *  call site where the override silently goes unhonoured. */
+export function isCategoricalColumn(ds: Dataset, col: number): boolean {
   if (col < 0) return false;
-  return inferModelingType(data.values.map((row) => row[col])) !== "continuous";
+  return isCategorical(channelModelingType(ds, col));
 }
 
 /** The ONE entry point the dialog + store action both call: groups `col`
@@ -291,10 +323,18 @@ export function isCategoricalColumn(data: DataStruct, col: number): boolean {
  *  comparison `> ` false, silently collapsing everything to one group) or a
  *  negative one (every gap, even a same-value repeat's gap of exactly 0,
  *  exceeds it, silently exploding into one group per row). */
-export function splitColumn(data: DataStruct, col: number, tolerance?: number): SplitResult {
+export function splitColumn(ds: Dataset, col: number, tolerance?: number): SplitResult {
+  const data = ds.data;
   const values = columnValues(data, col);
   const unit = columnUnit(data, col);
-  if (isCategoricalColumn(data, col)) return groupByExactValue(values, unit);
+  if (isCategoricalColumn(ds, col)) {
+    // `categoricalLevels` returns null for a column with no (or a malformed)
+    // level table — including a numeric column the shape heuristic routed
+    // here, and including the x column (never keyed in `cat_levels`, and
+    // `isCategoricalColumn` already refuses it) — and `groupByExactValue`
+    // then keeps its numeric labels.
+    return groupByExactValue(values, unit, categoricalLevels(data, col));
+  }
   const tol =
     tolerance !== undefined && Number.isFinite(tolerance) && tolerance >= 0
       ? tolerance

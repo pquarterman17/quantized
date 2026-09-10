@@ -201,6 +201,73 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
   });
 });
 
+// BUG-008: the dialog's tolerance field is the user-visible tell. It is shown
+// only for a CONTINUOUS column, and `isCategoricalColumn` used to answer that
+// from the raw shape heuristic alone — so a 6-row column with an explicit
+// level table was offered a tolerance (i.e. told the user it was a continuous
+// measurement) and previewed as ONE group.
+describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => {
+  const samples: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6],
+    values: [[0], [1], [2], [0], [1], [2]],
+    labels: ["sample"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["A123", "B456", "C789"] },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run1.dat", data: samples }],
+      splitDialogTargetId: "d1",
+    });
+  });
+
+  it("hides the tolerance field (the column is categorical, not a measurement)", () => {
+    render(<SplitDatasetDialog />);
+    expect(screen.queryByLabelText("Tolerance")).toBeNull();
+  });
+
+  it("previews one group per LEVEL NAME, not one merged group", () => {
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText("A123")).toBeInTheDocument();
+    expect(screen.getByText("B456")).toBeInTheDocument();
+    expect(screen.getByText("C789")).toBeInTheDocument();
+    expect(screen.getAllByText("2 rows")).toHaveLength(3);
+    expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
+  });
+
+  // A malformed level table with two identical names is the one realistic way
+  // two groups can share a LABEL. They must still be two groups (the codes
+  // differ), and the preview list must not collapse or warn — which is why it
+  // keys on `g.value`, the distinct grouping key, rather than the label.
+  it("keeps duplicate level NAMES as separate groups in the preview", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: { ...samples, cat_levels: { 0: ["dup", "dup", "C789"] } },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
+    expect(screen.getAllByText("dup")).toHaveLength(2);
+    expect(warn).not.toHaveBeenCalled(); // no duplicate-key warning
+    warn.mockRestore();
+  });
+
+  // The continuous fixture at the top of this file still gets its tolerance
+  // field — the positive control that the fix didn't hide it for everyone.
+  it("still shows the tolerance field for a continuous column", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run1.dat", data: wobble }] });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByLabelText("Tolerance")).toBeInTheDocument();
+  });
+});
+
 describe("Analyze-menu/⌘K command registry entry (MAIN_PLAN #26)", () => {
   // commands/dataCommands.ts's curated actions array IS (part of) the
   // command registry (MenuBar and the ⌘K palette both consume the

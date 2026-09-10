@@ -357,6 +357,59 @@ describe("splitDatasetByColumn — resolves a still-pending Origin book first", 
   });
 });
 
+// BUG-008: the end-to-end consequence of the grouping fix. A 6-row, 3-sample
+// categorical column used to yield ONE group (so the action bailed with
+// "doesn't split into more than one group") — and even when the row count
+// happened to satisfy the shape heuristic, each child was named after the raw
+// float CODE. Both are user-visible here, in the dataset names.
+describe("split honours an explicit cat_levels table (BUG-008)", () => {
+  const samples: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6],
+    values: [[0], [1], [2], [0], [1], [2]],
+    labels: ["sample"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["A123", "B456", "C789"] },
+  };
+
+  it("mints one child per LEVEL, named with the level name", async () => {
+    useApp.setState({ datasets: [baseDataset({ data: samples })] });
+
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+
+    const children = useApp.getState().datasets.filter((d) => d.id !== "d1");
+    expect(children.map((d) => d.name)).toEqual([
+      "run1.dat (A123)",
+      "run1.dat (B456)",
+      "run1.dat (C789)",
+    ]);
+    expect(children.map((d) => d.data.time)).toEqual([
+      [1, 4],
+      [2, 5],
+      [3, 6],
+    ]);
+    // Pre-fix this path bailed with the "doesn't split into more than one
+    // group" danger toast instead (measured), so the success toast — not the
+    // absence of a toast — is what proves the split ran.
+    expect(vi.mocked(toast).mock.calls).toEqual([["split into 3 datasets", "ok"]]);
+  });
+
+  it("carries the level table to every child, so they stay categorical", async () => {
+    useApp.setState({ datasets: [baseDataset({ data: samples })] });
+
+    await useApp.getState().splitDatasetByColumn("d1", 0);
+
+    const children = useApp.getState().datasets.filter((d) => d.id !== "d1");
+    // Assert the count FIRST: without it the loop below passes vacuously when
+    // the split bails (pre-fix it produced ONE group, so zero children, and
+    // "every child kept its level table" was trivially true of nothing).
+    expect(children).toHaveLength(3);
+    for (const child of children) {
+      expect(child.data.cat_levels).toEqual({ 0: ["A123", "B456", "C789"] });
+    }
+  });
+});
+
 describe("openSplitDialog / closeSplitDialog", () => {
   it("sets and clears the dialog target id", () => {
     useApp.getState().openSplitDialog("d1");

@@ -125,7 +125,7 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
       if (!src) return;
 
       const { splitColumn, sliceDataStruct, tooManyGroups } = await import("../lib/datasetsplit");
-      const { groups } = splitColumn(src.data, col, tolerance);
+      const { groups } = splitColumn(src, col, tolerance);
       if (groups.length < 2) {
         toast(`"${src.name}" doesn't split into more than one group on that column`, "danger");
         return;

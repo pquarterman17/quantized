@@ -9,7 +9,7 @@
 // in the same always-loaded file.
 
 import { splitColumn } from "./datasetsplit";
-import type { DataStruct } from "./types";
+import type { Dataset } from "./types";
 
 /** Cheap "how setpoint-like is this column" score for the dialog's default
  *  column pick — LOWER is better; `Infinity` marks a column that can't
@@ -17,8 +17,8 @@ import type { DataStruct } from "./types";
  *  group would be worse than useless). Fewer groups reads as more
  *  setpoint-like (a 4-level temperature column beats a near-continuous
  *  field column, which groups into hundreds under the same math). */
-function setpointScore(data: DataStruct, col: number): number {
-  const n = splitColumn(data, col).groups.length;
+function setpointScore(ds: Dataset, col: number): number {
+  const n = splitColumn(ds, col).groups.length;
   return n > 1 ? n : Infinity;
 }
 
@@ -31,15 +31,15 @@ function setpointScore(data: DataStruct, col: number): number {
  *  for all of them). Never the x/time column: a PPMS/MPMS-style export
  *  loops the SAME x sweep (e.g. field) once per setpoint, so x itself is
  *  essentially never the split key. Returns a channel index (0-based,
- *  into `DataStruct.values`), or -1 if `data` has no channels at all (a
+ *  into `DataStruct.values`), or -1 if `ds` has no channels at all (a
  *  degenerate/empty dataset — the caller should disable the picker). */
-export function pickDefaultSplitColumn(data: DataStruct): number {
-  const n = data.labels.length;
+export function pickDefaultSplitColumn(ds: Dataset): number {
+  const n = ds.data.labels.length;
   if (n === 0) return -1;
   let best = 0;
   let bestScore = Infinity;
   for (let c = 0; c < n; c++) {
-    const score = setpointScore(data, c);
+    const score = setpointScore(ds, c);
     if (score < bestScore) {
       bestScore = score;
       best = c;

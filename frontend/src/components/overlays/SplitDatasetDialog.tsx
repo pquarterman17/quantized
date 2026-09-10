@@ -39,7 +39,7 @@ export default function SplitDatasetDialog() {
   // was open on some other row.
   useEffect(() => {
     if (!dataset) return;
-    const def = pickDefaultSplitColumn(dataset.data);
+    const def = pickDefaultSplitColumn(dataset);
     setCol(def);
     setToleranceText(def < 0 ? "0" : String(autoTolerance(columnValues(dataset.data, def))));
     // Only re-seed on a genuine open (targetId change), not every dataset edit.
@@ -63,7 +63,7 @@ export default function SplitDatasetDialog() {
   // empty result, not by skipping the hook, so toggling the dialog
   // open/closed across renders of this ALWAYS-MOUNTED component (see
   // AppOverlays.tsx) never changes React's hook call order.
-  const categorical = dataset ? isCategoricalColumn(dataset.data, col) : false;
+  const categorical = dataset ? isCategoricalColumn(dataset, col) : false;
   const tolerance = Number(toleranceText);
   const validTolerance = Number.isFinite(tolerance) && tolerance >= 0;
   // Non-empty text that fails to parse (or is negative) is a hard error, not
@@ -78,7 +78,7 @@ export default function SplitDatasetDialog() {
   const resolvedTolerance = categorical || !validTolerance ? undefined : tolerance;
   const result = useMemo(() => {
     if (!dataset) return { groups: [], tolerance: null };
-    return splitColumn(dataset.data, col, resolvedTolerance);
+    return splitColumn(dataset, col, resolvedTolerance);
   }, [dataset, col, resolvedTolerance]);
 
   if (!targetId || !dataset) return null;
@@ -148,7 +148,12 @@ export default function SplitDatasetDialog() {
             </div>
           ) : (
             groups.map((g) => (
-              <div key={g.label} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              // Keyed on the group's VALUE, not its label: labels are display
+              // text and need not be unique (a malformed level table with two
+              // identical names, or two distinct numbers that format to the
+              // same string), while `value` is the distinct grouping key by
+              // construction — NaN for the single "(other)" catch-all.
+              <div key={String(g.value)} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <span>{g.label}</span>
                 <span className="qzk-ds-meta">{g.rowIndexes.length} rows</span>
               </div>

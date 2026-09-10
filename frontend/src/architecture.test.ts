@@ -854,6 +854,31 @@ describe("row-state model guard (#50 universal linking)", () => {
   });
 });
 
+// BUG-008 (plans/BUGS_AND_ISSUES.md): `lib/datasetsplit.ts` asked the RAW
+// shape heuristic `inferModelingType` whether a column is categorical, while
+// `lib/byPartition.ts` asked the sanctioned accessor `channelModelingType` —
+// which honours the user's `channelTypes` override, then an explicit
+// `cat_levels` level table, and only THEN the heuristic. Two paths, two
+// answers to the same question: a 3-sample/6-row categorical column that
+// byPartition offered as categorical was gap-clustered by Split into ONE
+// group, silently merging three samples into one dataset.
+//
+// The fix was one edit; this guard is what stops the NEXT one. Nothing in the
+// suite could see a module reaching past the accessor before — the divergence
+// was found by reading, not by a failing test.
+describe("modeling-type accessor chokepoint (BUG-008)", () => {
+  it("only lib/modeling.ts calls the raw inferModelingType heuristic", () => {
+    // `lib/modeling.ts` DEFINES it and is the one legitimate caller (from
+    // `channelModelingType`, after the override and level-table checks).
+    // `lib/statschooser.ts` only NAMES it in a comment, which is why the
+    // pattern requires a call, not a mention.
+    expect(
+      offenders(/\binferModelingType\s*\(/, ["/lib/modeling.ts"]),
+      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008)",
+    ).toEqual([]);
+  });
+});
+
 describe("FigureDocument write chokepoint (F1)", () => {
   it("routes PlotWindow.document writes through windowDocuments, except declared construction/persistence seams", () => {
     // `document: FigureDocument` is a function parameter/type annotation, not

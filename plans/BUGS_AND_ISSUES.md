@@ -31,6 +31,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
+| BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10; measured repro, 15 behaviour tests + 1 accessor-chokepoint ratchet, both halves sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; two data-CORRUPTING sites found in review round 5 and now guarded, but "refuse" should be "resolve-then-apply" and a failed fetch is a permanent lockout | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites fixed + ratcheted, structural fix open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1316,6 +1317,112 @@ impossibility for all three reshapes; it now distinguishes the three cases.
   alone kept it green regardless of the allowlist).
 - Owner verification: — (worth a look on a real Origin "Text & Numeric" sheet;
   the fix is shape-driven, not corpus-driven, so no specimen was needed.)
+
+---
+
+## BUG-008 — Split Dataset ignored an explicit categorical level table
+
+**Priority:** P2 — nothing is destroyed (the source dataset is untouched and the
+child rows that DO get minted are correct), but the primary failure mode is a
+silent merge: three samples become one dataset with no warning, and the user's
+next analysis runs on a pooled population they believe is one sample. The
+secondary mode is cosmetic-looking but just as misleading — children named
+`run.dat (0)` / `run.dat (1)` after raw float level codes.
+
+**Reported:** 2026-09-09, by Claude, while auditing the categorical accessors
+after the Group J propagation pass. Found by READING two modules that answer the
+same question, not by any failing test.
+
+### What happened
+
+`lib/modeling.ts`'s `channelModelingType(dataset, channel)` is the sanctioned
+accessor for "what does this column MEAN". It resolves in a deliberate order:
+
+1. the user's `channelTypes` override,
+2. an explicit `cat_levels` level table (its own comment: "a level table means
+   'these are labeled categories', the strongest signal there is — stronger
+   than the numeric-shape heuristic below, so it's checked first"),
+3. and only then `inferModelingType`, the numeric-shape heuristic.
+
+`lib/datasetsplit.ts`'s `isCategoricalColumn` skipped straight to (3). Since the
+heuristic needs at least 12 finite rows (`MIN_SAMPLES`) before it will call
+anything nominal, a realistic small categorical column read as CONTINUOUS and
+went to gap-clustering.
+
+Measured on a 3-sample / 6-row column (`cat_levels: {0: ["A123","B456","C789"]}`,
+codes `[0,1,2,0,1,2]`):
+
+| | before | after |
+|---|---|---|
+| `channelModelingType` | `nominal` | `nominal` |
+| `isCategoricalColumn` | **`false`** | `true` |
+| `splitColumn().groups` | **`[{label: "1", rows: 6}]`** | `[A123:2, B456:2, C789:2]` |
+
+One group, labelled `"1"` — the *median of the level codes* standing in for a
+sample name. At 12 rows, where the heuristic happens to agree, the grouping was
+right but the labels were the raw codes (`"0"`/`"1"`/`"2"`).
+
+### The same bug from a second angle, which settled the fix
+
+`lib/byPartition.ts`'s `byColumnOptions` — which decides which columns are
+OFFERED for splitting — already used the correct accessor:
+`isCategorical(channelModelingType(active, c.index))`. So a column the UI
+offered as categorical could be gap-clustered by the code that then split it.
+Two code paths, two answers to the same question. That made the fix direction
+unambiguous: adopt the accessor, don't add a second heuristic.
+
+### The fix
+
+- `isCategoricalColumn`, `splitColumn` and `pickDefaultSplitColumn` now take a
+  `Dataset` rather than a bare `DataStruct`, and the categorical decision is
+  `isCategorical(channelModelingType(ds, col))`. All three consumers already
+  held a full `Dataset` (`SplitDatasetDialog`, `store/split.ts`, and
+  `lib/datasetsplitDefault.ts`, whose only caller is that same dialog), so
+  there is NO DataStruct-only fallback and no call site where the
+  `channelTypes` override goes unhonoured. `lib/datasetsplit.ts` importing
+  `lib/modeling.ts` is not a layering break — `channelModelingType` itself
+  takes a `Dataset`.
+- `groupByExactValue` gained an optional `levels` argument; a group's label
+  resolves through `lib/categorical.ts`'s `labelForCode`, falling back to the
+  numeric label (with unit) for a code the table can't resolve. Passing no
+  levels keeps numeric labels, which is CORRECT for a small-integer numeric
+  column routed to exact-value grouping by the shape heuristic — "run 3" must
+  not become "run C". That negative control is the load-bearing test.
+- The dialog's tolerance field is hidden for a level-table column, where it was
+  previously offered (telling the user a categorical column was a continuous
+  measurement).
+
+### Mechanism, not just a fix
+
+The divergence was invisible to the whole suite — it took reading two modules
+side by side. So `architecture.test.ts` now carries a **modeling-type accessor
+chokepoint**: only `lib/modeling.ts` may CALL `inferModelingType`. Every other
+module has to go through `channelModelingType` and therefore honours the
+override and the level table. Sabotage-verified (restoring the old heuristic
+call in `datasetsplit.ts` fails it by name, with the remedy in the message).
+
+### Verification
+
+- Repro measured before the fix and recorded above, not inferred.
+- 15 behaviour tests: 9 in `lib/datasetsplit.test.ts` (grouping into 3,
+  level-name labels, `isCategoricalColumn` itself, the numeric negative
+  control, per-channel resolution, unresolvable-code fallback, the
+  `channelTypes` override, byPartition agreement, default-column pick), 2 in
+  `store/split.test.ts` (child names + level tables carried through) and 4 in
+  `components/overlays/SplitDatasetDialog.test.tsx` (tolerance field hidden,
+  preview shows level names, duplicate level names stay distinct groups,
+  continuous positive control). Plus the accessor chokepoint in
+  `architecture.test.ts`.
+- Both halves sabotage-verified independently: reverting the accessor fails 8 +
+  2 + 3 tests; reverting only the label resolution fails 3 and leaves the
+  numeric negative control green; reverting the preview's `key={g.value}` fails
+  the duplicate-level-name test alone.
+- One test was strengthened after sabotage showed it passing vacuously ("every
+  child kept its level table" was trivially true of zero children when the
+  split bailed), which is exactly the failure mode that sabotage exists to
+  catch.
+- Owner verification: — (shape-driven, no specimen needed; worth a look on a
+  real Origin sheet with a text column imported as categorical.)
 
 ---
 
