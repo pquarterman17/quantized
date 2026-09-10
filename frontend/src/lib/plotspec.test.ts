@@ -490,6 +490,68 @@ describe("specToRender", () => {
     ]);
   });
 
+  // Group O-2c: the ORDERED half of the cross-language parity pair. The
+  // fixture below is the same one the backend builds in
+  // tests/test_calc_plotting.py's `_ordered_parity_ds`, and the two files
+  // assert the same three orderings, so a drift between `orderLevels` and its
+  // Python port `calc.plotting._ordered_levels` reddens one of them. Before
+  // this block the backend comment CLAIMED that pairing and there was nothing
+  // here to pair with -- which is precisely why the ascending-vs-ordered
+  // divergence went unnoticed until it was looked for by hand.
+  const orderedParity = (order?: number[]): Dataset => ({
+    id: "o1",
+    name: "ordered.dat",
+    data: {
+      time: [0, 1, 2, 3, 4, 5],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 2],
+        [40, 0],
+        [50, 1],
+        [60, 2],
+      ],
+      labels: ["Value", "Group"],
+      units: ["V", ""],
+      metadata: {},
+      cat_levels: { 1: ["Low", "Med", "High"] },
+      ...(order ? { level_order: { 1: order } } : {}),
+    },
+  });
+  const orderedLabels = (order?: number[]): string[] => {
+    const ds = orderedParity(order);
+    const r = specToRender(
+      spec(null, [{ datasetId: "o1", channel: 0 }], "scatter", { datasetId: "o1", channel: 1 }),
+      [ds],
+    );
+    if (r.kind !== "xy") throw new Error(`expected an xy render, got ${r.kind}`);
+    return r.payload.series.map((sr) => sr.label);
+  };
+
+  it("cross-language parity: a level_order drives the series order", () => {
+    expect(orderedLabels([2, 1, 0])).toEqual([
+      "Value (Group=High)",
+      "Value (Group=Med)",
+      "Value (Group=Low)",
+    ]);
+  });
+
+  it("cross-language parity: no order is ascending by code, as before", () => {
+    expect(orderedLabels()).toEqual([
+      "Value (Group=Low)",
+      "Value (Group=Med)",
+      "Value (Group=High)",
+    ]);
+  });
+
+  it("cross-language parity: an order fails open on a level it does not name", () => {
+    expect(orderedLabels([2, 0])).toEqual([
+      "Value (Group=High)",
+      "Value (Group=Low)",
+      "Value (Group=Med)",
+    ]);
+  });
+
   it("nominal X + continuous Y → box stats grouped by the category", () => {
     const r = specToRender(spec(ref(2), [ref(1)], "box"), [DS]);
     expect(r.kind).toBe("box");

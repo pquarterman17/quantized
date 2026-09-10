@@ -428,3 +428,23 @@ def test_repeat_call_payload_is_dramatically_smaller() -> None:
     assert len(handle_body) < 200  # a hash + bounds, not a dataset
     reduction = 1 - (len(handle_body) / len(full_body))
     assert reduction > 0.999  # >99.9% smaller
+
+
+def test_hash_dataset_separates_datasets_differing_only_in_level_order() -> None:
+    """Group O-2c: `level_order` decides the series ORDER of a grouped render
+    -- colours, legend order, z-order -- so it is a rendering input and belongs
+    in the cache key, by the same argument this function's docstring already
+    makes for metadata. `cat_levels` likewise decides whether a grouped series
+    reads "Region=North" or "Region=0". Latent today (no handle-served route
+    groups), which is precisely when it is cheap to close."""
+    base = dict(time=[1.0, 2.0], values=[[0.0], [1.0]], labels=("g",), units=("",))
+    plain = DataStruct.create(**base)
+    ordered = DataStruct.create(**base, level_order={0: (1, 0)})
+    labelled = DataStruct.create(**base, cat_levels={0: ("North", "South")})
+    assert dc.hash_dataset(plain) != dc.hash_dataset(ordered)
+    assert dc.hash_dataset(plain) != dc.hash_dataset(labelled)
+    assert dc.hash_dataset(ordered) != dc.hash_dataset(labelled)
+    # Equal content still hashes equally -- the key stays a CONTENT hash.
+    assert dc.hash_dataset(ordered) == dc.hash_dataset(
+        DataStruct.create(**base, level_order={0: (1, 0)})
+    )

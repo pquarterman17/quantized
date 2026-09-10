@@ -161,6 +161,46 @@ def _format_level(level: float) -> str:
     return str(int(level)) if float(level).is_integer() else str(level)
 
 
+def _ordered_levels(
+    ds: DataStruct, channel: int, finite_group: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """The group levels in DISPLAY order — ascending by code unless the dataset
+    carries a ``level_order`` for this channel (JMP_GAP J1).
+
+    THE PORT CONTRACT this function exists to keep: ``build_grouped_series`` is
+    a faithful port of the frontend's ``lib/plotspec.ts`` ``buildXY``, "so a
+    Graph Builder 'group' zone renders identically on screen and in a
+    publication export" (this module's own docstring). The frontend orders
+    through ``lib/categorical.ts``'s ``orderLevels``; without the same rule
+    here, the moment a user set an order the screen and the exported PDF would
+    disagree about series colours, legend order and z-order.
+
+    Mirrors ``orderLevels`` exactly, including its two load-bearing rules:
+    a named code appears only if it is actually PRESENT (an order must not
+    invent an empty category), and every present code the order does not name
+    follows, ascending — FAILING OPEN, so a level that appeared after the order
+    was saved still renders rather than hiding behind a stale preference. The
+    result is therefore always the same SET as the plain ascending sort."""
+    present = np.sort(np.unique(finite_group))
+    order = (ds.level_order or {}).get(channel)
+    # `.get` can only yield None or a NON-EMPTY tuple on a constructed
+    # DataStruct (the normalizer rejects an empty code tuple and the wire
+    # parser drops one), so the empty half of this test is defensive, not
+    # covered behaviour — don't read it as a documented case.
+    if not order:
+        return present
+    remaining = list(present)
+    out: list[float] = []
+    for code in order:
+        for i, value in enumerate(remaining):
+            if value == code:
+                out.append(value)
+                del remaining[i]
+                break
+    out.extend(remaining)
+    return np.asarray(out, dtype=float)
+
+
 def build_grouped_series(
     ds: DataStruct,
     x_key: int | str | None,
@@ -226,7 +266,7 @@ def build_grouped_series(
         raise ValueError(f"group_col {group_col!r} is out of range")
     group_vals = ds.values[:, gi]
     finite_group = group_vals[np.isfinite(group_vals)]
-    levels = np.sort(np.unique(finite_group))
+    levels = _ordered_levels(ds, gi, finite_group)
     g_label = ds.labels[gi]
     group_is_categorical = is_categorical(ds, gi)
 
