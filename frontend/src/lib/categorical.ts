@@ -11,6 +11,91 @@
 
 import type { DataStruct } from "./types";
 
+// ── Category LEVELS: which distinct values a column's categories are ────────
+//
+// JMP_GAP J1 (Group O-1). SIX private implementations of "the distinct finite
+// values of this column, ascending" — `lib/barlayout.ts`, `lib/plotspec.ts`'s
+// `buildXY`, `lib/plotGroupSplit.ts` (twice: a list and a count), the Data
+// Filter workshop's `distinctLevels`, and `lib/variability.ts`'s factor-B
+// levels. Each is the answer to "what are this column's levels?", so they must
+// never be able to disagree — the BUG-008 lesson, where TWO copies of one
+// decision gave two answers and silently merged three samples into one dataset.
+//
+// The sixth was found by a review round AFTER the first five were unified and
+// a chokepoint declared: `variability.ts` built its Set with a loop and `.add`
+// instead of a filter, so the guard's first regex could not see it, and the
+// commit that added it said "five copies, not six" in good faith. That is the
+// whole argument for the guard now spanning statements rather than matching one
+// — and for its comment enumerating what it still cannot catch.
+//
+// They live HERE, not in `barlayout.ts` where the first copy was, because level
+// ORDER is about to stop being "ascending by code": J1's user-settable ordering
+// makes it a property of the categorical model, which is this module. Putting
+// the primitive here now makes that a one-module change instead of a five-site
+// one. `barlayout.ts` re-exports `categoryLevels` so its eight importers stay
+// untouched by this refactor.
+//
+// NOT unified, deliberately: `lib/datasetsplit.ts`'s `autoTolerance` contains
+// the identical five lines over the identical types, and is NOT this. It takes
+// the distinct values of a CONTINUOUS column to measure the gaps between them
+// for elbow detection. Those are not category levels, they are sample points on
+// a measurement axis, and a user-settable level order must never reach them.
+// A dedupe driven by shape rather than meaning would have swallowed it.
+// `lib/tabulate.ts` is a third case: it orders composite multi-dimension row
+// keys and never builds a distinct-level list, so it shares this convention
+// without sharing the code. `lib/panelwindow.ts` and `lib/waterfall.ts` are a
+// fourth: their union-x builds are the same shape over CONTINUOUS sample
+// positions, aligning traces onto a common grid. All the look-alikes now carry
+// a `levels-allowlist:` marker at the code itself, so the exemption and its
+// reason live where the next reader will be.
+
+/** A column's values by the `-1 = x/time, 0.. = a value channel` convention
+ *  shared with `ColumnFilter.col` (lib/types.ts). Lives here rather than being
+ *  imported so this module depends on nothing but `./types` — it sits at the
+ *  bottom of the import graph, and `lib/datasetsplit.ts`'s identical
+ *  `columnValues` is on the far side of a cycle through `barlayout.ts`.
+ *  Exported because `barlayout.ts` and `lib/variability.ts` each had their own
+ *  private copy of exactly this (`colValues`). NOTE the honest scope: this is
+ *  now the canonical spelling, not the only one — roughly a dozen other modules
+ *  still inline `channel < 0 ? data.time : …`, and they are NOT uniform
+ *  (`datasetsplit.ts` copies the array, `fitselection.ts` adds a width guard).
+ *  Nothing guards this one yet; Group O-1 unified the two copies that sat
+ *  beside the levels work, and left the rest alone rather than claiming a
+ *  sweep it did not do. */
+export function columnOf(data: DataStruct, channel: number): readonly number[] {
+  return channel < 0 ? data.time : data.values.map((row) => row[channel]);
+}
+
+/** The distinct finite values of `values`, ascending — a column's category
+ *  LEVELS. Non-finite entries (NaN = a missing category, and null/undefined
+ *  from an already-nulled plot payload) are dropped rather than becoming a
+ *  level of their own, which is the convention every consumer relies on. `-0`
+ *  and `0` collapse to one level, because a `Set` uses SameValueZero — and so
+ *  does the `Map` keying in `lib/datasetsplit.ts`'s exact-value grouping, so
+ *  the two agree on what counts as one level. */
+export function levelsOf(values: readonly (number | null | undefined)[]): number[] {
+  return [...new Set(values.filter((v): v is number => v != null && Number.isFinite(v)))].sort((a, b) => a - b);
+}
+
+/** How many levels `values` has, without materializing the sorted list — the
+ *  same answer as `levelsOf(values).length`, which a test pins. Kept in the
+ *  same one-statement shape as `levelsOf` on purpose: `architecture.test.ts`'s
+ *  chokepoint recognises that shape, and a guard whose pattern no longer
+ *  describes its own home protects nothing (its vacuity test caught exactly
+ *  that on this module's first draft). */
+export function levelCountOf(values: readonly (number | null | undefined)[]): number {
+  return new Set(values.filter((v): v is number => v != null && Number.isFinite(v))).size;
+}
+
+/** `channel`'s category levels, ascending (`-1` reads the x/time column). The
+ *  accessor every order-sensitive consumer goes through: bar/box/violin axis
+ *  slots, the interactive categorical x-axis, group-split series order,
+ *  Tabulate's group labels, the stat stage, facets, Fit Y by X, variability
+ *  charts and JMP-style By partitioning. */
+export function categoryLevels(data: DataStruct, channel: number): number[] {
+  return levelsOf(columnOf(data, channel));
+}
+
 /** True when `v` is a genuine non-empty array of strings -- NOT just
  *  truthy. P1.4 review P2-3/P3-1: these accessors are "the ONLY sanctioned
  *  read path" (module doc above), so they must degrade safely even when

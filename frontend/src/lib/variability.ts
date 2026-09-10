@@ -9,10 +9,8 @@
 // fityx/runLeg.ts (oneway ANOVA grouping) already do.
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { columnOf, levelsOf } from "./categorical";
 import type { DataStruct } from "./types";
-
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
 
 export interface VariabilityCell {
   /** 0-based position within its A-level's cells — matches the backend's
@@ -52,9 +50,9 @@ export function buildNestedLevels(
   factorACol: number,
   factorBCol: number,
 ): VariabilityFactorLevel[] {
-  const av = colValues(data, factorACol);
-  const bv = colValues(data, factorBCol);
-  const rv = colValues(data, responseCol);
+  const av = columnOf(data, factorACol);
+  const bv = columnOf(data, factorBCol);
+  const rv = columnOf(data, responseCol);
   const n = Math.min(av.length, bv.length, rv.length);
 
   const aLevels = categoryLevels(data, factorACol);
@@ -63,11 +61,17 @@ export function buildNestedLevels(
   const result: VariabilityFactorLevel[] = [];
   for (let ai = 0; ai < aLevels.length; ai++) {
     const a = aLevels[ai];
-    const bForA = new Set<number>();
-    for (let r = 0; r < n; r++) {
-      if (av[r] === a && Number.isFinite(bv[r])) bForA.add(bv[r]);
-    }
-    const bLevels = [...bForA].sort((x, y) => x - y);
+    // Group O-1 review: this was a SIXTH private copy of "distinct finite
+    // values, ascending" — spelled as a loop plus `.add`, which is why the
+    // chokepoint's first regex could not see it and why the commit that added
+    // that guard claimed five copies. It is order-sensitive and user-visible:
+    // `bLevels` becomes the sub-axis order on the chart and the `b_index`
+    // ordering on the `calc.stats_varcomp` wire, so under J1 it would have kept
+    // sorting factor B by raw code while factor A (which comes from
+    // `categoryLevels`) honoured the user's order — one chart, two orders.
+    // The row filter stays: these are the B values that CO-OCCUR with this A
+    // level, which is what makes the grouping nested.
+    const bLevels = levelsOf(av.map((av_r, r) => (av_r === a && r < n ? bv[r] : Number.NaN)));
     const bLabels = resolveCategoryLabels(data, factorBCol, bLevels);
 
     const cells: VariabilityCell[] = [];

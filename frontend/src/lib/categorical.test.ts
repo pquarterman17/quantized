@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { categoricalLevels, isCategoricalChannel, levelLabel } from "./categorical";
+import {
+  categoricalLevels,
+  categoryLevels,
+  isCategoricalChannel,
+  levelCountOf,
+  levelLabel,
+  levelsOf,
+} from "./categorical";
 import type { DataStruct } from "./types";
 
 const catDs: DataStruct = {
@@ -99,5 +106,84 @@ describe("corrupted cat_levels shapes degrade, never throw, never produce garbag
   it("an empty level list is rejected (cat_levels' own non-empty-tuple contract)", () => {
     const ds: DataStruct = { ...plainDs, cat_levels: { 0: [] } };
     expect(isCategoricalChannel(ds, 0)).toBe(false);
+  });
+});
+
+// Group O-1: the level primitives the five former private copies now share.
+// These pin the CONTRACT every order-sensitive surface depends on, so J1's
+// user-settable ordering has one place to change and one place to re-verify.
+describe("category level primitives (Group O-1)", () => {
+  it("returns distinct finite values, ascending, regardless of input order", () => {
+    expect(levelsOf([3, 1, 2, 1, 3])).toEqual([1, 2, 3]);
+    expect(levelsOf([2, 2, 2])).toEqual([2]);
+    expect(levelsOf([])).toEqual([]);
+  });
+
+  it("drops every non-finite entry rather than making it a level", () => {
+    // NaN is a MISSING category; null/undefined arrive from an already-nulled
+    // plot payload (`applyGroupSplit`'s input). None becomes a level, and none
+    // disqualifies the rest.
+    expect(levelsOf([1, Number.NaN, 2, null, undefined, Infinity, -Infinity, 3])).toEqual([1, 2, 3]);
+    expect(levelsOf([Number.NaN, null, undefined])).toEqual([]);
+  });
+
+  it("collapses -0 with 0, matching the Map keying that groups rows by level", () => {
+    // Both a Set and a Map use SameValueZero, so `lib/datasetsplit.ts`'s
+    // exact-value grouping and this accessor agree on what ONE level is. If
+    // they disagreed, a split would produce a group with no level or vice versa.
+    expect(levelsOf([-0, 0, 1])).toEqual([0, 1]);
+    expect(Object.is(levelsOf([-0])[0], 0)).toBe(true);
+  });
+
+  it("sorts NUMERICALLY, not lexicographically", () => {
+    // The default Array#sort would give [10, 2, 9] here — the classic bug this
+    // shape's explicit comparator exists to avoid.
+    expect(levelsOf([9, 10, 2])).toEqual([2, 9, 10]);
+    expect(levelsOf([-5, 100, -20])).toEqual([-20, -5, 100]);
+  });
+
+  it("levelCountOf always equals levelsOf(...).length", () => {
+    // Two functions, one answer: the count path exists so a caller that needs
+    // only a size does not materialize and sort a list, and this is what keeps
+    // it honest.
+    for (const input of [
+      [],
+      [1],
+      [2, 2, 2],
+      [3, 1, 2, 1],
+      [1, Number.NaN, null, 2, undefined],
+      [-0, 0],
+      [Number.NaN],
+      [9, 10, 2, 10],
+    ]) {
+      expect(levelCountOf(input), JSON.stringify(input)).toBe(levelsOf(input).length);
+    }
+  });
+
+  it("categoryLevels reads a value channel, and -1 as the x/time column", () => {
+    const ds: DataStruct = {
+      time: [30, 10, 20, 10],
+      values: [[2], [1], [3], [1]],
+      labels: ["c"],
+      units: [""],
+      metadata: {},
+    };
+    expect(categoryLevels(ds, 0)).toEqual([1, 2, 3]);
+    // The -1 convention is shared with `ColumnFilter.col`; barlayout's original
+    // `categoryLevels` had it, and dropping it in the move would have silently
+    // changed what a categorical x axis renders.
+    expect(categoryLevels(ds, -1)).toEqual([10, 20, 30]);
+  });
+
+  it("categoryLevels is levelsOf over the column, for both conventions", () => {
+    const ds: DataStruct = {
+      time: [5, 5, Number.NaN],
+      values: [[1], [Number.NaN], [1]],
+      labels: ["c"],
+      units: [""],
+      metadata: {},
+    };
+    expect(categoryLevels(ds, 0)).toEqual(levelsOf(ds.values.map((r) => r[0])));
+    expect(categoryLevels(ds, -1)).toEqual(levelsOf(ds.time));
   });
 });

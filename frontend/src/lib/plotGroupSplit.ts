@@ -41,15 +41,9 @@
 // in PRIMARY_SOFTWARE_AUDIT_PLAN.md's P1.5 entry, not re-litigated per call
 // site.
 
+import { categoryLevels, levelCountOf, levelsOf } from "./categorical";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
-
-/** Distinct finite level count across `groupCodes`. Shared by
- *  `groupSplitChannelMap` (how many display series per real channel) and
- *  `applyGroupSplit` (the level set itself) so both agree on "is there
- *  anything to split on" without the caller computing it twice. */
-function levelCount(groupCodes: readonly (number | null | undefined)[]): number {
-  return new Set(groupCodes.filter((v): v is number => v != null && Number.isFinite(v))).size;
-}
+import type { DataStruct } from "./types";
 
 /** The per-DISPLAY-series channel map a grouped render needs: each real
  *  fetched channel repeated once per level (or returned unchanged when
@@ -62,8 +56,28 @@ export function groupSplitChannelMap(
   fetchChannels: readonly number[],
   groupCodes: readonly (number | null | undefined)[],
 ): number[] {
-  const n = levelCount(groupCodes);
+  const n = levelCountOf(groupCodes);
   return n > 0 ? fetchChannels.flatMap((c) => Array<number>(n).fill(c)) : [...fetchChannels];
+}
+
+/** The group-split levels for `groupCol` of `data`, in order — the ONE place
+ *  the group well's level derivation lives, shared by `lib/plotspec.ts`'s
+ *  `buildXY` (which builds a grouped payload from a DataStruct) and available
+ *  to any future group-split caller that holds one.
+ *
+ *  Group O-1 extracted this out of `buildXY`, where it was an inline copy of
+ *  `categoryLevels`. The extraction is NOT a bare swap, and the difference is
+ *  the reason this function exists rather than a direct `categoryLevels` call:
+ *  the inline version read `row[groupCol]`, so `groupCol === -1` produced
+ *  `undefined` for every row and therefore NO levels and NO series, while
+ *  `categoryLevels` reads the x/time column for -1 and would group BY it —
+ *  potentially one series per row. Nothing structurally prevents -1 reaching
+ *  the group zone (a `ChannelRef`'s `channel` is a plain number, and a
+ *  hand-edited recipe parses through `normRef`), and deciding what a
+ *  time-grouped plot SHOULD do is a design question, not a refactor's call. So
+ *  the old answer is preserved here, named, with the question written down. */
+export function groupSplitLevels(data: DataStruct, groupCol: number): number[] {
+  return groupCol < 0 ? [] : categoryLevels(data, groupCol);
 }
 
 /** Split every Y series in `payload` into one series per level of
@@ -81,9 +95,7 @@ export function applyGroupSplit(
   groupLabel: string,
   levelLabelOf: (code: number) => string,
 ): PlotPayload {
-  const levels = [...new Set(groupCodes.filter((v): v is number => v != null && Number.isFinite(v)))].sort(
-    (a, b) => a - b,
-  );
+  const levels = levelsOf(groupCodes);
   if (levels.length === 0) return payload;
   const [x, ...ys] = payload.data as (number | null)[][];
   const cols: (number | null)[][] = [x];

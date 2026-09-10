@@ -8,6 +8,7 @@
 import { useMemo } from "react";
 
 import { resolveCategoryLabels } from "../../../lib/barlayout";
+import { levelsOf } from "../../../lib/categorical";
 import { filteredOutRows, isActive } from "../../../lib/datafilter";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { ColumnFilter, DataFilter } from "../../../lib/types";
@@ -54,8 +55,10 @@ export interface DataFilterState {
 // dep for every unfiltered dataset — the overwhelmingly common case).
 const NO_FILTER: DataFilter = [];
 
-const distinctLevels = (col: number[]): number[] =>
-  [...new Set(col.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
+// Group O-1: was its own copy of "distinct finite values, ascending". The
+// checkbox list a user picks levels from and the axis those levels are drawn on
+// must never order them differently, so both now come from one accessor.
+const distinctLevels = levelsOf;
 
 /** [min, max] of the finite values in `col`, or null if none are finite. */
 const dataRange = (col: number[]): [number, number] | null => {

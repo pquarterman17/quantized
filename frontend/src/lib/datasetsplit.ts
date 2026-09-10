@@ -165,6 +165,11 @@ const MIN_DISTINCT_FOR_ELBOW = 3;
  *  Finite values only; fewer than `MIN_DISTINCT_FOR_ELBOW` distinct finite
  *  values yields 0. */
 export function autoTolerance(values: readonly number[]): number {
+  // levels-allowlist: these are NOT category levels. This is the distinct
+  // values of a CONTINUOUS column, taken to measure the GAPS between them for
+  // elbow detection — sample points on a measurement axis. A user-settable
+  // level order (JMP_GAP J1) must never reach them, so this deliberately does
+  // not go through lib/categorical.ts's accessor despite the identical shape.
   const distinct = [...new Set(values.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
   if (distinct.length < MIN_DISTINCT_FOR_ELBOW) return 0;
 

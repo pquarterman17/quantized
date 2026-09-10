@@ -114,6 +114,7 @@ import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";
+import { groupSplitLevels } from "./plotGroupSplit";
 import { channelModelingType, isCategorical } from "./modeling";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
@@ -566,9 +567,8 @@ export function buildXY(
   if (groupCol === null) return buildColumns(data, null, xKey, yChannels);
   const xSrc = xKey === null ? data.time : data.values.map((row) => row[xKey]);
   const x = xSrc.map((v) => (Number.isFinite(v) ? v : null));
-  const levels = [...new Set(data.values.map((row) => row[groupCol]).filter((v) => Number.isFinite(v)))].sort(
-    (a, b) => a - b,
-  );
+  // Group O-1: `groupSplitLevels` (lib/plotGroupSplit.ts) owns this alongside the group-split it feeds, including why -1 yields no levels.
+  const levels = groupSplitLevels(data, groupCol);
   const cols: (number | null)[][] = [x];
   const series: PlotPayload["series"] = [];
   const gLabel = channelLabel(data, groupCol);

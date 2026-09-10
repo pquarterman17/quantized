@@ -9,19 +9,18 @@
 // the same axis geometry; groupedBarSlots is the extra sub-division a
 // clustered bar chart needs within one category slot.
 
-import { isCategoricalChannel, levelLabel } from "./categorical";
+import { categoryLevels, columnOf, isCategoricalChannel, levelLabel } from "./categorical";
 import type { DataStruct } from "./types";
-
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
 
 // ── Category levels + label resolution ──────────────────────────────────────
 
-/** Distinct finite values of `channel`, ascending — the category levels. */
-export function categoryLevels(data: DataStruct, channel: number): number[] {
-  const vals = colValues(data, channel);
-  return [...new Set(vals.filter((v) => Number.isFinite(v)))].sort((a, b) => a - b);
-}
+// `categoryLevels` MOVED to `lib/categorical.ts` (Group O-1) — it is the
+// categorical model's accessor, and five other modules had grown their own copy
+// of it. Re-exported here so its importers, which pair it with
+// `resolveCategoryLabels` below, need no churn in what is otherwise a pure
+// refactor (9 non-test files import the name; 11 mention it). New code should
+// import it from `./categorical` directly.
+export { categoryLevels };
 
 function isColumnStringsMap(v: unknown): v is Record<string, string[]> {
   return (
@@ -60,7 +59,7 @@ function textLabelsFor(
   const meta = data.metadata ?? {};
   const textCols = meta["text_columns"] ?? meta["origin_text_columns"];
   if (!isColumnStringsMap(textCols)) return null;
-  const by = colValues(data, channel);
+  const by = columnOf(data, channel);
   for (const key of sortColumnKeys(Object.keys(textCols))) {
     const rows = textCols[key];
     const perLevel = new Map<number, string>();
@@ -187,10 +186,10 @@ export function buildBarMatrix(
   valueChannels: readonly number[],
   seriesLabels: readonly string[],
 ): BarChartData {
-  const by = colValues(data, groupCol);
+  const by = columnOf(data, groupCol);
   const levels = categoryLevels(data, groupCol);
   const labels = resolveCategoryLabels(data, groupCol, levels);
-  const cols = valueChannels.map((c) => colValues(data, c));
+  const cols = valueChannels.map((c) => columnOf(data, c));
   const groups: BarGroup[] = levels.map((lvl, i) => ({
     label: labels[i],
     series: cols.map((col) => {
