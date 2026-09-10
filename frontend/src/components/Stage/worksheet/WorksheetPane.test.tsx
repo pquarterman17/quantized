@@ -136,7 +136,7 @@ describe("WorksheetPane column context menu — Reorder levels entry (Group O-2b
 
   beforeEach(() => {
     useApp.setState({ datasets: [withCategorical], activeId: "cat1" });
-    useLevelOrderPanel.setState({ open: false, datasetId: null, channel: null, openLabel: null });
+    useLevelOrderPanel.setState({ open: false, datasetId: null, channel: null });
   });
 
   const headerFor = (label: string) =>
@@ -149,7 +149,6 @@ describe("WorksheetPane column context menu — Reorder levels entry (Group O-2b
     expect(useLevelOrderPanel.getState().open).toBe(true);
     expect(useLevelOrderPanel.getState().datasetId).toBe("cat1");
     expect(useLevelOrderPanel.getState().channel).toBe(1);
-    expect(useLevelOrderPanel.getState().openLabel).toBe("Grade");
   });
 
   it("offers no Reorder levels… entry on a plain (non-categorical) column header", () => {

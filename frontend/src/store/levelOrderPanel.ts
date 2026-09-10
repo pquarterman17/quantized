@@ -11,6 +11,14 @@
 // does, so the heavy module (and its `lib/recode.ts` edge) now loads for
 // the first time inside that already-lazy chunk instead of the entry chunk.
 //
+// Review round LOW 5: this store deliberately does NOT cache the column's
+// LABEL. An earlier draft did, "so the panel can show a title immediately" —
+// but the panel renders nothing until the heavy store has seeded, so nothing
+// ever read it. Dead state whose comment promised behaviour that did not
+// exist, and eager bytes buying nothing. The label identity that DEFECT B
+// actually resolves against lives on the heavy store, derived from the live
+// dataset at seed time.
+//
 // WorksheetPane.tsx already runs the `isCategoricalChannel` guard at the
 // menu-build site before this entry is even offered, so it sets this flag
 // directly rather than calling into the heavy store's own (duplicate)
@@ -24,13 +32,7 @@ interface LevelOrderPanelState {
   open: boolean;
   datasetId: string | null;
   channel: number | null;
-  /** Cached purely so the panel can show a title immediately, before the
-   *  heavy store's lazy chunk finishes loading and seeding. store/
-   *  levelOrder.ts re-derives its OWN copy from the live dataset the moment
-   *  it seeds — that copy, not this one, is what DEFECT B's identity check
-   *  actually resolves against. */
-  openLabel: string | null;
-  openPanel: (datasetId: string, channel: number, openLabel: string) => void;
+  openPanel: (datasetId: string, channel: number) => void;
   closePanel: () => void;
 }
 
@@ -38,7 +40,6 @@ export const useLevelOrderPanel = create<LevelOrderPanelState>((set) => ({
   open: false,
   datasetId: null,
   channel: null,
-  openLabel: null,
-  openPanel: (datasetId, channel, openLabel) => set({ open: true, datasetId, channel, openLabel }),
-  closePanel: () => set({ open: false, datasetId: null, channel: null, openLabel: null }),
+  openPanel: (datasetId, channel) => set({ open: true, datasetId, channel }),
+  closePanel: () => set({ open: false, datasetId: null, channel: null }),
 }));

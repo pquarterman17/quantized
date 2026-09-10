@@ -42,7 +42,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ datasets: [catDataset()], activeId: "d1" });
   useLevelOrder.setState({ open: false, datasetId: null, channel: null, openLabel: null, draft: [] });
-  useLevelOrderPanel.setState({ open: false, datasetId: null, channel: null, openLabel: null });
+  useLevelOrderPanel.setState({ open: false, datasetId: null, channel: null });
 });
 
 describe("LevelOrderPanel", () => {
@@ -52,7 +52,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("opening via the tiny store seeds the heavy store on mount (through categoryLevels) and shows the level table", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     render(<LevelOrderPanel />);
     // Proves the mount-effect seed actually ran: the heavy store now has a
     // real draft, and the table renders from it.
@@ -65,7 +65,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("Move up/down glyph buttons reorder the draft, and are disabled at the boundaries", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade"); // seeds heavy draft = [0,1,2] = Pass,OK,Fail
+    useLevelOrderPanel.getState().openPanel("d1", 0); // seeds heavy draft = [0,1,2] = Pass,OK,Fail
     render(<LevelOrderPanel />);
     expect(screen.getByLabelText('move "Pass" up')).toBeDisabled();
     expect(screen.getByLabelText('move "Fail" down')).toBeDisabled();
@@ -76,7 +76,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("Sort by label reorders the visible rows", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade"); // Pass, OK, Fail
+    useLevelOrderPanel.getState().openPanel("d1", 0); // Pass, OK, Fail
     render(<LevelOrderPanel />);
     fireEvent.click(screen.getByRole("button", { name: "Sort by label" }));
     // Alphabetical: Fail, OK, Pass.
@@ -84,7 +84,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("Reset to code order restores ascending", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     render(<LevelOrderPanel />);
     fireEvent.click(screen.getByLabelText('move "OK" up'));
     expect(useLevelOrder.getState().draft).toEqual([1, 0, 2]);
@@ -93,7 +93,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("Commit writes the order and closes BOTH the heavy store and the tiny panel flag", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     render(<LevelOrderPanel />);
     fireEvent.click(screen.getByLabelText('move "OK" up'));
     fireEvent.click(screen.getByRole("button", { name: "Commit" }));
@@ -104,7 +104,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("Cancel closes BOTH stores without committing", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     render(<LevelOrderPanel />);
     fireEvent.click(screen.getByLabelText('move "OK" up'));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -115,7 +115,7 @@ describe("LevelOrderPanel", () => {
   });
 
   it("the ToolWindow's own close (X) also closes both stores", () => {
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     render(<LevelOrderPanel />);
     fireEvent.click(screen.getByRole("button", { name: /close/i }));
     expect(useLevelOrder.getState().open).toBe(false);
@@ -132,11 +132,30 @@ describe("LevelOrderPanel", () => {
       datasets: [{ ...catDataset(), data: { ...catDataset().data, cat_levels: undefined } }],
       activeId: "d1",
     });
-    useLevelOrderPanel.getState().openPanel("d1", 0, "Grade");
+    useLevelOrderPanel.getState().openPanel("d1", 0);
     const { container } = render(<LevelOrderPanel />);
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/isn't categorical/), "danger");
     expect(useLevelOrder.getState().open).toBe(false);
     expect(useLevelOrderPanel.getState().open).toBe(false); // not left stuck
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe("LevelOrderPanel — orphaned-panel cleanup (review LOW 7)", () => {
+  it("closes BOTH stores when the open dataset is removed, instead of just hiding", () => {
+    useLevelOrderPanel.getState().openPanel("d1", 0);
+    const { rerender } = render(<LevelOrderPanel />);
+    expect(useLevelOrder.getState().open).toBe(true);
+
+    // The dataset goes away (a removal, or a loadWorkspace swapping the
+    // library). Pre-fix the render guard hid the panel while BOTH stores
+    // stayed open — no chrome left to close it, and reopening a `.dwk` that
+    // restored the same ids made it reappear holding a pre-reload draft.
+    useApp.setState({ datasets: [], activeId: null });
+    rerender(<LevelOrderPanel />);
+
+    expect(useLevelOrderPanel.getState().open).toBe(false);
+    expect(useLevelOrder.getState().open).toBe(false);
+    expect(useLevelOrder.getState().draft).toEqual([]);
   });
 });

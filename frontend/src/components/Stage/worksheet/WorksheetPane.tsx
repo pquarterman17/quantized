@@ -278,7 +278,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                         // ratchet; see store/levelOrderPanel.ts's header).
                         {
                           label: "Reorder levels…",
-                          run: () => useLevelOrderPanel.getState().openPanel(ds.id, menu.target, ds.data.labels[menu.target]),
+                          run: () => useLevelOrderPanel.getState().openPanel(ds.id, menu.target),
                         },
                       ] as const)
                     : []),

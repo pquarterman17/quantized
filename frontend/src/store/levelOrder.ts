@@ -52,7 +52,15 @@
 
 import { create } from "zustand";
 
-import { categoryLevels, columnOf, groupLevelLabel, isCategoricalChannel, levelsOf, orderLevels } from "../lib/categorical";
+import {
+  categoricalLevels,
+  columnOf,
+  groupLevelLabel,
+  isCategoricalChannel,
+  levelOrderFor,
+  levelsOf,
+  orderLevels,
+} from "../lib/categorical";
 import { resolveRecodeChannel } from "../lib/recode";
 import type { DataStruct } from "../lib/types";
 import { refusePendingEdit } from "./pendingEdit";
@@ -63,6 +71,57 @@ function arraysEqual(a: readonly number[], b: readonly number[]): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
+/** The codes this panel may order for `channel`, ascending: every code the
+ *  column's rows actually hold, UNION every code its level table DECLARES.
+ *
+ *  Review round HIGH 1 — the union, not just the present codes, is what makes
+ *  a commit non-destructive. `orderLevels`' read side skips a named code that
+ *  no row holds (it cannot match one), which is harmless: the stored order
+ *  keeps the preference and the level reappears in place the moment a row
+ *  holds that code again. Deriving the write domain from PRESENT codes alone
+ *  broke that: committing pruned every absent-but-named code, and when the
+ *  survivors happened to be ascending it DELETED the whole entry. Measured:
+ *  with `cat_levels {0: ["Low","Mid","High"]}` and a stored order `[1,0,2]`
+ *  (Mid, Low, High), deleting the Mid rows and then clicking Commit while
+ *  changing nothing left `orderLevels([0,2], [1,0,2]) === [0,2]`, equal to
+ *  ascending — so a Commit the user believes is a no-op destroyed their
+ *  Mid-first preference, silently, and it came back ascending when the rows
+ *  did. Reachable without this panel at all: `lib/merge.ts` remaps dataset 0's
+ *  order onto the UNION table regardless of presence, `lib/formulaInputs.ts`
+ *  carries one across a recompute, and a `.dwk`/API payload can simply hold
+ *  one. The union also keeps such a level VISIBLE in the panel, which is the
+ *  only way a user can position it deliberately. */
+function domainOf(data: DataStruct, channel: number): number[] {
+  const declared = categoricalLevels(data, channel);
+  const present = levelsOf(columnOf(data, channel));
+  if (!declared) return present;
+  // A code outside the table's range is still a real code (the module's
+  // documented "coherence degrades at READ time" rule lets values hold one),
+  // so the union keeps it too rather than dropping it on the next commit.
+  return [...new Set([...present, ...declared.map((_, i) => i)])].sort((a, b) => a - b);
+}
+
+/** DEFECT B, read side. `channel` is a plain index that can go stale while
+ *  this non-modal panel is open, so every path that READS the column — not
+ *  just `commit()` — has to re-resolve it against `openLabel` first. The
+ *  precedent does exactly this: `store/recode.ts`'s `activeRecodePreview`
+ *  re-resolves "so a mid-edit shift doesn't preview against the wrong column
+ *  either", and returns null rather than reading the wrong one. Without this,
+ *  removing a column to the LEFT of the open one made `sortByLabel` sort by
+ *  code STRING (the label lookup found no table at the stale index, so every
+ *  label degraded to a bare number) and `resetToCodeOrder` produce an empty
+ *  draft — both then committed, through `commit()`'s correct retarget, onto
+ *  the right column. */
+export function resolvedChannelOf(
+  data: DataStruct,
+  channel: number | null,
+  openLabel: string | null,
+): number | null {
+  if (channel == null || openLabel == null) return null;
+  const resolved = resolveRecodeChannel(data.labels, channel, openLabel);
+  return resolved.ok ? resolved.channel : null;
+}
+
 interface LevelOrderState {
   open: boolean;
   datasetId: string | null;
@@ -71,7 +130,8 @@ interface LevelOrderState {
    *  `channel`'s position — see module header. */
   openLabel: string | null;
   /** The panel's working order, seeded from the column's CURRENT display
-   *  order at open time (`categoryLevels`) so the list starts where the
+   *  order at open time (`domainOf` + the stored order) so the list starts
+   *  where the
    *  user already sees it, not re-sorted by code. */
   draft: number[];
 
@@ -118,7 +178,7 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
       datasetId,
       channel,
       openLabel: ds.data.labels[channel],
-      draft: categoryLevels(ds.data, channel),
+      draft: orderLevels(domainOf(ds.data, channel), levelOrderFor(ds.data, channel)),
     });
   },
 
@@ -144,10 +204,11 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
 
   sortByLabel: () =>
     set((s) => {
-      const { datasetId, channel } = s;
+      const { datasetId, channel, openLabel } = s;
       const ds = datasetId != null ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
-      if (!ds || channel == null) return {};
-      const labelOf = (code: number) => groupLevelLabel(ds.data, channel, code);
+      const live = ds ? resolvedChannelOf(ds.data, channel, openLabel) : null;
+      if (!ds || live == null) return {};
+      const labelOf = (code: number) => groupLevelLabel(ds.data, live, code);
       // Array.prototype.sort has been a STABLE sort since ES2019 in every
       // engine this app targets — equal labels keep their incoming (prior
       // draft) relative order, never an arbitrary comparator-dependent one.
@@ -157,10 +218,11 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
 
   resetToCodeOrder: () =>
     set((s) => {
-      const { datasetId, channel } = s;
+      const { datasetId, channel, openLabel } = s;
       const ds = datasetId != null ? useApp.getState().datasets.find((d) => d.id === datasetId) : undefined;
-      if (!ds || channel == null) return {};
-      return { draft: levelsOf(columnOf(ds.data, channel)) };
+      const live = ds ? resolvedChannelOf(ds.data, channel, openLabel) : null;
+      if (!ds || live == null) return {};
+      return { draft: domainOf(ds.data, live) };
     }),
 
   commit: () => {
@@ -189,7 +251,9 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
       toast(`can't reorder levels for "${ds.data.labels[resolvedChannel]}": no longer categorical`, "danger");
       return false;
     }
-    const present = levelsOf(columnOf(ds.data, resolvedChannel)); // ascending, by construction
+    // The union domain (see `domainOf`), ascending by construction — NOT just
+    // the codes present in `values`, or a commit would prune the rest.
+    const domain = domainOf(ds.data, resolvedChannel);
     // Fail-open re-derivation: `orderLevels` is the ONE authority on what a
     // level order means (lib/categorical.ts header) — named codes that are
     // still present, in the draft's sequence, then any present code the
@@ -197,9 +261,9 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
     // through it is what keeps invariant 1 (codes are identity, never
     // invented or dropped) even when a code appeared or vanished from the
     // column while the panel sat open — the result is always exactly the
-    // set `present` holds, never the draft's raw membership.
-    const reordered = orderLevels(present, draft);
-    const ascending = arraysEqual(reordered, present);
+    // set `domain` holds, never the draft's raw membership.
+    const reordered = orderLevels(domain, draft);
+    const ascending = arraysEqual(reordered, domain);
     // "Reset to code order" and a manual drag back to ascending must agree
     // (invariant 3): both funnel through this same ascending check, so
     // either path DELETES the stored entry rather than writing one.

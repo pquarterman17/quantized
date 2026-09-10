@@ -52,7 +52,11 @@ import { fileURLToPath } from "node:url";
  *    main (f5209c19)          913,951
  *    O-2b, no split           916,377   (+2,426 — over the old pin by 2,362)
  *    O-2b, panel-flag split   914,397   (+446 — over the old pin by 382)
- *    new pin                  915,421   (= measured + 1,024, the capped margin)
+ *    O-2b as landed           914,353   (+402 — the review round dropped a
+ *                                        dead `openLabel` field from the flag
+ *                                        store, worth 44 bytes, and added the
+ *                                        DEFECT-B read-side resolution)
+ *    new pin                  915,377   (= 914,353 + 1,024, the capped margin)
  *  THE SPLIT (recovered 1,980 bytes, the bulk of the feature's eager weight):
  *  `store/levelOrder.ts` holds the whole feature — `lib/recode.ts`'s
  *  `resolveRecodeChannel`, the draft/permutation/commit logic — and was being
@@ -62,8 +66,8 @@ import { fileURLToPath } from "node:url";
  *  those read the new `store/levelOrderPanel.ts` instead — the
  *  `store/packProjectPanel.ts` precedent from the 2026-09-07 entry below,
  *  applied verbatim.
- *  WHAT THE REMAINING 446 BYTES ARE, and why they cannot be deferred: they are
- *  that flag store's own definition plus the menu entry's extra argument. The
+ *  WHAT THE REMAINING 402 BYTES ARE, and why they cannot be deferred: they are
+ *  that flag store's own definition. The
  *  flag is the thing that DECIDES whether to fetch the lazy chunk, so it is
  *  eager by construction — making it lazy would require something eager to
  *  decide when to load it, which is the same byte in a different file. This is
@@ -1146,7 +1150,7 @@ import { fileURLToPath } from "node:url";
  *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
  *  recorded above all still stand; only the arithmetic was fiction.
  */
-const EAGER_JS_BUDGET = 915_421;
+const EAGER_JS_BUDGET = 915_377;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

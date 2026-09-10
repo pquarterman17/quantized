@@ -24,7 +24,7 @@ import { useEffect } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
-import { useLevelOrder } from "../../../store/levelOrder";
+import { resolvedChannelOf, useLevelOrder } from "../../../store/levelOrder";
 import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import { useApp } from "../../../store/useApp";
 import LevelOrderTable from "./LevelOrderTable";
@@ -38,6 +38,7 @@ export default function LevelOrderPanel() {
   const open = useLevelOrder((s) => s.open);
   const datasetId = useLevelOrder((s) => s.datasetId);
   const channel = useLevelOrder((s) => s.channel);
+  const openLabel = useLevelOrder((s) => s.openLabel);
   const draft = useLevelOrder((s) => s.draft);
   const sortByLabel = useLevelOrder((s) => s.sortByLabel);
   const resetToCodeOrder = useLevelOrder((s) => s.resetToCodeOrder);
@@ -56,7 +57,14 @@ export default function LevelOrderPanel() {
   useEffect(() => {
     if (panelDatasetId == null || panelChannel == null) return;
     useLevelOrder.getState().openLevelOrder(panelDatasetId, panelChannel);
-    if (!useLevelOrder.getState().open) closePanel();
+    // Review round LOW 6: check that the heavy store is open ON THIS TARGET,
+    // not merely open. `openLevelOrder` refuses by early-returning WITHOUT
+    // touching state, so a refusal while it still held a previous target
+    // would leave `open === true` — the cleanup would be skipped and the two
+    // stores would sit pointed at different columns with the panel rendering
+    // the stale one.
+    const seeded = useLevelOrder.getState();
+    if (!seeded.open || seeded.datasetId !== panelDatasetId || seeded.channel !== panelChannel) closePanel();
   }, [panelDatasetId, panelChannel, closePanel]);
 
   const closeBoth = () => {
@@ -64,17 +72,30 @@ export default function LevelOrderPanel() {
     closePanel();
   };
 
-  if (!panelOpen || !open || !ds || channel == null) return null;
+  // Review round LOW 7: if the open dataset is removed (or a `loadWorkspace`
+  // swaps the whole library) the render guard below hides this panel but both
+  // stores stay open — no chrome is left for the user to close, and reopening
+  // a `.dwk` that restores the same ids makes the panel reappear unbidden
+  // holding a draft from before the reload. Close it instead of hiding it.
+  useEffect(() => {
+    if (panelOpen && datasetId != null && !ds) closeBoth();
+  });
+
+  // DEFECT B, read side: resolve the live index before LABELLING anything, so
+  // a column removed to the left of this one cannot make every row render as
+  // a bare code (see `resolvedChannelOf`).
+  const live = ds ? resolvedChannelOf(ds.data, channel, openLabel) : null;
+  if (!panelOpen || !open || !ds || live == null) return null;
 
   return (
-    <ToolWindow id="level-order-workshop" title={`Reorder levels — ${ds.data.labels[channel]}`} width={380} onClose={closeBoth}>
+    <ToolWindow id="level-order-workshop" title={`Reorder levels — ${ds.data.labels[live]}`} width={380} onClose={closeBoth}>
       <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {draft.length} level{draft.length === 1 ? "" : "s"}. Move up/down to set the display order used everywhere this
         column is grouped, faceted, or axis-labeled — the underlying codes never change.
       </div>
 
       <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
-        <LevelOrderTable data={ds.data} channel={channel} draft={draft} />
+        <LevelOrderTable data={ds.data} channel={live} draft={draft} />
       </div>
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "space-between" }}>

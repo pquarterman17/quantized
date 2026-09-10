@@ -3,6 +3,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { filteredOutRows } from "../lib/datafilter";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { useLevelOrder } from "./levelOrder";
 import { toast } from "./toasts";
@@ -107,16 +108,18 @@ describe("sortByLabel", () => {
       ],
     });
     useLevelOrder.getState().openLevelOrder("d1", 0);
-    // Seed the draft with the tied pair (1, 2) in ASCENDING relative order —
-    // deliberately, so a tiebreak that silently falls back to code order
-    // (descending OR ascending) can't coincidentally match "stable" and hide
-    // behind this test. Only preserving the INPUT'S order passes either way.
-    useLevelOrder.setState({ draft: [3, 0, 1, 2] });
+    // Review round MEDIUM 4: the tied pair (1, 2) must be seeded in
+    // DESCENDING relative order. An earlier version seeded [3, 0, 1, 2] —
+    // ascending — where a comparator that tiebreaks by ascending code
+    // (`labelOf(a).localeCompare(labelOf(b)) || (a - b)`) emits exactly the
+    // same array as a stable sort, so the test passed under that sabotage
+    // while its comment claimed it could not. Seeded 2-before-1, the two
+    // answers differ: stable keeps [2, 1, ...], an ascending-code tiebreak
+    // emits [1, 2, ...].
+    useLevelOrder.setState({ draft: [3, 0, 2, 1] });
     useLevelOrder.getState().sortByLabel();
-    // Ascending labels: A, A, B, C. The tied pair (1, 2) must keep the
-    // INPUT's relative order (1 before 2) — an unstable sort, or one that
-    // tiebreaks by descending code, could just as easily emit [2, 1, 0, 3].
-    expect(useLevelOrder.getState().draft).toEqual([1, 2, 0, 3]);
+    // Ascending labels: A, A, B, C.
+    expect(useLevelOrder.getState().draft).toEqual([2, 1, 0, 3]);
   });
 });
 
@@ -369,16 +372,26 @@ describe("commit — refuses on a pending dataset (BUG-006 site 9 class)", () =>
 });
 
 describe("undo — one entry", () => {
-  it("commit then undo restores the prior order exactly", () => {
-    useApp.setState({ datasets: [catDataset({ data: { ...catDataset().data, level_order: { 0: [2, 0, 1, 3] } } })] });
+  it("commit then undo restores the prior order exactly, in ONE history entry", () => {
+    useApp.setState({
+      datasets: [catDataset({ data: { ...catDataset().data, level_order: { 0: [2, 0, 1, 3] } } })],
+      history: [],
+    });
     useLevelOrder.getState().openLevelOrder("d1", 0);
     useLevelOrder.getState().sortByLabel();
     useLevelOrder.getState().commit();
     expect(active().data.level_order?.[0]).not.toEqual([2, 0, 1, 3]); // it did change
+    // Review round MEDIUM 3: the store header and the commit message both
+    // claim "ONE recordHistory, so a reorder is one undo entry", and NOTHING
+    // asserted it — adding a second `recordHistory` next to the first left
+    // both undo tests green, because two pre-mutation snapshots restore the
+    // same state and one `undo()` cannot tell them apart. Assert the DEPTH.
+    expect(useApp.getState().history).toHaveLength(1);
 
     useApp.getState().undo();
 
     expect(active().data.level_order).toEqual({ 0: [2, 0, 1, 3] }); // exactly the prior order restored
+    expect(useApp.getState().history).toHaveLength(0); // and nothing left to undo
   });
 
   it("commit then undo restores an absent level_order (no phantom entry left behind)", () => {
@@ -390,5 +403,138 @@ describe("undo — one entry", () => {
     useApp.getState().undo();
 
     expect(active().data.level_order).toBeUndefined();
+  });
+});
+
+describe("commit never destroys an order for a level that has no rows (review HIGH 1)", () => {
+  /** `cat_levels` declares Low/Mid/High but only Low and High occur in any
+   *  row — the state a row delete, a `lib/merge.ts` union remap, or a `.dwk`
+   *  can all produce. */
+  const declaredButAbsent = () =>
+    catDataset({
+      data: {
+        time: [1, 2],
+        values: [[0], [2]],
+        labels: ["Grade"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["Low", "Mid", "High"] },
+        level_order: { 0: [1, 0, 2] }, // Mid, Low, High
+      },
+    });
+
+  it("a no-op Commit leaves the stored order intact instead of deleting it", () => {
+    useApp.setState({ datasets: [declaredButAbsent()], activeId: "d1" });
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    // The panel SHOWS the declared-but-absent level, which is the only way a
+    // user can position it deliberately.
+    expect(useLevelOrder.getState().draft).toEqual([1, 0, 2]);
+    expect(useLevelOrder.getState().commit()).toBe(true);
+    // Before the fix this deleted `level_order` outright: the draft pruned to
+    // the PRESENT codes [0, 2], which is ascending, so the ascending check
+    // fired. The user's Mid-first preference vanished on a Commit they
+    // believed changed nothing, and came back ascending once Mid rows did.
+    expect(active().data.level_order).toEqual({ 0: [1, 0, 2] });
+  });
+
+  it("an explicit reorder keeps the absent level in its chosen slot", () => {
+    useApp.setState({ datasets: [declaredButAbsent()], activeId: "d1" });
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    useLevelOrder.getState().moveUp(2); // High above Low -> Mid, High, Low
+    useLevelOrder.getState().commit();
+    expect(active().data.level_order).toEqual({ 0: [1, 2, 0] });
+  });
+
+  it("reset-to-code-order still DELETES, over the declared domain", () => {
+    useApp.setState({ datasets: [declaredButAbsent()], activeId: "d1" });
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    useLevelOrder.getState().resetToCodeOrder();
+    expect(useLevelOrder.getState().draft).toEqual([0, 1, 2]); // the union, ascending
+    useLevelOrder.getState().commit();
+    expect(active().data.level_order).toBeUndefined();
+  });
+});
+
+describe("delete rule — branches nothing covered (review LOW 8)", () => {
+  it("resetting one channel keeps a -1 (x column) entry, so level_order survives", () => {
+    useApp.setState({
+      datasets: [
+        catDataset({
+          data: { ...catDataset().data, level_order: { 0: [3, 2, 1, 0], [-1]: [1, 0] } },
+        }),
+      ],
+      activeId: "d1",
+    });
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    useLevelOrder.getState().resetToCodeOrder();
+    useLevelOrder.getState().commit();
+    const order = active().data.level_order;
+    expect(order?.[0]).toBeUndefined(); // this channel's entry deleted
+    expect(order?.[-1]).toEqual([1, 0]); // the x column's preference untouched
+  });
+
+  it("a stored set-filter predicate still selects the same ROWS after a reorder", () => {
+    useApp.setState({ datasets: [catDataset()], activeId: "d1" });
+    const keep = [0, 2];
+    useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "set", values: keep }]);
+    const before = filteredOutRows(active().filter, active().data);
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    useLevelOrder.getState().moveUp(3);
+    useLevelOrder.getState().commit();
+    // The predicate keys on the CODE, so reordering cannot move the boundary.
+    expect(active().filter).toEqual([{ col: 0, kind: "set", values: keep }]);
+    expect(filteredOutRows(active().filter, active().data)).toEqual(before);
+  });
+});
+
+describe("DEFECT B, READ side: sortByLabel/resetToCodeOrder resolve the live index (review MEDIUM 2)", () => {
+  // Same shiftable fixture as the commit-side suite, rebuilt here because the
+  // defect is on the paths that RUN WHILE the panel is open, before commit.
+  function shiftable(): Dataset {
+    const levels = ["Bravo", "Alpha", "Delta", "Charlie"];
+    const code = [0, 1, 2, 3];
+    return {
+      id: "d1",
+      name: "grades.dat",
+      data: {
+        time: [0, 1, 2, 3],
+        values: code.map((c) => [c, 0, c, c]),
+        labels: ["Grade", "Filler", "Grade2", "Grade3"],
+        units: ["", "", "", ""],
+        metadata: {},
+        cat_levels: { 0: levels, 2: levels, 3: levels },
+      },
+      formulas: [
+        { name: "Filler", expr: "A * 0", deps: ["A"] },
+        { name: "Grade2", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } },
+        { name: "Grade3", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } },
+      ] satisfies ComputedColumn[],
+    };
+  }
+
+  it("sortByLabel sorts by the REAL labels after a column to the left is removed", () => {
+    useApp.setState({ datasets: [shiftable()], activeId: "d1" });
+    useLevelOrder.getState().openLevelOrder("d1", 3); // "Grade3"
+    useApp.getState().removeFormula("d1", 0); // Grade3 shifts 3 -> 2; index 3 is gone
+
+    useLevelOrder.getState().sortByLabel();
+
+    // Alpha(1), Bravo(0), Charlie(3), Delta(2). Before the fix the label
+    // lookup ran at the STALE index 3, found no level table there, and every
+    // label degraded to a bare code string — so this sorted "0".."3", i.e.
+    // [0, 1, 2, 3], and then committed that as the user's "sort by label".
+    expect(useLevelOrder.getState().draft).toEqual([1, 0, 3, 2]);
+  });
+
+  it("resetToCodeOrder yields the real domain, not an empty draft", () => {
+    useApp.setState({ datasets: [shiftable()], activeId: "d1" });
+    useLevelOrder.getState().openLevelOrder("d1", 3);
+    useApp.getState().removeFormula("d1", 0);
+
+    useLevelOrder.getState().resetToCodeOrder();
+
+    // Pre-fix: `columnOf(data, 3)` was undefined per row, `levelsOf` filtered
+    // them all out, and the panel read "0 levels".
+    expect(useLevelOrder.getState().draft).toEqual([0, 1, 2, 3]);
   });
 });
