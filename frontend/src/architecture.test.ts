@@ -617,14 +617,68 @@ const LIB_UI_GRANDFATHERED = new Set([
 // `const datasets = <state>.datasets.map(` (4 — `removeFormula`'s shape, which the
 // first version of this ratchet MISSED), and the array-literal `datasets: [` (6).
 //
-// HONEST LIMITATION, so nobody trusts it further than it goes: it is a REGEX over
-// source text, not a type-aware analysis. A mutation routed through a `lib/` helper,
-// or built by a loop into a local before assignment, or done via a `set` alias this
-// pattern does not name, still slips through. It is a coarse net over the shapes
-// this repo actually uses — not a proof. Checked while writing it: the only
-// `useApp.setState` in `store/` that mutates dataset data is `recode`'s, and the
-// object-literal pattern does match it; `relink`/`relinkCommit` set only
+// WHAT IT CATCHES, verified by sabotage rather than asserted:
+//   * a wholly new store module with an unguarded updater in any matched shape;
+//   * a SECOND unguarded action added to an already-guarded module (the first
+//     version missed this — it token-matched the FILE, so deleting all four guard
+//     CALLS while leaving the imports kept the whole suite green);
+//   * a guard deleted from one action while its siblings keep theirs.
+//
+// WHAT IT DOES NOT CATCH, so nobody reads a green run as a proof. It is a REGEX
+// over source text, not type-aware:
+//   * a mutation routed through a `lib/` helper that RETURNS a whole Dataset which
+//     the store then swaps in by identity. Live instance, benign today:
+//     `useApp.ts:1142` assigns `originOverlayDataset(...)` (which writes `metadata`
+//     in `lib/originOverlay.ts`) — the detector reports NOTHING for useApp.ts.
+//     Widening to "replaces a whole Dataset from a variable" would flag every
+//     legitimate replacement (import, reimport, restore-from-trash, overlay
+//     refresh) and need an exemption list larger than the set it protects.
+//   * `{ ...d, ...patch }` with the patch precomputed — `store/corrections.ts` and
+//     `store/recalcDatasets.ts`'s real shape. Both safe today (corrections awaits
+//     `resolveDataset`; the derived path throws on a pending source), but this net
+//     contributes nothing to keeping them that way.
+//   * `useApp.getState().datasets.map(` — `\w+\.datasets` cannot match `getState()`.
+//   * a mutated key further than PENDING_EDIT_WINDOW past the `datasets:` match.
+//   * ROW-STATE keys. The key list is `data|metadata|cat_levels|formulas`, so
+//     `excludedRows`/`filter` writes are invisible — and `toggleRowExcluded` et al
+//     are genuinely unguarded (booked in BUG-009, measured: accepted on a pending
+//     dataset, history entry pushed, wiped by `installBookData`).
+//   * anything outside `./store/`.
+//
+// Checked while writing it: the only `useApp.setState` in `store/` that mutates
+// dataset data is `recode`'s, which IS matched; `relink`/`relinkCommit` set only
 // `source`/`versionOf`, so they are correctly not flagged.
+/** How far past a `datasets:` match to look for a mutated key. Updaters here carry
+ *  20-line comment blocks, so a tight window false-NEGATIVES. */
+const PENDING_EDIT_WINDOW = 1400;
+
+const lineOf = (src: string, at: number): number => src.slice(0, at).split("\n").length;
+
+/** Does the ACTION enclosing `at` call `refusePendingEdit`?
+ *
+ *  Walks backward LINE by line to the nearest action boundary — a slice action
+ *  (`  name: (args) =>`) or a top-level function — and looks for the guard between
+ *  there and the updater.
+ *
+ *  Not a brace walk: the mutation always sits inside `set((s) => ({ datasets: ... }))`,
+ *  so the nearest enclosing `{` is that inner arrow and the guard (earlier in the
+ *  action, OUTSIDE the `set`) would never be seen. A brace walk was the first
+ *  attempt and flagged all six already-guarded sites — a false positive that would
+ *  have made this ratchet unusable and got it deleted. */
+function hasGuardInEnclosingAction(src: string, at: number): boolean {
+  const lines = src.slice(0, at).split("\n");
+  // An ACTION start only. A plain local `const byRow = new Map(...)` must NOT count:
+  // it does, if the `const` form is not pinned to column 0, and that cut the walk
+  // short inside `setCellBlock`/`setCategoricalCell` — flagging two guarded sites.
+  const boundary =
+    /^(?:(?:export\s+)?(?:async\s+)?function\s|(?:export\s+)?const\s+\w[\w$]*\s*=)|^\s{2,4}\w[\w$]*\s*:\s*(?:async\s*)?\(/;
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    if (lines[i].includes("refusePendingEdit")) return true;
+    if (boundary.test(lines[i])) return false;
+  }
+  return false;
+}
+
 const PENDING_EDIT_EXEMPT = new Map<string, string>([
   [
     "reimport.ts",
@@ -648,9 +702,19 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
         /\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),
       );
       if (!touchesData) continue;
-      if (src.includes("refusePendingEdit")) continue;
       if (PENDING_EDIT_EXEMPT.has(name)) continue;
-      offenders.push(name);
+      // PER-UPDATER, not per-FILE. `src.includes("refusePendingEdit")` was the first
+      // version and it enforced almost nothing: deleting all four guard CALLS while
+      // leaving the imports kept the whole suite green, so the data-corrupting fix
+      // this ratchet exists for was protected by nothing but an eslint
+      // unused-import error — which a PARTIAL deletion, or a reordering, defeats
+      // outright. Each offending updater must have a guard in its OWN enclosing
+      // block.
+      for (const m of updaters) {
+        const at = m.index ?? 0;
+        if (!/\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(at, at + PENDING_EDIT_WINDOW))) continue;
+        if (!hasGuardInEnclosingAction(src, at)) offenders.push(`${name}:${lineOf(src, at)}`);
+      }
     }
     expect(
       offenders,
@@ -661,8 +725,15 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
     ).toEqual([]);
   });
 
-  it("the exemption list stays honest — every entry still has a matching updater", () => {
-    const byName = new Map([...sources()].map(([p, src]) => [p.slice("./store/".length), src]));
+  it("the exemption list stays honest — entries keep both their updater AND their reason", () => {
+    // Scoped to ./store/ — the first version mapped ALL sources, so
+    // `"./lib/foo.ts".slice("./store/".length)` became `"o.ts"`: garbage keys and
+    // silently dropped collisions.
+    const byName = new Map(
+      [...sources()]
+        .filter(([p]) => p.startsWith("./store/"))
+        .map(([p, src]) => [p.slice("./store/".length), src]),
+    );
     const stale = [...PENDING_EDIT_EXEMPT.keys()].filter((n) => {
       const src = byName.get(n);
       return (
@@ -675,6 +746,16 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
       );
     });
     expect(stale, "drop the exemption; its updater is gone").toEqual([]);
+
+    // And the REASON must still hold. `reimport.ts` is exempt because it clears
+    // `pending` in the same updater that replaces `data`; deleting that clause left
+    // the exemption self-asserted and every test green.
+    const reimport = byName.get("reimport.ts") ?? "";
+    expect(
+      /pending:\s*undefined/.test(reimport),
+      "reimport.ts's exemption claims it clears `pending` in the same updater — it no " +
+        "longer does, so either restore that or drop the exemption",
+    ).toBe(true);
   });
 });
 

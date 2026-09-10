@@ -843,6 +843,49 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
+  it("all THREE cell editors speak on a pending book whose preview is SHORTER than the grid", () => {
+    // Round 6's regression, from moving the guard below the row-range check for
+    // comment adjacency: a text-only book is `time: []`, so the bounds check
+    // short-circuits EVERY row and `setCellValue`/`setCategoricalCell` fell silent
+    // while `setCellBlock` (not reordered) still spoke — two cell editors in one
+    // pane disagreeing. Silence is the harm: `refusePendingEdit` is the only thing
+    // on this path that kicks `ensureBookData`, so the retry never starts either.
+    const seedTextOnly = () =>
+      useApp.setState({
+        datasets: [
+          {
+            id: "p5",
+            name: "textonly.opj",
+            data: {
+              time: [],
+              values: [],
+              labels: [],
+              units: [],
+              metadata: { origin_text_columns: { Op: ["o0", "o1"] } },
+            },
+            pending: { bookId: "b5", rows: 0, cols: 0, previewSampled: false },
+          },
+        ],
+        activeId: "p5",
+        history: [],
+        status: "",
+      } as unknown as Parameters<typeof useApp.setState>[0]);
+
+    seedTextOnly();
+    useApp.getState().setCellValue("p5", 0, 0, 42);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    seedTextOnly();
+    useApp.getState().setCategoricalCell("p5", 0, 0, "red");
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    seedTextOnly();
+    useApp.getState().setCellBlock("p5", [{ row: 0, col: 0, value: 7 }], "paste");
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
   it("a RESOLVED text-only book edits normally — the positive control", () => {
     // Same book as the refusal tests above with `pending` cleared, so the guard is
     // shown to gate on pending-ness and nothing else. (This test previously carried

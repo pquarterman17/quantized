@@ -218,6 +218,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    // PENDING FIRST, ALWAYS. A previous round moved this below the row check for
+    // comment adjacency and silently broke the case BUG-009 singles out: on a
+    // pending book whose preview is shorter than the real grid — a text-only book
+    // is `time: []`, so EVERY row — the row check short-circuits first and the user
+    // gets no message and no kicked fetch, while `setCellBlock` (not reordered)
+    // still spoke. Two cell editors in one pane disagreeing, from moving a comment.
+    // Never order this after a bounds check that the preview's own shortness can
+    // trip.
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     // Out-of-range/negative row guard (P1.6b self-review finding): must run
     // BEFORE recordHistory, and before any patch — a `.slice()`-based patch
     // (below) throws on an out-of-range row rather than silently no-op'ing
@@ -226,7 +235,6 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // row >= time.length. Mirrors setCellBlock's own `e.row >= 0 && e.row <
     // ds.data.time.length` filter below.
     if (row < 0 || row >= ds.data.time.length) return;
-    if (refusePendingEdit(get, ds, "editing a cell")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) return; // computed column — read-only
     if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
@@ -330,11 +338,11 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    if (refusePendingEdit(get, ds, "editing a cell")) return; // pending first — see setCellValue
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based
     // patch that would otherwise throw on `values[row]`.
     if (row < 0 || row >= ds.data.time.length) return;
-    if (refusePendingEdit(get, ds, "editing a cell")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col < 0 || col >= baseCount) return; // x column and computed columns aren't categorical cells
     const levels = categoricalLevels(ds.data, col);

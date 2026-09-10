@@ -1349,11 +1349,37 @@ lose an edit:
 - [x] All nine mutation sites route through ONE `store/pendingEdit.refusePendingEdit`
   — its own module, because four earlier rounds each added a COPY of the rule
   instead of a home, and three of those copies were wrong at some point.
-- [x] A ratchet in `architecture.test.ts` fails the build when a store module's
-  dataset updater writes `data`/`metadata`/`cat_levels`/`formulas` without the
-  guard and without an explicit exemption. Sabotage-verified against the exact
-  round-5 miss. Its limitation is stated inline: it keys on the common updater
-  shape, so it is a coarse net, not a proof.
+- [x] A ratchet in `architecture.test.ts`. **Its first version enforced almost
+  nothing and this tick was FALSE for a day** — it token-matched the FILE
+  (`src.includes("refusePendingEdit")`), so deleting all four guard CALLS while
+  leaving the imports kept 620 files / 9,792 tests green. The only thing standing
+  between the data-corrupting fix and silent deletion was an eslint unused-import
+  error, which a partial deletion or a reorder defeats. Now PER-UPDATER: each
+  matched updater must have a guard in its own enclosing action. Sabotage-verified
+  on the three cases the file-level version missed (all four calls deleted; a
+  second unguarded action in an already-guarded module; a guard removed from one
+  action while siblings keep theirs).
+- [x] What the ratchet does NOT catch is enumerated inline rather than summarised
+  as "a coarse net": a mutation via a `lib/` helper returning a whole Dataset
+  (live instance named — `useApp.ts:1142`'s overlay path, benign today, and the
+  detector reports NOTHING for that file), `{...d, ...patch}` with a precomputed
+  patch (`corrections.ts`/`recalcDatasets.ts`'s real shape), `getState().datasets`,
+  a write past the scan window, ROW-STATE keys, and anything outside `./store/`.
+- [x] The exemption list's honesty test now checks the exempt module's stated
+  REASON, not just that it still has an updater: deleting `reimport.ts`'s
+  `pending: undefined` — the exact clause its exemption cites — previously left
+  every test green.
+
+### STILL OPEN — also the ROW-STATE family (found round 6)
+
+- [ ] `useApp.ts`'s `toggleRowExcluded`, `setRowsExcluded`, `clearRowExclusions`,
+  `setDatasetFilter`, `clearDatasetFilter` are the same defect class, unguarded, and
+  invisible to the ratchet (its key list is `data|metadata|cat_levels|formulas`).
+  Measured: `toggleRowExcluded` on a pending dataset is ACCEPTED, pushes a history
+  entry, says nothing — and `installBookData` clears `excludedRows`/`filter` on the
+  resolve. That is verbatim the shape round 4 called incoherent to leave for cell
+  edits, reachable from the SAME pane whose cell edits are guarded (the gutter
+  click). The invariant below covers them; the code does not.
 
 ### STILL OPEN — the structural fix
 
