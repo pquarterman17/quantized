@@ -246,7 +246,19 @@ const STORE_PINS: Record<string, number> = {
   // action. 323 lines came out in one slice — no headroom deliberately left;
   // the whole point of the pin sitting at zero slack is that a slice this
   // size gets extracted the moment it exists, not banked for later.
-  "/store/useApp.ts": 2449,
+  // 2449 -> 2333 (2026-09-10, BUG-009's guard half): the pin sat 2 lines above
+  // the file, so adding a pending guard to the row-state actions had to EXTRACT
+  // rather than append — the repo's rule (CLAUDE.md) is to move a cohesive
+  // sibling out, never to shave explanatory comments to fit a ceiling. Row
+  // exclusion (#50), the transient row `selection` that feeds it, and the
+  // per-column data filter (#53) went to the new store/rowState.ts
+  // (RowStateSlice), composed exactly like datasetMeta.ts/dataIntake.ts: one
+  // import line, one word on the extends clause, one creator-spread line.
+  // `worksheetOrActiveSelection` moved with them (its only two callers did).
+  // Pinned TIGHT at the post-extraction size, which is what the 2818 entry
+  // below said the next extraction after that sprint should do — the slack it
+  // banked for seven parallel lanes is now reclaimed.
+  "/store/useApp.ts": 2334,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -823,7 +835,13 @@ describe("row-state model guard (#50 universal linking)", () => {
       // (2026-08-30 extraction, P3.5) — same (de)serialize role, relocated
       // for the same size-pin reason as workspaceDatasetParse.ts above.
       "/lib/workspaceSerialize.ts",
-      "/store/useApp.ts",
+      // Row exclusion's own store slice (2026-09-10, BUG-009's guard half) —
+      // the actions that used to sit inline in useApp.ts, relocated under the
+      // store-size pin so a pending guard would fit. useApp.ts LEFT this list
+      // in the same commit: it no longer names `.excludedRows` anywhere, and a
+      // stale allow entry is exactly the dishonesty the sibling
+      // "grandfathered list stays honest" test exists to prevent.
+      "/store/rowState.ts",
       "/store/corrections.ts",
       "/store/cellEdit.ts",
       // recalcNow's dataset-recompute loop, extracted out of useApp.ts
