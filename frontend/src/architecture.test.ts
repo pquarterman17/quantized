@@ -1360,6 +1360,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   excludedRows:
     "ROW indices (JMP-style row state, #50), not COLUMN/channel indices -- unaffected by a column removal",
   pending: "lazy-load book-source descriptor, not channel-indexed",
+  pendingError:
+    "the reason the lazy-load fetch failed -- a transient advisory STRING, not channel-indexed",
   source: "re-import source path descriptor, not channel-indexed",
   versionOf: "a dataset id, not channel-indexed",
   workbookId: "Library organization only, not channel-indexed",

@@ -35,6 +35,9 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
                 ...d,
                 data: full,
                 pending: undefined,
+                // BUG-009: success clears the recorded failure too, so a book
+                // that arrives after a blip stops reporting one.
+                pendingError: undefined,
                 // Row-state indices were against the PREVIEW rows (#50/#53)
                 // — they no longer mean anything against the real data.
                 excludedRows: undefined,
@@ -43,6 +46,21 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
             : d,
         ),
       }));
+    })
+    .catch((e: unknown) => {
+      // BUG-009: record WHY, so `store/pendingEdit.ts` can stop promising a
+      // retry "in a moment" for a book that will never arrive. `pending` stays
+      // set on purpose (a retry may still work); only the message changes.
+      // Re-thrown unchanged, so every existing caller's error handling —
+      // `resolveDataset`'s reject, the save command's abort — is untouched.
+      set((s) => ({
+        datasets: s.datasets.map((d) =>
+          d.id === id
+            ? { ...d, pendingError: e instanceof Error ? e.message : String(e) }
+            : d,
+        ),
+      }));
+      throw e;
     })
     .finally(() => {
       _bookFetches.delete(id);

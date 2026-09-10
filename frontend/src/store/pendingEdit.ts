@@ -18,14 +18,19 @@
 // padding-trimmed prefix, whose cells line up). Round 3 unified the two because they
 // looked alike and re-opened the data loss. Two questions, two predicates.
 //
-// KNOWN INCOMPLETE, DELIBERATELY. This refuses; it does not defer. A permanently
-// failed fetch (moved source, expired upload token) leaves `pending` set forever, so
-// the refusal becomes a permanent lockout while the message still says "in a moment".
-// The right shape is resolve-THEN-apply (`store/corrections.ts` already does it:
-// `await get().resolveDataset(id)` first), wrapped so the safe path is the DEFAULT
-// rather than something each new action must remember. That is a store-wide
-// refactor, tracked in plans/BUGS_AND_ISSUES.md as BUG-009, and deliberately not
-// attempted inside a PR that has already taken five review rounds.
+// KNOWN INCOMPLETE, DELIBERATELY — NOW HALF DONE. This refuses; it does not defer.
+// A permanently failed fetch (moved source, expired upload token) leaves `pending`
+// set forever, so the refusal is still a lockout — but it no longer LIES about it:
+// `Dataset.pendingError` (BUG-009, recorded by `lib/bookData.installBookData`'s
+// failure path) records why the last fetch failed, and the status this function
+// sets says so, instead of promising a retry "in a moment" that cannot succeed.
+//
+// What remains is the DEFERRAL itself. The right shape is resolve-THEN-apply
+// (`store/corrections.ts` already does it: `await get().resolveDataset(id)`
+// first), wrapped so the safe path is the DEFAULT rather than something each new
+// action must remember. That is a store-wide refactor, tracked in
+// plans/BUGS_AND_ISSUES.md as BUG-009, and deliberately not attempted inside a
+// PR that has already taken five review rounds.
 
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
@@ -42,7 +47,18 @@ export function refusePendingEdit(
   action: string,
 ): boolean {
   if (ds.pending == null) return false;
+  // Still kick the fetch, even after a failure: a blip does come back, and the
+  // recorded error is ADVISORY — it changes what the user is told, never what is
+  // allowed, so nothing becomes unreachable.
   void get().ensureBookData(ds.id);
-  get().setStatus(`"${ds.name}" is still loading its full data — try ${action} again in a moment`);
+  get().setStatus(
+    ds.pendingError == null
+      ? `"${ds.name}" is still loading its full data — try ${action} again in a moment`
+      : // BUG-009: a book that will never arrive used to get the same "in a
+        // moment" as one arriving imminently, forever. Say what actually
+        // happened and point at the fix instead of promising a retry.
+        `"${ds.name}" could not load its full data (${ds.pendingError}) — ${action} needs the whole book. ` +
+        `Retrying now; if it keeps failing, relink or re-import the source.`,
+  );
   return true;
 }

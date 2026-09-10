@@ -32,7 +32,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; two data-CORRUPTING sites found in review round 5 and now guarded, but "refuse" should be "resolve-then-apply" and a failed fetch is a permanent lockout | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites fixed + ratcheted, structural fix open |
+| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1660,8 +1660,27 @@ lose an edit:
   wrapper would make the safe path the DEFAULT rather than something each new action
   must remember — which is the actual defect. Deliberately NOT attempted inside a PR
   that has already taken five review rounds.
-- [ ] Distinguish "in flight" from "failed, will never arrive", so the message stops
-  promising a retry that cannot succeed.
+### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
+
+- [x] `Dataset.pendingError` records why the last fetch for a `pending` dataset
+  failed (`lib/bookData.ts`'s `installBookData` gained a `.catch` that writes it and
+  RE-THROWS unchanged, so `resolveDataset`'s reject and the save command's abort are
+  untouched), and success clears it alongside `pending`. `store/pendingEdit.ts`'s
+  guard then says what actually happened — `could not load its full data (<reason>)
+  … relink or re-import the source` — instead of promising "try again in a moment"
+  forever to a book that will never arrive.
+  **ADVISORY ONLY, and that is pinned by test**: the retry is still kicked (a network
+  blip does come back), the refusal is unchanged, and nothing becomes unreachable
+  because a failure was recorded. So this closes the LIE, not the lockout — the
+  lockout is the deferral box above, which is still open.
+  Deliberately not serialized: `lib/workspaceSerialize.ts` writes an explicit field
+  list, and a transient error has no business surviving a reload as if still true.
+  `pendingError` is registered in `architecture.test.ts`'s
+  `DATASET_CHANNEL_REMAP_EXCLUDED` (a reason string, not channel-index-keyed state).
+  Funding note, per the repo's own rule against shaving comments to fit a ceiling:
+  the field's doc comment pushed `lib/types.ts` past its pinned size, so the Origin
+  graph-decode fidelity types were extracted to `lib/originFidelityTypes.ts` and
+  re-exported — the same move already made for `importTypes`/`reductionTypes`.
 
 ### The invariant, stated once (it never was)
 

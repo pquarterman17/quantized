@@ -6,6 +6,14 @@ import type { ErrorBinding } from "./errorRoles";
 
 import type { ColormapName } from "./colormap";
 import type { DatasetSource } from "./datasetSource";
+// Imported as well as re-exported below: three of these are referenced by the
+// interfaces in this file, and a bare `export type { … } from` re-export does
+// not bind a name locally.
+import type {
+  OriginFidelityManifest,
+  OriginFigureFidelity,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 import type { RecodeSpec } from "./recode";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
@@ -47,51 +55,19 @@ export interface DataStruct {
   origin_fidelity?: OriginFidelityManifest;
 }
 
-export type OriginFidelityStatus = "exact" | "best_effort" | "reference_only" | "unresolved";
-
-export interface OriginFigureFidelity {
-  status: OriginFidelityStatus;
-  recovered: string[];
-  omissions: string[];
-}
-
-export interface OriginFilteredFigure {
-  index: number;
-  name: string;
-  layer: number | null;
-  reason: string;
-}
-
-export interface OriginSavedPreview {
-  format: "png";
-  mime: "image/png";
-  width: number;
-  height: number;
-  sha256: string;
-  data: string;
-  confidence: "exact_page" | "ambiguous_page";
-  page_name: string;
-}
-
-export interface OriginPreviewDiagnostic {
-  page_name: string;
-  status: "no_preview" | "ambiguous" | "workbook_thumbnail";
-  asset_count: number;
-  assets?: OriginSavedPreview[];
-}
-
-export interface OriginFidelityManifest {
-  version: 1;
-  container: "opj" | "opju";
-  status: OriginFidelityStatus;
-  graph_records_total: number;
-  graph_records_actionable: number;
-  graph_records_filtered: number;
-  omissions: string[];
-  filtered_figures: OriginFilteredFigure[];
-  /** Optional for backward compatibility with #49 workspaces. */
-  preview_diagnostics?: OriginPreviewDiagnostic[];
-}
+// Origin graph-decode fidelity wire types (OriginFidelityStatus,
+// OriginFigureFidelity, OriginFilteredFigure, OriginSavedPreview,
+// OriginPreviewDiagnostic, OriginFidelityManifest) live in
+// lib/originFidelityTypes.ts — extracted, see that file's header. Re-exported
+// here so existing import paths keep working.
+export type {
+  OriginFidelityManifest,
+  OriginFidelityStatus,
+  OriginFigureFidelity,
+  OriginFilteredFigure,
+  OriginPreviewDiagnostic,
+  OriginSavedPreview,
+} from "./originFidelityTypes";
 
 /** The `books[]` entry for the book already returned in full at the payload's
  *  top level (ORIGIN_FILE_DECODE_PLAN #38) — carries no data of its own; the
@@ -537,6 +513,26 @@ export interface Dataset {
    *  that command resolves every pending dataset first
    *  (`useApp.resolvePendingDatasets`) so an exported .dwk is self-contained. */
   pending?: BookSource;
+  /** BUG-009: the reason the last fetch for `pending` FAILED, or absent while
+   *  one has never failed.
+   *
+   *  `lib/bookData.ts`'s `installBookData` leaves `pending` set on failure so
+   *  a later call retries — which is right, but it made a book that will NEVER
+   *  arrive (a moved source, an expired upload token) indistinguishable from one
+   *  arriving in a moment. Every guarded action then said "still loading its
+   *  full data — try again in a moment" forever, promising a retry that cannot
+   *  succeed. `store/pendingEdit.ts`'s header booked exactly this as KNOWN
+   *  INCOMPLETE.
+   *
+   *  ADVISORY ONLY: it changes what the user is TOLD, never what is allowed. A
+   *  retry is still kicked and can still succeed (a network blip does come
+   *  back), and success clears this along with `pending`. Nothing becomes
+   *  unreachable because of it.
+   *
+   *  Deliberately NOT serialized — `lib/workspaceSerialize.ts` writes an
+   *  explicit field list, and a transient error has no business surviving a
+   *  reload as if it were still true. */
+  pendingError?: string;
   /** Where this dataset's data can be re-read from on demand (MAIN_PLAN #10,
    *  "re-import from source" — Origin's "Re-import Directly"): a real path the
    *  path-based `/api/parsers/import` route already validated. Set ONLY where
