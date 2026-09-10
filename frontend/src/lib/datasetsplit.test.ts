@@ -13,11 +13,22 @@ import {
   sliceDataStruct,
   SPLIT_GROUP_CAP,
   splitColumn,
+  splitGroupCount,
   tooManyGroups,
   type SplitGroup,
 } from "./datasetsplit";
 import { pickDefaultSplitColumn } from "./datasetsplitDefault";
-import type { DataStruct } from "./types";
+import { byColumnOptions } from "./byPartition";
+import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import type { DataStruct, Dataset } from "./types";
+
+/** Wrap a bare fixture DataStruct as the minimal `Dataset` the split API now
+ *  takes (BUG-008): the grouping decision reads `channelTypes` and
+ *  `cat_levels`, so it needs the dataset, not just its columns. Tests that
+ *  exercise an override or a level table build their own Dataset instead. */
+function asDataset(data: DataStruct): Dataset {
+  return { id: "fixture", name: "fixture", data };
+}
 
 /** Sum of every group's row count — a split must always account for every
  *  source row exactly once (no silent drops, no double-counting). */
@@ -264,7 +275,7 @@ describe("column addressing (-1 = x convention, matches ColumnFilter.col)", () =
   });
 
   it("the x column is never treated as categorical", () => {
-    expect(isCategoricalColumn(data, -1)).toBe(false);
+    expect(isCategoricalColumn(asDataset(data), -1)).toBe(false);
   });
 });
 
@@ -290,14 +301,14 @@ describe("splitColumn dispatch", () => {
 
   it("gap-clusters a continuous channel", () => {
     const data = makeData();
-    const { groups, tolerance } = splitColumn(data, 0);
+    const { groups, tolerance } = splitColumn(asDataset(data), 0);
     expect(tolerance).not.toBeNull();
     expect(groups.map((g) => g.label)).toEqual(["5 K", "10 K"]);
   });
 
   it("exact-groups a categorical channel and reports tolerance null", () => {
     const data = makeData();
-    const { groups, tolerance } = splitColumn(data, 1);
+    const { groups, tolerance } = splitColumn(asDataset(data), 1);
     expect(tolerance).toBeNull();
     expect(groups.map((g) => g.value)).toEqual([1, 2]);
   });
@@ -312,24 +323,24 @@ describe("splitColumn dispatch", () => {
   // as if the caller had passed nothing at all.
   it("falls back to autoTolerance for a NaN tolerance (never collapses to one group)", () => {
     const data = makeData();
-    const nanResult = splitColumn(data, 0, NaN);
-    const autoResult = splitColumn(data, 0);
+    const nanResult = splitColumn(asDataset(data), 0, NaN);
+    const autoResult = splitColumn(asDataset(data), 0);
     expect(nanResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
     expect(nanResult.groups.length).toBeGreaterThan(1);
   });
 
   it("falls back to autoTolerance for a negative tolerance (never explodes to one-row groups)", () => {
     const data = makeData();
-    const negResult = splitColumn(data, 0, -5);
-    const autoResult = splitColumn(data, 0);
+    const negResult = splitColumn(asDataset(data), 0, -5);
+    const autoResult = splitColumn(asDataset(data), 0);
     expect(negResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
     expect(negResult.groups.every((g) => g.rowIndexes.length > 1 || g.label === "(other)")).toBe(true);
   });
 
   it("falls back to autoTolerance for -Infinity too (not just finite negatives)", () => {
     const data = makeData();
-    const negInfResult = splitColumn(data, 0, -Infinity);
-    const autoResult = splitColumn(data, 0);
+    const negInfResult = splitColumn(asDataset(data), 0, -Infinity);
+    const autoResult = splitColumn(asDataset(data), 0);
     expect(negInfResult.groups.map((g) => g.rowIndexes)).toEqual(autoResult.groups.map((g) => g.rowIndexes));
   });
 });
@@ -348,7 +359,7 @@ describe("pickDefaultSplitColumn", () => {
       metadata: {},
     };
     // channel 0 -> 2 groups, channel 1 -> 3 groups: channel 0 wins (fewer).
-    expect(pickDefaultSplitColumn(data)).toBe(0);
+    expect(pickDefaultSplitColumn(asDataset(data))).toBe(0);
   });
 
   it("falls back to the first channel when nothing splits (every column constant)", () => {
@@ -360,12 +371,487 @@ describe("pickDefaultSplitColumn", () => {
       units: ["", ""],
       metadata: {},
     };
-    expect(pickDefaultSplitColumn(data)).toBe(0);
+    expect(pickDefaultSplitColumn(asDataset(data))).toBe(0);
   });
 
   it("returns -1 for a dataset with no channels", () => {
     const data: DataStruct = { time: [1, 2], values: [[], []], labels: [], units: [], metadata: {} };
-    expect(pickDefaultSplitColumn(data)).toBe(-1);
+    expect(pickDefaultSplitColumn(asDataset(data))).toBe(-1);
+  });
+});
+
+// BUG-008 (plans/BUGS_AND_ISSUES.md): Split reached past `channelModelingType`
+// — the sanctioned modeling-type accessor, which honours a `channelTypes`
+// override and then a `cat_levels` table BEFORE the numeric-shape heuristic —
+// straight to the raw heuristic. Two consequences, both measured on the
+// fixture below before the fix:
+//   1. the heuristic needs >= 12 finite rows (lib/modeling.ts's MIN_SAMPLES),
+//      so a 6-row / 3-sample categorical column read as CONTINUOUS and got
+//      gap-clustered into a single group labelled "1" — three samples merged
+//      into one dataset, the codes' median standing in for a sample name.
+//   2. even at >= 12 rows, where the heuristic happens to agree, the group
+//      labels were the raw float CODES ("0"/"1"/"2"), so the child datasets
+//      were named "run.dat (0)" instead of "run.dat (A123)".
+// The negative control below is the load-bearing half: a small-integer column
+// with NO level table must keep its NUMERIC labels.
+describe("BUG-008 — an explicit cat_levels table decides the split", () => {
+  /** 3 samples x 2 rows = 6 rows: FEWER than lib/modeling.ts's MIN_SAMPLES,
+   *  so the shape heuristic alone calls this continuous. The level table is
+   *  the only thing that can make it categorical. */
+  function categoricalDataset(): Dataset {
+    return {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4, 5, 6],
+        values: [[0], [1], [2], [0], [1], [2]],
+        labels: ["sample"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["A123", "B456", "C789"] },
+      },
+    };
+  }
+
+  it("splits a 6-row / 3-level categorical column into 3 groups, not 1", () => {
+    const ds = categoricalDataset();
+    const { groups, tolerance } = splitColumn(ds, 0);
+    // Pre-fix measurement: [{ label: "1", rows: 6 }] — one group, all rows.
+    expect(groups.map((g) => g.rowIndexes.length)).toEqual([2, 2, 2]);
+    expect(tolerance).toBeNull(); // exact-value grouping, no tolerance
+    expect(totalRows(groups)).toBe(6);
+  });
+
+  it("labels the groups with LEVEL NAMES, in first-appearance order", () => {
+    const { groups } = splitColumn(categoricalDataset(), 0);
+    expect(groups.map((g) => g.label)).toEqual(["A123", "B456", "C789"]);
+    // The raw code stays available as `value` — only the LABEL is resolved.
+    expect(groups.map((g) => g.value)).toEqual([0, 1, 2]);
+  });
+
+  it("isCategoricalColumn agrees (it is what the dialog hides its tolerance field on)", () => {
+    expect(isCategoricalColumn(categoricalDataset(), 0)).toBe(true);
+  });
+
+  // THE NEGATIVE CONTROL. A run-index column is small integers with no level
+  // table: the heuristic correctly routes it to exact-value grouping, and its
+  // labels must stay numeric. An over-broad fix (e.g. resolving labels
+  // through whatever level table any OTHER channel carries, or inventing
+  // names from codes) fails here.
+  it("keeps NUMERIC labels for a small-int column with no level table", () => {
+    const n = 12;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        values: Array.from({ length: n }, (_, i) => [[1, 2, 3][i % 3]]),
+        labels: ["run"],
+        units: [""],
+        metadata: {},
+      },
+    };
+    const { groups } = splitColumn(ds, 0);
+    expect(groups.map((g) => g.label)).toEqual(["1", "2", "3"]);
+  });
+
+  // Round-2 review, MEDIUM 3. Naming depends on whether the column HAS names,
+  // NOT on why it reads as categorical — a shape-heuristic column with a
+  // covering sidecar IS named from it. Measured: this returned ["1","2","3"]
+  // before the resolver was adopted and ["C","A","B"] after. Deliberate: every
+  // other surface labels this same column from this same sidecar. It also
+  // proves the sidecar source is not Origin-specific — this is the generic
+  // `text_columns` key, which delimited and SQLite imports emit.
+  it("names a shape-heuristic column from a generic text sidecar too", () => {
+    const n = 12;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        values: Array.from({ length: n }, (_, i) => [(i % 3) + 1]),
+        labels: ["run"],
+        units: [""],
+        metadata: { text_columns: { A: Array.from({ length: n }, (_, i) => ["C", "A", "B"][i % 3]) } },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["C", "A", "B"]);
+    // Strip the sidecar and the SAME column keeps numeric labels — the pair is
+    // what makes "run 3 must not become run C" precise rather than false.
+    const bare: Dataset = { ...ds, data: { ...ds.data, metadata: {} } };
+    expect(splitColumn(bare, 0).groups.map((g) => g.label)).toEqual(["1", "2", "3"]);
+  });
+
+  // A level table on channel 0 must not leak into channel 1's labels — the
+  // resolution is per-CHANNEL, like every other `lib/categorical.ts` read.
+  it("resolves levels per channel, never from a sibling channel's table", () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4],
+        values: [
+          [0, 7],
+          [1, 8],
+          [0, 7],
+          [1, 8],
+        ],
+        labels: ["sample", "run"],
+        units: ["", ""],
+        metadata: {},
+        cat_levels: { 0: ["A123", "B456"] },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["A123", "B456"]);
+    // Channel 1 has no table of its own: continuous by the heuristic (4 rows
+    // < MIN_SAMPLES), so it gap-clusters and labels numerically.
+    expect(splitColumn(ds, 1).groups.map((g) => g.label)).toEqual(["7", "8"]);
+  });
+
+  // A code the table can't resolve (out of range, or non-integer) keeps its
+  // numeric label + unit rather than getting an invented name or a blank.
+  it("falls back to the numeric label for a code outside the level table", () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4],
+        values: [[0], [1], [5], [5]],
+        labels: ["sample"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["A123", "B456"] },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["A123", "B456", "5"]);
+    // MEASURED, and it corrected the doc comment (review round, LOW 8): the
+    // unit is NOT re-attached here. Once the canonical resolver names a column
+    // at all, `barlayout.ts`'s `catTableLabels` fills any code its table does
+    // not cover with a formatted number of its own, so the group gets that
+    // name — "5", not "5 K". That is deliberate consistency: an axis tick for
+    // the same unmapped code reads "5" too. The unit-bearing fallback belongs
+    // to a column the resolver declines WHOLESALE — see the text-sidecar
+    // negative control below, which asserts "0 K"/"1 K"/"2 K".
+    const withUnit: Dataset = { ...ds, data: { ...ds.data, units: ["K"] } };
+    expect(splitColumn(withUnit, 0).groups.map((g) => g.label)).toEqual(["A123", "B456", "5"]);
+  });
+
+  // The `channelTypes` override is the FIRST thing `channelModelingType`
+  // honours, and it was equally invisible to the old heuristic-only path.
+  it("honours a channelTypes override on values the heuristic calls continuous", () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4],
+        values: [[10], [20], [10], [20]],
+        labels: ["setpoint"],
+        units: ["K"],
+        metadata: {},
+      },
+      channelTypes: { 0: "nominal" },
+    };
+    const { groups, tolerance } = splitColumn(ds, 0);
+    expect(tolerance).toBeNull(); // exact-value grouping, because of the override
+    expect(groups.map((g) => g.label)).toEqual(["10 K", "20 K"]); // no level table -> numeric + unit
+    expect(groups.map((g) => g.rowIndexes)).toEqual([
+      [0, 2],
+      [1, 3],
+    ]);
+    // Without the override the same values gap-cluster (a tolerance is
+    // reported) — proof the override, not the shape, decided it.
+    const { tolerance: noOverride } = splitColumn({ ...ds, channelTypes: undefined }, 0);
+    expect(noOverride).not.toBeNull();
+  });
+
+  // MEDIUM 4 + 6 of the review round. `channelModelingType` checks the
+  // `channelTypes` override BEFORE the level table, so the override wins in
+  // BOTH directions and both outcomes are surprising enough to pin. Neither is
+  // a defect: the override is the user stating what the column MEANS, and the
+  // split obeys it. What would be a defect is the two paths disagreeing again.
+  it('a "nominal" override splits a wobbly setpoint column per DISTINCT read', () => {
+    // The module header's own motivating fixture: 4 setpoints x 5 wobble reads.
+    // Continuous, it gap-clusters to 4 groups. Declared nominal, exact-value
+    // grouping is correct BY DEFINITION and yields one group per distinct
+    // read — measured 20, under SPLIT_GROUP_CAP, so it commits.
+    const setpoints = [5, 10, 50, 100];
+    const values: number[][] = [];
+    for (const sp of setpoints) for (let i = 0; i < 5; i++) values.push([sp + i * 0.001]);
+    const data: DataStruct = {
+      time: values.map((_, i) => i),
+      values,
+      labels: ["T"],
+      units: ["K"],
+      metadata: {},
+    };
+    expect(splitColumn(asDataset(data), 0).groups).toHaveLength(4);
+    const overridden: Dataset = { ...asDataset(data), channelTypes: { 0: "nominal" } };
+    const { groups, tolerance } = splitColumn(overridden, 0);
+    expect(groups).toHaveLength(20);
+    expect(tolerance).toBeNull();
+    expect(groups.length).toBeLessThanOrEqual(SPLIT_GROUP_CAP); // so it really does commit
+  });
+
+  it('a "continuous" override gap-clusters a level-table column, codes and all', () => {
+    // The override is checked FIRST, ahead of the level table — so this
+    // reproduces the pre-fix symptom on purpose: one group whose label is the
+    // MEDIAN of the level codes. Recorded because "a level table is the
+    // strongest signal there is" (lib/modeling.ts) is true only relative to
+    // the numeric-shape heuristic, NOT relative to an explicit user override.
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4, 5, 6],
+        values: [[0], [1], [2], [0], [1], [2]],
+        labels: ["sample"],
+        units: [""],
+        metadata: {},
+        cat_levels: { 0: ["A123", "B456", "C789"] },
+      },
+      channelTypes: { 0: "continuous" },
+    };
+    expect(isCategoricalColumn(ds, 0)).toBe(false);
+    const { groups, tolerance } = splitColumn(ds, 0);
+    expect(groups.map((g) => `${g.label}:${g.rowIndexes.length}`)).toEqual(["1:6"]);
+    expect(tolerance).not.toBeNull();
+    // Drop the override and the level table takes over again.
+    expect(splitColumn({ ...ds, channelTypes: undefined }, 0).groups.map((g) => g.label)).toEqual([
+      "A123",
+      "B456",
+      "C789",
+    ]);
+  });
+
+  // Round-2 review, MEDIUM 2. Resolving names is not free — it scans the column
+  // and every candidate text sidecar — and `pickDefaultSplitColumn` scores
+  // EVERY channel on each dialog open while reading only the count. So there
+  // are now two entry points, and "two code paths, two answers to the same
+  // question" is exactly what BUG-008 was: this pins them together rather than
+  // trusting the argument that labels cannot affect grouping.
+  it("splitGroupCount agrees with splitColumn on every column shape", () => {
+    const n = 14;
+    const cases: Dataset[] = [
+      // a named categorical column
+      {
+        id: "a",
+        name: "a",
+        data: {
+          time: Array.from({ length: 6 }, (_, i) => i),
+          values: [[0], [1], [2], [0], [1], [2]],
+          labels: ["s"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["A", "B", "C"] },
+        },
+      },
+      // a wobbly continuous setpoint column (gap-clustered)
+      {
+        id: "b",
+        name: "b",
+        data: {
+          time: Array.from({ length: n }, (_, i) => i),
+          values: [4.997, 4.998, 4.999, 5, 5.001, 5.002, 5.003, 9.997, 9.998, 9.999, 10, 10.001, 10.002, 10.003].map(
+            (t) => [t],
+          ),
+          labels: ["T"],
+          units: ["K"],
+          metadata: {},
+        },
+      },
+      // nominal by the shape heuristic, no names
+      {
+        id: "c",
+        name: "c",
+        data: {
+          time: Array.from({ length: n }, (_, i) => i),
+          values: Array.from({ length: n }, (_, i) => [i % 2]),
+          labels: ["flag"],
+          units: [""],
+          metadata: {},
+        },
+      },
+      // an Origin-shaped sidecar column
+      {
+        id: "d",
+        name: "d",
+        data: {
+          time: Array.from({ length: 12 }, (_, i) => i),
+          values: Array.from({ length: 12 }, (_, i) => [i % 3]),
+          labels: ["batch"],
+          units: [""],
+          metadata: { origin_text_columns: { A: Array.from({ length: 12 }, (_, i) => ["R", "D", "N"][i % 3]) } },
+        },
+      },
+      // NaN rows, so the "(other)" group participates too
+      {
+        id: "e",
+        name: "e",
+        data: {
+          time: [0, 1, 2, 3],
+          values: [[0], [Number.NaN], [1], [Number.NaN]],
+          labels: ["s"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["A", "B"] },
+        },
+      },
+    ];
+    for (const ds of cases) {
+      for (const col of [-1, 0]) {
+        expect(splitGroupCount(ds, col), `${ds.id} col ${col}`).toBe(splitColumn(ds, col).groups.length);
+      }
+    }
+  });
+
+  // The label lookup is cached per (DataStruct, channel). A cache that outlived
+  // its data would be a correctness bug, not just a stale display: verify a
+  // REPLACED DataStruct (which is how every store path mutates one) resolves
+  // afresh, including when only `cat_levels` changed and `values` did not.
+  it("re-resolves names when the DataStruct is replaced, values unchanged", () => {
+    const values = [[0], [1], [0], [1]];
+    const base: DataStruct = {
+      time: [1, 2, 3, 4],
+      values,
+      labels: ["sample"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["A123", "B456"] },
+    };
+    const first: Dataset = { id: "d1", name: "run.dat", data: base };
+    expect(splitColumn(first, 0).groups.map((g) => g.label)).toEqual(["A123", "B456"]);
+
+    // Same `values` ARRAY REFERENCE, a new DataStruct, a renamed level. Keying
+    // the cache on `values` (as lib/modeling.ts does, correctly for what IT
+    // reads) would return the stale "A123" here.
+    const renamed: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: { ...base, cat_levels: { 0: ["Reference", "B456"] } },
+    };
+    expect(renamed.data.values).toBe(values); // the premise of the test
+    expect(splitColumn(renamed, 0).groups.map((g) => g.label)).toEqual(["Reference", "B456"]);
+  });
+
+  // The bug from its second angle: `lib/byPartition.ts`'s `byColumnOptions`
+  // (which decides which columns are OFFERED as categorical) already used
+  // `channelModelingType`, while `splitColumn` (which decides HOW the chosen
+  // column is grouped) used the raw heuristic. Two paths, two answers to the
+  // same question. They must now agree.
+  it("agrees with byPartition's offered-column decision for the same (dataset, column)", () => {
+    const ds = categoricalDataset();
+    const offered = byColumnOptions(ds, [{ index: 0, label: "sample" }]);
+    expect(offered.map((c) => c.index)).toEqual([0]); // byPartition offers it
+    expect(isCategoricalColumn(ds, 0)).toBe(true); // and split now groups it that way
+  });
+
+  // HIGH 1 of the BUG-008 review round. `channelModelingType` calls a column
+  // categorical for THREE reasons and only one of them carries a `cat_levels`
+  // table. An Origin `.opj` import is the second shape: numeric codes plus an
+  // `origin_text_columns` sidecar, no level table — the exact case
+  // `lib/statschooser.ts`'s header records having already been got wrong once
+  // by reaching for the narrow `lib/categorical.ts` accessor ("batch = 0" for
+  // the same column Data Filter and Tabulate labelled "Reference"). The first
+  // cut of this fix made that mistake again; measured then, this returned
+  // ["0","1","2"] while `resolveCategoryLabels` on the same column returned
+  // ["Reference","Doped","Annealed"].
+  it("names groups from an Origin text sidecar when there is no level table", () => {
+    const n = 12;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.opj",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        values: Array.from({ length: n }, (_, i) => [i % 3]),
+        labels: ["batch"],
+        units: [""],
+        metadata: {
+          origin_text_columns: {
+            A: Array.from({ length: n }, (_, i) => ["Reference", "Doped", "Annealed"][i % 3]),
+          },
+        },
+        // deliberately NO cat_levels — this is the Origin shape
+      },
+    };
+    const { groups } = splitColumn(ds, 0);
+    expect(groups.map((g) => g.label)).toEqual(["Reference", "Doped", "Annealed"]);
+    // And it agrees with what every other surface shows for this column.
+    expect(resolveCategoryLabels(ds.data, 0, categoryLevels(ds.data, 0))).toEqual([
+      "Reference",
+      "Doped",
+      "Annealed",
+    ]);
+  });
+
+  // A sidecar that does NOT consistently cover the levels must not produce a
+  // name — the resolver declines, and the numeric label (with unit) stands.
+  // This is the negative control for the sidecar half.
+  it("keeps numeric labels when a text sidecar disagrees with itself on a level", () => {
+    const n = 12;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.opj",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        values: Array.from({ length: n }, (_, i) => [i % 3]),
+        labels: ["setpoint"],
+        units: ["K"],
+        metadata: {
+          // level 0's rows say "Reference" and then "Other" — inconsistent, so
+          // this column cannot name the levels.
+          origin_text_columns: {
+            A: Array.from({ length: n }, (_, i) => (i === 3 ? "Other" : ["Reference", "Doped", "Annealed"][i % 3])),
+          },
+        },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["0 K", "1 K", "2 K"]);
+  });
+
+  // LOW 7 of the review round: `labelForCode` returns the level string, and
+  // "" is not nullish, so a `??` fallback produced a child dataset literally
+  // named "run.dat ()". `isValidLevelList` and `sanitizeDataStruct` both
+  // accept "", so a hand-edited or foreign `.dwk` reaches this.
+  it("treats an EMPTY level name as no name, not as a blank label", () => {
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: [1, 2, 3, 4],
+        values: [[0], [1], [0], [1]],
+        labels: ["sample"],
+        units: ["K"],
+        metadata: {},
+        cat_levels: { 0: ["", "B456"] },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["0 K", "B456"]);
+  });
+
+  it("pickDefaultSplitColumn prefers a level-table column over a continuous one", () => {
+    const n = 6;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        // channel 0: a continuous sweep (6 distinct values, gap-clustered
+        // into more groups); channel 1: 3 named levels.
+        values: [
+          [1.0, 0],
+          [2.5, 1],
+          [4.1, 2],
+          [5.9, 0],
+          [7.4, 1],
+          [9.2, 2],
+        ],
+        labels: ["field", "sample"],
+        units: ["T", ""],
+        metadata: {},
+        cat_levels: { 1: ["A123", "B456", "C789"] },
+      },
+    };
+    expect(pickDefaultSplitColumn(ds)).toBe(1);
   });
 });
 

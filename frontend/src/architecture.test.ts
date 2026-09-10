@@ -854,6 +854,111 @@ describe("row-state model guard (#50 universal linking)", () => {
   });
 });
 
+// BUG-008 (plans/BUGS_AND_ISSUES.md): `lib/datasetsplit.ts` asked the RAW
+// shape heuristic `inferModelingType` whether a column is categorical, while
+// `lib/byPartition.ts` asked the sanctioned accessor `channelModelingType` —
+// which honours the user's `channelTypes` override, then an explicit
+// `cat_levels` level table, and only THEN the heuristic. Two paths, two
+// answers to the same question: a 3-sample/6-row categorical column that
+// byPartition offered as categorical was gap-clustered by Split into ONE
+// group, silently merging three samples into one dataset.
+//
+// The fix was one edit; this guard is what stops the NEXT one. Nothing in the
+// suite could see a module reaching past the accessor before — the divergence
+// was found by reading, not by a failing test.
+describe("modeling-type accessor chokepoint (BUG-008)", () => {
+  // The FIRST cut of this guard was `offenders(/\binferModelingType\s*\(/,
+  // ["/lib/modeling.ts"])`, and the review round measured it inverted in all
+  // three directions:
+  //   * an aliased import evaded it while making the real call —
+  //     `import { inferModelingType as inferType } from "./modeling"` then
+  //     `inferType(...)` left the guard GREEN, which is BUG-008 verbatim;
+  //   * a file whose only mention was a `//` doc comment FAILED it, because
+  //     `\s*` matches the space in prose like "inferModelingType (MIN_SAMPLES
+  //     =12)" — text that already exists in two test files and in
+  //     `lib/statschooser.ts`'s header;
+  //   * `endsWith("/lib/modeling.ts")` is directory-blind, so a
+  //     `components/probe/lib/modeling.ts` was allowlisted too.
+  // So: strip comments, then flag the IDENTIFIER anywhere in real code (an
+  // import binding is the only way to reach a module-local function, and the
+  // import statement always spells the original name even when aliased), and
+  // compare the path EXACTLY.
+  const MODELING = "./lib/modeling.ts";
+
+  /** `src` with comments AND string/template literals removed, so text that
+   *  merely NAMES the function — prose in a doc comment, a help string, a
+   *  toast, an error message — is never mistaken for reaching it. The
+   *  round-2 review measured the comments-only version flagging
+   *  `export const HELP_TEXT = "… inferModelingType …"`, i.e. the round had
+   *  traded a comment false-positive for a string one rather than
+   *  eliminating the class. Same technique as the browser-storage guard at
+   *  the top of this file, extended to literals.
+   *
+   *  Deliberately naive about a `//` inside a string ("https://x" eats the
+   *  rest of its line) — stripping literals FIRST is what makes that
+   *  harmless here, and an import statement, which is what actually matches,
+   *  never shares a line with a URL. */
+  function withoutCommentsOrStrings(src: string): string {
+    return src
+      .replace(/`(?:[^`\\]|\\.)*`/g, "``")
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+  }
+
+  it("only lib/modeling.ts reaches the raw inferModelingType heuristic", () => {
+    const reaching = sources()
+      .filter(([p]) => p !== MODELING)
+      .filter(([, src]) => {
+        // The identifier itself catches a direct call and a named import,
+        // aliased or not (the import statement spells the original name). A
+        // NAMESPACE import spells nothing — `import * as M from "./modeling"`
+        // then `M[someKey](col)` — so the module path is checked too. That is
+        // the hole the round-1 commit wrongly claimed could not exist ("an
+        // import statement always spells the original name even when
+        // aliased"); a namespace import is the counterexample, measured.
+        //
+        // The two checks read DIFFERENT strippings, and that is load-bearing:
+        // the identifier check needs literals gone (a help string naming the
+        // function is not a call), while the import check needs them KEPT,
+        // because the module path lives inside one. Writing both against the
+        // strings-stripped text left the namespace case green — measured, on
+        // this guard, while verifying it.
+        const noLiterals = withoutCommentsOrStrings(src);
+        const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        return (
+          /\binferModelingType\b/.test(noLiterals) ||
+          /import\s+\*\s+as\s+\w+\s+from\s+["'][^"']*\/modeling["']/.test(noComments)
+        );
+      })
+      .map(([p]) => p);
+    expect(
+      reaching,
+      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008). Name it in a comment or a string if you need to discuss it, and import the named accessor rather than the whole module",
+    ).toEqual([]);
+  });
+
+  it("the guard is not vacuous: modeling.ts defines the heuristic AND its accessor calls it", () => {
+    // Without this, deleting or moving `inferModelingType` — or keeping it but
+    // no longer calling it from the sanctioned accessor — would leave the guard
+    // above green forever while protecting nothing. The round-2 review found
+    // the first version of this test proved only that the function EXISTS,
+    // because it matched `channelModelingType` anywhere in the file including
+    // a comment. So: strip comments, and require the call to appear INSIDE the
+    // accessor's own body.
+    const modeling = withoutCommentsOrStrings(
+      Object.entries(modules).find(([p]) => p === MODELING)?.[1] ?? "",
+    );
+    expect(modeling).toMatch(/export function inferModelingType\s*\(/);
+    const accessor = modeling.slice(modeling.indexOf("export function channelModelingType"));
+    expect(accessor).not.toBe("");
+    // Up to the next top-level export, i.e. the accessor's own body.
+    const body = accessor.slice(0, accessor.indexOf("\nexport ", 1) + 1 || undefined);
+    expect(body).toMatch(/\binferModelingType\s*\(/);
+  });
+});
+
 describe("FigureDocument write chokepoint (F1)", () => {
   it("routes PlotWindow.document writes through windowDocuments, except declared construction/persistence seams", () => {
     // `document: FigureDocument` is a function parameter/type annotation, not

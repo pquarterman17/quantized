@@ -34,17 +34,52 @@ export default function SplitDatasetDialog() {
   const [col, setCol] = useState(0);
   const [toleranceText, setToleranceText] = useState("0");
 
-  // Re-seed column + tolerance every time the dialog opens for a (possibly
-  // different) dataset — never carry a stale pick from the last time it
-  // was open on some other row.
+  // Re-seed the column every time the dialog opens for a (possibly different)
+  // dataset — never carry a stale pick from the last time it was open on some
+  // other row. The tolerance follows the COLUMN, in the effect below.
   useEffect(() => {
     if (!dataset) return;
-    const def = pickDefaultSplitColumn(dataset.data);
-    setCol(def);
-    setToleranceText(def < 0 ? "0" : String(autoTolerance(columnValues(dataset.data, def))));
+    setCol(pickDefaultSplitColumn(dataset));
     // Only re-seed on a genuine open (targetId change), not every dataset edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId]);
+
+  // A tolerance is a distance in the CHOSEN COLUMN's own units, so it is
+  // meaningless the moment the column changes and has to be re-derived (found
+  // in the BUG-008 review round, MEDIUM 5): since the default column is now
+  // frequently a categorical one — whose tolerance field is HIDDEN — the seed
+  // could be `autoTolerance` over dimensionless level codes, and switching to
+  // a physical column then presented that index-scale number as, say, Tesla.
+  // Measured before the fix: a field column arrived pre-filled "1 T" (from
+  // codes [0,1,2]) and previewed six one-row groups where its own
+  // `autoTolerance` of 1.8 previews one group. Re-seeding discards whatever
+  // the user typed for the PREVIOUS column, which is correct — that number
+  // described a different quantity.
+  //
+  // NO `col < 0` SPECIAL CASE (round-2 review, HIGH 1 — this fix's own
+  // regression). The predecessor effect read `def < 0 ? "0" : ...`, where
+  // `def` was `pickDefaultSplitColumn`'s return and `-1` could ONLY mean "this
+  // dataset has no channels at all". Here `col` is the USER's pick, and -1 is
+  // a first-class option the Select offers ("x (time/axis)"), so carrying that
+  // guard over seeded tolerance 0 for a perfectly ordinary continuous x sweep:
+  // measured on a PPMS-shaped x (4 setpoints x 5 wobble reads) it previewed 20
+  // groups instead of 4, and Confirm was ENABLED, so it committed 20 singleton
+  // datasets. `columnValues` already handles -1 (it returns a copy of
+  // `data.time`), so the x column needs no special case — it needs the same
+  // treatment as any other.
+  //
+  // Keyed on the column INDEX, not on the column's identity: if the dataset is
+  // replaced while the dialog is open and a different quantity lands at the
+  // same index, the tolerance stays in the old column's units. Keying on the
+  // dataset as well would fix that but re-seed on EVERY edit, wiping a
+  // tolerance the user typed while a recalc lands — the worse of the two, so
+  // this is a deliberate trade, not an oversight.
+  useEffect(() => {
+    if (!dataset) return;
+    setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));
+    // Keyed on the column (and the open), not on every dataset edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId, col]);
 
   useEffect(() => {
     if (!targetId) return;
@@ -63,7 +98,7 @@ export default function SplitDatasetDialog() {
   // empty result, not by skipping the hook, so toggling the dialog
   // open/closed across renders of this ALWAYS-MOUNTED component (see
   // AppOverlays.tsx) never changes React's hook call order.
-  const categorical = dataset ? isCategoricalColumn(dataset.data, col) : false;
+  const categorical = dataset ? isCategoricalColumn(dataset, col) : false;
   const tolerance = Number(toleranceText);
   const validTolerance = Number.isFinite(tolerance) && tolerance >= 0;
   // Non-empty text that fails to parse (or is negative) is a hard error, not
@@ -78,7 +113,7 @@ export default function SplitDatasetDialog() {
   const resolvedTolerance = categorical || !validTolerance ? undefined : tolerance;
   const result = useMemo(() => {
     if (!dataset) return { groups: [], tolerance: null };
-    return splitColumn(dataset.data, col, resolvedTolerance);
+    return splitColumn(dataset, col, resolvedTolerance);
   }, [dataset, col, resolvedTolerance]);
 
   if (!targetId || !dataset) return null;
@@ -137,8 +172,16 @@ export default function SplitDatasetDialog() {
         <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, display: "grid", gap: 4 }}>
           {overCap ? (
             <div className="qzk-ds-meta" style={{ color: "var(--danger, #d33)" }}>
-              {groups.length} groups detected — too many to split at once (cap {SPLIT_GROUP_CAP}). Pick
-              a different column, or widen the tolerance.
+              {groups.length} groups detected — too many to split at once (cap {SPLIT_GROUP_CAP}).{" "}
+              {/* BUG-008 review, MEDIUM 3: a categorical column has no
+                  tolerance field (it is hidden right above), so telling the
+                  user to widen one is impossible advice — and this case became
+                  reachable exactly when the fix started routing level-table
+                  and overridden columns to exact-value grouping. Recovery for
+                  a categorical column is fewer levels, i.e. Recode. */}
+              {categorical
+                ? "Pick a different column, or use Recode… to combine levels first."
+                : "Pick a different column, or widen the tolerance."}
             </div>
           ) : groups.length === 0 ? (
             <div className="qzk-ds-meta">No groups detected.</div>
@@ -148,7 +191,12 @@ export default function SplitDatasetDialog() {
             </div>
           ) : (
             groups.map((g) => (
-              <div key={g.label} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              // Keyed on the group's VALUE, not its label: labels are display
+              // text and need not be unique (a malformed level table with two
+              // identical names, or two distinct numbers that format to the
+              // same string), while `value` is the distinct grouping key by
+              // construction — NaN for the single "(other)" catch-all.
+              <div key={String(g.value)} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
                 <span>{g.label}</span>
                 <span className="qzk-ds-meta">{g.rowIndexes.length} rows</span>
               </div>

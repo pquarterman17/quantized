@@ -201,6 +201,221 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
   });
 });
 
+// BUG-008: the dialog's tolerance field is the user-visible tell. It is shown
+// only for a CONTINUOUS column, and `isCategoricalColumn` used to answer that
+// from the raw shape heuristic alone — so a 6-row column with an explicit
+// level table was offered a tolerance (i.e. told the user it was a continuous
+// measurement) and previewed as ONE group.
+describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => {
+  const samples: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6],
+    values: [[0], [1], [2], [0], [1], [2]],
+    labels: ["sample"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["A123", "B456", "C789"] },
+  };
+
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run1.dat", data: samples }],
+      splitDialogTargetId: "d1",
+    });
+  });
+
+  it("hides the tolerance field (the column is categorical, not a measurement)", () => {
+    render(<SplitDatasetDialog />);
+    expect(screen.queryByLabelText("Tolerance")).toBeNull();
+  });
+
+  it("previews one group per LEVEL NAME, not one merged group", () => {
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText("A123")).toBeInTheDocument();
+    expect(screen.getByText("B456")).toBeInTheDocument();
+    expect(screen.getByText("C789")).toBeInTheDocument();
+    expect(screen.getAllByText("2 rows")).toHaveLength(3);
+    expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
+  });
+
+  // A malformed level table with two identical names is the one realistic way
+  // two groups can share a LABEL. They must still be two groups (the codes
+  // differ), and the preview list must not collapse or warn — which is why it
+  // keys on `g.value`, the distinct grouping key, rather than the label.
+  it("keeps duplicate level NAMES as separate groups in the preview", () => {
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: { ...samples, cat_levels: { 0: ["dup", "dup", "C789"] } },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
+    expect(screen.getAllByText("dup")).toHaveLength(2);
+    expect(warn).not.toHaveBeenCalled(); // no duplicate-key warning
+    warn.mockRestore();
+  });
+
+  // MEDIUM 5 of the review round. The default column is now frequently the
+  // categorical one, whose tolerance field is hidden — so the seeded tolerance
+  // came from dimensionless level codes and was then presented, unchanged, as
+  // a distance in the next column's physical units.
+  it("re-seeds the tolerance from the NEW column when the column changes", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time: [0, 1, 2, 3, 4, 5],
+            // channel 0: a named categorical column (the default pick);
+            // channel 1: a physical field sweep in T.
+            values: [
+              [0, 1.0],
+              [1, 2.5],
+              [2, 4.1],
+              [0, 5.9],
+              [1, 7.4],
+              [2, 9.2],
+            ],
+            labels: ["sample", "field"],
+            units: ["", "T"],
+            metadata: {},
+            cat_levels: { 0: ["A123", "B456", "C789"] },
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    // Opens on the categorical column: no tolerance field at all.
+    expect(screen.queryByLabelText("Tolerance")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Split column"), { target: { value: "1" } });
+
+    // Pre-fix this arrived as "1" — autoTolerance over the codes [0,1,2] —
+    // and previewed six one-row groups. The field column's own autoTolerance
+    // is 1.8, which previews as ONE group ("nothing to split").
+    // MEASURED, not rounded: the field is seeded with `String(autoTolerance(
+    // ...))`, and this column's elbow tolerance carries float noise. The exact
+    // string matters because the dialog deliberately previews and commits the
+    // SAME resolved number, so a prettier display here would have to be a
+    // parse-back, not a reformat. The point of the assertion is the SCALE —
+    // ~1.8 T from the field column, not 1 from the level codes.
+    expect((screen.getByLabelText("Tolerance") as HTMLInputElement).value).toBe("1.8000000000000007");
+    expect(screen.getByText(/Only one group detected \(6 rows\)/)).toBeInTheDocument();
+  });
+
+  // MEDIUM 3: the over-cap advice used to say "widen the tolerance" for a
+  // column whose tolerance field this very component hides — impossible
+  // advice, and newly reachable because a >8-distinct level-table column now
+  // goes to exact-value grouping instead of gap-clustering.
+  it("does not tell the user to widen a tolerance field it is hiding", () => {
+    const n = 120;
+    const levels = Array.from({ length: 60 }, (_, i) => `L${i}`);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time: Array.from({ length: n }, (_, i) => i),
+            values: Array.from({ length: n }, (_, i) => [i % 60]),
+            labels: ["sample"],
+            units: [""],
+            metadata: {},
+            cat_levels: { 0: levels },
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.queryByLabelText("Tolerance")).toBeNull();
+    expect(screen.getByText(/60 groups detected/)).toBeInTheDocument();
+    expect(screen.getByText(/use Recode… to combine levels first/)).toBeInTheDocument();
+    expect(screen.queryByText(/widen the tolerance/)).toBeNull();
+  });
+
+  // HIGH 1 of the ROUND-2 review: the MEDIUM 5 fix above reintroduced, for the
+  // x column, the very defect it set out to fix. `-1` is a first-class option
+  // in the Select, but the copied `col < 0 ? "0"` guard meant picking it seeded
+  // tolerance 0 — and 0 splits every distinct x value into its own group.
+  it("seeds the tolerance from the x column when x is picked", () => {
+    // A PPMS-shaped x: 4 setpoints, 5 wobble reads each.
+    const time: number[] = [];
+    for (const sp of [5, 10, 50, 100]) for (let i = 0; i < 5; i++) time.push(sp + i * 0.001);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time,
+            values: time.map((_, i) => [i * 2]),
+            labels: ["M"],
+            units: ["emu"],
+            metadata: {},
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    fireEvent.change(screen.getByLabelText("Split column"), { target: { value: "-1" } });
+
+    // Pre-fix: value "0", 20 one-row groups, and Confirm ENABLED — so this
+    // committed 20 singleton datasets. The x column's own autoTolerance is
+    // ~0.0707, which recovers the 4 real setpoints.
+    expect((screen.getByLabelText("Tolerance") as HTMLInputElement).value).not.toBe("0");
+    expect(screen.getByText("Split into 4 datasets")).toBeInTheDocument();
+  });
+
+  // MEDIUM 4 of the round-2 review: the categorical branch of the over-cap
+  // advice was asserted, the CONTINUOUS one was not — so collapsing both
+  // branches to the Recode wording left the suite green (measured 23/23). This
+  // is that missing positive control.
+  it("still tells the user to widen the tolerance for a continuous column", () => {
+    // 60 setpoints x 3 wobble reads. A UNIFORM ramp will not do: its gaps are
+    // homogeneous, so `autoTolerance` falls to the largest gap and merges
+    // everything into ONE group (measured while writing this test). A bimodal
+    // wobble/jump structure is what makes `autoTolerance` find a real elbow
+    // and produce 60 clusters — over the cap of 50, and CONTINUOUS, so the
+    // tolerance field is showing.
+    const field: number[] = [];
+    for (let sp = 0; sp < 60; sp++) for (let i = 0; i < 3; i++) field.push(sp + i * 0.001);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time: field.map((_, i) => i),
+            values: field.map((v) => [v]),
+            labels: ["field"],
+            units: ["T"],
+            metadata: {},
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText(/too many to split at once/)).toBeInTheDocument();
+    expect(screen.getByText(/widen the tolerance/)).toBeInTheDocument();
+    expect(screen.queryByText(/use Recode…/)).toBeNull();
+    // And the field it points at is actually there for this column.
+    expect(screen.getByLabelText("Tolerance")).toBeInTheDocument();
+  });
+
+  // The continuous fixture at the top of this file still gets its tolerance
+  // field — the positive control that the fix didn't hide it for everyone.
+  it("still shows the tolerance field for a continuous column", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run1.dat", data: wobble }] });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByLabelText("Tolerance")).toBeInTheDocument();
+  });
+});
+
 describe("Analyze-menu/⌘K command registry entry (MAIN_PLAN #26)", () => {
   // commands/dataCommands.ts's curated actions array IS (part of) the
   // command registry (MenuBar and the ⌘K palette both consume the

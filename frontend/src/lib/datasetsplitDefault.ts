@@ -8,8 +8,8 @@
 // isn't called by anything in that eager chain, so it doesn't need to live
 // in the same always-loaded file.
 
-import { splitColumn } from "./datasetsplit";
-import type { DataStruct } from "./types";
+import { splitGroupCount } from "./datasetsplit";
+import type { Dataset } from "./types";
 
 /** Cheap "how setpoint-like is this column" score for the dialog's default
  *  column pick — LOWER is better; `Infinity` marks a column that can't
@@ -17,8 +17,11 @@ import type { DataStruct } from "./types";
  *  group would be worse than useless). Fewer groups reads as more
  *  setpoint-like (a 4-level temperature column beats a near-continuous
  *  field column, which groups into hundreds under the same math). */
-function setpointScore(data: DataStruct, col: number): number {
-  const n = splitColumn(data, col).groups.length;
+function setpointScore(ds: Dataset, col: number): number {
+  // `splitGroupCount`, not `splitColumn`: this only ever reads the COUNT, and
+  // resolving each group's display name costs a full column scan plus a text-
+  // sidecar scan per channel (round-2 review, MEDIUM 2).
+  const n = splitGroupCount(ds, col);
   return n > 1 ? n : Infinity;
 }
 
@@ -31,15 +34,15 @@ function setpointScore(data: DataStruct, col: number): number {
  *  for all of them). Never the x/time column: a PPMS/MPMS-style export
  *  loops the SAME x sweep (e.g. field) once per setpoint, so x itself is
  *  essentially never the split key. Returns a channel index (0-based,
- *  into `DataStruct.values`), or -1 if `data` has no channels at all (a
+ *  into `DataStruct.values`), or -1 if `ds` has no channels at all (a
  *  degenerate/empty dataset — the caller should disable the picker). */
-export function pickDefaultSplitColumn(data: DataStruct): number {
-  const n = data.labels.length;
+export function pickDefaultSplitColumn(ds: Dataset): number {
+  const n = ds.data.labels.length;
   if (n === 0) return -1;
   let best = 0;
   let bestScore = Infinity;
   for (let c = 0; c < n; c++) {
-    const score = setpointScore(data, c);
+    const score = setpointScore(ds, c);
     if (score < bestScore) {
       bestScore = score;
       best = c;
