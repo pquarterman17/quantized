@@ -1036,6 +1036,19 @@ import { fileURLToPath } from "node:url";
  *  test failure rather than another review round and another raise.
  *
  *  Pinned at measured (912,774) + 64, measured after the final edit.
+ *
+ *  2026-09-10 (Group O-1, JMP_GAP J1) — NO pin change; recorded because the
+ *  measurement came within 4 bytes of it and the next slice has almost no room.
+ *  Unifying the five private copies of "a column's category levels" behind
+ *  `lib/categorical.ts` measured 912,842 — FOUR BYTES OVER, so the ratchet
+ *  failed the build on a refactor that is near-neutral by construction. Rather
+ *  than raise for 4 bytes, the fix was a real reduction in the same spirit:
+ *  `barlayout.ts` carried its own private `colValues` implementing the same
+ *  `-1 = x/time` column-read convention as the new accessor's `columnOf`, so
+ *  that duplicate was removed too. 912,842 -> 912,784, i.e. 54 UNDER the pin.
+ *  Not lowered to `measured + 1,024`: that would RAISE this pin, and 54 bytes
+ *  is a refactor netting out slightly negative, not a diet pass. The 54 bytes
+ *  are the whole headroom O-2 (the user-settable order itself) has to work in.
  */
 const EAGER_JS_BUDGET = 912_838;
 

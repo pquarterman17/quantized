@@ -959,6 +959,73 @@ describe("modeling-type accessor chokepoint (BUG-008)", () => {
   });
 });
 
+// JMP_GAP J1 (Group O-1). "The distinct finite values of this column,
+// ascending" — a column's category LEVELS — had five independent
+// implementations of the same five lines: `lib/barlayout.ts`,
+// `lib/plotspec.ts`'s `buildXY`, `lib/plotGroupSplit.ts` twice (a list and a
+// count), and the Data Filter workshop. Every order-sensitive surface in the app
+// derives its order from one of them, so they must not be able to disagree —
+// BUG-008 is what happens when two copies of one decision do. They now share
+// `lib/categorical.ts`'s `levelsOf` / `levelCountOf` / `categoryLevels`.
+//
+// This guard keeps new copies out, and it matters more than a tidiness rule:
+// J1's user-settable level ordering changes what "the levels, in order" MEANS,
+// and a surviving private copy would silently keep ascending-by-code while
+// everything else honoured the user's order.
+describe("category-level accessor chokepoint (JMP_GAP J1)", () => {
+  // Built on the two lessons the BUG-008 ratchet cost: strip comments AND
+  // string literals (prose naming a thing is not a use of it), and compare
+  // paths EXACTLY (a suffix match allowlists `components/probe/lib/foo.ts`).
+  function withoutCommentsOrStrings(src: string): string {
+    return src
+      .replace(/`(?:[^`\\]|\\.)*`/g, "``")
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+  }
+
+  /** `new Set(...)` spread-or-sized and sorted ascending over a
+   *  finite-filtered column — the shape all five copies had. Matched with the
+   *  `isFinite` guard and the numeric sort as separate requirements on the same
+   *  statement, so an incidental `new Set` elsewhere is not a hit. */
+  const LEVELS_SHAPE = /new Set\((?:[^;]*?)Number\.isFinite(?:[^;]*?)\)(?:[^;]*?)(?:\.sort\(|\.size)/;
+
+  const HOME = "./lib/categorical.ts";
+  const ALLOWED = [
+    HOME, // defines levelsOf / levelCountOf / categoryLevels
+    // `autoTolerance` runs the IDENTICAL five lines over the identical types
+    // and is deliberately NOT this accessor: it takes the distinct values of a
+    // CONTINUOUS column to measure the gaps between them for elbow detection.
+    // Those are sample points on a measurement axis, not category levels, and a
+    // user-settable level order must never reach them. Unifying on SHAPE rather
+    // than MEANING would have swallowed it — which is why this entry is an
+    // allowlist line with a reason and not a silent regex carve-out.
+    "./lib/datasetsplit.ts",
+  ];
+
+  it("only lib/categorical.ts derives a column's levels", () => {
+    const offenders = sources()
+      .filter(([p]) => !ALLOWED.includes(p))
+      .filter(([, src]) => LEVELS_SHAPE.test(withoutCommentsOrStrings(src)))
+      .map(([p]) => p);
+    expect(
+      offenders,
+      "use lib/categorical.ts's categoryLevels(data, channel) — or levelsOf/levelCountOf for a bare value array. Level ORDER is becoming user-settable (JMP_GAP J1), and a private copy would keep sorting by raw code while every other surface honoured the user's order",
+    ).toEqual([]);
+  });
+
+  it("the guard is not vacuous: the shape it forbids is the shape the home uses", () => {
+    // If `levelsOf` is ever rewritten so it no longer matches LEVELS_SHAPE, the
+    // regex stops describing anything real and the test above goes green
+    // forever while protecting nothing. Assert the pattern still fires on the
+    // one file that is SUPPOSED to contain it.
+    const home = Object.entries(modules).find(([p]) => p === HOME)?.[1] ?? "";
+    expect(home).not.toBe("");
+    expect(LEVELS_SHAPE.test(withoutCommentsOrStrings(home))).toBe(true);
+  });
+});
+
 describe("FigureDocument write chokepoint (F1)", () => {
   it("routes PlotWindow.document writes through windowDocuments, except declared construction/persistence seams", () => {
     // `document: FigureDocument` is a function parameter/type annotation, not
