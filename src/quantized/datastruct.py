@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import json
 import math
+import numbers
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -103,6 +104,113 @@ def _normalize_cat_levels(
     return MappingProxyType(normalized)
 
 
+def _level_code(code: Any) -> int | float | None:
+    """One level CODE, normalized, or ``None`` if it is not a usable code.
+
+    Accepts any FINITE REAL, not just ``int``, because that is what the
+    frontend contract this field mirrors accepts: ``lib/categorical.ts``'s
+    ``sanitizeLevelOrder`` keeps every ``Number.isFinite`` value and
+    ``orderLevels`` matches them through a ``Set`` of plain numbers. Server-
+    side grouping is equally float-tolerant — ``build_grouped_series`` groups
+    by ANY channel and ``group_is_categorical`` only decides whether the level
+    gets a LABEL — so an int-only rule here would silently drop a legitimate
+    order for a group column whose distinct values are, say, ``{0.5, 1.5}``:
+    the screen would show the user's order and the exported PDF ascending,
+    which is the exact divergence `_ordered_levels` exists to prevent.
+
+    ``Integral`` inputs normalize to ``int`` so the overwhelmingly common
+    integer order still serializes as ``[1, 0]`` and not ``[1.0, 0.0]``; this
+    is also what admits ``np.int64``, which ``isinstance(c, int)`` rejects and
+    which any producer building an order from ``np.unique`` will hand us."""
+    if isinstance(code, bool):
+        return None
+    if isinstance(code, numbers.Integral):
+        return int(code)
+    if isinstance(code, numbers.Real) and math.isfinite(float(code)):
+        return float(code)
+    return None
+
+
+def _normalize_level_order(
+    level_order: Mapping[int, tuple[float, ...]] | None, n_channels: int
+) -> Mapping[int, tuple[float, ...]] | None:
+    """Validate + freeze ``level_order`` (JMP_GAP J1): a channel index -> the
+    level CODES in the user's chosen DISPLAY order. Purely presentational; the
+    codes in ``values`` never move, which is the whole point of the design (a
+    code is a level's IDENTITY, and it is referenced from places nothing can
+    rewrite -- a computed column's formula text most sharply).
+
+    Mirrors ``_normalize_cat_levels`` above, with ONE deliberate difference:
+    ``-1`` is a legal key. That is the x/time column under the ``-1 = x,
+    0.. = a value channel`` convention the frontend's ``ColumnFilter.col`` and
+    ``lib/categorical.ts``'s ``categoryLevels`` both use, and the frontend does
+    order a categorical x axis. Nothing here CONSUMES that entry -- server-side
+    grouping is per value channel -- but rejecting it would make the API drop a
+    preference the client legitimately holds."""
+    if level_order is None:
+        return None
+    normalized: dict[int, tuple[float, ...]] = {}
+    for idx, codes in level_order.items():
+        if not isinstance(idx, int) or isinstance(idx, bool) or not (-1 <= idx < n_channels):
+            raise ValueError(f"level_order channel index {idx!r} out of range [-1, {n_channels})")
+        coded = tuple(_level_code(c) for c in codes)
+        if not coded or any(c is None for c in coded):
+            raise ValueError(
+                f"level_order[{idx}] must be a non-empty tuple of finite numbers, got {codes!r}"
+            )
+        normalized[idx] = tuple(c for c in coded if c is not None)
+    # An empty mapping becomes ABSENT, not a stale `{}` — `to_dict` and
+    # `routes/_payload.py` both key their additive emission off `is not None`,
+    # so returning `{}` here would emit `"level_order": {}` on the way out and
+    # nothing on the way back, making the very first round trip lossy.
+    return MappingProxyType(normalized) if normalized else None
+
+
+def _parse_level_order_payload(raw: Any) -> dict[int, tuple[float, ...]] | None:
+    """Parse the wire-format ``level_order`` payload -- the same UNTRUSTED
+    boundary ``_parse_cat_levels_payload`` guards, and the same
+    degrade-never-raise contract: a malformed entry is DROPPED so a corrupted
+    body still constructs a ``DataStruct`` instead of 500ing.
+
+    The two must agree on what they accept, or the pair raises: this parser is
+    what feeds ``_normalize_level_order``, so anything it lets through and the
+    normalizer rejects would raise from ``from_dict``. Hence unusable codes are
+    filtered HERE, not merely validated there.
+
+    KNOWN ASYMMETRY, not fixed here: ``_parse_cat_levels_payload`` does NOT
+    filter its VALUES this way, so ``cat_levels {"0": []}`` or
+    ``{"0": [1, 2]}`` still reaches the normalizer and raises. That surfaces
+    as a descriptive 422 (``ValueError`` is in ``CALC_ERRORS``), not a 500, so
+    it is a design question — is a malformed level table worth failing the
+    request over? — rather than a bug, and it is not this field's to answer.
+    Adopting the filter for ``level_order`` is safe because the field is new:
+    nothing yet depends on its malformed payloads being rejected."""
+    if not isinstance(raw, Mapping) or not raw:
+        return None
+    out: dict[int, tuple[float, ...]] = {}
+    for k, v in raw.items():
+        try:
+            idx = int(k)
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError is `int(float("inf"))`. Unreachable from JSON (its
+            # object keys are strings) but NOT from the callers that hand
+            # `from_dict` a plain Python dict — `plugins/loader.py`'s
+            # `_wrap_read` and `client.py` — and unlike the other two it is
+            # absent from `CALC_ERRORS`, so it would be a genuine 500.
+            continue
+        # `str`/`bytes` are not `list`/`tuple`, so the sequence check alone
+        # already excludes them (a bare `tuple("abc")` splitting into
+        # characters is the trap `_parse_cat_levels_payload` names).
+        if not isinstance(v, (list, tuple)):
+            continue
+        codes = tuple(c for c in (_level_code(x) for x in v) if c is not None)
+        # A mapping whose every code was junk collapses to nothing rather than
+        # reaching the normalizer as an empty tuple, which it rejects.
+        if codes:
+            out[idx] = codes
+    return out or None
+
+
 def _parse_cat_levels_payload(raw: Any) -> dict[int, tuple[str, ...]] | None:
     """Parse the wire-format ``cat_levels`` payload (``DataStruct.from_dict``'s
     deserialization boundary -- P2-1, Sol's Day-6 audit).
@@ -127,7 +235,7 @@ def _parse_cat_levels_payload(raw: Any) -> dict[int, tuple[str, ...]] | None:
     for k, v in raw.items():
         try:
             idx = int(k)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):  # see `_parse_level_order_payload`
             continue
         if isinstance(v, (str, bytes)) or not isinstance(v, (list, tuple)):
             continue
@@ -145,6 +253,7 @@ class DataStruct:
     units: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
     cat_levels: Mapping[int, tuple[str, ...]] | None = None
+    level_order: Mapping[int, tuple[float, ...]] | None = None
 
     def __post_init__(self) -> None:
         time = np.asarray(self.time, dtype=float).ravel()
@@ -182,6 +291,7 @@ class DataStruct:
         object.__setattr__(self, "units", units)
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
         object.__setattr__(self, "cat_levels", _normalize_cat_levels(self.cat_levels, m))
+        object.__setattr__(self, "level_order", _normalize_level_order(self.level_order, m))
 
     # ── Construction ──────────────────────────────────────────────────────
     @classmethod
@@ -194,6 +304,7 @@ class DataStruct:
         units: Sequence[str] | None = None,
         metadata: Mapping[str, Any] | None = None,
         cat_levels: Mapping[int, tuple[str, ...]] | None = None,
+        level_order: Mapping[int, tuple[float, ...]] | None = None,
     ) -> DataStruct:
         """Mirror of MATLAB ``createDataStruct``. Accepts array-likes.
 
@@ -222,6 +333,7 @@ class DataStruct:
             units=tuple(units) if units is not None else (),
             metadata=dict(metadata) if metadata is not None else {},
             cat_levels=cat_levels,
+            level_order=level_order,
         )
 
     # ── Shape helpers ─────────────────────────────────────────────────────
@@ -258,19 +370,42 @@ class DataStruct:
         # str ones).
         if self.cat_levels is not None:
             out["cat_levels"] = {str(k): list(v) for k, v in self.cat_levels.items()}
+        # ADDITIVE for the same reason (JMP_GAP J1): emitted only when a user
+        # has actually chosen an order, so every existing golden fixture and
+        # every plain-numeric payload is byte-identical to before.
+        if self.level_order is not None:
+            out["level_order"] = {str(k): list(v) for k, v in self.level_order.items()}
         return out
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> DataStruct:
-        raw_cat_levels = payload.get("cat_levels")
-        cat_levels = _parse_cat_levels_payload(raw_cat_levels)
+        # An OUT-OF-RANGE channel index in either channel-keyed map reaches the
+        # normalizer and RAISES — deliberately, and NOT a 500: `ValueError` is
+        # in `routes/_errors.py`'s `CALC_ERRORS`, and every `from_dict` call
+        # site in `routes/` sits inside an `except CALC_ERRORS` that turns it
+        # into a 422 naming the offending index. Measured on
+        # `POST /api/export/xrd-csv` with `cat_levels {"0": []}`: 422
+        # "cat_levels[0] must be a non-empty tuple of str, got ()".
+        #
+        # An earlier draft of this commit filtered those entries out here on
+        # the belief they 500'd. They do not, and the filter was strictly
+        # worse: a descriptive 422 became a silent 200 whose response quietly
+        # lacked the client's level table. It also could not compute the
+        # channel count for a 1-D or ndarray `values` — both shapes
+        # `__post_init__` accepts — so it dropped `cat_levels` that had round-
+        # tripped fine for years (a plugin returning a numpy `values` via
+        # `plugins/loader.py`'s `_wrap_read` is the live vector). Whether a
+        # vestigial out-of-range entry deserves a 422 or a silent drop is a
+        # real product question; it is not this commit's, and answering it by
+        # accident cost real data.
         return cls.create(
             time=payload["time"],
             values=payload["values"],
             labels=payload.get("labels"),
             units=payload.get("units"),
             metadata=payload.get("metadata"),
-            cat_levels=cat_levels,
+            cat_levels=_parse_cat_levels_payload(payload.get("cat_levels")),
+            level_order=_parse_level_order_payload(payload.get("level_order")),
         )
 
     def to_json(self) -> str:

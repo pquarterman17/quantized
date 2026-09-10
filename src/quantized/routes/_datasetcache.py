@@ -74,6 +74,7 @@ import hashlib
 import json
 import threading
 from collections import OrderedDict
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException
@@ -114,6 +115,13 @@ def _estimate_bytes(ds: DataStruct) -> int:
     return int(ds.time.nbytes + ds.values.nbytes)
 
 
+def _channel_keyed(m: Mapping[int, tuple[Any, ...]] | None) -> dict[str, list[Any]] | None:
+    """A channel-keyed map in a form `json.dumps(sort_keys=True)` can
+    canonicalize: JSON object keys must be strings, and `sort_keys` on int
+    keys would order 10 before 2 in one encoder and not another."""
+    return None if m is None else {str(k): list(v) for k, v in m.items()}
+
+
 def hash_dataset(ds: DataStruct) -> str:
     """Content hash of an already-decoded DataStruct's numeric payload.
 
@@ -144,6 +152,21 @@ def hash_dataset(ds: DataStruct) -> str:
     # (unsorted) insertion order and defeats `sort_keys` entirely. `dict(..)`
     # first makes it a real dict so `sort_keys` actually canonicalizes it.
     hasher.update(json.dumps(dict(ds.metadata), sort_keys=True, default=str).encode())
+    # The two channel-keyed maps are RENDERING INPUTS by the same argument the
+    # metadata paragraph above makes: `cat_levels` decides whether a grouped
+    # series is labelled "Region=North" or "Region=0", and `level_order`
+    # (JMP_GAP J1) decides the series ORDER, hence colours, legend order and
+    # z-order. Two datasets identical in every number but differing in either
+    # must not share a handle. No route serves a grouped render from a handle
+    # today, so this is a latent collision rather than a live bug -- which is
+    # exactly when it is cheap to close (CLAUDE.md's cache red-team rule: every
+    # input the rendered output depends on belongs in the key).
+    hasher.update(
+        json.dumps(
+            {"cat": _channel_keyed(ds.cat_levels), "ord": _channel_keyed(ds.level_order)},
+            sort_keys=True,
+        ).encode()
+    )
     return hasher.hexdigest()
 
 

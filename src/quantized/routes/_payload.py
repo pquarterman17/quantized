@@ -134,6 +134,12 @@ def datastruct_payload(ds: DataStruct) -> dict[str, Any]:
     # pure-numeric dataset so an existing response shape never changes.
     if ds.cat_levels is not None:
         payload["cat_levels"] = {str(k): list(v) for k, v in ds.cat_levels.items()}
+    # JMP_GAP J1: the user's level DISPLAY order, emitted only when one exists
+    # so every existing payload is byte-identical. Without this the field was
+    # SILENTLY DROPPED on every round trip — `from_dict` ignores unknown keys,
+    # so there was no 422 to notice, just an order that vanished.
+    if ds.level_order is not None:
+        payload["level_order"] = {str(k): list(v) for k, v in ds.level_order.items()}
     return payload
 
 

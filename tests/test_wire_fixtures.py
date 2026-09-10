@@ -35,6 +35,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from quantized.datastruct import DataStruct
 from quantized.io.delimited import import_csv
 from quantized.io.import_preview import ImportSettings, parse_import
 from quantized.routes._payload import datastruct_payload
@@ -117,3 +118,27 @@ def test_wire_fixture_carries_label_derived_labels_and_comments() -> None:
     payload = json.loads((WIRE_DIR / "label_import_payload.json").read_text(encoding="utf-8"))
     assert payload["labels"] == ["NbAu-Alpha", "NbAu-Beta"]
     assert payload["metadata"]["comments"] == ["# Sample: NbAu bilayer", "# Operator: pq"]
+
+
+def test_datastruct_payload_emits_level_order() -> None:
+    """JMP_GAP J1 (Group O-2c): the route payload must carry the user's level
+    DISPLAY order. Without this the field was silently dropped on every round
+    trip — `from_dict` ignores unknown keys, so there was no 422 to notice —
+    and a user's ordering vanished the moment the data touched the API.
+
+    This test exists because sabotaging the emitter left the whole suite green:
+    `datastruct_payload` had no coverage for the field it was supposed to
+    carry."""
+    ds = DataStruct.create(
+        time=[1.0, 2.0, 3.0],
+        values=[[0.0], [1.0], [0.0]],
+        labels=("sample",),
+        units=("",),
+        cat_levels={0: ("lo", "hi")},
+        level_order={0: (1, 0)},
+    )
+    payload = datastruct_payload(ds)
+    assert payload["level_order"] == {"0": [1, 0]}
+    # ADDITIVE: absent when no order was chosen, so every existing wire
+    # fixture stays byte-identical.
+    assert "level_order" not in datastruct_payload(DataStruct.create(time=[1.0], values=[[0.0]]))

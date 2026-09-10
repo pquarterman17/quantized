@@ -133,6 +133,130 @@ def test_build_grouped_series_matches_frontend_parity_fixture() -> None:
     assert plot.x_label == "x"  # no x_key -> derives from metadata, same as build_series
 
 
+# ── level_order parity (JMP_GAP J1, Group O-2c) ─────────────────────────────
+# The existing parity pair above carries NO level_order, which is exactly why
+# nothing caught the divergence this covers: the frontend's buildXY orders
+# through lib/categorical.ts's orderLevels, and this port sorted ascending
+# regardless. A user setting an order would have seen it on screen and NOT in
+# the exported PDF. `_ordered_parity_ds` below is mirrored by plotspec.test.ts's
+# `orderedParity` (its "cross-language parity: ..." order cases) -- the same
+# fixture-on-both-sides contract as _parity_ds, kept in sync by hand.
+# plotGroupSplit.test.ts carries an order case too, but against its OWN
+# fixture, so it pins applyGroupSplit rather than this port.
+
+
+def _ordered_parity_ds(order: tuple[int, ...] | None) -> DataStruct:
+    """The parity fixture plus a categorical group column with codes 0/1/2 and
+    an optional display order on it."""
+    return DataStruct.create(
+        time=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        values=[[10.0, 0.0], [20.0, 1.0], [30.0, 2.0], [40.0, 0.0], [50.0, 1.0], [60.0, 2.0]],
+        labels=("Value", "Group"),
+        units=("V", ""),
+        cat_levels={1: ("Low", "Med", "High")},
+        **({"level_order": {1: order}} if order else {}),
+    )
+
+
+def test_build_grouped_series_honours_level_order() -> None:
+    plot = build_grouped_series(_ordered_parity_ds((2, 1, 0)), None, [0], 1)
+    assert [s.label for s in plot.series] == [
+        "Value (Group=High)",
+        "Value (Group=Med)",
+        "Value (Group=Low)",
+    ]
+    # The SERIES DATA follows the order too, not just the labels.
+    np.testing.assert_array_equal(
+        plot.series[0].values, np.array([np.nan, np.nan, 30.0, np.nan, np.nan, 60.0])
+    )
+
+
+def test_build_grouped_series_without_an_order_is_ascending_as_before() -> None:
+    plot = build_grouped_series(_ordered_parity_ds(None), None, [0], 1)
+    assert [s.label for s in plot.series] == [
+        "Value (Group=Low)",
+        "Value (Group=Med)",
+        "Value (Group=High)",
+    ]
+
+
+def test_build_grouped_series_level_order_fails_open_on_an_unnamed_level() -> None:
+    """orderLevels' load-bearing rule: a level the order does not name still
+    renders, ascending, at the end -- never hidden behind a stale preference."""
+    plot = build_grouped_series(_ordered_parity_ds((2, 0)), None, [0], 1)
+    assert [s.label for s in plot.series] == [
+        "Value (Group=High)",
+        "Value (Group=Low)",
+        "Value (Group=Med)",
+    ]
+
+
+def test_build_grouped_series_level_order_does_not_invent_an_absent_level() -> None:
+    ds = DataStruct.create(
+        time=[0.0, 1.0],
+        values=[[10.0, 0.0], [20.0, 2.0]],
+        labels=("Value", "Group"),
+        units=("V", ""),
+        cat_levels={1: ("Low", "Med", "High")},
+        level_order={1: (2, 1, 0)},  # names Med, which no row has
+    )
+    plot = build_grouped_series(ds, None, [0], 1)
+    assert [s.label for s in plot.series] == ["Value (Group=High)", "Value (Group=Low)"]
+
+
+def test_build_grouped_series_level_order_membership_is_unchanged() -> None:
+    """The invariant every consumer relies on: ordering changes the SEQUENCE,
+    never the SET. Asserted against the unordered run rather than a literal."""
+    ordered = build_grouped_series(_ordered_parity_ds((2, 0, 1)), None, [0], 1)
+    plain = build_grouped_series(_ordered_parity_ds(None), None, [0], 1)
+    assert sorted(s.label for s in ordered.series) == sorted(s.label for s in plain.series)
+
+
+def test_build_grouped_series_level_order_ignores_a_duplicated_code() -> None:
+    """A load-bearing rule of orderLevels that nothing asserted: the TS side
+    consumes a matched code out of a Set, so naming it twice cannot emit the
+    series twice. The Python port consumes it out of `remaining` for the same
+    reason."""
+    plot = build_grouped_series(_ordered_parity_ds((1, 1, 0)), None, [0], 1)
+    assert [s.label for s in plot.series] == [
+        "Value (Group=Med)",
+        "Value (Group=Low)",
+        "Value (Group=High)",
+    ]
+
+
+def test_build_grouped_series_ignores_a_minus_one_level_order_entry() -> None:
+    """`-1` is a legal level_order key (the x/time column) but server-side
+    grouping is per VALUE channel, so a `-1` entry must not leak into any
+    channel's ordering -- the "nothing here CONSUMES that entry" claim in
+    `_normalize_level_order`, which had no test."""
+    ds = DataStruct.create(
+        time=[0.0, 1.0, 2.0],
+        values=[[10.0, 0.0], [20.0, 1.0], [30.0, 2.0]],
+        labels=("Value", "Group"),
+        units=("V", ""),
+        cat_levels={1: ("Low", "Med", "High")},
+        level_order={-1: (2, 1, 0)},
+    )
+    plot = build_grouped_series(ds, None, [0], 1)
+    assert [s.label for s in plot.series] == [
+        "Value (Group=Low)",
+        "Value (Group=Med)",
+        "Value (Group=High)",
+    ]
+
+
+def test_build_grouped_series_level_order_applies_to_a_label_resolved_group_col() -> None:
+    """The order is keyed by channel INDEX; naming the group column by label
+    must resolve to the same index and pick the order up."""
+    plot = build_grouped_series(_ordered_parity_ds((2, 1, 0)), None, [0], "Group")
+    assert [s.label for s in plot.series] == [
+        "Value (Group=High)",
+        "Value (Group=Med)",
+        "Value (Group=Low)",
+    ]
+
+
 def test_build_grouped_series_group_col_resolves_by_label_too() -> None:
     plot = build_grouped_series(_parity_ds(), None, [0], "Group")
     assert [s.label for s in plot.series] == ["Value (Group=1)", "Value (Group=2)"]
