@@ -168,22 +168,16 @@ describe("applyGroupSplit vs buildXY — real runtime parity (P1.5 review P2)", 
 // Taking a bare `groupCodes` array it cannot read `level_order` itself, so the
 // caller passes it and both run the one shared `orderLevels`.
 describe("applyGroupSplit honours a level order (Group O-2)", () => {
-  const payload: PlotPayload = {
-    data: [
-      [1, 2, 3, 4],
-      [10, 20, 30, 40],
-    ],
-    series: [{ label: "M" }],
-  } as PlotPayload;
+  const base = (): PlotPayload => ({ ...payload(), series: [{ label: "M", unit: "", axis: 0 }] });
   const codes = [0, 1, 0, 1];
 
   it("emits the series in the caller's order", () => {
-    const out = applyGroupSplit(payload, codes, "Sample", (c) => `L${c}`, [1, 0]);
+    const out = applyGroupSplit(base(), codes, "Sample", (c) => `L${c}`, [1, 0]);
     expect(out.series.map((s) => s.label)).toEqual(["M (Sample=L1)", "M (Sample=L0)"]);
   });
 
   it("is ascending when no order is passed — the pre-J1 behaviour, unchanged", () => {
-    const out = applyGroupSplit(payload, codes, "Sample", (c) => `L${c}`);
+    const out = applyGroupSplit(base(), codes, "Sample", (c) => `L${c}`);
     expect(out.series.map((s) => s.label)).toEqual(["M (Sample=L0)", "M (Sample=L1)"]);
   });
 
@@ -207,7 +201,7 @@ describe("applyGroupSplit honours a level order (Group O-2)", () => {
     };
     const preview = buildXY(data, null, [0], 1);
     const live = applyGroupSplit(
-      { data: [[1, 2, 3, 4], [10, 20, 30, 40]], series: [{ label: "M" }] } as PlotPayload,
+      base(),
       [0, 1, 0, 1],
       "Sample",
       (c) => data.cat_levels![1][c],

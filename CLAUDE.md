@@ -193,6 +193,31 @@ Practical conventions discovered while porting — follow them to stay green.
   `waitFor(() => expect(mock).toHaveBeenCalled())` sites fail the build. Wait on
   STATE, not on the call. A bare `expect(mock).toHaveBeenCalled()` is fine.
 
+### Verifying a build the way CI does
+- **`npm run build`'s `tsc -b` is INCREMENTAL — a local pass can be stale and
+  mean nothing.** Measured 2026-09-10 on PR #343: the full local gate reported
+  `BUILD exit=0`, and CI then failed BOTH the `frontend` and `e2e` jobs (e2e's
+  failing step is "Build the SPA", i.e. the same build) on six TypeScript
+  errors in two newly-added TEST files. `tsc -b` reused a `.tsbuildinfo` from
+  before those files existed and never rechecked them; CI builds clean.
+- **`npx tsc --noEmit -p tsconfig.json` is NOT the check CI runs.** It was
+  passing throughout, because the solution-style `tsc -b` covers project
+  references that the single `-p` invocation does not. Two errors it therefore
+  never saw: passing a plain `DataStruct` where a BRANDED `StrippableData` is
+  required (`asAlreadyComputed` is the sanctioned way to assert that), and
+  `as PlotPayload` on an object literal missing `xLabel`/`xUnit` — an unsound
+  cast TS rejects as insufficiently overlapping.
+- So before claiming a green build: **`npx tsc -b --force`** (or delete the
+  buildinfo first). Cheap, and it is the difference between a real check and a
+  cached "yes".
+- **A truncated log download is worse than no log.** Fetching the failing job
+  with `curl` through the proxy died with `CONNECT tunnel failed, response 403`
+  but still wrote 40 lines — which described a completely different, stale
+  failure (a module-size ceiling on a file the branch never touched). Acting on
+  it would have sent the whole investigation the wrong way. Use
+  `mcp__github__get_job_logs` (or verify the download completed) and re-read
+  before diagnosing.
+
 ### Lint / CI
 - Always lint **`ruff check src tests tools`** (CI does) — not just `src`; a
   tests-only import-sort slipped past a `src`-only local run and reddened CI.

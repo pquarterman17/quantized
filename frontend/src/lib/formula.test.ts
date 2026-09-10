@@ -887,14 +887,14 @@ describe("a computed column's level order survives a recompute (Group O-2)", () 
   it("keeps the order when the recomputed table comes back identical", () => {
     const before = applied();
     const seeded: DataStruct = { ...before, level_order: { 1: [1, 0] } };
-    const after = recomputeWithErrors(seeded, recode).data;
+    const after = recomputeWithErrors(asAlreadyComputed(seeded), recode).data;
     expect(after.cat_levels?.[1]).toEqual(before.cat_levels?.[1]); // table unchanged
     expect(after.level_order?.[1]).toEqual([1, 0]); // ...so the order is still valid
   });
 
   it("keeps a BASE channel's order too", () => {
     const seeded = applied({ level_order: { 0: [1, 0] } });
-    expect(recomputeWithErrors(seeded, recode).data.level_order?.[0]).toEqual([1, 0]);
+    expect(recomputeWithErrors(asAlreadyComputed(seeded), recode).data.level_order?.[0]).toEqual([1, 0]);
   });
 
   // A recode derives its levels from its SOURCE's table, so APPENDING a level
@@ -906,7 +906,7 @@ describe("a computed column's level order survives a recompute (Group O-2)", () 
   it("keeps the order when a new level is APPENDED to the source table", () => {
     const seeded: DataStruct = { ...applied(), level_order: { 1: [1, 0] } };
     const grown: DataStruct = { ...seeded, cat_levels: { ...seeded.cat_levels, 0: ["lo", "hi", "mid"] } };
-    const after = recomputeWithErrors(grown, recode).data;
+    const after = recomputeWithErrors(asAlreadyComputed(grown), recode).data;
     expect(after.cat_levels?.[1]).toEqual(["lo", "hi", "mid"]); // grew by a prefix
     expect(after.level_order?.[1]).toEqual([1, 0]); // ...so old codes still mean what they did
   });
@@ -916,7 +916,7 @@ describe("a computed column's level order survives a recompute (Group O-2)", () 
     // The source's levels swap, so the recode's codes swap with them and the
     // saved order would now name the opposite levels.
     const swapped: DataStruct = { ...seeded, cat_levels: { ...seeded.cat_levels, 0: ["hi", "lo"] } };
-    const after = recomputeWithErrors(swapped, recode).data;
+    const after = recomputeWithErrors(asAlreadyComputed(swapped), recode).data;
     expect(after.cat_levels?.[1]).toEqual(["hi", "lo"]); // the premise: not a prefix
     expect(after.level_order?.[1]).toBeUndefined();
   });
