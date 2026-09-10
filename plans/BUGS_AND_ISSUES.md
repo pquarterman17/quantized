@@ -1222,18 +1222,40 @@ differs from its input's — and that is what turned up sites 7-9.
   in the second review round. NOTE `preview.py` is no longer merely "not a site":
   it is now the SOURCE of site 9's fix, since it is the only place that can tell a
   padding trim (an aligned prefix) from a min/max sample.
-- [ ] **Site 10, STILL OPEN: `frontend/src/lib/barlayout.ts`'s `textLabelsFor`
-  (`:69-73`).** It indexes `rows[r]` against `colValues(data, channel)[r]` to
-  derive categorical bar labels, and it takes a bare `DataStruct` — so it
-  structurally CANNOT apply site 9's condition, which needs `pending` off the
-  `Dataset` (the stated reason was originally `pending`/`rows` — the `rows` half
-  is stale now that the condition reads the backend's flag, but the conclusion is
-  unchanged: a bare `DataStruct` cannot see `pending` at all). A pending book routed through the figure builder therefore pairs
-  full-length sidecar cells with preview values: the same class of bug, one layer
-  below where the fix can reach. Transient (activation kicks `ensureBookData`),
-  exactly as the worksheet render was before it was fixed. Fixing it means
-  threading the row span (or a "these rows are a sample" flag) into the pure
-  layer, a contract change deliberately not bolted on here.
+- [x] **Site 10, CLOSED 2026-09-10 — and NOT where this entry expected.** The
+  diagnosis was right: `barlayout.ts`'s `textLabelsFor` indexes a row-indexed
+  sidecar against `columnOf(data, channel)` and takes a bare `DataStruct`, so it
+  structurally cannot apply site 9's condition. Measured wrong output, red-first:
+  a 6-row book with levels `[0,0,1,1,2,2]` and text
+  `["A0","A0","B1","B1","C2","C2"]`, sampled to rows `[1,2,4,5]`, returned
+  `["A0","A0","B1"]` for levels `[0,1,2]` — every level covered and each
+  internally consistent, so its own agreement check PASSED. Confident wrong
+  category names on a bar chart, not a safe numeric fallback. (Other
+  misalignments do disagree with themselves and fall back, which is why it reads
+  as intermittent.)
+  **The prescribed fix — thread a "these rows are a sample" flag into the pure
+  layer — was built, measured and abandoned.** Making the parameter required
+  enumerated 27 errors across 13 files: ~9 pure functions each needing the flag
+  plus every transitive caller, and a permanent hazard that any new caller passes
+  `false` and silently restores the bug.
+  **Fixed at the two PRODUCERS instead, as one invariant: A SAMPLED PREVIEW NEVER
+  CARRIES A ROW-INDEXED SIDECAR.** `store/importDatasets.ts` (import) and
+  `lib/workspaceDatasetParse.ts` (`.dwk` restore) are the only two places a
+  dataset gains `pending`; each now runs the FULL book's metadata through the
+  existing `withoutRowSidecars` when `rowsAreSampled(pending)`. Two lines instead
+  of twenty signatures, and it protects every consumer that indexes such a
+  sidecar rather than only the label path. Nothing is lost: `installBookData`
+  restores the full metadata when the fetch lands.
+  Only when SAMPLED — a padding-trimmed preview is a genuine PREFIX whose cells
+  line up, so its labels are correct and are kept. That is also why a row-count
+  proxy cannot stand in for the predicate: a trimmed preview is *also* shorter
+  than its sidecar. Both directions are sabotage-pinned (stop stripping; strip
+  unconditionally; and a length-proxy variant).
+  `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
+  row-indexed, so decimation cannot disturb it, and it takes precedence anyway.
+  Site 9's `worksheetTextColumns` suppression stays as belt-and-braces.
+  `barlayout.test.ts` also pins the pre-fix wrong answer, so a future change that
+  lets an unsliced sidecar back through is recognised rather than puzzled over.
   `lib/projectSearchSidecars.ts` reads keys only and is fine.
 
 #### Second review round, on the fix itself — all fixed here

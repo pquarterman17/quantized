@@ -284,3 +284,54 @@ describe("stackedSegments / stackedTotal", () => {
     expect(stackedTotal([])).toBe(0);
   });
 });
+
+// BUG-006 site 10, the CONSUMER end. The fix lives at the two producers (a
+// sampled preview never carries a row-indexed sidecar — store/importDatasets.ts
+// and lib/workspaceDatasetParse.ts), so what this file pins is that the
+// resolver does the right thing with the result: no sidecar means fall through
+// to the level table, then to formatted numbers. It also records what the WRONG
+// answer looked like, so the next reader can see why the strip is at the
+// producer and not here.
+describe("category labels for a decimated preview (BUG-006 site 10)", () => {
+  const sampledRows = { time: [1, 2, 4, 5], values: [[0], [1], [2], [2]] };
+
+  it("falls back to formatted numeric levels once the sidecar is stripped", () => {
+    const stripped: DataStruct = {
+      ...sampledRows,
+      labels: ["Group"],
+      units: [""],
+      metadata: { instrument: "PPMS" }, // the strip kept non-row-indexed keys
+    };
+    expect(resolveCategoryLabels(stripped, 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  it("prefers a LEVEL TABLE, which is channel-keyed and so never misindexed", () => {
+    // Why catTableLabels needed no change: `cat_levels` is not row-indexed, so
+    // decimation cannot disturb it. A sampled preview still gets real names
+    // when the channel is categorical.
+    const withTable: DataStruct = {
+      ...sampledRows,
+      labels: ["Group"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Low", "Mid", "High"] },
+    };
+    expect(resolveCategoryLabels(withTable, 0, [0, 1, 2])).toEqual(["Low", "Mid", "High"]);
+  });
+
+  it("DOCUMENTS the pre-fix wrong answer: an unsliced sidecar reads as self-consistent", () => {
+    // If a full-length sidecar ever reaches here again, this is what happens —
+    // not a safe null fallback, but confident wrong names. The walk pairs
+    // (0,"A0"), (1,"A0"), (2,"B1"), (2,"B1"): every level covered, each
+    // internally consistent, so the agreement check passes. The truth is
+    // A0/B1/C2. This test exists so that a future change that lets an unsliced
+    // sidecar through is recognised for what it is rather than puzzled over.
+    const unsliced: DataStruct = {
+      ...sampledRows,
+      labels: ["Group"],
+      units: [""],
+      metadata: { text_columns: { Group: ["A0", "A0", "B1", "B1", "C2", "C2"] } },
+    };
+    expect(resolveCategoryLabels(unsliced, 0, [0, 1, 2])).toEqual(["A0", "A0", "B1"]);
+  });
+});
