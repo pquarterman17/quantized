@@ -45,14 +45,6 @@ import { categoryLevels, levelCountOf, levelsOf } from "./categorical";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { DataStruct } from "./types";
 
-/** Distinct finite level count across `groupCodes`. Shared by
- *  `groupSplitChannelMap` (how many display series per real channel) and
- *  `applyGroupSplit` (the level set itself) so both agree on "is there
- *  anything to split on" without the caller computing it twice. */
-function levelCount(groupCodes: readonly (number | null | undefined)[]): number {
-  return levelCountOf(groupCodes);
-}
-
 /** The per-DISPLAY-series channel map a grouped render needs: each real
  *  fetched channel repeated once per level (or returned unchanged when
  *  there's nothing to split on). `usePlotPayload.ts` uses this as its
@@ -64,19 +56,10 @@ export function groupSplitChannelMap(
   fetchChannels: readonly number[],
   groupCodes: readonly (number | null | undefined)[],
 ): number[] {
-  const n = levelCount(groupCodes);
+  const n = levelCountOf(groupCodes);
   return n > 0 ? fetchChannels.flatMap((c) => Array<number>(n).fill(c)) : [...fetchChannels];
 }
 
-/** Split every Y series in `payload` into one series per level of
- *  `groupCodes` (row-position-aligned to `payload.data`, one code per row --
- *  the caller reads it off the group channel's OWN column, e.g.
- *  `active.data.values.map((row) => row[groupKey])`). Identity (the SAME
- *  `payload`, untouched) when there are no finite group codes to split on --
- *  a channel with every row NaN/missing degrades to ungrouped rather than
- *  emitting zero series. `levelLabelOf` resolves a level's DISPLAY text
- *  (`lib/categorical.ts`'s `groupLevelLabel` is the sanctioned accessor for
- *  it -- P1.5 item 3, never a raw code). */
 /** The group-split levels for `groupCol` of `data`, in order — the ONE place
  *  the group well's level derivation lives, shared by `lib/plotspec.ts`'s
  *  `buildXY` (which builds a grouped payload from a DataStruct) and available
@@ -97,6 +80,15 @@ export function groupSplitLevels(data: DataStruct, groupCol: number): number[] {
   return groupCol < 0 ? [] : categoryLevels(data, groupCol);
 }
 
+/** Split every Y series in `payload` into one series per level of
+ *  `groupCodes` (row-position-aligned to `payload.data`, one code per row --
+ *  the caller reads it off the group channel's OWN column, e.g.
+ *  `active.data.values.map((row) => row[groupKey])`). Identity (the SAME
+ *  `payload`, untouched) when there are no finite group codes to split on --
+ *  a channel with every row NaN/missing degrades to ungrouped rather than
+ *  emitting zero series. `levelLabelOf` resolves a level's DISPLAY text
+ *  (`lib/categorical.ts`'s `groupLevelLabel` is the sanctioned accessor for
+ *  it -- P1.5 item 3, never a raw code). */
 export function applyGroupSplit(
   payload: PlotPayload,
   groupCodes: readonly (number | null | undefined)[],

@@ -111,6 +111,10 @@ export function alignToUnionX(traces: WaterfallTrace[]): {
   x: number[];
   ys: (number | null)[][];
 } {
+  // levels-allowlist: not category levels — the UNION of x sample positions
+  // across the waterfall's traces, aligning them onto one common grid. These
+  // are continuous measurement-axis values (see panelwindow.ts's identical
+  // union-x build), so a user-settable level order must never reach them.
   const xset = new Set<number>();
   for (const t of traces) for (const xv of t.x) if (Number.isFinite(xv)) xset.add(xv);
   const x = [...xset].sort((a, b) => a - b);

@@ -15,10 +15,11 @@ import type { DataStruct } from "./types";
 // ── Category levels + label resolution ──────────────────────────────────────
 
 // `categoryLevels` MOVED to `lib/categorical.ts` (Group O-1) — it is the
-// categorical model's accessor, and four other modules had grown their own copy
-// of it. Re-exported here so this module's eight importers, which pair it with
+// categorical model's accessor, and five other modules had grown their own copy
+// of it. Re-exported here so its importers, which pair it with
 // `resolveCategoryLabels` below, need no churn in what is otherwise a pure
-// refactor. New code should import it from `./categorical` directly.
+// refactor (9 non-test files import the name; 11 mention it). New code should
+// import it from `./categorical` directly.
 export { categoryLevels };
 
 function isColumnStringsMap(v: unknown): v is Record<string, string[]> {

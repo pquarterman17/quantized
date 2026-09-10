@@ -903,7 +903,11 @@ describe("modeling-type accessor chokepoint (BUG-008)", () => {
       .replace(/`(?:[^`\\]|\\.)*`/g, "``")
       .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
       .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
+      // Block comments become the SAME NUMBER of newlines, not nothing: the
+      // marker lookup below maps an offset in this stripped text back to a line
+      // in the original, and collapsing a doc comment silently shifted every
+      // line after it (measured — it made the one real marker undetectable).
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""))
       .replace(/\/\/.*$/gm, "");
   }
 
@@ -973,56 +977,109 @@ describe("modeling-type accessor chokepoint (BUG-008)", () => {
 // and a surviving private copy would silently keep ascending-by-code while
 // everything else honoured the user's order.
 describe("category-level accessor chokepoint (JMP_GAP J1)", () => {
-  // Built on the two lessons the BUG-008 ratchet cost: strip comments AND
-  // string literals (prose naming a thing is not a use of it), and compare
-  // paths EXACTLY (a suffix match allowlists `components/probe/lib/foo.ts`).
+  // Built on the lessons the BUG-008 ratchet cost: strip comments AND string
+  // literals (prose naming a thing is not a use of it), and compare paths
+  // EXACTLY (a suffix match allowlists `components/probe/lib/foo.ts`).
   function withoutCommentsOrStrings(src: string): string {
     return src
       .replace(/`(?:[^`\\]|\\.)*`/g, "``")
       .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
       .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
+      // Block comments become the SAME NUMBER of newlines, not nothing: the
+      // marker lookup below maps an offset in this stripped text back to a line
+      // in the original, and collapsing a doc comment silently shifted every
+      // line after it (measured — it made the one real marker undetectable).
+      .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ""))
       .replace(/\/\/.*$/gm, "");
   }
 
-  /** `new Set(...)` spread-or-sized and sorted ascending over a
-   *  finite-filtered column — the shape all five copies had. Matched with the
-   *  `isFinite` guard and the numeric sort as separate requirements on the same
-   *  statement, so an incidental `new Set` elsewhere is not a hit. */
-  const LEVELS_SHAPE = /new Set\((?:[^;]*?)Number\.isFinite(?:[^;]*?)\)(?:[^;]*?)(?:\.sort\(|\.size)/;
+  // A levels copy is a `new Set` that collects finite numbers and is then
+  // ordered numerically (or merely counted). The FIRST version of this guard
+  // required all of that inside ONE statement (`[^;]*?`), and the review round
+  // measured four ordinary spellings walking straight past it — including the
+  // real sixth copy in `lib/variability.ts`, which built its Set with a loop
+  // and `.add`. So the co-occurrence is checked inside a WINDOW that spans
+  // statements instead.
+  // WHAT THIS DOES AND DOES NOT CATCH — measured, not assumed, because a guard
+  // trusted past its reach is worse than no guard. Caught: the inline-predicate
+  // spelling, `Array.from` instead of spread, different sort parameter names,
+  // point-free `.filter(Number.isFinite)`, a loop with `.add`, the copy split
+  // across two statements, a `.size` count, and the global `isFinite` (which is
+  // ALSO semantically wrong here — `isFinite("3")` is true, so a string out of
+  // a hand-edited .dwk would become a level). NOT caught: a predicate hidden
+  // behind a local alias (`const isFin = v => Number.isFinite(v)` … `.filter(isFin)`)
+  // — nothing textual near the `new Set` names finiteness, and chasing aliases
+  // means a type-aware pass, not a regex. The mitigation is that the migration
+  // left ZERO unmarked copies behind, so this guards a clean baseline rather
+  // than papering over a dirty one.
+  const WINDOW = 400;
+  const SET = /new Set\b/g;
+  const FINITE = /Number\.isFinite\b|\bisFinite\s*\(/;
+  const ORDERED = /\.sort\(\s*\(?\s*\w+\s*,\s*\w+\s*\)?\s*=>\s*\w+\s*-\s*\w+|\.size\b/;
+
+  /** Lines carrying an explicit, reasoned exemption. Function-scoped by
+   *  construction: the marker sits on the copy itself, so it cannot silently
+   *  cover the rest of a file the way the first version's file-level allowlist
+   *  did — and that mattered, because the one file it exempted was
+   *  `datasetsplit.ts`, i.e. the BUG-008 module, where a genuinely new levels
+   *  copy would have gone undetected. */
+  const MARKER = "levels-allowlist:";
+
+  function levelsCopies(src: string): number[] {
+    const code = withoutCommentsOrStrings(src);
+    const hits: number[] = [];
+    for (const m of code.matchAll(SET)) {
+      const at = m.index ?? 0;
+      const win = code.slice(at, at + WINDOW);
+      if (FINITE.test(win) && ORDERED.test(win)) hits.push(at);
+    }
+    return hits;
+  }
+
+  /** True when the ORIGINAL source (comments intact) carries the marker within
+   *  the few lines before the hit — the exemption has to be written where the
+   *  code is, not in this file. */
+  function isMarked(src: string, code: string, at: number): boolean {
+    const line = code.slice(0, at).split("\n").length;
+    const lines = src.split("\n");
+    return lines.slice(Math.max(0, line - 6), line).some((l) => l.includes(MARKER));
+  }
 
   const HOME = "./lib/categorical.ts";
-  const ALLOWED = [
-    HOME, // defines levelsOf / levelCountOf / categoryLevels
-    // `autoTolerance` runs the IDENTICAL five lines over the identical types
-    // and is deliberately NOT this accessor: it takes the distinct values of a
-    // CONTINUOUS column to measure the gaps between them for elbow detection.
-    // Those are sample points on a measurement axis, not category levels, and a
-    // user-settable level order must never reach them. Unifying on SHAPE rather
-    // than MEANING would have swallowed it — which is why this entry is an
-    // allowlist line with a reason and not a silent regex carve-out.
-    "./lib/datasetsplit.ts",
-  ];
 
   it("only lib/categorical.ts derives a column's levels", () => {
-    const offenders = sources()
-      .filter(([p]) => !ALLOWED.includes(p))
-      .filter(([, src]) => LEVELS_SHAPE.test(withoutCommentsOrStrings(src)))
-      .map(([p]) => p);
+    const offenders: string[] = [];
+    for (const [path, src] of sources()) {
+      if (path === HOME) continue;
+      const code = withoutCommentsOrStrings(src);
+      for (const at of levelsCopies(src)) {
+        if (!isMarked(src, code, at)) offenders.push(path);
+      }
+    }
     expect(
-      offenders,
-      "use lib/categorical.ts's categoryLevels(data, channel) — or levelsOf/levelCountOf for a bare value array. Level ORDER is becoming user-settable (JMP_GAP J1), and a private copy would keep sorting by raw code while every other surface honoured the user's order",
+      [...new Set(offenders)],
+      `use lib/categorical.ts's categoryLevels(data, channel) — or levelsOf/levelCountOf for a bare value array. Level ORDER is becoming user-settable (JMP_GAP J1), and a private copy would keep sorting by raw code while every other surface honoured the user's order. If this genuinely is NOT a column's category levels, write "${MARKER} <why>" in a comment on the lines just above it`,
     ).toEqual([]);
   });
 
-  it("the guard is not vacuous: the shape it forbids is the shape the home uses", () => {
-    // If `levelsOf` is ever rewritten so it no longer matches LEVELS_SHAPE, the
-    // regex stops describing anything real and the test above goes green
-    // forever while protecting nothing. Assert the pattern still fires on the
-    // one file that is SUPPOSED to contain it.
+  it("the guard is not vacuous: it fires on the shape its own home uses", () => {
+    // If `levelsOf` is rewritten so the pattern no longer describes anything
+    // real, the test above goes green forever while protecting nothing.
     const home = Object.entries(modules).find(([p]) => p === HOME)?.[1] ?? "";
     expect(home).not.toBe("");
-    expect(LEVELS_SHAPE.test(withoutCommentsOrStrings(home))).toBe(true);
+    expect(levelsCopies(home).length).toBeGreaterThan(0);
+  });
+
+  it("the exemptions that exist are marked at the code, and are still needed", () => {
+    // `autoTolerance` takes the distinct values of a CONTINUOUS column to
+    // measure the gaps between them for elbow detection — sample points on a
+    // measurement axis, not category levels, and a user-settable level order
+    // must never reach them. Assert the marker is actually there: if that code
+    // is ever migrated or deleted, this fails and the marker goes with it,
+    // rather than lingering as a standing exemption nobody re-reads.
+    const split = Object.entries(modules).find(([p]) => p === "./lib/datasetsplit.ts")?.[1] ?? "";
+    expect(split).toContain(MARKER);
+    expect(levelsCopies(split).length).toBeGreaterThan(0);
   });
 });
 

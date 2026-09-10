@@ -227,6 +227,10 @@ export function buildOverlayPayload(datasets: readonly Dataset[]): OverlayPayloa
     return { ds, data, channels: defaultDenseChannels(data, null) };
   });
 
+  // levels-allowlist: not category levels. This is the UNION of x sample
+  // positions across the panel's datasets, built to align them onto one common
+  // grid — continuous measurement-axis values, not a categorical column's
+  // levels, so a user-settable level order (JMP_GAP J1) must never reach it.
   const xSet = new Set<number>();
   for (const { data } of perDs) {
     for (const t of data.time) if (Number.isFinite(t)) xSet.add(t);

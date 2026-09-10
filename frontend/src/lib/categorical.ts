@@ -13,15 +13,20 @@ import type { DataStruct } from "./types";
 
 // ── Category LEVELS: which distinct values a column's categories are ────────
 //
-// JMP_GAP J1 (Group O-1). Five modules independently implemented "the distinct
-// finite values of this column, ascending" — `lib/barlayout.ts`,
-// `lib/plotspec.ts`'s `buildXY`, `lib/plotGroupSplit.ts` (twice: a list and a
-// count), and the Data Filter workshop's `distinctLevels`. Same five lines
-// each, and each one is the answer to "what are this column's levels?", so
-// they must never be able to disagree — the BUG-008 lesson, where TWO copies of
-// one decision gave two answers and silently merged three samples into one
-// dataset. `architecture.test.ts` carries a chokepoint that keeps new copies
-// out.
+// JMP_GAP J1 (Group O-1). SIX private implementations of "the distinct finite
+// values of this column, ascending" — `lib/barlayout.ts`, `lib/plotspec.ts`'s
+// `buildXY`, `lib/plotGroupSplit.ts` (twice: a list and a count), the Data
+// Filter workshop's `distinctLevels`, and `lib/variability.ts`'s factor-B
+// levels. Each is the answer to "what are this column's levels?", so they must
+// never be able to disagree — the BUG-008 lesson, where TWO copies of one
+// decision gave two answers and silently merged three samples into one dataset.
+//
+// The sixth was found by a review round AFTER the first five were unified and
+// a chokepoint declared: `variability.ts` built its Set with a loop and `.add`
+// instead of a filter, so the guard's first regex could not see it, and the
+// commit that added it said "five copies, not six" in good faith. That is the
+// whole argument for the guard now spanning statements rather than matching one
+// — and for its comment enumerating what it still cannot catch.
 //
 // They live HERE, not in `barlayout.ts` where the first copy was, because level
 // ORDER is about to stop being "ascending by code": J1's user-settable ordering
@@ -38,17 +43,25 @@ import type { DataStruct } from "./types";
 // A dedupe driven by shape rather than meaning would have swallowed it.
 // `lib/tabulate.ts` is a third case: it orders composite multi-dimension row
 // keys and never builds a distinct-level list, so it shares this convention
-// without sharing the code.
+// without sharing the code. `lib/panelwindow.ts` and `lib/waterfall.ts` are a
+// fourth: their union-x builds are the same shape over CONTINUOUS sample
+// positions, aligning traces onto a common grid. All the look-alikes now carry
+// a `levels-allowlist:` marker at the code itself, so the exemption and its
+// reason live where the next reader will be.
 
 /** A column's values by the `-1 = x/time, 0.. = a value channel` convention
  *  shared with `ColumnFilter.col` (lib/types.ts). Lives here rather than being
  *  imported so this module depends on nothing but `./types` — it sits at the
  *  bottom of the import graph, and `lib/datasetsplit.ts`'s identical
  *  `columnValues` is on the far side of a cycle through `barlayout.ts`.
- *  Exported because `barlayout.ts` had its own private copy of exactly this
- *  (`colValues`), and one convention implemented twice is what Group O-1 is
- *  about — the `-1` half especially, since forgetting it silently reads
- *  `row[-1]` as undefined for every row. */
+ *  Exported because `barlayout.ts` and `lib/variability.ts` each had their own
+ *  private copy of exactly this (`colValues`). NOTE the honest scope: this is
+ *  now the canonical spelling, not the only one — roughly a dozen other modules
+ *  still inline `channel < 0 ? data.time : …`, and they are NOT uniform
+ *  (`datasetsplit.ts` copies the array, `fitselection.ts` adds a width guard).
+ *  Nothing guards this one yet; Group O-1 unified the two copies that sat
+ *  beside the levels work, and left the rest alone rather than claiming a
+ *  sweep it did not do. */
 export function columnOf(data: DataStruct, channel: number): readonly number[] {
   return channel < 0 ? data.time : data.values.map((row) => row[channel]);
 }

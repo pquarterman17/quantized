@@ -1049,6 +1049,18 @@ import { fileURLToPath } from "node:url";
  *  Not lowered to `measured + 1,024`: that would RAISE this pin, and 54 bytes
  *  is a refactor netting out slightly negative, not a diet pass. The 54 bytes
  *  are the whole headroom O-2 (the user-settable order itself) has to work in.
+ *
+ *  CORRECTED after the review round, because the paragraph above measures the
+ *  wrong thing: 912,842 -> 912,784 is an INTRA-DEVELOPMENT delta (before and
+ *  after deleting `colValues`), not this change's cost. Measured commit to
+ *  commit with a lock-matched node_modules, the parent was 912,775, so the
+ *  refactor was +9 bytes, NOT "netting out slightly negative". Headroom went
+ *  63 -> 54, i.e. the refactor spent 14% of it. The review round's own fixes
+ *  (migrating the sixth levels copy in variability.ts, dropping a single-caller
+ *  wrapper in plotGroupSplit.ts) then measured 912,758 — 80 under the pin and
+ *  17 under the parent, so the WHOLE of Group O-1 is finally a small net
+ *  reduction. Pin unchanged at 912,838: still not a diet pass, and lowering it
+ *  to `measured + 1,024` would raise it.
  */
 const EAGER_JS_BUDGET = 912_838;
 
