@@ -875,9 +875,9 @@ produces fractional numbers that index nothing. So a dataset carrying, say,
 `[Moment (numeric), Phase (categorical)]` comes out of Corrections with a
 `Phase` column of arbitrary decimals.
 
-#### Why the current drop is CONSERVATIVE — not simply correct
+#### Why the drop WAS conservative (superseded — see the CLOSED entry below) — not simply correct
 
-Both functions discard `cat_levels`. That is now **explicit and documented in
+Both functions used to discard `cat_levels` unconditionally; they now discard it unless the codes provably survived (see the CLOSED entry below). Both functions discard `cat_levels`. That is now **explicit and documented in
 both modules** (it used to be an accidental omission that read like a bug in
 the propagation audit). For a transform that actually changes values, keeping
 the table would be strictly worse: the output would claim level labels for
@@ -970,11 +970,13 @@ Open sub-questions for whoever takes it:
   beam-footprint scale, which deliberately SKIPS `dq`-labelled channels: ch0 moves
   (1.0 -> 114.59...), the `dq` channel does not, and only its table survives.
   Seven sabotages verified, including both "always keep" and "always drop".
-  New home rather than a new function in `datastruct.py`: that file was 458 lines
-  and the helper's comments took it to 506, over the 500 ceiling, so it became
-  `row_sidecars.py`'s sibling — that module owns "which metadata keys are
-  row-indexed", this one owns "when does a value transform invalidate a level
-  table", and both exist because the answer used to be re-derived at each site.
+  New home rather than a new function in `datastruct.py`, for COHESION:
+  `row_sidecars.py` owns "which metadata keys are row-indexed", this one owns
+  "when does a value transform invalidate a level table". (A line-count reason was
+  also cited and was WRONG — 506 was measured against a draft that was then
+  rewritten; the shipped single function would have left `datastruct.py` at 496,
+  under the ceiling. With `surviving_level_order` it would now be 514, but the
+  argument was always cohesion.)
 - [ ] Resample's nearest-neighbour-vs-refuse ruling.
 - [ ] Any user-facing warning.
 

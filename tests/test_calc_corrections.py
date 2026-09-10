@@ -10,7 +10,7 @@ import pytest
 from numpy.testing import assert_allclose
 
 from quantized.calc.corrections import apply_corrections
-from quantized.datastruct import DataStruct
+from quantized.datastruct import DataStruct, level_of
 
 
 def _raw(g: dict[str, Any], labels: list[str], units: list[str]) -> DataStruct:
@@ -363,21 +363,26 @@ def test_corrections_keeps_cat_levels_through_a_pure_row_trim():
     np.testing.assert_array_equal(out.values[:, 1], [1.0, 0.0])
 
 
-def test_corrections_drops_only_the_channel_whose_codes_moved():
-    """`cat_levels` is per CHANNEL, so the decision has to be too — a correction
-    that moves one channel must not cost a DIFFERENT, untouched channel its
-    labels.
+def test_a_quantity_redefining_step_drops_EVERY_table_even_an_untouched_channel():
+    """The per-channel property lives in `surviving_cat_levels` and is asserted
+    directly in tests/test_cat_levels.py. In the PIPELINE it is deliberately
+    subordinate to the quantity flag: the beam-footprint scale skips `dq`-labelled
+    channels, so channel 1's numbers here really do not move — and its table is
+    dropped anyway, because after a footprint scale the DATASET is no longer the
+    thing those tables were written against.
 
-    The beam-footprint scale is the real per-channel path: it deliberately skips
-    channels labelled ``dq`` (like the neutron R-scale), so channel 0 moves and
-    channel 1 does not. Measured: ch0 1.0 -> 114.59..., ch1 unchanged.
+    An earlier version of this test asserted the opposite (that channel 1 kept its
+    table) and was named "drops only the channel whose codes moved". It was wrong
+    twice over: it put a table only on the SKIPPED channel, so it dropped nothing
+    and its name was a lie (review MEDIUM 5); and the behaviour it described was
+    the pre-HIGH-1 bit-identity-only rule that let a dY/dX channel keep a label.
     """
     data = DataStruct.create(
         [0.5, 1.0],
         [[1.0, 0.0], [2.0, 1.0]],
         labels=["R", "dq"],
         units=["", ""],
-        cat_levels={1: ("alpha", "beta")},
+        cat_levels={0: ("lo", "hi"), 1: ("alpha", "beta")},
     )
 
     out = apply_corrections(
@@ -385,8 +390,8 @@ def test_corrections_drops_only_the_channel_whose_codes_moved():
     )
 
     assert not np.array_equal(out.values[:, 0], data.values[:, 0]), "ch0 really moved"
-    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
-    assert out.cat_levels == {1: ("alpha", "beta")}
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])  # ch1 skipped
+    assert out.cat_levels is None, "the quantity changed, so no table survives"
 
 
 def test_corrections_keeps_cat_levels_for_an_x_only_shift():
@@ -422,3 +427,123 @@ def test_corrections_drops_cat_levels_when_a_y_offset_moves_the_codes():
 
     np.testing.assert_array_equal(out.values[:, 1], [-5.0, -4.0])
     assert out.cat_levels is None
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        pytest.param({"derivativeMode": "dY/dX"}, id="derivative"),
+        pytest.param({"derivativeMode": "d²Y/dX²"}, id="second-derivative"),
+        pytest.param({"derivativeMode": "∫Y dx"}, id="integral"),
+        pytest.param({"derivativeMode": "dlog/dlog"}, id="log-derivative"),
+        pytest.param(
+            {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 3},
+            id="smooth",
+        ),
+        pytest.param({"normMethod": "Range [0,1]"}, id="norm-range"),
+        pytest.param({"normMethod": "Peak (max=1)"}, id="norm-peak"),
+        pytest.param({"normMethod": "Z-score"}, id="norm-zscore"),
+        pytest.param({"normMethod": "Area (integral=1)"}, id="norm-area"),
+        pytest.param({"yScale": 1000.0}, id="y-scale"),
+        pytest.param({"yOff": 5.0}, id="y-offset"),
+        pytest.param(
+            {"isMag": True, "momentUnit": "emu/g", "sampleMass": 2.0}, id="mass-normalize"
+        ),
+        pytest.param(
+            {"isMag": True, "momentUnit": "emu/cm³", "sampleVolume": 2.0},
+            id="volume-normalize",
+        ),
+        pytest.param({"isMag": True, "momentUnit": "A·m²"}, id="unit-convert"),
+        pytest.param(
+            {"footprintW": 10.0, "footprintL": 20.0, "footprintTwoTheta": True},
+            id="footprint",
+        ),
+    ],
+)
+def test_corrections_drops_cat_levels_for_every_y_transforming_step(params):
+    """Review HIGH 1: bit-identity is NOT evidence that the codes survived, so
+    every step that REDEFINES what a channel is must drop the table regardless of
+    the numbers.
+
+    The channel here has a SINGLE level, so every code is 0 — the commonest real
+    case (a Sample/Phase/Status column constant within one file), and the one
+    where arithmetic maps the codes to themselves by accident. Measured before
+    the fix: dY/dX, ∫Y dx, a moving-average smooth, all four normalizations, a
+    unit conversion and yScale=1000 each left the column [0, 0, 0] and so KEPT
+    the table, and `level_of` returned 'only' for a dY/dX channel.
+
+    This is also the guard on the `y_touched` flag: a step added later that
+    forgets to set it is caught the moment it is given a case here.
+    """
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[0.0, 10.0], [0.0, 20.0], [0.0, 30.0]],
+        labels=["Phase", "Y"],
+        units=["", ""],
+        cat_levels={0: ("only",)},
+    )
+
+    out = apply_corrections(data, params)
+
+    assert out.cat_levels is None, f"{params} kept a level table"
+    assert level_of(out, 0, 0.0) is None
+
+
+def test_corrections_drops_everything_when_a_trim_keeps_no_rows():
+    """Review MEDIUM 2: zero rows is zero EVIDENCE, not full survival. Two empty
+    columns compare equal, so an empty trim used to preserve every table — even
+    one the same call had smoothed and differentiated — and `is_categorical`
+    would then be True for a channel with no value left to index it."""
+    data = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("a", "b")},
+    )
+
+    out = apply_corrections(data, {"xTrimMin": 99.0})
+
+    assert out.values.shape[0] == 0
+    assert out.cat_levels is None
+
+
+def test_corrections_carries_level_order_with_the_table_it_belongs_to():
+    """Review MEDIUM 3: `level_order` names level CODES, so its validity
+    condition is IDENTICAL to `cat_levels`'. Keeping one without the other left a
+    new incoherent state — an identity correction returned the labels but
+    silently reset the user's chosen ORDER, which `calc/plotting.py`'s
+    `_ordered_levels` reads to keep the screen and an exported PDF agreeing about
+    series colours, legend order and z-order."""
+    data = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        cat_levels={1: ("a", "b")},
+        level_order={1: (1, 0)},
+    )
+
+    kept = apply_corrections(data, {})
+    assert kept.cat_levels == {1: ("a", "b")}
+    assert kept.level_order == {1: (1, 0)}
+
+    # And it goes with the table when the codes move.
+    moved = apply_corrections(data, {"yOff": 5.0})
+    assert moved.cat_levels is None
+    assert moved.level_order is None
+
+
+def test_corrections_drops_a_minus_one_level_order_when_x_moves():
+    """`-1` is the x column and has no `cat_levels` entry to key off, so it
+    survives only while the x values themselves do. An x offset moves them."""
+    data = DataStruct.create(
+        [0.0, 1.0],
+        [[1.0, 0.0], [2.0, 1.0]],
+        labels=["Y", "Phase"],
+        units=["", ""],
+        level_order={-1: (1, 0)},
+    )
+
+    assert apply_corrections(data, {}).level_order == {-1: (1, 0)}
+    assert apply_corrections(data, {"xOff": 2.0}).level_order is None

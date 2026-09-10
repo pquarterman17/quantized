@@ -2,7 +2,13 @@
 
 The sibling of ``row_sidecars.py``: that module owns "which metadata keys are
 row-indexed, so a row operation must slice them"; this one owns "when does a
-value transform invalidate a level table". Both exist because the answer was
+value transform invalidate a level table". It is a separate module for COHESION
+— that is the whole reason, and an earlier version of this note also claimed a
+line-count one that was not reproducible: it cited ``datastruct.py`` reaching 506
+lines, measured against a draft of this function that was then rewritten. Review
+re-measured the shipped version at 496, under the 500 ceiling. (With
+``surviving_level_order`` added it would now be 514, so the arithmetic happens to
+agree — but cohesion was always the argument.) Both exist because the answer was
 previously re-derived, differently, at each call site.
 
 WHY A LEVEL TABLE IS FRAGILE. A categorical channel's values are level CODES
@@ -46,6 +52,8 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+__all__ = ["surviving_cat_levels", "surviving_level_order"]
+
 
 def surviving_cat_levels(
     cat_levels: Mapping[int, tuple[str, ...]] | None,
@@ -73,8 +81,24 @@ def surviving_cat_levels(
     """
     if not cat_levels:
         return None
-    base = before if kept_rows is None else before[list(kept_rows), :]
+    rows = list(kept_rows) if kept_rows is not None else None
+    if rows is not None and any(not (0 <= r < before.shape[0]) for r in rows):
+        # An out-of-range row index would raise IndexError, which is NOT in
+        # routes/_errors.py's CALC_ERRORS and so would surface as a 500 from a
+        # function whose contract is to degrade. Unreachable from
+        # `calc/corrections.py` (its indices come from `np.flatnonzero` over a
+        # full-length mask) but this is a public helper.
+        return None
+    base = before if rows is None else before[rows, :]
     if base.ndim != 2 or after.ndim != 2 or base.shape[0] != after.shape[0]:
+        return None
+    if base.shape[0] == 0:
+        # ZERO ROWS IS ZERO EVIDENCE, not full survival (review MEDIUM 2). Two
+        # empty columns compare equal, so a trim that kept nothing would have
+        # preserved every table — including one the same call had smoothed and
+        # differentiated. `is_categorical` would then be True and
+        # `routes/_payload.py` would emit a level table for a channel with no
+        # value left to index it.
         return None
     kept: dict[int, tuple[str, ...]] = {}
     for idx, levels in cat_levels.items():
@@ -82,4 +106,41 @@ def surviving_cat_levels(
             continue
         if np.array_equal(base[:, idx], after[:, idx], equal_nan=True):
             kept[idx] = levels
+    return kept or None
+
+
+def surviving_level_order(
+    level_order: Mapping[int, tuple[float, ...]] | None,
+    surviving: Mapping[int, tuple[str, ...]] | None,
+    x_unchanged: bool,
+) -> dict[int, tuple[float, ...]] | None:
+    """The ``level_order`` entries still valid after the same transform.
+
+    Review MEDIUM 3: ``level_order``'s validity condition is IDENTICAL to
+    ``cat_levels``' — it names level CODES, so it means something exactly when
+    those codes still do. Carrying one without the other produced a new
+    incoherent state: an identity or trim correction returned the labels but
+    silently reset the user's chosen level ORDER, which is the same class of
+    silent degradation this work exists to remove. It is live, not cosmetic:
+    ``calc/plotting.py``'s ``_ordered_levels`` reads it, and its own docstring
+    says that without it "the screen and the exported PDF would disagree about
+    series colours, legend order and z-order".
+
+    Keyed off ``surviving`` (the ``cat_levels`` result) rather than recomputing,
+    so the two answers cannot drift.
+
+    ``-1`` is the x/time column under the frontend's ``-1 = x`` convention, and
+    it has no entry in ``cat_levels`` to key off — so it survives only when the
+    x values themselves are unchanged (``x_unchanged``). An x offset or a trim
+    moves or drops them and takes the ordering with it.
+    """
+    if not level_order:
+        return None
+    kept: dict[int, tuple[float, ...]] = {}
+    for idx, codes in level_order.items():
+        if idx == -1:
+            if x_unchanged:
+                kept[idx] = codes
+        elif surviving is not None and idx in surviving:
+            kept[idx] = codes
     return kept or None

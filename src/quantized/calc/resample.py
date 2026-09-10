@@ -153,6 +153,16 @@ def resample_data(
     # `surviving_cat_levels` decides per channel by comparing the numbers, so the
     # drop still happens whenever interpolation actually moved them.
     #
+    # GATED ON A GENUINELY COINCIDENT GRID (review MEDIUM 4). Without the
+    # `array_equal(x_old, x_new)` test the keep also fired on a BRAND-NEW grid
+    # whenever interpolation happened to reproduce the codes — measured on a
+    # constant column (`grid=[0.5, 1.0, 1.5]`) and on a step-like one whose new
+    # points all landed inside flat regions. Those codes are valid, so it was not
+    # a wrong label; but it silently SETTLED the refuse-vs-nearest-neighbour
+    # product decision that is still booked, by shipping a third answer. Every
+    # comment and test here described the keep as coincident-grid-only, so the
+    # code now is.
+    #
     # STILL BOOKED as BUG-005: what Resample SHOULD do with a categorical channel
     # on a genuinely new grid (refuse, or nearest-neighbour it) is a product
     # decision, not something to settle here.
@@ -162,5 +172,9 @@ def resample_data(
         labels=data.labels,
         units=data.units,
         metadata=meta,
-        cat_levels=surviving_cat_levels(data.cat_levels, y_old, y_new),
+        cat_levels=(
+            surviving_cat_levels(data.cat_levels, y_old, y_new)
+            if np.array_equal(x_old, x_new)
+            else None
+        ),
     )
