@@ -36,7 +36,7 @@ export function toggleExcluded(current: readonly number[] | undefined, row: numb
 /** Union a selected-row set into an existing exclusion list ("Exclude
  *  selected" — #50 bulk action), sorted + de-duped. Shared by the legacy
  *  active-dataset selection and the per-worksheet-window one (GUI_INTERACTION
- *  #14) — same math, two callers in store/useApp.ts. */
+ *  #14) — same math, two callers in store/rowState.ts. */
 export function mergeExcluded(current: readonly number[] | undefined, rows: readonly number[]): number[] {
   return [...new Set([...(current ?? []), ...rows])].sort((a, b) => a - b);
 }

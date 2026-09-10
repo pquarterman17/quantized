@@ -6,7 +6,8 @@
 // one never moves a highlight in the other).
 //
 // This is DELIBERATELY separate from the legacy `selection` singleton in
-// store/useApp.ts, which the Stage "Worksheet" TAB (components/Stage/
+// store/rowState.ts (it lived in store/useApp.ts until the 2026-09-10
+// BUG-009 extraction), which the Stage "Worksheet" TAB (components/Stage/
 // Worksheet.tsx — not an MDI window, always tracks `worksheetId ?? activeId`)
 // keeps using exactly as before. That singleton is the pre-existing,
 // deliberate link to the live plot: composeDisplayPayload highlights the

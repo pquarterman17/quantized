@@ -70,6 +70,7 @@ import { createCellEditSlice, type CellEditSlice } from "./cellEdit";
 import { createGadgetSlice, type GadgetSlice } from "./gadget";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
+import { createRowStateSlice, type RowStateSlice } from "./rowState";
 import { deleteFolderWithTrash } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasets";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
@@ -105,12 +106,11 @@ import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
 import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
-import { isActive } from "../lib/datafilter";
 import type { FwhmResult } from "../lib/peakwidth";
 import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { analysisData, keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
+import { analysisData } from "../lib/rowstate";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -122,7 +122,6 @@ import type {
   AxisFormat, AxisScale,
   BaselineOverlay,
   ChannelRole,
-  DataFilter,
   Dataset,
   DataStruct,
   FitOverlay, FitSpec,
@@ -274,7 +273,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -692,29 +691,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setErrKey: (channel: number, errChannel: number | null) => void;
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
   setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
-  // Row state (#50): persistent per-row exclusion on a dataset. Excluded rows
-  // stay visible but drop from analysis everywhere; round-trips .dwk.
-  toggleRowExcluded: (id: string, row: number) => void;
-  setRowsExcluded: (id: string, rows: number[]) => void;
-  clearRowExclusions: (id: string) => void;
-  // Row selection (#50 selection dimension): a transient brush on the active
-  // dataset. `selection` is null or {datasetId, rows}; it is "live" only when its
-  // datasetId matches activeId, so switching datasets naturally drops it (no
-  // reset wiring). This is the Stage "Worksheet" tab's channel only — an MDI
-  // document window uses its own independent one (`worksheetSelections`,
-  // GUI_INTERACTION #14, store/worksheetSelection.ts). The bulk actions turn a
-  // selection into persistent exclusions; their optional `windowId` targets
-  // that per-window map instead (omit it for the Stage tab's own selection).
-  selection: { datasetId: string; rows: number[] } | null;
-  toggleRowSelected: (row: number) => void;
-  setRowSelection: (rows: number[]) => void;
-  clearRowSelection: () => void;
-  excludeSelectedRows: (windowId?: string) => void;
-  keepOnlySelectedRows: (windowId?: string) => void;
-  // Local data filter (#53): non-destructive per-column predicates that narrow
-  // the analysis view of a dataset. Only active predicates are stored.
-  setDatasetFilter: (id: string, filter: DataFilter) => void;
-  clearDatasetFilter: (id: string) => void;
+  // (Row exclusion (#50), the row `selection` that feeds it, and the per-column
+  // data filter (#53) are declared on RowStateSlice — store/rowState.ts, which
+  // also carries their BUG-009 pending guards.)
   setSeriesOrder: (order: number[] | null) => void;
   toggleHidden: (channel: number) => void;
   // Solo one plotted channel (hide all others); null = show all. The column
@@ -794,18 +773,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setStatus: (status: string) => void;
 }
 
-// #14: the live selection for excludeSelectedRows/keepOnlySelectedRows — a
-// document window's own map entry, or the legacy active-dataset singleton
-// for the Stage tab (`windowId` omitted); same stale-datasetId guard either way.
-function worksheetOrActiveSelection(
-  s: AppState,
-  windowId: string | undefined,
-): { datasetId: string; rows: number[] } | null {
-  if (windowId) return s.worksheetSelections[windowId] ?? null;
-  const id = s.activeId;
-  return id != null && s.selection?.datasetId === id ? s.selection : null;
-}
-
 // Appearance/behaviour prefs persistence (the `qz.prefs` blob) lives in
 // store/prefs.ts (store-size ratchet, #54) — `loadPrefs`/`syncPrefs` imported
 // above; `defaultPanelFit` (#54) rides the same mechanism as `defaultGrid`.
@@ -842,6 +809,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createGadgetSlice(set, get),
   ...createDatasetMetaSlice(set, get),
   ...createDataIntakeSlice(set, get),
+  ...createRowStateSlice(set, get),
   ...createTrashSlice(set, get),
   ...createImportSlice(set, get),
   ...createRecentsSlice(set),
@@ -942,7 +910,6 @@ export const useApp = create<AppState>((set, get) => ({
   waterfall: 0,
   plotTool: "pointer",
   regionPicked: null,
-  selection: null,
   integral: null,
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in
@@ -2090,88 +2057,6 @@ export const useApp = create<AppState>((set, get) => ({
   // Row state (#50): the single source of truth for per-row exclusion. Excluded
   // rows persist on the dataset (round-trip .dwk) so every view can honor them —
   // no view should keep its own local row mask.
-  toggleRowExcluded: (id, row) => {
-    get().recordHistory("row exclusion");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const next = toggleExcluded(d.excludedRows, row);
-        return { ...d, excludedRows: next.length ? next : undefined };
-      }),
-    }));
-  },
-  setRowsExcluded: (id, rows) => {
-    get().recordHistory("row exclusion");
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const clean = sanitizeExcluded(rows, d.data.time.length);
-        return { ...d, excludedRows: clean.length ? clean : undefined };
-      }),
-    }));
-  },
-  clearRowExclusions: (id) => {
-    get().recordHistory("clear row exclusions");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, excludedRows: undefined } : d,
-      ),
-    }));
-  },
-  setDatasetFilter: (id, filter) =>
-    set((s) => ({
-      datasets: s.datasets.map((d) => {
-        if (d.id !== id) return d;
-        const active = filter.filter(isActive);
-        return { ...d, filter: active.length ? active : undefined };
-      }),
-    })),
-  clearDatasetFilter: (id) =>
-    set((s) => ({
-      datasets: s.datasets.map((d) => (d.id === id ? { ...d, filter: undefined } : d)),
-    })),
-  toggleRowSelected: (row) => {
-    const id = get().activeId;
-    if (id == null) return;
-    set((s) => {
-      const cur = s.selection?.datasetId === id ? s.selection.rows : [];
-      const rows = cur.includes(row)
-        ? cur.filter((r) => r !== row)
-        : [...cur, row].sort((a, b) => a - b);
-      return { selection: rows.length ? { datasetId: id, rows } : null };
-    });
-  },
-  setRowSelection: (rows) => {
-    const id = get().activeId;
-    if (id == null) return;
-    const clean = [...new Set(rows)].sort((a, b) => a - b);
-    set({ selection: clean.length ? { datasetId: id, rows: clean } : null });
-  },
-  clearRowSelection: () => set({ selection: null }),
-  excludeSelectedRows: (windowId) => {
-    const sel = worksheetOrActiveSelection(get(), windowId);
-    if (!sel?.rows.length) return;
-    get().recordHistory("row exclusion");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === sel.datasetId ? { ...d, excludedRows: mergeExcluded(d.excludedRows, sel.rows) } : d,
-      ),
-    }));
-    if (windowId) get().clearWorksheetRowSelection(windowId);
-    else set({ selection: null });
-  },
-  keepOnlySelectedRows: (windowId) => {
-    const sel = worksheetOrActiveSelection(get(), windowId);
-    if (!sel?.rows.length) return;
-    get().recordHistory("row exclusion");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === sel.datasetId ? { ...d, excludedRows: keepOnlyExcluded(sel.rows, d.data.time.length) } : d,
-      ),
-    }));
-    if (windowId) get().clearWorksheetRowSelection(windowId);
-    else set({ selection: null });
-  },
   // Persist an explicit plotted-channel draw order (a permutation of the current
   // plotted channels). effectiveChannels reorders by it; stale entries (channels
   // no longer plotted) are ignored and newly-plotted channels append in order.

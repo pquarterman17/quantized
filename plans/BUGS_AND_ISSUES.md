@@ -1556,16 +1556,46 @@ lose an edit:
   `pending: undefined` — the exact clause its exemption cites — previously left
   every test green.
 
-### STILL OPEN — also the ROW-STATE family (found round 6)
+### CLOSED (2026-09-10) — the ROW-STATE family (found round 6)
 
-- [ ] `useApp.ts`'s `toggleRowExcluded`, `setRowsExcluded`, `clearRowExclusions`,
-  `setDatasetFilter`, `clearDatasetFilter` are the same defect class, unguarded, and
-  invisible to the ratchet (its key list is `data|metadata|cat_levels|formulas`).
-  Measured: `toggleRowExcluded` on a pending dataset is ACCEPTED, pushes a history
-  entry, says nothing — and `installBookData` clears `excludedRows`/`filter` on the
-  resolve. That is verbatim the shape round 4 called incoherent to leave for cell
-  edits, reachable from the SAME pane whose cell edits are guarded (the gutter
-  click). The invariant below covers them; the code does not.
+- [x] The row-state actions are guarded, and the ratchet can now see them. They no
+  longer live in `useApp.ts`: row exclusion, the transient row `selection`, and the
+  per-column filter moved to **`store/rowState.ts`** (`RowStateSlice`), because the
+  `useApp.ts` size pin sat 2 lines above the file and the guard had to be funded by
+  an extraction rather than an append.
+  **SEVEN actions, not the five booked here** — this entry missed
+  `excludeSelectedRows` and `keepOnlySelectedRows`, which are how a selection
+  actually becomes exclusions (the worksheet TOOLBAR's Exclude / Keep-only buttons,
+  `WorksheetToolbar.tsx` -> `useWorksheetView.ts`; the row CONTEXT menu is
+  mask/unmask/copy-row). `keepOnlySelectedRows` was the worst of them: it takes the
+  COMPLEMENT over `data.time.length`, i.e. over the PREVIEW's row count.
+  **Five WRITERS are guarded**: `toggleRowExcluded`, `setRowsExcluded`,
+  `setDatasetFilter`, `excludeSelectedRows`, `keepOnlySelectedRows` — each calling
+  `refusePendingEdit` directly (a wrapper hid the call from the ratchet's
+  guard-detection; sabotage caught that).
+  **Two CLEARS are deliberately NOT guarded and must stay that way**:
+  `clearRowExclusions` and `clearDatasetFilter`. Clearing destroys a preference
+  rather than recording one, and refusing it would TRAP a user whose `.dwk` restored
+  row state alongside `pending` (`lib/workspaceSerialize.ts` writes the three fields
+  independently and `lib/workspaceDatasetParse.ts` restores them independently — a
+  reimport is NOT the path, it clears `pending` in the same updater).
+  `rowState.test.ts` pins BOTH directions, so adding a guard to either clear turns a
+  test red on purpose: that is the design, not an oversight to fix.
+  The ratchet's key list is now `data|metadata|cat_levels|formulas|excludedRows|filter`
+  with per-ACTION exemptions, so a NEW row-state writer in a NEW slice is caught.
+
+- [ ] **Booked while closing the above:** `lib/workspaceDatasetParse.ts`'s restore
+  clamps `excludedRows` with `sanitizeExcluded(..., ds.data.time.length)` where
+  `data` is the stored PREVIEW on a pending dataset — the same clamp-against-preview
+  shape the guard fixes for `setRowsExcluded`, on the LOAD path, unguarded. Low harm
+  today (`installBookData` clears the field on resolve anyway, so the clamp only
+  truncates them earlier), but it carries its own design question — should a `.dwk`'s
+  exclusions survive a pending load at all? — so it is not a drive-by fix.
+
+- [ ] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
+  while `clearRowExclusions` does. So building a filter and pressing undo restores a
+  snapshot from before the filter change and silently discards it. Pre-existing and
+  untouched by the guard pass; worth its own fix.
 
 ### STILL OPEN — the structural fix
 
