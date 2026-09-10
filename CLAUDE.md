@@ -210,6 +210,22 @@ Practical conventions discovered while porting — follow them to stay green.
 - So before claiming a green build: **`npx tsc -b --force`** (or delete the
   buildinfo first). Cheap, and it is the difference between a real check and a
   cached "yes".
+- **vite's transform cache also lies, and `npm ci` is the only check that
+  catches it.** Same PR, second CI failure: the bundle gate failed at 892.5 kB
+  over a 892.2 kB budget while the identical commit measured 892.1 kB locally.
+  Running `npm ci` first — exactly what the workflow does — made the local
+  build match CI byte for byte. The cache under `node_modules` had served
+  stale output FOR THE VERY FILES BEING EDITED, under-reporting the change by
+  436 bytes. Proof it was the cache and not dependency drift: `main` measures
+  912,758 either way; only the edited branch moved. The existing
+  "compare a pinned dependency's version" check cannot see this — versions
+  matched perfectly. **Before trusting any bundle number that will become a
+  pin, rebuild after `npm ci`.**
+- **`cmd | tail -n; echo "exit=$?"` reports TAIL's status, not the command's.**
+  Measured: `false | tail -1` then `$?` is 0, while `${PIPESTATUS[0]}` is 1.
+  Several gate invocations this session logged `BUILD exit=0` from `tail`
+  succeeding. Use `${PIPESTATUS[0]}`, or redirect to a file and check `$?`
+  directly, whenever the exit code is the thing being trusted.
 - **A truncated log download is worse than no log.** Fetching the failing job
   with `curl` through the proxy died with `CONNECT tunnel failed, response 403`
   but still wrote 40 lines — which described a completely different, stale

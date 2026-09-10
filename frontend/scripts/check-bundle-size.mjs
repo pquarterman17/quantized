@@ -1098,7 +1098,27 @@ import { fileURLToPath } from "node:url";
  *  reason to remove a safety net. Recorded so the next person does not
  *  "rediscover" it as free savings.
  */
-const EAGER_JS_BUDGET = 913_579;
+/*  2026-09-10 (Group O-2a, CORRECTED after CI) — 913,579 -> 914,015. The
+ *  RAISE ITSELF was already justified above and that reasoning is unchanged;
+ *  what was wrong was every NUMBER in it, because the builds they came from
+ *  were stale.
+ *
+ *  CI failed this check at 892.5 kB over a 892.2 kB budget while the same
+ *  commit measured 892.1 kB locally and reported BUILD exit=0. Reproduced by
+ *  running `npm ci` first, exactly as the workflow does: the local build then
+ *  matched CI byte for byte. The cause is vite's transform cache under
+ *  `node_modules` — it served cached output for the very files being edited,
+ *  so a local rebuild silently under-reported this change by 436 bytes.
+ *  `main` measures 912,758 either way, which is what proves it was the EDITED
+ *  files' cache and not a dependency-version drift.
+ *
+ *  TRUE numbers, all from clean `npm ci` builds:
+ *      main            912,758
+ *      this change     913,951   (+1,193, not the +741 claimed above)
+ *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
+ *  recorded above all still stand; only the arithmetic was fiction.
+ */
+const EAGER_JS_BUDGET = 914_015;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
