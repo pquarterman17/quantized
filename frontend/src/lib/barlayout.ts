@@ -62,6 +62,40 @@ function textLabelsFor(
   const by = columnOf(data, channel);
   for (const key of sortColumnKeys(Object.keys(textCols))) {
     const rows = textCols[key];
+    // BUG-006 site 10. This loop pairs sidecar cell r with row r, so it is only
+    // valid when the two describe the SAME rows. A lazily-loaded Origin book's
+    // preview breaks that: `book.preview.{time,values}` are decimated while
+    // `book.metadata` is the FULL book's (`io/origin_project/preview.py` leaves
+    // `metadata=ds.metadata` on both the trim and the sampled path), so preview
+    // row r reads a cell belonging to some other book row.
+    //
+    // The failure was NOT a safe fallback. Measured on a 6-row book with levels
+    // [0,0,1,1,2,2] and text ["A0","A0","B1","B1","C2","C2"] sampled to rows
+    // [1,2,4,5]: the walk paired (0,"A0"), (1,"A0"), (2,"B1"), (2,"B1") — every
+    // level covered, every level internally CONSISTENT — so the agreement check
+    // below passed and it returned ["A0","A0","B1"] for levels [0,1,2]. The
+    // truth is A0/B1/C2. Confident wrong category names on a bar chart.
+    //
+    // SUPPRESS, never reindex, and never DELETE — the shape site 9 chose
+    // (`components/Stage/worksheet/textColumns.ts`). Reindexing is impossible:
+    // the preview does not record which rows the sampler kept. Deleting the
+    // sidecar at the producer was tried and REVERTED in review: several
+    // legitimate readers do not row-index it at all (the Inspector's Origin
+    // provenance card, `lib/projectSearchSidecars.ts`'s name search) and a
+    // producer-side strip destroyed their data too — persistently, since
+    // `lib/workspaceSerialize.ts` then wrote the stripped metadata into the
+    // `.dwk`. Declining to INDEX costs nothing but this one label source.
+    //
+    // KNOWN COST, accepted: a merely padding-TRIMMED preview is a genuine
+    // PREFIX whose cells DO line up, and its sidecar is full-length too, so
+    // this guard also suppresses it and those labels fall back to formatted
+    // numbers until the book resolves. A length test cannot tell a prefix from
+    // a sample. That is a DEGRADATION (numbers instead of names, self-healing
+    // on resolve) where the alternative is WRONG names, so it is the right way
+    // to be wrong. Recovering it properly needs the backend to send which rows
+    // the decimator kept — booked in plans/BUGS_AND_ISSUES.md, not invented
+    // here.
+    if (rows.length !== by.length) continue;
     const perLevel = new Map<number, string>();
     let ok = true;
     for (let r = 0; r < by.length && ok; r++) {

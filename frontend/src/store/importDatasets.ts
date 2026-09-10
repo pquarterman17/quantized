@@ -41,7 +41,6 @@ import {
   type DataStruct,
   type Dataset,
 } from "../lib/types";
-import { withoutRowSidecars } from "../lib/rowSidecars";
 import { deriveWorkbooks } from "../lib/workbooks";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
@@ -192,40 +191,7 @@ function addFromPayload(
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
-        // BUG-006 site 10. `book.preview.{time,values}` are DECIMATED but
-        // `book.metadata` is the FULL book's — `io/origin_project/preview.py`
-        // leaves `metadata=ds.metadata` untouched on both the trim and the
-        // sampled path. A ROW-INDEXED sidecar (`text_columns` and friends) is
-        // therefore paired with the wrong rows by every consumer that indexes
-        // it, because preview row r is not book row r once the sampler has run.
-        //
-        // Measured, before this strip: a 6-row book with levels [0,0,1,1,2,2]
-        // and text ["A0","A0","B1","B1","C2","C2"], sampled to rows [1,2,4,5],
-        // made `lib/barlayout.ts`'s label resolver return ["A0","A0","B1"] for
-        // levels [0,1,2] — every level covered and each internally consistent,
-        // so its agreement check PASSED and a bar chart drew the wrong category
-        // names with nothing to indicate it.
-        //
-        // Fixed HERE rather than at the ~13 label call sites, because the
-        // hazard is not about labels: it is that the preview carries a sidecar
-        // it cannot index. Dropping it at the producer establishes one
-        // invariant — A SAMPLED PREVIEW NEVER CARRIES A ROW-INDEXED SIDECAR —
-        // that protects every present and future consumer, instead of a
-        // `sampled` flag threaded through nine pure functions that any new
-        // caller could forget. Nothing is lost: `installBookData` replaces
-        // `data` with the full book, sidecars and all, when the fetch lands.
-        //
-        // Only when SAMPLED. A merely padding-trimmed preview
-        // (`preview_sampled === false`) is a genuine PREFIX whose cells DO line
-        // up, so its labels are correct and must be kept — which is also why a
-        // row-count proxy cannot stand in for this predicate.
-        const bookData = {
-          time: book.preview.time,
-          values: book.preview.values,
-          labels: book.labels,
-          units: book.units,
-          metadata: book.preview_sampled ? withoutRowSidecars(book.metadata) : book.metadata,
-        };
+        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({
           id,
           name,

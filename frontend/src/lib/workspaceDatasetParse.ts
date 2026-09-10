@@ -21,7 +21,6 @@ import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { baseColumns } from "./formula";
 import { applyComputedColumnsExtras } from "./workspaceComputedColumns";
-import { rowsAreSampled, withoutRowSidecars } from "./rowSidecars";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   BookSource,
@@ -242,21 +241,7 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
   // snapshot (a real "Save workspace" export always resolves it first);
   // validated the same defensive way as every other optional field here.
   const pending = parsePending(dd.pending);
-  if (pending) {
-    ds.pending = pending;
-    // BUG-006 site 10, the OTHER way a pending dataset comes into being. The
-    // import path strips row-indexed sidecars from a SAMPLED preview
-    // (store/importDatasets.ts — see the reasoning there); a `.dwk` written
-    // before that fix, or by a build without it, can restore the same
-    // mismatched pair, because `lib/workspaceSerialize.ts` stores `metadata`
-    // wholesale and `pending` independently. These two assignments are the ONLY
-    // places a dataset gains `pending`, so stripping at both makes "a sampled
-    // preview never carries a row-indexed sidecar" an invariant rather than a
-    // property of one code path.
-    if (rowsAreSampled(pending)) {
-      ds.data = { ...ds.data, metadata: withoutRowSidecars(ds.data.metadata ?? {}) };
-    }
-  }
+  if (pending) ds.pending = pending;
   const source = parseDatasetSource(dd.source, projectDir);
   if (source) ds.source = source;
   // P1.7 box 5: see the serializer's matching comment in workspace.ts.

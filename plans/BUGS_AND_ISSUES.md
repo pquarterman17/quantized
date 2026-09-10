@@ -1222,40 +1222,47 @@ differs from its input's — and that is what turned up sites 7-9.
   in the second review round. NOTE `preview.py` is no longer merely "not a site":
   it is now the SOURCE of site 9's fix, since it is the only place that can tell a
   padding trim (an aligned prefix) from a min/max sample.
-- [x] **Site 10, CLOSED 2026-09-10 — and NOT where this entry expected.** The
-  diagnosis was right: `barlayout.ts`'s `textLabelsFor` indexes a row-indexed
-  sidecar against `columnOf(data, channel)` and takes a bare `DataStruct`, so it
-  structurally cannot apply site 9's condition. Measured wrong output, red-first:
-  a 6-row book with levels `[0,0,1,1,2,2]` and text
-  `["A0","A0","B1","B1","C2","C2"]`, sampled to rows `[1,2,4,5]`, returned
-  `["A0","A0","B1"]` for levels `[0,1,2]` — every level covered and each
-  internally consistent, so its own agreement check PASSED. Confident wrong
-  category names on a bar chart, not a safe numeric fallback. (Other
-  misalignments do disagree with themselves and fall back, which is why it reads
-  as intermittent.)
-  **The prescribed fix — thread a "these rows are a sample" flag into the pure
-  layer — was built, measured and abandoned.** Making the parameter required
-  enumerated 27 errors across 13 files: ~9 pure functions each needing the flag
-  plus every transitive caller, and a permanent hazard that any new caller passes
-  `false` and silently restores the bug.
-  **Fixed at the two PRODUCERS instead, as one invariant: A SAMPLED PREVIEW NEVER
-  CARRIES A ROW-INDEXED SIDECAR.** `store/importDatasets.ts` (import) and
-  `lib/workspaceDatasetParse.ts` (`.dwk` restore) are the only two places a
-  dataset gains `pending`; each now runs the FULL book's metadata through the
-  existing `withoutRowSidecars` when `rowsAreSampled(pending)`. Two lines instead
-  of twenty signatures, and it protects every consumer that indexes such a
-  sidecar rather than only the label path. Nothing is lost: `installBookData`
-  restores the full metadata when the fetch lands.
-  Only when SAMPLED — a padding-trimmed preview is a genuine PREFIX whose cells
-  line up, so its labels are correct and are kept. That is also why a row-count
-  proxy cannot stand in for the predicate: a trimmed preview is *also* shorter
-  than its sidecar. Both directions are sabotage-pinned (stop stripping; strip
-  unconditionally; and a length-proxy variant).
+- [x] **Site 10, CLOSED 2026-09-10.** The diagnosis was right: `textLabelsFor`
+  pairs sidecar cell r with row r, and a lazily-loaded book's preview has
+  decimated rows against a FULL-LENGTH sidecar
+  (`io/origin_project/preview.py` leaves `metadata=ds.metadata` on both the trim
+  and the sampled path). Measured wrong output, red-first: a 6-row book with
+  levels `[0,0,1,1,2,2]` and text `["A0","A0","B1","B1","C2","C2"]`, sampled to
+  rows `[1,2,4,5]`, returned `["A0","A0","B1"]` for levels `[0,1,2]` — every
+  level covered and each internally consistent, so its own agreement check
+  PASSED. Confident wrong category names, not a safe numeric fallback.
+  **FIX: `textLabelsFor` skips a sidecar column whose length disagrees with the
+  row count.** Suppress, never reindex (reindexing is impossible — the preview
+  does not record which rows the sampler kept), and never DELETE.
+  **TWO REJECTED ALTERNATIVES, both measured:**
+  * *Threading a `sampled` flag into the pure layer* (what this entry originally
+    prescribed): making the parameter required enumerated 27 errors across 13
+    files — ~9 pure functions plus every transitive caller — and left a
+    permanent hazard that a new caller passes `false` and silently restores the
+    bug.
+  * *Stripping the sidecar at the two producers* (built, and REVERTED in
+    adversarial review): it destroyed data that legitimate NON-row-indexing
+    readers need — the Inspector's Origin provenance card and
+    `lib/projectSearchSidecars.ts`'s name search — and the loss PERSISTED,
+    because `lib/workspaceSerialize.ts` then wrote the stripped metadata into
+    the `.dwk`. It also gated on `book.preview_sampled`'s truthiness rather than
+    the shared `rowsAreSampled` predicate, so an older backend's `undefined`
+    FAILED OPEN and reopened the bug. Site 9 had already chosen the right shape
+    and said so in its own header; the strip contradicted it.
+  **KNOWN COST, accepted and tested:** a padding-TRIMMED preview is a genuine
+  PREFIX whose cells DO line up, but its sidecar is full-length too and no
+  length test can tell a prefix from a sample — so its labels also degrade to
+  formatted numbers until the book resolves. A degradation, deliberately
+  preferred over wrong names.
+- [ ] **Booked by site 10's fix:** recovering a TRIMMED preview's text labels
+  needs the backend to send which rows the decimator kept (or to slice the
+  sidecar to the preview on the trim path, where the mapping is a known
+  prefix). Then the guard can be exact instead of conservative. A wire/preview
+  contract change, deliberately not invented inside the fix.
   `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
-  row-indexed, so decimation cannot disturb it, and it takes precedence anyway.
-  Site 9's `worksheetTextColumns` suppression stays as belt-and-braces.
-  `barlayout.test.ts` also pins the pre-fix wrong answer, so a future change that
-  lets an unsliced sidecar back through is recognised rather than puzzled over.
+  row-indexed. NOTE that is a narrow claim: an Origin `.opj` import carries text
+  columns and NO `cat_levels`, so for the datasets this guard actually affects
+  the fallback IS the numbers.
   `lib/projectSearchSidecars.ts` reads keys only and is fine.
 
 #### Second review round, on the fix itself — all fixed here

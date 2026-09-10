@@ -285,53 +285,65 @@ describe("stackedSegments / stackedTotal", () => {
   });
 });
 
-// BUG-006 site 10, the CONSUMER end. The fix lives at the two producers (a
-// sampled preview never carries a row-indexed sidecar — store/importDatasets.ts
-// and lib/workspaceDatasetParse.ts), so what this file pins is that the
-// resolver does the right thing with the result: no sidecar means fall through
-// to the level table, then to formatted numbers. It also records what the WRONG
-// answer looked like, so the next reader can see why the strip is at the
-// producer and not here.
-describe("category labels for a decimated preview (BUG-006 site 10)", () => {
-  const sampledRows = { time: [1, 2, 4, 5], values: [[0], [1], [2], [2]] };
-
-  it("falls back to formatted numeric levels once the sidecar is stripped", () => {
-    const stripped: DataStruct = {
-      ...sampledRows,
-      labels: ["Group"],
-      units: [""],
-      metadata: { instrument: "PPMS" }, // the strip kept non-row-indexed keys
-    };
-    expect(resolveCategoryLabels(stripped, 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+// BUG-006 site 10: `textLabelsFor` pairs sidecar cell r with row r, which is
+// only valid when the two describe the SAME rows. A lazily-loaded Origin book's
+// preview breaks that — decimated rows, full-length sidecar — so the resolver
+// declines to row-index a sidecar whose length disagrees with the rows.
+describe("category labels never come from a sidecar that does not match the rows (BUG-006 site 10)", () => {
+  const SIDECAR = { Group: ["A0", "A0", "B1", "B1", "C2", "C2"] };
+  const preview = (time: number[], values: number[][]): DataStruct => ({
+    time,
+    values,
+    labels: ["Group"],
+    units: [""],
+    metadata: { text_columns: SIDECAR, instrument: "PPMS" },
   });
 
-  it("prefers a LEVEL TABLE, which is channel-keyed and so never misindexed", () => {
-    // Why catTableLabels needed no change: `cat_levels` is not row-indexed, so
-    // decimation cannot disturb it. A sampled preview still gets real names
-    // when the channel is categorical.
+  it("a SAMPLED preview falls back to numbers instead of confident WRONG names", () => {
+    // The measured defect. Pre-guard this returned ["A0","A0","B1"]: every
+    // level covered and each internally consistent, so the agreement check
+    // passed. The truth is A0/B1/C2.
+    const sampled = preview([1, 2, 4, 5], [[0], [1], [2], [2]]);
+    const labels = resolveCategoryLabels(sampled, 0, [0, 1, 2]);
+    expect(labels).not.toEqual(["A0", "A0", "B1"]);
+    expect(labels).toEqual(["0", "1", "2"]);
+  });
+
+  it("does NOT delete the sidecar — readers that never row-index it still see it", () => {
+    // The producer-side strip this replaced destroyed the sidecar outright,
+    // which broke the Inspector's Origin provenance card and
+    // lib/projectSearchSidecars.ts's name search — and persisted the loss into
+    // the .dwk. Declining to INDEX costs only this one label source.
+    const sampled = preview([1, 2, 4, 5], [[0], [1], [2], [2]]);
+    resolveCategoryLabels(sampled, 0, [0, 1, 2]);
+    expect(sampled.metadata?.["text_columns"]).toEqual(SIDECAR);
+    expect(sampled.metadata?.["instrument"]).toBe("PPMS");
+  });
+
+  it("a MATCHING sidecar is still used — the guard is not a blanket refusal", () => {
+    const resolved = preview([1, 2, 3, 4, 5, 6], [[0], [0], [1], [1], [2], [2]]);
+    expect(resolveCategoryLabels(resolved, 0, [0, 1, 2])).toEqual(["A0", "B1", "C2"]);
+  });
+
+  it("KNOWN COST: a padding-trimmed preview also degrades to numbers", () => {
+    // A trim is a genuine PREFIX whose cells DO line up, but its sidecar is
+    // full-length too, and no length test can tell a prefix from a sample. So
+    // these labels are correct-but-unavailable until the book resolves. A
+    // degradation, deliberately preferred over the wrong names above. Recovering
+    // it needs the backend to send which rows the decimator kept (booked).
+    const trimmed = preview([1, 2, 3, 4], [[0], [0], [1], [1]]);
+    expect(resolveCategoryLabels(trimmed, 0, [0, 1])).toEqual(["0", "1"]);
+  });
+
+  it("a LEVEL TABLE still wins, so a categorical channel keeps real names", () => {
+    // `cat_levels` is channel-keyed, not row-indexed, so decimation cannot
+    // disturb it and it takes precedence. NOTE this is a narrow claim: an
+    // Origin .opj import carries text columns and NO cat_levels, so for the
+    // datasets this guard actually affects the fallback IS the numbers above.
     const withTable: DataStruct = {
-      ...sampledRows,
-      labels: ["Group"],
-      units: [""],
-      metadata: {},
+      ...preview([1, 2, 4, 5], [[0], [1], [2], [2]]),
       cat_levels: { 0: ["Low", "Mid", "High"] },
     };
     expect(resolveCategoryLabels(withTable, 0, [0, 1, 2])).toEqual(["Low", "Mid", "High"]);
-  });
-
-  it("DOCUMENTS the pre-fix wrong answer: an unsliced sidecar reads as self-consistent", () => {
-    // If a full-length sidecar ever reaches here again, this is what happens —
-    // not a safe null fallback, but confident wrong names. The walk pairs
-    // (0,"A0"), (1,"A0"), (2,"B1"), (2,"B1"): every level covered, each
-    // internally consistent, so the agreement check passes. The truth is
-    // A0/B1/C2. This test exists so that a future change that lets an unsliced
-    // sidecar through is recognised for what it is rather than puzzled over.
-    const unsliced: DataStruct = {
-      ...sampledRows,
-      labels: ["Group"],
-      units: [""],
-      metadata: { text_columns: { Group: ["A0", "A0", "B1", "B1", "C2", "C2"] } },
-    };
-    expect(resolveCategoryLabels(unsliced, 0, [0, 1, 2])).toEqual(["A0", "A0", "B1"]);
   });
 });
