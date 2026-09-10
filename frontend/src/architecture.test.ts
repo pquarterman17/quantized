@@ -612,11 +612,19 @@ const LIB_UI_GRANDFATHERED = new Set([
 // or `formulas` must either route through `store/pendingEdit.refusePendingEdit` or
 // be listed below with a reason. A NEW such module fails this test.
 //
-// HONEST LIMITATION, so nobody trusts this further than it goes: the detector keys
-// on the common `datasets: <state>.datasets.map(` updater shape. Other shapes exist
-// (`removeFormula` assigns `const datasets = s.datasets.map(...)` inside a block and
-// is NOT matched, though its module is guarded anyway). This is a coarse net that
-// catches the shape four of the five rounds' misses actually used — not a proof.
+// SHAPES IT MATCHES, counted in-repo rather than guessed: the object-literal
+// `datasets: <state>.datasets.map(` (38 uses), the assigned
+// `const datasets = <state>.datasets.map(` (4 — `removeFormula`'s shape, which the
+// first version of this ratchet MISSED), and the array-literal `datasets: [` (6).
+//
+// HONEST LIMITATION, so nobody trusts it further than it goes: it is a REGEX over
+// source text, not a type-aware analysis. A mutation routed through a `lib/` helper,
+// or built by a loop into a local before assignment, or done via a `set` alias this
+// pattern does not name, still slips through. It is a coarse net over the shapes
+// this repo actually uses — not a proof. Checked while writing it: the only
+// `useApp.setState` in `store/` that mutates dataset data is `recode`'s, and the
+// object-literal pattern does match it; `relink`/`relinkCommit` set only
+// `source`/`versionOf`, so they are correctly not flagged.
 const PENDING_EDIT_EXEMPT = new Map<string, string>([
   [
     "reimport.ts",
@@ -631,7 +639,11 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
     for (const [path, src] of sources()) {
       if (!path.startsWith("./store/") || path.endsWith(".test.ts")) continue;
       const name = path.slice("./store/".length);
-      const updaters = [...src.matchAll(/datasets:\s*\w+\.datasets\.map\(/g)];
+      const updaters = [
+        ...src.matchAll(/datasets:\s*\w+\.datasets\.map\(/g),
+        ...src.matchAll(/\w+\s*=\s*\w+\.datasets\.map\(/g),
+        ...src.matchAll(/datasets:\s*\[/g),
+      ];
       const touchesData = updaters.some((m) =>
         /\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),
       );
@@ -653,7 +665,14 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
     const byName = new Map([...sources()].map(([p, src]) => [p.slice("./store/".length), src]));
     const stale = [...PENDING_EDIT_EXEMPT.keys()].filter((n) => {
       const src = byName.get(n);
-      return !src || !/datasets:\s*\w+\.datasets\.map\(/.test(src);
+      return (
+        !src ||
+        !(
+          /datasets:\s*\w+\.datasets\.map\(/.test(src) ||
+          /\w+\s*=\s*\w+\.datasets\.map\(/.test(src) ||
+          /datasets:\s*\[/.test(src)
+        )
+      );
     });
     expect(stale, "drop the exemption; its updater is gone").toEqual([]);
   });
