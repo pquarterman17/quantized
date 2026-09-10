@@ -31,6 +31,7 @@ import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useRecode } from "../../../store/recode";
+import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
 import SheetTabs from "./SheetTabs";
@@ -266,6 +267,19 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
                     ? ([
                         { separator: true },
                         { label: "Recode…", run: () => useRecode.getState().openRecode(ds.id, menu.target) },
+                        // JMP_GAP J1 (Group O-2b): same guard as Recode above —
+                        // only a real, categorical value column has a level
+                        // order to reorder. Sets the TINY panel-flag store
+                        // (store/levelOrderPanel.ts) directly, not the heavy
+                        // store/levelOrder.ts — this guard already IS the
+                        // refusal check the heavy store would otherwise
+                        // duplicate, and importing that store here would pull
+                        // lib/recode.ts into the eager bundle (bundle-size
+                        // ratchet; see store/levelOrderPanel.ts's header).
+                        {
+                          label: "Reorder levels…",
+                          run: () => useLevelOrderPanel.getState().openPanel(ds.id, menu.target, ds.data.labels[menu.target]),
+                        },
                       ] as const)
                     : []),
                 ]
