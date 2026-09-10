@@ -29,8 +29,9 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices + row edits | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **6 of 8 sites fixed** 2026-09-09, sabotage-verified; `calc/corrections.py` xTrim and `lib/merge.ts` still open — see the entry. Declared "fixed everywhere" twice and wasn't, both times caught by review, never by the suite |
+| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
+| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; two data-CORRUPTING sites found in review round 5 and now guarded, but "refuse" should be "resolve-then-apply" and a failed fetch is a permanent lockout | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites fixed + ratcheted, structural fix open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1153,13 +1154,16 @@ The two hesitations, and what they were actually worth:
   `origin_text_columns: {Source}`, which a surviving stale `text_columns` beat
   in `lib/columnmeta.ts`'s `text_columns ?? origin_text_columns`.
 
-#### STILL OPEN — two sites found by the Group N review, with measured evidence
+#### The last three sites (Group P) — and why the enumeration kept being wrong
 
-The status below is **NOT "fixed everywhere"**, and the earlier claim that the
-slice was "applied at EVERY row-slicing site" was false twice over. Two sites
-remain, both PERSISTED, both reachable without an Origin file:
+The claim "applied at EVERY row-slicing site" was false twice. Group P closed
+the two the Group N review found, plus a NINTH the Group P audit found on its
+own, and the reason the count kept moving is worth recording: each earlier pass
+enumerated the sites it had *thought of* instead of searching for the shape.
+Group P searched for the shape — every producer of a DataStruct whose row count
+differs from its input's — and that is what turned up sites 7-9.
 
-- [ ] **`src/quantized/calc/corrections.py`'s xTrim** (`:122-131` masks rows,
+- [x] **`src/quantized/calc/corrections.py`'s xTrim** (`:122-131` masks rows,
   `:252` returns `metadata=dict(data.metadata)` unsliced). Import a CSV with one
   `label`-role column, so `metadata.text_columns` holds exactly one cell per row
   (`io/import_preview.py:453-458`); apply corrections with `xTrimMin` cutting the
@@ -1170,15 +1174,127 @@ remain, both PERSISTED, both reachable without an Origin file:
   bug started from, which only ever produced a derived copy. The code right
   beside it reasons explicitly about `excludedRows` shifting under an xTrim and
   says nothing about the sidecars.
-- [ ] **`frontend/src/lib/merge.ts:119-123`** — `metadata: { ...datasets[0].metadata,
+- [x] **`frontend/src/lib/merge.ts:119-123`** — `metadata: { ...datasets[0].metadata,
   ... }`. Two harms: datasets 1..N's sidecars are silently DROPPED, and if
   dataset 0's sidecar is longer than its own row count (the ragged case) its
   trailing cells land on dataset 1's rows. Measured shape: A = `time:[10,20,30]`
   with `text_columns:{A:[a0..a5]}`, B = 3 numeric rows -> merge yields 6 rows
   with `A:[a0..a5]` unchanged, so B's rows display `a3,a4,a5`. Reached from
-  `useApp.ts` importAppended + mergeSelected. A correct fix concatenates each
-  dataset's cells padded to its own row count, unioning column names — feasible,
-  not done here.
+  `useApp.ts` importAppended + mergeSelected. FIXED by
+  `lib/rowSidecars.concatRowSidecars`: column names are unioned in
+  first-appearance order, each input contributes EXACTLY its own row count padded
+  with blanks, and an all-blank column is dropped. This is the one place that
+  must NOT trailing-trim — trimming one part would shift every following part.
+  An input whose sidecar runs longer than its own rows has cells for rows the
+  combined grid does not have; those are dropped rather than pushed onto the next
+  input, the honest trade.
+- [x] **Site 9, found by Group P's own audit, NOT by the reviews:
+  `store/importDatasets.ts` + `useWorksheetView.ts`.** A still-pending Origin
+  book's placeholder Dataset pairs the ~200-row min/max-DECIMATED preview
+  (`_book_preview_payload` -> `book.preview.time/values`) with the FULL book's
+  `metadata` (`_slim_metadata` strips only `origin_books`), so its text sidecars
+  hold one cell per REAL row. `GridRow` then rendered `t.rows[r]` beside
+  `values[r]` — and decimation keeps each bucket's extremum, so it is not even a
+  prefix: row r's text belonged to whatever row the sampler picked. It also drove
+  the grid's row count to the FULL length via
+  `max(time.length, textRowCount)`, rendering thousands of rows with no numbers.
+  Visible in the worksheet for as long as the fetch takes, and indefinitely when
+  it fails (`installBookData`'s catch leaves `pending` set). `pendingGuard` in
+  the SAME FILE already refused extract/copy citing this exact reasoning ("a row
+  index computed against the preview doesn't correspond to any real row") — the
+  render simply never got the same treatment. FIXED by suppressing text columns
+  while `ds.pending`; nothing is lost, since `installBookData` swaps data and
+  metadata together and the Inspector's provenance card (which never indexes by
+  row) keeps showing them throughout.
+- [x] **`calc/resample.py`** — DROPS them rather than slicing, because every
+  output row is an interpolated point on a new grid: no output row IS an input
+  row, so there is no mapping. The same reasoning already governed `cat_levels`
+  there. New `drop_row_sidecars` makes the choice explicit and tested.
+- [x] `src/quantized/row_sidecars.py` is the new Python mirror of
+  `lib/rowSidecars.ts` — same module name, same key list, same trailing-trim and
+  empty-column rules, kept in sync BY HAND like
+  `datastruct.is_categorical`/`lib/categorical.isCategoricalChannel`.
+- [x] Checked and NOT sites: `io/origin_project/preview.py`'s
+  `_trim_trailing_padding`/`decimate_datastruct` (their metadata is discarded —
+  the payload sends the full ds's), and `calc/map.py` (builds a 2-D `MapData`
+  grid, where a per-row sidecar has no meaning). Both independently re-verified
+  in the second review round. NOTE `preview.py` is no longer merely "not a site":
+  it is now the SOURCE of site 9's fix, since it is the only place that can tell a
+  padding trim (an aligned prefix) from a min/max sample.
+- [ ] **Site 10, STILL OPEN: `frontend/src/lib/barlayout.ts`'s `textLabelsFor`
+  (`:69-73`).** It indexes `rows[r]` against `colValues(data, channel)[r]` to
+  derive categorical bar labels, and it takes a bare `DataStruct` — so it
+  structurally CANNOT apply site 9's condition, which needs `pending` off the
+  `Dataset` (the stated reason was originally `pending`/`rows` — the `rows` half
+  is stale now that the condition reads the backend's flag, but the conclusion is
+  unchanged: a bare `DataStruct` cannot see `pending` at all). A pending book routed through the figure builder therefore pairs
+  full-length sidecar cells with preview values: the same class of bug, one layer
+  below where the fix can reach. Transient (activation kicks `ensureBookData`),
+  exactly as the worksheet render was before it was fixed. Fixing it means
+  threading the row span (or a "these rows are a sample" flag) into the pure
+  layer, a contract change deliberately not bolted on here.
+  `lib/projectSearchSidecars.ts` reads keys only and is fine.
+
+#### Second review round, on the fix itself — all fixed here
+
+Ten more issues, two HIGH, and both HIGH ones were in the round-1 FIX rather than
+in code it had missed:
+
+- [x] `concatRowSidecars` sized parts by `time.length`, TRUNCATING an input's
+  overflow cells — the very thing `store/cellEdit.ts` had ruled against one
+  commit earlier, and its doc called that truncation "the honest trade" without
+  mentioning the honest option. Parts are now sized by `sidecarRowCount` and the
+  numeric rows padded to match, so nothing is dropped and part k's numbers and
+  text land on the same output rows.
+- [x] `mergeDatasets` spread dataset 0's metadata and relied on the rebuild to
+  OVERWRITE it; `concatRowSidecars` omits a key no input contributes to, and an
+  omitted key left dataset 0's sidecar standing. Now stripped first
+  (`withoutRowSidecars`). Recorded precisely because it matters: with the span fix
+  in place, a sabotage showed the strip is load-bearing ONLY for a corrupted
+  sidecar — it does not fix the two headline reproductions, and the comment says
+  so rather than taking credit for them.
+- [x] Row EDITS on a pending book were unguarded, so `sidecarRowCount` reported
+  the full book's span against the preview's numbers: one "insert row" padded the
+  grid to the full length in NaN, persisted it, and `installBookData` then wiped
+  it silently. `refusePendingEdit` (store/pendingEdit.ts) mirrors `pendingGuard`. Site 9's render fix
+  had just removed the phantom rows that used to hint at this.
+- [~] Site 9's condition went through THREE wrong versions before the right one,
+  and the record of the wrong ones matters more than the fix:
+  1. `ds.pending` alone — over-suppressed the RENDER: a text-only book (where the
+     text columns ARE the grid) went completely blank while pending, permanently
+     when the fetch failed.
+  2. `pending.rows > data.time.length` — a row-count PROXY, and the claim
+     justifying it was FALSE. `decimate_datastruct` does NOT return its input
+     unchanged below 200 rows: `_trim_trailing_padding` runs FIRST, and that trim
+     is corpus-attested (Book15 drops 19 of 180). So a trimmed preview is shorter
+     than `pending.rows` while still being a strict PREFIX whose cells line up —
+     and the proxy blanked ordinary books, which is the regression it replaced.
+  3. Reusing the resulting `rowsAreSampled` for the row-EDIT guard as well. Those
+     answer different questions: whether SIDECARS may be indexed (render) versus
+     whether `d.data` is about to be THROWN AWAY by `installBookData` (edit, true
+     for every pending dataset). That loosening re-opened a silent data-loss path
+     — measured on the same corpus shape, `insertRows` materialized 19 trimmed
+     rows as NaN, recorded undo, warned about nothing, and the resolve discarded
+     all of it.
+  NOW: the render reads `rowsAreSampled`, which reads the BACKEND's own
+  `preview_sampled` (only the backend can distinguish a trim from a sample);
+  the edit guard reads `pending != null` and covers cell writes as well as row
+  edits. Both are sabotage-verified, and the wire flag's three plumbing hops are
+  each pinned by a test — round 4 deleted each of them with the whole suite green.
+- [x] The Python module diverged from the TS on three measured cases: a `None`
+  cell (which a `.dwk` round trip really produces), a non-integer index, and a
+  tuple-valued column (silently returned UNSLICED to a pure-API caller).
+- [x] "name-for-name" and "cannot drift silently" were both false — nothing
+  compared the two modules at all. The key list is now mechanically enforced by a
+  test that parses the `.ts` file; cell semantics are pinned case-by-case.
+- [x] Every `concatRowSidecars` branch was untested, including the all-blank
+  prune whose deletion left the whole suite green while keeping site 8 open.
+  Covered, plus the negative-index guard the Python side had never pinned.
+- [x] A `useMemo` keyed on the whole `Dataset` re-materialized every text cell on
+  any unrelated change (rename, tag, exclusion toggle); back to the two fields it
+  reads.
+- [x] `corrections.py`'s comment cited `excludedRows` reasoning that lives in the
+  FRONTEND, not in that module.
 
 Also booked, not a defect: `lib/worksheetTransforms.ts`'s `stackWorksheet` DOES
 have a recoverable row mapping (output row `k` <- source row
@@ -1200,6 +1316,98 @@ impossibility for all three reshapes; it now distinguishes the three cases.
   alone kept it green regardless of the allowlist).
 - Owner verification: — (worth a look on a real Origin "Text & Numeric" sheet;
   the fix is shape-driven, not corpus-driven, so no specimen was needed.)
+
+---
+
+## BUG-009 — the pending-dataset contract is five ad-hoc guards, not a contract
+
+**Priority:** P2 — the two data-CORRUPTING sites are guarded as of 2026-09-10, so
+nothing is actively destroying data. What remains is structural, and the structure
+is why this cost five review rounds.
+
+### What happened
+
+BUG-006's site 9 (a pending Origin book's `data` is a display projection that
+`installBookData` replaces wholesale) took FIVE review rounds. Each round found two
+HIGH defects; THREE of those were regressions introduced by the fix for an earlier
+round's finding. Every round was fully green when its defects were found.
+
+The cause was not carelessness. **Nothing noticed a MISSING guard.** The suite and
+each reviewer could only see the guards that existed, so round 4 could extend the
+guard to three sites and still miss the two that CORRUPT data rather than merely
+lose an edit:
+
+- `store/computedColumns.ts` `addFormula`/`updateFormula`/`removeFormula` and
+  `store/recode.ts` wrote `formulas` onto a pending dataset. Measured: the formula
+  SURVIVES the resolve while the preview's labels do not, so the next legitimate
+  edit computes `baseCount = labels.length - formulas.length`, treats a REAL
+  measured channel as the computed one, and overwrites its imported values with
+  formula output under its own label. `applyCorrections` drops that channel outright.
+
+### Done (2026-09-10)
+
+- [x] All nine mutation sites route through ONE `store/pendingEdit.refusePendingEdit`
+  — its own module, because four earlier rounds each added a COPY of the rule
+  instead of a home, and three of those copies were wrong at some point.
+- [x] A ratchet in `architecture.test.ts`. **Its first version enforced almost
+  nothing and this tick was FALSE for a day** — it token-matched the FILE
+  (`src.includes("refusePendingEdit")`), so deleting all four guard CALLS while
+  leaving the imports kept 620 files / 9,792 tests green. The only thing standing
+  between the data-corrupting fix and silent deletion was an eslint unused-import
+  error, which a partial deletion or a reorder defeats. Now PER-UPDATER: each
+  matched updater must have a guard in its own enclosing action. Sabotage-verified
+  on the three cases the file-level version missed (all four calls deleted; a
+  second unguarded action in an already-guarded module; a guard removed from one
+  action while siblings keep theirs).
+- [x] What the ratchet does NOT catch is enumerated inline rather than summarised
+  as "a coarse net": a mutation via a `lib/` helper returning a whole Dataset
+  (live instance named — `useApp.ts:1142`'s overlay path, benign today, and the
+  detector reports NOTHING for that file), `{...d, ...patch}` with a precomputed
+  patch (`corrections.ts`/`recalcDatasets.ts`'s real shape), `getState().datasets`,
+  a write past the scan window, ROW-STATE keys, and anything outside `./store/`.
+- [x] The exemption list's honesty test now checks the exempt module's stated
+  REASON, not just that it still has an updater: deleting `reimport.ts`'s
+  `pending: undefined` — the exact clause its exemption cites — previously left
+  every test green.
+
+### STILL OPEN — also the ROW-STATE family (found round 6)
+
+- [ ] `useApp.ts`'s `toggleRowExcluded`, `setRowsExcluded`, `clearRowExclusions`,
+  `setDatasetFilter`, `clearDatasetFilter` are the same defect class, unguarded, and
+  invisible to the ratchet (its key list is `data|metadata|cat_levels|formulas`).
+  Measured: `toggleRowExcluded` on a pending dataset is ACCEPTED, pushes a history
+  entry, says nothing — and `installBookData` clears `excludedRows`/`filter` on the
+  resolve. That is verbatim the shape round 4 called incoherent to leave for cell
+  edits, reachable from the SAME pane whose cell edits are guarded (the gutter
+  click). The invariant below covers them; the code does not.
+
+### STILL OPEN — the structural fix
+
+- [ ] **Replace "refuse" with "resolve-then-apply."** The guard refuses; it does not
+  defer. `ensureBookData` never clears `pending` on failure, so a permanently failed
+  fetch (moved source, expired upload token) is a permanent lockout: every edit,
+  extract, copy and save refused forever, while the status still says "in a moment".
+  For a text-only book the render fix now SHOWS the cells, so the user sees an
+  editable grid that can never be edited. `store/corrections.ts` already has the
+  right shape (`await get().resolveDataset(id)` first). One `withResolved(id, fn)`
+  wrapper would make the safe path the DEFAULT rather than something each new action
+  must remember — which is the actual defect. Deliberately NOT attempted inside a PR
+  that has already taken five review rounds.
+- [ ] Distinguish "in flight" from "failed, will never arrive", so the message stops
+  promising a retry that cannot succeed.
+
+### The invariant, stated once (it never was)
+
+A pending dataset's `data` is a **read-only display projection**. Read: allowed.
+Render: allowed, and row-indexed sidecars may be shown only when the backend says
+the preview is a prefix (`preview_sampled === false`). Edit / derive / extract /
+save: resolve FIRST, then apply, and surface a genuine failure.
+
+### Completion record
+
+- PR/commit: the round-5 response on the Group P branch (2026-09-10).
+- Owner verification: — (the resolve-then-apply refactor is a design call worth
+  an owner's read before it is built).
 
 ---
 

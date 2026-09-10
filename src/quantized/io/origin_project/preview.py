@@ -19,7 +19,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 
-__all__ = ["decimate_datastruct"]
+__all__ = ["decimate_datastruct", "decimate_with_alignment"]
 
 
 def _trim_trailing_padding(ds: DataStruct) -> DataStruct:
@@ -96,10 +96,34 @@ def decimate_datastruct(ds: DataStruct, target_points: int = 200) -> DataStruct:
     empty-data pseudo-book -- nothing to pick extrema from, and nothing to
     save by decimating zero columns).
     """
+    return _decimate(ds, target_points)[0]
+
+
+def decimate_with_alignment(ds: DataStruct, target_points: int = 200) -> tuple[DataStruct, bool]:
+    """:func:`decimate_datastruct`, plus whether the result's rows are a SAMPLE.
+
+    ``(preview, sampled)``. ``sampled`` is ``True`` only when the bucketed min/max
+    pick below actually ran -- the one case where output row ``r`` is NOT source
+    row ``r``.
+
+    Exists because only this module can answer that, and a consumer holding just
+    the two DataStructs cannot infer it: BOTH the padding trim and the sampling
+    shorten the data, and only the sampling breaks row correspondence. A row-count
+    comparison therefore cannot tell them apart -- which is exactly the bug it
+    caused. The frontend's ``worksheet/textColumns.ts`` gated on
+    ``pending.rows > data.time.length`` and blanked a book's text columns whenever
+    :func:`_trim_trailing_padding` had removed ANY over-allocated row
+    (corpus-attested: Book15 drops 19 of 180), even though a trimmed preview is a
+    strict PREFIX whose sidecar cells line up exactly.
+    """
+    return _decimate(ds, target_points)
+
+
+def _decimate(ds: DataStruct, target_points: int) -> tuple[DataStruct, bool]:
     ds = _trim_trailing_padding(ds)
     n = ds.n_points
     if n <= target_points or ds.n_channels == 0:
-        return ds
+        return ds, False
 
     finite_counts = np.count_nonzero(np.isfinite(ds.values), axis=0)
     densest = int(np.argmax(finite_counts))
@@ -123,10 +147,13 @@ def decimate_datastruct(ds: DataStruct, target_points: int = 200) -> DataStruct:
         keep.add(start + int(local[int(np.argmax(seg_finite))]))
 
     idx = np.fromiter(sorted(keep), dtype=np.int64)
-    return DataStruct(
-        time=ds.time[idx],
-        values=ds.values[idx, :],
-        labels=ds.labels,
-        units=ds.units,
-        metadata=ds.metadata,
+    return (
+        DataStruct(
+            time=ds.time[idx],
+            values=ds.values[idx, :],
+            labels=ds.labels,
+            units=ds.units,
+            metadata=ds.metadata,
+        ),
+        True,
     )

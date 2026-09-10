@@ -942,8 +942,102 @@ import { fileURLToPath } from "node:url";
  *  +24 used above on purpose — `__BUILD_SHA__` is baked into the bundle
  *  (vite.config.ts), so a short SHA git extends by a character or two would
  *  otherwise redden CI with no code change at all. 64 covers that, no more.
+ *
+ *  2026-09-09 (Group P) — 912,554 -> 912,453, a LOWER of 101.
+ *
+ *  This entry was first written as a RAISE to 913,130, justified at length by two
+ *  reductions "tried and rejected". A review round then made the raise
+ *  unnecessary, and the reason is the useful part: **rejected-reduction claim #1
+ *  was simply false.** It said deferring `lib/merge.ts` "adds four lines to
+ *  store/useApp.ts, which sits AT its store-size pin" — true only of the shape I
+ *  happened to write,
+ *
+ *      const { mergeDatasets } = await import("../lib/merge");   // +1 line
+ *      const merged = mergeDatasets(...)                          // each site
+ *
+ *  when the inlined form costs ZERO lines, and −1 once the static top-level
+ *  import goes away:
+ *
+ *      const merged = (await import("../lib/merge")).mergeDatasets(...)
+ *
+ *  So the ratchet-vs-ratchet conflict I documented as a hard constraint was an
+ *  artifact of one formatting choice. `useApp.ts` went 2,448 -> 2,447 lines and
+ *  `lib/merge.ts` (127 lines of row-concatenation math, reachable only from two
+ *  already-async user actions) left the eager chunk. Check whether a constraint
+ *  is real before writing it down as one.
+ *
+ *  Rejected reduction #2 still stands as written: making `mergeDatasets` async
+ *  to defer a helper would turn a pure synchronous library function async for
+ *  bytes, and `lib/` is a pure library layer. It is also now moot.
+ *
+ *  Net: the round's ~400 new eager bytes (BUG-006's `withoutRowSidecars`,
+ *  per-part spans, and the pending row-edit guard) are more than paid for.
+ *  Pinned at measured (912,389) + 64; the day (from 910,711) is **+1,742**.
+ *
+ *  2026-09-09 (Group P, review round 3) — 912,453 -> 912,611, a raise of 158.
+ *
+ *  Against the pin currently on `main` (912,554) this is +57; the intermediate
+ *  912,453 was this branch's own lower, so quoting the raise against it is the
+ *  honest comparison and both numbers are given rather than the flattering one.
+ *
+ *  Buys the fix for two HIGH round-3 findings: a shared `rowsAreSampled`
+ *  predicate (the rule had been copied into three files and two copies were
+ *  wrong), plus the `preview_sampled` wire field it reads — the backend is the
+ *  only side that can distinguish a padding-TRIMMED preview, which is a strict
+ *  prefix and safe to index, from a SAMPLED one, which is not. The row-count
+ *  proxy it replaces blanked the text columns of ordinary corpus books.
+ *
+ *  Reduction taken first, as the rule requires: the predicate started as its own
+ *  `lib/pendingRows.ts` and moved into `lib/rowSidecars.ts`, which already owns
+ *  the row-indexed-sidecar contract and is already eager — a separate module was
+ *  an extra chunk for one function. What remains is the function body and the
+ *  field plumbing, which have no lazy boundary: both readers are a synchronous
+ *  store slice and a render path.
+ *
+ *  Pinned at measured (912,547) + 64, measured AFTER the final edit.
+ *
+ *  2026-09-10 (Group P, review round 4) — 912,611 -> 912,681, a raise of 70.
+ *  (+127 against `main`'s 912,554.)
+ *
+ *  Round 4 found that round 3 had LOOSENED `store/cellEdit.ts`'s edit guard from
+ *  `pending != null` to `rowsAreSampled`, re-opening a silent data-loss path: the
+ *  two answer different questions (may a SIDECAR be indexed, versus is `d.data`
+ *  about to be thrown away by `installBookData`). Restoring the correct condition
+ *  and extending it to the three CELL writes — which were equally destructive and
+ *  unguarded — is what these bytes are: three more guard call sites in a
+ *  synchronous store slice, plus the `preview_sampled` plumbing tests' production
+ *  counterparts. No lazy boundary exists for a store slice's own guards.
+ *
+ *  Pinned at measured (912,617) + 64, measured after the final edit — which for
+ *  once means after the LINE-ceiling fix too, since trimming a comment moves no
+ *  bytes but re-running the build is the only way to know that rather than assume
+ *  it.
+ *
+ *  2026-09-10 (Group P, review round 5) — 912,681 -> 912,838, a raise of 157.
+ *  (+284 against `main`'s 912,554.)
+ *
+ *  Round 5 found two MORE unguarded mutation sites, and these CORRUPT data rather
+ *  than lose an edit: `computedColumns.addFormula`/`updateFormula`/`removeFormula`
+ *  and `recode` wrote `formulas` onto a pending dataset, where the formula survives
+ *  the resolve but the preview's labels do not — so `baseCount = labels.length -
+ *  formulas.length` then treats a REAL measured channel as the computed one and
+ *  overwrites its imported values under its own label.
+ *
+ *  These bytes are the fix: `store/pendingEdit.ts` (the guard's own module, because
+ *  four earlier rounds each added a COPY of the rule instead of a home and three of
+ *  those copies were wrong at some point) plus four call sites. No reduction is
+ *  available — a store slice's own guard cannot be lazy, and the module is imported
+ *  by three eager slices.
+ *
+ *  WORTH NOTING WHERE THIS SERIES OF RAISES CAME FROM: the eager cost of this whole
+ *  feature is guards and one shared predicate, spread over five rounds because
+ *  nothing detected a MISSING guard. That detector now exists
+ *  (`architecture.test.ts`'s pending-edit ratchet), so the next site should cost a
+ *  test failure rather than another review round and another raise.
+ *
+ *  Pinned at measured (912,774) + 64, measured after the final edit.
  */
-const EAGER_JS_BUDGET = 912_554;
+const EAGER_JS_BUDGET = 912_838;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

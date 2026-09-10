@@ -40,6 +40,7 @@
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
 import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { refusePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -105,6 +106,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     insertRows: (id, at, count) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds || count <= 0) return;
+      if (refusePendingEdit(get, ds, "inserting rows")) return;
       get().recordHistory("insert rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -181,6 +183,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
       const deleted = new Set(rows.filter((r) => r >= 0 && r < span));
       if (deleted.size === 0) return;
+      if (refusePendingEdit(get, ds, "deleting rows")) return;
       get().recordHistory("delete rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -215,6 +218,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    // PENDING FIRST, ALWAYS. A previous round moved this below the row check for
+    // comment adjacency and silently broke the case BUG-009 singles out: on a
+    // pending book whose preview is shorter than the real grid — a text-only book
+    // is `time: []`, so EVERY row — the row check short-circuits first and the user
+    // gets no message and no kicked fetch, while `setCellBlock` (not reordered)
+    // still spoke. Two cell editors in one pane disagreeing, from moving a comment.
+    // Never order this after a bounds check that the preview's own shortness can
+    // trip.
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     // Out-of-range/negative row guard (P1.6b self-review finding): must run
     // BEFORE recordHistory, and before any patch — a `.slice()`-based patch
     // (below) throws on an out-of-range row rather than silently no-op'ing
@@ -263,6 +275,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // Computed columns are read-only, exactly as in setCellValue above. The
     // pure layer (lib/clipboardGrid) already filters them out, but a block
     // arriving from anywhere else must not be able to bypass the rule.
+    if (refusePendingEdit(get, ds, "pasting cells")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     // P1.6b item 7: same guard as setCellValue, applied per-cell — a bulk
     // paste that hits a categorical column drops just the invalid cells
@@ -325,6 +338,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
     if (!ds) return;
+    if (refusePendingEdit(get, ds, "editing a cell")) return; // pending first — see setCellValue
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based
     // patch that would otherwise throw on `values[row]`.

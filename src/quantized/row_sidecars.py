@@ -1,0 +1,271 @@
+"""Row-indexed metadata sidecars, and the one place that knows which keys those are.
+
+The Python counterpart of ``frontend/src/lib/rowSidecars.ts``: the same module
+name, the same key list, and the same per-cell slicing rule.
+
+WHAT "MIRROR" DOES AND DOES NOT MEAN HERE. Only the pieces the backend needs are
+mirrored -- ``slice_row_sidecars`` and the cell semantics. ``concatRowSidecars``,
+``sidecarRowCount``, ``insertRowIndexes`` and ``SidecarPart`` have no counterpart
+here (they serve frontend merge/row-edit paths), and ``drop_row_sidecars`` has
+none there. An earlier version of this docstring claimed the two matched
+"name-for-name" and that the pair therefore "cannot drift silently"; both were
+false -- nothing compared them at all, including for the
+``datastruct.is_categorical`` / ``lib/categorical.isCategoricalChannel``
+precedent it cited.
+
+The KEY LIST is now actually enforced:
+``tests/test_row_sidecars.py::TestMirrorsTheTypeScriptModule`` parses
+``ROW_INDEXED_SIDECARS`` out of the ``.ts`` file and fails on any divergence,
+because an added row-indexed sidecar that only one side slices is precisely the
+bug this module exists to prevent. The CELL SEMANTICS are pinned case-by-case in
+``TestMatchesTypeScriptCellSemantics`` (three real divergences were found there
+by review after this module was first called a mirror); those are still
+hand-kept, so add a case there when you touch either side.
+
+Most of ``DataStruct.metadata`` is structural or file-level and survives a row
+operation untouched. THREE keys are not: they hold one cell per ROW, so any
+operation that keeps a subset of rows has to keep the same subset of their cells,
+or every cell describes a different measurement than the one beside it -- a
+sample id or an operator read against the wrong row, silently.
+
+The keys are ENUMERATED, not inferred. "Slice anything shaped like
+``{name: list}``" would also hit the channel-indexed collections and be the
+mirror-image bug: ``label_rows``' cells are per-CHANNEL, ``all_column_names`` is
+the column roster, ``comments``/``source`` are file-level.
+
+WHY THIS IS ITS OWN MODULE, not a helper in ``calc/``: ``calc/`` and ``io/`` are
+pure libraries and both need this, and a metadata contract belongs beside the
+data contract rather than inside one consumer of it.
+"""
+
+from __future__ import annotations
+
+import operator
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
+__all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "slice_row_sidecars"]
+
+#: ``text_columns`` and ``origin_text_columns`` are the two spellings of the
+#: inline-text sidecar (the frontend's ``lib/columnmeta.ts`` reads
+#: ``text_columns ?? origin_text_columns``); ``origin_report_sheets`` is the same
+#: ``{name: [cell per row]}`` shape, holding Origin report-sheet references.
+ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sheets")
+
+
+def _is_boolean(i: Any) -> bool:
+    """Is ``i`` a boolean, INCLUDING a numpy one?
+
+    ``np.bool_`` is NOT a subclass of ``bool``, so a plain ``isinstance(i, bool)``
+    let a numpy boolean through -- the same isinstance-vs-numpy-scalar trap
+    ``np.int64`` fell into two rounds earlier, in a module whose native currency is
+    numpy index arrays.
+
+    WHICH LINE it got through matters, and an earlier version of this docstring named
+    the wrong one. It said ``np.bool_`` "does implement ``__index__``". It does not
+    (measured, numpy 2.4.6: ``hasattr(np.True_, "__index__")`` is ``False`` and
+    ``operator.index(np.True_)`` raises ``TypeError``). It got through the ``float()``
+    fallback below, since ``float(np.True_) == 1.0`` is integral. Anyone told
+    ``operator.index`` was the hole would audit the wrong line. The ``float()``
+    fallback is the one to watch: it accepts anything with a working ``__float__``.
+    (``np.timedelta64`` was suggested as another way through it -- it is not:
+    ``float(np.timedelta64(2, "s"))`` raises ``TypeError``, which the handler
+    already turns into a miss. Checked rather than assumed, both directions.)
+
+    Passing a boolean MASK where an index list is expected returned
+    plausible-looking WRONG cells instead of blanks:
+
+        _slice_cells(["a0","a1","a2"], [np.True_, 0])  ->  ["a1", "a0"]   (wrong)
+        JS  sliceCells(...,            [true,    0])   ->  ["",   "a0"]
+
+    ``.item()`` is the portable test: every numpy scalar has it, and for a
+    ``np.bool_`` it returns a real ``bool``. No numpy import needed here.
+    """
+    if i is True or i is False:
+        return True
+    item = getattr(i, "item", None)
+    if not callable(item):
+        return False
+    try:
+        return isinstance(item(), bool)
+    except Exception:
+        # TOTAL, like every other predicate here. `ndarray.item()` raises for size
+        # != 1 and a foreign `.item()` can raise anything, so an unguarded call
+        # turned a previously fail-soft input into a public-API crash:
+        # `slice_row_sidecars(meta, [np.array([1, 2]), 0])` returned blanks before
+        # and raised ValueError after. `slice_row_sidecars` is in `__all__`.
+        return False
+
+
+def _as_index(i: Any) -> int | None:
+    """``i`` as a real position in a JS array, or ``None``.
+
+    Derived from a MEASURED table of what the TypeScript side returns, not from
+    what "index" ought to mean -- the previous version guessed, and a test then
+    locked the guess in. JS array access stringifies the key, so:
+
+    =======================  ===========================  =============
+    index                    JS ``cells[i]``              here
+    =======================  ===========================  =============
+    ``2`` / ``np.int64(2)``  ``cells[2]``                 the cell
+    ``2.0``                  ``cells["2"]`` -> the cell   the cell
+    ``1.5``                  ``cells["1.5"]`` -> undef    ``None``
+    ``True``                 ``cells["true"]`` -> undef   ``None``
+    ``-1`` / ``99``          undefined                    ``None``
+    ``"x"``                  undefined                    ``None``
+    =======================  ===========================  =============
+
+    ``operator.index`` rather than ``isinstance(i, int)``: ``np.int64`` is NOT a
+    subclass of ``int``, so an isinstance check made every index from
+    ``np.flatnonzero`` a miss and the empty-column prune then deleted the WHOLE
+    column -- silent, total loss, in a pure numpy module where index arrays are the
+    native currency. An INTEGRAL FLOAT is accepted because JS treats ``2.0`` and
+    ``2`` as the same key and a wire/JSON round trip makes every number a double.
+    """
+    if _is_boolean(i):
+        return None
+    try:
+        return operator.index(i)
+    except TypeError:
+        pass
+    if isinstance(i, (str, bytes, bytearray)):
+        return None  # see `_in_range`: a numeric STRING is out of range in both
+    try:
+        f = float(i)
+    except (TypeError, ValueError):
+        return None
+    return int(f) if f.is_integer() else None
+
+
+def _in_range(cells: Sequence[Any], i: Any) -> bool:
+    """The TRAILING-TRIM predicate, mirroring the TS ``hit(i)``.
+
+    ``hit`` is a bare NUMERIC range check (``i >= 0 && i < cells.length``), NOT an
+    integrality check -- so JS does not trim a ``1.5`` or a ``true``: both compare
+    inside the range, survive the trim, and then yield ``""`` from the lookup.
+    Measured against the TS module:
+
+        [0, 1.5]  -> ["a0", ""]     length 2, NOT trimmed
+        [0, true] -> ["a0", ""]     length 2, NOT trimmed
+        [0, "x"]  -> ["a0"]         trimmed
+        [0, 99]   -> ["a0"]         trimmed
+
+    Requiring integrality here -- which the previous version did -- made the result
+    one shorter than the TS, and the test asserting that was pinning the divergence
+    rather than the contract.
+
+    Deliberate narrower divergence, and it is applied CONSISTENTLY in both halves
+    (an earlier version had ``_in_range`` reject a numeric string while ``_as_index``
+    accepted it via its ``float()`` fallback -- one function calling ``"1"`` out of
+    range while the other returned ``cells[1]``): a numeric STRING is out of range
+    and not an index here, though JS ``"1" >= 0 && "1" < 3`` is true by coercion. No
+    caller can produce one -- indices come from ``range``/numpy -- and coercing
+    strings to indices is not behaviour worth mirroring. ``bytes`` likewise.
+
+    ALSO DIVERGENT, and recorded rather than papered over: JS coerces ``null`` and
+    ``""`` to 0, so both are IN range there and yield a kept blank, while here they
+    are out of range and a trailing one is trimmed. Same class as the string case
+    (JS numeric coercion of non-numbers), same reasoning, and no caller produces
+    either.
+    """
+    if isinstance(i, (str, bytes, bytearray)):
+        return False
+    try:
+        return 0 <= float(i) < len(cells)
+    except (TypeError, ValueError):
+        return False
+
+
+def _cell(cells: Sequence[Any], i: Any) -> Any:
+    """One cell, or ``""`` for anything that is not a real position in ``cells``.
+
+    Mirrors the TypeScript ``cells[i] ?? ""``. ``None`` becomes ``""`` because JS
+    ``?? ""`` catches ``null`` as well as ``undefined``, and this is not
+    hypothetical -- the TS module's own doc says ``??`` exists because
+    ``undefined`` "would serialize to ``null`` and read back as a hole", so a
+    ``.dwk``/wire round trip produces exactly this cell.
+    """
+    idx = _as_index(i)
+    if idx is None:
+        return ""
+    return cells[idx] if 0 <= idx < len(cells) and cells[idx] is not None else ""
+
+
+def _slice_cells(cells: Sequence[Any], row_indexes: list[Any]) -> list[Any]:
+    """Slice one column's cells to ``row_indexes``.
+
+    A gap inside the kept range yields ``""`` -- the blank the worksheet already
+    renders for a missing cell -- rather than ``None``, which serializes to
+    ``null`` and reads back as a hole.
+
+    TRAILING misses are dropped rather than materialized, matching the
+    TypeScript side: a column shorter than the grid already reads as blank for
+    the rows it does not cover, so padding it out changes nothing on screen while
+    growing every saved copy.
+    """
+    end = len(row_indexes)
+    while end > 0 and not _in_range(cells, row_indexes[end - 1]):
+        end -= 1
+    return [_cell(cells, i) for i in row_indexes[:end]]
+
+
+def _slice_one(raw: Any, row_indexes: list[int]) -> Any:
+    """Slice one ``{column: [cell per row]}`` sidecar.
+
+    A value that is not a mapping of lists is a corrupted sidecar and is returned
+    UNTOUCHED: reshaping data we failed to understand is worse than leaving it
+    alone. A column the slice empties is REMOVED rather than kept as ``[]``,
+    since several readers test only for a key's presence.
+    """
+    if not isinstance(raw, Mapping):
+        return raw
+    out: dict[str, Any] = {}
+    for name, cells in raw.items():
+        # `list` OR `tuple`: DataStruct fields are routinely tuples on this side
+        # (`cat_levels` is a tuple of str), and a `list`-only check silently handed
+        # a tuple column back UNSLICED at its original length -- a caller of the
+        # pure Python API (`apply_corrections`) got misaligned cells with no sign.
+        # The TS side has no such split; `Array.isArray` covers its only sequence.
+        if not isinstance(cells, (list, tuple)):
+            out[name] = cells
+            continue
+        sliced = _slice_cells(cells, row_indexes)
+        if sliced:
+            out[name] = sliced
+    return out
+
+
+def slice_row_sidecars(metadata: Mapping[str, Any], row_indexes: Iterable[Any]) -> dict[str, Any]:
+    """A copy of ``metadata`` with every row-indexed sidecar sliced to
+    ``row_indexes`` (the surviving source row numbers, in output order) and
+    everything else carried through unchanged.
+
+    Use this whenever an operation keeps a SUBSET of rows in their original
+    identity -- a trim, a mask, a row filter. When rows are instead REPLACED
+    (interpolation, aggregation) there is no mapping to slice to and
+    :func:`drop_row_sidecars` is the honest answer.
+    """
+    # NOT `int(i)`: coercing here is what made a non-integer index return a real
+    # cell instead of a blank (see `_cell`). Indexes pass through as given and the
+    # position checks judge them.
+    rows = list(row_indexes)
+    out = dict(metadata)
+    for key in ROW_INDEXED_SIDECARS:
+        if key in out:
+            out[key] = _slice_one(out[key], rows)
+    return out
+
+
+def drop_row_sidecars(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """A copy of ``metadata`` with the row-indexed sidecars REMOVED.
+
+    For an operation whose output rows are not a subset of its input rows -- x
+    resampling interpolates onto a new grid, so no output row IS any input row.
+    There is nothing to slice to, so the sidecars fail closed. The same reasoning
+    already governs ``cat_levels`` on those paths: carrying a per-row cell
+    against rows it cannot describe is worse than not carrying it.
+    """
+    out = dict(metadata)
+    for key in ROW_INDEXED_SIDECARS:
+        out.pop(key, None)
+    return out

@@ -714,3 +714,223 @@ describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
     expect(meta["per_channel_notes"]).toBe(notRowIndexed); // same object, untouched
   });
 });
+
+// Review round 2 of BUG-006 site 9. Row edits on a still-pending book sized
+// everything from `sidecarRowCount`, which reports the FULL book's span against
+// the DECIMATED preview's numbers — so one "insert row" padded the grid to the
+// full book's length in NaN and persisted it, and `installBookData` then replaced
+// `data` wholesale so the edit vanished without a word.
+describe("row edits refuse a dataset whose full data is still pending", () => {
+  const seedPending = () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "p1",
+          name: "book.opj",
+          data: {
+            time: [0, 40, 90], // a 3-row DECIMATED sample of a 12-row book
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: { origin_text_columns: { Op: Array.from({ length: 12 }, (_, i) => `o${i}`) } },
+          },
+          pending: { bookId: "b1", rows: 12, cols: 1, previewSampled: true },
+        },
+      ],
+      activeId: "p1",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+
+  it("insertRows does nothing, records no undo entry, and says why", () => {
+    seedPending();
+    useApp.getState().insertRows("p1", 1, 1);
+    const d = useApp.getState().datasets[0].data;
+    // Before: 13 rows, 10 of them all-NaN, written into d.data.
+    expect(d.time).toEqual([0, 40, 90]);
+    expect(d.values).toHaveLength(3);
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+  });
+
+  it("deleteRows does nothing either — the request is filtered against the FULL span", () => {
+    seedPending();
+    useApp.getState().deleteRows("p1", [7]); // a row the preview does not have
+    const d = useApp.getState().datasets[0].data;
+    expect(d.time).toEqual([0, 40, 90]);
+    expect(
+      (d.metadata["origin_text_columns"] as Record<string, string[]>).Op,
+    ).toHaveLength(12); // no cell stripped
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("refuses edits on a pending book even when its preview is NOT a sample", () => {
+    // Round 4's HIGH, and a regression round 3 introduced by loosening this guard
+    // from `pending` to `rowsAreSampled`. The two answer different questions:
+    // `rowsAreSampled` is about whether SIDECARS may be indexed; this guard is about
+    // whether `d.data` is about to be THROWN AWAY, which is true for every pending
+    // dataset. On the corpus shape the loosening was justified by — a 180-row book
+    // previewing as a 161-row trimmed prefix, `sampled: false` — `insertRows(id, 5,
+    // 1)` grew `time` to 181 by materializing the 19 trimmed rows as NaN, recorded
+    // an undo entry, warned about nothing, and the resolve then discarded all of it.
+    useApp.setState({
+      datasets: [
+        {
+          id: "p3",
+          name: "trimmed.opj",
+          data: {
+            time: Array.from({ length: 161 }, (_, i) => i),
+            values: Array.from({ length: 161 }, (_, i) => [i]),
+            labels: ["Y"],
+            units: [""],
+            metadata: { origin_text_columns: { Op: Array.from({ length: 180 }, (_, i) => `o${i}`) } },
+          },
+          pending: { bookId: "b3", rows: 180, cols: 1, previewSampled: false },
+        },
+      ],
+      activeId: "p3",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("p3", 5, 1);
+    expect(useApp.getState().datasets[0].data.time).toHaveLength(161); // untouched
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+  });
+
+  it("refuses CELL writes on a pending book too, not just row edits", () => {
+    // The commonest edit, and it was unguarded: it wrote into the preview, recorded
+    // undo and a macro line, and was wiped by the resolve without a word. Guarding
+    // only row edits was not a coherent contract.
+    useApp.setState({
+      datasets: [
+        {
+          id: "p4",
+          name: "big.opj",
+          data: {
+            time: [0, 1, 2],
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: {},
+          },
+          pending: { bookId: "b4", rows: 5000, cols: 1, previewSampled: true },
+        },
+      ],
+      activeId: "p4",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().setCellValue("p4", 1, 0, 999);
+    expect(useApp.getState().datasets[0].data.values[1][0]).toBe(2); // not 999
+    useApp.getState().setCellBlock("p4", [{ row: 0, col: 0, value: 42 }], "paste");
+    expect(useApp.getState().datasets[0].data.values[0][0]).toBe(1); // not 42
+    // setCategoricalCell is the INTERACTIVE single-cell editor the worksheet UI
+    // actually calls, and round 5 found its guard unfalsifiable: deleting the line
+    // left all 620 files / 9,790 tests green. It needs a categorical column.
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            values: [[0], [1], [0]],
+            cat_levels: { 0: ["red", "blue"] },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().setCategoricalCell("p4", 1, 0, "red");
+    expect(useApp.getState().datasets[0].data.values[1][0]).toBe(1); // still "blue"
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("all THREE cell editors speak on a pending book whose preview is SHORTER than the grid", () => {
+    // Round 6's regression, from moving the guard below the row-range check for
+    // comment adjacency: a text-only book is `time: []`, so the bounds check
+    // short-circuits EVERY row and `setCellValue`/`setCategoricalCell` fell silent
+    // while `setCellBlock` (not reordered) still spoke — two cell editors in one
+    // pane disagreeing. Silence is the harm: `refusePendingEdit` is the only thing
+    // on this path that kicks `ensureBookData`, so the retry never starts either.
+    const seedTextOnly = () =>
+      useApp.setState({
+        datasets: [
+          {
+            id: "p5",
+            name: "textonly.opj",
+            data: {
+              time: [],
+              values: [],
+              labels: [],
+              units: [],
+              metadata: { origin_text_columns: { Op: ["o0", "o1"] } },
+            },
+            pending: { bookId: "b5", rows: 0, cols: 0, previewSampled: false },
+          },
+        ],
+        activeId: "p5",
+        history: [],
+        status: "",
+      } as unknown as Parameters<typeof useApp.setState>[0]);
+
+    seedTextOnly();
+    useApp.getState().setCellValue("p5", 0, 0, 42);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    seedTextOnly();
+    useApp.getState().setCategoricalCell("p5", 0, 0, "red");
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    seedTextOnly();
+    useApp.getState().setCellBlock("p5", [{ row: 0, col: 0, value: 7 }], "paste");
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a RESOLVED text-only book edits normally — the positive control", () => {
+    // Same book as the refusal tests above with `pending` cleared, so the guard is
+    // shown to gate on pending-ness and nothing else. (This test previously carried
+    // `pending` and asserted the edit SUCCEEDED — that was round 3's loosening,
+    // which round 4 established re-opened a silent data-loss path. The scenario is
+    // now covered by the refusal test above; the round-3 complaint it came from —
+    // "renders its rows then refuses to edit them" — is answered by the status
+    // message and the kicked fetch, not by permitting a doomed edit.)
+    useApp.setState({
+      datasets: [
+        {
+          id: "p2",
+          name: "textonly.opj",
+          data: {
+            time: [],
+            values: [],
+            labels: [],
+            units: [],
+            metadata: { origin_text_columns: { Op: ["o0", "o1", "o2", "o3"] } },
+          },
+        },
+      ],
+      activeId: "p2",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().deleteRows("p2", [1]);
+    expect(
+      (useApp.getState().datasets[0].data.metadata["origin_text_columns"] as Record<string, string[]>).Op,
+    ).toEqual(["o0", "o2", "o3"]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("the SAME edits work once the book has resolved", () => {
+    seedPending();
+    const resolved = {
+      ...useApp.getState().datasets[0],
+      pending: undefined,
+      data: {
+        ...useApp.getState().datasets[0].data,
+        time: Array.from({ length: 12 }, (_, i) => i),
+        values: Array.from({ length: 12 }, (_, i) => [i]),
+      },
+    };
+    useApp.setState({ datasets: [resolved] } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("p1", 1, 1);
+    expect(useApp.getState().datasets[0].data.time).toHaveLength(13);
+  });
+});

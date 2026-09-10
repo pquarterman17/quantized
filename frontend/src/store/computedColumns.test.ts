@@ -949,3 +949,73 @@ describe("removeFormula (finding 3, review round 2): composition is invalidated 
     expect(useApp.getState().composition).toBe(staleComposition);
   });
 });
+
+// The round-5 fix's OWN coverage, which round 6 found to be nil: no test anywhere
+// exercised these on a pending dataset, so all four guards could be deleted silently.
+// They are the sites that CORRUPT data rather than lose an edit — the formula survives
+// `installBookData`'s wholesale replace while the preview's labels do not, so the next
+// legitimate edit computes `baseCount = labels.length - formulas.length`, treats a REAL
+// measured channel as the computed one, and overwrites its imported values under that
+// channel's own label.
+describe("formula actions refuse a dataset whose full data is still pending", () => {
+  const seedPending = () =>
+    useApp.setState({
+      datasets: [
+        {
+          id: "pf",
+          name: "book.opj",
+          data: {
+            time: [0, 1],
+            values: [[1, 100], [2, 200]],
+            labels: ["Ya", "Yb"],
+            units: ["", ""],
+            metadata: {},
+          },
+          formulas: [],
+          pending: { bookId: "b", rows: 5000, cols: 2, previewSampled: true },
+        },
+      ],
+      activeId: "pf",
+      history: [],
+      status: "",
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+
+  it("addFormula refuses, returns false, and writes nothing", () => {
+    seedPending();
+    expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(false);
+    const d = useApp.getState().datasets[0];
+    expect(d.formulas).toEqual([]);
+    expect(d.data.labels).toEqual(["Ya", "Yb"]); // no phantom column
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+  });
+
+  it("updateFormula refuses", () => {
+    seedPending();
+    useApp.setState({
+      datasets: [{ ...useApp.getState().datasets[0], formulas: [{ name: "C", expr: "A", deps: ["A"] }] }],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    expect(useApp.getState().updateFormula("pf", 0, { expr: "A*3" })).toBe(false);
+    expect(useApp.getState().datasets[0].formulas?.[0].expr).toBe("A");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("removeFormula refuses", () => {
+    seedPending();
+    useApp.setState({
+      datasets: [{ ...useApp.getState().datasets[0], formulas: [{ name: "C", expr: "A", deps: ["A"] }] }],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().removeFormula("pf", 0);
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("the SAME calls succeed once the book has resolved — the positive control", () => {
+    seedPending();
+    useApp.setState({
+      datasets: [{ ...useApp.getState().datasets[0], pending: undefined }],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(true);
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+  });
+});

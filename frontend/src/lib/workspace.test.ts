@@ -729,6 +729,35 @@ describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", 
     expect(restored.pending).toEqual(ds.pending);
   });
 
+  // BUG-006 site 9's flag through the SAVE/LOAD hop. Round 4 deleted
+  // `parsePending`'s `previewSampled` spread and the whole suite stayed green, so
+  // nothing pinned it: save a workspace, reload, and every pending book silently
+  // reverts to fail-closed (text columns hidden, edits refused).
+  it("round-trips previewSampled: false — the value that UN-hides text columns", () => {
+    const ds = makeDataset("a", "lazy book");
+    ds.pending = { kind: "path", path: "/p.opj", bookId: "B2", rows: 180, cols: 1, previewSampled: false };
+    const [restored] = parse(ser([ds]));
+    expect(restored.pending?.previewSampled).toBe(false);
+  });
+
+  it("round-trips previewSampled: true", () => {
+    const ds = makeDataset("a", "lazy book");
+    ds.pending = { kind: "upload", token: "t", bookId: "B2", rows: 5000, cols: 1, previewSampled: true };
+    const [restored] = parse(ser([ds]));
+    expect(restored.pending?.previewSampled).toBe(true);
+  });
+
+  it("does NOT invent previewSampled for a legacy .dwk that never had it", () => {
+    // Absent must stay absent, so `rowsAreSampled`'s `!== false` fails closed
+    // rather than a default here quietly deciding the question. Also keeps a legacy
+    // file round-tripping byte-identically.
+    const ds = makeDataset("a", "lazy book");
+    ds.pending = { kind: "path", path: "/p.opj", bookId: "B2", rows: 5000, cols: 1 };
+    const [restored] = parse(ser([ds]));
+    expect(restored.pending).toEqual(ds.pending);
+    expect("previewSampled" in (restored.pending as object)).toBe(false);
+  });
+
   it("omits pending when absent (the normal, fully-resolved case)", () => {
     const [restored] = parse(ser([makeDataset("a", "normal")]));
     expect(restored.pending).toBeUndefined();

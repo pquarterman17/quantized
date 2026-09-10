@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 
 from ..datastruct import DataStruct
+from ..row_sidecars import slice_row_sidecars
 from .backgrounds import anchor_baseline, footprint_factor
 from .processing import (
     cumulative_integral,
@@ -121,6 +122,7 @@ def apply_corrections(
     # 1. Trim on x.
     x_min = params.get("xTrimMin", float("nan"))
     x_max = params.get("xTrimMax", float("nan"))
+    kept_rows: list[int] | None = None
     if not (math.isnan(x_min) and math.isnan(x_max)):
         mask = np.ones(time.size, dtype=bool)
         if not math.isnan(x_min):
@@ -129,6 +131,18 @@ def apply_corrections(
             mask &= time <= x_max
         time = time[mask]
         values = values[mask, :]
+        # BUG-006 site 7. This is the ONLY step here that changes the ROW COUNT,
+        # so it is the only one whose row-indexed metadata sidecars need to move
+        # -- and they were riding through unsliced, which is strictly worse than
+        # the Extract/Split cases the bug started from: those produce a derived
+        # copy, while this response is written straight back into the dataset and
+        # the .dwk. Trim the first 50 of 100 rows and `text_columns` still held
+        # 100 cells starting at row 0, so every visible text cell described a
+        # row 50 places away. (An earlier version of this comment said "the code
+        # below already reasons about `excludedRows` shifting under this same
+        # trim" -- there is no `excludedRows` anywhere in this module; that
+        # reasoning is in the FRONTEND, `store/corrections.ts`.)
+        kept_rows = [int(i) for i in np.flatnonzero(mask)]
 
     # 2. X offset.
     time = time - params.get("xOff", 0.0)
@@ -248,6 +262,9 @@ def apply_corrections(
     # carries real golden-parity regression risk. That is booked as BUG-005 in
     # plans/BUGS_AND_ISSUES.md, not faked here. Pinned by
     # `test_corrections_strips_cat_levels_because_codes_are_transformed`.
-    return DataStruct.create(
-        time, values, labels=labels, units=list(data.units), metadata=dict(data.metadata)
+    metadata = (
+        dict(data.metadata)
+        if kept_rows is None
+        else slice_row_sidecars(data.metadata, kept_rows)
     )
+    return DataStruct.create(time, values, labels=labels, units=list(data.units), metadata=metadata)

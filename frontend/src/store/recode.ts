@@ -64,6 +64,7 @@ import {
 } from "../lib/recode";
 import type { ComputedColumn } from "../lib/types";
 import { toast } from "./toasts";
+import { refusePendingEdit } from "./pendingEdit";
 import { useApp } from "./useApp";
 
 let _savedSeq = 0;
@@ -229,6 +230,10 @@ export const useRecode = create<RecodeState>((set, get) => ({
       toast(`can't add recode column "${name}": ${reason}`, "danger");
       return null;
     }
+    // Same site class as computedColumns' addFormula (BUG-006 site 9, round 5): a
+    // recode is a computed column, so on a pending dataset it survives the resolve
+    // while the preview's labels do not, and a real channel then gets overwritten.
+    if (refusePendingEdit(() => useApp.getState(), ds, "recoding a column")) return null;
     app.recordHistory("recode column");
     useApp.setState((s) => ({
       datasets: s.datasets.map((d) => {

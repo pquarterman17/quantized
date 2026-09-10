@@ -144,4 +144,166 @@ describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
     const m = mergeDatasets([a, b], ["a", "b"]);
     expect("cat_levels" in m).toBe(false);
   });
+
+  // BUG-006 site 8: `{...datasets[0].metadata}` dropped datasets 1..N's
+  // row-indexed sidecars AND, when dataset 0's ran longer than its own rows,
+  // pushed its trailing cells onto dataset 1's rows.
+  describe("row-indexed metadata sidecars concatenate across every input", () => {
+    const withText = (
+      time: number[],
+      cells: Record<string, string[]>,
+      extra: Record<string, unknown> = {},
+    ): DataStruct => ({
+      time,
+      values: time.map((t) => [t * 10]),
+      labels: ["M"],
+      units: ["emu"],
+      metadata: { text_columns: cells, ...extra },
+    });
+
+    it("keeps every input's cells, in row order", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }), withText([3, 4], { Op: ["r", "s"] })],
+        ["a", "b"],
+      );
+      expect(m.time).toEqual([1, 2, 3, 4]);
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["p", "q", "r", "s"]);
+    });
+
+    it("no longer DROPS the second dataset's sidecar", () => {
+      const m = mergeDatasets([withText([1, 2], {}), withText([3, 4], { Op: ["r", "s"] })], ["a", "b"]);
+      // Before: dataset 0 had no `text_columns`, so the merge had none at all
+      // and "r"/"s" vanished.
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual(["", "", "r", "s"]);
+    });
+
+    it("keeps dataset 0's OVERFLOW cells AND keeps them off dataset 1's rows", () => {
+      // The ragged case: A's sidecar has 5 cells for 2 numeric rows. Two wrong
+      // answers were shipped before this one. First, A's array verbatim, so B's
+      // rows displayed a2/a3. Then, sized by `time.length`, which put B's cells
+      // at index 2 and DELETED a2/a3/a4 — the truncation `store/cellEdit.ts`
+      // already forbade. A's span is 5, so it contributes 5 rows to both halves.
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["a0", "a1", "a2", "a3", "a4"] }), withText([3, 4], { Op: ["b0", "b1"] })],
+        ["a", "b"],
+      );
+      expect((m.metadata["text_columns"] as Record<string, string[]>).Op).toEqual([
+        "a0", "a1", "a2", "a3", "a4", "b0", "b1",
+      ]);
+      // The numeric half is padded to the same span, so B's numbers are at 5/6 —
+      // the same rows as b0/b1, which is the whole point.
+      expect(m.time).toHaveLength(7);
+      expect(m.time[5]).toBe(3);
+      expect(m.time[6]).toBe(4);
+      expect(m.time.slice(2, 5).every((t) => Number.isNaN(t))).toBe(true);
+    });
+
+    it("two TEXT-ONLY books keep both books' cells", () => {
+      // Review-round regression. Both have zero numeric rows, so under
+      // `time.length` sizing both spans were 0, every rebuilt column came out
+      // empty, `concatRowSidecars` omitted the key — and the spread-then-
+      // overwrite then left dataset 0's ORIGINAL sidecar standing. Book 2's
+      // cells were simply gone: the pre-fix behaviour, shipped green.
+      const textOnly = (cells: string[]): DataStruct => ({
+        time: [],
+        values: [],
+        labels: [],
+        units: [],
+        metadata: { origin_text_columns: { A: cells } },
+      });
+      const m = mergeDatasets([textOnly(["b0-r0", "b0-r1"]), textOnly(["b1-r0", "b1-r1"])], ["one", "two"]);
+      expect((m.metadata["origin_text_columns"] as Record<string, string[]>).A).toEqual([
+        "b0-r0", "b0-r1", "b1-r0", "b1-r1",
+      ]);
+    });
+
+    it("each PAD row is its own array, not one shared reference", () => {
+      // The comment in merge.ts promised this ("A fresh row per pad row — never
+      // one shared array"); nothing tested it. Hoisting a single `padRow` shared
+      // by every pad row left 339 files / 6,323 tests green — a doc promise with
+      // no test, which is the exact discipline CLAUDE.md names. Asserted through a
+      // WRITE, so it fails the way a user would see it.
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["a0", "a1", "a2", "a3", "a4"] }), withText([3, 4], {})],
+        ["a", "b"],
+      );
+      const pads = [m.values[2], m.values[3], m.values[4]];
+      expect(pads[0]).not.toBe(pads[1]);
+      expect(pads[1]).not.toBe(pads[2]);
+      pads[0][0] = 42;
+      expect(m.values[3][0]).toBeNaN(); // a shared row would have taken the 42
+      expect(m.values[4][0]).toBeNaN();
+    });
+
+    it("a CORRUPTED sidecar on dataset 0 does not survive onto the merged grid", () => {
+      // This is the case the strip actually earns its place on, and finding it
+      // took a sabotage: with per-part spans in place, every ordinary case emits
+      // the key and the overwrite alone would have sufficed. A corrupted
+      // (non-`{name: array}`) sidecar is skipped for NAME collection, so no key
+      // is emitted — and a plain spread then carried dataset 0's bare array
+      // through onto a grid with twice its rows. Measured: without the strip,
+      // `text_columns: ["bare","array","corrupted"]` survives on a 4-row merge.
+      const corrupted: DataStruct = {
+        ...a,
+        metadata: { text_columns: ["bare", "array", "corrupted"] as unknown as Record<string, string[]> },
+      };
+      const m = mergeDatasets([corrupted, { ...b, metadata: {} }], ["a", "b"]);
+      expect(m.metadata["text_columns"]).toBeUndefined();
+    });
+
+    it("a stale sidecar cannot survive when the rebuild contributes nothing", () => {
+      // The other half of the same bug, and the nastier one: dataset 0's
+      // IN-RANGE cells are blank while an overflow cell is not. The all-blank
+      // prune dropped the rebuilt column, the key was omitted, and dataset 0's
+      // untouched array came through — putting "SAMPLE-B7" on what is now
+      // dataset 1's first row. Dataset 0's keys are stripped before the rebuild
+      // now, so an omitted key means ABSENT, never "inherited".
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["", "", "SAMPLE-B7"] }), withText([3, 4], {})],
+        ["a", "b"],
+      );
+      const cols = m.metadata["text_columns"] as Record<string, string[]> | undefined;
+      // Whatever survives, "SAMPLE-B7" must not be sitting on dataset 1's rows
+      // (indices 3 and 4 of the 5-row output: span 3 for A, then B's two).
+      expect(cols?.Op?.[3]).not.toBe("SAMPLE-B7");
+      expect(cols?.Op?.[4]).not.toBe("SAMPLE-B7");
+      expect(cols?.Op?.[2]).toBe("SAMPLE-B7"); // still on its OWN row
+    });
+
+    it("unions differently-named columns, blank where an input lacks one", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }), withText([3, 4], { Sample: ["x", "y"] })],
+        ["a", "b"],
+      );
+      const cols = m.metadata["text_columns"] as Record<string, string[]>;
+      expect(cols.Op).toEqual(["p", "q", "", ""]);
+      expect(cols.Sample).toEqual(["", "", "x", "y"]);
+    });
+
+    it("covers the origin_* spellings too", () => {
+      const m = mergeDatasets(
+        [
+          { ...a, metadata: { origin_text_columns: { S: ["s0", "s1"] } } },
+          { ...b, metadata: { origin_report_sheets: { R: ["r0", "r1"] } } },
+        ],
+        ["a", "b"],
+      );
+      expect((m.metadata["origin_text_columns"] as Record<string, string[]>).S).toEqual(["s0", "s1", "", ""]);
+      expect((m.metadata["origin_report_sheets"] as Record<string, string[]>).R).toEqual(["", "", "r0", "r1"]);
+    });
+
+    it("still inherits dataset 0's FILE-level metadata", () => {
+      const m = mergeDatasets(
+        [withText([1, 2], { Op: ["p", "q"] }, { source: "a.dat" }), withText([3, 4], { Op: ["r", "s"] })],
+        ["a", "b"],
+      );
+      expect(m.metadata["source"]).toBe("a.dat");
+      expect(m.metadata["merged_count"]).toBe(2);
+    });
+
+    it("emits no sidecar key at all when no input carries one", () => {
+      const m = mergeDatasets([a, b], ["a", "b"]);
+      expect("text_columns" in m.metadata).toBe(false);
+    });
+  });
 });

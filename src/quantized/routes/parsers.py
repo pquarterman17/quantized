@@ -35,7 +35,7 @@ from quantized.io.origin_project.graph_preview import (
     PreviewDiagnostic,
     attach_opju_graph_previews,
 )
-from quantized.io.origin_project.preview import decimate_datastruct
+from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.routes._bookcache import cache_project_books
 from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
@@ -45,7 +45,7 @@ from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
 
 # Rows kept in a non-primary book's preview (Library sparkline resolution;
-# see io/origin_project/preview.decimate_datastruct).
+# see io/origin_project/preview.decimate_with_alignment).
 _PREVIEW_POINTS = 200
 
 
@@ -141,7 +141,7 @@ def _book_preview_payload(ds: DataStruct) -> dict[str, Any]:
     sparkline renders without the full column data) — never the full
     ``.time``/``.values``. ``lazy: true`` is the frontend's discriminant
     between this shape and a full/primary entry."""
-    preview = decimate_datastruct(ds, target_points=_PREVIEW_POINTS)
+    preview, sampled = decimate_with_alignment(ds, target_points=_PREVIEW_POINTS)
     return {
         "lazy": True,
         "id": _origin_book_id(ds),
@@ -155,6 +155,14 @@ def _book_preview_payload(ds: DataStruct) -> dict[str, Any]:
         # copy of them under `preview` would double the very weight this
         # entry exists to avoid.
         "preview": {"time": jsonify(preview.time), "values": jsonify(preview.values)},
+        # Do the preview's rows correspond one-to-one with the book's rows?
+        # FALSE when they do (an untouched or merely padding-TRIMMED preview is a
+        # strict prefix), TRUE when the bucketed min/max sampler ran and row r is
+        # some arbitrary source row. The frontend needs this to know whether the
+        # FULL-length row-indexed metadata sidecars above can be indexed against
+        # these numbers (BUG-006 site 9); it cannot infer it, because the trim and
+        # the sampling both shorten the data and only one breaks correspondence.
+        "preview_sampled": sampled,
     }
 
 

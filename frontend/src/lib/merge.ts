@@ -3,6 +3,7 @@
 // share a column count; labels/units come from the first. Use the worksheet sort
 // afterwards if the merged x needs ordering (concatenation preserves input order).
 
+import { concatRowSidecars, sidecarRowCount, withoutRowSidecars } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 /** Two level tables agree only if they're the SAME LENGTH and SAME ORDER —
@@ -97,12 +98,30 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
     const plan = planChannel(datasets, c);
     if (plan) plans.set(c, plan);
   }
+  // ONE row span per input, taken from `sidecarRowCount` rather than
+  // `d.time.length` (BUG-006 site 8, review round 2). An input's sidecar can
+  // legitimately run LONGER than its numeric grid — `store/cellEdit.ts` says so
+  // in as many words and refuses to size anything from `time.length` for exactly
+  // this reason — so sizing each part by `time.length` here silently TRUNCATED
+  // the excess, the very thing that rule forbids. It also let a part's numeric
+  // rows and its sidecar cells start at different offsets in the output, which
+  // is misalignment rather than mere loss.
+  //
+  // The numeric rows are padded to the same span, so every part contributes
+  // exactly `span` rows to BOTH halves and part k's numbers and text land on the
+  // same output rows. `d.time.length` and `d.values.length` can themselves
+  // differ on a ragged input; one span settles that too.
+  const spans = datasets.map((d) => sidecarRowCount(d.metadata, Math.max(d.time.length, d.values.length)));
   const time: number[] = [];
   const values: number[][] = [];
   datasets.forEach((d, di) => {
-    for (const t of d.time) time.push(t);
-    for (const row of d.values) {
-      const out = [...row];
+    const span = spans[di];
+    for (let r = 0; r < span; r += 1) {
+      time.push(r < d.time.length ? d.time[r] : Number.NaN);
+      // A fresh row per pad row — never one shared array (the aliasing trap
+      // `store/cellEdit.ts` documents).
+      const src = d.values[r];
+      const out = src ? [...src] : Array.from({ length: ncol }, () => Number.NaN);
       for (const [c, plan] of plans) {
         const remap = plan.remaps[di];
         if (remap) out[c] = remap(out[c]);
@@ -118,7 +137,24 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
     labels: [...datasets[0].labels],
     units: [...datasets[0].units],
     metadata: {
-      ...datasets[0].metadata,
+      // BUG-006 site 8. Dataset 0's row-indexed sidecars are STRIPPED before the
+      // rebuild rather than merely overwritten by it, so an omitted key means
+      // ABSENT and never "inherited from dataset 0".
+      //
+      // Honest about what does the work, because the first version of this
+      // comment was not: the per-part SPANS above are what fix the two
+      // reproductions the review found (two text-only books whose spans were
+      // both 0, and an overflow cell landing on dataset 1's row) — with spans,
+      // every ordinary case emits the key and the overwrite alone would suffice.
+      // The strip earns its place on one narrower case, established by sabotage
+      // rather than assumed: a CORRUPTED (non-`{name: array}`) sidecar is skipped
+      // for name collection, so no key is emitted, and a plain spread carried
+      // dataset 0's bare array onto a grid with twice its rows.
+      //
+      // Everything NOT row-indexed still comes from dataset 0 — source,
+      // comments, instrument fields — which a merge reasonably inherits.
+      ...withoutRowSidecars(datasets[0].metadata),
+      ...concatRowSidecars(datasets.map((d, i) => ({ metadata: d.metadata, rowCount: spans[i] }))),
       merged_from: names.join(" + "),
       merged_count: datasets.length,
     },

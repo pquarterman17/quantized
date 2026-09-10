@@ -240,3 +240,134 @@ describe("useWorksheetView — window-scoped row selection (GUI_INTERACTION #14)
     expect([...result.current.selected]).toEqual([]);
   });
 });
+
+// BUG-006 site 9: a still-pending Origin book pairs a ~200-row min/max-DECIMATED
+// preview in `.time`/`.values` with the FULL book's `.metadata`, so its text
+// sidecars carry one cell per REAL row. Rendering them would put row r's text
+// beside a completely unrelated row's numbers — and drive the grid's row count
+// to the full length, showing thousands of rows whose numbers don't exist yet.
+// `pendingGuard` already refuses extract/copy for this exact reason.
+describe("text columns are suppressed while a book's full data is still pending", () => {
+  const previewRows = 3;
+  const fullRows = 12;
+  const pendingBook: Dataset = {
+    id: "p1",
+    name: "book.opj",
+    data: {
+      time: Array.from({ length: previewRows }, (_, i) => i * 4), // decimated sample
+      values: Array.from({ length: previewRows }, (_, i) => [i]),
+      labels: ["Y"],
+      units: [""],
+      // FULL-length sidecar: one cell per real row, not per preview row.
+      metadata: { origin_text_columns: { Op: Array.from({ length: fullRows }, (_, i) => `o${i}`) } },
+    },
+    // EXPLICITLY sampled. Left undefined, this test would have passed on the
+    // fail-closed default instead of the path it claims to exercise.
+    pending: { bookId: "b1", rows: fullRows, cols: 1, previewSampled: true } as unknown as Dataset["pending"],
+  };
+
+  const seed = (d: Dataset) => {
+    useApp.setState({ datasets: [d], activeId: d.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+  };
+
+  it("renders no text columns, and no phantom rows, while pending AND decimated", () => {
+    seed(pendingBook);
+    const { result } = renderHook(() => useWorksheetView(pendingBook));
+    expect(result.current.textCols).toEqual([]);
+    // The row count stays the preview's, not the full book's 12 — the phantom
+    // rows came from `textRowCount` feeding `max(time.length, textRowCount)`.
+    expect(result.current.filtered).toHaveLength(previewRows);
+  });
+
+  it("renders them again once the full data has landed", () => {
+    // Same dataset with `pending` cleared and full-length numbers, which is what
+    // `installBookData` swaps in (data and metadata together).
+    const resolved: Dataset = {
+      ...pendingBook,
+      pending: undefined,
+      data: {
+        ...pendingBook.data,
+        time: Array.from({ length: fullRows }, (_, i) => i),
+        values: Array.from({ length: fullRows }, (_, i) => [i]),
+      },
+    };
+    seed(resolved);
+    const { result } = renderHook(() => useWorksheetView(resolved));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.textCols[0].rows).toHaveLength(fullRows);
+  });
+});
+
+// Review round 2 of site 9: the first condition was `ds.pending` alone, which
+// over-suppressed badly. `decimate_datastruct` returns its input UNCHANGED when
+// the book has <= 200 rows or no channels, so for a small book — and for EVERY
+// text-only book — the "preview" is the full data and its sidecars are exactly
+// aligned. Blanking those cost the user the whole worksheet.
+describe("a pending book whose preview is NOT decimated still shows its text", () => {
+  // These fixtures carry `previewSampled` — the BACKEND's own answer. The
+  // row-count proxy tried before it (`pending.rows > data.time.length`) was
+  // refuted in round 3: the backend runs `_trim_trailing_padding` BEFORE its
+  // `n <= target_points` early return, so a merely padding-trimmed preview is
+  // shorter than `pending.rows` while still being a strict PREFIX whose cells
+  // line up. That trim is corpus-attested (Book15: 19 of 180 rows), so the proxy
+  // blanked ordinary books — the regression it had been written to remove.
+  // THREE counts, deliberately separate — conflating them is what made the first
+  // version of this fixture wrong: `numericRows` is what the preview holds,
+  // `pending.rows` is the backend's own numeric count for the full book, and
+  // `textCells` is the sidecar length, which for a text-only book exceeds BOTH.
+  const pendingButComplete = (numericRows: number, textCells: number, labels: string[]) => ({
+    id: "p2",
+    name: "small.opj",
+    data: {
+      time: Array.from({ length: numericRows }, (_, i) => i),
+      values: Array.from({ length: numericRows }, (_, i) => labels.map(() => i)),
+      labels,
+      units: labels.map(() => ""),
+      metadata: { origin_text_columns: { Op: Array.from({ length: textCells }, (_, i) => `o${i}`) } },
+    },
+    pending: { bookId: "b2", rows: numericRows, cols: labels.length, previewSampled: false },
+  }) as unknown as Dataset;
+
+  it("a PADDING-TRIMMED preview keeps its columns — the row-count proxy blanked it", () => {
+    // The round-3 HIGH, in its corpus shape: a 180-row book with 19 over-allocated
+    // trailing rows previews as 161 ALIGNED prefix rows, while `pending.rows` is
+    // the pre-trim 180. `180 > 161` was true, so the proxy hid text that lined up
+    // perfectly — and permanently, on a failed fetch.
+    const ds = pendingButComplete(161, 180, ["Y"]);
+    (ds.pending as unknown as { rows: number }).rows = 180;
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+  });
+
+  it("an UNKNOWN previewSampled fails CLOSED — a .dwk predating the field", () => {
+    // `parsePending` applies the same `!== false` rule on load. Defaulting the
+    // other way is a silent misalignment: the old proxy read a missing/0 `rows` as
+    // `0 > 200` = false and rendered the very bug it was written to prevent.
+    const ds = pendingButComplete(200, 5000, ["Y"]);
+    delete (ds.pending as unknown as { previewSampled?: boolean }).previewSampled;
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toEqual([]);
+  });
+
+  it("a small book (rows <= target_points, so no decimation) keeps its columns", () => {
+    const ds = pendingButComplete(5, 5, ["Y"]); // 5 numeric rows, preview == full
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.textCols[0].rows).toHaveLength(5);
+  });
+
+  it("a TEXT-ONLY book is not blanked — its text columns ARE the grid", () => {
+    // `decimate_datastruct` returns early on `n_channels === 0`, so this book's
+    // preview is its full data. Under `ds.pending` alone the worksheet rendered
+    // COMPLETELY EMPTY, and permanently so when the fetch failed
+    // (`installBookData`'s catch leaves `pending` set).
+    const ds = pendingButComplete(0, 4, []); // n_points 0, but four TEXT rows
+    useApp.setState({ datasets: [ds], activeId: ds.id, stageTab: "worksheet" } as unknown as Parameters<typeof useApp.setState>[0]);
+    const { result } = renderHook(() => useWorksheetView(ds));
+    expect(result.current.textCols).toHaveLength(1);
+    expect(result.current.filtered).toHaveLength(4); // the text rows are the grid
+  });
+});
