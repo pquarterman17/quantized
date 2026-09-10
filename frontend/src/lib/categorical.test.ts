@@ -281,9 +281,20 @@ describe("user-settable level order (Group O-2)", () => {
   it("sanitizeDataStruct drops a junk order at parse instead of storing it", () => {
     const dirty = {
       ...base,
-      level_order: { 0: [2, 1, 0], 1: "nope", 2: [], 3: ["a"], "-1": [0], x: [1] },
+      level_order: { 0: [2, 1, 0], 1: "nope", 2: [], 3: ["a"], "-2": [0], x: [1] },
     } as unknown as DataStruct;
     expect(sanitizeDataStruct(dirty).level_order).toEqual({ 0: [2, 1, 0] });
+  });
+
+  // The x/time column is channel -1 by the convention `ColumnFilter.col` sets,
+  // and `categoryLevels` genuinely reads it (the categorical x-axis passes
+  // `xKey`). An earlier sanitizer rejected every negative key, so an x-axis
+  // order survived in-session, was written to the .dwk, and vanished on reopen
+  // — the accessor and the sanitizer disagreeing about which channels exist.
+  it("keeps an order for channel -1, the x/time column the accessor reads", () => {
+    const ds: DataStruct = { ...base, time: [30, 10, 20, 10, 30, 20], level_order: { "-1": [30, 10, 20] } };
+    expect(sanitizeDataStruct(ds).level_order).toEqual({ "-1": [30, 10, 20] });
+    expect(categoryLevels(ds, -1)).toEqual([30, 10, 20]);
   });
 
   it("sanitizeDataStruct drops the field entirely when nothing survives", () => {

@@ -131,29 +131,44 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
   });
   const cat_levels: Record<number, string[]> = {};
   for (const [c, plan] of plans) cat_levels[c] = plan.levels;
-  // Group O-2: a `level_order` names CODES, so it is only safe to carry across
-  // a merge if dataset 0's codes do not move. They don't, and that is a
-  // PROPERTY OF `planChannel` rather than a happy accident: the union is built
-  // starting from `tables[0]` in its own order, so every one of dataset 0's
-  // levels keeps its index and `remapFor(tables[0], union)` is an identity.
+  // Group O-2: a `level_order` names CODES, and the union table can renumber
+  // them, so dataset 0's order goes through the SAME remap its values do.
   //
-  // The first version of this ran each code through `plan.remaps[0]` anyway,
-  // "defensively". Sabotage exposed that as dead code — deleting the remap left
-  // every test green, because it cannot change a value. Rather than keep a line
-  // no test can hold honest, the invariant it was guarding is asserted directly
-  // in merge.test.ts ("dataset 0's codes are never renumbered"), so a future
-  // change to the union construction fails THERE, loudly, pointing at exactly
-  // the code that would then need a remap.
+  // THIS LINE WAS ONCE DELETED AS DEAD CODE AND THAT WAS WRONG — it is worth
+  // recording why, because the reasoning was persuasive. The argument was that
+  // `planChannel` builds the union starting from `tables[0]` in its own order,
+  // so dataset 0's levels keep their indices and `remapFor(tables[0], union)`
+  // is an identity; sabotage agreed, since deleting the remap left every test
+  // green. Both were true and the conclusion was still false: the identity
+  // holds only when `tables[0]` has no REPEATED level string. With
+  // `tables[0] = ["A","A","B"]`, the union de-duplicates to `["A","B",…]` and
+  // dataset 0's own code 2 becomes 1 — its codes DO move. So the line was not
+  // dead, it was untested, and a green sabotage meant the test set had a hole,
+  // not that the code was useless. `merge.test.ts` now covers the duplicate
+  // case; the earlier "codes are never renumbered" test was true only of the
+  // unique-string fixture it used.
   //
   // Only dataset 0's preference survives, matching how this merge treats every
   // other non-row-indexed field (labels, units, metadata): there is no
   // defensible way to reconcile two users' orderings, and inventing one would
   // be worse than deterministically picking the first.
   const level_order: Record<number, number[]> = {};
-  for (const [c] of plans) {
+  for (const [c, plan] of plans) {
     const own = datasets[0].level_order?.[c];
     if (!Array.isArray(own)) continue;
-    const codes = own.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    const remap = plan.remaps[0];
+    const seen = new Set<number>();
+    const codes: number[] = [];
+    for (const v of own) {
+      if (typeof v !== "number" || !Number.isFinite(v)) continue;
+      const mapped = remap ? remap(v) : v;
+      // A de-duplicating union can map two of dataset 0's codes onto one, so
+      // the remapped order must not repeat a code.
+      if (Number.isFinite(mapped) && !seen.has(mapped)) {
+        seen.add(mapped);
+        codes.push(mapped);
+      }
+    }
     if (codes.length) level_order[c] = codes;
   }
   return {

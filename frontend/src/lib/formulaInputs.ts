@@ -123,3 +123,46 @@ export function baseColumns(data: DataStruct, n: number): DataStruct {
     level_order: stripChannelKeyed(data.level_order, keep),
   };
 }
+
+/** Re-attach a COMPUTED column's `level_order` across a recompute, but only
+ *  when its level table came back IDENTICAL (Group O-2 review, MEDIUM 3).
+ *
+ *  `baseColumns` strips every channel-keyed entry at or beyond the base column
+ *  count — correctly, since the computed columns are about to be rebuilt — and
+ *  `computeFormulas` then re-derives `cat_levels` for a recode column but has
+ *  no way to re-derive a user's ORDER. So an order set on a recoded column was
+ *  destroyed by any recompute at all: a cell edit, a correction, adding or
+ *  removing an unrelated formula.
+ *
+ *  The condition is that the OLD table is a PREFIX of the new one, which is
+ *  exactly the condition under which every old code still names the level it
+ *  named before. It is doing real work rather than being cautious for its own
+ *  sake — a recode's table is derived, so a reorder or a removal shifts later
+ *  codes, and carrying the order through that would silently name the WRONG
+ *  levels, the corruption class this design avoids by never moving codes.
+ *
+ *  PREFIX rather than IDENTICAL, and the difference is not academic: the first
+ *  version required the table to come back unchanged, and a test written to
+ *  prove the drop case instead proved that rule too strict. A recode derives
+ *  its levels from its SOURCE's table, and `store/cellEdit.ts` APPENDS a level
+ *  to that table whenever a user types a new category — a routine edit that
+ *  leaves codes 0..n-1 untouched and only adds n. Under identical-only, typing
+ *  one new category anywhere in the source column silently reset the recoded
+ *  column's order. Under prefix, it does not, and nothing unsafe is admitted. */
+export function carryComputedLevelOrder(before: StrippableData, after: DataStruct): DataStruct {
+  const prior = before.level_order;
+  if (!prior) return after;
+  const carried: Record<number, number[]> = { ...(after.level_order ?? {}) };
+  let changed = false;
+  for (const [key, codes] of Object.entries(prior)) {
+    const ch = Number(key);
+    if (ch in carried) continue; // a base channel's order already survived
+    const wasTable = before.cat_levels?.[ch];
+    const nowTable = after.cat_levels?.[ch];
+    if (!wasTable || !nowTable || nowTable.length < wasTable.length) continue;
+    if (wasTable.some((label, i) => label !== nowTable[i])) continue;
+    carried[ch] = [...codes];
+    changed = true;
+  }
+  return changed ? { ...after, level_order: carried } : after;
+}

@@ -94,7 +94,7 @@
 
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
-import { baseColumns, type StrippableData } from "./formulaInputs";
+import { baseColumns, carryComputedLevelOrder, type StrippableData } from "./formulaInputs";
 import { computeRecodeAppend } from "./recode";
 import type { ComputedColumn, DataStruct } from "./types";
 
@@ -479,8 +479,10 @@ export function recomputeWithErrors(
   data: StrippableData,
   formulas: ComputedColumn[],
 ): { data: DataStruct; errors: Record<string, string> } {
-  return computeFormulas(baseColumns(data, formulas.length), formulas);
+  const out = computeFormulas(baseColumns(data, formulas.length), formulas);
+  return { ...out, data: carryComputedLevelOrder(data, out.data) };
 }
+
 
 /** Channel letter for a 0-based index: 0→A, 1→B, … 25→Z, then AA, AB, … */
 export function channelLetter(i: number): string {

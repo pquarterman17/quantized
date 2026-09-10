@@ -41,7 +41,7 @@
 // in PRIMARY_SOFTWARE_AUDIT_PLAN.md's P1.5 entry, not re-litigated per call
 // site.
 
-import { categoryLevels, levelCountOf, levelsOf } from "./categorical";
+import { categoryLevels, levelCountOf, levelsOf, orderLevels } from "./categorical";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { DataStruct } from "./types";
 
@@ -94,8 +94,17 @@ export function applyGroupSplit(
   groupCodes: readonly (number | null | undefined)[],
   groupLabel: string,
   levelLabelOf: (code: number) => string,
+  order?: readonly unknown[] | null,
 ): PlotPayload {
-  const levels = levelsOf(groupCodes);
+  // Group O-2 review, HIGH 1: this is the LIVE Stage, and `lib/plotspec.ts`'s
+  // `buildXY` — the Graph Builder preview it is contractually required to match
+  // (see this module's ALGORITHM PARITY header) — orders its levels through
+  // `categoryLevels`. Taking a bare `groupCodes` array, this cannot read the
+  // dataset's `level_order` itself, so the caller passes it and both sides run
+  // `orderLevels`, the one shared implementation. Measured before the fix: the
+  // preview showed the user's order and the live plot showed ascending, with
+  // different series colours and legend order.
+  const levels = orderLevels(levelsOf(groupCodes), order ?? null);
   if (levels.length === 0) return payload;
   const [x, ...ys] = payload.data as (number | null)[][];
   const cols: (number | null)[][] = [x];

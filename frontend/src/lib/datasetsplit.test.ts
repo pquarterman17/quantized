@@ -19,7 +19,8 @@ import {
 } from "./datasetsplit";
 import { pickDefaultSplitColumn } from "./datasetsplitDefault";
 import { byColumnOptions } from "./byPartition";
-import { categoryLevels, resolveCategoryLabels } from "./barlayout";
+import { resolveCategoryLabels } from "./barlayout";
+import { categoryLevels } from "./categorical";
 import type { DataStruct, Dataset } from "./types";
 
 /** Wrap a bare fixture DataStruct as the minimal `Dataset` the split API now
@@ -1020,5 +1021,40 @@ describe("sliceDataStruct — row-indexed metadata sidecars (BUG-006)", () => {
     const out = sliceDataStruct(plain, [1]);
     expect(out.metadata).toEqual({ source: "/x.dat" });
     expect("text_columns" in out.metadata).toBe(false);
+  });
+});
+
+// Group O-2 review, HIGH 2: `level_order` is channel-indexed, so a ROW slice
+// leaves it entirely valid — dropping it reverted Split children, Extract rows
+// and every By partition to ascending.
+describe("sliceDataStruct carries the level order (Group O-2)", () => {
+  const src: DataStruct = {
+    time: [1, 2, 3, 4],
+    values: [[0], [1], [2], [0]],
+    labels: ["sample"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["Low", "Med", "High"] },
+    level_order: { 0: [2, 1, 0] },
+  };
+
+  it("keeps the order through a row slice, alongside cat_levels", () => {
+    const child = sliceDataStruct(src, [0, 1]);
+    expect(child.level_order).toEqual({ 0: [2, 1, 0] });
+    expect(child.cat_levels).toEqual({ 0: ["Low", "Med", "High"] });
+    // And the child's own accessor answers in that order for the levels it has.
+    expect(categoryLevels(child, 0)).toEqual([1, 0]);
+  });
+
+  it("omits the field when the source has none", () => {
+    const { level_order: _drop, ...bare } = src;
+    expect("level_order" in sliceDataStruct(bare as DataStruct, [0])).toBe(false);
+  });
+
+  it("a Split child keeps the parent's order", () => {
+    const ds: Dataset = { id: "d1", name: "run.dat", data: src };
+    const { groups } = splitColumn(ds, 0);
+    const child = sliceDataStruct(src, groups[0].rowIndexes);
+    expect(child.level_order).toEqual({ 0: [2, 1, 0] });
   });
 });

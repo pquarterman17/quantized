@@ -322,14 +322,32 @@ describe("merge carries the level order through the code remap", () => {
     };
   }
 
-  // THE INVARIANT that makes carrying dataset 0's order safe. `planChannel`
+  // THE COUNTEREXAMPLE that a review round found to the "dataset 0's codes
+  // never move" argument, and the reason the remap in mergeDatasets is NOT dead
+  // code. A repeated level STRING in dataset 0's own table makes the union
+  // de-duplicate it, so dataset 0's later codes shift down.
+  it("remaps dataset 0's order when a REPEATED level string shifts its own codes", () => {
+    const a = ds(["A", "A", "B"], [0, 1, 2], [2, 1, 0]);
+    const b = ds(["C"], [0]);
+    const merged = mergeDatasets([a, b], ["a", "b"]);
+    expect(merged.cat_levels![0]).toEqual(["A", "B", "C"]);
+    // Dataset 0's rows prove its codes moved: 0,1,2 -> 0,0,1.
+    expect(merged.values.slice(0, 3)).toEqual([[0], [0], [1]]);
+    // The order must follow. Carried verbatim it would read [2,1,0] = C,B,A —
+    // naming dataset 1's level. Remapped it is [1,0] = B,A, which is what the
+    // user actually chose (their two distinct levels, in their order).
+    const union = merged.cat_levels![0];
+    expect(merged.level_order![0].map((c) => union[c])).toEqual(["B", "A"]);
+  });
+
+  // THE INVARIANT that makes carrying dataset 0's order safe FOR UNIQUE TABLES. `planChannel`
   // builds the union starting from `tables[0]` in its own order, so dataset 0's
   // levels keep their indices. Asserted directly because the alternative — a
   // "defensive" remap in mergeDatasets — was dead code that no test could hold
   // honest (sabotage: deleting it left everything green). If the union
   // construction ever changes so dataset 0's codes DO move, this fails and the
   // remap becomes genuinely necessary.
-  it("dataset 0's codes are never renumbered by the union table", () => {
+  it("dataset 0's codes are never renumbered when its own levels are unique", () => {
     const a = ds(["Low", "High"], [0, 1]);
     const b = ds(["Med", "High", "Extra"], [0, 1, 2]);
     const merged = mergeDatasets([a, b], ["a", "b"]);

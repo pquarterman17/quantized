@@ -94,9 +94,44 @@ export function levelCountOf(values: readonly (number | null | undefined)[]): nu
  *  a null or a NaN, so junk simply fails to match and is skipped. Filtering
  *  here would allocate a fresh array on every call — and `categoryLevels` is
  *  called inline in render — to reach the identical result. */
-function levelOrderFor(data: DataStruct, channel: number): readonly unknown[] | null {
+export function levelOrderFor(data: DataStruct, channel: number): readonly unknown[] | null {
   const raw = data.level_order?.[channel];
   return Array.isArray(raw) && raw.length > 0 ? raw : null;
+}
+
+/** Put `present` into `order`'s sequence — the ONE implementation of what a
+ *  user's level order MEANS, exported because several consumers hold a level
+ *  list without holding the DataStruct it came from: `lib/plotGroupSplit.ts`
+ *  (the live Stage's group split, which receives a bare `groupCodes` array) and
+ *  `lib/variability.ts` (factor B's levels are the ones CO-OCCURRING with an A
+ *  level, a filtered subset no column read can produce). Group O-1's whole
+ *  lesson was that a second private copy of a level decision is how two
+ *  surfaces come to disagree; this is that lesson applied before the copies
+ *  exist.
+ *
+ *  Rules, in one place:
+ *   - codes named by `order` come first, in that order, but ONLY if actually
+ *     present — an order must not invent a level the data no longer has;
+ *   - every present code the order does not name follows, ascending. FAIL OPEN:
+ *     a level that appeared after the order was saved still renders instead of
+ *     hiding behind a stale preference;
+ *   - `order` is deliberately unvalidated. Matching is by `Set.delete`, and a
+ *     `Set<number>` built from `levelsOf` holds only finite numbers, so a
+ *     string, a null, an object or a NaN out of a hand-edited `.dwk` simply
+ *     fails to match. `delete` also CONSUMES the match, so a code repeated in
+ *     the order cannot emit a duplicate.
+ *  The result is therefore always the same SET as `present` — order changes,
+ *  membership never does. */
+export function orderLevels(present: readonly number[], order: readonly unknown[] | null): number[] {
+  if (!order) return [...present];
+  const remaining = new Set(present);
+  const out: number[] = [];
+  for (const raw of order) {
+    const code = raw as number;
+    if (remaining.delete(code)) out.push(code);
+  }
+  for (const code of present) if (remaining.has(code)) out.push(code);
+  return out;
 }
 
 /** `channel`'s category levels, in DISPLAY order (`-1` reads the x/time
@@ -118,23 +153,7 @@ function levelOrderFor(data: DataStruct, channel: number): readonly unknown[] | 
  *  changes, the membership never does, which is what lets every downstream
  *  consumer adopt this without re-checking its own assumptions. */
 export function categoryLevels(data: DataStruct, channel: number): number[] {
-  const present = levelsOf(columnOf(data, channel));
-  const order = levelOrderFor(data, channel);
-  if (!order) return present;
-  const remaining = new Set(present);
-  const out: number[] = [];
-  for (const raw of order) {
-    // `raw` is deliberately unvalidated (see `levelOrderFor`). The cast asks
-    // the Set a question it can answer for ANY value: a `Set<number>` built
-    // from `levelsOf` holds only finite numbers, so a string, a null or a NaN
-    // out of a hand-edited `.dwk` simply fails to match and is skipped. The
-    // `delete` both tests membership and consumes it, so a code repeated in
-    // the order cannot emit a duplicate.
-    const code = raw as number;
-    if (remaining.delete(code)) out.push(code);
-  }
-  for (const code of present) if (remaining.has(code)) out.push(code);
-  return out;
+  return orderLevels(levelsOf(columnOf(data, channel)), levelOrderFor(data, channel));
 }
 
 /** True when `v` is a genuine non-empty array of strings -- NOT just
@@ -214,7 +233,13 @@ function sanitizeLevelOrder(data: DataStruct): DataStruct {
   if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
     for (const [key, codes] of Object.entries(raw)) {
       const idx = Number(key);
-      if (!Number.isInteger(idx) || idx < 0 || !Array.isArray(codes)) continue;
+      // `-1` is a REAL channel here, not junk: it is the x/time column, which
+      // `categoryLevels` reads (the interactive categorical x-axis passes
+      // `xKey`, and Split accepts "x or a value channel"). An earlier version
+      // rejected `idx < 0`, so an x-axis order was honoured in-session, written
+      // to the file, and silently deleted on reopen — the accessor and the
+      // sanitizer disagreeing about which channels exist.
+      if (!Number.isInteger(idx) || idx < -1 || !Array.isArray(codes)) continue;
       const clean = codes.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
       if (clean.length) out[idx] = clean;
     }
