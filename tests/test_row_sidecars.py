@@ -142,6 +142,28 @@ class TestMatchesTypeScriptCellSemantics:
             "A": ["", "", ""]
         }
 
+    def test_a_raising_item_does_not_escape_as_an_exception(self) -> None:
+        """Every predicate here is TOTAL — `""` for anything that is not a real
+        position. `_is_boolean`'s unguarded `.item()` broke that: `ndarray.item()`
+        raises for size != 1, so a multi-element array turned a previously fail-soft
+        input into a public-API crash (`slice_row_sidecars` is in `__all__`)."""
+
+        class Boom:
+            def item(self) -> object:
+                raise RuntimeError("nope")
+
+        meta = {"text_columns": {"A": ["a0", "a1", "a2"]}}
+        assert slice_row_sidecars(meta, [np.array([1, 2]), 0])["text_columns"] == {"A": ["", "a0"]}
+        assert slice_row_sidecars(meta, [Boom(), 0])["text_columns"] == {"A": ["", "a0"]}
+
+    def test_BYTES_are_rejected_by_both_halves_like_a_string(self) -> None:
+        # `float(b"1") == 1.0`, so without the bytes branch a bytes key resolves to a
+        # REAL cell. Round 5 found this branch live but untested: narrowing both
+        # rejections to `str` alone left the whole file green.
+        meta = {"text_columns": {"A": ["a0", "a1", "a2"]}}
+        assert slice_row_sidecars(meta, [b"1", 0])["text_columns"] == {"A": ["", "a0"]}
+        assert slice_row_sidecars(meta, [0, b"1"])["text_columns"] == {"A": ["a0"]}
+
     def test_a_numeric_string_is_rejected_by_BOTH_halves(self) -> None:
         """The two halves must agree. `_in_range` called `"1"` out of range while
         `_as_index`'s float() fallback returned `cells[1]` for it — one function

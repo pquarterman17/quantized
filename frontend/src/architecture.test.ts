@@ -597,6 +597,68 @@ const LIB_UI_GRANDFATHERED = new Set([
   "./lib/worksheetTransformCommands.ts",
 ]);
 
+// PENDING-EDIT GUARD RATCHET (BUG-006 site 9, added review round 5).
+//
+// Five review rounds on one feature produced two HIGH defects per round, and the
+// reason was structural, not careless: NOTHING noticed a MISSING guard. Both the
+// suite and each reviewer could only see the guards that existed, so round 4 could
+// extend the guard to three sites and still miss the two that CORRUPT data
+// (`computedColumns.addFormula` and `recode`: the formula survives the resolve while
+// the preview's labels do not, so `baseCount = labels.length - formulas.length` then
+// treats a real measured channel as the computed one and overwrites its imported
+// values under its own label).
+//
+// So: a store module whose dataset updater writes `data`, `metadata`, `cat_levels`
+// or `formulas` must either route through `store/pendingEdit.refusePendingEdit` or
+// be listed below with a reason. A NEW such module fails this test.
+//
+// HONEST LIMITATION, so nobody trusts this further than it goes: the detector keys
+// on the common `datasets: <state>.datasets.map(` updater shape. Other shapes exist
+// (`removeFormula` assigns `const datasets = s.datasets.map(...)` inside a block and
+// is NOT matched, though its module is guarded anyway). This is a coarse net that
+// catches the shape four of the five rounds' misses actually used — not a proof.
+const PENDING_EDIT_EXEMPT = new Map<string, string>([
+  [
+    "reimport.ts",
+    "REPLACES data deliberately with freshly fetched bytes and clears `pending` in " +
+      "the same updater — the resolve-and-replace pattern, same as installBookData.",
+  ],
+]);
+
+describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
+  it("every store module that mutates a dataset's data guards it, or is listed with a reason", () => {
+    const offenders: string[] = [];
+    for (const [path, src] of sources()) {
+      if (!path.startsWith("./store/") || path.endsWith(".test.ts")) continue;
+      const name = path.slice("./store/".length);
+      const updaters = [...src.matchAll(/datasets:\s*\w+\.datasets\.map\(/g)];
+      const touchesData = updaters.some((m) =>
+        /\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),
+      );
+      if (!touchesData) continue;
+      if (src.includes("refusePendingEdit")) continue;
+      if (PENDING_EDIT_EXEMPT.has(name)) continue;
+      offenders.push(name);
+    }
+    expect(
+      offenders,
+      "route the mutation through store/pendingEdit.refusePendingEdit (a pending " +
+        "dataset's `data` is replaced wholesale when its fetch lands, so anything " +
+        "written into it is discarded silently), or add it to PENDING_EDIT_EXEMPT " +
+        "with the reason it is safe",
+    ).toEqual([]);
+  });
+
+  it("the exemption list stays honest — every entry still has a matching updater", () => {
+    const byName = new Map([...sources()].map(([p, src]) => [p.slice("./store/".length), src]));
+    const stale = [...PENDING_EDIT_EXEMPT.keys()].filter((n) => {
+      const src = byName.get(n);
+      return !src || !/datasets:\s*\w+\.datasets\.map\(/.test(src);
+    });
+    expect(stale, "drop the exemption; its updater is gone").toEqual([]);
+  });
+});
+
 describe("lib/ layering guard (DIRACULATOR_AUDIT P3)", () => {
   const importsComponents = (src: string): boolean =>
     /from\s+["'][^"']*components\//.test(src);

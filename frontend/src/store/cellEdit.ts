@@ -40,6 +40,7 @@
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
 import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { refusePendingEdit } from "./pendingEdit";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -70,45 +71,6 @@ function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
     data: incremental.data,
     formulaErrors: Object.keys(incremental.errors).length ? incremental.errors : undefined,
   };
-}
-
-/** Refuse ANY edit to a dataset whose full data has not arrived yet, and say why.
- *
- *  THE CONDITION IS `pending != null`, DELIBERATELY NOT `rowsAreSampled`. Those
- *  answer different questions and a review round caught me collapsing them:
- *
- *    * `rowsAreSampled` (lib/rowSidecars.ts) answers "may a row-indexed sidecar be
- *      INDEXED against these numbers?" — false for a padding-trimmed prefix, whose
- *      cells line up fine. That is the right rule for the worksheet RENDER.
- *    * this guard answers "is `d.data` about to be THROWN AWAY?" — which is true
- *      for every pending dataset, sampled or not, because
- *      `lib/bookData.installBookData` replaces `data` wholesale when the fetch
- *      lands. `WorksheetPane` kicks `ensureBookData` the moment the worksheet
- *      opens, and `resolvePendingDatasets` runs before every save, so the race is
- *      live on every view.
- *
- *  Loosening this to `rowsAreSampled` re-opened the exact harm the guard exists to
- *  stop, measured on the corpus shape the loosening was justified by (a 180-row
- *  book previewing as a 161-row trimmed prefix, `sampled: false`):
- *  `insertRows(id, 5, 1)` grew `time` to 181 by materializing the 19 trimmed rows
- *  as NaN and writing them into `d.data`, recorded an undo entry, warned about
- *  nothing — and the subsequent resolve discarded the insert, the sidecar shift and
- *  the padding, silently. "Insert a row, save the workspace" lost the row and saved
- *  the pre-edit data.
- *
- *  Covers the CELL writes too, not just row insert/delete. They are the commonest
- *  edit and were equally destructive on this path: each wrote into the preview,
- *  recorded undo and a macro line, and was wiped by the resolve without a word.
- *  Guarding only row edits was not a coherent contract. (`store/corrections.ts`
- *  already resolves first, and `installBookData` clears `excludedRows`/`filter`, so
- *  those paths are fine.)
- *
- *  Kicks the fetch so the retry the message suggests can succeed. */
-function refusePendingEdit(get: SliceGet, ds: Dataset, action: string): boolean {
-  if (ds.pending == null) return false;
-  void get().ensureBookData(ds.id);
-  get().setStatus(`"${ds.name}" is still loading its full data — try ${action} again in a moment`);
-  return true;
 }
 
 /** Is `value` a code the categorical level table at `col` already has an
@@ -263,8 +225,8 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // otherwise grow `time` into a sparse array via `time[row] = value` for
     // row >= time.length. Mirrors setCellBlock's own `e.row >= 0 && e.row <
     // ds.data.time.length` filter below.
-    if (refusePendingEdit(get, ds, "editing a cell")) return;
     if (row < 0 || row >= ds.data.time.length) return;
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) return; // computed column — read-only
     if (Number.isFinite(value) && !isValidExistingCode(ds, col, value)) {
@@ -371,8 +333,8 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based
     // patch that would otherwise throw on `values[row]`.
-    if (refusePendingEdit(get, ds, "editing a cell")) return;
     if (row < 0 || row >= ds.data.time.length) return;
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col < 0 || col >= baseCount) return; // x column and computed columns aren't categorical cells
     const levels = categoricalLevels(ds.data, col);

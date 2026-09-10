@@ -1159,8 +1159,10 @@ describe("L0.46 — batch folder suggestion (never creates without the click)", 
 });
 
 // The `preview_sampled` PLUMBING (BUG-006 site 9). Round 4 deleted the single line
-// carrying this from the wire entry onto `pending` and the whole suite — 621 files /
-// 9,784 tests — stayed green, so nothing pinned it. Losing it silently reverts every
+// carrying this from the wire entry onto `pending` and the whole suite stayed green,
+// so nothing pinned it. (An earlier version of this comment quoted "621 files / 9,784
+// tests"; both numbers were wrong — 620 files, and the parent total was 9,782. Quoted
+// counts get checked around here, so don't quote one you didn't measure.) Losing it silently reverts every
 // lazy Origin book to fail-closed: text columns hidden, edits refused. Which is the
 // regression the flag exists to remove.
 describe("a lazy book's preview_sampled reaches its pending ref", () => {

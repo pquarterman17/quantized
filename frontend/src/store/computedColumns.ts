@@ -26,6 +26,7 @@ import {
   remapViewChannels,
   remapWindowViews,
 } from "../lib/channelRemap";
+import { refusePendingEdit } from "./pendingEdit";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
 import type { AppState } from "./useApp";
 
@@ -108,6 +109,12 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           return false;
         }
       }
+      // BUG-006 site 9's edit half, found in review round 5. This is WORSE than the
+      // losses the row/cell guards stop: the added formula survives the resolve
+      // while the preview's labels do not, so `baseCount = labels.length -
+      // formulas.length` then treats a REAL measured channel as the computed one and
+      // overwrites its imported values with formula output under its own label.
+      if (refusePendingEdit(get, ds, "adding a column")) return false;
       get().recordHistory("add column");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -128,6 +135,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       const ds = get().datasets.find((d) => d.id === id);
       const current = ds?.formulas?.[index];
       if (!ds || !current) return false;
+      if (refusePendingEdit(get, ds, "editing a column")) return false; // see addFormula
       const name = patch.name?.trim() || current.name;
       const expr = patch.expr ?? current.expr;
       const unit = patch.unit ?? current.unit;
@@ -175,6 +183,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       // function's body.
       const target = get().datasets.find((d) => d.id === id);
       if (!target?.formulas) return;
+      if (refusePendingEdit(get, target, "removing a column")) return; // see addFormula
       get().recordHistory("remove column");
       const removedCol = baseColumns(target.data, target.formulas.length).labels.length + index;
       set((s) => {

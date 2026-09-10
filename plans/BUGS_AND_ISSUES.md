@@ -31,6 +31,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
+| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; two data-CORRUPTING sites found in review round 5 and now guarded, but "refuse" should be "resolve-then-apply" and a failed fetch is a permanent lockout | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites fixed + ratcheted, structural fix open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1255,7 +1256,7 @@ in code it had missed:
 - [x] Row EDITS on a pending book were unguarded, so `sidecarRowCount` reported
   the full book's span against the preview's numbers: one "insert row" padded the
   grid to the full length in NaN, persisted it, and `installBookData` then wiped
-  it silently. `refusePendingRowEdit` mirrors `pendingGuard`. Site 9's render fix
+  it silently. `refusePendingEdit` (store/pendingEdit.ts) mirrors `pendingGuard`. Site 9's render fix
   had just removed the phantom rows that used to hint at this.
 - [~] Site 9's condition went through THREE wrong versions before the right one,
   and the record of the wrong ones matters more than the fix:
@@ -1315,6 +1316,72 @@ impossibility for all three reshapes; it now distinguishes the three cases.
   alone kept it green regardless of the allowlist).
 - Owner verification: — (worth a look on a real Origin "Text & Numeric" sheet;
   the fix is shape-driven, not corpus-driven, so no specimen was needed.)
+
+---
+
+## BUG-009 — the pending-dataset contract is five ad-hoc guards, not a contract
+
+**Priority:** P2 — the two data-CORRUPTING sites are guarded as of 2026-09-10, so
+nothing is actively destroying data. What remains is structural, and the structure
+is why this cost five review rounds.
+
+### What happened
+
+BUG-006's site 9 (a pending Origin book's `data` is a display projection that
+`installBookData` replaces wholesale) took FIVE review rounds. Each round found two
+HIGH defects; THREE of those were regressions introduced by the fix for an earlier
+round's finding. Every round was fully green when its defects were found.
+
+The cause was not carelessness. **Nothing noticed a MISSING guard.** The suite and
+each reviewer could only see the guards that existed, so round 4 could extend the
+guard to three sites and still miss the two that CORRUPT data rather than merely
+lose an edit:
+
+- `store/computedColumns.ts` `addFormula`/`updateFormula`/`removeFormula` and
+  `store/recode.ts` wrote `formulas` onto a pending dataset. Measured: the formula
+  SURVIVES the resolve while the preview's labels do not, so the next legitimate
+  edit computes `baseCount = labels.length - formulas.length`, treats a REAL
+  measured channel as the computed one, and overwrites its imported values with
+  formula output under its own label. `applyCorrections` drops that channel outright.
+
+### Done (2026-09-10)
+
+- [x] All nine mutation sites route through ONE `store/pendingEdit.refusePendingEdit`
+  — its own module, because four earlier rounds each added a COPY of the rule
+  instead of a home, and three of those copies were wrong at some point.
+- [x] A ratchet in `architecture.test.ts` fails the build when a store module's
+  dataset updater writes `data`/`metadata`/`cat_levels`/`formulas` without the
+  guard and without an explicit exemption. Sabotage-verified against the exact
+  round-5 miss. Its limitation is stated inline: it keys on the common updater
+  shape, so it is a coarse net, not a proof.
+
+### STILL OPEN — the structural fix
+
+- [ ] **Replace "refuse" with "resolve-then-apply."** The guard refuses; it does not
+  defer. `ensureBookData` never clears `pending` on failure, so a permanently failed
+  fetch (moved source, expired upload token) is a permanent lockout: every edit,
+  extract, copy and save refused forever, while the status still says "in a moment".
+  For a text-only book the render fix now SHOWS the cells, so the user sees an
+  editable grid that can never be edited. `store/corrections.ts` already has the
+  right shape (`await get().resolveDataset(id)` first). One `withResolved(id, fn)`
+  wrapper would make the safe path the DEFAULT rather than something each new action
+  must remember — which is the actual defect. Deliberately NOT attempted inside a PR
+  that has already taken five review rounds.
+- [ ] Distinguish "in flight" from "failed, will never arrive", so the message stops
+  promising a retry that cannot succeed.
+
+### The invariant, stated once (it never was)
+
+A pending dataset's `data` is a **read-only display projection**. Read: allowed.
+Render: allowed, and row-indexed sidecars may be shown only when the backend says
+the preview is a prefix (`preview_sampled === false`). Edit / derive / extract /
+save: resolve FIRST, then apply, and surface a genuine failure.
+
+### Completion record
+
+- PR/commit: the round-5 response on the Group P branch (2026-09-10).
+- Owner verification: — (the resolve-then-apply refactor is a design call worth
+  an owner's read before it is built).
 
 ---
 

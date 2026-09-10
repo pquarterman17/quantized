@@ -823,6 +823,23 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     expect(useApp.getState().datasets[0].data.values[1][0]).toBe(2); // not 999
     useApp.getState().setCellBlock("p4", [{ row: 0, col: 0, value: 42 }], "paste");
     expect(useApp.getState().datasets[0].data.values[0][0]).toBe(1); // not 42
+    // setCategoricalCell is the INTERACTIVE single-cell editor the worksheet UI
+    // actually calls, and round 5 found its guard unfalsifiable: deleting the line
+    // left all 620 files / 9,790 tests green. It needs a categorical column.
+    useApp.setState({
+      datasets: [
+        {
+          ...useApp.getState().datasets[0],
+          data: {
+            ...useApp.getState().datasets[0].data,
+            values: [[0], [1], [0]],
+            cat_levels: { 0: ["red", "blue"] },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().setCategoricalCell("p4", 1, 0, "red");
+    expect(useApp.getState().datasets[0].data.values[1][0]).toBe(1); // still "blue"
     expect(useApp.getState().history).toHaveLength(0);
   });
 

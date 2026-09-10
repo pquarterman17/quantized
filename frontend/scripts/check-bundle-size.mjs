@@ -1012,8 +1012,32 @@ import { fileURLToPath } from "node:url";
  *  once means after the LINE-ceiling fix too, since trimming a comment moves no
  *  bytes but re-running the build is the only way to know that rather than assume
  *  it.
+ *
+ *  2026-09-10 (Group P, review round 5) — 912,681 -> 912,838, a raise of 157.
+ *  (+284 against `main`'s 912,554.)
+ *
+ *  Round 5 found two MORE unguarded mutation sites, and these CORRUPT data rather
+ *  than lose an edit: `computedColumns.addFormula`/`updateFormula`/`removeFormula`
+ *  and `recode` wrote `formulas` onto a pending dataset, where the formula survives
+ *  the resolve but the preview's labels do not — so `baseCount = labels.length -
+ *  formulas.length` then treats a REAL measured channel as the computed one and
+ *  overwrites its imported values under its own label.
+ *
+ *  These bytes are the fix: `store/pendingEdit.ts` (the guard's own module, because
+ *  four earlier rounds each added a COPY of the rule instead of a home and three of
+ *  those copies were wrong at some point) plus four call sites. No reduction is
+ *  available — a store slice's own guard cannot be lazy, and the module is imported
+ *  by three eager slices.
+ *
+ *  WORTH NOTING WHERE THIS SERIES OF RAISES CAME FROM: the eager cost of this whole
+ *  feature is guards and one shared predicate, spread over five rounds because
+ *  nothing detected a MISSING guard. That detector now exists
+ *  (`architecture.test.ts`'s pending-edit ratchet), so the next site should cost a
+ *  test failure rather than another review round and another raise.
+ *
+ *  Pinned at measured (912,774) + 64, measured after the final edit.
  */
-const EAGER_JS_BUDGET = 912_681;
+const EAGER_JS_BUDGET = 912_838;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

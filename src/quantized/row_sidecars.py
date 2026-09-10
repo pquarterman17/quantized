@@ -56,12 +56,24 @@ ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sh
 def _is_boolean(i: Any) -> bool:
     """Is ``i`` a boolean, INCLUDING a numpy one?
 
-    ``np.bool_`` is NOT a subclass of ``bool`` and it does implement ``__index__``,
-    so a plain ``isinstance(i, bool)`` let a numpy boolean through as index 1 --
-    the same isinstance-vs-numpy-scalar trap that ``np.int64`` fell into two rounds
-    earlier, and in a module whose native currency is numpy index arrays. Passing a
-    boolean MASK where an index list is expected then returned plausible-looking
-    WRONG cells instead of blanks:
+    ``np.bool_`` is NOT a subclass of ``bool``, so a plain ``isinstance(i, bool)``
+    let a numpy boolean through -- the same isinstance-vs-numpy-scalar trap
+    ``np.int64`` fell into two rounds earlier, in a module whose native currency is
+    numpy index arrays.
+
+    WHICH LINE it got through matters, and an earlier version of this docstring named
+    the wrong one. It said ``np.bool_`` "does implement ``__index__``". It does not
+    (measured, numpy 2.4.6: ``hasattr(np.True_, "__index__")`` is ``False`` and
+    ``operator.index(np.True_)`` raises ``TypeError``). It got through the ``float()``
+    fallback below, since ``float(np.True_) == 1.0`` is integral. Anyone told
+    ``operator.index`` was the hole would audit the wrong line. The ``float()``
+    fallback is the one to watch: it accepts anything with a working ``__float__``.
+    (``np.timedelta64`` was suggested as another way through it -- it is not:
+    ``float(np.timedelta64(2, "s"))`` raises ``TypeError``, which the handler
+    already turns into a miss. Checked rather than assumed, both directions.)
+
+    Passing a boolean MASK where an index list is expected returned
+    plausible-looking WRONG cells instead of blanks:
 
         _slice_cells(["a0","a1","a2"], [np.True_, 0])  ->  ["a1", "a0"]   (wrong)
         JS  sliceCells(...,            [true,    0])   ->  ["",   "a0"]
@@ -72,7 +84,17 @@ def _is_boolean(i: Any) -> bool:
     if i is True or i is False:
         return True
     item = getattr(i, "item", None)
-    return callable(item) and isinstance(item(), bool)
+    if not callable(item):
+        return False
+    try:
+        return isinstance(item(), bool)
+    except Exception:
+        # TOTAL, like every other predicate here. `ndarray.item()` raises for size
+        # != 1 and a foreign `.item()` can raise anything, so an unguarded call
+        # turned a previously fail-soft input into a public-API crash:
+        # `slice_row_sidecars(meta, [np.array([1, 2]), 0])` returned blanks before
+        # and raised ValueError after. `slice_row_sidecars` is in `__all__`.
+        return False
 
 
 def _as_index(i: Any) -> int | None:
