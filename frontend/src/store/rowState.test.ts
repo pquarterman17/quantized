@@ -60,7 +60,7 @@ describe("row-state writes are refused while a dataset is pending (BUG-009)", ()
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  it("excludeSelectedRows — the worksheet's right-click action — records nothing", () => {
+  it("excludeSelectedRows — the worksheet toolbar's Exclude button — records nothing", () => {
     useApp.setState({ selection: { datasetId: "d1", rows: [1, 2] } });
     useApp.getState().excludeSelectedRows();
     expect(ds().excludedRows).toBeUndefined();
@@ -86,10 +86,13 @@ describe("row-state writes are refused while a dataset is pending (BUG-009)", ()
 
 describe("CLEARING row state is still allowed while pending, deliberately", () => {
   it("clearRowExclusions clears, so a user is never trapped with exclusions they cannot remove", () => {
-    // Reachable: a dataset can carry row state and later be marked pending
-    // again (a reimport). Refusing here would create the very lockout the
-    // guard exists to prevent, and clears nothing `installBookData` would not
-    // clear itself a moment later.
+    // Reachable via the .dwk ROUND TRIP, not a reimport (which clears
+    // `pending` in the same updater): lib/workspaceSerialize.ts writes
+    // excludedRows/filter/pending independently and
+    // lib/workspaceDatasetParse.ts restores all three independently, so a
+    // document saved by a pre-guard build loads pending WITH row state.
+    // Refusing here would create the very lockout the guard exists to prevent,
+    // and clears nothing `installBookData` would not clear a moment later.
     useApp.setState({ datasets: [pendingDataset({ excludedRows: [0, 2] })], activeId: "d1", history: [] });
     useApp.getState().clearRowExclusions("d1");
     expect(ds().excludedRows).toBeUndefined();
@@ -167,10 +170,70 @@ describe("selection actions (transient, never written into a dataset)", () => {
   });
 });
 
-describe("an id that resolves to no dataset is not treated as pending", () => {
-  it("acts as a plain no-op rather than emitting a loading message", () => {
+describe("an id that resolves to no dataset aborts before recording anything", () => {
+  it("leaves no undo entry and no loading message", () => {
+    // Review round L3: the first version of this test asserted only `status`
+    // and `excludedRows`, and BOTH are unchanged whichever way the missing-id
+    // branch decides — so inverting that decision left it green. The real
+    // observable is the HISTORY: falling through to the `datasets.map` (which
+    // matches nothing) still ran `recordHistory`, leaving a dead undo entry —
+    // the same wart this commit fixes for the pending case. It now aborts.
     useApp.getState().toggleRowExcluded("nope", 0);
+    expect(useApp.getState().history).toHaveLength(0);
     expect(useApp.getState().status).toBe("");
     expect(ds().excludedRows).toBeUndefined();
+  });
+});
+
+describe("a refusal PRESERVES existing row state (review L6)", () => {
+  it("does not clear exclusions or the filter it declined to change", () => {
+    // Every refusal test above starts from a dataset with no row state, so an
+    // implementation that CLEARED it on refusal passed all of them —
+    // `undefined` on both sides. Seed it, so the assertion has something to
+    // lose.
+    useApp.setState({
+      datasets: [pendingDataset({ excludedRows: [0], filter: [{ col: 0, kind: "range", min: 5, max: 25 }] })],
+      activeId: "d1",
+      history: [],
+    });
+    useApp.getState().toggleRowExcluded("d1", 2);
+    useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 100, max: 200 }]);
+    expect(ds().excludedRows).toEqual([0]);
+    expect(ds().filter).toEqual([{ col: 0, kind: "range", min: 5, max: 25 }]);
+  });
+});
+
+describe("the windowId (MDI worksheet) route is guarded too (review L5)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [pendingDataset()],
+      activeId: "d1",
+      selection: null,
+      history: [],
+      status: "",
+      worksheetSelections: { ws1: { datasetId: "d1", rows: [1, 2] } },
+    });
+  });
+
+  it("excludeSelectedRows(windowId) refuses, and leaves that window's selection intact", () => {
+    useApp.getState().excludeSelectedRows("ws1");
+    expect(ds().excludedRows).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
+    // The refusal returns BEFORE clearWorksheetRowSelection, so the retry the
+    // message suggests still has a selection to act on.
+    expect(useApp.getState().worksheetSelections.ws1).toEqual({ datasetId: "d1", rows: [1, 2] });
+  });
+
+  it("keepOnlySelectedRows(windowId) refuses the same way", () => {
+    useApp.getState().keepOnlySelectedRows("ws1");
+    expect(ds().excludedRows).toBeUndefined();
+    expect(useApp.getState().worksheetSelections.ws1).toEqual({ datasetId: "d1", rows: [1, 2] });
+  });
+
+  it("and both still work through that route on a non-pending dataset", () => {
+    useApp.setState({ datasets: [dataset()], worksheetSelections: { ws1: { datasetId: "d1", rows: [1, 2] } } });
+    useApp.getState().excludeSelectedRows("ws1");
+    expect(ds().excludedRows).toEqual([1, 2]);
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
   });
 });

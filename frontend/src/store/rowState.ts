@@ -27,9 +27,20 @@
 // `clearDatasetFilter`. Clearing cannot lose user intent — it destroys a
 // preference rather than recording one, and it is precisely what
 // `installBookData` itself does a moment later. Refusing a clear would instead
-// TRAP a user who is looking at exclusions they want gone (a dataset can hold
-// row state and later be marked pending again by a reimport), so the guard
-// would create the lockout it exists to prevent. Pinned by a test.
+// TRAP a user looking at exclusions they want gone, so the guard would create
+// the lockout it exists to prevent. Pinned by a test in BOTH directions.
+//
+// HOW row state and `pending` come to coexist — corrected in review, because
+// the first version of this note named the wrong path. It is NOT a reimport:
+// `store/reimport.ts` sets `pending: undefined` in the same updater it writes,
+// which is exactly why that file sits in `PENDING_EDIT_EXEMPT`. `pending` is
+// only ever SET on a brand-new dataset (`store/importDatasets.ts`). The
+// reachable path is the `.dwk` ROUND TRIP: `lib/workspaceSerialize.ts` writes
+// `excludedRows`, `filter` and `pending` independently, and
+// `lib/workspaceDatasetParse.ts` restores all three independently, on both open
+// and Append-workspace. So a document saved by a pre-guard build — or a
+// hand-edited one — loads pending WITH row state, and the unguarded clear is
+// what lets the user get rid of it.
 //
 // This slice does NOT solve BUG-009's other half — refuse-vs-resolve-then-apply
 // is a store-wide product decision (see store/pendingEdit.ts's "KNOWN
@@ -37,7 +48,7 @@
 
 import { isActive } from "../lib/datafilter";
 import { keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
-import type { DataFilter } from "../lib/types";
+import type { DataFilter, Dataset } from "../lib/types";
 import { refusePendingEdit } from "./pendingEdit";
 import type { AppState } from "./useApp";
 
@@ -79,16 +90,20 @@ function worksheetOrActiveSelection(
   return id != null && s.selection?.datasetId === id ? s.selection : null;
 }
 
-/** BUG-009: true when `id`'s full data has not arrived, so the caller must
- *  abort. Wraps the one shared guard (`store/pendingEdit.ts`) with this
- *  slice's id-to-dataset lookup, so each action below is a single line and no
- *  action can accidentally carry its own copy of the rule — the "four wrong
- *  copies" history that module's header records. A dataset id that no longer
- *  resolves is not pending; the action's own `datasets.map` then simply
- *  matches nothing. */
-function pendingBlocks(get: () => AppState, id: string, action: string): boolean {
-  const ds = get().datasets.find((d) => d.id === id);
-  return ds != null && refusePendingEdit(get, ds, action);
+/** The dataset `id` names, or null. A lookup ONLY: each action below calls
+ *  `refusePendingEdit` itself rather than going through a wrapper.
+ *
+ *  That is deliberate, and sabotage is what found it. `architecture.test.ts`'s
+ *  pending-edit ratchet detects a guard by walking back from the offending
+ *  updater for the literal `refusePendingEdit` inside the SAME action — a
+ *  wrapper hid the call, so every writer in this file was reported unguarded
+ *  even though all five were guarded. Naming the real function at each site is
+ *  what lets the ratchet VERIFY the guard rather than take its word, and it
+ *  matches `store/pendingEdit.ts`'s header: one rule, one home, called
+ *  directly, never re-expressed. A null lookup ABORTS rather than falling
+ *  through, so a stale id cannot leave a dead undo entry behind. */
+function datasetOf(get: () => AppState, id: string): Dataset | null {
+  return get().datasets.find((d) => d.id === id) ?? null;
 }
 
 export function createRowStateSlice(
@@ -99,7 +114,8 @@ export function createRowStateSlice(
     selection: null,
 
     toggleRowExcluded: (id, row) => {
-      if (pendingBlocks(get, id, "excluding rows")) return;
+      const ds = datasetOf(get, id);
+      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -111,7 +127,8 @@ export function createRowStateSlice(
     },
 
     setRowsExcluded: (id, rows) => {
-      if (pendingBlocks(get, id, "excluding rows")) return;
+      const ds = datasetOf(get, id);
+      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -156,7 +173,8 @@ export function createRowStateSlice(
     excludeSelectedRows: (windowId) => {
       const sel = worksheetOrActiveSelection(get(), windowId);
       if (!sel?.rows.length) return;
-      if (pendingBlocks(get, sel.datasetId, "excluding rows")) return;
+      const ds = datasetOf(get, sel.datasetId);
+      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) =>
@@ -170,7 +188,8 @@ export function createRowStateSlice(
     keepOnlySelectedRows: (windowId) => {
       const sel = worksheetOrActiveSelection(get(), windowId);
       if (!sel?.rows.length) return;
-      if (pendingBlocks(get, sel.datasetId, "excluding rows")) return;
+      const ds = datasetOf(get, sel.datasetId);
+      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) =>
@@ -185,7 +204,8 @@ export function createRowStateSlice(
     },
 
     setDatasetFilter: (id, filter) => {
-      if (pendingBlocks(get, id, "filtering")) return;
+      const ds = datasetOf(get, id);
+      if (!ds || refusePendingEdit(get, ds, "filtering")) return;
       set((s) => ({
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;

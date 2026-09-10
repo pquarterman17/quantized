@@ -910,7 +910,6 @@ export const useApp = create<AppState>((set, get) => ({
   waterfall: 0,
   plotTool: "pointer",
   regionPicked: null,
-  selection: null,
   integral: null,
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in

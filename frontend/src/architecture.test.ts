@@ -246,7 +246,7 @@ const STORE_PINS: Record<string, number> = {
   // action. 323 lines came out in one slice — no headroom deliberately left;
   // the whole point of the pin sitting at zero slack is that a slice this
   // size gets extracted the moment it exists, not banked for later.
-  // 2449 -> 2333 (2026-09-10, BUG-009's guard half): the pin sat 2 lines above
+  // 2449 -> 2334 (2026-09-10, BUG-009's guard half): the pin sat 2 lines above
   // the file, so adding a pending guard to the row-state actions had to EXTRACT
   // rather than append — the repo's rule (CLAUDE.md) is to move a cohesive
   // sibling out, never to shave explanatory comments to fit a ceiling. Row
@@ -651,10 +651,14 @@ const LIB_UI_GRANDFATHERED = new Set([
 //     contributes nothing to keeping them that way.
 //   * `useApp.getState().datasets.map(` — `\w+\.datasets` cannot match `getState()`.
 //   * a mutated key further than PENDING_EDIT_WINDOW past the `datasets:` match.
-//   * ROW-STATE keys. The key list is `data|metadata|cat_levels|formulas`, so
-//     `excludedRows`/`filter` writes are invisible — and `toggleRowExcluded` et al
-//     are genuinely unguarded (booked in BUG-009, measured: accepted on a pending
-//     dataset, history entry pushed, wiped by `installBookData`).
+//     (WAS a blind spot, CLOSED 2026-09-10 with BUG-009's guard half: the key
+//     list now includes `excludedRows|filter`, so the row-state writers are
+//     covered by this ratchet and not only by store/rowState.test.ts. Before
+//     that, `toggleRowExcluded` et al were genuinely unguarded — accepted on a
+//     pending dataset, history entry pushed, wiped by `installBookData` — and
+//     nothing here noticed, which is BUG-009's own stated root cause. Extending
+//     the regex is what keeps a NEW row-state writer in a NEW slice from
+//     repeating it.)
 //   * anything outside `./store/`.
 //
 // Checked while writing it: the only `useApp.setState` in `store/` that mutates
@@ -691,11 +695,47 @@ function hasGuardInEnclosingAction(src: string, at: number): boolean {
   return false;
 }
 
+function enclosingActionName(src: string, at: number): string | null {
+  const lines = src.slice(0, at).split("\n");
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const m = /^\s{2,4}(\w[\w$]*)\s*:\s*(?:async\s*)?\(/.exec(lines[i]);
+    if (m) return m[1];
+    if (/^(?:(?:export\s+)?(?:async\s+)?function\s|(?:export\s+)?const\s+\w[\w$]*\s*=)/.test(lines[i])) return null;
+  }
+  return null;
+}
+
 const PENDING_EDIT_EXEMPT = new Map<string, string>([
   [
     "reimport.ts",
     "REPLACES data deliberately with freshly fetched bytes and clears `pending` in " +
       "the same updater — the resolve-and-replace pattern, same as installBookData.",
+  ],
+]);
+
+// Per-ACTION exemptions for the `excludedRows`/`filter` keys the list above
+// gained in 2026-09-10's BUG-009 pass. Keyed by ACTION NAME, not by file: the
+// first draft of this was a file-level map, and sabotage caught it excusing
+// rowState.ts's five guarded WRITERS along with its two deliberate clears —
+// dropping the guard from `toggleRowExcluded` left this ratchet green, which is
+// precisely the hole it was added to close. An action not named here gets no
+// row-state pass, however row-state-only its updater looks.
+const ROW_STATE_EXEMPT = new Map<string, string>([
+  [
+    "clearRowExclusions",
+    "clearing destroys a preference rather than recording one, and refusing it would " +
+      "trap a user whose .dwk restored row state alongside `pending` (store/rowState.ts's " +
+      "header). rowState.test.ts pins BOTH directions, so this is not an oversight.",
+  ],
+  [
+    "clearDatasetFilter",
+    "same as clearRowExclusions — a clear cannot lose user intent.",
+  ],
+  [
+    "resetCorrections",
+    "store/corrections.ts CLEARS index-based row state because reverting a trim " +
+      "restores rows and makes it stale — the same rowsChanged rule the apply path " +
+      "uses. A clear, not a write, and the action awaits `resolveDataset` first.",
   ],
 ]);
 
@@ -711,7 +751,7 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
         ...src.matchAll(/datasets:\s*\[/g),
       ];
       const touchesData = updaters.some((m) =>
-        /\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),
+        /\b(data|metadata|cat_levels|formulas|excludedRows|filter)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),
       );
       if (!touchesData) continue;
       if (PENDING_EDIT_EXEMPT.has(name)) continue;
@@ -724,7 +764,14 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
       // block.
       for (const m of updaters) {
         const at = m.index ?? 0;
-        if (!/\b(data|metadata|cat_levels|formulas)\s*:/.test(src.slice(at, at + PENDING_EDIT_WINDOW))) continue;
+        const window = src.slice(at, at + PENDING_EDIT_WINDOW);
+        if (!/\b(data|metadata|cat_levels|formulas|excludedRows|filter)\s*:/.test(window)) continue;
+        // A ROW-STATE-ONLY updater inside an exempted ACTION is excused. One
+        // that also touches data/metadata/cat_levels/formulas is NOT, so an
+        // exemption can never smuggle a real data write past the net.
+        const rowStateOnly = !/\b(data|metadata|cat_levels|formulas)\s*:/.test(window);
+        const action = enclosingActionName(src, at);
+        if (rowStateOnly && action != null && ROW_STATE_EXEMPT.has(action)) continue;
         if (!hasGuardInEnclosingAction(src, at)) offenders.push(`${name}:${lineOf(src, at)}`);
       }
     }
@@ -810,7 +857,9 @@ describe("lib/ layering guard (DIRACULATOR_AUDIT P3)", () => {
 describe("row-state model guard (#50 universal linking)", () => {
   it("only the row-state model reads/writes Dataset.excludedRows", () => {
     // rowstate = the exclusion primitives; workspace = .dwk (de)serialize;
-    // useApp = the store mutation actions; corrections = the
+    // rowState = the store mutation actions (they lived in useApp.ts until
+    // 2026-09-10's BUG-009 extraction, which is why useApp.ts is NOT here);
+    // corrections = the
     // applyCorrections/resetCorrections mutation actions extracted out of
     // useApp.ts (2026-07-18, store-size ratchet) — still a store mutation
     // action, just relocated to its own slice file. Everything else goes
@@ -826,7 +875,11 @@ describe("row-state model guard (#50 universal linking)", () => {
     // what moved — unlike a trim, whose mapping is unrecoverable from lengths.
     const allow = [
       "/lib/rowstate.ts",
-      "/lib/workspace.ts",
+      // ("/lib/workspace.ts" LEFT this list 2026-09-10 — the new staleness
+      // check below caught it on its first run: both its read and write bodies
+      // moved to workspaceDatasetParse.ts / workspaceSerialize.ts, which are
+      // listed just under, so the entry had been vestigial since those
+      // extractions.)
       // The per-dataset .dwk parse/validate body that used to live inline in
       // workspace.ts's parseWorkspace (2026-08-22 extraction) — same .dwk
       // (de)serialize role as workspace.ts itself, just relocated.
@@ -855,6 +908,18 @@ describe("row-state model guard (#50 universal linking)", () => {
       offenders(/\.excludedRows\b/, allow),
       "read exclusion via lib/rowstate (analysisData/droppedRows/excludedSet), not Dataset.excludedRows directly",
     ).toEqual([]);
+
+    // Review round L2: this allowlist had no staleness guard, so the hygiene
+    // was manual and would rot — the 2026-09-10 removal of "/store/useApp.ts"
+    // (which stopped naming the field when its actions moved to rowState.ts)
+    // was justified by invoking the "grandfathered list stays honest" tests,
+    // and those cover TS_MODULE_PINS and LIB_UI_GRANDFATHERED, NOT this list.
+    // Shaped like theirs: an entry that no longer matches must leave.
+    const stale = allow.filter((key) => {
+      const entry = sources().find(([path]) => path.endsWith(key));
+      return entry == null || !/\.excludedRows\b/.test(entry[1]);
+    });
+    expect(stale, "remove from the allowlist (ratchet down) — it no longer touches the field").toEqual([]);
   });
 
   it("only sanctioned modules reduce the local filter via filteredOutRows", () => {
