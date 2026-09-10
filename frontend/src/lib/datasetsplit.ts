@@ -25,9 +25,16 @@
 //     encoded as a small integer): EXACT-VALUE grouping
 //     (`groupByExactValue`) — no tolerance needed or shown, every
 //     occurrence of the same number is the same group by definition. A
-//     categorical column's groups are labelled with their LEVEL NAMES
-//     (`lib/categorical.ts`'s `labelForCode`), not their raw float codes,
-//     so the child datasets read "run.dat (B456)" and not "run.dat (1)".
+//     NAMED categorical column's groups are labelled with those names rather
+//     than their raw float codes, so the child datasets read
+//     "run.dat (B456)" and not "run.dat (1)". "Named" is decided by the app's
+//     one canonical resolver, `lib/barlayout.ts`'s
+//     `resolveCategoryLabelsOrNull` — a `cat_levels` level table first, then
+//     an Origin text-label sidecar that consistently covers every level (an
+//     Origin `.opj` import is exactly that shape: numeric codes plus
+//     `origin_text_columns` and NO `cat_levels`). A column categorical only
+//     by the shape heuristic has neither, and correctly keeps its numeric
+//     labels — "run 3" must not become "run C".
 // Both return the SAME `SplitGroup[]` shape (`SplitResult`) so the dialog
 // and the store action never need to know which strategy produced a group.
 //
@@ -40,7 +47,7 @@
 // `splitColumn`/`tooManyGroups`/`sliceDataStruct` chain, only the (lazy)
 // SplitDatasetDialog picking a suggestion.
 
-import { categoricalLevels, labelForCode } from "./categorical";
+import { categoryLevels, resolveCategoryLabelsOrNull } from "./barlayout";
 import { fmtNum } from "./format";
 import { sliceRowSidecars } from "./rowSidecars";
 import { channelModelingType, isCategorical } from "./modeling";
@@ -243,20 +250,32 @@ export function clusterByGaps(
  *  arbitrary numeric sort). NaN rows still collect into a trailing
  *  "(other)" group, the same convention `clusterByGaps` uses.
  *
- *  `levels` (BUG-008) is the column's `cat_levels` table when it HAS one:
- *  each group's label then resolves through `lib/categorical.ts`'s
- *  `labelForCode`, so a sample-id column groups into "A123"/"B456"/"C789"
- *  rather than "0"/"1"/"2". `unit` is dropped for a resolved level — a level
- *  NAME takes no physical unit — but is still applied to any code the table
- *  can't resolve (out of range, non-integer), which keeps such a value
- *  visible as the number it is instead of inventing a name for it. Passing
- *  no `levels` (or `null`) keeps the numeric labels, which is CORRECT for a
- *  small-integer numeric column routed here by the shape heuristic: that
+ *  `labelFor` (BUG-008) resolves one level's NAME, or returns null/"" when
+ *  that level has none — `splitColumn` builds it from the app's canonical
+ *  category-label resolver. `unit` is dropped for a named level (a level name
+ *  takes no physical unit) and applied whenever `labelFor` declines, which
+ *  keeps such a value visible as the number it is instead of inventing a name
+ *  for it. An EMPTY name counts as declining (`||`, not `??`): a hand-edited
+ *  `.dwk` can carry `cat_levels: {0: ["", "B"]}`, and a child dataset called
+ *  "run.dat ()" is worse than one called "run.dat (0)".
+ *
+ *  MEASURED CAVEAT on that unit rule, which corrected an earlier version of
+ *  this comment: declining is a WHOLE-COLUMN decision in practice, because the
+ *  canonical resolver, once it decides a column has names, supplies formatted
+ *  numbers of its own for any code its table does not cover
+ *  (`lib/barlayout.ts`'s `catTableLabels`). So an out-of-range code on a
+ *  `cat_levels` column is labelled "5", not "5 K" — deliberately the same text
+ *  a categorical axis tick shows for that code. The unit appears when the
+ *  resolver declines for the entire column: no level table and no
+ *  consistently-covering text sidecar.
+ *
+ *  Passing no `labelFor` keeps numeric labels throughout, which is CORRECT for
+ *  a small-integer numeric column routed here by the shape heuristic: that
  *  column's values ARE numbers, and "run 3" must not become "run C". */
 export function groupByExactValue(
   values: readonly number[],
   unit = "",
-  levels?: readonly string[] | null,
+  labelFor?: ((value: number) => string | null) | null,
 ): SplitResult {
   const order: number[] = [];
   const byValue = new Map<number, number[]>();
@@ -273,7 +292,7 @@ export function groupByExactValue(
     byValue.get(v)!.push(i);
   });
   const groups: SplitGroup[] = order.map((v) => ({
-    label: (levels ? labelForCode(levels, v) : null) ?? formatGroupLabel(v, unit),
+    label: (labelFor?.(v) || null) ?? formatGroupLabel(v, unit),
     value: v,
     rowIndexes: byValue.get(v)!,
   }));
@@ -311,6 +330,24 @@ export function isCategoricalColumn(ds: Dataset, col: number): boolean {
   return isCategorical(channelModelingType(ds, col));
 }
 
+/** A per-level name lookup for `col`, or null when the column has no named
+ *  levels at all (BUG-008 review). Delegates to `lib/barlayout.ts`'s
+ *  `resolveCategoryLabelsOrNull` — the app's ONE category-label resolver,
+ *  shared with the bar/box axis, Tabulate, Data Filter, the stat stage,
+ *  facets and `lib/byPartition.ts` — so a split's group names can never
+ *  disagree with the names those surfaces show for the same column. The
+ *  resolver works positionally over an ascending level list, so this pairs it
+ *  back up into a value→name map; `categoryLevels` de-duplicates through a
+ *  `Set`, which merges `-0` with `0` exactly as `groupByExactValue`'s own
+ *  `Map` keying does, so the two agree on what counts as one level. */
+function categoryLabelFor(data: DataStruct, col: number): ((value: number) => string | null) | null {
+  const levels = categoryLevels(data, col);
+  const named = resolveCategoryLabelsOrNull(data, col, levels);
+  if (!named) return null;
+  const byValue = new Map(levels.map((lvl, i) => [lvl, named[i]] as const));
+  return (value) => byValue.get(value) ?? null;
+}
+
 /** The ONE entry point the dialog + store action both call: groups `col`
  *  (x or a value channel) by value, dispatching to exact-value grouping
  *  for a categorical column (`tolerance` ignored) or gap-clustering (at
@@ -327,14 +364,7 @@ export function splitColumn(ds: Dataset, col: number, tolerance?: number): Split
   const data = ds.data;
   const values = columnValues(data, col);
   const unit = columnUnit(data, col);
-  if (isCategoricalColumn(ds, col)) {
-    // `categoricalLevels` returns null for a column with no (or a malformed)
-    // level table — including a numeric column the shape heuristic routed
-    // here, and including the x column (never keyed in `cat_levels`, and
-    // `isCategoricalColumn` already refuses it) — and `groupByExactValue`
-    // then keeps its numeric labels.
-    return groupByExactValue(values, unit, categoricalLevels(data, col));
-  }
+  if (isCategoricalColumn(ds, col)) return groupByExactValue(values, unit, categoryLabelFor(data, col));
   const tol =
     tolerance !== undefined && Number.isFinite(tolerance) && tolerance >= 0
       ? tolerance

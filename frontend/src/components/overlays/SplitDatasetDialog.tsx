@@ -34,17 +34,33 @@ export default function SplitDatasetDialog() {
   const [col, setCol] = useState(0);
   const [toleranceText, setToleranceText] = useState("0");
 
-  // Re-seed column + tolerance every time the dialog opens for a (possibly
-  // different) dataset — never carry a stale pick from the last time it
-  // was open on some other row.
+  // Re-seed the column every time the dialog opens for a (possibly different)
+  // dataset — never carry a stale pick from the last time it was open on some
+  // other row. The tolerance follows the COLUMN, in the effect below.
   useEffect(() => {
     if (!dataset) return;
-    const def = pickDefaultSplitColumn(dataset);
-    setCol(def);
-    setToleranceText(def < 0 ? "0" : String(autoTolerance(columnValues(dataset.data, def))));
+    setCol(pickDefaultSplitColumn(dataset));
     // Only re-seed on a genuine open (targetId change), not every dataset edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId]);
+
+  // A tolerance is a distance in the CHOSEN COLUMN's own units, so it is
+  // meaningless the moment the column changes and has to be re-derived (found
+  // in the BUG-008 review round, MEDIUM 5): since the default column is now
+  // frequently a categorical one — whose tolerance field is HIDDEN — the seed
+  // could be `autoTolerance` over dimensionless level codes, and switching to
+  // a physical column then presented that index-scale number as, say, Tesla.
+  // Measured before the fix: a field column arrived pre-filled "1 T" (from
+  // codes [0,1,2]) and previewed six one-row groups where its own
+  // `autoTolerance` of 1.8 previews one group. Re-seeding discards whatever
+  // the user typed for the PREVIOUS column, which is correct — that number
+  // described a different quantity.
+  useEffect(() => {
+    if (!dataset) return;
+    setToleranceText(col < 0 ? "0" : String(autoTolerance(columnValues(dataset.data, col))));
+    // Keyed on the column (and the open), not on every dataset edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId, col]);
 
   useEffect(() => {
     if (!targetId) return;
@@ -137,8 +153,16 @@ export default function SplitDatasetDialog() {
         <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, display: "grid", gap: 4 }}>
           {overCap ? (
             <div className="qzk-ds-meta" style={{ color: "var(--danger, #d33)" }}>
-              {groups.length} groups detected — too many to split at once (cap {SPLIT_GROUP_CAP}). Pick
-              a different column, or widen the tolerance.
+              {groups.length} groups detected — too many to split at once (cap {SPLIT_GROUP_CAP}).{" "}
+              {/* BUG-008 review, MEDIUM 3: a categorical column has no
+                  tolerance field (it is hidden right above), so telling the
+                  user to widen one is impossible advice — and this case became
+                  reachable exactly when the fix started routing level-table
+                  and overridden columns to exact-value grouping. Recovery for
+                  a categorical column is fewer levels, i.e. Recode. */}
+              {categorical
+                ? "Pick a different column, or use Recode… to combine levels first."
+                : "Pick a different column, or widen the tolerance."}
             </div>
           ) : groups.length === 0 ? (
             <div className="qzk-ds-meta">No groups detected.</div>

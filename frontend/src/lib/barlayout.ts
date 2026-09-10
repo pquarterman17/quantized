@@ -103,6 +103,30 @@ function catTableLabels(
   return levels.map((lvl) => levelLabel(data, channel, lvl) ?? formatLevel(lvl));
 }
 
+/** The two NAMED sources only — `channel`'s own level table, then an Origin
+ *  text-label column that consistently covers every level — or `null` when
+ *  neither applies. Split out (BUG-008 review) for a caller that has its own,
+ *  better fallback than a bare formatted number: `lib/datasetsplit.ts` labels
+ *  an unnamed group with the number PLUS the column's unit ("10 K"), which
+ *  `formatLevel` cannot produce, so it needs to know that no name was found
+ *  rather than receiving one silently formatted for it.
+ *
+ *  Why a split-out and not a second implementation: the first cut of the
+ *  BUG-008 fix resolved labels through `lib/categorical.ts`'s level table
+ *  ALONE, which is the narrower of the two sources — the exact mistake
+ *  `lib/statschooser.ts`'s header records having already been made and fixed
+ *  once (an Origin `.opj` import is numeric codes plus `origin_text_columns`
+ *  and NO `cat_levels`, so the narrow accessor printed "batch = 0" for the
+ *  same column Data Filter and Tabulate labelled "Reference"). One resolver,
+ *  one answer. */
+export function resolveCategoryLabelsOrNull(
+  data: DataStruct,
+  channel: number,
+  levels: readonly number[],
+): string[] | null {
+  return catTableLabels(data, channel, levels) ?? textLabelsFor(data, channel, levels);
+}
+
 /** Category tick labels for `channel`'s levels: a P1.4 categorical channel's
  *  own level table first (new, highest precedence), then an Origin
  *  text-label column when one consistently covers every level (RESOLVED
@@ -112,7 +136,7 @@ export function resolveCategoryLabels(
   channel: number,
   levels: readonly number[],
 ): string[] {
-  return catTableLabels(data, channel, levels) ?? textLabelsFor(data, channel, levels) ?? levels.map(formatLevel);
+  return resolveCategoryLabelsOrNull(data, channel, levels) ?? levels.map(formatLevel);
 }
 
 // ── Per-series aggregate (mean ± SEM) ────────────────────────────────────────

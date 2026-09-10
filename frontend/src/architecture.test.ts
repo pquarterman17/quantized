@@ -867,15 +867,48 @@ describe("row-state model guard (#50 universal linking)", () => {
 // suite could see a module reaching past the accessor before — the divergence
 // was found by reading, not by a failing test.
 describe("modeling-type accessor chokepoint (BUG-008)", () => {
-  it("only lib/modeling.ts calls the raw inferModelingType heuristic", () => {
-    // `lib/modeling.ts` DEFINES it and is the one legitimate caller (from
-    // `channelModelingType`, after the override and level-table checks).
-    // `lib/statschooser.ts` only NAMES it in a comment, which is why the
-    // pattern requires a call, not a mention.
+  // The FIRST cut of this guard was `offenders(/\binferModelingType\s*\(/,
+  // ["/lib/modeling.ts"])`, and the review round measured it inverted in all
+  // three directions:
+  //   * an aliased import evaded it while making the real call —
+  //     `import { inferModelingType as inferType } from "./modeling"` then
+  //     `inferType(...)` left the guard GREEN, which is BUG-008 verbatim;
+  //   * a file whose only mention was a `//` doc comment FAILED it, because
+  //     `\s*` matches the space in prose like "inferModelingType (MIN_SAMPLES
+  //     =12)" — text that already exists in two test files and in
+  //     `lib/statschooser.ts`'s header;
+  //   * `endsWith("/lib/modeling.ts")` is directory-blind, so a
+  //     `components/probe/lib/modeling.ts` was allowlisted too.
+  // So: strip comments, then flag the IDENTIFIER anywhere in real code (an
+  // import binding is the only way to reach a module-local function, and the
+  // import statement always spells the original name even when aliased), and
+  // compare the path EXACTLY.
+  const MODELING = "./lib/modeling.ts";
+
+  /** `src` with line and block comments removed, so prose that merely NAMES a
+   *  function is not mistaken for a call to it. Same technique as the
+   *  browser-storage guard at the top of this file. */
+  function withoutComments(src: string): string {
+    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+
+  it("only lib/modeling.ts reaches the raw inferModelingType heuristic", () => {
+    const reaching = sources()
+      .filter(([p]) => p !== MODELING)
+      .filter(([, src]) => /\binferModelingType\b/.test(withoutComments(src)))
+      .map(([p]) => p);
     expect(
-      offenders(/\binferModelingType\s*\(/, ["/lib/modeling.ts"]),
-      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008)",
+      reaching,
+      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008). Name it only in a comment if you need to discuss it",
     ).toEqual([]);
+  });
+
+  it("lib/modeling.ts is still the module that defines it (the allowlist is not vacuous)", () => {
+    // Without this, deleting/moving `inferModelingType` would leave the guard
+    // above green forever and silently stop protecting anything.
+    const modeling = Object.entries(modules).find(([p]) => p === MODELING)?.[1] ?? "";
+    expect(modeling).toMatch(/export function inferModelingType\s*\(/);
+    expect(modeling).toMatch(/channelModelingType/);
   });
 });
 
