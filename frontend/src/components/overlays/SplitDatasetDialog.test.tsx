@@ -338,6 +338,75 @@ describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => 
     expect(screen.queryByText(/widen the tolerance/)).toBeNull();
   });
 
+  // HIGH 1 of the ROUND-2 review: the MEDIUM 5 fix above reintroduced, for the
+  // x column, the very defect it set out to fix. `-1` is a first-class option
+  // in the Select, but the copied `col < 0 ? "0"` guard meant picking it seeded
+  // tolerance 0 — and 0 splits every distinct x value into its own group.
+  it("seeds the tolerance from the x column when x is picked", () => {
+    // A PPMS-shaped x: 4 setpoints, 5 wobble reads each.
+    const time: number[] = [];
+    for (const sp of [5, 10, 50, 100]) for (let i = 0; i < 5; i++) time.push(sp + i * 0.001);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time,
+            values: time.map((_, i) => [i * 2]),
+            labels: ["M"],
+            units: ["emu"],
+            metadata: {},
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    fireEvent.change(screen.getByLabelText("Split column"), { target: { value: "-1" } });
+
+    // Pre-fix: value "0", 20 one-row groups, and Confirm ENABLED — so this
+    // committed 20 singleton datasets. The x column's own autoTolerance is
+    // ~0.0707, which recovers the 4 real setpoints.
+    expect((screen.getByLabelText("Tolerance") as HTMLInputElement).value).not.toBe("0");
+    expect(screen.getByText("Split into 4 datasets")).toBeInTheDocument();
+  });
+
+  // MEDIUM 4 of the round-2 review: the categorical branch of the over-cap
+  // advice was asserted, the CONTINUOUS one was not — so collapsing both
+  // branches to the Recode wording left the suite green (measured 23/23). This
+  // is that missing positive control.
+  it("still tells the user to widen the tolerance for a continuous column", () => {
+    // 60 setpoints x 3 wobble reads. A UNIFORM ramp will not do: its gaps are
+    // homogeneous, so `autoTolerance` falls to the largest gap and merges
+    // everything into ONE group (measured while writing this test). A bimodal
+    // wobble/jump structure is what makes `autoTolerance` find a real elbow
+    // and produce 60 clusters — over the cap of 50, and CONTINUOUS, so the
+    // tolerance field is showing.
+    const field: number[] = [];
+    for (let sp = 0; sp < 60; sp++) for (let i = 0; i < 3; i++) field.push(sp + i * 0.001);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "run1.dat",
+          data: {
+            time: field.map((_, i) => i),
+            values: field.map((v) => [v]),
+            labels: ["field"],
+            units: ["T"],
+            metadata: {},
+          },
+        },
+      ],
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText(/too many to split at once/)).toBeInTheDocument();
+    expect(screen.getByText(/widen the tolerance/)).toBeInTheDocument();
+    expect(screen.queryByText(/use Recode…/)).toBeNull();
+    // And the field it points at is actually there for this column.
+    expect(screen.getByLabelText("Tolerance")).toBeInTheDocument();
+  });
+
   // The continuous fixture at the top of this file still gets its tolerance
   // field — the positive control that the fix didn't hide it for everyone.
   it("still shows the tolerance field for a continuous column", () => {

@@ -29,12 +29,24 @@
 //     than their raw float codes, so the child datasets read
 //     "run.dat (B456)" and not "run.dat (1)". "Named" is decided by the app's
 //     one canonical resolver, `lib/barlayout.ts`'s
-//     `resolveCategoryLabelsOrNull` — a `cat_levels` level table first, then
-//     an Origin text-label sidecar that consistently covers every level (an
-//     Origin `.opj` import is exactly that shape: numeric codes plus
-//     `origin_text_columns` and NO `cat_levels`). A column categorical only
-//     by the shape heuristic has neither, and correctly keeps its numeric
-//     labels — "run 3" must not become "run C".
+//     `resolveCategoryLabelsOrNull` — a `cat_levels` level table first, then a
+//     text-label sidecar (`metadata.text_columns`, else
+//     `origin_text_columns`) that consistently covers every level. An Origin
+//     `.opj` import is that second shape — numeric codes plus a sidecar and NO
+//     `cat_levels` — but so is any delimited or SQLite import that leaves a
+//     covering text column in metadata, so the sidecar source is NOT
+//     Origin-specific.
+//
+//     WHY THIS IS INDEPENDENT OF WHY THE COLUMN IS CATEGORICAL (round-2
+//     review, MEDIUM 3 — an earlier version of this comment claimed
+//     otherwise): a column categorical only by the SHAPE HEURISTIC can still
+//     carry a covering sidecar, and it is then named from it. That is
+//     deliberate — `lib/byPartition.ts`, Tabulate, Data Filter and the stat
+//     stage all label that same column from that same sidecar, and a split
+//     that disagreed with them would be the very divergence BUG-008 was. What
+//     survives of "run 3 must not become run C" is the case with no names at
+//     all: no level table AND no covering sidecar keeps numeric labels, and
+//     that negative control is the load-bearing test.
 // Both return the SAME `SplitGroup[]` shape (`SplitResult`) so the dialog
 // and the store action never need to know which strategy produced a group.
 //
@@ -330,6 +342,27 @@ export function isCategoricalColumn(ds: Dataset, col: number): boolean {
   return isCategorical(channelModelingType(ds, col));
 }
 
+type LabelLookup = ((value: number) => string | null) | null;
+
+/** Resolved label lookups per `(DataStruct, channel)` — round-2 review,
+ *  MEDIUM 2. Resolving names is not the O(1) dict read the first cut used:
+ *  `categoryLevels` scans the column and builds a Set, and `textLabelsFor`
+ *  scans it again plus every candidate text sidecar column. Measured at
+ *  100k rows x 20 nominal channels, that took a dialog open from ~220 ms to
+ *  ~445 ms, and to ~984 ms against an all-blank sidecar (which
+ *  `io/sqlite_query.py` does emit, and which `textLabelsFor` scans in full
+ *  before failing its coverage check).
+ *
+ *  Keyed on the DATASTRUCT object, deliberately tighter than
+ *  `lib/modeling.ts`'s cache, which keys on `data.values`: that one only reads
+ *  values, while this resolution also depends on `metadata` (the text sidecar)
+ *  and `cat_levels`, either of which can change while `values` keeps its
+ *  reference. Every store path replaces the DataStruct wholesale
+ *  (`{...d, data: {...d.data, ...}}`), so the object identity moves whenever
+ *  ANY of the three does. A WeakMap lets a replaced dataset's entry be
+ *  collected rather than leaking. */
+const labelLookupCache = new WeakMap<DataStruct, Map<number, LabelLookup>>();
+
 /** A per-level name lookup for `col`, or null when the column has no named
  *  levels at all (BUG-008 review). Delegates to `lib/barlayout.ts`'s
  *  `resolveCategoryLabelsOrNull` — the app's ONE category-label resolver,
@@ -340,12 +373,20 @@ export function isCategoricalColumn(ds: Dataset, col: number): boolean {
  *  back up into a value→name map; `categoryLevels` de-duplicates through a
  *  `Set`, which merges `-0` with `0` exactly as `groupByExactValue`'s own
  *  `Map` keying does, so the two agree on what counts as one level. */
-function categoryLabelFor(data: DataStruct, col: number): ((value: number) => string | null) | null {
+function categoryLabelFor(data: DataStruct, col: number): LabelLookup {
+  let byChannel = labelLookupCache.get(data);
+  if (!byChannel) {
+    byChannel = new Map();
+    labelLookupCache.set(data, byChannel);
+  }
+  const hit = byChannel.get(col);
+  if (hit !== undefined) return hit;
   const levels = categoryLevels(data, col);
   const named = resolveCategoryLabelsOrNull(data, col, levels);
-  if (!named) return null;
-  const byValue = new Map(levels.map((lvl, i) => [lvl, named[i]] as const));
-  return (value) => byValue.get(value) ?? null;
+  const byValue = named ? new Map(levels.map((lvl, i) => [lvl, named[i]] as const)) : null;
+  const lookup: LabelLookup = byValue ? (value) => byValue.get(value) ?? null : null;
+  byChannel.set(col, lookup);
+  return lookup;
 }
 
 /** The ONE entry point the dialog + store action both call: groups `col`
@@ -360,16 +401,35 @@ function categoryLabelFor(data: DataStruct, col: number): ((value: number) => st
  *  comparison `> ` false, silently collapsing everything to one group) or a
  *  negative one (every gap, even a same-value repeat's gap of exactly 0,
  *  exceeds it, silently exploding into one group per row). */
-export function splitColumn(ds: Dataset, col: number, tolerance?: number): SplitResult {
+function splitGroups(ds: Dataset, col: number, tolerance: number | undefined, withLabels: boolean): SplitResult {
   const data = ds.data;
   const values = columnValues(data, col);
   const unit = columnUnit(data, col);
-  if (isCategoricalColumn(ds, col)) return groupByExactValue(values, unit, categoryLabelFor(data, col));
+  if (isCategoricalColumn(ds, col)) {
+    return groupByExactValue(values, unit, withLabels ? categoryLabelFor(data, col) : null);
+  }
   const tol =
     tolerance !== undefined && Number.isFinite(tolerance) && tolerance >= 0
       ? tolerance
       : autoTolerance(values);
   return clusterByGaps(values, tol, unit);
+}
+
+export function splitColumn(ds: Dataset, col: number, tolerance?: number): SplitResult {
+  return splitGroups(ds, col, tolerance, true);
+}
+
+/** How many groups `col` would split into — the same dispatch and the same
+ *  grouping as `splitColumn`, with the label resolution SKIPPED (round-2
+ *  review, MEDIUM 2). `lib/datasetsplitDefault.ts` scores every channel to
+ *  pick the dialog's default column and only ever reads `groups.length`, so it
+ *  was paying for names it discarded, once per channel, on every dialog open.
+ *  Labels cannot affect the count — grouping is by VALUE — and a test pins the
+ *  two entry points to the same number rather than trusting that claim, since
+ *  "two code paths, two answers to the same question" is precisely what
+ *  BUG-008 was. */
+export function splitGroupCount(ds: Dataset, col: number): number {
+  return splitGroups(ds, col, undefined, false).groups.length;
 }
 
 /** Slice a DataStruct's time+values rows down to `rowIndexes` (any order —

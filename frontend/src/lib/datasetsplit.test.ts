@@ -13,6 +13,7 @@ import {
   sliceDataStruct,
   SPLIT_GROUP_CAP,
   splitColumn,
+  splitGroupCount,
   tooManyGroups,
   type SplitGroup,
 } from "./datasetsplit";
@@ -454,6 +455,33 @@ describe("BUG-008 — an explicit cat_levels table decides the split", () => {
     expect(groups.map((g) => g.label)).toEqual(["1", "2", "3"]);
   });
 
+  // Round-2 review, MEDIUM 3. Naming depends on whether the column HAS names,
+  // NOT on why it reads as categorical — a shape-heuristic column with a
+  // covering sidecar IS named from it. Measured: this returned ["1","2","3"]
+  // before the resolver was adopted and ["C","A","B"] after. Deliberate: every
+  // other surface labels this same column from this same sidecar. It also
+  // proves the sidecar source is not Origin-specific — this is the generic
+  // `text_columns` key, which delimited and SQLite imports emit.
+  it("names a shape-heuristic column from a generic text sidecar too", () => {
+    const n = 12;
+    const ds: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: {
+        time: Array.from({ length: n }, (_, i) => i),
+        values: Array.from({ length: n }, (_, i) => [(i % 3) + 1]),
+        labels: ["run"],
+        units: [""],
+        metadata: { text_columns: { A: Array.from({ length: n }, (_, i) => ["C", "A", "B"][i % 3]) } },
+      },
+    };
+    expect(splitColumn(ds, 0).groups.map((g) => g.label)).toEqual(["C", "A", "B"]);
+    // Strip the sidecar and the SAME column keeps numeric labels — the pair is
+    // what makes "run 3 must not become run C" precise rather than false.
+    const bare: Dataset = { ...ds, data: { ...ds.data, metadata: {} } };
+    expect(splitColumn(bare, 0).groups.map((g) => g.label)).toEqual(["1", "2", "3"]);
+  });
+
   // A level table on channel 0 must not leak into channel 1's labels — the
   // resolution is per-CHANNEL, like every other `lib/categorical.ts` read.
   it("resolves levels per channel, never from a sibling channel's table", () => {
@@ -593,6 +621,116 @@ describe("BUG-008 — an explicit cat_levels table decides the split", () => {
       "B456",
       "C789",
     ]);
+  });
+
+  // Round-2 review, MEDIUM 2. Resolving names is not free — it scans the column
+  // and every candidate text sidecar — and `pickDefaultSplitColumn` scores
+  // EVERY channel on each dialog open while reading only the count. So there
+  // are now two entry points, and "two code paths, two answers to the same
+  // question" is exactly what BUG-008 was: this pins them together rather than
+  // trusting the argument that labels cannot affect grouping.
+  it("splitGroupCount agrees with splitColumn on every column shape", () => {
+    const n = 14;
+    const cases: Dataset[] = [
+      // a named categorical column
+      {
+        id: "a",
+        name: "a",
+        data: {
+          time: Array.from({ length: 6 }, (_, i) => i),
+          values: [[0], [1], [2], [0], [1], [2]],
+          labels: ["s"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["A", "B", "C"] },
+        },
+      },
+      // a wobbly continuous setpoint column (gap-clustered)
+      {
+        id: "b",
+        name: "b",
+        data: {
+          time: Array.from({ length: n }, (_, i) => i),
+          values: [4.997, 4.998, 4.999, 5, 5.001, 5.002, 5.003, 9.997, 9.998, 9.999, 10, 10.001, 10.002, 10.003].map(
+            (t) => [t],
+          ),
+          labels: ["T"],
+          units: ["K"],
+          metadata: {},
+        },
+      },
+      // nominal by the shape heuristic, no names
+      {
+        id: "c",
+        name: "c",
+        data: {
+          time: Array.from({ length: n }, (_, i) => i),
+          values: Array.from({ length: n }, (_, i) => [i % 2]),
+          labels: ["flag"],
+          units: [""],
+          metadata: {},
+        },
+      },
+      // an Origin-shaped sidecar column
+      {
+        id: "d",
+        name: "d",
+        data: {
+          time: Array.from({ length: 12 }, (_, i) => i),
+          values: Array.from({ length: 12 }, (_, i) => [i % 3]),
+          labels: ["batch"],
+          units: [""],
+          metadata: { origin_text_columns: { A: Array.from({ length: 12 }, (_, i) => ["R", "D", "N"][i % 3]) } },
+        },
+      },
+      // NaN rows, so the "(other)" group participates too
+      {
+        id: "e",
+        name: "e",
+        data: {
+          time: [0, 1, 2, 3],
+          values: [[0], [Number.NaN], [1], [Number.NaN]],
+          labels: ["s"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["A", "B"] },
+        },
+      },
+    ];
+    for (const ds of cases) {
+      for (const col of [-1, 0]) {
+        expect(splitGroupCount(ds, col), `${ds.id} col ${col}`).toBe(splitColumn(ds, col).groups.length);
+      }
+    }
+  });
+
+  // The label lookup is cached per (DataStruct, channel). A cache that outlived
+  // its data would be a correctness bug, not just a stale display: verify a
+  // REPLACED DataStruct (which is how every store path mutates one) resolves
+  // afresh, including when only `cat_levels` changed and `values` did not.
+  it("re-resolves names when the DataStruct is replaced, values unchanged", () => {
+    const values = [[0], [1], [0], [1]];
+    const base: DataStruct = {
+      time: [1, 2, 3, 4],
+      values,
+      labels: ["sample"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["A123", "B456"] },
+    };
+    const first: Dataset = { id: "d1", name: "run.dat", data: base };
+    expect(splitColumn(first, 0).groups.map((g) => g.label)).toEqual(["A123", "B456"]);
+
+    // Same `values` ARRAY REFERENCE, a new DataStruct, a renamed level. Keying
+    // the cache on `values` (as lib/modeling.ts does, correctly for what IT
+    // reads) would return the stale "A123" here.
+    const renamed: Dataset = {
+      id: "d1",
+      name: "run.dat",
+      data: { ...base, cat_levels: { 0: ["Reference", "B456"] } },
+    };
+    expect(renamed.data.values).toBe(values); // the premise of the test
+    expect(splitColumn(renamed, 0).groups.map((g) => g.label)).toEqual(["Reference", "B456"]);
   });
 
   // The bug from its second angle: `lib/byPartition.ts`'s `byColumnOptions`

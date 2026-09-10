@@ -1387,8 +1387,19 @@ unambiguous: adopt the accessor, don't add a second heuristic.
   ONE category-label resolver, shared with the bar/box axis, Tabulate, Data
   Filter, the stat stage, facets and `lib/byPartition.ts`. Passing no resolver
   keeps numeric labels, which is CORRECT for a small-integer numeric column
-  routed to exact-value grouping by the shape heuristic — "run 3" must not
-  become "run C". That negative control is the load-bearing test.
+  routed to exact-value grouping by the shape heuristic AND carrying no
+  covering text sidecar either — "run 3" must not become "run C". That
+  negative control is the load-bearing test.
+
+  The qualifier matters and a round-2 finding put it there: naming is decided
+  by whether the column HAS names, not by WHY it reads as categorical. A
+  shape-heuristic column with a covering sidecar is named from it (measured:
+  `run = [1,2,3,…]` with a generic `text_columns` sidecar labels its groups
+  `["C","A","B"]`), because `byPartition`, Tabulate, Data Filter and the stat
+  stage all label that same column from that same sidecar — a split that
+  disagreed would be the very divergence BUG-008 was. The sidecar source is
+  also not Origin-specific: `metadata.text_columns` is read first, so
+  delimited and SQLite imports are in scope too.
 
   **The first cut got this wrong and the review round caught it (HIGH 1).** It
   resolved labels through `lib/categorical.ts`'s level table ALONE, which is

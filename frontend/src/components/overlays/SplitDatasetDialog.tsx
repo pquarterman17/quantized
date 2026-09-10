@@ -55,9 +55,28 @@ export default function SplitDatasetDialog() {
   // `autoTolerance` of 1.8 previews one group. Re-seeding discards whatever
   // the user typed for the PREVIOUS column, which is correct — that number
   // described a different quantity.
+  //
+  // NO `col < 0` SPECIAL CASE (round-2 review, HIGH 1 — this fix's own
+  // regression). The predecessor effect read `def < 0 ? "0" : ...`, where
+  // `def` was `pickDefaultSplitColumn`'s return and `-1` could ONLY mean "this
+  // dataset has no channels at all". Here `col` is the USER's pick, and -1 is
+  // a first-class option the Select offers ("x (time/axis)"), so carrying that
+  // guard over seeded tolerance 0 for a perfectly ordinary continuous x sweep:
+  // measured on a PPMS-shaped x (4 setpoints x 5 wobble reads) it previewed 20
+  // groups instead of 4, and Confirm was ENABLED, so it committed 20 singleton
+  // datasets. `columnValues` already handles -1 (it returns a copy of
+  // `data.time`), so the x column needs no special case — it needs the same
+  // treatment as any other.
+  //
+  // Keyed on the column INDEX, not on the column's identity: if the dataset is
+  // replaced while the dialog is open and a different quantity lands at the
+  // same index, the tolerance stays in the old column's units. Keying on the
+  // dataset as well would fix that but re-seed on EVERY edit, wiping a
+  // tolerance the user typed while a recalc lands — the worse of the two, so
+  // this is a deliberate trade, not an oversight.
   useEffect(() => {
     if (!dataset) return;
-    setToleranceText(col < 0 ? "0" : String(autoTolerance(columnValues(dataset.data, col))));
+    setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));
     // Keyed on the column (and the open), not on every dataset edit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, col]);

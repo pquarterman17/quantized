@@ -8,7 +8,7 @@
 // isn't called by anything in that eager chain, so it doesn't need to live
 // in the same always-loaded file.
 
-import { splitColumn } from "./datasetsplit";
+import { splitGroupCount } from "./datasetsplit";
 import type { Dataset } from "./types";
 
 /** Cheap "how setpoint-like is this column" score for the dialog's default
@@ -18,7 +18,10 @@ import type { Dataset } from "./types";
  *  setpoint-like (a 4-level temperature column beats a near-continuous
  *  field column, which groups into hundreds under the same math). */
 function setpointScore(ds: Dataset, col: number): number {
-  const n = splitColumn(ds, col).groups.length;
+  // `splitGroupCount`, not `splitColumn`: this only ever reads the COUNT, and
+  // resolving each group's display name costs a full column scan plus a text-
+  // sidecar scan per channel (round-2 review, MEDIUM 2).
+  const n = splitGroupCount(ds, col);
   return n > 1 ? n : Infinity;
 }
 

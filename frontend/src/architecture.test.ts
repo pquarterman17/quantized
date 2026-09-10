@@ -885,30 +885,77 @@ describe("modeling-type accessor chokepoint (BUG-008)", () => {
   // compare the path EXACTLY.
   const MODELING = "./lib/modeling.ts";
 
-  /** `src` with line and block comments removed, so prose that merely NAMES a
-   *  function is not mistaken for a call to it. Same technique as the
-   *  browser-storage guard at the top of this file. */
-  function withoutComments(src: string): string {
-    return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  /** `src` with comments AND string/template literals removed, so text that
+   *  merely NAMES the function — prose in a doc comment, a help string, a
+   *  toast, an error message — is never mistaken for reaching it. The
+   *  round-2 review measured the comments-only version flagging
+   *  `export const HELP_TEXT = "… inferModelingType …"`, i.e. the round had
+   *  traded a comment false-positive for a string one rather than
+   *  eliminating the class. Same technique as the browser-storage guard at
+   *  the top of this file, extended to literals.
+   *
+   *  Deliberately naive about a `//` inside a string ("https://x" eats the
+   *  rest of its line) — stripping literals FIRST is what makes that
+   *  harmless here, and an import statement, which is what actually matches,
+   *  never shares a line with a URL. */
+  function withoutCommentsOrStrings(src: string): string {
+    return src
+      .replace(/`(?:[^`\\]|\\.)*`/g, "``")
+      .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+      .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
   }
 
   it("only lib/modeling.ts reaches the raw inferModelingType heuristic", () => {
     const reaching = sources()
       .filter(([p]) => p !== MODELING)
-      .filter(([, src]) => /\binferModelingType\b/.test(withoutComments(src)))
+      .filter(([, src]) => {
+        // The identifier itself catches a direct call and a named import,
+        // aliased or not (the import statement spells the original name). A
+        // NAMESPACE import spells nothing — `import * as M from "./modeling"`
+        // then `M[someKey](col)` — so the module path is checked too. That is
+        // the hole the round-1 commit wrongly claimed could not exist ("an
+        // import statement always spells the original name even when
+        // aliased"); a namespace import is the counterexample, measured.
+        //
+        // The two checks read DIFFERENT strippings, and that is load-bearing:
+        // the identifier check needs literals gone (a help string naming the
+        // function is not a call), while the import check needs them KEPT,
+        // because the module path lives inside one. Writing both against the
+        // strings-stripped text left the namespace case green — measured, on
+        // this guard, while verifying it.
+        const noLiterals = withoutCommentsOrStrings(src);
+        const noComments = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+        return (
+          /\binferModelingType\b/.test(noLiterals) ||
+          /import\s+\*\s+as\s+\w+\s+from\s+["'][^"']*\/modeling["']/.test(noComments)
+        );
+      })
       .map(([p]) => p);
     expect(
       reaching,
-      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008). Name it only in a comment if you need to discuss it",
+      "ask lib/modeling.ts's channelModelingType(dataset, channel) — it honours a channelTypes override and a cat_levels level table BEFORE the numeric-shape heuristic, which inferModelingType alone cannot see (BUG-008). Name it in a comment or a string if you need to discuss it, and import the named accessor rather than the whole module",
     ).toEqual([]);
   });
 
-  it("lib/modeling.ts is still the module that defines it (the allowlist is not vacuous)", () => {
-    // Without this, deleting/moving `inferModelingType` would leave the guard
-    // above green forever and silently stop protecting anything.
-    const modeling = Object.entries(modules).find(([p]) => p === MODELING)?.[1] ?? "";
+  it("the guard is not vacuous: modeling.ts defines the heuristic AND its accessor calls it", () => {
+    // Without this, deleting or moving `inferModelingType` — or keeping it but
+    // no longer calling it from the sanctioned accessor — would leave the guard
+    // above green forever while protecting nothing. The round-2 review found
+    // the first version of this test proved only that the function EXISTS,
+    // because it matched `channelModelingType` anywhere in the file including
+    // a comment. So: strip comments, and require the call to appear INSIDE the
+    // accessor's own body.
+    const modeling = withoutCommentsOrStrings(
+      Object.entries(modules).find(([p]) => p === MODELING)?.[1] ?? "",
+    );
     expect(modeling).toMatch(/export function inferModelingType\s*\(/);
-    expect(modeling).toMatch(/channelModelingType/);
+    const accessor = modeling.slice(modeling.indexOf("export function channelModelingType"));
+    expect(accessor).not.toBe("");
+    // Up to the next top-level export, i.e. the accessor's own body.
+    const body = accessor.slice(0, accessor.indexOf("\nexport ", 1) + 1 || undefined);
+    expect(body).toMatch(/\binferModelingType\s*\(/);
   });
 });
 
