@@ -995,8 +995,25 @@ import { fileURLToPath } from "node:url";
  *  store slice and a render path.
  *
  *  Pinned at measured (912,547) + 64, measured AFTER the final edit.
+ *
+ *  2026-09-10 (Group P, review round 4) — 912,611 -> 912,681, a raise of 70.
+ *  (+127 against `main`'s 912,554.)
+ *
+ *  Round 4 found that round 3 had LOOSENED `store/cellEdit.ts`'s edit guard from
+ *  `pending != null` to `rowsAreSampled`, re-opening a silent data-loss path: the
+ *  two answer different questions (may a SIDECAR be indexed, versus is `d.data`
+ *  about to be thrown away by `installBookData`). Restoring the correct condition
+ *  and extending it to the three CELL writes — which were equally destructive and
+ *  unguarded — is what these bytes are: three more guard call sites in a
+ *  synchronous store slice, plus the `preview_sampled` plumbing tests' production
+ *  counterparts. No lazy boundary exists for a store slice's own guards.
+ *
+ *  Pinned at measured (912,617) + 64, measured after the final edit — which for
+ *  once means after the LINE-ceiling fix too, since trimming a comment moves no
+ *  bytes but re-running the build is the only way to know that rather than assume
+ *  it.
  */
-const EAGER_JS_BUDGET = 912_611;
+const EAGER_JS_BUDGET = 912_681;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

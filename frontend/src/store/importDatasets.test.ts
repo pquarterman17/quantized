@@ -1157,3 +1157,53 @@ describe("L0.46 — batch folder suggestion (never creates without the click)", 
     expect(useToasts.getState().toasts.some((t) => t.action)).toBe(false);
   });
 });
+
+// The `preview_sampled` PLUMBING (BUG-006 site 9). Round 4 deleted the single line
+// carrying this from the wire entry onto `pending` and the whole suite — 621 files /
+// 9,784 tests — stayed green, so nothing pinned it. Losing it silently reverts every
+// lazy Origin book to fail-closed: text columns hidden, edits refused. Which is the
+// regression the flag exists to remove.
+describe("a lazy book's preview_sampled reaches its pending ref", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  const payload = (previewSampled: boolean | undefined) => ({
+    time: [0, 1],
+    values: [[0], [1]],
+    labels: ["Y"],
+    units: [""],
+    metadata: { origin_book: "Primary" },
+    book_source: { kind: "path" as const, path: "/p.opj" },
+    books: [
+      { lazy: false as const, primary: true as const, id: "b0", labels: ["Y"], units: [""], metadata: { origin_book: "Primary" }, rows: 2, cols: 1 },
+      {
+        lazy: true as const,
+        id: "b1",
+        labels: ["Y"],
+        units: [""],
+        metadata: { origin_book: "Lazy" },
+        rows: 500,
+        cols: 1,
+        preview: { time: [0, 1], values: [[0], [1]] },
+        ...(previewSampled === undefined ? {} : { preview_sampled: previewSampled }),
+      },
+    ],
+  });
+
+  const importOne = async (previewSampled: boolean | undefined) => {
+    vi.mocked(uploadFile).mockResolvedValueOnce(payload(previewSampled) as never);
+    await useApp.getState().importFiles(files("p.opj"));
+    return useApp.getState().datasets.find((d) => d.pending != null)?.pending;
+  };
+
+  it("carries a TRUE flag through", async () => {
+    expect((await importOne(true))?.previewSampled).toBe(true);
+  });
+
+  it("carries a FALSE flag through — the value that UN-hides the columns", async () => {
+    expect((await importOne(false))?.previewSampled).toBe(false);
+  });
+
+  it("leaves it undefined when an older backend omits it, so the reader fails closed", async () => {
+    expect((await importOne(undefined))?.previewSampled).toBeUndefined();
+  });
+});

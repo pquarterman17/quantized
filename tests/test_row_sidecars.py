@@ -16,6 +16,7 @@ from quantized.calc.corrections import apply_corrections
 from quantized.calc.resample import resample_data
 from quantized.datastruct import DataStruct
 from quantized.io.origin_project.preview import decimate_with_alignment
+from quantized.routes.parsers import _book_preview_payload
 from quantized.row_sidecars import (
     ROW_INDEXED_SIDECARS,
     drop_row_sidecars,
@@ -124,6 +125,30 @@ class TestMatchesTypeScriptCellSemantics:
         meta = {"text_columns": {"A": ["a0", "a1"]}}
         assert slice_row_sidecars(meta, [True, 0])["text_columns"] == {"A": ["", "a0"]}
         assert slice_row_sidecars(meta, [0, True])["text_columns"] == {"A": ["a0", ""]}
+
+    def test_a_NUMPY_BOOLEAN_is_a_blank_not_index_1(self) -> None:
+        """`np.bool_` is not a subclass of `bool` and DOES implement `__index__` —
+        the same isinstance-vs-numpy trap `np.int64` fell into two rounds earlier.
+        A boolean MASK passed where an index list belongs returned plausible-looking
+        WRONG cells (`['a1','a0']`) instead of blanks."""
+        meta = {"text_columns": {"A": ["a0", "a1", "a2"]}}
+        assert slice_row_sidecars(meta, [np.True_, 0])["text_columns"] == {"A": ["", "a0"]}
+        # A whole mask degrades to BLANKS rather than to a plausible wrong answer.
+        # Not to an absent column: `float(np.True_)` is 1.0, which is in range, so
+        # `_in_range` keeps the slot and only the VALUE lookup blanks it. Measured,
+        # after asserting `{}` here from memory and being wrong — the same
+        # unmeasured-expectation habit this file keeps catching.
+        assert slice_row_sidecars(meta, np.array([True, False, True]))["text_columns"] == {
+            "A": ["", "", ""]
+        }
+
+    def test_a_numeric_string_is_rejected_by_BOTH_halves(self) -> None:
+        """The two halves must agree. `_in_range` called `"1"` out of range while
+        `_as_index`'s float() fallback returned `cells[1]` for it — one function
+        trimming what the other resolved."""
+        meta = {"text_columns": {"A": ["a0", "a1", "a2"]}}
+        assert slice_row_sidecars(meta, ["1", 0])["text_columns"] == {"A": ["", "a0"]}
+        assert slice_row_sidecars(meta, [0, "1"])["text_columns"] == {"A": ["a0"]}
 
     def test_a_NEGATIVE_index_is_a_blank_not_the_last_cell(self) -> None:
         # The TS side pins this (`[0,-1,1]`); the Python mirror's only
@@ -293,3 +318,44 @@ class TestDecimateWithAlignment:
         from quantized.io.origin_project.preview import decimate_datastruct
 
         assert decimate_datastruct(self._book(1000), target_points=200).n_points < 1000
+
+
+class TestPreviewSampledReachesTheWire:
+    """The `preview_sampled` PLUMBING, which nothing pinned.
+
+    Round 4 deleted each of the three lines carrying this flag from backend to
+    persisted state and the suite stayed green every time — 4,711 backend and 9,784
+    frontend tests. Any of those regressions silently reverts every lazy Origin book
+    to fail-closed (text columns hidden, edits refused), which is the regression the
+    flag exists to remove. `grep -rn preview_sampled tests/` returned nothing.
+
+    This covers the BACKEND hop; the import and persistence hops are covered in
+    `frontend/src/store/importDatasets.test.ts` and `lib/workspace.test.ts`.
+    """
+
+    @staticmethod
+    def _ds(rows: int, trailing_zero_rows: int = 0) -> DataStruct:
+        n = rows + trailing_zero_rows
+        time = np.arange(float(n))
+        values = np.arange(1.0, n + 1).reshape(n, 1)
+        if trailing_zero_rows:
+            time[rows:] = 0.0
+            values[rows:, :] = 0.0
+        return DataStruct.create(time, values, labels=["Y"], units=[""], metadata={})
+
+    def test_a_sampled_book_reports_it(self) -> None:
+        payload = _book_preview_payload(self._ds(1000))
+        assert payload["preview_sampled"] is True
+
+    def test_a_small_book_reports_NOT_sampled(self) -> None:
+        payload = _book_preview_payload(self._ds(20))
+        assert payload["preview_sampled"] is False
+
+    def test_a_PADDING_TRIMMED_book_reports_NOT_sampled_end_to_end(self) -> None:
+        """The distinction the flag exists for, through the route helper: `rows` is
+        the pre-trim count while the preview is a shorter, ALIGNED prefix — the exact
+        pair a row-count proxy got wrong."""
+        payload = _book_preview_payload(self._ds(161, trailing_zero_rows=19))
+        assert payload["preview_sampled"] is False
+        assert payload["rows"] == 180  # pre-trim, so rows > len(preview.time) ...
+        assert len(payload["preview"]["time"]) == 161  # ... yet perfectly aligned

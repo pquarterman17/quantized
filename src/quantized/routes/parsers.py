@@ -45,7 +45,7 @@ from quantized.routes._uploadstream import UploadTooLargeError, stream_to_path
 router = APIRouter(prefix="/api/parsers", tags=["parsers"])
 
 # Rows kept in a non-primary book's preview (Library sparkline resolution;
-# see io/origin_project/preview.decimate_datastruct).
+# see io/origin_project/preview.decimate_with_alignment).
 _PREVIEW_POINTS = 200
 
 

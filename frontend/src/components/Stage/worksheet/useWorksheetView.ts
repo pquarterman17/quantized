@@ -434,11 +434,11 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const toggleMask = (r: number) => toggleRowExcluded(ds.id, r);
   const unmaskAll = () => clearRowExclusions(ds.id);
 
-  // #38 deferred edge: a still-pending dataset's rows are a min/max-DECIMATED
-  // SAMPLE of the true data, not a prefix — a row index computed against the
-  // preview doesn't correspond to any real row once the full data lands, so
-  // extract/copy abort (kick the fetch, tell the user to retry) rather than
-  // produce a permanently-wrong subset or clipboard payload.
+  // #38: a pending dataset's `data` is REPLACED WHOLESALE when the fetch lands, so
+  // a subset or clipboard payload from it uses numbers about to cease to exist.
+  // Gated on `pending`, NOT `rowsAreSampled` — see `store/cellEdit.ts`'s
+  // `refusePendingEdit` header for the full reasoning, and for why this comment's
+  // old "min/max-DECIMATED SAMPLE, not a prefix" justification was false.
   function pendingGuard(action: string): boolean {
     if (!ds.pending) return false;
     useApp.getState().ensureBookData(ds.id);

@@ -29,7 +29,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 sites fixed** 2026-09-09, each sabotage-verified; `lib/barlayout.ts` open (see entry). Declared closed THREE times before it was — each time a review found either an unfixed site or a defect in the fix itself, and a fully green suite caught neither. Treat a "closed" here as unproven until a search for the SHAPE backs it |
+| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1217,12 +1217,16 @@ differs from its input's — and that is what turned up sites 7-9.
   `_trim_trailing_padding`/`decimate_datastruct` (their metadata is discarded —
   the payload sends the full ds's), and `calc/map.py` (builds a 2-D `MapData`
   grid, where a per-row sidecar has no meaning). Both independently re-verified
-  in the second review round.
+  in the second review round. NOTE `preview.py` is no longer merely "not a site":
+  it is now the SOURCE of site 9's fix, since it is the only place that can tell a
+  padding trim (an aligned prefix) from a min/max sample.
 - [ ] **Site 10, STILL OPEN: `frontend/src/lib/barlayout.ts`'s `textLabelsFor`
   (`:69-73`).** It indexes `rows[r]` against `colValues(data, channel)[r]` to
   derive categorical bar labels, and it takes a bare `DataStruct` — so it
-  structurally CANNOT apply site 9's condition, which needs `pending`/`rows` off
-  the `Dataset`. A pending book routed through the figure builder therefore pairs
+  structurally CANNOT apply site 9's condition, which needs `pending` off the
+  `Dataset` (the stated reason was originally `pending`/`rows` — the `rows` half
+  is stale now that the condition reads the backend's flag, but the conclusion is
+  unchanged: a bare `DataStruct` cannot see `pending` at all). A pending book routed through the figure builder therefore pairs
   full-length sidecar cells with preview values: the same class of bug, one layer
   below where the fix can reach. Transient (activation kicks `ensureBookData`),
   exactly as the worksheet render was before it was fixed. Fixing it means
@@ -1253,12 +1257,29 @@ in code it had missed:
   grid to the full length in NaN, persisted it, and `installBookData` then wiped
   it silently. `refusePendingRowEdit` mirrors `pendingGuard`. Site 9's render fix
   had just removed the phantom rows that used to hint at this.
-- [x] Site 9's condition was `ds.pending` alone, which OVER-suppressed:
-  `decimate_datastruct` returns its input unchanged for a book of ≤ 200 rows or
-  no channels, so a small book — and EVERY text-only book — has a perfectly
-  aligned "preview". A text-only book (where the text columns ARE the grid) went
-  completely blank while pending, permanently when the fetch failed. Now
-  conditioned on the real mismatch, `pending.rows > data.time.length`.
+- [~] Site 9's condition went through THREE wrong versions before the right one,
+  and the record of the wrong ones matters more than the fix:
+  1. `ds.pending` alone — over-suppressed the RENDER: a text-only book (where the
+     text columns ARE the grid) went completely blank while pending, permanently
+     when the fetch failed.
+  2. `pending.rows > data.time.length` — a row-count PROXY, and the claim
+     justifying it was FALSE. `decimate_datastruct` does NOT return its input
+     unchanged below 200 rows: `_trim_trailing_padding` runs FIRST, and that trim
+     is corpus-attested (Book15 drops 19 of 180). So a trimmed preview is shorter
+     than `pending.rows` while still being a strict PREFIX whose cells line up —
+     and the proxy blanked ordinary books, which is the regression it replaced.
+  3. Reusing the resulting `rowsAreSampled` for the row-EDIT guard as well. Those
+     answer different questions: whether SIDECARS may be indexed (render) versus
+     whether `d.data` is about to be THROWN AWAY by `installBookData` (edit, true
+     for every pending dataset). That loosening re-opened a silent data-loss path
+     — measured on the same corpus shape, `insertRows` materialized 19 trimmed
+     rows as NaN, recorded undo, warned about nothing, and the resolve discarded
+     all of it.
+  NOW: the render reads `rowsAreSampled`, which reads the BACKEND's own
+  `preview_sampled` (only the backend can distinguish a trim from a sample);
+  the edit guard reads `pending != null` and covers cell writes as well as row
+  edits. Both are sabotage-verified, and the wire flag's three plumbing hops are
+  each pinned by a test — round 4 deleted each of them with the whole suite green.
 - [x] The Python module diverged from the TS on three measured cases: a `None`
   cell (which a `.dwk` round trip really produces), a non-integer index, and a
   tuple-valued column (silently returned UNSLICED to a pure-API caller).

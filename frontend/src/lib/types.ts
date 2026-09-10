@@ -115,7 +115,9 @@ export interface LazyBookEntry {
    *  only the sampler breaks row correspondence, so a row-count comparison cannot
    *  tell them apart. Consumed by the worksheet to decide whether the FULL-length
    *  row-indexed metadata sidecars may be indexed against these numbers (BUG-006
-   *  site 9). Optional for a `.dwk` written before the field existed. */
+   *  site 9). Optional because an older backend may not send it — this is a WIRE
+   *  shape and never appears in a `.dwk`; the persisted field is
+   *  `BookSource.previewSampled` below. */
   preview_sampled?: boolean;
 }
 

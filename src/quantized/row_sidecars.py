@@ -53,6 +53,28 @@ __all__ = ["ROW_INDEXED_SIDECARS", "drop_row_sidecars", "slice_row_sidecars"]
 ROW_INDEXED_SIDECARS = ("text_columns", "origin_text_columns", "origin_report_sheets")
 
 
+def _is_boolean(i: Any) -> bool:
+    """Is ``i`` a boolean, INCLUDING a numpy one?
+
+    ``np.bool_`` is NOT a subclass of ``bool`` and it does implement ``__index__``,
+    so a plain ``isinstance(i, bool)`` let a numpy boolean through as index 1 --
+    the same isinstance-vs-numpy-scalar trap that ``np.int64`` fell into two rounds
+    earlier, and in a module whose native currency is numpy index arrays. Passing a
+    boolean MASK where an index list is expected then returned plausible-looking
+    WRONG cells instead of blanks:
+
+        _slice_cells(["a0","a1","a2"], [np.True_, 0])  ->  ["a1", "a0"]   (wrong)
+        JS  sliceCells(...,            [true,    0])   ->  ["",   "a0"]
+
+    ``.item()`` is the portable test: every numpy scalar has it, and for a
+    ``np.bool_`` it returns a real ``bool``. No numpy import needed here.
+    """
+    if i is True or i is False:
+        return True
+    item = getattr(i, "item", None)
+    return callable(item) and isinstance(item(), bool)
+
+
 def _as_index(i: Any) -> int | None:
     """``i`` as a real position in a JS array, or ``None``.
 
@@ -78,12 +100,14 @@ def _as_index(i: Any) -> int | None:
     native currency. An INTEGRAL FLOAT is accepted because JS treats ``2.0`` and
     ``2`` as the same key and a wire/JSON round trip makes every number a double.
     """
-    if isinstance(i, bool):
+    if _is_boolean(i):
         return None
     try:
         return operator.index(i)
     except TypeError:
         pass
+    if isinstance(i, (str, bytes, bytearray)):
+        return None  # see `_in_range`: a numeric STRING is out of range in both
     try:
         f = float(i)
     except (TypeError, ValueError):
@@ -108,14 +132,21 @@ def _in_range(cells: Sequence[Any], i: Any) -> bool:
     one shorter than the TS, and the test asserting that was pinning the divergence
     rather than the contract.
 
-    Deliberate narrower divergence: a NUMERIC STRING. JS ``"1" >= 0 && "1" < 3`` is
-    true by coercion; here it is out of range. No caller can produce one (indices
-    come from ``range``/numpy), and coercing strings to indices is not behaviour
-    worth mirroring.
+    Deliberate narrower divergence, and it is applied CONSISTENTLY in both halves
+    (an earlier version had ``_in_range`` reject a numeric string while ``_as_index``
+    accepted it via its ``float()`` fallback -- one function calling ``"1"`` out of
+    range while the other returned ``cells[1]``): a numeric STRING is out of range
+    and not an index here, though JS ``"1" >= 0 && "1" < 3`` is true by coercion. No
+    caller can produce one -- indices come from ``range``/numpy -- and coercing
+    strings to indices is not behaviour worth mirroring. ``bytes`` likewise.
+
+    ALSO DIVERGENT, and recorded rather than papered over: JS coerces ``null`` and
+    ``""`` to 0, so both are IN range there and yield a kept blank, while here they
+    are out of range and a trailing one is trimmed. Same class as the string case
+    (JS numeric coercion of non-numbers), same reasoning, and no caller produces
+    either.
     """
-    if isinstance(i, bool):
-        return 0 <= int(i) < len(cells)
-    if isinstance(i, str):
+    if isinstance(i, (str, bytes, bytearray)):
         return False
     try:
         return 0 <= float(i) < len(cells)

@@ -39,7 +39,7 @@
 // options, so nothing is ever silently dropped.
 
 import { isCategoricalChannel, categoricalLevels } from "../lib/categorical";
-import { insertRowIndexes, rowsAreSampled, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
+import { insertRowIndexes, sidecarRowCount, sliceRowSidecars } from "../lib/rowSidecars";
 import { plural } from "../lib/plural";
 import { lit } from "../lib/macro";
 import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForInsert } from "../lib/rowShift";
@@ -72,33 +72,40 @@ function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
   };
 }
 
-/** Refuse a row edit on a dataset whose full data has not arrived yet, and say
- *  why (review round 2 of BUG-006 site 9).
+/** Refuse ANY edit to a dataset whose full data has not arrived yet, and say why.
  *
- *  A still-pending Origin book's `.time`/`.values` are the DECIMATED preview
- *  while its `.metadata` is the full book's, so `sidecarRowCount` reports the
- *  full book's span against the preview's numbers. Both row edits below size
- *  everything from that span, so one "insert row" on a 200-row preview of a
- *  5,000-row book padded the grid to ~5,000 rows of NaN and wrote them into
- *  `d.data` — and then `lib/bookData.installBookData` replaces `data` wholesale
- *  when the fetch lands, so the user's edit vanishes without a word. `deleteRows`
- *  mirrors it: the request is filtered against the full book's span, so it can
- *  strip a sidecar cell whose row does not exist in the preview.
+ *  THE CONDITION IS `pending != null`, DELIBERATELY NOT `rowsAreSampled`. Those
+ *  answer different questions and a review round caught me collapsing them:
  *
- *  Same ruling as `useWorksheetView`'s `pendingGuard` (which covers extract and
- *  copy) and for the same reason: a row index against a SAMPLE does not name a
- *  real row. Kicks the fetch so the retry the message suggests can succeed.
- *  Suppressing the text-column RENDER removed the phantom rows that used to hint
- *  at this, which is precisely why the edit path needs its own guard.
+ *    * `rowsAreSampled` (lib/rowSidecars.ts) answers "may a row-indexed sidecar be
+ *      INDEXED against these numbers?" — false for a padding-trimmed prefix, whose
+ *      cells line up fine. That is the right rule for the worksheet RENDER.
+ *    * this guard answers "is `d.data` about to be THROWN AWAY?" — which is true
+ *      for every pending dataset, sampled or not, because
+ *      `lib/bookData.installBookData` replaces `data` wholesale when the fetch
+ *      lands. `WorksheetPane` kicks `ensureBookData` the moment the worksheet
+ *      opens, and `resolvePendingDatasets` runs before every save, so the race is
+ *      live on every view.
  *
- *  Gated on the SHARED `rowsAreSampled`, not on `ds.pending`. Gating on `pending`
- *  alone — which the first version did — refused edits on every book whose preview
- *  is NOT a sample: a small book, and every text-only book, whose columns the very
- *  same commit had just stopped hiding. That book rendered its rows and then
- *  refused to edit them, permanently when the fetch failed, while the status bar
- *  kept saying "try again in a moment". Two copies of one rule, disagreeing. */
-function refusePendingRowEdit(get: SliceGet, ds: Dataset, action: string): boolean {
-  if (!rowsAreSampled(ds.pending)) return false;
+ *  Loosening this to `rowsAreSampled` re-opened the exact harm the guard exists to
+ *  stop, measured on the corpus shape the loosening was justified by (a 180-row
+ *  book previewing as a 161-row trimmed prefix, `sampled: false`):
+ *  `insertRows(id, 5, 1)` grew `time` to 181 by materializing the 19 trimmed rows
+ *  as NaN and writing them into `d.data`, recorded an undo entry, warned about
+ *  nothing — and the subsequent resolve discarded the insert, the sidecar shift and
+ *  the padding, silently. "Insert a row, save the workspace" lost the row and saved
+ *  the pre-edit data.
+ *
+ *  Covers the CELL writes too, not just row insert/delete. They are the commonest
+ *  edit and were equally destructive on this path: each wrote into the preview,
+ *  recorded undo and a macro line, and was wiped by the resolve without a word.
+ *  Guarding only row edits was not a coherent contract. (`store/corrections.ts`
+ *  already resolves first, and `installBookData` clears `excludedRows`/`filter`, so
+ *  those paths are fine.)
+ *
+ *  Kicks the fetch so the retry the message suggests can succeed. */
+function refusePendingEdit(get: SliceGet, ds: Dataset, action: string): boolean {
+  if (ds.pending == null) return false;
   void get().ensureBookData(ds.id);
   get().setStatus(`"${ds.name}" is still loading its full data — try ${action} again in a moment`);
   return true;
@@ -137,7 +144,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     insertRows: (id, at, count) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds || count <= 0) return;
-      if (refusePendingRowEdit(get, ds, "inserting rows")) return;
+      if (refusePendingEdit(get, ds, "inserting rows")) return;
       get().recordHistory("insert rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -214,7 +221,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       const span = sidecarRowCount(ds.data.metadata, ds.data.time.length);
       const deleted = new Set(rows.filter((r) => r >= 0 && r < span));
       if (deleted.size === 0) return;
-      if (refusePendingRowEdit(get, ds, "deleting rows")) return;
+      if (refusePendingEdit(get, ds, "deleting rows")) return;
       get().recordHistory("delete rows");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -256,6 +263,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // otherwise grow `time` into a sparse array via `time[row] = value` for
     // row >= time.length. Mirrors setCellBlock's own `e.row >= 0 && e.row <
     // ds.data.time.length` filter below.
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col >= baseCount) return; // computed column — read-only
@@ -297,6 +305,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // Computed columns are read-only, exactly as in setCellValue above. The
     // pure layer (lib/clipboardGrid) already filters them out, but a block
     // arriving from anywhere else must not be able to bypass the rule.
+    if (refusePendingEdit(get, ds, "pasting cells")) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     // P1.6b item 7: same guard as setCellValue, applied per-cell — a bulk
     // paste that hits a categorical column drops just the invalid cells
@@ -362,6 +371,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based
     // patch that would otherwise throw on `values[row]`.
+    if (refusePendingEdit(get, ds, "editing a cell")) return;
     if (row < 0 || row >= ds.data.time.length) return;
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
     if (col < 0 || col >= baseCount) return; // x column and computed columns aren't categorical cells

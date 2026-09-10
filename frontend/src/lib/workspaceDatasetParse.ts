@@ -50,7 +50,7 @@ function parsePending(v: unknown): BookSource | null {
   const cols = typeof o.cols === "number" && Number.isFinite(o.cols) ? o.cols : 0;
   // `previewSampled` is carried through ONLY when the file actually states it, and
   // is NOT defaulted here. The fail-closed rule ("unknown means it may be a
-  // sample") lives in exactly one place, `lib/pendingRows.rowsAreSampled`, which
+  // sample") lives in exactly one place, `lib/rowSidecars.rowsAreSampled`, which
   // treats anything other than an explicit `false` as sampled. Writing a default
   // here too would be a SECOND copy of that rule — which is the mistake the shared
   // predicate exists to prevent, and the one the round-3 review caught between

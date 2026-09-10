@@ -764,12 +764,76 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  it("a pending book whose preview is NOT a sample is still EDITABLE", () => {
-    // The round-3 HIGH: the guard gated on `ds.pending` alone — the very mistake
-    // the same commit had just fixed in `textColumns.ts` — so a text-only book
-    // rendered its rows (that commit's own new test asserts it) and then refused
-    // every row edit, permanently when the fetch failed, while the status bar kept
-    // promising "try again in a moment". Both now read the shared `rowsAreSampled`.
+  it("refuses edits on a pending book even when its preview is NOT a sample", () => {
+    // Round 4's HIGH, and a regression round 3 introduced by loosening this guard
+    // from `pending` to `rowsAreSampled`. The two answer different questions:
+    // `rowsAreSampled` is about whether SIDECARS may be indexed; this guard is about
+    // whether `d.data` is about to be THROWN AWAY, which is true for every pending
+    // dataset. On the corpus shape the loosening was justified by — a 180-row book
+    // previewing as a 161-row trimmed prefix, `sampled: false` — `insertRows(id, 5,
+    // 1)` grew `time` to 181 by materializing the 19 trimmed rows as NaN, recorded
+    // an undo entry, warned about nothing, and the resolve then discarded all of it.
+    useApp.setState({
+      datasets: [
+        {
+          id: "p3",
+          name: "trimmed.opj",
+          data: {
+            time: Array.from({ length: 161 }, (_, i) => i),
+            values: Array.from({ length: 161 }, (_, i) => [i]),
+            labels: ["Y"],
+            units: [""],
+            metadata: { origin_text_columns: { Op: Array.from({ length: 180 }, (_, i) => `o${i}`) } },
+          },
+          pending: { bookId: "b3", rows: 180, cols: 1, previewSampled: false },
+        },
+      ],
+      activeId: "p3",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().insertRows("p3", 5, 1);
+    expect(useApp.getState().datasets[0].data.time).toHaveLength(161); // untouched
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/still loading its full data/);
+  });
+
+  it("refuses CELL writes on a pending book too, not just row edits", () => {
+    // The commonest edit, and it was unguarded: it wrote into the preview, recorded
+    // undo and a macro line, and was wiped by the resolve without a word. Guarding
+    // only row edits was not a coherent contract.
+    useApp.setState({
+      datasets: [
+        {
+          id: "p4",
+          name: "big.opj",
+          data: {
+            time: [0, 1, 2],
+            values: [[1], [2], [3]],
+            labels: ["Y"],
+            units: [""],
+            metadata: {},
+          },
+          pending: { bookId: "b4", rows: 5000, cols: 1, previewSampled: true },
+        },
+      ],
+      activeId: "p4",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useApp.getState().setCellValue("p4", 1, 0, 999);
+    expect(useApp.getState().datasets[0].data.values[1][0]).toBe(2); // not 999
+    useApp.getState().setCellBlock("p4", [{ row: 0, col: 0, value: 42 }], "paste");
+    expect(useApp.getState().datasets[0].data.values[0][0]).toBe(1); // not 42
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a RESOLVED text-only book edits normally — the positive control", () => {
+    // Same book as the refusal tests above with `pending` cleared, so the guard is
+    // shown to gate on pending-ness and nothing else. (This test previously carried
+    // `pending` and asserted the edit SUCCEEDED — that was round 3's loosening,
+    // which round 4 established re-opened a silent data-loss path. The scenario is
+    // now covered by the refusal test above; the round-3 complaint it came from —
+    // "renders its rows then refuses to edit them" — is answered by the status
+    // message and the kicked fetch, not by permitting a doomed edit.)
     useApp.setState({
       datasets: [
         {
@@ -782,7 +846,6 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
             units: [],
             metadata: { origin_text_columns: { Op: ["o0", "o1", "o2", "o3"] } },
           },
-          pending: { bookId: "b2", rows: 0, cols: 0, previewSampled: false },
         },
       ],
       activeId: "p2",
