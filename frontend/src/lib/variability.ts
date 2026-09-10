@@ -9,7 +9,7 @@
 // fityx/runLeg.ts (oneway ANOVA grouping) already do.
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
-import { columnOf, levelsOf } from "./categorical";
+import { columnOf, levelOrderFor, levelsOf, orderLevels } from "./categorical";
 import type { DataStruct } from "./types";
 
 export interface VariabilityCell {
@@ -71,7 +71,18 @@ export function buildNestedLevels(
     // `categoryLevels`) honoured the user's order — one chart, two orders.
     // The row filter stays: these are the B values that CO-OCCUR with this A
     // level, which is what makes the grouping nested.
-    const bLevels = levelsOf(av.map((av_r, r) => (av_r === a && r < n ? bv[r] : Number.NaN)));
+    // Group O-2 review, MEDIUM 5 — the defect the comment above PREDICTED, now
+    // that J1 has landed: factor A comes from `categoryLevels` and honours the
+    // user's order, so factor B must too, or one chart shows two orders (and
+    // the `b_index` sequence on the `calc.stats_varcomp` wire disagrees with
+    // the A axis beside it). `categoryLevels` cannot serve here — these are the
+    // B levels CO-OCCURRING with this A level, a filtered subset no whole-column
+    // read produces — so it shares the ordering primitive instead of growing a
+    // second private answer.
+    const bLevels = orderLevels(
+      levelsOf(av.map((av_r, r) => (av_r === a && r < n ? bv[r] : Number.NaN))),
+      levelOrderFor(data, factorBCol),
+    );
     const bLabels = resolveCategoryLabels(data, factorBCol, bLevels);
 
     const cells: VariabilityCell[] = [];

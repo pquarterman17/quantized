@@ -87,13 +87,73 @@ export function levelCountOf(values: readonly (number | null | undefined)[]): nu
   return new Set(values.filter((v): v is number => v != null && Number.isFinite(v))).size;
 }
 
-/** `channel`'s category levels, ascending (`-1` reads the x/time column). The
- *  accessor every order-sensitive consumer goes through: bar/box/violin axis
- *  slots, the interactive categorical x-axis, group-split series order,
- *  Tabulate's group labels, the stat stage, facets, Fit Y by X, variability
- *  charts and JMP-style By partitioning. */
+/** The user's chosen display order for `channel`, or null when there is none.
+ *  Deliberately does NOT filter the codes, though this is a sanctioned read
+ *  path that must survive a hand-edited `.dwk`: the consumer below matches
+ *  each entry with `Set.delete`, and a `Set<number>` never contains a string,
+ *  a null or a NaN, so junk simply fails to match and is skipped. Filtering
+ *  here would allocate a fresh array on every call — and `categoryLevels` is
+ *  called inline in render — to reach the identical result. */
+export function levelOrderFor(data: DataStruct, channel: number): readonly unknown[] | null {
+  const raw = data.level_order?.[channel];
+  return Array.isArray(raw) && raw.length > 0 ? raw : null;
+}
+
+/** Put `present` into `order`'s sequence — the ONE implementation of what a
+ *  user's level order MEANS, exported because several consumers hold a level
+ *  list without holding the DataStruct it came from: `lib/plotGroupSplit.ts`
+ *  (the live Stage's group split, which receives a bare `groupCodes` array) and
+ *  `lib/variability.ts` (factor B's levels are the ones CO-OCCURRING with an A
+ *  level, a filtered subset no column read can produce). Group O-1's whole
+ *  lesson was that a second private copy of a level decision is how two
+ *  surfaces come to disagree; this is that lesson applied before the copies
+ *  exist.
+ *
+ *  Rules, in one place:
+ *   - codes named by `order` come first, in that order, but ONLY if actually
+ *     present — an order must not invent a level the data no longer has;
+ *   - every present code the order does not name follows, ascending. FAIL OPEN:
+ *     a level that appeared after the order was saved still renders instead of
+ *     hiding behind a stale preference;
+ *   - `order` is deliberately unvalidated. Matching is by `Set.delete`, and a
+ *     `Set<number>` built from `levelsOf` holds only finite numbers, so a
+ *     string, a null, an object or a NaN out of a hand-edited `.dwk` simply
+ *     fails to match. `delete` also CONSUMES the match, so a code repeated in
+ *     the order cannot emit a duplicate.
+ *  The result is therefore always the same SET as `present` — order changes,
+ *  membership never does. */
+export function orderLevels(present: readonly number[], order: readonly unknown[] | null): number[] {
+  if (!order) return [...present];
+  const remaining = new Set(present);
+  const out: number[] = [];
+  for (const raw of order) {
+    const code = raw as number;
+    if (remaining.delete(code)) out.push(code);
+  }
+  for (const code of present) if (remaining.has(code)) out.push(code);
+  return out;
+}
+
+/** `channel`'s category levels, in DISPLAY order (`-1` reads the x/time
+ *  column). The accessor every order-sensitive consumer goes through: bar/box/
+ *  violin axis slots, the interactive categorical x-axis, group-split series
+ *  order, Tabulate's group labels, the stat stage, facets, Fit Y by X,
+ *  variability charts and JMP-style By partitioning.
+ *
+ *  Ascending by code unless the dataset carries a `level_order` for this
+ *  channel (JMP_GAP J1), in which case:
+ *   - codes named by the order come first, in that order, but ONLY if they are
+ *     actually present in the column — an order naming a level the data no
+ *     longer has must not invent an empty category;
+ *   - every present code the order does NOT name follows, ascending. This is
+ *     the load-bearing rule and it FAILS OPEN: a level that appears after the
+ *     order was saved (a cell edit, a re-import, a wider filter) still renders.
+ *     Dropping it instead would hide real data behind a stale preference.
+ *  So the RESULT is always exactly the set `levelsOf` would return — the order
+ *  changes, the membership never does, which is what lets every downstream
+ *  consumer adopt this without re-checking its own assumptions. */
 export function categoryLevels(data: DataStruct, channel: number): number[] {
-  return levelsOf(columnOf(data, channel));
+  return orderLevels(levelsOf(columnOf(data, channel)), levelOrderFor(data, channel));
 }
 
 /** True when `v` is a genuine non-empty array of strings -- NOT just
@@ -157,6 +217,38 @@ export function levelLabel(ds: DataStruct, channel: number, code: number): strin
  *  when there's nothing to repair (the common, non-categorical case) or a
  *  fresh one otherwise -- never mutates the input. */
 export function sanitizeDataStruct(data: DataStruct): DataStruct {
+  return sanitizeLevelOrder(sanitizeCatLevels(data));
+}
+
+/** Structural repair of a possibly-corrupted `level_order` (Group O-2), the
+ *  same contract `sanitizeCatLevels` has for the level table: drop any entry
+ *  that isn't a non-empty array of finite numbers. `levelOrderFor` above
+ *  already degrades safely on read — this only keeps a parsed DataStruct from
+ *  CARRYING junk into the store, so a later `.dwk` save doesn't write it back
+ *  out. Returns the SAME object when there is nothing to repair. */
+function sanitizeLevelOrder(data: DataStruct): DataStruct {
+  const raw = data.level_order;
+  if (raw === undefined) return data;
+  const out: Record<number, number[]> = {};
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    for (const [key, codes] of Object.entries(raw)) {
+      const idx = Number(key);
+      // `-1` is a REAL channel here, not junk: it is the x/time column, which
+      // `categoryLevels` reads (the interactive categorical x-axis passes
+      // `xKey`, and Split accepts "x or a value channel"). An earlier version
+      // rejected `idx < 0`, so an x-axis order was honoured in-session, written
+      // to the file, and silently deleted on reopen — the accessor and the
+      // sanitizer disagreeing about which channels exist.
+      if (!Number.isInteger(idx) || idx < -1 || !Array.isArray(codes)) continue;
+      const clean = codes.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      if (clean.length) out[idx] = clean;
+    }
+  }
+  const { level_order: _drop, ...rest } = data;
+  return Object.keys(out).length ? { ...rest, level_order: out } : (rest as DataStruct);
+}
+
+function sanitizeCatLevels(data: DataStruct): DataStruct {
   const raw = data.cat_levels;
   if (raw === undefined) return data;
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {

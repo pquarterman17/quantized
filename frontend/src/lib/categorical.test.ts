@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   categoricalLevels,
+  sanitizeDataStruct,
   categoryLevels,
   isCategoricalChannel,
   levelCountOf,
@@ -185,5 +186,129 @@ describe("category level primitives (Group O-1)", () => {
     };
     expect(categoryLevels(ds, 0)).toEqual(levelsOf(ds.values.map((r) => r[0])));
     expect(categoryLevels(ds, -1)).toEqual(levelsOf(ds.time));
+  });
+});
+
+// JMP_GAP J1 / Group O-2: the user's chosen level DISPLAY order. Codes are
+// identity and never move (a formula literal like `A==1` binds to the raw code,
+// measured, with no detector and no remap anywhere) — only the order they are
+// shown in is a preference.
+describe("user-settable level order (Group O-2)", () => {
+  const base: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6],
+    values: [[0], [1], [2], [0], [1], [2]],
+    labels: ["sample"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["Low", "Med", "High"] },
+  };
+
+  it("returns the levels in the user's order", () => {
+    const ds: DataStruct = { ...base, level_order: { 0: [2, 1, 0] } };
+    expect(categoryLevels(ds, 0)).toEqual([2, 1, 0]);
+    // ...and without one, ascending by code, exactly as before.
+    expect(categoryLevels(base, 0)).toEqual([0, 1, 2]);
+  });
+
+  it("FAILS OPEN: a level the order does not name still renders, ascending, at the end", () => {
+    // The load-bearing rule. An order is saved, then the data grows a level (a
+    // cell edit, a re-import, a widened filter). Hiding it would put real data
+    // behind a stale preference.
+    const ds: DataStruct = {
+      ...base,
+      values: [[0], [1], [2], [5], [4]],
+      level_order: { 0: [2, 0] },
+    };
+    expect(categoryLevels(ds, 0)).toEqual([2, 0, 1, 4, 5]);
+  });
+
+  it("does not invent a level the order names but the data no longer has", () => {
+    const ds: DataStruct = { ...base, values: [[0], [2], [0]], level_order: { 0: [2, 1, 0] } };
+    expect(categoryLevels(ds, 0)).toEqual([2, 0]); // no phantom 1
+  });
+
+  it("MEMBERSHIP never changes — only order. Property, over randomized data", () => {
+    // This is the invariant that lets every downstream consumer (axis slots,
+    // group split, Tabulate, facets, By, the stat stage) adopt the accessor
+    // without re-checking its own assumptions, so it is worth asserting as a
+    // property rather than on one fixture.
+    let seed = 99;
+    const rnd = (): number => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const pool = [0, 1, 2, 3, 4, Number.NaN, -0];
+    for (let t = 0; t < 500; t++) {
+      const rows = Array.from({ length: 1 + Math.floor(rnd() * 8) }, () => [
+        pool[Math.floor(rnd() * pool.length)],
+      ]);
+      const order = Array.from({ length: Math.floor(rnd() * 6) }, () => Math.floor(rnd() * 6));
+      const ds: DataStruct = { ...base, values: rows, level_order: order.length ? { 0: order } : undefined };
+      const got = categoryLevels(ds, 0);
+      const expected = levelsOf(rows.map((r) => r[0]));
+      expect([...got].sort((a, b) => a - b), JSON.stringify({ rows, order })).toEqual(expected);
+      expect(new Set(got).size, "no duplicates").toBe(got.length);
+    }
+  });
+
+  it("degrades to ascending on a structurally corrupt order (read-side safety)", () => {
+    for (const bad of [[], "2,1,0", { 0: 1 }, [null, undefined], [Number.NaN, Infinity]]) {
+      const ds = { ...base, level_order: { 0: bad } } as unknown as DataStruct;
+      expect(categoryLevels(ds, 0), JSON.stringify(bad)).toEqual([0, 1, 2]);
+    }
+  });
+
+  it("keeps the finite codes out of a PARTLY corrupt order", () => {
+    const ds = { ...base, level_order: { 0: [2, "x", null, 0] } } as unknown as DataStruct;
+    expect(categoryLevels(ds, 0)).toEqual([2, 0, 1]);
+  });
+
+  it("orders each channel independently", () => {
+    const ds: DataStruct = {
+      time: [1, 2, 3, 4],
+      values: [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [0, 1],
+      ],
+      labels: ["a", "b"],
+      units: ["", ""],
+      metadata: {},
+      level_order: { 0: [2, 1, 0] },
+    };
+    expect(categoryLevels(ds, 0)).toEqual([2, 1, 0]);
+    expect(categoryLevels(ds, 1)).toEqual([0, 1, 2]); // untouched
+  });
+
+  it("sanitizeDataStruct drops a junk order at parse instead of storing it", () => {
+    const dirty = {
+      ...base,
+      level_order: { 0: [2, 1, 0], 1: "nope", 2: [], 3: ["a"], "-2": [0], x: [1] },
+    } as unknown as DataStruct;
+    expect(sanitizeDataStruct(dirty).level_order).toEqual({ 0: [2, 1, 0] });
+  });
+
+  // The x/time column is channel -1 by the convention `ColumnFilter.col` sets,
+  // and `categoryLevels` genuinely reads it (the categorical x-axis passes
+  // `xKey`). An earlier sanitizer rejected every negative key, so an x-axis
+  // order survived in-session, was written to the .dwk, and vanished on reopen
+  // — the accessor and the sanitizer disagreeing about which channels exist.
+  it("keeps an order for channel -1, the x/time column the accessor reads", () => {
+    const ds: DataStruct = { ...base, time: [30, 10, 20, 10, 30, 20], level_order: { "-1": [30, 10, 20] } };
+    expect(sanitizeDataStruct(ds).level_order).toEqual({ "-1": [30, 10, 20] });
+    expect(categoryLevels(ds, -1)).toEqual([30, 10, 20]);
+  });
+
+  it("sanitizeDataStruct drops the field entirely when nothing survives", () => {
+    const dirty = { ...base, level_order: { 1: "nope" } } as unknown as DataStruct;
+    expect("level_order" in sanitizeDataStruct(dirty)).toBe(false);
+  });
+
+  it("sanitizeDataStruct keeps its identity fast path through the added stage", () => {
+    // The documented contract is identity for the COMMON, non-categorical case
+    // — a DataStruct with neither field. (With `cat_levels` present it has
+    // always rebuilt, which this test originally got wrong.) Group O-2 turned
+    // one sanitizer into two chained ones, and this is what pins that the
+    // added stage didn't cost the fast path.
+    const plain: DataStruct = { time: [1], values: [[1]], labels: ["a"], units: [""], metadata: {} };
+    expect(sanitizeDataStruct(plain)).toBe(plain);
   });
 });

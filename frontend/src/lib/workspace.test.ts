@@ -2420,3 +2420,40 @@ describe("workspace plot recipe persistence, project scope (P1.3 wave 2, Lane C)
     expect(parseWorkspace(JSON.stringify(doc)).plotRecipes).toEqual([]);
   });
 });
+
+// Group O-2: the level order rides along in `data`, so a .dwk round-trip
+// preserves it with no schema-version change — and `parseWorkspace`'s
+// sanitizer is what keeps a hand-edited file from reintroducing junk. Mirrors
+// the P1.4 `cat_levels` gate above, for the same reason and with the same
+// well-formed / corrupted pair.
+describe("workspace level order (Group O-2)", () => {
+  it("round-trips a well-formed level_order unchanged", () => {
+    const ds = makeDataset("a", "categorical");
+    ds.data = {
+      ...ds.data,
+      values: [[10, 0], [20, 1], [30, 0]],
+      cat_levels: { 1: ["NbAu-1", "NbAu-2"] },
+      level_order: { 1: [1, 0] },
+    };
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.level_order).toEqual({ 1: [1, 0] });
+    // The CODES in the rows are untouched — the whole point of ordering by
+    // display rather than by renumbering.
+    expect(restored.data.values).toEqual([[10, 0], [20, 1], [30, 0]]);
+  });
+
+  it("a dataset with no level_order round-trips with the key simply absent", () => {
+    const ds = makeDataset("a", "plain");
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.level_order).toBeUndefined();
+  });
+
+  it("repairs a hand-edited level_order instead of loading junk into the store", () => {
+    const ds = makeDataset("a", "categorical");
+    ds.data = { ...ds.data, cat_levels: { 1: ["NbAu-1", "NbAu-2"] } };
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].data.level_order = { 1: [1, "x", null, 0], 2: "nope" };
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.data.level_order).toEqual({ 1: [1, 0] });
+  });
+});

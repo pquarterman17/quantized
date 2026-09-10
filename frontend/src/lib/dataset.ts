@@ -49,5 +49,16 @@ export function cloneDataStruct(d: DataStruct): DataStruct {
           ),
         }
       : {}),
+    // Group O-2: `level_order`'s per-channel arrays need the same treatment for
+    // the same measured reason as `cat_levels` above — a shallow spread would
+    // leave the copy sharing the ORIGINAL's arrays, so reordering one dataset's
+    // levels would silently reorder its duplicate's too.
+    ...(d.level_order
+      ? {
+          level_order: Object.fromEntries(
+            Object.entries(d.level_order).map(([ch, codes]) => [ch, [...codes]]),
+          ),
+        }
+      : {}),
   };
 }

@@ -58,3 +58,53 @@ describe("buildNestedLevels / toWireGroups", () => {
     expect(levels.length).toBe(1);
   });
 });
+
+// Group O-2 review, MEDIUM 5: the defect this module's own comment predicted.
+// Factor A comes from `categoryLevels` (order-aware); factor B must too, or one
+// chart shows two orders and the b_index sequence on the calc.stats_varcomp
+// wire disagrees with the A axis beside it.
+describe("variability honours the level order on BOTH factors (Group O-2)", () => {
+  const data: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6, 7, 8],
+    values: [
+      [0, 0, 1],
+      [0, 1, 2],
+      [1, 0, 3],
+      [1, 1, 4],
+      [0, 0, 5],
+      [0, 1, 6],
+      [1, 0, 7],
+      [1, 1, 8],
+    ],
+    labels: ["lot", "wafer", "y"],
+    units: ["", "", ""],
+    metadata: {},
+    cat_levels: { 0: ["a0", "a1"], 1: ["b0", "b1"] },
+  };
+
+  it("reverses factor B with its order, not just factor A", () => {
+    const ordered: DataStruct = { ...data, level_order: { 0: [1, 0], 1: [1, 0] } };
+    const levels = buildNestedLevels(ordered, 2, 0, 1);
+    expect(levels.map((l) => [l.aLabel, l.cells.map((c) => c.bLabel)])).toEqual([
+      ["a1", ["b1", "b0"]],
+      ["a0", ["b1", "b0"]],
+    ]);
+  });
+
+  it("is ascending on both factors without an order — unchanged behaviour", () => {
+    const levels = buildNestedLevels(data, 2, 0, 1);
+    expect(levels.map((l) => [l.aLabel, l.cells.map((c) => c.bLabel)])).toEqual([
+      ["a0", ["b0", "b1"]],
+      ["a1", ["b0", "b1"]],
+    ]);
+  });
+
+  it("orders factor B alone when only B has an order (the measured mismatch)", () => {
+    const ordered: DataStruct = { ...data, level_order: { 1: [1, 0] } };
+    const levels = buildNestedLevels(ordered, 2, 0, 1);
+    expect(levels.map((l) => [l.aLabel, l.cells.map((c) => c.bLabel)])).toEqual([
+      ["a0", ["b1", "b0"]],
+      ["a1", ["b1", "b0"]],
+    ]);
+  });
+});

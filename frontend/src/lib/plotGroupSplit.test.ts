@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { groupLevelLabel } from "./categorical";
+import { groupLevelLabel, levelOrderFor } from "./categorical";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { applyGroupSplit } from "./plotGroupSplit";
 import { buildXY } from "./plotspec";
@@ -160,5 +160,53 @@ describe("applyGroupSplit vs buildXY — real runtime parity (P1.5 review P2)", 
     const expected = buildXY(data, 1, [0], 2);
     const actual = viaApplyGroupSplit(data, 1, [0], 2);
     expect(actual).toEqual(expected);
+  });
+});
+
+// Group O-2 review, HIGH 1: this module's ALGORITHM PARITY header commits it to
+// matching `lib/plotspec.ts`'s `buildXY`, which orders through `categoryLevels`.
+// Taking a bare `groupCodes` array it cannot read `level_order` itself, so the
+// caller passes it and both run the one shared `orderLevels`.
+describe("applyGroupSplit honours a level order (Group O-2)", () => {
+  const base = (): PlotPayload => ({ ...payload(), series: [{ label: "M", unit: "", axis: 0 }] });
+  const codes = [0, 1, 0, 1];
+
+  it("emits the series in the caller's order", () => {
+    const out = applyGroupSplit(base(), codes, "Sample", (c) => `L${c}`, [1, 0]);
+    expect(out.series.map((s) => s.label)).toEqual(["M (Sample=L1)", "M (Sample=L0)"]);
+  });
+
+  it("is ascending when no order is passed — the pre-J1 behaviour, unchanged", () => {
+    const out = applyGroupSplit(base(), codes, "Sample", (c) => `L${c}`);
+    expect(out.series.map((s) => s.label)).toEqual(["M (Sample=L0)", "M (Sample=L1)"]);
+  });
+
+  it("PARITY: agrees with buildXY's series order for the same order", () => {
+    // The real defect: the Graph Builder preview showed the user's order while
+    // the live Stage showed ascending, so series colours, legend order and
+    // z-order all disagreed between preview and plot.
+    const data: DataStruct = {
+      time: [1, 2, 3, 4],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 0],
+        [40, 1],
+      ],
+      labels: ["M", "Sample"],
+      units: ["", ""],
+      metadata: {},
+      cat_levels: { 1: ["NbAu-1", "NbAu-2"] },
+      level_order: { 1: [1, 0] },
+    };
+    const preview = buildXY(data, null, [0], 1);
+    const live = applyGroupSplit(
+      base(),
+      [0, 1, 0, 1],
+      "Sample",
+      (c) => data.cat_levels![1][c],
+      levelOrderFor(data, 1),
+    );
+    expect(live.series.map((s) => s.label)).toEqual(preview.series.map((s) => s.label));
   });
 });

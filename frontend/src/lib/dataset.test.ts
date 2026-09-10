@@ -96,3 +96,32 @@ describe("cloneDataStruct — optional fields survive the copy", () => {
     }
   });
 });
+
+// Group O-2: `level_order` joins `cat_levels` as a channel-keyed field whose
+// per-channel ARRAYS must be copied, not shared.
+describe("cloneDataStruct deep-copies the level order", () => {
+  it("does not share the order arrays with the original", () => {
+    const withOrder: DataStruct = {
+      time: [1, 2],
+      values: [[0], [1]],
+      labels: ["s"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["A", "B"] },
+      level_order: { 0: [1, 0] },
+    };
+    const copy = cloneDataStruct(withOrder);
+    expect(copy.level_order).toEqual({ 0: [1, 0] });
+    expect(copy.level_order![0]).not.toBe(withOrder.level_order![0]);
+    // The measured harm this guards, identical to the one this module's header
+    // records for `cat_levels`: reordering the copy must not reorder the
+    // original, which a shallow spread would allow.
+    copy.level_order![0].reverse();
+    expect(withOrder.level_order![0]).toEqual([1, 0]);
+  });
+
+  it("omits the field when the source has none", () => {
+    const plain: DataStruct = { time: [1], values: [[0]], labels: ["s"], units: [""], metadata: {} };
+    expect("level_order" in cloneDataStruct(plain)).toBe(false);
+  });
+});

@@ -462,5 +462,13 @@ export function sliceDataStruct(data: DataStruct, rowIndexes: readonly number[])
     units: [...data.units],
     metadata: sliceRowSidecars(data.metadata, rowIndexes),
     ...(data.cat_levels ? { cat_levels: data.cat_levels } : {}),
+    // Group O-2 review, HIGH 2. `level_order` is channel-indexed exactly like
+    // `cat_levels`, so a ROW slice leaves it entirely valid — and dropping it
+    // silently reverted three user-visible things to ascending: every child of
+    // a Split by column, every Extract rows result, and (worst, because it
+    // contradicts itself in one view) `lib/byPartition.ts`, which SEQUENCES its
+    // partitions with `categoryLevels` and then handed each partition a copy
+    // with the order stripped.
+    ...(data.level_order ? { level_order: data.level_order } : {}),
   };
 }

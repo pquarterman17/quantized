@@ -831,3 +831,93 @@ describe("computeFormulas — recode columns (J2)", () => {
     expect(out.values.map((r) => r[2])).toEqual([0, 0, 1, 0]);
   });
 });
+
+// Group O-2: `level_order` is channel-index-keyed, exactly like `cat_levels`,
+// so it must be stripped by the same column strip. SILENT_STATE_CORRUPTION_PLAN
+// #8 is what happens otherwise: a channel-keyed entry survives the strip and
+// re-lands on whatever column next takes that index.
+describe("baseColumns strips level_order with the columns", () => {
+  const withOrder: DataStruct = {
+    time: [1, 2],
+    values: [
+      [0, 1, 9],
+      [1, 0, 8],
+    ],
+    labels: ["a", "b", "computed"],
+    units: ["", "", ""],
+    metadata: {},
+    cat_levels: { 0: ["X", "Y"], 2: ["P", "Q"] },
+    level_order: { 0: [1, 0], 2: [1, 0] },
+  };
+
+  it("drops entries at or beyond the kept column count", () => {
+    const base = baseColumns(withOrder, 1); // strip the 1 computed column
+    expect(base.level_order).toEqual({ 0: [1, 0] }); // channel 2's entry is gone
+    expect(base.cat_levels).toEqual({ 0: ["X", "Y"] }); // in lockstep
+  });
+
+  it("drops the field entirely when nothing survives the strip", () => {
+    const onlyHigh: DataStruct = { ...withOrder, cat_levels: { 2: ["P", "Q"] }, level_order: { 2: [1, 0] } };
+    expect(baseColumns(onlyHigh, 1).level_order).toBeUndefined();
+  });
+});
+
+// Group O-2 review, MEDIUM 3: `baseColumns` strips the computed columns'
+// channel-keyed entries (correctly — they are about to be rebuilt), and
+// `computeFormulas` re-derives `cat_levels` for a recode column but cannot
+// re-derive a user's ORDER. So an order on a recoded column was destroyed by
+// ANY recompute: a cell edit, a correction, an unrelated formula.
+describe("a computed column's level order survives a recompute (Group O-2)", () => {
+  const base: DataStruct = {
+    time: [0, 1, 2, 3],
+    values: [[0], [1], [0], [1]],
+    labels: ["src"],
+    units: [""],
+    metadata: {},
+    cat_levels: { 0: ["lo", "hi"] },
+  };
+  const recode = [
+    { name: "grade", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } },
+  ] as unknown as ComputedColumn[];
+
+  /** The shape the store holds: base columns PLUS the computed ones, which is
+   *  what `recomputeWithErrors` strips and rebuilds. */
+  const applied = (over: Partial<DataStruct> = {}): DataStruct => ({ ...applyFormulas(base, recode), ...over });
+
+  it("keeps the order when the recomputed table comes back identical", () => {
+    const before = applied();
+    const seeded: DataStruct = { ...before, level_order: { 1: [1, 0] } };
+    const after = recomputeWithErrors(asAlreadyComputed(seeded), recode).data;
+    expect(after.cat_levels?.[1]).toEqual(before.cat_levels?.[1]); // table unchanged
+    expect(after.level_order?.[1]).toEqual([1, 0]); // ...so the order is still valid
+  });
+
+  it("keeps a BASE channel's order too", () => {
+    const seeded = applied({ level_order: { 0: [1, 0] } });
+    expect(recomputeWithErrors(asAlreadyComputed(seeded), recode).data.level_order?.[0]).toEqual([1, 0]);
+  });
+
+  // A recode derives its levels from its SOURCE's table, so APPENDING a level
+  // there — which store/cellEdit.ts does whenever a user types a new category —
+  // grows the recode's table without moving any existing code. An
+  // identical-table rule dropped the order here; a prefix rule keeps it, which
+  // is what the user means. (Writing the drop test below is what exposed the
+  // stricter rule as wrong.)
+  it("keeps the order when a new level is APPENDED to the source table", () => {
+    const seeded: DataStruct = { ...applied(), level_order: { 1: [1, 0] } };
+    const grown: DataStruct = { ...seeded, cat_levels: { ...seeded.cat_levels, 0: ["lo", "hi", "mid"] } };
+    const after = recomputeWithErrors(asAlreadyComputed(grown), recode).data;
+    expect(after.cat_levels?.[1]).toEqual(["lo", "hi", "mid"]); // grew by a prefix
+    expect(after.level_order?.[1]).toEqual([1, 0]); // ...so old codes still mean what they did
+  });
+
+  it("DROPS a computed column's order when its table REORDERS, rather than mis-pointing it", () => {
+    const seeded: DataStruct = { ...applied(), level_order: { 1: [1, 0] } };
+    // The source's levels swap, so the recode's codes swap with them and the
+    // saved order would now name the opposite levels.
+    const swapped: DataStruct = { ...seeded, cat_levels: { ...seeded.cat_levels, 0: ["hi", "lo"] } };
+    const after = recomputeWithErrors(asAlreadyComputed(swapped), recode).data;
+    expect(after.cat_levels?.[1]).toEqual(["hi", "lo"]); // the premise: not a prefix
+    expect(after.level_order?.[1]).toBeUndefined();
+  });
+});

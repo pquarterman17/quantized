@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { groupLevelLabel } from "../../lib/categorical";
+import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
@@ -335,6 +335,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
               groupCodes,
               active.data.labels[groupCol] ?? `col ${groupCol}`,
               (code) => groupLevelLabel(active.data, groupCol, code),
+              levelOrderFor(active.data, groupCol),
             )
           : withCategories;
       basePayloadRef.current = composed;

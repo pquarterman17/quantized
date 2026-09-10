@@ -1062,7 +1062,63 @@ import { fileURLToPath } from "node:url";
  *  reduction. Pin unchanged at 912,838: still not a diet pass, and lowering it
  *  to `measured + 1,024` would raise it.
  */
-const EAGER_JS_BUDGET = 912_838;
+/*  2026-09-10 (Group O-2a, JMP_GAP J1) — 912,838 -> 913,579, a RAISE of 741.
+ *  Measured 913,515 (677 over the old pin), pinned at measured + 64 to match
+ *  the tight margin the recent entries use rather than the +1,024 cap.
+ *
+ *  WHAT GREW, and why none of it can be deferred: the user-settable categorical
+ *  level DISPLAY order. Its eager cost is (a) the ordering branch inside
+ *  `lib/categorical.ts`'s `categoryLevels`, which is called INLINE IN RENDER
+ *  from ~15 surfaces (bar/box axis, categorical x, group split, Tabulate, the
+ *  stat stage, facets, Fit Y by X, variability, By) and so is eager by
+ *  definition; (b) `sanitizeLevelOrder`, reached from `parseWorkspace`, which
+ *  `store/workspaceIO.ts` imports STATICALLY — workspace parsing is already in
+ *  the eager graph, so relocating the sanitizer buys nothing and making
+ *  workspace lazy is a far larger change than this feature; (c) the
+ *  channel-index-keyed family that a new DataStruct field obliges — the column
+ *  strip, the deep copy, the merge carry — all of which sit in eager core
+ *  modules. `lib/merge.ts` is ALREADY dynamically imported, so its share costs
+ *  nothing here.
+ *
+ *  A lazy split was looked for first, as this header requires, and there is no
+ *  panel or user-action-gated module behind any of it.
+ *
+ *  TWO REDUCTIONS WERE TAKEN BEFORE RAISING, recovering 109 bytes (786 -> 677
+ *  over): `levelOrderFor` stopped filtering its codes on every call — the
+ *  accessor matches with `Set.delete`, and a `Set<number>` never contains a
+ *  string/null/NaN, so junk fails to match anyway and the filter was an
+ *  allocation on a render-path function for an identical result — and
+ *  `stripCatLevels` collapsed into the generic `stripChannelKeyed` it had
+ *  become a one-line wrapper around.
+ *
+ *  A THIRD REDUCTION WAS REJECTED, deliberately: dropping the parse-time
+ *  `sanitizeLevelOrder` would have saved ~20 lines, and the accessor is
+ *  structurally robust without it. But that sanitizer stops junk being written
+ *  back out on save and keeps the store clean, and byte pressure is the wrong
+ *  reason to remove a safety net. Recorded so the next person does not
+ *  "rediscover" it as free savings.
+ */
+/*  2026-09-10 (Group O-2a, CORRECTED after CI) — 913,579 -> 914,015. The
+ *  RAISE ITSELF was already justified above and that reasoning is unchanged;
+ *  what was wrong was every NUMBER in it, because the builds they came from
+ *  were stale.
+ *
+ *  CI failed this check at 892.5 kB over a 892.2 kB budget while the same
+ *  commit measured 892.1 kB locally and reported BUILD exit=0. Reproduced by
+ *  running `npm ci` first, exactly as the workflow does: the local build then
+ *  matched CI byte for byte. The cause is vite's transform cache under
+ *  `node_modules` — it served cached output for the very files being edited,
+ *  so a local rebuild silently under-reported this change by 436 bytes.
+ *  `main` measures 912,758 either way, which is what proves it was the EDITED
+ *  files' cache and not a dependency-version drift.
+ *
+ *  TRUE numbers, all from clean `npm ci` builds:
+ *      main            912,758
+ *      this change     913,951   (+1,193, not the +741 claimed above)
+ *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
+ *  recorded above all still stand; only the arithmetic was fiction.
+ */
+const EAGER_JS_BUDGET = 914_015;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

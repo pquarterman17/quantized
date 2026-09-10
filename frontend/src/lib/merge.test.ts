@@ -307,3 +307,86 @@ describe("mergeDatasets — cat_levels (P1.5 real conflict resolution)", () => {
     });
   });
 });
+
+// Group O-2: a `level_order` names CODES, and a union table renumbers them.
+describe("merge carries the level order through the code remap", () => {
+  function ds(levels: string[], codes: number[], order?: number[]): DataStruct {
+    return {
+      time: codes.map((_, i) => i),
+      values: codes.map((c) => [c]),
+      labels: ["sample"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: levels },
+      ...(order ? { level_order: { 0: order } } : {}),
+    };
+  }
+
+  // THE COUNTEREXAMPLE that a review round found to the "dataset 0's codes
+  // never move" argument, and the reason the remap in mergeDatasets is NOT dead
+  // code. A repeated level STRING in dataset 0's own table makes the union
+  // de-duplicate it, so dataset 0's later codes shift down.
+  it("remaps dataset 0's order when a REPEATED level string shifts its own codes", () => {
+    const a = ds(["A", "A", "B"], [0, 1, 2], [2, 1, 0]);
+    const b = ds(["C"], [0]);
+    const merged = mergeDatasets([a, b], ["a", "b"]);
+    expect(merged.cat_levels![0]).toEqual(["A", "B", "C"]);
+    // Dataset 0's rows prove its codes moved: 0,1,2 -> 0,0,1.
+    expect(merged.values.slice(0, 3)).toEqual([[0], [0], [1]]);
+    // The order must follow. Carried verbatim it would read [2,1,0] = C,B,A —
+    // naming dataset 1's level. Remapped it is [1,0] = B,A, which is what the
+    // user actually chose (their two distinct levels, in their order).
+    const union = merged.cat_levels![0];
+    expect(merged.level_order![0].map((c) => union[c])).toEqual(["B", "A"]);
+  });
+
+  // THE INVARIANT that makes carrying dataset 0's order safe FOR UNIQUE TABLES. `planChannel`
+  // builds the union starting from `tables[0]` in its own order, so dataset 0's
+  // levels keep their indices. Asserted directly because the alternative — a
+  // "defensive" remap in mergeDatasets — was dead code that no test could hold
+  // honest (sabotage: deleting it left everything green). If the union
+  // construction ever changes so dataset 0's codes DO move, this fails and the
+  // remap becomes genuinely necessary.
+  it("dataset 0's codes are never renumbered when its own levels are unique", () => {
+    const a = ds(["Low", "High"], [0, 1]);
+    const b = ds(["Med", "High", "Extra"], [0, 1, 2]);
+    const merged = mergeDatasets([a, b], ["a", "b"]);
+    const union = merged.cat_levels![0];
+    // Every level of dataset 0 sits at the SAME index in the union.
+    a.cat_levels![0].forEach((label, code) => {
+      expect(union[code], `dataset 0's "${label}" moved from code ${code}`).toBe(label);
+    });
+    // And dataset 0's own rows kept their raw codes through the merge.
+    expect(merged.values.slice(0, 2)).toEqual([[0], [1]]);
+  });
+
+  it("keeps the user's order pointing at the same LEVELS across a union merge", () => {
+    // A: [Low, High] codes 0,1 — user order [High, Low] = [1, 0].
+    // B: [Med, High] — the union appends Med, so B's codes move, and A's may
+    // too depending on the union's construction. Whatever the union is, the
+    // order must still name the SAME LEVELS by their new codes.
+    const a = ds(["Low", "High"], [0, 1], [1, 0]);
+    const b = ds(["Med", "High"], [0, 1]);
+    const merged = mergeDatasets([a, b], ["a", "b"]);
+    const union = merged.cat_levels![0];
+    const orderedLabels = merged.level_order![0].map((c) => union[c]);
+    expect(orderedLabels).toEqual(["High", "Low"]); // the user's order, by NAME
+  });
+
+  it("keeps the order untouched when every table already agrees (no remap built)", () => {
+    const a = ds(["Low", "High"], [0, 1], [1, 0]);
+    const b = ds(["Low", "High"], [0, 1]);
+    expect(mergeDatasets([a, b], ["a", "b"]).level_order).toEqual({ 0: [1, 0] });
+  });
+
+  it("takes dataset 0's order and ignores the others' (deterministic, documented)", () => {
+    const a = ds(["Low", "High"], [0, 1], [1, 0]);
+    const b = ds(["Low", "High"], [0, 1], [0, 1]);
+    expect(mergeDatasets([a, b], ["a", "b"]).level_order).toEqual({ 0: [1, 0] });
+  });
+
+  it("emits no level_order at all when dataset 0 has none", () => {
+    const merged = mergeDatasets([ds(["Low", "High"], [0, 1]), ds(["Low", "High"], [0, 1], [1, 0])], ["a", "b"]);
+    expect("level_order" in merged).toBe(false);
+  });
+});
