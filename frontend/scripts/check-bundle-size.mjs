@@ -1173,13 +1173,40 @@ import { fileURLToPath } from "node:url";
  *  the `reasonOf` wrapper was inlined, together worth ~100 bytes (915,684 ->
  *  915,582). What remains is the message text itself.
  *
- *  A SECOND "REDUCTION" WAS REJECTED, deliberately, and this is the part worth
- *  reading: shortening the user-facing message would have closed the gap. That
- *  is the same mistake as shaving an explanatory comment to fit a module
- *  ceiling, only aimed at the user instead of the next maintainer — the message
- *  IS the deliverable here, and a budget is the wrong reason to make it worse.
- *  A lazy split was also looked for and not found: everything this adds is
- *  reachable from `useApp`, which is eager by construction.
+ *  THE LAZY SPLIT THIS FILE PRESCRIBES WAS BUILT, MEASURED, AND REVERTED — read
+ *  this before trying it again. The failure text above says "Do NOT raise the
+ *  budget. Make the new code lazy instead... anything only needed after a user
+ *  action can be a dynamic import()", and a refusal message does qualify, so the
+ *  two message strings were moved to a `lib/pendingMessage.ts` reached from
+ *  `refusePendingEdit` through `import()`. It WORKED, arithmetically: 915,582 ->
+ *  915,393, worth 189 bytes, leaving a 16-byte residue. It was still the wrong
+ *  trade, for two measured reasons:
+ *
+ *    1. IT BROKE THE GUARD, and only a test said so. Looking the failure reason
+ *       up inside the lazily-imported formatter runs it after the guard's retry
+ *       kick has settled and cleared the record — so a book that had genuinely
+ *       died was reported as "still loading its full data", the exact confusion
+ *       BUG-009 exists to remove. Fixable (pass the reason in), and fixed, but it
+ *       shows the split is not the free refactor it looks like.
+ *    2. THE SYNCHRONOUS STATUS IS PART OF THE CONTRACT. Seven assertions across
+ *       `cellEdit.test.ts`, `computedColumns.test.ts`, `levelOrder.test.ts` and
+ *       `rowState.test.ts` read the status immediately after a refused action.
+ *       Making it async to save 189 bytes — 0.02% of the eager bundle — rewrites
+ *       four suites' expectations and leaves an error message about a failed
+ *       fetch itself depending on a chunk fetch.
+ *
+ *  So the budget moves and the guard stays synchronous. The remaining eager cost
+ *  could not be made lazy in any case: `lastBookError` and the record it reads are
+ *  written by `installBookData` on the eager store path and read synchronously by
+ *  `lib/workbookTransfer`.
+ *
+ *  A THIRD "REDUCTION" WAS REJECTED outright: shortening the user-facing message
+ *  would have closed the gap. That is the same mistake as shaving an explanatory
+ *  comment to fit a module ceiling, only aimed at the user instead of the next
+ *  maintainer — the message IS the deliverable here.
+ *
+ *  MEASURED, not assumed: `_resetBookTransportForTests` is tree-shaken and costs
+ *  0 bytes (removing it moved the total not at all).
  */
 const EAGER_JS_BUDGET = 915_646;
 
