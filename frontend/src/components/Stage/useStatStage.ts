@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFacetSpec, type CategoricalFigureSpec, type StatplotFacetSpec, type StatplotFigureSpec } from "../../lib/api/figures";
+import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFigureSpec } from "../../lib/api/figures";
 import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
@@ -45,6 +45,7 @@ import { analysisData } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
+  finiteOf,
   resolveGroups,
   resolveGroupsIndexed,
   type IndexedGroupSpec,
@@ -53,7 +54,7 @@ import {
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
-import { buildExportSpec, finiteOf } from "./statStageExportSpec";
+import { buildExportSpec, exportFacetedFigure } from "./statStageExport";
 import {
   computeBarData,
   computeBoxDraw,
@@ -487,7 +488,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     // exactly the modes that facet (box/violin/bar) — see the useEffect
     // above. Checked before the flat branches below.
     if (drawFacets && drawFacets.length > 0) {
-      await exportFacetedFigure(fmt);
+      await exportFacetedFigure(fmt, {
+        drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel,
+      });
       return;
     }
     if (mode === "bar") {
@@ -522,74 +525,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       showPoints, pointRowIndices, showMeanCI, showConnectMeans && effectiveGroupCol != null,
     );
     if (spec) await exportStatplotFigure(spec);
-  }
-
-  /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
-   *  faceted figure — the SAME ceil(sqrt(n)) grid the screen shows (gap
-   *  #21's shared `calc.figure_facets` layout). Bar facets reuse
-   *  `draw.data` directly (already the full category x series matrix,
-   *  computed synchronously with no possible per-slice degrade); box/violin
-   *  facets reuse the raw `rawGroups` values `computeFacetGroupDraws`
-   *  attached, paired with each facet's OWN resolved `draw.mode` for
-   *  per-slice degrade fidelity — a violin facet that fell back to box on
-   *  screen (its own /api/statplots/violin call failed) exports as box, not
-   *  a fresh (and maybe now-successful) violin recompute. */
-  async function exportFacetedFigure(fmt: string): Promise<void> {
-    if (!drawFacets || drawFacets.length === 0) return;
-    if (mode === "bar") {
-      const facets: CategoricalFacetSpec[] = [];
-      for (const f of drawFacets) {
-        const draw = f.draw;
-        if (draw.mode !== "bar") continue;
-        facets.push({
-          label: f.label,
-          groups: draw.data.groups.map((g) => g.label),
-          series: draw.data.seriesLabels,
-          values: draw.data.groups.map((g) => g.series.map((s) => s.mean)),
-          errors: draw.data.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
-        });
-      }
-      if (!facets.length) return;
-      const spec: CategoricalFigureSpec = {
-        groups: facets[0].groups,
-        series: facets[0].series,
-        values: facets[0].values,
-        errors: facets[0].errors,
-        stacked: barStack,
-        fmt,
-        title: `${barValueLabel} by ${groupLabel}, faceted`,
-        x_label: groupLabel,
-        y_label: barValueLabel,
-        filename: `bar_${barValueLabel}_faceted`,
-        facets,
-      };
-      await exportCategoricalFigure(spec);
-      return;
-    }
-    if (mode !== "box" && mode !== "violin") return;
-    const facets: StatplotFacetSpec[] = [];
-    for (const f of drawFacets) {
-      if (!f.rawGroups || f.rawGroups.length === 0) continue;
-      facets.push({
-        label: f.label,
-        kind: f.draw.mode === "violin" ? "violin" : "box",
-        data: f.rawGroups.map((g) => g.values),
-        labels: f.rawGroups.map((g) => g.label),
-      });
-    }
-    if (!facets.length) return;
-    const spec: StatplotFigureSpec = {
-      kind: mode,
-      data: facets[0].data,
-      labels: facets[0].labels,
-      fmt,
-      title: `${valueLabel} by ${groupLabel}, faceted`,
-      x_label: groupLabel,
-      y_label: valueLabel,
-      filename: `${mode}_${valueLabel}_faceted`,
-      facets,
-    };
-    await exportStatplotFigure(spec);
   }
 
   return {

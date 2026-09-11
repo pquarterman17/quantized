@@ -505,14 +505,19 @@ const TS_MODULE_PINS: Record<string, number> = {
   // above this was an EAGER-BYTES extraction, not a line-count one:
   // measured 890.2 -> 885.3 kB eager (local, same environment).
   "/components/Stage/useMultiPanelStage.ts": 791,
-  // 704 -> 634 (2026-09-11, Group R), in TWO extractions, because the file had
+  // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the
   //     per-dataset reset, the Graph Builder seed and the staleness mask —
   //     moved to components/Stage/useStatStagePicks.ts;
-  //   * the pure figure-spec builder + its column helpers moved to
-  //     components/Stage/statStageExportSpec.ts.
-  "/components/Stage/useStatStage.ts": 634,
+  //   * the whole server-side figure EXPORT path — the flat spec builder and
+  //     the faceted variant, which used to be a method closing over six hook
+  //     locals — moved to components/Stage/statStageExport.ts. Imported
+  //     EAGERLY: a dynamic import() there was built and measured and made the
+  //     eager bundle worse, see that file's header. Its column helpers went to
+  //     lib/statstage.ts instead, since the render path calls them
+  //     synchronously.
+  "/components/Stage/useStatStage.ts": 569,
   // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
   // P3 split moved each shared-state domain to its own bounded hook
   // (useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc, all under the

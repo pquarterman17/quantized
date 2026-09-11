@@ -146,25 +146,10 @@ export function groupsByNestedCategory(
   factorACol: number,
   factorBCol: number,
 ): GroupSpec[] {
-  const a = colValues(data, factorACol);
-  const b = colValues(data, factorBCol);
-  const val = colValues(data, valueCol);
-  const n = Math.min(a.length, b.length, val.length);
-  const out: GroupSpec[] = [];
-  for (const lvl of nestedLevels(data, factorACol, factorBCol)) {
-    for (let bi = 0; bi < lvl.bCodes.length; bi++) {
-      const values: number[] = [];
-      for (let r = 0; r < n; r++) {
-        if (a[r] === lvl.aCode && b[r] === lvl.bCodes[bi] && Number.isFinite(val[r])) {
-          values.push(val[r]);
-        }
-      }
-      if (values.length > 0) {
-        out.push({ label: nestedLabel(data, factorACol, factorBCol, lvl.aLabel, lvl.bLabels[bi]), values });
-      }
-    }
-  }
-  return out;
+  return nestedCells(data, valueCol, factorACol, factorBCol).map((c) => ({
+    label: c.label,
+    values: c.points.map((p) => p.value),
+  }));
 }
 
 /** `lot = 1 / wafer = 3` — the single-factor convention
@@ -215,13 +200,36 @@ export function groupsFromColumnsIndexed(
   });
 }
 
-/** Index-preserving counterpart to `groupsByNestedCategory`, and it MUST stay
- *  in lockstep with it for the same reason the single-factor pair must: this
- *  one feeds the jittered raw-point overlay, so if the two ordered or filtered
- *  differently a box would sit over another cell's points. Both walk the same
- *  `nestedLevels` structure, drop empty cells on the same test, and build the
- *  same label — pinned by a test that compares their labels directly. */
+/** Index-preserving counterpart to `groupsByNestedCategory`. The two MUST stay
+ *  in lockstep for the same reason the single-factor pair must: this one feeds
+ *  the jittered raw-point overlay, so if they ordered or filtered differently a
+ *  box would sit over another cell's points.
+ *
+ *  They cannot diverge, because there is only one walk — `nestedCells` below —
+ *  and the plain variant is that walk with the row indices dropped. The two
+ *  used to be copies kept honest by a comment and a test comparing their
+ *  labels; the test still stands, but it is now pinning an identity rather than
+ *  guarding a duplication. (A bundle-budget failure is what prompted looking at
+ *  them again; the dedupe was worth ~0.1 kB of it — 895.2 kB -> 895.1 kB — not
+ *  the 0.4 I first wrote down before measuring.) */
 export function groupsByNestedCategoryIndexed(
+  data: DataStruct,
+  valueCol: number,
+  factorACol: number,
+  factorBCol: number,
+): IndexedGroupSpec[] {
+  return nestedCells(data, valueCol, factorACol, factorBCol);
+}
+
+/** The ONE nested walk: one cell per (factor-A, factor-B) pair that has finite
+ *  values, in nested display order, each carrying its points with their
+ *  original row indices.
+ *
+ *  Always builds the indexed form even for the plain caller, which then drops
+ *  the indices. The waste is one small object per finite value in a box plot's
+ *  worth of data, and it buys the guarantee above — the two public builders
+ *  partition, order and label identically because they are the same code. */
+function nestedCells(
   data: DataStruct,
   valueCol: number,
   factorACol: number,

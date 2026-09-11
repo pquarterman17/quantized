@@ -1219,7 +1219,50 @@ import { fileURLToPath } from "node:url";
  *  MEASURED, not assumed: `_resetBookTransportForTests` is tree-shaken and costs
  *  0 bytes (removing it moved the total not at all).
  */
-const EAGER_JS_BUDGET = 915_735;
+/*  915,735 -> 917,635 (2026-09-11, Group R / R2b: the "then by" picker that makes
+ *  nested two-factor box grouping reachable). Measured 916,661 after `npm ci`,
+ *  which is the CI-faithful number — 926 over the old budget — leaving the same
+ *  ~1 kB of headroom the BUG-009 move left.
+ *
+ *  WHAT THE WEIGHT IS. #351 added the nested COMPUTE (`lib/nestedLevels.ts`,
+ *  `groupsByNestedCategory` and its indexed twin, `nestedLabel`) and nothing
+ *  eager imported it, so rollup shook it out and #351 cost ~nothing. R2b wires
+ *  it into `lib/statstage.resolveGroups`, which the Stat Stage calls
+ *  synchronously inside a `useMemo` during render — so the compute arrives in
+ *  the eager bundle for the first time, along with the picker's own JSX and the
+ *  four masking rules. It is new functionality, not new indirection.
+ *
+ *  TWO REDUCTIONS WERE TAKEN FIRST, and together they were not enough:
+ *    1. `groupsByNestedCategory` and `groupsByNestedCategoryIndexed` were
+ *       near-identical copies of the same triple loop. They are now one walk
+ *       (`nestedCells`) plus a two-line projection, which also turns their
+ *       "MUST stay in lockstep" comment into a structural guarantee. Worth
+ *       ~0.1 kB: 895.2 kB -> 895.1 kB. (I wrote "~0.4 kB" in that file's header
+ *       before measuring it, and corrected it.)
+ *    2. Moving `exportFacetedFigure` out of the hook (it closed over six
+ *       locals) shrank `useStatStage.ts` from 634 to 569 lines against its pin.
+ *       That was a line-ceiling fix, not a byte fix; it cost ~0.1 kB eager.
+ *
+ *  THE LAZY SPLIT THIS FILE PRESCRIBES WAS BUILT, MEASURED, AND REVERTED — for
+ *  the SECOND time (the BUG-009 block below is the first). The failure text says
+ *  "anything only needed after a user action can be a dynamic import()", and the
+ *  server-side figure export qualifies exactly: `exportFigure` is already async,
+ *  and unlike the BUG-009 case the moved code reads no live state — every input
+ *  arrives as an argument, so when it loads cannot change what it returns. The
+ *  correctness objection that sank the last attempt does not apply here.
+ *
+ *  It lost on the arithmetic instead. `await import("./statStageExport")` made
+ *  the EAGER total WORSE: 895.2 kB -> 895.6 kB. Rollup emitted a 1.93 kB
+ *  `statStageExport` chunk and the chunk plumbing, plus the shared modules it
+ *  could no longer fold into the eager graph, cost more than the 1.93 kB it
+ *  moved. Reverted to an eager import.
+ *
+ *  So the lesson from BUG-009 needs widening: the prescription is worth TRYING
+ *  and is not worth ASSUMING, in either direction. Build it, read the number,
+ *  and be willing to throw it away — twice now the number has disagreed with a
+ *  sound-sounding argument.
+ */
+const EAGER_JS_BUDGET = 917_635;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

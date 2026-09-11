@@ -134,6 +134,17 @@ export function firstValueChannel(ds: Dataset | null, avoid: number): number {
   return 0;
 }
 
+// ── Column reads ────────────────────────────────────────────────────────────
+
+/** One channel's raw values; index < 0 selects the shared x/time column. */
+export const colValues = (data: DataStruct, index: number): number[] =>
+  index < 0 ? data.time : data.values.map((row) => row[index]);
+
+/** `colValues` with the non-finite entries dropped — what every ungrouped
+ *  single-column statistic (Q-Q, histogram) actually consumes. */
+export const finiteOf = (data: DataStruct, index: number): number[] =>
+  colValues(data, index).filter((v) => Number.isFinite(v));
+
 // ── Grouping (Box / Violin) ─────────────────────────────────────────────────
 
 /** Groups for Box/Violin: partition `valueCol` by `groupCol` when a

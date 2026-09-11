@@ -1162,8 +1162,9 @@ output, not a caught error).
   `components/Stage/useStatStagePicks.ts` (the column picks, their per-dataset
   reset, the Graph Builder seed and the staleness mask — moved together because
   the reset MUST stay declared before the seed, "so a same-dataset send wins")
-  and `components/Stage/statStageExportSpec.ts` (the pure figure-spec builder).
-  The pin ratcheted 704 -> 634.
+  and `components/Stage/statStageExport.ts` (the whole server-side figure export
+  path — the flat spec builder and the faceted variant). The pin ratcheted
+  704 -> 569.
   Four rules govern the pick, each with its own sabotage-verified test. The
   first three live together in `maskStaleCategoricalPicks`, so one pure function
   answers "is this pick still valid?"; the fourth is deliberately elsewhere:
@@ -1190,6 +1191,16 @@ output, not a caught error).
   it is already group-count-agnostic and composite labels flow through as
   ordinary strings — pinned by a test that exports a nested plot and reads the
   spec back.
+  **It cost eager bundle bytes, and the budget moved to pay for them**
+  (915,735 -> 917,635, with the measurements in `check-bundle-size.mjs`). #351's
+  compute was tree-shaken out because nothing eager imported it; R2b wires it
+  into `resolveGroups`, which the stage calls synchronously during render, so it
+  arrives in the eager graph for the first time. Two reductions were taken first
+  (deduping the two nested builders into one walk, ~0.1 kB; moving the export
+  path out of the hook), and the lazy split the gate prescribes was built,
+  measured and REVERTED for the second time in this repo's history — it made the
+  eager total worse, 895.2 -> 895.6 kB, because the chunk plumbing cost more
+  than the 1.93 kB it moved.
 - [x] Existing numeric projects migrate unchanged — additive by
   construction (`cat_levels` absent = byte-identical to before this field
   existed, both languages); pinned by `test_cat_levels_absent_is_additive_
