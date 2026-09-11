@@ -1156,9 +1156,20 @@ import { fileURLToPath } from "node:url";
  *  the branch figure reproduces CI byte for byte (CI: 894.2 kB over a 893.9 kB
  *  budget; local, cached: the same 894.2 kB — so the transform cache was not
  *  lying this time, and the overage is real):
- *      main            914,761
- *      this change     915,582   (+821)
- *  Pinned at 915,582 + 64, the same "+64" convention as the entry above. The
+ *      main                     914,761
+ *      first attempt            915,684   (+923, 307 over)
+ *      after two reductions     915,582   (+821, 205 over)
+ *      after the lazy split     915,393   (+632,  16 over — reverted, see below)
+ *      after review round 2     915,671   (+910)
+ *  Pinned at 915,671 + 64, the same "+64" convention as the entry above.
+ *
+ *  Round 2 of review cost 89 bytes on top of the 821, and each is a correctness
+ *  fix rather than a feature: `lastBookError` compares `token` too (an upload
+ *  `BookSource` has no `path`, so without it the identity check degenerated to
+ *  `bookId` alone for exactly the expired-upload-token case this bug names);
+ *  `truncateReason` is shared, so `lib/workbookTransfer` stops interpolating an
+ *  unbounded backend `detail`; and that refusal no longer calls a book dead for
+ *  good when the record says only that its last attempt failed. The
  *  lockfile is identical to main's, which is what makes the two comparable.
  *
  *  WHAT THE 821 BYTES BUY. A lazy Origin book whose fetch fails for good (a
@@ -1188,7 +1199,7 @@ import { fileURLToPath } from "node:url";
  *       died was reported as "still loading its full data", the exact confusion
  *       BUG-009 exists to remove. Fixable (pass the reason in), and fixed, but it
  *       shows the split is not the free refactor it looks like.
- *    2. THE SYNCHRONOUS STATUS IS PART OF THE CONTRACT. Seven assertions across
+ *    2. THE SYNCHRONOUS STATUS IS PART OF THE CONTRACT. Nine assertions (eight tests) across
  *       `cellEdit.test.ts`, `computedColumns.test.ts`, `levelOrder.test.ts` and
  *       `rowState.test.ts` read the status immediately after a refused action.
  *       Making it async to save 189 bytes — 0.02% of the eager bundle — rewrites
@@ -1208,7 +1219,7 @@ import { fileURLToPath } from "node:url";
  *  MEASURED, not assumed: `_resetBookTransportForTests` is tree-shaken and costs
  *  0 bytes (removing it moved the total not at all).
  */
-const EAGER_JS_BUDGET = 915_646;
+const EAGER_JS_BUDGET = 915_735;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

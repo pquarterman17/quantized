@@ -8,7 +8,7 @@ import type { ComputedColumn, Dataset } from "../lib/types";
 import { useLevelOrder } from "./levelOrder";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
-import { _resetBookTransportForTests } from "../lib/bookData";
+import { resetBookTransportForTests } from "../lib/bookData";
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
 
@@ -36,7 +36,7 @@ const resetPanel = () => useLevelOrder.setState({ open: false, datasetId: null, 
 beforeEach(() => {
   // BUG-009: the guard kicks a real fetch that rejects under jsdom and records
   // the reason in module scope; clear it so one test cannot answer for the next.
-  _resetBookTransportForTests();
+  resetBookTransportForTests();
   vi.clearAllMocks();
   useApp.setState({ datasets: [catDataset()], activeId: "d1" });
   resetPanel();

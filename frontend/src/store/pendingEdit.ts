@@ -34,7 +34,7 @@
 // plans/BUGS_AND_ISSUES.md as BUG-009, and deliberately not attempted inside a
 // PR that has already taken five review rounds.
 
-import { lastBookError } from "../lib/bookData";
+import { lastBookError, truncateReason } from "../lib/bookData";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
@@ -89,12 +89,4 @@ export function pendingStatusMessage(ds: Dataset, action: string): string {
     `"${ds.name}" — the last attempt to load its full data failed (${truncateReason(failed)}). ` +
     `${action} needs the whole book. Retrying now; if it keeps failing, relink or re-import the source.`
   );
-}
-
-/** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
- *  ARRAY, which `lib/api/http.ts` stringifies rather than rejecting. Neither
- *  belongs verbatim in a one-line status bar, so cap it and say it was cut. */
-function truncateReason(reason: string): string {
-  const flat = reason.replace(/\s+/g, " ").trim();
-  return flat.length > 120 ? `${flat.slice(0, 119)}\u2026` : flat;
 }

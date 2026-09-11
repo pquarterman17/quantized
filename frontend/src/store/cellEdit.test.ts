@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useApp } from "./useApp";
 import { recomputeFromBase } from "../lib/formulaInputs";
 import type { ComputedColumn, Dataset } from "../lib/types";
+import { resetBookTransportForTests } from "../lib/bookData";
 
 const ds = (): Dataset => ({
   id: "d1",
@@ -27,6 +28,11 @@ const ds = (): Dataset => ({
 const active = () => useApp.getState().datasets[0];
 
 beforeEach(() => {
+  // BUG-009: the pending guard kicks a real fetch that rejects under jsdom and
+  // records the reason in module scope; clear it so one test cannot answer for
+  // the next. Without this these suites pass only because the one test that
+  // asserts the message happens to run first (proven with --sequence.shuffle).
+  resetBookTransportForTests();
   useApp.setState({ datasets: [ds()], activeId: "d1" });
 });
 

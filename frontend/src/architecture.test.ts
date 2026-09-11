@@ -1264,6 +1264,49 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/workshops/importwizard/useImportWizard.test.ts": 1,
 };
 
+// BUG-009: `lib/bookData.ts` keeps the reason the last lazy-book fetch failed in
+// MODULE state, cleared only by a SUCCESS. A test that exercises a pending-dataset
+// guard makes `refusePendingEdit` kick a real fetch, which rejects under jsdom and
+// records a reason that outlives the test — so a later test in the same file, on
+// the same dataset id, gets "the last attempt ... failed" where it expected
+// "still loading its full data".
+//
+// This is not hypothetical and it is not a style rule. `cellEdit.test.ts` and
+// `computedColumns.test.ts` shipped exactly this and passed, because the one test
+// in each that asserts the message happened to run first; `--sequence.shuffle.tests
+// --sequence.seed=1` failed both. `lib/bookData.ts` documents the rule ("CALL THIS
+// in the beforeEach of any suite that exercises a pending-dataset guard") and the
+// commit that wrote it applied it to two of the four files that needed it. A
+// documented rule nothing enforces is how that happened, so: enforce it.
+describe("pending-guard suites must reset the book-transport record (BUG-009)", () => {
+  it("a test file asserting the pending-guard message also resets module state", () => {
+    const asserts = /still loading its full data|last attempt to load its full data/;
+    const missing: string[] = [];
+
+    for (const [p, src] of Object.entries(modules)) {
+      if (!/\.test\.(ts|tsx)$/.test(p)) continue;
+      if (!asserts.test(src)) continue;
+      // The CALL, not the import. The first version of this check tested
+      // `src.includes("resetBookTransportForTests")`, which an unused import
+      // satisfies — deleting the call from rowState.test.ts left this green. That
+      // is the identical hole BUG-009's OTHER ratchet already shipped and
+      // recorded once ("it token-matched the FILE ... deleting all four guard
+      // CALLS while leaving the imports kept 620 files green"). Sabotage found it
+      // both times; only the second time was it already written down.
+      if (!/resetBookTransportForTests\s*\(\s*\)/.test(src)) missing.push(p);
+    }
+
+    expect(
+      missing,
+      `add \`resetBookTransportForTests()\` to the beforeEach of each file above.
+Rationale: lib/bookData.ts's failure record is module state cleared only by a
+success, so one test's refused action poisons the next test's expected message.
+Measured 2026-09-11: cellEdit.test.ts and computedColumns.test.ts both failed
+under --sequence.shuffle.tests before this guard existed.`,
+    ).toEqual([]);
+  });
+});
+
 describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
   /** Load test files only (*.test.ts, *.test.tsx). */
   function testSources(): [string, string][] {

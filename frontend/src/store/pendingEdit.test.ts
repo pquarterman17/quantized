@@ -21,7 +21,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchBookData } from "../lib/api";
-import { _resetBookTransportForTests, installBookData, lastBookError } from "../lib/bookData";
+import { resetBookTransportForTests, installBookData, lastBookError } from "../lib/bookData";
 import type { BookSource, Dataset } from "../lib/types";
 import { type AutosaveState, shouldAutosave } from "../useWorkspaceAutosave";
 import { refusePendingEdit } from "./pendingEdit";
@@ -59,7 +59,7 @@ async function failOnce(reason: unknown, source: BookSource = SOURCE): Promise<v
 
 beforeEach(() => {
   vi.clearAllMocks();
-  _resetBookTransportForTests();
+  resetBookTransportForTests();
   // A default so the guard's own fire-and-forget `ensureBookData` has something
   // to await; the per-test `*Once` mocks take precedence over it.
   vi.mocked(fetchBookData).mockResolvedValue(FULL);
@@ -161,6 +161,27 @@ describe("lastBookError — the record itself", () => {
 
     expect(lastBookError("d1", SOURCE)).toBe("source not found");
     expect(lastBookError("d1", OTHER_SOURCE)).toBeNull();
+  });
+
+  it("distinguishes each identity field ON ITS OWN — including an upload's token", async () => {
+    // Review LOW 1: the assertion above varies `path` AND `bookId` at once, so it
+    // passes even if only one of them is compared. Each field is varied alone
+    // here, and `token` is the one that matters most: an upload BookSource has NO
+    // `path`, so without it the check degenerates to `bookId` for exactly the
+    // case BUG-009 names — an EXPIRED UPLOAD TOKEN. That field was genuinely
+    // missing from the first version of this comparison.
+    const upload: BookSource = { kind: "upload", token: "tok-1", bookId: "b9", rows: 9, cols: 1 };
+    useApp.setState({ datasets: [pendingDataset({ pending: upload })] });
+    await failOnce(new Error("token expired"), upload);
+
+    expect(lastBookError("d1", upload)).toBe("token expired");
+    expect(lastBookError("d1", { ...upload, token: "tok-2" })).toBeNull();
+    expect(lastBookError("d1", { ...upload, bookId: "b8" })).toBeNull();
+    expect(lastBookError("d1", { ...upload, kind: "path" })).toBeNull();
+    // And for a path-kind source, `path` alone must discriminate.
+    useApp.setState({ datasets: [pendingDataset()] });
+    await failOnce(new Error("moved"), SOURCE);
+    expect(lastBookError("d1", { ...SOURCE, path: "/other.opj" })).toBeNull();
   });
 });
 

@@ -49,16 +49,34 @@ const _bookErrors = new Map<string, { source: BookSource; message: string }>();
 
 /** Why the last fetch for `id` failed, or null while none has failed (or the
  *  recorded failure belongs to a different book). `source` is the book being
- *  asked about, so a stale entry from a previous project cannot answer: the
- *  three fields below are what identify a book, compared directly rather than
- *  through a built key string (same answer, less code in the eager bundle). */
+ *  asked about, so a stale entry from a previous project cannot answer.
+ *
+ *  ALL FOUR identity fields are compared, `token` included, and that is not
+ *  belt-and-braces: an upload `BookSource` has no `path`, so without `token` the
+ *  check degenerates to `bookId` alone for exactly the case BUG-009 names — an
+ *  EXPIRED UPLOAD TOKEN. Compared directly rather than through a built key
+ *  string (same answer, less code in the eager bundle). */
 export function lastBookError(id: string, source: BookSource): string | null {
   const rec = _bookErrors.get(id);
   if (!rec) return null;
   const s = rec.source;
-  return s.kind === source.kind && s.path === source.path && s.bookId === source.bookId
+  return s.kind === source.kind &&
+    s.path === source.path &&
+    s.token === source.token &&
+    s.bookId === source.bookId
     ? rec.message
     : null;
+}
+
+/** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
+ *  ARRAY, which `lib/api/http.ts` stringifies rather than rejecting. Neither
+ *  belongs verbatim in a one-line status or a refusal reason, so cap it and say
+ *  it was cut. Lives here, beside the record, because BOTH consumers of a
+ *  recorded reason need it — `store/pendingEdit.ts` and
+ *  `lib/workbookTransfer.ts` — and the second one was interpolating it raw. */
+export function truncateReason(reason: string): string {
+  const flat = reason.replace(/\s+/g, " ").trim();
+  return flat.length > 120 ? `${flat.slice(0, 119)}\u2026` : flat;
 }
 
 /** Test-only: drop all transport state so one test's in-flight promise or
@@ -72,7 +90,7 @@ export function lastBookError(id: string, source: BookSource): string | null {
  *  `src/test/setup.ts`: importing this module there resolves `./api` before any
  *  suite's `vi.mock("../lib/api")` applies, which silently un-mocks the fetch
  *  for every test in the repo (measured). */
-export function _resetBookTransportForTests(): void {
+export function resetBookTransportForTests(): void {
   _bookFetches.clear();
   _bookErrors.clear();
 }
@@ -105,12 +123,19 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
       // The book arrived: whatever the last attempt failed with is history.
       _bookErrors.delete(id);
     })
-    .catch((e: unknown) => {
+    .then(undefined, (e: unknown) => {
       // BUG-009: record WHY, so `store/pendingEdit.ts` can stop promising a
       // retry "in a moment" for a book that will never arrive. `pending` stays
       // set on purpose (a retry may still work); only the message changes.
       // Re-thrown unchanged, so every existing caller's error handling —
       // `resolveDataset`'s reject, the save command's abort — is untouched.
+      //
+      // A REJECTION HANDLER, not `.catch`: `.catch` here would also catch a throw
+      // from the SUCCESS handler above (a Zustand subscriber throwing during the
+      // datasets swap), recording a fetch that actually succeeded as a failure and
+      // skipping the delete. Unreadable today — `pending` is already cleared by
+      // then, so the message short-circuits — but the record would mean less than
+      // this comment claims.
       _bookErrors.set(id, { source, message: e instanceof Error ? e.message : String(e) });
       throw e;
     })

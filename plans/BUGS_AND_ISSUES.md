@@ -1698,6 +1698,36 @@ lose an edit:
   the flag stays false either way); it survived the sabotage that reintroduced the
   write, and now asserts the gate directly.
 
+- [x] **Review round 2 (no HIGHs; both round-1 HIGHs verified gone).** Fixed:
+  `lastBookError` now compares `token` as well — an upload `BookSource` has no
+  `path`, so without it the identity check degenerated to `bookId` alone for
+  exactly the case this bug names, an expired upload token. Each of the four
+  fields is now sabotage-verified individually (the first test varied two at
+  once and could not tell which was compared). `installBookData`'s failure
+  handler became the second argument to `.then` rather than a `.catch`, so a
+  throw from the SUCCESS handler can no longer be recorded as a fetch failure.
+  `lib/workbookTransfer`'s refusal no longer claims a book is dead for good —
+  the record says only that the LAST attempt failed, and a two-second blip
+  records one — and it now caps the reason through the shared `truncateReason`
+  instead of interpolating an unbounded backend `detail`; both arms have tests,
+  the failure arm having had none. The status text stopped advising "relink",
+  which writes `Dataset.source` only and never clears `pending`, so it could
+  not revive the book.
+
+- [x] **A PROVEN test-order defect, and a ratchet for it.** `_bookErrors` is
+  module state cleared only by a success, so a guard test's jsdom-rejecting
+  fetch poisons later tests in the same file that share a dataset id.
+  `cellEdit.test.ts` and `computedColumns.test.ts` shipped exactly that and
+  passed only because the one test in each that asserts the message happened to
+  run first: `--sequence.shuffle.tests --seed=1` failed both. `lib/bookData.ts`
+  already documented the rule and the commit that wrote it applied it to two of
+  the four files needing it — so `architecture.test.ts` now enforces it (a test
+  file asserting the pending-guard message must CALL
+  `resetBookTransportForTests()`). That check's own first version matched the
+  IMPORT, so deleting the call left it green — the identical hole this bug's
+  other ratchet already shipped and recorded once. Sabotage caught it both
+  times; only the second time was it already written down.
+
 - [x] **The wording now has ONE home.** The first version corrected one of five
   messages while claiming it had corrected all of them:
   `useWorksheetView.pendingGuard` (Extract / Copy rows), `useTabulate`,

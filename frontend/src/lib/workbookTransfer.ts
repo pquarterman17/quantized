@@ -105,7 +105,7 @@ import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
 import { parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
-import { lastBookError } from "./bookData";
+import { lastBookError, truncateReason } from "./bookData";
 
 export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
 export const WORKBOOK_TRANSFER_VERSION = 1;
@@ -181,18 +181,29 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
   if (datasets.length === 0) return { ok: false, reason: "workbook has no worksheets to copy" };
   const pending = datasets.filter((d) => d.pending);
   if (pending.length > 0) {
-    // BUG-009: "try again in a moment" is only true while a fetch may still
-    // succeed. If any of these books has already failed for good (a moved
-    // source, an expired upload token), retrying cannot help, so name the first
-    // real failure instead of promising one.
-    const dead = pending.find((d) => d.pending && lastBookError(d.id, d.pending) !== null);
-    const deadReason = dead?.pending ? lastBookError(dead.id, dead.pending) : null;
+    // BUG-009: "try again in a moment" is only informative while nothing has
+    // gone wrong. If a fetch for one of these books has already FAILED, say so
+    // and say why, naming the first such book in `datasets` order.
+    //
+    // Reviewed and narrowed: the record says the LAST attempt failed, NOT that
+    // the book is dead for good — a two-second offline blip records one. So this
+    // reports what happened and still invites a retry, exactly like
+    // `store/pendingEdit.ts`'s message; the first version of this branch said
+    // "could not load ... relink or re-import it", which is a permanent-sounding
+    // verdict the record cannot support, on the one path here that does not
+    // itself kick a re-fetch.
+    const failed = pending.find((d) => d.pending && lastBookError(d.id, d.pending) !== null);
+    const reason = failed?.pending ? lastBookError(failed.id, failed.pending) : null;
     return {
       ok: false,
       reason:
-        deadReason == null
+        failed == null || reason == null
           ? `${pending.length} worksheet${plural(pending.length)} not fully loaded yet — try again in a moment`
-          : `"${dead?.name ?? ""}" could not load its full data (${deadReason}) — relink or re-import it before copying this workbook`,
+          : // Capped: a backend `detail` is unbounded and can be a FastAPI 422
+            // ARRAY that `lib/api/http.ts` stringifies. The first version
+            // interpolated it raw into this refusal.
+            `"${failed.name}" has not finished loading — its last attempt failed (${truncateReason(reason)}). ` +
+            `Try again; if it keeps failing, re-import that worksheet before copying this workbook.`,
     };
   }
   const memberIds = new Set(datasets.map((d) => d.id));
