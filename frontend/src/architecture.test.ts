@@ -1098,10 +1098,74 @@ describe("category-level accessor chokepoint (JMP_GAP J1)", () => {
   // means a type-aware pass, not a regex. The mitigation is that the migration
   // left ZERO unmarked copies behind, so this guards a clean baseline rather
   // than papering over a dirty one.
-  const WINDOW = 400;
-  const SET = /new Set\b/g;
+  // `Set` OR `Map`, and a comparator on a bare name OR an indexed/property one.
+  // Both widenings are here because this guard MISSED a real instance twice
+  // over: `lib/statschooser.ts`'s `groupsByCategory` derived a column's levels
+  // with `new Map<number, number[]>()` and ordered them with
+  // `.sort((a, b) => a[0] - b[0])`, so neither the `new Set` anchor nor the
+  // bare-`a - b` comparator matched — and box/violin/strip spent J1 sorting by
+  // raw code while every other surface honoured the user's order, which is
+  // verbatim the failure this guard's own message predicts. A Map keyed by a
+  // column's values IS a derivation of that column's levels.
+  const SET = /new (?:Set|Map)\b/g;
   const FINITE = /Number\.isFinite\b|\bisFinite\s*\(/;
-  const ORDERED = /\.sort\(\s*\(?\s*\w+\s*,\s*\w+\s*\)?\s*=>\s*\w+\s*-\s*\w+|\.size\b/;
+  const ORDERED = /\.sort\(\s*\(?\s*\w+\s*,\s*\w+\s*\)?\s*=>\s*[\w.[\]]+\s*-\s*[\w.[\]]+|\.size\b/;
+
+  /** How far from the `new Set|Map` an INLINE ordering may sit
+   *  (`[...new Set(xs)].sort((a, b) => a - b)` names no collection at all), and
+   *  the cap on the enclosing-declaration span searched for a NAMED one. */
+  const NEAR = 140;
+  const CAP = 600;
+
+  /** The name bound to this `new Set|Map`, or null. Handles the spread form
+   *  (`const xs = [...new Set(`) as well as a plain assignment. */
+  function bindingName(code: string, at: number): string | null {
+    const line = code.slice(code.lastIndexOf("\n", at) + 1, at);
+    return /(?:const|let|var)\s+(\w[\w$]*)\s*(?::[^=]*)?=\s*(?:\[\s*\.\.\.\s*)?$/.exec(line)?.[1] ?? null;
+  }
+
+  /** The enclosing declaration's text from `at`, capped. */
+  function declSpan(code: string, at: number): string {
+    const after = code.slice(at, at + CAP);
+    const end = /\n(?:\}|(?:export\s+)?(?:async\s+)?function\s|(?:export\s+)?const\s)/.exec(after);
+    return end ? after.slice(0, end.index) : after;
+  }
+
+  /** Is the SAME collection that was just built also being ordered or counted?
+   *
+   *  This replaced a flat 400-character window, and the replacement is not
+   *  tidiness — the window was measured to miss a real instance by TWO
+   *  characters. `lib/statschooser.ts` carried TWO copies of exactly the defect
+   *  this guard exists to catch; their `.sort(` sat at +330 and +398 characters
+   *  from their `new Map`, so the window saw the first and missed the second.
+   *  The file was therefore reported for one of its two instances, and a
+   *  reintroduction in the index-preserving twin ALONE — the copy feeding the
+   *  jitter overlay — would have passed green.
+   *
+   *  Simply widening the constant is the wrong lever: measured tree-wide, 600
+   *  characters admits one false positive and 800 admits two, because a `.size`
+   *  on an unrelated Set anywhere in a long function then matches. Tying the
+   *  ordering to the collection's own NAME is what makes distance stop
+   *  mattering. Measured over the 865 non-test `.ts`/`.tsx` files the guard
+   *  actually scans — NOT the 1,028 `.ts` files a naive `find` reports, which
+   *  counts tests it excludes and omits the `.tsx` it reads: zero false
+   *  positives, all three existing exemptions still live, and BOTH
+   *  `statschooser.ts` copies caught. */
+  function derivesLevels(code: string, at: number): boolean {
+    const span = declSpan(code, at);
+    if (!FINITE.test(span)) return false;
+    // An inline `[...new Set(xs)].sort(...)` binds no name; proximity is the
+    // only available evidence, and it is strong at this distance.
+    if (new RegExp(ORDERED.source).test(code.slice(at, at + NEAR))) return true;
+    const name = bindingName(code, at);
+    if (!name) return false;
+    if (new RegExp(`\\b${name}\\.size\\b`).test(span)) return true;
+    for (const m of span.matchAll(new RegExp(ORDERED.source, "g"))) {
+      const before = span.slice(Math.max(0, (m.index ?? 0) - 160), m.index ?? 0);
+      if (new RegExp(`\\b${name}\\b`).test(before)) return true;
+    }
+    return false;
+  }
 
   /** Lines carrying an explicit, reasoned exemption. Function-scoped by
    *  construction: the marker sits on the copy itself, so it cannot silently
@@ -1116,8 +1180,7 @@ describe("category-level accessor chokepoint (JMP_GAP J1)", () => {
     const hits: number[] = [];
     for (const m of code.matchAll(SET)) {
       const at = m.index ?? 0;
-      const win = code.slice(at, at + WINDOW);
-      if (FINITE.test(win) && ORDERED.test(win)) hits.push(at);
+      if (derivesLevels(code, at)) hits.push(at);
     }
     return hits;
   }

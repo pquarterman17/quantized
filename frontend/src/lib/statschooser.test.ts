@@ -86,6 +86,141 @@ describe("groupsByCategory", () => {
   });
 });
 
+describe("groupsByCategory honours the user's level ORDER (JMP_GAP J1)", () => {
+  // The defect: box/violin/strip axis slots came from a private
+  // `new Map(...).sort((a, b) => a[0] - b[0])`, i.e. ALWAYS ascending by raw
+  // code, while every other order-sensitive surface went through
+  // `lib/categorical.categoryLevels` and honoured `level_order` — bar layout,
+  // the XY group split, Tabulate, facets, and the backend's own
+  // `_ordered_levels` for an exported PDF. So a user who reordered levels saw
+  // the bar chart and the export obey and the box plot silently not.
+  //
+  // The chokepoint guard in architecture.test.ts exists to prevent exactly this
+  // ("a private copy would keep sorting by raw code while every other surface
+  // honoured the user's order") and MISSED it twice over: it anchors on
+  // `new Set` (this used `new Map`) and its comparator pattern only matched a
+  // bare `a - b` (this was `a[0] - b[0]`). Both are widened in this change.
+  const ordered: DataStruct = {
+    ...DATA,
+    cat_levels: { 1: ["Reference", "Annealed"] },
+    level_order: { 1: [1, 0] },
+  };
+
+  it("puts the groups in the user's order, values following their labels", () => {
+    const gs = groupsByCategory(ordered, 0, 1);
+    expect(gs.map((g) => g.label)).toEqual(["batch = Annealed", "batch = Reference"]);
+    // The VALUES must travel with their label, not just the label list reorder.
+    expect(gs[0].values).toEqual([20, 21, 22]);
+    expect(gs[1].values).toEqual([10, 11]);
+  });
+
+  it("reorders the INDEXED path identically — jitter points must not detach", () => {
+    // `groupsByCategoryIndexed` feeds the raw-point overlay, which hashes
+    // (rowIndex, category). If the two paths ordered differently, a box would
+    // sit over another category's points.
+    const gs = groupsByCategoryIndexed(ordered, 0, 1);
+    expect(gs.map((g) => g.label)).toEqual(["batch = Annealed", "batch = Reference"]);
+    expect(gs[0].points.map((pt) => pt.rowIndex)).toEqual([3, 4, 5]);
+    expect(gs[1].points.map((pt) => pt.rowIndex)).toEqual([0, 1]);
+  });
+
+  it("still ascends when the dataset carries no order (the previous behaviour)", () => {
+    expect(groupsByCategory(DATA, 0, 1).map((g) => g.label)).toEqual([
+      "batch = 0",
+      "batch = 1",
+    ]);
+  });
+
+  it("FAILS OPEN on a partial order: named levels first, the rest ascending", () => {
+    // categoryLevels' load-bearing rule. A level that appeared after the order
+    // was saved must still get a box rather than hide behind a stale preference.
+    const three: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 2],
+      ],
+      labels: ["signal", "batch"],
+      units: ["V", ""],
+      metadata: {},
+      level_order: { 1: [2] },
+    };
+    const gs = groupsByCategory(three, 0, 1);
+    expect(gs.map((g) => g.values)).toEqual([[30], [10], [20]]);
+  });
+
+  it("does not invent a group for an ordered level the data no longer has", () => {
+    const stale: DataStruct = { ...DATA, level_order: { 1: [9, 1, 0] } };
+    expect(groupsByCategory(stale, 0, 1)).toHaveLength(2);
+    expect(groupsByCategory(stale, 0, 1)[0].values).toEqual([20, 21, 22]);
+  });
+});
+
+describe("membership stays the PARTITION's, not the level table's", () => {
+  it("a level whose value rows are all non-finite gets NO group", () => {
+    // The load-bearing promise of the `.filter((level) => parts.has(level))`:
+    // `categoryLevels` lists every level in the BY column, but a level whose
+    // value rows are all NaN has no bucket and must not become an empty group.
+    // It was claimed in the comment and the commit and tested by nothing — an
+    // empty group is not loud, it reaches `boxStatsClient` and throws "needs at
+    // least one finite value" on the offline-fallback branch.
+    const holey: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 0],
+        [Number.NaN, 1],
+        [12, 0],
+      ],
+      labels: ["signal", "batch"],
+      units: ["V", ""],
+      metadata: {},
+      cat_levels: { 1: ["Kept", "Empty"] },
+    };
+    const gs = groupsByCategory(holey, 0, 1);
+    expect(gs).toHaveLength(1);
+    expect(gs[0].label).toBe("batch = Kept");
+    expect(gs[0].values).toEqual([10, 12]);
+    // And the indexed twin agrees, or a box would face an empty jitter bucket.
+    expect(groupsByCategoryIndexed(holey, 0, 1)).toHaveLength(1);
+  });
+});
+
+describe("the level order reaches the STATISTICAL TEST, not just the plot", () => {
+  // Found by asking what else `groupsByCategory` feeds. It is not only the box
+  // plot: the Stats Chooser builds its `groups` from it
+  // (components/workshops/statschooser/useStatsChooser.ts), and
+  // `buildRunRequest` below destructures `const [g0, g1] = groups` — so for a
+  // two-sample t-test, Wilcoxon or Mann-Whitney, group ORDER decides which
+  // sample is `x` and which is `y`. Reordering levels therefore flips the sign
+  // of the t statistic and of the reported difference.
+  //
+  // That is a DELIBERATE consequence, not an accident, and it is pinned here
+  // rather than left silent: the test and the plot now agree on which group
+  // comes first, every group is labelled, and a user who has explicitly ordered
+  // the levels gets that order everywhere. Making the plot follow the order
+  // while the test kept its own would be the worse outcome — two surfaces
+  // disagreeing about "group 1", which is the exact class of bug the shared
+  // `categoryLevels` chokepoint exists to prevent.
+  const ordered: DataStruct = {
+    ...DATA,
+    cat_levels: { 1: ["Reference", "Annealed"] },
+    level_order: { 1: [1, 0] },
+  };
+
+  it("hands the user's FIRST level to the test as x, and the second as y", () => {
+    const gs = groupsByCategory(ordered, 0, 1);
+    const req = buildRunRequest("/api/stats/ttest", gs.map((g) => g.values), false);
+    expect(req?.body).toEqual({ x: [20, 21, 22], y: [10, 11], paired: false });
+  });
+
+  it("without an order the assignment is the ascending-code one, as before", () => {
+    const gs = groupsByCategory(DATA, 0, 1);
+    const req = buildRunRequest("/api/stats/ttest", gs.map((g) => g.values), false);
+    expect(req?.body).toEqual({ x: [10, 11], y: [20, 21, 22], paired: false });
+  });
+});
+
 describe("buildRunRequest", () => {
   const g2 = [
     [1, 2, 3],
