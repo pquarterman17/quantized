@@ -26,6 +26,7 @@ import {
 import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 /** A selectable column: -1 is the x column, 0.. are channels. */
 export interface TabulateColumn {
@@ -203,7 +204,7 @@ export function useTabulate(): TabulateState {
   function pendingGuard(action: string): boolean {
     if (!active?.pending) return false;
     useApp.getState().ensureBookData(active.id);
-    setStatus(`still loading full data — try ${action} again in a moment`);
+    setStatus(pendingStatusMessage(active, action)); // BUG-009: one home for the wording
     return true;
   }
 

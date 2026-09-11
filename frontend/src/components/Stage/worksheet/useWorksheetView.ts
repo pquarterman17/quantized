@@ -50,6 +50,7 @@ import { plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
+import { refusePendingEdit } from "../../../store/pendingEdit";
 
 /** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
 function passesFilter(v: number | undefined, op: string, a: number, b: number): boolean {
@@ -436,15 +437,14 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
 
   // #38: a pending dataset's `data` is REPLACED WHOLESALE when the fetch lands, so
   // a subset or clipboard payload from it uses numbers about to cease to exist.
-  // Gated on `pending`, NOT `rowsAreSampled` — see `store/cellEdit.ts`'s
-  // `refusePendingEdit` header for the full reasoning, and for why this comment's
-  // old "min/max-DECIMATED SAMPLE, not a prefix" justification was false.
-  function pendingGuard(action: string): boolean {
-    if (!ds.pending) return false;
-    useApp.getState().ensureBookData(ds.id);
-    setStatus(`still loading full data — try ${action} again in a moment`);
-    return true;
-  }
+  // Gated on `pending`, NOT `rowsAreSampled` — see `store/pendingEdit.ts`'s header
+  // for the full reasoning, and for why this comment's old "min/max-DECIMATED
+  // SAMPLE, not a prefix" justification was false.
+  // BUG-009: this was a hand-rolled COPY of that rule — one of four — still
+  // promising "try again in a moment" for books whose fetch had failed for good.
+  // It is now the rule itself: `setStatus` above is the store's own, so
+  // `refusePendingEdit` is a drop-in and the file loses a duplicate, not gains a line.
+  const pendingGuard = (action: string) => refusePendingEdit(useApp.getState, ds, action);
 
   function extractSubset() {
     if (!canExtract) return;

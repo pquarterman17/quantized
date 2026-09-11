@@ -1662,25 +1662,51 @@ lose an edit:
   that has already taken five review rounds.
 ### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
 
-- [x] `Dataset.pendingError` records why the last fetch for a `pending` dataset
-  failed (`lib/bookData.ts`'s `installBookData` gained a `.catch` that writes it and
-  RE-THROWS unchanged, so `resolveDataset`'s reject and the save command's abort are
-  untouched), and success clears it alongside `pending`. `store/pendingEdit.ts`'s
-  guard then says what actually happened — `could not load its full data (<reason>)
-  … relink or re-import the source` — instead of promising "try again in a moment"
-  forever to a book that will never arrive.
+- [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed
+  (`lastBookError(id, source)`), and `store/pendingEdit.ts`'s
+  `pendingStatusMessage` says what actually happened — `the last attempt to load
+  its full data failed (<reason>) … relink or re-import the source` — instead of
+  promising "try again in a moment" forever to a book that will never arrive.
+  `installBookData` re-throws unchanged, so `resolveDataset`'s reject, the save
+  command's abort and `ensureBookData`'s toast are untouched; success clears the
+  record alongside `pending`.
   **ADVISORY ONLY, and that is pinned by test**: the retry is still kicked (a network
   blip does come back), the refusal is unchanged, and nothing becomes unreachable
   because a failure was recorded. So this closes the LIE, not the lockout — the
   lockout is the deferral box above, which is still open.
-  Deliberately not serialized: `lib/workspaceSerialize.ts` writes an explicit field
-  list, and a transient error has no business surviving a reload as if still true.
-  `pendingError` is registered in `architecture.test.ts`'s
-  `DATASET_CHANNEL_REMAP_EXCLUDED` (a reason string, not channel-index-keyed state).
-  Funding note, per the repo's own rule against shaving comments to fit a ceiling:
-  the field's doc comment pushed `lib/types.ts` past its pinned size, so the Origin
-  graph-decode fidelity types were extracted to `lib/originFidelityTypes.ts` and
-  re-exported — the same move already made for `importTypes`/`reductionTypes`.
+
+  **MODULE STATE, NOT A `Dataset` FIELD — and the first attempt got that wrong,
+  which is the useful part of this entry.** Putting the reason on `Dataset` meant a
+  failed fetch performed a store write where it had previously performed NONE, and
+  two live mechanisms compare `datasets` by IDENTITY:
+  `components/windows/WindowCanvas.tsx` and `components/Stage/useMultiPanelStage.ts`
+  have effects whose deps include `datasets` (or the active `Dataset` object) and
+  whose bodies call `ensureBookData` when `pending` is set — so each failure re-ran
+  the effect, which re-fetched, which failed, which wrote again: an unbounded
+  request storm on exactly the dead book being fixed. And
+  `useWorkspaceAutosave.shouldAutosave` compares the same reference, so the write
+  marked a clean project dirty and, once looping, reset the 800 ms autosave
+  debounce faster than it could ever fire — starving autosave of real user edits.
+  Both were found in adversarial review while CI was 14/14 green.
+  A fetch outcome is transport state, like the in-flight promise beside it; keeping
+  it in module scope makes "never serialized, never undone, never remapped, never
+  re-rendered" true by construction instead of by four separate allowlists. The
+  entry records WHICH source failed, because dataset ids repeat across a project
+  load. Pinned by four tests that assert the array identity, each dataset's object
+  identity, and `shouldAutosave` — the last of those asserted `projectDirty`
+  first and was VACUOUS (its subscriber only registers inside a React effect, so
+  the flag stays false either way); it survived the sabotage that reintroduced the
+  write, and now asserts the gate directly.
+
+- [x] **The wording now has ONE home.** The first version corrected one of five
+  messages while claiming it had corrected all of them:
+  `useWorksheetView.pendingGuard` (Extract / Copy rows), `useTabulate`,
+  `useFitYByX` and `useStatsChooser` each carried their own hard-coded "try again
+  in a moment", and `lib/workbookTransfer.buildTransferPackage` its own plural
+  variant. All five now go through `pendingStatusMessage` (or, for the transfer
+  package, name the first genuinely dead book). Their control flow is unchanged —
+  each still writes to its own local status/error channel — so this unifies the
+  wording only; unifying the GUARDS is the structural half still open above.
 
 ### The invariant, stated once (it never was)
 

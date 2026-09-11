@@ -514,6 +514,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/lib/roiMath.ts": 664,
   "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
   "/lib/plotdata.ts": 658,
+  // Unchanged at 648 (BUG-009): its hand-rolled `pendingGuard` became a one-line
+  // call to `store/pendingEdit.refusePendingEdit`, and dropping the duplicate paid
+  // for the import exactly — net zero, so there is no ratchet to record here.
   "/components/Stage/worksheet/useWorksheetView.ts": 648,
   "/lib/roi.ts": 638,
   "/lib/plotspec2.ts": 637,
@@ -1360,8 +1363,6 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   excludedRows:
     "ROW indices (JMP-style row state, #50), not COLUMN/channel indices -- unaffected by a column removal",
   pending: "lazy-load book-source descriptor, not channel-indexed",
-  pendingError:
-    "the reason the lazy-load fetch failed -- a transient advisory STRING, not channel-indexed",
   source: "re-import source path descriptor, not channel-indexed",
   versionOf: "a dataset id, not channel-indexed",
   workbookId: "Library organization only, not channel-indexed",

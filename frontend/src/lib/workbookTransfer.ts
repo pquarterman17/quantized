@@ -105,6 +105,7 @@ import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
 import { parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
+import { lastBookError } from "./bookData";
 
 export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
 export const WORKBOOK_TRANSFER_VERSION = 1;
@@ -180,9 +181,18 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
   if (datasets.length === 0) return { ok: false, reason: "workbook has no worksheets to copy" };
   const pending = datasets.filter((d) => d.pending);
   if (pending.length > 0) {
+    // BUG-009: "try again in a moment" is only true while a fetch may still
+    // succeed. If any of these books has already failed for good (a moved
+    // source, an expired upload token), retrying cannot help, so name the first
+    // real failure instead of promising one.
+    const dead = pending.find((d) => d.pending && lastBookError(d.id, d.pending) !== null);
+    const deadReason = dead?.pending ? lastBookError(dead.id, dead.pending) : null;
     return {
       ok: false,
-      reason: `${pending.length} worksheet${plural(pending.length)} not fully loaded yet — try again in a moment`,
+      reason:
+        deadReason == null
+          ? `${pending.length} worksheet${plural(pending.length)} not fully loaded yet — try again in a moment`
+          : `"${dead?.name ?? ""}" could not load its full data (${deadReason}) — relink or re-import it before copying this workbook`,
     };
   }
   const memberIds = new Set(datasets.map((d) => d.id));

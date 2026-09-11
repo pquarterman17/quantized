@@ -18,6 +18,71 @@ type DatasetsSetter = (fn: (s: { datasets: Dataset[] }) => { datasets: Dataset[]
  *  serialize. */
 const _bookFetches = new Map<string, Promise<void>>();
 
+/** BUG-009: why the LAST fetch for a dataset failed, or no entry if none has.
+ *  `store/pendingEdit.ts` reads it so a guarded action can say what actually
+ *  happened instead of promising a retry "in a moment" that cannot succeed.
+ *
+ *  MODULE SCOPE, NOT A `Dataset` FIELD — and the first version of this fix put
+ *  it on `Dataset`, which is how the reason is known rather than guessed. A
+ *  failed fetch previously performed NO store write at all, and writing one
+ *  gave `datasets` a new array (and the dataset a new object) identity on every
+ *  failure. Two live consequences, both measured in review:
+ *    * `components/windows/WindowCanvas.tsx` and
+ *      `components/Stage/useMultiPanelStage.ts` have effects whose deps include
+ *      `datasets` / the active `Dataset` and whose bodies call `ensureBookData`
+ *      when `pending` is set. A new identity re-ran the effect, which re-fetched,
+ *      which failed, which wrote again: an unbounded request storm on exactly
+ *      the dead book this fix is about.
+ *    * `useWorkspaceAutosave.ts`'s `shouldAutosave` compares `state.datasets`
+ *      by IDENTITY, so the write marked a clean project dirty and, once looping,
+ *      reset the 800 ms autosave debounce faster than it could ever fire —
+ *      starving autosave of real user edits.
+ *  A fetch outcome is transport state, like the in-flight promise above it. It
+ *  has no business flowing through Zustand subscribers, a `.dwk` serialize, an
+ *  undo snapshot, or a channel remap — and keeping it here is what makes all
+ *  four true by construction rather than by four separate allowlists.
+ *
+ *  Keyed by dataset id, like `_bookFetches`, but the entry also records WHICH
+ *  source failed: ids can repeat across a project load, and a reason recorded
+ *  for a different book must not be reported for this one. */
+const _bookErrors = new Map<string, { key: string; message: string }>();
+
+/** A stable identity for the book a `BookSource` names — enough to tell "the
+ *  same book that failed a moment ago" from "a different book that happens to
+ *  have inherited this dataset id". */
+function sourceKey(source: BookSource): string {
+  return `${source.kind}\u0000${source.path ?? ""}\u0000${source.bookId}`;
+}
+
+/** A readable reason from anything a rejected fetch can carry. */
+function reasonOf(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Why the last fetch for `id` failed, or null while none has failed (or the
+ *  recorded failure belongs to a different book). `source` is the book being
+ *  asked about, so a stale entry from a previous project cannot answer. */
+export function lastBookError(id: string, source: BookSource): string | null {
+  const rec = _bookErrors.get(id);
+  return rec && rec.key === sourceKey(source) ? rec.message : null;
+}
+
+/** Test-only: drop all transport state so one test's in-flight promise or
+ *  recorded failure cannot answer for the next.
+ *
+ *  CALL THIS in the `beforeEach` of any suite that exercises a pending-dataset
+ *  guard. `refusePendingEdit` kicks a REAL fetch, which rejects under jsdom, so
+ *  a guard test records a failure that a later test in the same file would
+ *  otherwise report — two suites asserting "still loading its full data" got
+ *  "the last attempt … failed" instead. Deliberately NOT wired into
+ *  `src/test/setup.ts`: importing this module there resolves `./api` before any
+ *  suite's `vi.mock("../lib/api")` applies, which silently un-mocks the fetch
+ *  for every test in the repo (measured). */
+export function _resetBookTransportForTests(): void {
+  _bookFetches.clear();
+  _bookErrors.clear();
+}
+
 /** Fetch one dataset's full data and install it, single-flight. Resolves
  *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
  *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
@@ -35,9 +100,6 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
                 ...d,
                 data: full,
                 pending: undefined,
-                // BUG-009: success clears the recorded failure too, so a book
-                // that arrives after a blip stops reporting one.
-                pendingError: undefined,
                 // Row-state indices were against the PREVIEW rows (#50/#53)
                 // — they no longer mean anything against the real data.
                 excludedRows: undefined,
@@ -46,6 +108,8 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
             : d,
         ),
       }));
+      // The book arrived: whatever the last attempt failed with is history.
+      _bookErrors.delete(id);
     })
     .catch((e: unknown) => {
       // BUG-009: record WHY, so `store/pendingEdit.ts` can stop promising a
@@ -53,13 +117,7 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
       // set on purpose (a retry may still work); only the message changes.
       // Re-thrown unchanged, so every existing caller's error handling —
       // `resolveDataset`'s reject, the save command's abort — is untouched.
-      set((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id
-            ? { ...d, pendingError: e instanceof Error ? e.message : String(e) }
-            : d,
-        ),
-      }));
+      _bookErrors.set(id, { key: sourceKey(source), message: reasonOf(e) });
       throw e;
     })
     .finally(() => {

@@ -21,9 +21,11 @@
 // KNOWN INCOMPLETE, DELIBERATELY — NOW HALF DONE. This refuses; it does not defer.
 // A permanently failed fetch (moved source, expired upload token) leaves `pending`
 // set forever, so the refusal is still a lockout — but it no longer LIES about it:
-// `Dataset.pendingError` (BUG-009, recorded by `lib/bookData.installBookData`'s
-// failure path) records why the last fetch failed, and the status this function
-// sets says so, instead of promising a retry "in a moment" that cannot succeed.
+// `lib/bookData.lastBookError` (BUG-009) reports why the last fetch for this book
+// failed, and the status below says so instead of promising a retry "in a moment"
+// that cannot succeed. That reason lives in `lib/bookData.ts`'s module scope
+// beside the in-flight registry, NOT on `Dataset` — see its own comment for the
+// request storm and the starved autosave that putting it on `Dataset` caused.
 //
 // What remains is the DEFERRAL itself. The right shape is resolve-THEN-apply
 // (`store/corrections.ts` already does it: `await get().resolveDataset(id)`
@@ -32,6 +34,7 @@
 // plans/BUGS_AND_ISSUES.md as BUG-009, and deliberately not attempted inside a
 // PR that has already taken five review rounds.
 
+import { lastBookError } from "../lib/bookData";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 
@@ -47,18 +50,51 @@ export function refusePendingEdit(
   action: string,
 ): boolean {
   if (ds.pending == null) return false;
+  // Read first because that is the order this function reasons in — NOT because
+  // the order is load-bearing. The record changes only when a fetch SETTLES,
+  // which cannot happen synchronously inside this call, so moving this below the
+  // kick reads identically; a sabotage that reordered it stayed green, and the
+  // earlier version of this comment claimed otherwise.
   // Still kick the fetch, even after a failure: a blip does come back, and the
-  // recorded error is ADVISORY — it changes what the user is told, never what is
-  // allowed, so nothing becomes unreachable.
+  // recorded reason is ADVISORY — it changes what the user is told, never what
+  // is allowed, so nothing becomes unreachable.
   void get().ensureBookData(ds.id);
-  get().setStatus(
-    ds.pendingError == null
-      ? `"${ds.name}" is still loading its full data — try ${action} again in a moment`
-      : // BUG-009: a book that will never arrive used to get the same "in a
-        // moment" as one arriving imminently, forever. Say what actually
-        // happened and point at the fix instead of promising a retry.
-        `"${ds.name}" could not load its full data (${ds.pendingError}) — ${action} needs the whole book. ` +
-        `Retrying now; if it keeps failing, relink or re-import the source.`,
-  );
+  get().setStatus(pendingStatusMessage(ds, action));
   return true;
+}
+
+/** What to TELL the user about a `pending` dataset they just tried to act on —
+ *  "still loading" while nothing has failed, or what the last attempt failed
+ *  with once something has.
+ *
+ *  Exported because four other guards (`useWorksheetView.pendingGuard`,
+ *  `useTabulate`, `useFitYByX`, `useStatsChooser`) have their own copies of the
+ *  refusal and each hard-coded "try again in a moment" — so the first version of
+ *  this fix corrected ONE of five messages while its commit claimed it had
+ *  corrected all of them. Those guards keep their own control flow (each writes
+ *  to its own local status/error channel, not the store's), but the WORDING now
+ *  has exactly one home, so a book that will never arrive cannot be described
+ *  one way here and another way there. Unifying the guards themselves is the
+ *  structural half tracked as BUG-009. */
+export function pendingStatusMessage(ds: Dataset, action: string): string {
+  const failed = ds.pending ? lastBookError(ds.id, ds.pending) : null;
+  if (failed == null) {
+    return `"${ds.name}" is still loading its full data — try ${action} again in a moment`;
+  }
+  // BUG-009: a book that will never arrive used to get the same "in a moment"
+  // as one arriving imminently, forever. Say what actually happened and point
+  // at the fix instead of promising a retry. Past tense on purpose: it reports
+  // the LAST attempt, while saying that another is now running.
+  return (
+    `"${ds.name}" — the last attempt to load its full data failed (${truncateReason(failed)}). ` +
+    `${action} needs the whole book. Retrying now; if it keeps failing, relink or re-import the source.`
+  );
+}
+
+/** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
+ *  ARRAY, which `lib/api/http.ts` stringifies rather than rejecting. Neither
+ *  belongs verbatim in a one-line status bar, so cap it and say it was cut. */
+function truncateReason(reason: string): string {
+  const flat = reason.replace(/\s+/g, " ").trim();
+  return flat.length > 120 ? `${flat.slice(0, 119)}\u2026` : flat;
 }
