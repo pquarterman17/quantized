@@ -58,6 +58,21 @@ export function buildNestedLevels(
   // The A/B level structure and its display order now come from
   // `lib/nestedLevels.ts` — extracted verbatim from here so a nested BOX plot
   // (P2.6) consumes the same decision instead of re-deriving it a third time.
+  //
+  // ONE REAL DIFFERENCE, and why it cannot be observed. This function's `n`
+  // includes the RESPONSE column's length; `nestedLevels` only knows the two
+  // factor columns, so its own row bound is `min(A, B)`. Those differ exactly
+  // when the response is the shortest column, which (since `columnOf` gives
+  // every real channel `values.length`) requires `responseCol === -1` with a
+  // `time` array shorter than `values`. In precisely that case the extra rows
+  // have an UNDEFINED response, so every cell they could add is non-finite and
+  // is dropped below as empty — the wider structure cannot reach the output.
+  // Verified rather than argued: old and new agree on six adversarial shapes
+  // (response=-1 with time shorter by 1 and by 4, factor A=-1, factor B=-1,
+  // ragged rows, time longer than values), and the `responseCol === -1` shape
+  // is pinned by a test in variability.test.ts so a future change to either
+  // bound has to face it. The seven pre-existing tests passing unmodified is
+  // NECESSARY evidence, not sufficient — none of them has a ragged shape.
   // The Group O-1/O-2 review comments this block used to carry are the argument
   // for that, and they moved with the code. What stays here is the part that is
   // genuinely this chart's own: bucketing response values, and dropping empty

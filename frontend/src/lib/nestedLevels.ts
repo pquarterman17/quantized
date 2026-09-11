@@ -59,19 +59,24 @@ export function nestedLevels(
 ): NestedLevels[] {
   const av = columnOf(data, factorACol);
   const bv = columnOf(data, factorBCol);
-  const n = Math.min(av.length, bv.length);
 
   const aCodes = categoryLevels(data, factorACol);
   const aLabels = resolveCategoryLabels(data, factorACol, aCodes);
   const bOrder = levelOrderFor(data, factorBCol);
 
   return aCodes.map((aCode, ai) => {
-    // The B values appearing in rows where A is this level. `NaN` for every
-    // other row, which `levelsOf` drops — the same masking `buildNestedLevels`
-    // used, kept because it reuses the shared `levelsOf` rather than open-coding
-    // a distinct-value walk.
+    // The B values appearing in rows where A is this level; `NaN` elsewhere,
+    // which `levelsOf` drops. Reuses the shared `levelsOf` rather than
+    // open-coding a distinct-value walk.
+    //
+    // NO ROW BOUND, deliberately. The version extracted from
+    // `buildNestedLevels` carried an `r < n` guard against the shorter of the
+    // two columns; a sabotage that removed it stayed green, and `levelsOf` is
+    // why — it filters `null`/`undefined`/non-finite, which is exactly what a
+    // short `bv` yields past its end. Keeping a bound that prevents nothing
+    // would read as load-bearing to the next person.
     const bCodes = orderLevels(
-      levelsOf(av.map((a, r) => (a === aCode && r < n ? bv[r] : Number.NaN))),
+      levelsOf(av.map((a, r) => (a === aCode ? bv[r] : Number.NaN))),
       bOrder,
     );
     return {
