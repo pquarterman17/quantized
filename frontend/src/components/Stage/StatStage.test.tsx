@@ -4,6 +4,7 @@
 // StatStageState — the workshop-pattern split lets the two stay independent.
 
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
@@ -38,6 +39,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     ],
     groupCol: 0,
     setGroupCol: vi.fn(),
+    group2Col: null,
+    setGroup2Col: vi.fn(),
     valueCol: 1,
     setValueCol: vi.fn(),
     dist: "norm",
@@ -122,6 +125,58 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     const picker = screen.getByRole("combobox", { name: "facet by" }) as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.textContent)).toEqual(["(none)", "grp", "fac"]);
     expect(picker.value).toBe("2");
+  });
+
+  it('the "then by" picker omits the column already chosen as "group by" (Group R)', () => {
+    // Nesting a column inside itself labels every box `grp = 0 / grp = 0`.
+    // The hook's mask refuses that value anyway (it cannot trust one picker),
+    // but the list must not offer it in the first place.
+    stateRef.current = makeState({ mode: "box", groupCol: 0 });
+    const { rerender } = render(<StatStage />);
+    const picker = () => screen.getByRole("combobox", { name: "then by" }) as HTMLSelectElement;
+    expect(Array.from(picker().options).map((o) => o.textContent)).toEqual(["(none)", "fac"]);
+
+    // ...and it follows "group by", rather than omitting a fixed column.
+    stateRef.current = makeState({ mode: "box", groupCol: 2 });
+    rerender(<StatStage />);
+    expect(Array.from(picker().options).map((o) => o.textContent)).toEqual(["(none)", "grp"]);
+  });
+
+  it('shows "then by" for box/violin/strip, and NOT for bar/qq/histogram', () => {
+    // Bar's category slots come from one column (it builds a category x series
+    // matrix), and qq/histogram do not group at all — the hook holds the pick
+    // inert in those modes, so offering the control would be a lie.
+    for (const mode of ["box", "violin", "strip"] as const) {
+      stateRef.current = makeState({ mode, groupCol: 0 });
+      const { unmount } = render(<StatStage />);
+      expect(screen.getByRole("combobox", { name: "then by" })).toBeInTheDocument();
+      unmount();
+    }
+    for (const mode of ["bar", "qq", "histogram"] as const) {
+      stateRef.current = makeState({ mode, groupCol: 0 });
+      const { unmount } = render(<StatStage />);
+      expect(screen.queryByRole("combobox", { name: "then by" })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('hides "then by" under the per-plotted-channel fallback (groupCol null)', () => {
+    // With no first factor the groups are CHANNELS, not levels — there is
+    // nothing to nest inside, and the hook masks any pick to null.
+    stateRef.current = makeState({ mode: "box", groupCol: null });
+    render(<StatStage />);
+    expect(screen.queryByRole("combobox", { name: "then by" })).not.toBeInTheDocument();
+  });
+
+  it('"then by" reflects the current pick and reports changes', async () => {
+    const setGroup2Col = vi.fn();
+    stateRef.current = makeState({ mode: "box", groupCol: 0, group2Col: 2, setGroup2Col });
+    render(<StatStage />);
+    const picker = screen.getByRole("combobox", { name: "then by" }) as HTMLSelectElement;
+    expect(picker.value).toBe("2");
+
+    await userEvent.selectOptions(picker, "none");
+    expect(setGroup2Col).toHaveBeenCalledWith(null);
   });
 
   it("Export is enabled for a flat draw AND for a faceted grid (GUI_INTERACTION #12 slice 4b), disabled only when both are empty", () => {

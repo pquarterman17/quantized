@@ -633,3 +633,210 @@ describe("useStatStage — faceted export (GUI_INTERACTION #12 slice 4b)", () =>
     expect(spec.facets).toBeUndefined();
   });
 });
+
+// ── Nested (two-factor) grouping, Group R ──────────────────────────────────
+// PRIMARY_SOFTWARE_AUDIT_PLAN.md:1143, "lot/wafer/type can form nested
+// grouping for a box plot". The level STRUCTURE and its order are pinned in
+// lib/nestedLevels.test.ts and lib/statschooser.test.ts, and the mask/resolver
+// rules in lib/statstage.test.ts; what is asserted HERE is only what those
+// cannot see — that the hook actually reaches them, in the right modes, with
+// the right column, and says so on its axis.
+
+// lot (ch0) x wafer (ch2), faceted by site (ch3), thickness (ch1) the value.
+// Full 2x2x2 crossing with 16 finite rows per categorical column, which is
+// what lib/modeling needs to infer nominal.
+const NEST_DATA: DataStruct = {
+  time: Array.from({ length: 16 }, (_, i) => i),
+  values: [
+    [0, 10, 0, 0], [0, 11, 0, 1], [0, 12, 1, 0], [0, 13, 1, 1],
+    [0, 14, 0, 0], [0, 15, 0, 1], [0, 16, 1, 0], [0, 17, 1, 1],
+    [1, 20, 0, 0], [1, 21, 0, 1], [1, 22, 1, 0], [1, 23, 1, 1],
+    [1, 24, 0, 0], [1, 25, 0, 1], [1, 26, 1, 0], [1, 27, 1, 1],
+  ],
+  labels: ["lot", "thickness", "wafer", "site"],
+  units: ["", "nm", "", ""],
+  metadata: {},
+};
+const NEST_DS: Dataset = { id: "n1", name: "wafers.dat", data: NEST_DATA };
+
+/** The `(values, labels)` of the most recent `statsBox` call. */
+const lastBoxCall = () => {
+  const calls = vi.mocked(statsBox).mock.calls;
+  const [values, labels] = calls[calls.length - 1] as [number[][], string[]];
+  return { values, labels };
+};
+
+describe("useStatStage — nested second factor (Group R)", () => {
+  const nestParams = () => baseParams({ active: NEST_DS });
+
+  it("box: a picked second factor splits each level into (A, B) cells", async () => {
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    // Defaults: group by lot (the first categorical channel), value thickness.
+    await waitFor(() => expect(result.current.groupCol).toBe(0));
+    expect(lastBoxCall().labels).toEqual(["lot = 0", "lot = 1"]);
+
+    act(() => result.current.setGroup2Col(2));
+
+    await waitFor(() => expect(lastBoxCall().labels).toHaveLength(4));
+    const { values, labels } = lastBoxCall();
+    expect(labels).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+    // lot 0 / wafer 0 is rows 0,1,4,5 — the SITE column plays no part in a
+    // nest by lot x wafer, which is why the raw values are listed here.
+    expect(values).toEqual([
+      [10, 11, 14, 15], [12, 13, 16, 17], [20, 21, 24, 25], [22, 23, 26, 27],
+    ]);
+  });
+
+  it("names BOTH factors on the group axis, in the tick labels' own order", async () => {
+    // `statschooser.nestedLabel` writes ticks as `lot = 0 / wafer = 1`, so an
+    // axis reading anything but "lot / wafer" contradicts the ticks under it.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot"));
+
+    act(() => result.current.setGroup2Col(2));
+
+    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+  });
+
+  it("strip nests too, and its POINTS keep their original row indices", async () => {
+    // The jitter overlay is drawn into the slots the box stats produced, so
+    // the indexed resolve has to nest identically or points land on the wrong
+    // box.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    act(() => result.current.setMode("strip"));
+    act(() => result.current.setGroup2Col(2));
+
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "strip" && d.points).toHaveLength(4);
+    });
+    const d = result.current.draw;
+    if (d?.mode !== "strip") throw new Error("expected a strip draw");
+    expect(d.points.map((g) => g.points.map((pt) => pt.rowIndex))).toEqual([
+      [0, 1, 4, 5], [2, 3, 6, 7], [8, 9, 12, 13], [10, 11, 14, 15],
+    ]);
+  });
+
+  it("BAR ignores it — the pick survives, but nothing about the plot nests", async () => {
+    // Bar builds a category x series MATRIX whose slots come from one column,
+    // so a second factor is inert there. Both halves matter: the axis must not
+    // claim a nesting the plot does not have, and the pick must not be lost
+    // (the toolbar hides the picker in Bar rather than emptying it).
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    act(() => result.current.setGroup2Col(2));
+    act(() => result.current.setMode("bar"));
+
+    await waitFor(() => expect(result.current.draw?.mode).toBe("bar"));
+    const d = result.current.draw;
+    if (d?.mode !== "bar") throw new Error("expected a bar draw");
+    expect(d.groupLabel).toBe("lot");
+    // Bar's category labels are bare levels (`lib/barlayout.buildBarMatrix`
+    // names the column on the axis instead), unlike box's `lot = 0` ticks —
+    // a pre-existing convention difference, not something nesting introduced.
+    expect(d.data.groups.map((g) => g.label)).toEqual(["0", "1"]);
+    expect(result.current.group2Col).toBe(2);
+
+    // ...and switching back to box nests again, from the same held pick.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    act(() => result.current.setMode("box"));
+    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+  });
+
+  it("each FACET panel nests too, not just the flat one", async () => {
+    // A facet that silently collapsed the nesting would contradict its own
+    // axis label, which names both factors — `computeFacetGroupDraws` takes
+    // the second factor for exactly this reason.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    act(() => result.current.setFacetCol(3));
+    act(() => result.current.setGroup2Col(2));
+
+    await waitFor(() => expect(result.current.drawFacets).toHaveLength(2));
+    const facets = result.current.drawFacets ?? [];
+    // `lib/facet.facetSlices` names a slice by its bare level, same as bar.
+    expect(facets.map((f) => f.label)).toEqual(["0", "1"]);
+    // site = 0 is the even rows: lot 0 gives 10,14 / 12,16; lot 1 gives 20,24 / 22,26.
+    expect(facets[0].rawGroups?.map((g) => g.label)).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+    expect(facets[0].rawGroups?.map((g) => g.values)).toEqual([
+      [10, 14], [12, 16], [20, 24], [22, 26],
+    ]);
+    // and the odd rows in the other panel, so the slice really did bite.
+    expect(facets[1].rawGroups?.map((g) => g.values)).toEqual([
+      [11, 15], [13, 17], [21, 25], [23, 27],
+    ]);
+  });
+
+  it("EXPORT sends the nested boxes, pre-aggregated with their composite labels", async () => {
+    // routes/export_statplots takes `data: number[][]` + `labels`, so nesting
+    // needs no wire change — but only if the spec is built from the nested
+    // groups. Asserted because "no backend change needed" is a claim.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    act(() => result.current.setGroup2Col(2));
+    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+
+    await act(async () => {
+      await result.current.exportFigure("pdf");
+    });
+
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0] as {
+      labels: string[]; data: number[][]; x_label: string;
+    };
+    expect(spec.labels).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+    expect(spec.data).toEqual([
+      [10, 11, 14, 15], [12, 13, 16, 17], [20, 21, 24, 25], [22, 23, 26, 27],
+    ]);
+    expect(spec.x_label).toBe("lot / wafer");
+  });
+
+  it("a Graph Builder seed CLEARS a previously picked nest", async () => {
+    // A StatStageSeed fully specifies its grouping and carries no second
+    // factor. Leaving one in place would split the sent plot by a column the
+    // sender never mentioned — and the sender's own status line would not
+    // mention it either.
+    vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
+    const seed: StatStageSeed = { mode: "box", groupCol: 0, valueCol: 1 };
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: nestParams(),
+    });
+    act(() => result.current.setGroup2Col(2));
+    await waitFor(() => expect(result.current.group2Col).toBe(2));
+
+    rerender(baseParams({ active: NEST_DS, seed }));
+
+    await waitFor(() => expect(result.current.group2Col).toBeNull());
+    await waitFor(() => expect(lastBoxCall().labels).toEqual(["lot = 0", "lot = 1"]));
+  });
+
+  it("resets to null when the active dataset changes", () => {
+    // Same reason groupCol/facetCol reset: a channel index from the PREVIOUS
+    // dataset names a different column here, so it would silently mis-group.
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: nestParams(),
+    });
+    act(() => result.current.setGroup2Col(2));
+    expect(result.current.group2Col).toBe(2);
+
+    rerender(baseParams({ active: { ...NEST_DS, id: "n2" } }));
+
+    expect(result.current.group2Col).toBeNull();
+  });
+});

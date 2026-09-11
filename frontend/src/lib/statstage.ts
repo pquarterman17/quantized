@@ -11,6 +11,8 @@ import { channelModelingType, isCategorical } from "./modeling";
 import {
   groupsByCategory,
   groupsByCategoryIndexed,
+  groupsByNestedCategory,
+  groupsByNestedCategoryIndexed,
   groupsFromColumns,
   groupsFromColumnsIndexed,
   type GroupSpec,
@@ -63,24 +65,47 @@ export function categoricalChannels(ds: Dataset | null): number[] {
  *  exact same pick back automatically. */
 export interface EffectiveCategoricalPicks {
   groupCol: number | null;
+  /** The NESTED second factor (Group R) — non-null only when it is itself
+   *  live, DISTINCT from `groupCol`, and `groupCol` is set. See below. */
+  group2Col: number | null;
   facetCol: number | null;
 }
 
-/** Applies the mask above to Stat Stage's two categorical picks at once,
+/** Applies the mask above to Stat Stage's categorical picks at once,
  *  building the lookup Set internally so the caller doesn't need its own
  *  `useMemo` for it. */
 export function maskStaleCategoricalPicks(
   groupCol: number | null,
   facetCol: number | null,
   categoricalCols: readonly { index: number }[],
+  group2Col: number | null = null,
 ): EffectiveCategoricalPicks {
   const index = new Set(categoricalCols.map((c) => c.index));
+  const liveGroup = groupCol != null && index.has(groupCol) ? groupCol : null;
   return {
     // groupCol is masked: EVERY way to set it is categorical-gated — the
     // picker's own option list, and `useGraphBuilder`'s seed, which computes
     // `x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel :
     // null`. So a non-categorical groupCol can only be a stale leftover.
-    groupCol: groupCol != null && index.has(groupCol) ? groupCol : null,
+    groupCol: liveGroup,
+    // group2Col (Group R, the NESTED second factor) is masked exactly like
+    // groupCol — its only entry point is a picker built from the same
+    // `categoricalCols` list, and the Graph Builder seed clears it outright
+    // (it has no nested spec to send), so a non-categorical value can only be
+    // a stale leftover. It carries TWO further conditions that groupCol does
+    // not, both of which would otherwise render a nonsense axis:
+    //
+    //   * `liveGroup == null` -> inactive. Without a first factor there is
+    //     nothing to nest INSIDE; the grouping falls back to one group per
+    //     plotted channel, which is not a factor at all.
+    //   * equal to the first factor -> inactive. `groupsByNestedCategory(d,
+    //     v, 1, 1)` is well-defined but labels every box `lot = 0 / lot = 0`.
+    //     The picker already omits the chosen column, but `groupCol` can MOVE
+    //     onto `group2Col` afterwards, so the rule belongs here, not there.
+    group2Col:
+      liveGroup != null && group2Col != null && group2Col !== liveGroup && index.has(group2Col)
+        ? group2Col
+        : null,
     // facetCol is NOT masked. REVIEW ROUND — masking it was a regression I
     // introduced. `useGraphBuilder` seeds `facetCol` from
     // `spec.zones.facet?.channel` with NO categorical gate (unlike groupCol
@@ -115,14 +140,35 @@ export function firstValueChannel(ds: Dataset | null, avoid: number): number {
  *  categorical column is picked; otherwise one group per PLOTTED channel —
  *  the whole-dataset fallback for datasets with no categorical column
  *  (mirrors polar/stack's "just use what's plotted"). `groupCol === null`
- *  selects the fallback explicitly. */
+ *  selects the fallback explicitly.
+ *
+ *  `group2Col` (Group R) nests a SECOND factor inside the first: one box per
+ *  (A, B) cell that has finite values, in nested display order. It is the
+ *  trailing OPTIONAL parameter because two of the four call sites are
+ *  deliberately single-factor and must stay that way —
+ *  `useStatStageCompute.computeBoxDraw`'s per-channel fallback (`groupCol`
+ *  null, so nesting is meaningless by definition) and `lib/plotspec.ts`'s
+ *  Graph Builder path, whose spec has one category zone and therefore no
+ *  second factor to pass. The Stat Stage's own two call sites (the flat draw
+ *  and `computeFacetGroupDraws`) BOTH pass it; a facet that silently dropped
+ *  the nesting the flat panel shows would be the obvious defect here.
+ *
+ *  Callers pass the MASKED pick (`maskStaleCategoricalPicks(...).group2Col`),
+ *  which is already null whenever `groupCol` is null or the two factors are
+ *  the same column — so the `groupCol != null` branch below is the only place
+ *  nesting can engage. */
 export function resolveGroups(
   data: DataStruct,
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
+  group2Col: number | null = null,
 ): GroupSpec[] {
-  if (groupCol != null) return groupsByCategory(data, valueCol, groupCol);
+  if (groupCol != null) {
+    return group2Col != null && group2Col !== groupCol
+      ? groupsByNestedCategory(data, valueCol, groupCol, group2Col)
+      : groupsByCategory(data, valueCol, groupCol);
+  }
   const cols = plotted.length ? plotted : [valueCol];
   return groupsFromColumns(data, cols);
 }
@@ -138,8 +184,13 @@ export function resolveGroupsIndexed(
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
+  group2Col: number | null = null,
 ): IndexedGroupSpec[] {
-  if (groupCol != null) return groupsByCategoryIndexed(data, valueCol, groupCol);
+  if (groupCol != null) {
+    return group2Col != null && group2Col !== groupCol
+      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col)
+      : groupsByCategoryIndexed(data, valueCol, groupCol);
+  }
   const cols = plotted.length ? plotted : [valueCol];
   return groupsFromColumnsIndexed(data, cols);
 }

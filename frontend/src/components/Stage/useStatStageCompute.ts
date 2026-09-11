@@ -193,10 +193,15 @@ export async function computeFacetGroupDraws(
   plotted: readonly number[],
   valueLabel: string,
   groupLabel: string,
+  /** The NESTED second factor (Group R), or null. Passed through so a facet
+   *  panel shows the SAME boxes the flat panel would — a facet that silently
+   *  collapsed the nesting would disagree with its own axis label, which names
+   *  both factors. */
+  group2Col: number | null = null,
 ): Promise<FacetDraw[]> {
   const rs = await Promise.all(
     slices.map(async (s): Promise<FacetDraw | null> => {
-      const finiteGroups = resolveGroups(s.data, groupCol, valueCol, plotted).filter(
+      const finiteGroups = resolveGroups(s.data, groupCol, valueCol, plotted, group2Col).filter(
         (g) => g.values.length > 0,
       );
       if (!finiteGroups.length) return null;

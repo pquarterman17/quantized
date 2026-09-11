@@ -10,6 +10,7 @@ import {
   finiteDomain,
   firstValueChannel,
   groupBoxStatsClient,
+  maskStaleCategoricalPicks,
   resolveGroups,
   resolveGroupsIndexed,
   violinOutline,
@@ -168,6 +169,125 @@ describe("resolveGroups", () => {
     const groups = resolveGroups(ds.data, null, 1, []);
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe("valA");
+  });
+});
+
+describe("resolveGroups — NESTED second factor (Group R)", () => {
+  // lot/wafer, the JMP reading (PRIMARY_SOFTWARE_AUDIT_PLAN.md:1143). Lot 0
+  // holds wafers 0 and 1; lot 1 holds wafer 1 only — RAGGED on purpose, so a
+  // cross product would produce a `lot = 1 / wafer = 0` box that must not
+  // exist, and a nested/flat mix-up changes the COUNT, not just the labels.
+  const rows = [
+    [0, 10, 0],
+    [0, 11, 0],
+    [0, 20, 1],
+    [0, 21, 1],
+    [1, 30, 1],
+    [1, 31, 1],
+  ];
+  const ds = makeDataset(["lot", "thickness", "wafer"], rows);
+
+  it("one group per (A, B) cell that has values, in nested order, named by both", () => {
+    const groups = resolveGroups(ds.data, 0, 1, [1], 2);
+    expect(groups.map((g) => g.label)).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 1",
+    ]);
+    expect(groups.map((g) => g.values)).toEqual([[10, 11], [20, 21], [30, 31]]);
+  });
+
+  it("group2Col === null is the ORDINARY single-factor plot, unchanged", () => {
+    expect(resolveGroups(ds.data, 0, 1, [1], null).map((g) => g.label)).toEqual([
+      "lot = 0",
+      "lot = 1",
+    ]);
+    // And omitting the argument entirely must mean the same thing — two of the
+    // four call sites (computeBoxDraw's fallback, lib/plotspec) rely on that.
+    expect(resolveGroups(ds.data, 0, 1, [1])).toEqual(resolveGroups(ds.data, 0, 1, [1], null));
+  });
+
+  it("nesting a column inside ITSELF degrades to the single-factor plot", () => {
+    // Defense in depth. The mask (`maskStaleCategoricalPicks`) nulls this out
+    // before it ever reaches here and the picker omits the chosen column from
+    // its list — but `groupsByNestedCategory(d, v, 0, 0)` is perfectly
+    // well-defined and would label every box `lot = 0 / lot = 0`, so the
+    // resolver refuses it on its own rather than trusting two callers.
+    expect(resolveGroups(ds.data, 0, 1, [1], 0).map((g) => g.label)).toEqual([
+      "lot = 0",
+      "lot = 1",
+    ]);
+  });
+
+  it("the per-plotted-channel FALLBACK ignores a second factor entirely", () => {
+    // groupCol null means there is no first factor to nest inside; the groups
+    // are columns, not levels. A second factor here would be meaningless, so
+    // it must not change the answer.
+    expect(resolveGroups(ds.data, null, 1, [1, 2], 2)).toEqual(
+      resolveGroups(ds.data, null, 1, [1, 2]),
+    );
+  });
+
+  it("resolveGroupsIndexed nests IDENTICALLY — same cells, same order, same counts", () => {
+    // The two must not diverge: the jittered points overlay is drawn into the
+    // category slots the box stats produced, so a mismatch silently scatters
+    // one cell's points over another cell's box.
+    const plain = resolveGroups(ds.data, 0, 1, [1], 2);
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1], 2);
+    expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
+    expect(indexed.map((g) => g.points.map((pt) => pt.value))).toEqual(
+      plain.map((g) => g.values),
+    );
+    expect(indexed.map((g) => g.points.map((pt) => pt.rowIndex))).toEqual([
+      [0, 1],
+      [2, 3],
+      [4, 5],
+    ]);
+  });
+});
+
+describe("maskStaleCategoricalPicks — the nested second factor (Group R)", () => {
+  const CATS = [{ index: 0 }, { index: 2 }];
+
+  it("passes a live, distinct second factor through", () => {
+    expect(maskStaleCategoricalPicks(0, null, CATS, 2).group2Col).toBe(2);
+  });
+
+  it("masks a second factor whose column stopped reading as categorical", () => {
+    // Same BUG-004 root cause as groupCol: a channelTypes override landed
+    // after the pick was made, and nothing else clears the stored pick.
+    expect(maskStaleCategoricalPicks(0, null, [{ index: 0 }], 2).group2Col).toBeNull();
+  });
+
+  it("is INERT with no first factor — there is nothing to nest inside", () => {
+    // groupCol null selects the per-plotted-channel fallback, whose groups are
+    // columns rather than levels; nesting inside it is not defined.
+    expect(maskStaleCategoricalPicks(null, null, CATS, 2).group2Col).toBeNull();
+  });
+
+  it("is inert when the first factor MOVES ONTO it", () => {
+    // The picker omits the chosen column from the second list, so the user
+    // cannot ask for this directly — but they can pick `wafer` second and then
+    // change `group by` to `wafer`, which the picker cannot prevent. Without
+    // this rule the axis would read `wafer = 0 / wafer = 0`.
+    expect(maskStaleCategoricalPicks(2, null, CATS, 2).group2Col).toBeNull();
+  });
+
+  it("is inert when the FIRST factor is itself masked away", () => {
+    // groupCol 0 is no longer categorical, so it masks to null and the plot
+    // falls back to per-plotted-channel — at which point the still-live second
+    // factor must go inert too, or the fallback would silently nest.
+    const picks = maskStaleCategoricalPicks(0, null, [{ index: 2 }], 2);
+    expect(picks.groupCol).toBeNull();
+    expect(picks.group2Col).toBeNull();
+  });
+
+  it("leaves the other two picks exactly as they were", () => {
+    // facetCol stays UNMASKED (Graph Builder facets on non-categorical columns
+    // deliberately); adding a fourth parameter must not have changed that.
+    const picks = maskStaleCategoricalPicks(0, 99, [{ index: 0 }, { index: 2 }], 2);
+    expect(picks.groupCol).toBe(0);
+    expect(picks.facetCol).toBe(99);
   });
 });
 
