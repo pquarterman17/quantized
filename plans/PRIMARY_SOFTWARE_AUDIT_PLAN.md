@@ -1140,10 +1140,43 @@ output, not a caught error).
   the representation supports it (any categorical channel can be the group
   column); the Graph Builder wiring to pick ANY such channel as the legend
   source specifically is P1.5.
-- [ ] Lot/wafer/type can form nested grouping for a box plot — single-level
-  categorical grouping works (box/bar's `isCategorical` gate now composes
-  with the P1.4 nominal default, see `plotspec.test.ts`); NESTED
-  (multi-factor) grouping is not built.
+- [~] Lot/wafer/type can form nested grouping for a box plot. The COMPUTE half
+  landed 2026-09-11 (#351); the PICKER has not, so it is not yet reachable from
+  the UI and this stays `[~]`.
+  **What exists:** `lib/statschooser.groupsByNestedCategory` and its
+  index-preserving twin return one group per (factor-A, factor-B) cell with
+  finite values, in nested display order, labelled `lot = 1 / wafer = 3`. Flat,
+  not hierarchical — a box axis has one slot per box, so they return the same
+  shapes the single-factor path does and box stats, the Canvas renderer and the
+  pre-aggregated export are untouched. The level ORDER decision lives once in
+  `lib/nestedLevels.ts`, shared with the variability chart
+  (`lib/variability.buildNestedLevels` was refactored onto it) so the two cannot
+  disagree about what a user's level order means — the failure Group O-1 and O-2
+  each cost a review round.
+  **A PREREQUISITE was broken and is now fixed (#350):** box/violin/strip took
+  their axis order from a private ascending-by-code sort and ignored
+  `level_order` entirely, while bar layout, the XY split, Tabulate and facets all
+  honoured it. Nesting on top of that would have cemented it.
+  **What R2b still needs, with the constraints already measured:**
+  * A second group picker in the Stat Stage. `components/Stage/useStatStage.ts`
+    is 703 lines against a pinned 704, so this needs a sibling extraction, NOT an
+    append — and the extraction is not trivial: the active-id reset effect
+    couples `groupCol` -> `valueCol` via `firstValueChannel`, and the Graph
+    Builder seed effect is deliberately declared AFTER that reset "so a
+    same-dataset send wins". That ordering must survive.
+  * The new pick MUST go through `lib/statstage.maskStaleCategoricalPicks`
+    the way `groupCol` does and `facetCol` deliberately does NOT: every way to
+    set a GROUP factor is categorical-gated, so a non-categorical one can only be
+    a stale leftover (BUG-004). Masking `facetCol` was a review-caught regression
+    because Graph Builder legitimately facets on non-categorical columns; a
+    second group factor is the `groupCol` case, not the `facetCol` case.
+  * The picker must exclude the already-chosen column: review measured
+    `groupsByNestedCategory(D, 0, 1, 1)` returning `"lot = 0 / lot = 0"` — a
+    degenerate self-nesting that silently degrades to the single-factor plot with
+    worse labels.
+  * No backend change: `routes/export_statplots.py` takes pre-aggregated
+    `data[][]` + `labels[]`, so it is already group-count-agnostic and composite
+    labels flow through as ordinary strings.
 - [x] Existing numeric projects migrate unchanged — additive by
   construction (`cat_levels` absent = byte-identical to before this field
   existed, both languages); pinned by `test_cat_levels_absent_is_additive_
