@@ -64,6 +64,30 @@ export function nestedLevels(
   const aLabels = resolveCategoryLabels(data, factorACol, aCodes);
   const bOrder = levelOrderFor(data, factorBCol);
 
+  // Factor B's labels are resolved ONCE, over the whole column's level set, and
+  // indexed per A level below — NOT resolved per A level over that level's
+  // subset.
+  //
+  // Review H1, and it is the defect this module exists to prevent, found inside
+  // the module itself. "Which sidecar text column names this column's levels?"
+  // is a WHOLE-COLUMN question: `barlayout.textLabelsFor` picks the first
+  // sidecar that is self-consistent AND covers the levels it is asked about, so
+  // asking it once per A level lets different A levels get different answers.
+  // Measured on an `.opj`-shaped import (numeric codes + `text_columns`, no
+  // `cat_levels` — the shape `statschooser.ts`'s own header records as having
+  // caused one wrong-label bug already): wafer code 0 came back `earlyW0` under
+  // lot 0 and `bigW0` under lot 1, on the same axis, with the single-factor box
+  // plot of the same column calling it `bigW0`. Confident, plausible, different
+  // names for one code — which `barlayout.ts` itself calls out as the worst
+  // failure mode.
+  //
+  // The union of every A level's co-occurring B codes IS `categoryLevels`'
+  // answer for that column, by construction, so resolving over it is both the
+  // correct question and strictly less work than the per-level version.
+  const bAllCodes = categoryLevels(data, factorBCol);
+  const bAllLabels = resolveCategoryLabels(data, factorBCol, bAllCodes);
+  const bLabelOf = new Map(bAllCodes.map((code, i) => [code, bAllLabels[i]]));
+
   return aCodes.map((aCode, ai) => {
     // The B values appearing in rows where A is this level; `NaN` elsewhere,
     // which `levelsOf` drops. Reuses the shared `levelsOf` rather than
@@ -83,7 +107,10 @@ export function nestedLevels(
       aCode,
       aLabel: aLabels[ai],
       bCodes,
-      bLabels: resolveCategoryLabels(data, factorBCol, bCodes),
+      // `?? String(code)` cannot fire for a code that came from this column —
+      // `bAllCodes` is the same level set `bCodes` is filtered from — but a Map
+      // lookup is typed optional, and inventing a number is the right degrade.
+      bLabels: bCodes.map((code) => bLabelOf.get(code) ?? String(code)),
     };
   });
 }

@@ -277,9 +277,15 @@ describe("groupsByNestedCategory — two-factor nesting (P2.6 / JMP lot-wafer)",
     ]);
   });
 
-  it("nests only the B levels that CO-OCCUR with each A level", () => {
-    // Lot 0 has wafer 0 only; lot 1 has wafer 1 only. A cross product would
-    // invent two empty boxes.
+  it("emits no group for a cell that has no rows", () => {
+    // NOTE ON THIS TEST'S NAME: it used to say "nests only the B levels that
+    // CO-OCCUR", and it could not observe that. A cross product invents cells
+    // with no finite values, and the empty-cell drop removes them again, so
+    // swapping co-occurrence for a full cross product left every test here
+    // green. The co-occurrence contract belongs to `nestedLevels` and is
+    // asserted in `nestedLevels.test.ts`, where the structure is visible; what
+    // this test actually pins is the OUTPUT — lot 0 with wafer 0 only, lot 1
+    // with wafer 1 only, and no third or fourth box.
     const sparse: DataStruct = {
       time: [1, 2],
       values: [
@@ -297,8 +303,8 @@ describe("groupsByNestedCategory — two-factor nesting (P2.6 / JMP lot-wafer)",
   });
 
   it("drops a cell whose values are all non-finite, like the single-factor path", () => {
-    // Row 7 is lot 1 / wafer 1 with a NaN thickness — but rows 6 keeps that cell
-    // alive, so build one that is entirely NaN.
+    // The shared LW fixture's NaN row sits in a cell that another row keeps
+    // alive, so this builds a cell that is entirely non-finite.
     const holey: DataStruct = {
       time: [1, 2],
       values: [

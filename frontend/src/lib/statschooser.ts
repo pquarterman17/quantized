@@ -32,6 +32,15 @@ const colValues = (data: DataStruct, index: number): number[] =>
 
 const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
 
+/** A column's display name. One spelling: review L2 found three in this file —
+ *  `groupsFromColumns` honoured `metadata.x_column_name` for the x column while
+ *  the two label builders hardcoded "x", so the same column was "Time (s)" in
+ *  columns mode and "x" in a group label. */
+const columnDisplayName = (data: DataStruct, col: number): string =>
+  col < 0
+    ? String(data.metadata?.["x_column_name"] ?? "x")
+    : (data.labels[col] ?? `col ${col}`);
+
 /** Keep statistical labels aligned with plots, filters, and Tabulate: a
  *  categorical code is implementation detail, while the text the scientist
  *  assigned is what they expect to read on a group.
@@ -55,15 +64,14 @@ const categoryGroupLabels = (
   byCol: number,
   levels: readonly number[],
 ): string[] => {
-  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
+  const byLabel = columnDisplayName(data, byCol);
   return resolveCategoryLabels(data, byCol, levels).map((text) => `${byLabel} = ${text}`);
 };
 
 /** Columns mode: each picked column (-1 = x, 0.. = channels) is one group. */
 export function groupsFromColumns(data: DataStruct, cols: readonly number[]): GroupSpec[] {
-  const xName = String(data.metadata?.["x_column_name"] ?? "x");
   return cols.map((c) => ({
-    label: c < 0 ? xName : (data.labels[c] ?? `col ${c}`),
+    label: columnDisplayName(data, c),
     values: finite(colValues(data, c)),
   }));
 }
@@ -172,9 +180,7 @@ function nestedLabel(
   aLabel: string,
   bLabel: string,
 ): string {
-  const aName = factorACol < 0 ? "x" : (data.labels[factorACol] ?? `col ${factorACol}`);
-  const bName = factorBCol < 0 ? "x" : (data.labels[factorBCol] ?? `col ${factorBCol}`);
-  return `${aName} = ${aLabel} / ${bName} = ${bLabel}`;
+  return `${columnDisplayName(data, factorACol)} = ${aLabel} / ${columnDisplayName(data, factorBCol)} = ${bLabel}`;
 }
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
@@ -199,14 +205,13 @@ export function groupsFromColumnsIndexed(
   data: DataStruct,
   cols: readonly number[],
 ): IndexedGroupSpec[] {
-  const xName = String(data.metadata?.["x_column_name"] ?? "x");
   return cols.map((c) => {
     const vs = colValues(data, c);
     const points: IndexedPoint[] = [];
     for (let i = 0; i < vs.length; i++) {
       if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: i });
     }
-    return { label: c < 0 ? xName : (data.labels[c] ?? `col ${c}`), points };
+    return { label: columnDisplayName(data, c), points };
   });
 }
 
