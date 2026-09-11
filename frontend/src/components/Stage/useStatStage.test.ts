@@ -5,6 +5,7 @@ import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/fig
 import { statsBox, statsViolin } from "../../lib/api";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
+import type { StatDrawData } from "./statRender";
 import { useStatStage, type UseStatStageParams } from "./useStatStage";
 
 vi.mock("../../lib/api", async (importOriginal) => ({
@@ -659,6 +660,15 @@ const NEST_DATA: DataStruct = {
 };
 const NEST_DS: Dataset = { id: "n1", name: "wafers.dat", data: NEST_DATA };
 
+/** The group-axis label of the current draw, or null. `StatDrawData` is a
+ *  discriminated union and `groupLabel` is only on the grouped variants
+ *  (box/violin/strip/bar), so the narrowing is done once here rather than
+ *  reaching through `draw?.groupLabel`, which does not typecheck. */
+const axisLabel = (d: StatDrawData | null): string | null =>
+  d && (d.mode === "box" || d.mode === "violin" || d.mode === "strip" || d.mode === "bar")
+    ? d.groupLabel
+    : null;
+
 /** The `(values, labels)` of the most recent `statsBox` call. */
 const lastBoxCall = () => {
   const calls = vi.mocked(statsBox).mock.calls;
@@ -698,11 +708,11 @@ describe("useStatStage — nested second factor (Group R)", () => {
     // axis reading anything but "lot / wafer" contradicts the ticks under it.
     vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
     const { result } = renderHook(() => useStatStage(nestParams()));
-    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot"));
+    await waitFor(() => expect(axisLabel(result.current.draw)).toBe("lot"));
 
     act(() => result.current.setGroup2Col(2));
 
-    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+    await waitFor(() => expect(axisLabel(result.current.draw)).toBe("lot / wafer"));
   });
 
   it("strip nests too, and its POINTS keep their original row indices", async () => {
@@ -747,7 +757,7 @@ describe("useStatStage — nested second factor (Group R)", () => {
     // ...and switching back to box nests again, from the same held pick.
     vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
     act(() => result.current.setMode("box"));
-    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+    await waitFor(() => expect(axisLabel(result.current.draw)).toBe("lot / wafer"));
   });
 
   it("each FACET panel nests too, not just the flat one", async () => {
@@ -786,7 +796,7 @@ describe("useStatStage — nested second factor (Group R)", () => {
     vi.mocked(statsBox).mockResolvedValue({ n_groups: 4, boxes: [] });
     const { result } = renderHook(() => useStatStage(nestParams()));
     act(() => result.current.setGroup2Col(2));
-    await waitFor(() => expect(result.current.draw?.groupLabel).toBe("lot / wafer"));
+    await waitFor(() => expect(axisLabel(result.current.draw)).toBe("lot / wafer"));
 
     await act(async () => {
       await result.current.exportFigure("pdf");
