@@ -7,6 +7,8 @@ import {
   buildRunRequest,
   groupsByCategory,
   groupsByCategoryIndexed,
+  groupsByNestedCategory,
+  groupsByNestedCategoryIndexed,
   groupsFromColumns,
   reportRecord,
   resultRows,
@@ -218,6 +220,119 @@ describe("the level order reaches the STATISTICAL TEST, not just the plot", () =
     const gs = groupsByCategory(DATA, 0, 1);
     const req = buildRunRequest("/api/stats/ttest", gs.map((g) => g.values), false);
     expect(req?.body).toEqual({ x: [10, 11], y: [20, 21, 22], paired: false });
+  });
+});
+
+describe("groupsByNestedCategory — two-factor nesting (P2.6 / JMP lot-wafer)", () => {
+  // lot/wafer: wafer codes REPEAT across lots and mean different things, which
+  // is the whole reason nesting is not just "group by a second column".
+  const LW: DataStruct = {
+    time: [1, 2, 3, 4, 5, 6, 7],
+    values: [
+      [10, 0, 0],
+      [11, 0, 0],
+      [20, 0, 1],
+      [30, 1, 0],
+      [31, 1, 0],
+      [40, 1, 1],
+      [Number.NaN, 1, 1],
+    ],
+    labels: ["thickness", "lot", "wafer"],
+    units: ["nm", "", ""],
+    metadata: {},
+  };
+
+  it("one group per (A, B) cell, nested order, composite label naming both columns", () => {
+    const gs = groupsByNestedCategory(LW, 0, 1, 2);
+    expect(gs.map((g) => g.label)).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+    expect(gs.map((g) => g.values)).toEqual([[10, 11], [20], [30, 31], [40]]);
+  });
+
+  it("follows the user's level order on BOTH factors", () => {
+    // The defect the shared `nestedLevels` exists to prevent: factor A honouring
+    // the order while factor B kept sorting by raw code — one chart, two orders.
+    const ordered: DataStruct = { ...LW, level_order: { 1: [1, 0], 2: [1, 0] } };
+    expect(groupsByNestedCategory(ordered, 0, 1, 2).map((g) => g.label)).toEqual([
+      "lot = 1 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 0 / wafer = 0",
+    ]);
+  });
+
+  it("orders factor B independently of factor A", () => {
+    // Reordering ONLY B must leave A's sequence alone — proves the two factors
+    // read their own `level_order` entry rather than sharing one.
+    const bOnly: DataStruct = { ...LW, level_order: { 2: [1, 0] } };
+    expect(groupsByNestedCategory(bOnly, 0, 1, 2).map((g) => g.label)).toEqual([
+      "lot = 0 / wafer = 1",
+      "lot = 0 / wafer = 0",
+      "lot = 1 / wafer = 1",
+      "lot = 1 / wafer = 0",
+    ]);
+  });
+
+  it("emits no group for a cell that has no rows", () => {
+    // NOTE ON THIS TEST'S NAME: it used to say "nests only the B levels that
+    // CO-OCCUR", and it could not observe that. A cross product invents cells
+    // with no finite values, and the empty-cell drop removes them again, so
+    // swapping co-occurrence for a full cross product left every test here
+    // green. The co-occurrence contract belongs to `nestedLevels` and is
+    // asserted in `nestedLevels.test.ts`, where the structure is visible; what
+    // this test actually pins is the OUTPUT — lot 0 with wafer 0 only, lot 1
+    // with wafer 1 only, and no third or fourth box.
+    const sparse: DataStruct = {
+      time: [1, 2],
+      values: [
+        [10, 0, 0],
+        [20, 1, 1],
+      ],
+      labels: ["thickness", "lot", "wafer"],
+      units: ["nm", "", ""],
+      metadata: {},
+    };
+    expect(groupsByNestedCategory(sparse, 0, 1, 2).map((g) => g.label)).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+  });
+
+  it("drops a cell whose values are all non-finite, like the single-factor path", () => {
+    // The shared LW fixture's NaN row sits in a cell that another row keeps
+    // alive, so this builds a cell that is entirely non-finite.
+    const holey: DataStruct = {
+      time: [1, 2],
+      values: [
+        [10, 0, 0],
+        [Number.NaN, 0, 1],
+      ],
+      labels: ["thickness", "lot", "wafer"],
+      units: ["nm", "", ""],
+      metadata: {},
+    };
+    const gs = groupsByNestedCategory(holey, 0, 1, 2);
+    expect(gs).toHaveLength(1);
+    expect(gs[0].label).toBe("lot = 0 / wafer = 0");
+  });
+
+  it("uses categorical level NAMES on both factors when the dataset has them", () => {
+    const named: DataStruct = { ...LW, cat_levels: { 1: ["A", "B"], 2: ["w1", "w2"] } };
+    expect(groupsByNestedCategory(named, 0, 1, 2)[0].label).toBe("lot = A / wafer = w1");
+  });
+
+  it("the INDEXED twin matches label-for-label, and carries original row indices", () => {
+    // If these two ever diverge a box sits over another cell's jitter points.
+    const flat = groupsByNestedCategory(LW, 0, 1, 2);
+    const idx = groupsByNestedCategoryIndexed(LW, 0, 1, 2);
+    expect(idx.map((g) => g.label)).toEqual(flat.map((g) => g.label));
+    expect(idx.map((g) => g.points.map((p) => p.value))).toEqual(flat.map((g) => g.values));
+    expect(idx[0].points.map((p) => p.rowIndex)).toEqual([0, 1]);
+    expect(idx[3].points.map((p) => p.rowIndex)).toEqual([5]); // NaN row 6 dropped
   });
 });
 

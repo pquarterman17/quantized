@@ -108,3 +108,28 @@ describe("variability honours the level order on BOTH factors (Group O-2)", () =
     ]);
   });
 });
+
+describe("the nestedLevels extraction is behaviour-preserving where it could not be", () => {
+  it("response = the x column, with time SHORTER than values", () => {
+    // `buildNestedLevels` bounds rows by min(A, B, RESPONSE); the extracted
+    // `nestedLevels` only knows the factors, so it bounds by min(A, B). They
+    // differ exactly here — and the rows in the gap have an undefined response,
+    // so the cells they would add are empty and dropped. Pinned so a future
+    // change to either bound cannot quietly start emitting them.
+    const d: DataStruct = {
+      time: [1, 2],
+      values: [
+        [0, 0],
+        [0, 1],
+        [1, 2],
+      ],
+      labels: ["lot", "wafer"],
+      units: ["", ""],
+      metadata: {},
+    };
+    const out = buildNestedLevels(d, -1, 0, 1);
+    expect(out).toHaveLength(1);
+    expect(out[0].aLabel).toBe("0");
+    expect(out[0].cells.map((c) => c.values)).toEqual([[1], [2]]);
+  });
+});

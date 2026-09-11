@@ -7,6 +7,7 @@
 
 import { resolveCategoryLabels } from "./barlayout";
 import { categoryLevels } from "./categorical";
+import { nestedLevels } from "./nestedLevels";
 import type { DataStruct } from "./types";
 
 /** One candidate group: a label for the UI + its finite values. */
@@ -31,6 +32,15 @@ const colValues = (data: DataStruct, index: number): number[] =>
 
 const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
 
+/** A column's display name. One spelling: review L2 found three in this file —
+ *  `groupsFromColumns` honoured `metadata.x_column_name` for the x column while
+ *  the two label builders hardcoded "x", so the same column was "Time (s)" in
+ *  columns mode and "x" in a group label. */
+const columnDisplayName = (data: DataStruct, col: number): string =>
+  col < 0
+    ? String(data.metadata?.["x_column_name"] ?? "x")
+    : (data.labels[col] ?? `col ${col}`);
+
 /** Keep statistical labels aligned with plots, filters, and Tabulate: a
  *  categorical code is implementation detail, while the text the scientist
  *  assigned is what they expect to read on a group.
@@ -54,15 +64,14 @@ const categoryGroupLabels = (
   byCol: number,
   levels: readonly number[],
 ): string[] => {
-  const byLabel = byCol < 0 ? "x" : (data.labels[byCol] ?? `col ${byCol}`);
+  const byLabel = columnDisplayName(data, byCol);
   return resolveCategoryLabels(data, byCol, levels).map((text) => `${byLabel} = ${text}`);
 };
 
 /** Columns mode: each picked column (-1 = x, 0.. = channels) is one group. */
 export function groupsFromColumns(data: DataStruct, cols: readonly number[]): GroupSpec[] {
-  const xName = String(data.metadata?.["x_column_name"] ?? "x");
   return cols.map((c) => ({
-    label: c < 0 ? xName : (data.labels[c] ?? `col ${c}`),
+    label: columnDisplayName(data, c),
     values: finite(colValues(data, c)),
   }));
 }
@@ -113,6 +122,67 @@ export function groupsByCategory(
   return levels.map((level, i) => ({ label: labels[i], values: parts.get(level) ?? [] }));
 }
 
+/** NESTED (two-factor) group-by: one group per (factor-A, factor-B) cell that
+ *  actually has finite values, in nested display order — factor A's levels in
+ *  their display order, and within each, the B levels co-occurring with it in
+ *  theirs (PRIMARY_SOFTWARE_AUDIT_PLAN.md:1143, "lot/wafer/type can form nested
+ *  grouping for a box plot").
+ *
+ *  The level structure and its ORDER come from `lib/nestedLevels.ts`, shared
+ *  with the variability chart, so the two cannot come to disagree about what a
+ *  user's level order means — the specific failure Group O-1 and O-2 each cost
+ *  a review round.
+ *
+ *  FLAT, not hierarchical: a box axis has one slot per box, so this returns the
+ *  same `GroupSpec[]` the single-factor path does and every downstream consumer
+ *  (box stats, the Canvas renderer, the pre-aggregated export) keeps working
+ *  unchanged. The nesting survives in the ORDER and in the composite label.
+ *
+ *  Empty cells are dropped, exactly as the single-factor path drops a level
+ *  whose value rows are all non-finite: a box with no values is not a box. */
+export function groupsByNestedCategory(
+  data: DataStruct,
+  valueCol: number,
+  factorACol: number,
+  factorBCol: number,
+): GroupSpec[] {
+  const a = colValues(data, factorACol);
+  const b = colValues(data, factorBCol);
+  const val = colValues(data, valueCol);
+  const n = Math.min(a.length, b.length, val.length);
+  const out: GroupSpec[] = [];
+  for (const lvl of nestedLevels(data, factorACol, factorBCol)) {
+    for (let bi = 0; bi < lvl.bCodes.length; bi++) {
+      const values: number[] = [];
+      for (let r = 0; r < n; r++) {
+        if (a[r] === lvl.aCode && b[r] === lvl.bCodes[bi] && Number.isFinite(val[r])) {
+          values.push(val[r]);
+        }
+      }
+      if (values.length > 0) {
+        out.push({ label: nestedLabel(data, factorACol, factorBCol, lvl.aLabel, lvl.bLabels[bi]), values });
+      }
+    }
+  }
+  return out;
+}
+
+/** `lot = 1 / wafer = 3` — the single-factor convention
+ *  (`categoryGroupLabels`' `"{column} = {level}"`) applied to both factors and
+ *  joined, so a nested tick reads the same way a flat one does and names both
+ *  columns. Deliberately NOT just `"1 / 3"`: a nested box axis is the one place
+ *  a bare code is most ambiguous, since the same B code under two A levels is a
+ *  different thing entirely. */
+function nestedLabel(
+  data: DataStruct,
+  factorACol: number,
+  factorBCol: number,
+  aLabel: string,
+  bLabel: string,
+): string {
+  return `${columnDisplayName(data, factorACol)} = ${aLabel} / ${columnDisplayName(data, factorBCol)} = ${bLabel}`;
+}
+
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
 // Same partitions as `groupsFromColumns`/`groupsByCategory` above, but each
 // value keeps its ORIGINAL dataset row index alongside it -- the jittered
@@ -135,15 +205,47 @@ export function groupsFromColumnsIndexed(
   data: DataStruct,
   cols: readonly number[],
 ): IndexedGroupSpec[] {
-  const xName = String(data.metadata?.["x_column_name"] ?? "x");
   return cols.map((c) => {
     const vs = colValues(data, c);
     const points: IndexedPoint[] = [];
     for (let i = 0; i < vs.length; i++) {
       if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: i });
     }
-    return { label: c < 0 ? xName : (data.labels[c] ?? `col ${c}`), points };
+    return { label: columnDisplayName(data, c), points };
   });
+}
+
+/** Index-preserving counterpart to `groupsByNestedCategory`, and it MUST stay
+ *  in lockstep with it for the same reason the single-factor pair must: this
+ *  one feeds the jittered raw-point overlay, so if the two ordered or filtered
+ *  differently a box would sit over another cell's points. Both walk the same
+ *  `nestedLevels` structure, drop empty cells on the same test, and build the
+ *  same label — pinned by a test that compares their labels directly. */
+export function groupsByNestedCategoryIndexed(
+  data: DataStruct,
+  valueCol: number,
+  factorACol: number,
+  factorBCol: number,
+): IndexedGroupSpec[] {
+  const a = colValues(data, factorACol);
+  const b = colValues(data, factorBCol);
+  const val = colValues(data, valueCol);
+  const n = Math.min(a.length, b.length, val.length);
+  const out: IndexedGroupSpec[] = [];
+  for (const lvl of nestedLevels(data, factorACol, factorBCol)) {
+    for (let bi = 0; bi < lvl.bCodes.length; bi++) {
+      const points: IndexedPoint[] = [];
+      for (let r = 0; r < n; r++) {
+        if (a[r] === lvl.aCode && b[r] === lvl.bCodes[bi] && Number.isFinite(val[r])) {
+          points.push({ value: val[r], rowIndex: r });
+        }
+      }
+      if (points.length > 0) {
+        out.push({ label: nestedLabel(data, factorACol, factorBCol, lvl.aLabel, lvl.bLabels[bi]), points });
+      }
+    }
+  }
+  return out;
 }
 
 /** Group-by mode, index-preserving counterpart to `groupsByCategory` — same
