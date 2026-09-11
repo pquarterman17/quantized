@@ -8,8 +8,8 @@
 // column values the same way lib/barlayout (bar-chart categories) and
 // fityx/runLeg.ts (oneway ANOVA grouping) already do.
 
-import { categoryLevels, resolveCategoryLabels } from "./barlayout";
-import { columnOf, levelOrderFor, levelsOf, orderLevels } from "./categorical";
+import { columnOf } from "./categorical";
+import { nestedLevels } from "./nestedLevels";
 import type { DataStruct } from "./types";
 
 export interface VariabilityCell {
@@ -55,46 +55,27 @@ export function buildNestedLevels(
   const rv = columnOf(data, responseCol);
   const n = Math.min(av.length, bv.length, rv.length);
 
-  const aLevels = categoryLevels(data, factorACol);
-  const aLabels = resolveCategoryLabels(data, factorACol, aLevels);
-
+  // The A/B level structure and its display order now come from
+  // `lib/nestedLevels.ts` — extracted verbatim from here so a nested BOX plot
+  // (P2.6) consumes the same decision instead of re-deriving it a third time.
+  // The Group O-1/O-2 review comments this block used to carry are the argument
+  // for that, and they moved with the code. What stays here is the part that is
+  // genuinely this chart's own: bucketing response values, and dropping empty
+  // cells and empty A levels because `calc.stats_varcomp` requires every cell
+  // non-empty — which is why `aIndex`/`bIndex` count the KEPT entries rather
+  // than the structural ones.
   const result: VariabilityFactorLevel[] = [];
-  for (let ai = 0; ai < aLevels.length; ai++) {
-    const a = aLevels[ai];
-    // Group O-1 review: this was a SIXTH private copy of "distinct finite
-    // values, ascending" — spelled as a loop plus `.add`, which is why the
-    // chokepoint's first regex could not see it and why the commit that added
-    // that guard claimed five copies. It is order-sensitive and user-visible:
-    // `bLevels` becomes the sub-axis order on the chart and the `b_index`
-    // ordering on the `calc.stats_varcomp` wire, so under J1 it would have kept
-    // sorting factor B by raw code while factor A (which comes from
-    // `categoryLevels`) honoured the user's order — one chart, two orders.
-    // The row filter stays: these are the B values that CO-OCCUR with this A
-    // level, which is what makes the grouping nested.
-    // Group O-2 review, MEDIUM 5 — the defect the comment above PREDICTED, now
-    // that J1 has landed: factor A comes from `categoryLevels` and honours the
-    // user's order, so factor B must too, or one chart shows two orders (and
-    // the `b_index` sequence on the `calc.stats_varcomp` wire disagrees with
-    // the A axis beside it). `categoryLevels` cannot serve here — these are the
-    // B levels CO-OCCURRING with this A level, a filtered subset no whole-column
-    // read produces — so it shares the ordering primitive instead of growing a
-    // second private answer.
-    const bLevels = orderLevels(
-      levelsOf(av.map((av_r, r) => (av_r === a && r < n ? bv[r] : Number.NaN))),
-      levelOrderFor(data, factorBCol),
-    );
-    const bLabels = resolveCategoryLabels(data, factorBCol, bLevels);
-
+  for (const lvl of nestedLevels(data, factorACol, factorBCol)) {
     const cells: VariabilityCell[] = [];
-    for (let bi = 0; bi < bLevels.length; bi++) {
-      const b = bLevels[bi];
+    for (let bi = 0; bi < lvl.bCodes.length; bi++) {
+      const b = lvl.bCodes[bi];
       const values: number[] = [];
       for (let r = 0; r < n; r++) {
-        if (av[r] === a && bv[r] === b && Number.isFinite(rv[r])) values.push(rv[r]);
+        if (av[r] === lvl.aCode && bv[r] === b && Number.isFinite(rv[r])) values.push(rv[r]);
       }
-      if (values.length > 0) cells.push({ bIndex: cells.length, bLabel: bLabels[bi], values });
+      if (values.length > 0) cells.push({ bIndex: cells.length, bLabel: lvl.bLabels[bi], values });
     }
-    if (cells.length > 0) result.push({ aIndex: result.length, aLabel: aLabels[ai], cells });
+    if (cells.length > 0) result.push({ aIndex: result.length, aLabel: lvl.aLabel, cells });
   }
   return result;
 }
