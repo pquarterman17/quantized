@@ -735,6 +735,36 @@ describe("useStatStage — nested second factor (Group R)", () => {
     ]);
   });
 
+  it("VIOLIN nests too — the mode gate names it, so something must hold it there", async () => {
+    // Review finding 3: deleting `mode === "violin" ||` from the hook's nestCol
+    // gate left the ENTIRE suite green. The box/strip/bar/facet tests cover the
+    // other three arms, and StatStage.test.tsx's picker test renders against a
+    // MOCKED StatStageState, so it cannot see the gate at all — while the plan
+    // and the picker both promise Violin.
+    // `statsViolin` takes ONE group's values per call and carries no labels, so
+    // the nesting is observable in the draw's own violin labels.
+    vi.mocked(statsViolin).mockResolvedValue({
+      x: [0, 1], density: [0.5, 0.5], bandwidth: 0.3, quartiles: [0, 0.5, 1], n: 4,
+    });
+    const { result } = renderHook(() => useStatStage(nestParams()));
+    act(() => result.current.setMode("violin"));
+    act(() => result.current.setGroup2Col(2));
+
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "violin" && d.violins).toHaveLength(4);
+    });
+    const d = result.current.draw;
+    if (d?.mode !== "violin") throw new Error("expected a violin draw");
+    expect(d.violins.map((v) => v.label)).toEqual([
+      "lot = 0 / wafer = 0",
+      "lot = 0 / wafer = 1",
+      "lot = 1 / wafer = 0",
+      "lot = 1 / wafer = 1",
+    ]);
+    expect(d.groupLabel).toBe("lot / wafer");
+  });
+
   it("BAR ignores it — the pick survives, but nothing about the plot nests", async () => {
     // Bar builds a category x series MATRIX whose slots come from one column,
     // so a second factor is inert there. Both halves matter: the axis must not

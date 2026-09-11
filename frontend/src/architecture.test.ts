@@ -553,7 +553,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // drag-to-place dispatch whole to previewDrag.ts, which dropped the hook
   // under the general ceiling and off this list entirely.
   "/lib/uplotShapes.ts": 593,
-  "/components/Stage/statRender.ts": 527,
+  // 527 -> 505 (2026-09-11, Group R review finding 1): the CATEGORY axis —
+  // `drawCategoryAxis` and the `truncateLabel` budget it is the only caller of
+  // — moved to components/Stage/statRenderAxes.ts. The nested-label fix (two
+  // stacked lines instead of one truncated one) pushed this file past the pin,
+  // and the label-fitting rule is a real unit, not a convenient offcut.
+  "/components/Stage/statRender.ts": 505,
 };
 
 describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {

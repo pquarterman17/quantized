@@ -3,10 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { DataStruct, Dataset } from "./types";
 import {
   barValueDomain,
+  connectMeansBreaks,
   boxStatsClient,
   categoricalChannels,
   categorySlots,
   connectMeansSeries,
+  type BoxStat,
   finiteDomain,
   firstValueChannel,
   groupBoxStatsClient,
@@ -339,6 +341,51 @@ describe("finiteDomain", () => {
   it("spans across multiple lists (e.g. one box's whiskers + fliers)", () => {
     const [, hi] = finiteDomain([[3, 8], [50]]);
     expect(hi).toBeGreaterThan(50);
+  });
+});
+
+describe("connectMeansBreaks — the interaction line must not cross a nested boundary", () => {
+  // Review finding 2. The line asserts that consecutive categories are steps
+  // along ONE factor. Nested, they are not: the step from `lot = 0 / wafer = 1`
+  // to `lot = 1 / wafer = 0` crosses into another lot, and drawing it claims a
+  // trend between two lots that share no wafer.
+  const box = (label: string): BoxStat => ({
+    label, q1: 0, median: 1, q3: 2, iqr: 2, whislo: 0, whishi: 2,
+    mean: 1, sem: 0.1, ciLo: 0.9, ciHi: 1.1, n: 3, fliers: [],
+  });
+
+  it("breaks at each new outer factor, and nowhere else", () => {
+    const breaks = connectMeansBreaks([
+      box("lot = 0 / wafer = 0"),
+      box("lot = 0 / wafer = 1"),
+      box("lot = 1 / wafer = 0"),
+      box("lot = 1 / wafer = 1"),
+    ]);
+    // index 0 always starts a segment; index 2 is the first box of lot 1.
+    expect(breaks).toEqual([true, false, true, false]);
+  });
+
+  it("leaves a SINGLE-factor plot as one unbroken line", () => {
+    // The load-bearing case. Consecutive single-factor labels differ by design,
+    // so a naive "did the label change?" rule would segment every slot and
+    // silently delete the existing interaction plot.
+    expect(connectMeansBreaks([box("lot = 0"), box("lot = 1"), box("lot = 2")])).toEqual([
+      true, false, false,
+    ]);
+  });
+
+  it("does not break when the outer factor repeats after a gap it cannot see", () => {
+    // Runs, not set membership: `nestedLevels` emits each A level's cells
+    // contiguously, so a repeat would mean the order was already wrong. What is
+    // pinned here is that the rule compares NEIGHBOURS, which is what makes it
+    // a segmenting rule rather than a grouping one.
+    expect(connectMeansBreaks([box("a = 0 / b = 0"), box("a = 0 / b = 1")])).toEqual([
+      true, false,
+    ]);
+  });
+
+  it("treats the per-plotted-channel fallback (bare column names) as one line", () => {
+    expect(connectMeansBreaks([box("valA"), box("valB")])).toEqual([true, false]);
   });
 });
 

@@ -1165,9 +1165,10 @@ output, not a caught error).
   and `components/Stage/statStageExport.ts` (the whole server-side figure export
   path — the flat spec builder and the faceted variant). The pin ratcheted
   704 -> 569.
-  Four rules govern the pick, each with its own sabotage-verified test. The
-  first three live together in `maskStaleCategoricalPicks`, so one pure function
-  answers "is this pick still valid?"; the fourth is deliberately elsewhere:
+  Four rules govern the pick. The first three live together in
+  `maskStaleCategoricalPicks`, so one pure function answers "is this pick still
+  valid?", and each is sabotage-verified; the fourth is deliberately elsewhere
+  and is verified only for Bar (see its bullet):
   * masked back to null when its column stops reading as categorical — the
     `groupCol` treatment (BUG-004), not the `facetCol` one. Every way to set a
     GROUP factor is categorical-gated, so a non-categorical one can only be a
@@ -1183,9 +1184,26 @@ output, not a caught error).
     answers "is this pick still valid?", not "does this mode use it?"). Bar
     builds a category x series MATRIX from one column; the toolbar hides the
     control there rather than showing one that does nothing, and the pick
-    survives a round-trip through Bar.
+    survives a round-trip through Bar. Only the BAR half is testable: Q-Q and
+    Histogram resolve no groups at all, so nesting is unobservable there
+    whatever the gate says. The claim was originally written as "each with its
+    own sabotage-verified test" and narrowed when review checked it.
   The axis names both factors ("lot / wafer"), matching the tick convention
-  underneath it, and facet panels nest identically to the flat panel.
+  underneath it, and facet panels nest identically to the flat panel. The TICKS
+  stack the two halves on separate lines (`statRenderAxes.drawCategoryAxis`):
+  review found the composite label being truncated to 14 characters, so
+  `lot = 0 / wafer = 0` painted as `lot = 0 / waf...` and every box under one lot
+  shared a tick — the caption promised two factors the axis could not show. The
+  connect-means interaction line is segmented at each outer-factor boundary
+  (`lib/statstage.connectMeansBreaks`) for the same reason the channel fallback
+  refuses it: a line from `lot = 0 / wafer = 1` to `lot = 1 / wafer = 0` asserts
+  a trend between two lots that share no wafer.
+  **Known residual, not fixed here:** "facet by" does not exclude the column
+  picked as "then by" (nor, as before this change, the one picked as "group
+  by"). Facet by `site` + then by `site` gives every box in a panel the same
+  constant nested half. The data stays correct and the existing facet/group
+  overlap has the same shape, so widening the picker's exclusion rule is booked
+  rather than bolted on here.
   **No backend change, as predicted and now asserted:**
   `routes/export_statplots.py` takes pre-aggregated `data[][]` + `labels[]`, so
   it is already group-count-agnostic and composite labels flow through as

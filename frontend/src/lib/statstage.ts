@@ -9,6 +9,7 @@
 
 import { channelModelingType, isCategorical } from "./modeling";
 import {
+  NESTED_LABEL_SEP,
   groupsByCategory,
   groupsByCategoryIndexed,
   groupsByNestedCategory,
@@ -136,8 +137,10 @@ export function firstValueChannel(ds: Dataset | null, avoid: number): number {
 
 // ── Column reads ────────────────────────────────────────────────────────────
 
-/** One channel's raw values; index < 0 selects the shared x/time column. */
-export const colValues = (data: DataStruct, index: number): number[] =>
+/** One channel's raw values; index < 0 selects the shared x/time column.
+ *  Deliberately NOT exported — `finiteOf` below is the only consumer, and
+ *  `statschooser.ts` already owns the copy other modules import. */
+const colValues = (data: DataStruct, index: number): number[] =>
   index < 0 ? data.time : data.values.map((row) => row[index]);
 
 /** `colValues` with the non-finite entries dropped — what every ungrouped
@@ -155,14 +158,22 @@ export const finiteOf = (data: DataStruct, index: number): number[] =>
  *
  *  `group2Col` (Group R) nests a SECOND factor inside the first: one box per
  *  (A, B) cell that has finite values, in nested display order. It is the
- *  trailing OPTIONAL parameter because two of the four call sites are
- *  deliberately single-factor and must stay that way —
- *  `useStatStageCompute.computeBoxDraw`'s per-channel fallback (`groupCol`
- *  null, so nesting is meaningless by definition) and `lib/plotspec.ts`'s
- *  Graph Builder path, whose spec has one category zone and therefore no
- *  second factor to pass. The Stat Stage's own two call sites (the flat draw
- *  and `computeFacetGroupDraws`) BOTH pass it; a facet that silently dropped
- *  the nesting the flat panel shows would be the obvious defect here.
+ *  trailing OPTIONAL parameter because three of the five call sites are
+ *  deliberately single-factor and must stay that way:
+ *    * `useStatStageCompute.computeBarData`'s per-channel fallback, which
+ *      passes `groupCol` null outright, so nesting is meaningless there;
+ *    * `lib/plotspec.ts` TWICE (the flat draw and the per-facet-slice draw) —
+ *      the Graph Builder spec has one category zone and so has no second
+ *      factor to pass.
+ *  The Stat Stage's own two sites (the flat draw and `computeFacetGroupDraws`)
+ *  BOTH pass it; a facet that silently dropped the nesting the flat panel
+ *  shows would be the obvious defect here.
+ *
+ *  (Review finding 5: this paragraph previously named `computeBoxDraw`, which
+ *  takes groups ALREADY resolved and never calls this function at all, and
+ *  counted four sites rather than five. It is the stated justification for the
+ *  parameter's shape, so a reader auditing "did every site that should nest get
+ *  updated?" was being pointed at the wrong function.)
  *
  *  Callers pass the MASKED pick (`maskStaleCategoricalPicks(...).group2Col`),
  *  which is already null whenever `groupCol` is null or the two factors are
@@ -309,6 +320,39 @@ export function groupBoxStatsClient(
  *  renderer breaks the polyline there rather than drawing through a gap. */
 export function connectMeansSeries(boxes: readonly BoxStat[]): number[] {
   return boxes.map((b) => b.mean);
+}
+
+/** The outer factor of a NESTED tick label, or null when the label is not
+ *  nested. `null` for every single-factor label is the load-bearing part: it is
+ *  what keeps `connectMeansBreaks` from segmenting an ordinary interaction
+ *  plot, where consecutive labels differ by design. */
+function nestedOuterLabel(label: string): string | null {
+  const i = label.indexOf(NESTED_LABEL_SEP);
+  return i < 0 ? null : label.slice(0, i);
+}
+
+/** Which category slots START a new connect-means segment (JMP_GAP J5
+ *  residual x Group R). Index 0 always does; under NESTED grouping so does the
+ *  first box of each new outer-factor run.
+ *
+ *  WHY (review finding 2): the interaction line is a claim that consecutive
+ *  categories are steps along ONE factor. Nested, they are not — the step from
+ *  `lot = 0 / wafer = 1` to `lot = 1 / wafer = 0` crosses into a different lot,
+ *  and drawing through it asserts a trend between two lots that share no wafer.
+ *  That is the same misreading the `effectiveGroupCol != null` gate in
+ *  `useStatStage` already refuses for the per-plotted-channel fallback, so
+ *  refusing it here is consistency, not a new policy. JMP breaks the line at
+ *  each outer-factor boundary; so do we.
+ *
+ *  Non-nested labels yield `null` on both sides of every comparison, so a
+ *  single-factor plot gets exactly one segment — unchanged. */
+export function connectMeansBreaks(boxes: readonly BoxStat[]): boolean[] {
+  return boxes.map((b, i) => {
+    if (i === 0) return true;
+    const cur = nestedOuterLabel(b.label);
+    const prev = nestedOuterLabel(boxes[i - 1].label);
+    return cur !== null && prev !== null && cur !== prev;
+  });
 }
 
 // ── Scale / layout math (Canvas2D) ──────────────────────────────────────────

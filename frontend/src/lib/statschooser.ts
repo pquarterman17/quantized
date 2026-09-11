@@ -158,6 +158,15 @@ export function groupsByNestedCategory(
  *  columns. Deliberately NOT just `"1 / 3"`: a nested box axis is the one place
  *  a bare code is most ambiguous, since the same B code under two A levels is a
  *  different thing entirely. */
+/** Joins the two halves of a nested tick label. Exported because the RENDERER
+ *  has to take it apart again: `statRender.drawCategoryAxis` stacks the halves
+ *  on two lines, since a composite label does not survive a single-line tick
+ *  (review finding 1 — `lot = 0 / wafer = 0` truncated to `lot = 0 / waf…`,
+ *  which erased the second factor on every box). A column whose own name
+ *  contains this sequence would be split for display too; that is benign (the
+ *  tick wraps) and strictly better than the alternative of erasing a factor. */
+export const NESTED_LABEL_SEP = " / ";
+
 function nestedLabel(
   data: DataStruct,
   factorACol: number,
@@ -165,7 +174,7 @@ function nestedLabel(
   aLabel: string,
   bLabel: string,
 ): string {
-  return `${columnDisplayName(data, factorACol)} = ${aLabel} / ${columnDisplayName(data, factorBCol)} = ${bLabel}`;
+  return `${columnDisplayName(data, factorACol)} = ${aLabel}${NESTED_LABEL_SEP}${columnDisplayName(data, factorBCol)} = ${bLabel}`;
 }
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────

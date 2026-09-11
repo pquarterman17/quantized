@@ -179,6 +179,22 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     expect(setGroup2Col).toHaveBeenCalledWith(null);
   });
 
+  it('"then by" can actually SET a nest, not just clear one', async () => {
+    // Review finding 7: the test above only exercises the `null` branch, so a
+    // handler hard-wired to `st.setGroup2Col(null)` — one that can never turn
+    // nesting ON from the UI at all — passed it and every other test here.
+    // This pins the forward direction and the `Number(e.target.value)`
+    // coercion, which nothing else covered.
+    const setGroup2Col = vi.fn();
+    stateRef.current = makeState({ mode: "box", groupCol: 0, group2Col: null, setGroup2Col });
+    render(<StatStage />);
+    const picker = screen.getByRole("combobox", { name: "then by" }) as HTMLSelectElement;
+    expect(picker.value).toBe("none");
+
+    await userEvent.selectOptions(picker, "2");
+    expect(setGroup2Col).toHaveBeenCalledWith(2);
+  });
+
   it("Export is enabled for a flat draw AND for a faceted grid (GUI_INTERACTION #12 slice 4b), disabled only when both are empty", () => {
     // Faceted: drawFacets set, flat draw null.
     stateRef.current = makeState({

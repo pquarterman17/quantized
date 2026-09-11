@@ -117,8 +117,10 @@ export function buildExportSpec(
 }
 
 /** Everything `exportFacetedFigure` used to close over as a method on the
- *  hook. Passed explicitly so the whole export path can live out here and be
- *  loaded on demand. */
+ *  hook. Passed explicitly so the whole export path can live out here.
+ *  (Review finding 4: this said "and be loaded on demand", which the same
+ *  commit had already falsified — the dynamic import was reverted, see the
+ *  module header.) */
 export interface FacetedExportInputs {
   drawFacets: FacetDraw[] | null;
   mode: StatMode;
@@ -139,11 +141,11 @@ export interface FacetedExportInputs {
  *  screen (its own /api/statplots/violin call failed) exports as box, not
  *  a fresh (and maybe now-successful) violin recompute. */
 export async function exportFacetedFigure(
-fmt: string,
-o: FacetedExportInputs,
+  fmt: string,
+  o: FacetedExportInputs,
 ): Promise<void> {
-const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
-if (!drawFacets || drawFacets.length === 0) return;
+  const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
+  if (!drawFacets || drawFacets.length === 0) return;
   if (mode === "bar") {
     const facets: CategoricalFacetSpec[] = [];
     for (const f of drawFacets) {

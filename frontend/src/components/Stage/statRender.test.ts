@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { BoxStat } from "../../lib/statstage";
 import { seriesStat, type BarChartData } from "../../lib/barlayout";
-import { draw, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
-import { boxValueDomain } from "./statRenderBox";
+import { draw, drawCategoryAxis, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
+import { boxValueDomain, drawConnectMeansLine } from "./statRenderBox";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -285,5 +285,130 @@ describe("boxValueDomain", () => {
     const host = document.createElement("div");
     const canvas = document.createElement("canvas");
     expect(() => draw(canvas, host, { mode: "box", boxes: [], valueLabel: "v", groupLabel: "g" })).not.toThrow();
+  });
+});
+
+
+describe("drawCategoryAxis — NESTED tick labels (Group R, review finding 1)", () => {
+  // The gap that let the defect through: every Group R test asserted on the
+  // DATA layer (which cells, which order, which label strings), and nothing
+  // asserted what those strings look like once they reach the canvas. They
+  // reached it through a 14-character truncation that cut
+  // `lot = 0 / wafer = 0` down to `lot = 0 / waf…` — so a two-lot/two-wafer
+  // plot painted four boxes under two distinct ticks, and the second factor,
+  // the whole point of the feature, was invisible.
+
+  /** Records every `fillText(text, x, y)` the renderer issues. */
+  function recordingCtx() {
+    const texts: { text: string; x: number; y: number }[] = [];
+    const ctx = {
+      font: "",
+      fillStyle: "",
+      textAlign: "" as CanvasTextAlign,
+      textBaseline: "" as CanvasTextBaseline,
+      fillText: (text: string, x: number, y: number) => texts.push({ text, x, y }),
+    } as unknown as CanvasRenderingContext2D;
+    return { ctx, texts };
+  }
+
+  const RECT = { x: 0, y: 0, w: 400, h: 200 };
+  const SLOTS = [{ cx: 0.25 }, { cx: 0.75 }];
+
+  it("stacks each half on its own line, so BOTH factors survive", () => {
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(
+      ctx, RECT, SLOTS,
+      ["lot = 0 / wafer = 0", "lot = 0 / wafer = 1"],
+      "lot / wafer", "#000", "#888",
+    );
+    const ticks = texts.filter((t) => t.text !== "lot / wafer");
+    expect(ticks.map((t) => t.text)).toEqual([
+      "lot = 0", "wafer = 0",
+      "lot = 0", "wafer = 1",
+    ]);
+    // The distinguishing half is present and DISTINCT per slot — the exact
+    // property the truncation destroyed.
+    expect(new Set(ticks.map((t) => t.text)).size).toBe(3);
+    // Second line sits below the first, and above the caption at +30.
+    expect(ticks[1].y).toBeGreaterThan(ticks[0].y);
+    expect(ticks[1].y).toBeLessThan(RECT.y + RECT.h + 30);
+  });
+
+  it("leaves a SINGLE-factor label on one line, exactly as before", () => {
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(ctx, RECT, SLOTS, ["lot = 0", "lot = 1"], "lot", "#000", "#888");
+    expect(texts.filter((t) => t.text !== "lot").map((t) => t.text)).toEqual([
+      "lot = 0", "lot = 1",
+    ]);
+  });
+
+  it("still truncates a half that is genuinely too long, per line", () => {
+    // The budget is not abolished — it now applies to each half, so a long
+    // column name eats only its own line instead of erasing the other factor.
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(
+      ctx, RECT, SLOTS,
+      ["deposition_chamber = 0 / wafer = 7", "deposition_chamber = 1 / wafer = 8"],
+      "x", "#000", "#888",
+    );
+    const ticks = texts.filter((t) => t.text !== "x");
+    expect(ticks[0].text).toBe("deposition_ch…");
+    expect(ticks[1].text).toBe("wafer = 7");
+    expect(ticks[3].text).toBe("wafer = 8");
+  });
+});
+
+describe("drawConnectMeansLine — segmented at the nested boundary (review finding 2)", () => {
+  // The predicate is unit-tested in lib/statstage.test.ts; what is pinned here
+  // is that the RENDERER honours it. A sabotage that made the renderer ignore
+  // `breaks` was caught only by the compiler noticing an unused variable —
+  // which would not have caught a subtler misuse (an off-by-one index, say).
+
+  /** Records the path commands that decide where the line lifts. */
+  function pathRecorder() {
+    const ops: string[] = [];
+    const ctx = {
+      save: () => {}, restore: () => {}, beginPath: () => {}, stroke: () => {},
+      setLineDash: () => {},
+      strokeStyle: "", lineWidth: 0,
+      moveTo: (x: number) => ops.push(`move@${Math.round(x)}`),
+      lineTo: (x: number) => ops.push(`line@${Math.round(x)}`),
+    } as unknown as CanvasRenderingContext2D;
+    return { ctx, ops };
+  }
+
+  const mk = (label: string, mean: number): BoxStat => ({
+    label, q1: 0, median: mean, q3: 2, iqr: 2, whislo: 0, whishi: 2,
+    mean, n: 3, fliers: [],
+  });
+  const RECT = { x: 0, y: 0, w: 400, h: 200 };
+  const SLOTS4 = [0.1, 0.3, 0.6, 0.9].map((cx) => ({ cx, halfWidth: 0.05 }));
+  const vy = (v: number) => 100 - v;
+
+  it("lifts the pen when the outer factor changes", () => {
+    const { ctx, ops } = pathRecorder();
+    drawConnectMeansLine(ctx, [
+      mk("lot = 0 / wafer = 0", 1), mk("lot = 0 / wafer = 1", 2),
+      mk("lot = 1 / wafer = 0", 3), mk("lot = 1 / wafer = 1", 4),
+    ], SLOTS4, RECT, vy, "#000");
+    // Two segments: a move starts each lot, and NO line is drawn across the
+    // lot 0 -> lot 1 step (slot 2, x=240).
+    expect(ops).toEqual(["move@40", "line@120", "move@240", "line@360"]);
+  });
+
+  it("draws ONE unbroken line for a single-factor plot", () => {
+    const { ctx, ops } = pathRecorder();
+    drawConnectMeansLine(ctx, [
+      mk("lot = 0", 1), mk("lot = 1", 2), mk("lot = 2", 3), mk("lot = 3", 4),
+    ], SLOTS4, RECT, vy, "#000");
+    expect(ops).toEqual(["move@40", "line@120", "line@240", "line@360"]);
+  });
+
+  it("still lifts on a non-finite mean, as it always did", () => {
+    const { ctx, ops } = pathRecorder();
+    drawConnectMeansLine(ctx, [
+      mk("a", 1), mk("b", Number.NaN), mk("c", 3), mk("d", 4),
+    ], SLOTS4, RECT, vy, "#000");
+    expect(ops).toEqual(["move@40", "move@240", "line@360"]);
   });
 });

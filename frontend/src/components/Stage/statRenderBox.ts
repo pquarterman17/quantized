@@ -14,6 +14,7 @@
 import { deterministicJitter } from "../../lib/jitter";
 import {
   categorySlots,
+  connectMeansBreaks,
   connectMeansSeries,
   finiteDomain,
   type BoxStat,
@@ -105,7 +106,7 @@ function drawMeanCIMarker(
  *  rather than drawing through a non-finite mean (shouldn't happen for a
  *  finite group, but matches the box glyph's own defensive finiteness
  *  checks). Always drawn in `ink` so it reads against every series color. */
-function drawConnectMeansLine(
+export function drawConnectMeansLine(
   ctx: CanvasRenderingContext2D,
   boxes: readonly BoxStat[],
   slots: readonly CategorySlot[],
@@ -114,6 +115,10 @@ function drawConnectMeansLine(
   ink: string,
 ) {
   const means = connectMeansSeries(boxes);
+  // Review finding 2: under NESTED grouping the line must not run across an
+  // outer-factor boundary — see `connectMeansBreaks` for why that reading is
+  // wrong. Non-nested plots get exactly one segment, as before.
+  const breaks = connectMeansBreaks(boxes);
   ctx.save();
   ctx.strokeStyle = ink;
   ctx.lineWidth = 1.5;
@@ -127,7 +132,7 @@ function drawConnectMeansLine(
     }
     const cx = rect.x + slots[i].cx * rect.w;
     const cy = vy(m);
-    if (started) ctx.lineTo(cx, cy);
+    if (started && !breaks[i]) ctx.lineTo(cx, cy);
     else ctx.moveTo(cx, cy);
     started = true;
   });
