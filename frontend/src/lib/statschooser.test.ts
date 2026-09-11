@@ -157,6 +157,35 @@ describe("groupsByCategory honours the user's level ORDER (JMP_GAP J1)", () => {
   });
 });
 
+describe("membership stays the PARTITION's, not the level table's", () => {
+  it("a level whose value rows are all non-finite gets NO group", () => {
+    // The load-bearing promise of the `.filter((level) => parts.has(level))`:
+    // `categoryLevels` lists every level in the BY column, but a level whose
+    // value rows are all NaN has no bucket and must not become an empty group.
+    // It was claimed in the comment and the commit and tested by nothing — an
+    // empty group is not loud, it reaches `boxStatsClient` and throws "needs at
+    // least one finite value" on the offline-fallback branch.
+    const holey: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 0],
+        [Number.NaN, 1],
+        [12, 0],
+      ],
+      labels: ["signal", "batch"],
+      units: ["V", ""],
+      metadata: {},
+      cat_levels: { 1: ["Kept", "Empty"] },
+    };
+    const gs = groupsByCategory(holey, 0, 1);
+    expect(gs).toHaveLength(1);
+    expect(gs[0].label).toBe("batch = Kept");
+    expect(gs[0].values).toEqual([10, 12]);
+    // And the indexed twin agrees, or a box would face an empty jitter bucket.
+    expect(groupsByCategoryIndexed(holey, 0, 1)).toHaveLength(1);
+  });
+});
+
 describe("the level order reaches the STATISTICAL TEST, not just the plot", () => {
   // Found by asking what else `groupsByCategory` feeds. It is not only the box
   // plot: the Stats Chooser builds its `groups` from it

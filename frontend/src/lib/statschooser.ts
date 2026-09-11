@@ -73,11 +73,19 @@ export function groupsFromColumns(data: DataStruct, cols: readonly number[]): Gr
  *  JMP_GAP J1: display order, not ascending-by-code. This used to sort the
  *  partition's own keys numerically, which made box/violin/strip the one
  *  order-sensitive surface that ignored a user's chosen level order while bar
- *  layout, the XY group split, Tabulate, facets and the backend's
- *  `_ordered_levels` (so the exported PDF) all honoured it — reorder the levels
- *  and the bars moved while the boxes did not. `categoryLevels` is the one
- *  accessor that answers "the levels, in order"; going through it is what keeps
- *  the two from disagreeing again.
+ *  layout, the XY group split, Tabulate and facets all honoured it — reorder
+ *  the levels and the bars moved while the boxes did not.
+ *
+ *  `categoryLevels` is the one accessor that answers "the levels, in order";
+ *  going through it is what keeps the two from disagreeing again.
+ *
+ *  NARROWED after review: an earlier version of this note also claimed the
+ *  backend's `_ordered_levels` honoured the order "so the exported PDF" did.
+ *  That is true of the XY colour split it governs (`build_grouped_series`) and
+ *  NOT of this plot family — a box/violin export posts explicit `data`/`labels`
+ *  built right here (`lib/api/figures.ts` -> `routes/export_statplots.py`), so
+ *  before this fix the exported PDF faithfully reproduced the wrongly-ordered
+ *  screen. The divergence was between PLOT FAMILIES, not screen vs export.
  *
  *  Membership is still the PARTITION's, not the level table's: a level present
  *  in `byCol` whose `valueCol` rows are all non-finite has no bucket here and
