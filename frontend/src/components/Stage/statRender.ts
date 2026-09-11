@@ -20,6 +20,7 @@ import {
   type BarChartData,
 } from "../../lib/barlayout";
 import { niceTicks } from "../../lib/ticks";
+import { drawCategoryAxis } from "./statRenderAxes";
 import {
   barValueDomain,
   categorySlots,
@@ -124,10 +125,6 @@ export function fmt(v: number): string {
   return Number(v.toPrecision(4)).toString();
 }
 
-function truncateLabel(s: string, max = 14): string {
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
-}
-
 /** "n=<count>" caption above a box/violin/strip (shared by all three). */
 export function drawCountLabel(
   ctx: CanvasRenderingContext2D,
@@ -211,28 +208,6 @@ export function drawValueAxis(
   ctx.textBaseline = "top";
   ctx.fillText(caption, 0, 0);
   ctx.restore();
-}
-
-export function drawCategoryAxis(
-  ctx: CanvasRenderingContext2D,
-  rect: Rect,
-  slots: { cx: number }[],
-  labels: string[],
-  caption: string,
-  ink: string,
-  muted: string,
-) {
-  ctx.font = "10px 'JetBrains Mono', monospace";
-  ctx.fillStyle = muted;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  slots.forEach((s, i) => {
-    const sx = rect.x + s.cx * rect.w;
-    ctx.fillText(truncateLabel(labels[i] ?? ""), sx, rect.y + rect.h + 6);
-  });
-  ctx.fillStyle = ink;
-  ctx.font = "11px 'JetBrains Mono', monospace";
-  ctx.fillText(caption, rect.x + rect.w / 2, rect.y + rect.h + 30);
 }
 
 function drawNumericXAxis(
@@ -524,3 +499,6 @@ function drawHistogram(
     ctx.stroke();
   }
 }
+
+// Re-exported so `statRenderBox.ts` and the tests keep one import site.
+export { drawCategoryAxis } from "./statRenderAxes";

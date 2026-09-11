@@ -36,7 +36,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFacetSpec, type CategoricalFigureSpec, type StatplotFacetSpec, type StatplotFigureSpec } from "../../lib/api/figures";
+import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFigureSpec } from "../../lib/api/figures";
 import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
@@ -45,16 +45,16 @@ import { analysisData } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
-  firstValueChannel,
-  maskStaleCategoricalPicks,
+  finiteOf,
   resolveGroups,
   resolveGroupsIndexed,
   type IndexedGroupSpec,
   type StatMode,
 } from "../../lib/statstage";
-import type { DataStruct, Dataset } from "../../lib/types";
+import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
+import { buildExportSpec, exportFacetedFigure } from "./statStageExport";
 import {
   computeBarData,
   computeBoxDraw,
@@ -64,6 +64,7 @@ import {
   computeViolinDraw,
   type FacetDraw,
 } from "./useStatStageCompute";
+import { useStatStagePicks } from "./useStatStagePicks";
 
 export type { FacetDraw } from "./useStatStageCompute";
 
@@ -102,6 +103,13 @@ export interface StatStageState {
   /** null = "(per plotted channel)" fallback (no categorical column picked). */
   groupCol: number | null;
   setGroupCol: (i: number | null) => void;
+  /** Group R — the NESTED second factor for Box/Violin/Strip: one box per
+   *  (groupCol, group2Col) cell that has finite values, in nested order.
+   *  null = no nesting (the ordinary one-box-per-level plot). Inert unless
+   *  `groupCol` is set and names a DIFFERENT column; see
+   *  `lib/statstage.maskStaleCategoricalPicks`. */
+  group2Col: number | null;
+  setGroup2Col: (i: number | null) => void;
   valueCol: number;
   setValueCol: (i: number) => void;
   dist: string;
@@ -155,12 +163,6 @@ export interface StatStageState {
   exportFigure: (fmt: string) => Promise<void>;
 }
 
-const colValues = (data: DataStruct, index: number): number[] =>
-  index < 0 ? data.time : data.values.map((row) => row[index]);
-
-const finiteOf = (data: DataStruct, index: number): number[] =>
-  colValues(data, index).filter((v) => Number.isFinite(v));
-
 function numArr(v: unknown): number[] {
   return Array.isArray(v) ? v.map((x) => Number(x)) : [];
 }
@@ -185,9 +187,22 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     [active, yKeys, xKey, seriesOrder],
   );
 
-  const [mode, setMode] = useState<StatMode>("box");
-  const [groupCol, setGroupColState] = useState<number | null>(null);
-  const [valueCol, setValueCol] = useState<number>(0);
+  // Column picks + their defaults/seed/staleness rules — see
+  // useStatStagePicks.ts. Declared HERE, at the position the state and the two
+  // effects used to occupy, so its effects keep running before the compute
+  // effect below.
+  //
+  // Only the MASKED picks are destructured: this hook's math and its returned
+  // state both use them (the raw values exist so the mask can be reverted, and
+  // are the picks hook's own business).
+  const {
+    mode, setMode,
+    setGroupCol, setGroup2Col,
+    valueCol, setValueCol,
+    setFacetCol,
+    effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
+  } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed });
+
   const [dist, setDist] = useState("norm");
   const [bins, setBins] = useState<string>("fd");
   const [fit, setFit] = useState<string | null>(null);
@@ -200,33 +215,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // Connect-means line toggle (JMP_GAP J5 residual) — same display-only
   // character as showPoints/showMeanCI above.
   const [showConnectMeans, setShowConnectMeans] = useState(false);
-  // Facet column (GUI_INTERACTION #11) — internal picker state, NOT a hook
-  // param: background windows (params.seed === null) have no facet Picker
-  // and never call setFacetCol, so they simply never facet.
-  const [facetCol, setFacetColState] = useState<number | null>(null);
-
-  // Re-derive the default picks whenever the active dataset changes — a
-  // channel index from the PREVIOUS dataset would silently mis-group.
-  useEffect(() => {
-    const cats = categoricalChannels(active);
-    const g = cats[0] ?? null;
-    setGroupColState(g);
-    setValueCol(firstValueChannel(active, g ?? -999));
-    setFacetColState(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
-
-  // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
-  // box/violin/bar spec it "sent to stage" (mirrors the reflectivity SLD
-  // seed). Declared AFTER the active-id reset so a same-dataset send wins.
-  useEffect(() => {
-    if (!seed) return;
-    setMode(seed.mode);
-    setGroupColState(seed.groupCol);
-    setValueCol(seed.valueCol);
-    setFacetColState(seed.facetCol ?? null);
-    onSeedConsumed();
-  }, [seed, onSeedConsumed]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,17 +222,20 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [drawData, setDrawData] = useState<StatDrawData | null>(null);
   const [drawFacets, setDrawFacets] = useState<FacetDraw[] | null>(null);
 
-  // BUG-004 (BUGS_AND_ISSUES.md): mask a stale groupCol/facetCol pick back to null once its column
-  // stops reading as categorical (a channelTypes override landed after the pick was made) — applied
-  // to BOTH the exposed picker value and the grouping/faceting math below, not display-only. See
-  // lib/statstage.ts's maskStaleCategoricalPicks for the full reasoning.
-  const { groupCol: effectiveGroupCol, facetCol: effectiveFacetCol } =
-    maskStaleCategoricalPicks(groupCol, facetCol, categoricalCols);
+  // Nesting (Group R) applies to the 1-D group list ONLY. Bar builds a
+  // category x series MATRIX (lib/barlayout) whose category slots come from a
+  // single column, and Q-Q/Histogram do not group at all — so a second factor
+  // is inert in those modes. Gated here rather than in the mask because the
+  // mask is mode-blind on purpose (it answers "is this pick still valid?",
+  // not "does this mode use it?"); the toolbar hides the picker to match, so
+  // the two never disagree about what is being shown.
+  const nestCol =
+    mode === "box" || mode === "violin" || mode === "strip" ? effectiveGroup2Col : null;
 
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip")) return [];
-    return resolveGroups(data, effectiveGroupCol, valueCol, plotted);
-  }, [data, mode, effectiveGroupCol, valueCol, plotted]);
+    return resolveGroups(data, effectiveGroupCol, valueCol, plotted, nestCol);
+  }, [data, mode, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   // Indexed groups (JMP_GAP J5 #1/#3): raw finite values + their ORIGINAL
   // dataset row index, for the jittered points overlay -- only resolved when
@@ -253,14 +244,21 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const indexedGroups = useMemo<IndexedGroupSpec[]>(() => {
     if (!data) return [];
     if (mode === "strip" || (mode === "box" && showPoints)) {
-      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted);
+      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol);
     }
     return [];
-  }, [data, mode, showPoints, effectiveGroupCol, valueCol, plotted]);
+  }, [data, mode, showPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
+  const labelOf = (i: number | null): string | null =>
+    i == null ? null : (columns.find((c) => c.index === i)?.label ?? "group");
+  // Nested: "lot / wafer", matching the `lot = 1 / wafer = 3` tick convention
+  // `statschooser.nestedLabel` writes, so the axis names both factors in the
+  // same order and with the same separator the ticks below it use.
   const groupLabel =
-    effectiveGroupCol != null ? (columns.find((c) => c.index === effectiveGroupCol)?.label ?? "group") : "channel";
+    effectiveGroupCol != null
+      ? [labelOf(effectiveGroupCol), labelOf(nestCol)].filter((l) => l != null).join(" / ")
+      : "channel";
 
   // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
   // when a categorical column is picked, every PLOTTED channel becomes its
@@ -333,7 +331,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      void computeFacetGroupDraws(slices, mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel)
+      void computeFacetGroupDraws(slices, mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol)
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -478,6 +476,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barStack,
     effectiveFacetCol,
     effectiveGroupCol,
+    nestCol,
     plotted,
     barValueChannels,
     barLabels,
@@ -489,7 +488,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     // exactly the modes that facet (box/violin/bar) — see the useEffect
     // above. Checked before the flat branches below.
     if (drawFacets && drawFacets.length > 0) {
-      await exportFacetedFigure(fmt);
+      await exportFacetedFigure(fmt, {
+        drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel,
+      });
       return;
     }
     if (mode === "bar") {
@@ -526,74 +527,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     if (spec) await exportStatplotFigure(spec);
   }
 
-  /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
-   *  faceted figure — the SAME ceil(sqrt(n)) grid the screen shows (gap
-   *  #21's shared `calc.figure_facets` layout). Bar facets reuse
-   *  `draw.data` directly (already the full category x series matrix,
-   *  computed synchronously with no possible per-slice degrade); box/violin
-   *  facets reuse the raw `rawGroups` values `computeFacetGroupDraws`
-   *  attached, paired with each facet's OWN resolved `draw.mode` for
-   *  per-slice degrade fidelity — a violin facet that fell back to box on
-   *  screen (its own /api/statplots/violin call failed) exports as box, not
-   *  a fresh (and maybe now-successful) violin recompute. */
-  async function exportFacetedFigure(fmt: string): Promise<void> {
-    if (!drawFacets || drawFacets.length === 0) return;
-    if (mode === "bar") {
-      const facets: CategoricalFacetSpec[] = [];
-      for (const f of drawFacets) {
-        const draw = f.draw;
-        if (draw.mode !== "bar") continue;
-        facets.push({
-          label: f.label,
-          groups: draw.data.groups.map((g) => g.label),
-          series: draw.data.seriesLabels,
-          values: draw.data.groups.map((g) => g.series.map((s) => s.mean)),
-          errors: draw.data.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
-        });
-      }
-      if (!facets.length) return;
-      const spec: CategoricalFigureSpec = {
-        groups: facets[0].groups,
-        series: facets[0].series,
-        values: facets[0].values,
-        errors: facets[0].errors,
-        stacked: barStack,
-        fmt,
-        title: `${barValueLabel} by ${groupLabel}, faceted`,
-        x_label: groupLabel,
-        y_label: barValueLabel,
-        filename: `bar_${barValueLabel}_faceted`,
-        facets,
-      };
-      await exportCategoricalFigure(spec);
-      return;
-    }
-    if (mode !== "box" && mode !== "violin") return;
-    const facets: StatplotFacetSpec[] = [];
-    for (const f of drawFacets) {
-      if (!f.rawGroups || f.rawGroups.length === 0) continue;
-      facets.push({
-        label: f.label,
-        kind: f.draw.mode === "violin" ? "violin" : "box",
-        data: f.rawGroups.map((g) => g.values),
-        labels: f.rawGroups.map((g) => g.label),
-      });
-    }
-    if (!facets.length) return;
-    const spec: StatplotFigureSpec = {
-      kind: mode,
-      data: facets[0].data,
-      labels: facets[0].labels,
-      fmt,
-      title: `${valueLabel} by ${groupLabel}, faceted`,
-      x_label: groupLabel,
-      y_label: valueLabel,
-      filename: `${mode}_${valueLabel}_faceted`,
-      facets,
-    };
-    await exportStatplotFigure(spec);
-  }
-
   return {
     hasData: !!active,
     mode,
@@ -601,7 +534,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     columns,
     categoricalCols,
     groupCol: effectiveGroupCol,
-    setGroupCol: setGroupColState,
+    setGroupCol,
+    // The MASKED nest, not the mode-gated `nestCol`: switching to Bar and back
+    // must not silently forget the user's second factor, and the toolbar hides
+    // the picker in Bar rather than showing it emptied.
+    group2Col: effectiveGroup2Col,
+    setGroup2Col,
     valueCol,
     setValueCol,
     dist,
@@ -619,85 +557,12 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     showConnectMeans,
     setShowConnectMeans,
     facetCol: effectiveFacetCol,
-    setFacetCol: setFacetColState,
+    setFacetCol,
     busy,
     error,
     note,
     draw: drawData,
     drawFacets,
     exportFigure,
-  };
-}
-
-function buildExportSpec(
-  mode: StatMode,
-  data: DataStruct,
-  groups: GroupSpec[],
-  valueCol: number,
-  valueLabel: string,
-  groupLabel: string,
-  dist: string,
-  bins: string,
-  fit: string | null,
-  fmt: string,
-  showPoints = false,
-  pointRowIndices: number[][] | null = null,
-  showMeanCI = false,
-  showConnectMeans = false,
-): StatplotFigureSpec | null {
-  if (mode === "box" || mode === "violin" || mode === "strip") {
-    const finiteGroups = groups.filter((g) => g.values.length > 0);
-    if (!finiteGroups.length) return null;
-    // Violin has neither mark (JMP_GAP J5 is a box/strip feature) — omit
-    // rather than send `false`/`null` no-ops on every violin export. Strip's
-    // points overlay is always on (no toggle for it -- it's the whole plot),
-    // so `show_points` is forced true there regardless of the (box-only)
-    // `showPoints` toggle state.
-    const marks =
-      mode === "violin"
-        ? {}
-        : {
-            show_points: mode === "strip" ? true : showPoints,
-            point_row_indices: pointRowIndices,
-            show_mean_ci: showMeanCI,
-            show_connect_means: showConnectMeans,
-          };
-    return {
-      kind: mode,
-      data: finiteGroups.map((g) => g.values),
-      labels: finiteGroups.map((g) => g.label),
-      fmt,
-      title: `${valueLabel} by ${groupLabel}`,
-      x_label: groupLabel,
-      y_label: valueLabel,
-      filename: `${mode}_${valueLabel}`,
-      ...marks,
-    };
-  }
-  const values = finiteOf(data, valueCol);
-  if (mode === "qq") {
-    if (values.length < 3) return null;
-    return {
-      kind: "qq",
-      data: values,
-      dist,
-      fmt,
-      title: `Q-Q — ${valueLabel}`,
-      x_label: `Theoretical quantiles (${dist})`,
-      y_label: `Sample quantiles (${valueLabel})`,
-      filename: `qq_${valueLabel}`,
-    };
-  }
-  if (values.length < 2) return null;
-  return {
-    kind: "histogram",
-    data: values,
-    bins,
-    fit,
-    fmt,
-    title: `Histogram — ${valueLabel}`,
-    x_label: valueLabel,
-    y_label: fit ? "density" : "count",
-    filename: `histogram_${valueLabel}`,
   };
 }

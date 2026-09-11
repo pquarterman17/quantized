@@ -76,6 +76,17 @@ export default function StatStage() {
     ...st.categoricalCols.map((c) => ({ value: String(c.index), label: c.label })),
   ];
   const columnOptions = st.columns.map((c) => ({ value: String(c.index), label: c.label }));
+  // Group R: the NESTED second factor. The already-chosen "group by" column is
+  // omitted — nesting a column inside itself labels every box `lot = 0 / lot =
+  // 0`. (`maskStaleCategoricalPicks` enforces the same rule on the value, for
+  // the case where "group by" MOVES onto an already-picked second factor; this
+  // list just stops the user from asking for it in the first place.)
+  const thenByOptions = [
+    { value: "none", label: "(none)" },
+    ...st.categoricalCols
+      .filter((c) => c.index !== st.groupCol)
+      .map((c) => ({ value: String(c.index), label: c.label })),
+  ];
   // #11: small multiples for Box/Violin/Bar — one panel per level of a
   // SECOND categorical column (independent of "group by").
   const facetByOptions = [
@@ -143,6 +154,22 @@ export default function StatStage() {
                 }
               />
             </Picker>
+            {/* Nested second factor (Group R) -- one box per (group, then-by)
+                cell. Box/Violin/Strip only: Bar's category slots come from a
+                single column (it builds a category x series matrix, not a 1-D
+                group list), so the hook holds the pick inert there and this
+                hides it rather than showing a control that does nothing. */}
+            {st.groupCol != null && st.mode !== "bar" && (
+              <Picker label="then by">
+                <Select
+                  options={thenByOptions}
+                  value={st.group2Col == null ? "none" : String(st.group2Col)}
+                  onChange={(e) =>
+                    st.setGroup2Col(e.target.value === "none" ? null : Number(e.target.value))
+                  }
+                />
+              </Picker>
+            )}
             {st.groupCol != null && st.mode !== "bar" && (
               <Picker label="value">
                 <Select
