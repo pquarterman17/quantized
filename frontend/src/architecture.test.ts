@@ -1099,9 +1099,19 @@ describe("category-level accessor chokepoint (JMP_GAP J1)", () => {
   // left ZERO unmarked copies behind, so this guards a clean baseline rather
   // than papering over a dirty one.
   const WINDOW = 400;
-  const SET = /new Set\b/g;
+  // `Set` OR `Map`, and a comparator on a bare name OR an indexed/property one.
+  // Both widenings are here because this guard MISSED a real instance twice
+  // over: `lib/statschooser.ts`'s `groupsByCategory` derived a column's levels
+  // with `new Map<number, number[]>()` and ordered them with
+  // `.sort((a, b) => a[0] - b[0])`, so neither the `new Set` anchor nor the
+  // bare-`a - b` comparator matched — and box/violin/strip spent J1 sorting by
+  // raw code while every other surface honoured the user's order, which is
+  // verbatim the failure this guard's own message predicts. A Map keyed by a
+  // column's values IS a derivation of that column's levels. Measured when
+  // widening: across 1,028 `.ts` files this adds exactly one hit, the real one.
+  const SET = /new (?:Set|Map)\b/g;
   const FINITE = /Number\.isFinite\b|\bisFinite\s*\(/;
-  const ORDERED = /\.sort\(\s*\(?\s*\w+\s*,\s*\w+\s*\)?\s*=>\s*\w+\s*-\s*\w+|\.size\b/;
+  const ORDERED = /\.sort\(\s*\(?\s*\w+\s*,\s*\w+\s*\)?\s*=>\s*[\w.[\]]+\s*-\s*[\w.[\]]+|\.size\b/;
 
   /** Lines carrying an explicit, reasoned exemption. Function-scoped by
    *  construction: the marker sits on the copy itself, so it cannot silently

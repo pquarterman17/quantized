@@ -6,6 +6,7 @@
 // fetch) so every branch unit-tests standalone.
 
 import { resolveCategoryLabels } from "./barlayout";
+import { categoryLevels } from "./categorical";
 import type { DataStruct } from "./types";
 
 /** One candidate group: a label for the UI + its finite values. */
@@ -67,7 +68,23 @@ export function groupsFromColumns(data: DataStruct, cols: readonly number[]): Gr
 }
 
 /** Group-by mode: partition `valueCol` by the distinct levels of `byCol`
- *  (finite pairs only), one group per level in ascending level order. */
+ *  (finite pairs only), one group per level in the level's DISPLAY order.
+ *
+ *  JMP_GAP J1: display order, not ascending-by-code. This used to sort the
+ *  partition's own keys numerically, which made box/violin/strip the one
+ *  order-sensitive surface that ignored a user's chosen level order while bar
+ *  layout, the XY group split, Tabulate, facets and the backend's
+ *  `_ordered_levels` (so the exported PDF) all honoured it — reorder the levels
+ *  and the bars moved while the boxes did not. `categoryLevels` is the one
+ *  accessor that answers "the levels, in order"; going through it is what keeps
+ *  the two from disagreeing again.
+ *
+ *  Membership is still the PARTITION's, not the level table's: a level present
+ *  in `byCol` whose `valueCol` rows are all non-finite has no bucket here and
+ *  must not become an empty group, so the ordered levels are filtered by what
+ *  was actually collected. `categoryLevels` returns exactly the set `levelsOf`
+ *  would, so that filter can only ever remove — never reorder or drop a real
+ *  group. */
 export function groupsByCategory(
   data: DataStruct,
   valueCol: number,
@@ -83,9 +100,9 @@ export function groupsByCategory(
     if (bucket) bucket.push(val[i]);
     else parts.set(by[i], [val[i]]);
   }
-  const entries = [...parts.entries()].sort((a, b) => a[0] - b[0]);
-  const labels = categoryGroupLabels(data, byCol, entries.map(([level]) => level));
-  return entries.map(([, values], i) => ({ label: labels[i], values }));
+  const levels = categoryLevels(data, byCol).filter((level) => parts.has(level));
+  const labels = categoryGroupLabels(data, byCol, levels);
+  return levels.map((level, i) => ({ label: labels[i], values: parts.get(level) ?? [] }));
 }
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
@@ -121,7 +138,10 @@ export function groupsFromColumnsIndexed(
   });
 }
 
-/** Group-by mode, index-preserving counterpart to `groupsByCategory`. */
+/** Group-by mode, index-preserving counterpart to `groupsByCategory` — same
+ *  display-order rule, and it MUST stay the same: this one feeds the raw-point
+ *  overlay, so if the two ordered differently a box would sit over another
+ *  category's jittered points. */
 export function groupsByCategoryIndexed(
   data: DataStruct,
   valueCol: number,
@@ -138,9 +158,9 @@ export function groupsByCategoryIndexed(
     if (bucket) bucket.push(point);
     else parts.set(by[i], [point]);
   }
-  const entries = [...parts.entries()].sort((a, b) => a[0] - b[0]);
-  const labels = categoryGroupLabels(data, byCol, entries.map(([level]) => level));
-  return entries.map(([, points], i) => ({ label: labels[i], points }));
+  const levels = categoryLevels(data, byCol).filter((level) => parts.has(level));
+  const labels = categoryGroupLabels(data, byCol, levels);
+  return levels.map((level, i) => ({ label: labels[i], points: parts.get(level) ?? [] }));
 }
 
 /** Build the request for the RECOMMENDED endpoint from the same groups the

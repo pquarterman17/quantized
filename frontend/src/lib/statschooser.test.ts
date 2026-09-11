@@ -86,6 +86,77 @@ describe("groupsByCategory", () => {
   });
 });
 
+describe("groupsByCategory honours the user's level ORDER (JMP_GAP J1)", () => {
+  // The defect: box/violin/strip axis slots came from a private
+  // `new Map(...).sort((a, b) => a[0] - b[0])`, i.e. ALWAYS ascending by raw
+  // code, while every other order-sensitive surface went through
+  // `lib/categorical.categoryLevels` and honoured `level_order` — bar layout,
+  // the XY group split, Tabulate, facets, and the backend's own
+  // `_ordered_levels` for an exported PDF. So a user who reordered levels saw
+  // the bar chart and the export obey and the box plot silently not.
+  //
+  // The chokepoint guard in architecture.test.ts exists to prevent exactly this
+  // ("a private copy would keep sorting by raw code while every other surface
+  // honoured the user's order") and MISSED it twice over: it anchors on
+  // `new Set` (this used `new Map`) and its comparator pattern only matched a
+  // bare `a - b` (this was `a[0] - b[0]`). Both are widened in this change.
+  const ordered: DataStruct = {
+    ...DATA,
+    cat_levels: { 1: ["Reference", "Annealed"] },
+    level_order: { 1: [1, 0] },
+  };
+
+  it("puts the groups in the user's order, values following their labels", () => {
+    const gs = groupsByCategory(ordered, 0, 1);
+    expect(gs.map((g) => g.label)).toEqual(["batch = Annealed", "batch = Reference"]);
+    // The VALUES must travel with their label, not just the label list reorder.
+    expect(gs[0].values).toEqual([20, 21, 22]);
+    expect(gs[1].values).toEqual([10, 11]);
+  });
+
+  it("reorders the INDEXED path identically — jitter points must not detach", () => {
+    // `groupsByCategoryIndexed` feeds the raw-point overlay, which hashes
+    // (rowIndex, category). If the two paths ordered differently, a box would
+    // sit over another category's points.
+    const gs = groupsByCategoryIndexed(ordered, 0, 1);
+    expect(gs.map((g) => g.label)).toEqual(["batch = Annealed", "batch = Reference"]);
+    expect(gs[0].points.map((pt) => pt.rowIndex)).toEqual([3, 4, 5]);
+    expect(gs[1].points.map((pt) => pt.rowIndex)).toEqual([0, 1]);
+  });
+
+  it("still ascends when the dataset carries no order (the previous behaviour)", () => {
+    expect(groupsByCategory(DATA, 0, 1).map((g) => g.label)).toEqual([
+      "batch = 0",
+      "batch = 1",
+    ]);
+  });
+
+  it("FAILS OPEN on a partial order: named levels first, the rest ascending", () => {
+    // categoryLevels' load-bearing rule. A level that appeared after the order
+    // was saved must still get a box rather than hide behind a stale preference.
+    const three: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 2],
+      ],
+      labels: ["signal", "batch"],
+      units: ["V", ""],
+      metadata: {},
+      level_order: { 1: [2] },
+    };
+    const gs = groupsByCategory(three, 0, 1);
+    expect(gs.map((g) => g.values)).toEqual([[30], [10], [20]]);
+  });
+
+  it("does not invent a group for an ordered level the data no longer has", () => {
+    const stale: DataStruct = { ...DATA, level_order: { 1: [9, 1, 0] } };
+    expect(groupsByCategory(stale, 0, 1)).toHaveLength(2);
+    expect(groupsByCategory(stale, 0, 1)[0].values).toEqual([20, 21, 22]);
+  });
+});
+
 describe("buildRunRequest", () => {
   const g2 = [
     [1, 2, 3],
