@@ -157,6 +157,41 @@ describe("groupsByCategory honours the user's level ORDER (JMP_GAP J1)", () => {
   });
 });
 
+describe("the level order reaches the STATISTICAL TEST, not just the plot", () => {
+  // Found by asking what else `groupsByCategory` feeds. It is not only the box
+  // plot: the Stats Chooser builds its `groups` from it
+  // (components/workshops/statschooser/useStatsChooser.ts), and
+  // `buildRunRequest` below destructures `const [g0, g1] = groups` — so for a
+  // two-sample t-test, Wilcoxon or Mann-Whitney, group ORDER decides which
+  // sample is `x` and which is `y`. Reordering levels therefore flips the sign
+  // of the t statistic and of the reported difference.
+  //
+  // That is a DELIBERATE consequence, not an accident, and it is pinned here
+  // rather than left silent: the test and the plot now agree on which group
+  // comes first, every group is labelled, and a user who has explicitly ordered
+  // the levels gets that order everywhere. Making the plot follow the order
+  // while the test kept its own would be the worse outcome — two surfaces
+  // disagreeing about "group 1", which is the exact class of bug the shared
+  // `categoryLevels` chokepoint exists to prevent.
+  const ordered: DataStruct = {
+    ...DATA,
+    cat_levels: { 1: ["Reference", "Annealed"] },
+    level_order: { 1: [1, 0] },
+  };
+
+  it("hands the user's FIRST level to the test as x, and the second as y", () => {
+    const gs = groupsByCategory(ordered, 0, 1);
+    const req = buildRunRequest("/api/stats/ttest", gs.map((g) => g.values), false);
+    expect(req?.body).toEqual({ x: [20, 21, 22], y: [10, 11], paired: false });
+  });
+
+  it("without an order the assignment is the ascending-code one, as before", () => {
+    const gs = groupsByCategory(DATA, 0, 1);
+    const req = buildRunRequest("/api/stats/ttest", gs.map((g) => g.values), false);
+    expect(req?.body).toEqual({ x: [10, 11], y: [20, 21, 22], paired: false });
+  });
+});
+
 describe("buildRunRequest", () => {
   const g2 = [
     [1, 2, 3],
