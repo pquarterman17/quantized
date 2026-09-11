@@ -13,6 +13,7 @@ import { defaultPlotView } from "../lib/plotview";
 import type { ComputedColumn, Dataset, FitSpec } from "../lib/types";
 import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
+import { resetBookTransportForTests } from "../lib/bookData";
 
 // A base dataset with ONE real column, "A".
 const baseDs = (id: string, over: Partial<Dataset> = {}): Dataset => ({
@@ -55,6 +56,11 @@ function dsWithFormulas(id: string, formulas: ComputedColumn[]): Dataset {
 }
 
 beforeEach(() => {
+  // BUG-009: the pending guard kicks a real fetch that rejects under jsdom and
+  // records the reason in module scope; clear it so one test cannot answer for
+  // the next. Without this these suites pass only because the one test that
+  // asserts the message happens to run first (proven with --sequence.shuffle).
+  resetBookTransportForTests();
   useApp.setState({
     datasets: [],
     activeId: null,

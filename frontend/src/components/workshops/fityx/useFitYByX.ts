@@ -32,6 +32,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
+import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 export type { BivariateResult, ContingencyResult, FitYByXKind, OnewayGroup, OnewayResult } from "./runLeg";
 
@@ -259,7 +260,7 @@ export function useFitYByX(): FitYByXState {
   function pendingGuard(action: string): boolean {
     if (!active?.pending) return false;
     useApp.getState().ensureBookData(active.id);
-    setStatus(`still loading full data — try ${action} again in a moment`);
+    setStatus(pendingStatusMessage(active, action)); // BUG-009: one home for the wording
     return true;
   }
 

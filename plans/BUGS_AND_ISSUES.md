@@ -32,7 +32,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; two data-CORRUPTING sites found in review round 5 and now guarded, but "refuse" should be "resolve-then-apply" and a failed fetch is a permanent lockout | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites fixed + ratcheted, structural fix open |
+| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1660,8 +1660,83 @@ lose an edit:
   wrapper would make the safe path the DEFAULT rather than something each new action
   must remember — which is the actual defect. Deliberately NOT attempted inside a PR
   that has already taken five review rounds.
-- [ ] Distinguish "in flight" from "failed, will never arrive", so the message stops
-  promising a retry that cannot succeed.
+### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
+
+- [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed
+  (`lastBookError(id, source)`), and `store/pendingEdit.ts`'s
+  `pendingStatusMessage` says what actually happened — `the last attempt to load
+  its full data failed (<reason>) … relink or re-import the source` — instead of
+  promising "try again in a moment" forever to a book that will never arrive.
+  `installBookData` re-throws unchanged, so `resolveDataset`'s reject, the save
+  command's abort and `ensureBookData`'s toast are untouched; success clears the
+  record alongside `pending`.
+  **ADVISORY ONLY, and that is pinned by test**: the retry is still kicked (a network
+  blip does come back), the refusal is unchanged, and nothing becomes unreachable
+  because a failure was recorded. So this closes the LIE, not the lockout — the
+  lockout is the deferral box above, which is still open.
+
+  **MODULE STATE, NOT A `Dataset` FIELD — and the first attempt got that wrong,
+  which is the useful part of this entry.** Putting the reason on `Dataset` meant a
+  failed fetch performed a store write where it had previously performed NONE, and
+  two live mechanisms compare `datasets` by IDENTITY:
+  `components/windows/WindowCanvas.tsx` and `components/Stage/useMultiPanelStage.ts`
+  have effects whose deps include `datasets` (or the active `Dataset` object) and
+  whose bodies call `ensureBookData` when `pending` is set — so each failure re-ran
+  the effect, which re-fetched, which failed, which wrote again: an unbounded
+  request storm on exactly the dead book being fixed. And
+  `useWorkspaceAutosave.shouldAutosave` compares the same reference, so the write
+  marked a clean project dirty and, once looping, reset the 800 ms autosave
+  debounce faster than it could ever fire — starving autosave of real user edits.
+  Both were found in adversarial review while CI was 14/14 green.
+  A fetch outcome is transport state, like the in-flight promise beside it; keeping
+  it in module scope makes "never serialized, never undone, never remapped, never
+  re-rendered" true by construction instead of by four separate allowlists. The
+  entry records WHICH source failed, because dataset ids repeat across a project
+  load. Pinned by four tests that assert the array identity, each dataset's object
+  identity, and `shouldAutosave` — the last of those asserted `projectDirty`
+  first and was VACUOUS (its subscriber only registers inside a React effect, so
+  the flag stays false either way); it survived the sabotage that reintroduced the
+  write, and now asserts the gate directly.
+
+- [x] **Review round 2 (no HIGHs; both round-1 HIGHs verified gone).** Fixed:
+  `lastBookError` now compares `token` as well — an upload `BookSource` has no
+  `path`, so without it the identity check degenerated to `bookId` alone for
+  exactly the case this bug names, an expired upload token. Each of the four
+  fields is now sabotage-verified individually (the first test varied two at
+  once and could not tell which was compared). `installBookData`'s failure
+  handler became the second argument to `.then` rather than a `.catch`, so a
+  throw from the SUCCESS handler can no longer be recorded as a fetch failure.
+  `lib/workbookTransfer`'s refusal no longer claims a book is dead for good —
+  the record says only that the LAST attempt failed, and a two-second blip
+  records one — and it now caps the reason through the shared `truncateReason`
+  instead of interpolating an unbounded backend `detail`; both arms have tests,
+  the failure arm having had none. The status text stopped advising "relink",
+  which writes `Dataset.source` only and never clears `pending`, so it could
+  not revive the book.
+
+- [x] **A PROVEN test-order defect, and a ratchet for it.** `_bookErrors` is
+  module state cleared only by a success, so a guard test's jsdom-rejecting
+  fetch poisons later tests in the same file that share a dataset id.
+  `cellEdit.test.ts` and `computedColumns.test.ts` shipped exactly that and
+  passed only because the one test in each that asserts the message happened to
+  run first: `--sequence.shuffle.tests --seed=1` failed both. `lib/bookData.ts`
+  already documented the rule and the commit that wrote it applied it to two of
+  the four files needing it — so `architecture.test.ts` now enforces it (a test
+  file asserting the pending-guard message must CALL
+  `resetBookTransportForTests()`). That check's own first version matched the
+  IMPORT, so deleting the call left it green — the identical hole this bug's
+  other ratchet already shipped and recorded once. Sabotage caught it both
+  times; only the second time was it already written down.
+
+- [x] **The wording now has ONE home.** The first version corrected one of five
+  messages while claiming it had corrected all of them:
+  `useWorksheetView.pendingGuard` (Extract / Copy rows), `useTabulate`,
+  `useFitYByX` and `useStatsChooser` each carried their own hard-coded "try again
+  in a moment", and `lib/workbookTransfer.buildTransferPackage` its own plural
+  variant. All five now go through `pendingStatusMessage` (or, for the transfer
+  package, name the first genuinely dead book). Their control flow is unchanged —
+  each still writes to its own local status/error channel — so this unifies the
+  wording only; unifying the GUARDS is the structural half still open above.
 
 ### The invariant, stated once (it never was)
 

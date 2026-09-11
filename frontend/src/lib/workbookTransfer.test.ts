@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FigureDocument } from "./figureDocument";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
@@ -17,6 +17,17 @@ import {
   type TransferSourceState,
   type WorkbookTransferPackage,
 } from "./workbookTransfer";
+import { fetchBookData } from "./api";
+import { installBookData, resetBookTransportForTests } from "./bookData";
+
+vi.mock("./api", async (orig) => ({
+  ...(await orig<typeof import("./api")>()),
+  fetchBookData: vi.fn(),
+}));
+
+beforeEach(() => {
+  resetBookTransportForTests();
+});
 
 function ds(id: string, name: string, over: Partial<Dataset> = {}): Dataset {
   return {
@@ -115,6 +126,45 @@ describe("buildTransferPackage", () => {
     const result = buildTransferPackage("wb-1", state);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/not fully loaded/);
+  });
+
+  it("names the book and the REASON once a fetch for it has failed (BUG-009)", async () => {
+    // The other arm of the branch above. Untested when it landed, and it shipped
+    // with two defects because of that: a permanent-sounding "could not load ...
+    // relink or re-import it" that the record cannot justify, and an uncapped
+    // reason interpolated raw.
+    const src = { kind: "upload" as const, token: "t", bookId: "b", rows: 0, cols: 0 };
+    const state = makeState({
+      datasets: [ds("ds-1", "Sheet 1", { workbookId: "wb-1", pending: src })],
+    });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("expired upload token"));
+    await expect(installBookData(() => {}, "ds-1", src)).rejects.toBeTruthy();
+
+    const result = buildTransferPackage("wb-1", state);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("expired upload token");
+      expect(result.reason).toMatch(/last attempt failed/);
+      // It still invites a retry: the record says the LAST attempt failed, not
+      // that the book is dead, so a transient blip must not read as permanent.
+      expect(result.reason).toMatch(/Try again/);
+    }
+  });
+
+  it("CAPS a pathological reason instead of pasting it into the refusal", async () => {
+    const src = { kind: "upload" as const, token: "t2", bookId: "b2", rows: 0, cols: 0 };
+    const state = makeState({
+      datasets: [ds("ds-2", "Sheet 2", { workbookId: "wb-1", pending: src })],
+    });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("y".repeat(500)));
+    await expect(installBookData(() => {}, "ds-2", src)).rejects.toBeTruthy();
+
+    const result = buildTransferPackage("wb-1", state);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("\u2026");
+      expect(result.reason.length).toBeLessThan(300);
+    }
   });
 
   it("includes only worksheets, figures, reports, and templates that belong to the workbook", () => {

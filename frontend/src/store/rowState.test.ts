@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
+import { resetBookTransportForTests } from "../lib/bookData";
 
 function dataset(over: Partial<Dataset> = {}): Dataset {
   return {
@@ -39,6 +40,9 @@ function pendingDataset(over: Partial<Dataset> = {}): Dataset {
 const ds = () => useApp.getState().datasets[0];
 
 beforeEach(() => {
+  // BUG-009: the guard kicks a real fetch that rejects under jsdom and records
+  // the reason in module scope; clear it so one test cannot answer for the next.
+  resetBookTransportForTests();
   useApp.setState({ datasets: [dataset()], activeId: "d1", selection: null, history: [], status: "" });
 });
 

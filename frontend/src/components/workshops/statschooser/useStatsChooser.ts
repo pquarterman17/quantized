@@ -21,6 +21,7 @@ import {
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 export type ChooserMode = "columns" | "groupby";
 
@@ -114,7 +115,7 @@ export function useStatsChooser(): StatsChooserState {
     // incomplete preview. Abort (kick the fetch, ask the user to retry).
     if (active?.pending) {
       useApp.getState().ensureBookData(active.id);
-      setError("still loading full data — try again in a moment");
+      setError(pendingStatusMessage(active, "this")); // BUG-009: one home for the wording
       return;
     }
     setBusy(true);

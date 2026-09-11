@@ -1150,7 +1150,76 @@ import { fileURLToPath } from "node:url";
  *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
  *  recorded above all still stand; only the arithmetic was fiction.
  */
-const EAGER_JS_BUDGET = 915_377;
+/*  2026-09-11 (BUG-009, PR #349) — 915,377 -> 915,646.
+ *
+ *  Measured, both builds from the SAME `node_modules` after one `npm ci`, and
+ *  the branch figure reproduces CI byte for byte (CI: 894.2 kB over a 893.9 kB
+ *  budget; local, cached: the same 894.2 kB — so the transform cache was not
+ *  lying this time, and the overage is real):
+ *      main                     914,761
+ *      first attempt            915,684   (+923, 307 over)
+ *      after two reductions     915,582   (+821, 205 over)
+ *      after the lazy split     915,393   (+632,  16 over — reverted, see below)
+ *      after review round 2     915,671   (+910)
+ *  Pinned at 915,671 + 64, the same "+64" convention as the entry above.
+ *
+ *  Round 2 of review cost 89 bytes on top of the 821, and each is a correctness
+ *  fix rather than a feature: `lastBookError` compares `token` too (an upload
+ *  `BookSource` has no `path`, so without it the identity check degenerated to
+ *  `bookId` alone for exactly the expired-upload-token case this bug names);
+ *  `truncateReason` is shared, so `lib/workbookTransfer` stops interpolating an
+ *  unbounded backend `detail`; and that refusal no longer calls a book dead for
+ *  good when the record says only that its last attempt failed. The
+ *  lockfile is identical to main's, which is what makes the two comparable.
+ *
+ *  WHAT THE 821 BYTES BUY. A lazy Origin book whose fetch fails for good (a
+ *  moved source, an expired upload token) used to be described exactly like one
+ *  arriving imminently — "try again in a moment", forever — across five separate
+ *  surfaces. The eager cost is `lib/bookData.lastBookError` plus the failure
+ *  record it reads, and `store/pendingEdit.pendingStatusMessage`, whose two
+ *  message STRINGS are most of the weight.
+ *
+ *  A REDUCTION WAS TAKEN FIRST, and it was not enough: the record's source
+ *  identity went from a built key string to a direct three-field comparison and
+ *  the `reasonOf` wrapper was inlined, together worth ~100 bytes (915,684 ->
+ *  915,582). What remains is the message text itself.
+ *
+ *  THE LAZY SPLIT THIS FILE PRESCRIBES WAS BUILT, MEASURED, AND REVERTED — read
+ *  this before trying it again. The failure text above says "Do NOT raise the
+ *  budget. Make the new code lazy instead... anything only needed after a user
+ *  action can be a dynamic import()", and a refusal message does qualify, so the
+ *  two message strings were moved to a `lib/pendingMessage.ts` reached from
+ *  `refusePendingEdit` through `import()`. It WORKED, arithmetically: 915,582 ->
+ *  915,393, worth 189 bytes, leaving a 16-byte residue. It was still the wrong
+ *  trade, for two measured reasons:
+ *
+ *    1. IT BROKE THE GUARD, and only a test said so. Looking the failure reason
+ *       up inside the lazily-imported formatter runs it after the guard's retry
+ *       kick has settled and cleared the record — so a book that had genuinely
+ *       died was reported as "still loading its full data", the exact confusion
+ *       BUG-009 exists to remove. Fixable (pass the reason in), and fixed, but it
+ *       shows the split is not the free refactor it looks like.
+ *    2. THE SYNCHRONOUS STATUS IS PART OF THE CONTRACT. Nine assertions (eight tests) across
+ *       `cellEdit.test.ts`, `computedColumns.test.ts`, `levelOrder.test.ts` and
+ *       `rowState.test.ts` read the status immediately after a refused action.
+ *       Making it async to save 189 bytes — 0.02% of the eager bundle — rewrites
+ *       four suites' expectations and leaves an error message about a failed
+ *       fetch itself depending on a chunk fetch.
+ *
+ *  So the budget moves and the guard stays synchronous. The remaining eager cost
+ *  could not be made lazy in any case: `lastBookError` and the record it reads are
+ *  written by `installBookData` on the eager store path and read synchronously by
+ *  `lib/workbookTransfer`.
+ *
+ *  A THIRD "REDUCTION" WAS REJECTED outright: shortening the user-facing message
+ *  would have closed the gap. That is the same mistake as shaving an explanatory
+ *  comment to fit a module ceiling, only aimed at the user instead of the next
+ *  maintainer — the message IS the deliverable here.
+ *
+ *  MEASURED, not assumed: `_resetBookTransportForTests` is tree-shaken and costs
+ *  0 bytes (removing it moved the total not at all).
+ */
+const EAGER_JS_BUDGET = 915_735;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
