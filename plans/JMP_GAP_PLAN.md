@@ -143,7 +143,7 @@ on, when one exists.
 | J5 | Jitter/strip mark, raw points over box, mean-with-CI marks, connect-means (interaction plot): none of these marks exist | P2.6 |
 | J6 | Tabulate: JMP nests multiple row/column grouping levels with many simultaneous stats; v1 is one group × one value × fixed six | — |
 | J7 | "By" role: JMP runs any platform once per level of a By column; quantized analyses run on one dataset only (manual split first) | — |
-| J8 | Variability/gauge chart (nested lot/wafer/site factors, connect cell means, group means) + variance components / nested ANOVA: absent (front AND back) | P2.6 |
+| J8 | Variability/gauge chart (nested lot/wafer/site factors, connect cell means, group means) + variance components / nested ANOVA. **Row corrected 2026-09-11: NOT "absent (front AND back)" — both halves ship.** Backend `calc/stats_varcomp.py` (`nested_anova`/`variability_summary`/`variance_components_nested`) + `routes/stats_varcomp.py`; frontend `lib/variability.ts` -> `components/workshops/variability/` (panel, chart, variance-components view, hook, tests), reachable from `AppOverlays.tsx`. The row was written before that landed and never revisited. What remains open is the GAUGE half (R&R study structure) and the chart's own polish, not the nested-factor capability. | P2.6 |
 | J9 | Outlier screening (Grubbs, Dixon, Rosner, robust MAD): absent | — |
 | J10 | Multivariate platform UI: correlation heatmap, scatterplot matrix (SPLOM), PCA scores/loadings/biplot/scree — engines exist (`stats_multivar`, `pca_analysis`) with zero UI | — |
 | J11 | Formula language: row-scoped arithmetic only — no comparisons, conditionals, aggregate refs (mean(A)), row()/lag/diff, missing-value handling (JMP formula editor covers all) | — |
