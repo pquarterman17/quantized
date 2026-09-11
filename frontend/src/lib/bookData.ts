@@ -45,26 +45,20 @@ const _bookFetches = new Map<string, Promise<void>>();
  *  Keyed by dataset id, like `_bookFetches`, but the entry also records WHICH
  *  source failed: ids can repeat across a project load, and a reason recorded
  *  for a different book must not be reported for this one. */
-const _bookErrors = new Map<string, { key: string; message: string }>();
-
-/** A stable identity for the book a `BookSource` names — enough to tell "the
- *  same book that failed a moment ago" from "a different book that happens to
- *  have inherited this dataset id". */
-function sourceKey(source: BookSource): string {
-  return `${source.kind}\u0000${source.path ?? ""}\u0000${source.bookId}`;
-}
-
-/** A readable reason from anything a rejected fetch can carry. */
-function reasonOf(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
+const _bookErrors = new Map<string, { source: BookSource; message: string }>();
 
 /** Why the last fetch for `id` failed, or null while none has failed (or the
  *  recorded failure belongs to a different book). `source` is the book being
- *  asked about, so a stale entry from a previous project cannot answer. */
+ *  asked about, so a stale entry from a previous project cannot answer: the
+ *  three fields below are what identify a book, compared directly rather than
+ *  through a built key string (same answer, less code in the eager bundle). */
 export function lastBookError(id: string, source: BookSource): string | null {
   const rec = _bookErrors.get(id);
-  return rec && rec.key === sourceKey(source) ? rec.message : null;
+  if (!rec) return null;
+  const s = rec.source;
+  return s.kind === source.kind && s.path === source.path && s.bookId === source.bookId
+    ? rec.message
+    : null;
 }
 
 /** Test-only: drop all transport state so one test's in-flight promise or
@@ -117,7 +111,7 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
       // set on purpose (a retry may still work); only the message changes.
       // Re-thrown unchanged, so every existing caller's error handling —
       // `resolveDataset`'s reject, the save command's abort — is untouched.
-      _bookErrors.set(id, { key: sourceKey(source), message: reasonOf(e) });
+      _bookErrors.set(id, { source, message: e instanceof Error ? e.message : String(e) });
       throw e;
     })
     .finally(() => {

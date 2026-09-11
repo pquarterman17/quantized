@@ -1150,7 +1150,38 @@ import { fileURLToPath } from "node:url";
  *  Pinned at 913,951 + 64. The lazy-split search and the two reductions
  *  recorded above all still stand; only the arithmetic was fiction.
  */
-const EAGER_JS_BUDGET = 915_377;
+/*  2026-09-11 (BUG-009, PR #349) — 915,377 -> 915,646.
+ *
+ *  Measured, both builds from the SAME `node_modules` after one `npm ci`, and
+ *  the branch figure reproduces CI byte for byte (CI: 894.2 kB over a 893.9 kB
+ *  budget; local, cached: the same 894.2 kB — so the transform cache was not
+ *  lying this time, and the overage is real):
+ *      main            914,761
+ *      this change     915,582   (+821)
+ *  Pinned at 915,582 + 64, the same "+64" convention as the entry above. The
+ *  lockfile is identical to main's, which is what makes the two comparable.
+ *
+ *  WHAT THE 821 BYTES BUY. A lazy Origin book whose fetch fails for good (a
+ *  moved source, an expired upload token) used to be described exactly like one
+ *  arriving imminently — "try again in a moment", forever — across five separate
+ *  surfaces. The eager cost is `lib/bookData.lastBookError` plus the failure
+ *  record it reads, and `store/pendingEdit.pendingStatusMessage`, whose two
+ *  message STRINGS are most of the weight.
+ *
+ *  A REDUCTION WAS TAKEN FIRST, and it was not enough: the record's source
+ *  identity went from a built key string to a direct three-field comparison and
+ *  the `reasonOf` wrapper was inlined, together worth ~100 bytes (915,684 ->
+ *  915,582). What remains is the message text itself.
+ *
+ *  A SECOND "REDUCTION" WAS REJECTED, deliberately, and this is the part worth
+ *  reading: shortening the user-facing message would have closed the gap. That
+ *  is the same mistake as shaving an explanatory comment to fit a module
+ *  ceiling, only aimed at the user instead of the next maintainer — the message
+ *  IS the deliverable here, and a budget is the wrong reason to make it worse.
+ *  A lazy split was also looked for and not found: everything this adds is
+ *  reachable from `useApp`, which is eager by construction.
+ */
+const EAGER_JS_BUDGET = 915_646;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
