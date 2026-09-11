@@ -81,7 +81,13 @@ describe("refusePendingEdit — what the user is told", () => {
     const status = useApp.getState().status;
     expect(status).toMatch(/the last attempt to load its full data failed/);
     expect(status).toContain("source not found");
-    expect(status).toMatch(/relink or re-import/);
+    expect(status).toMatch(/RE-IMPORT the file/);
+    // NOT "relink": relinkCommit.ts writes `source`/`versionOf` and never clears
+    // `pending`, so relinking alone cannot revive the book. The first version of
+    // this message advised it, and the first attempt to FIX that silently
+    // no-opped (a string replace that did not match, with no assertion on it) —
+    // so this asserts the remedy named is the one that works.
+    expect(status).not.toMatch(/relink or re-import/);
     // The lie this fixes: a book that will never arrive used to get this.
     expect(status).not.toMatch(/in a moment/);
   });
@@ -117,8 +123,13 @@ describe("refusePendingEdit — what the user is told", () => {
     refusePendingEdit(useApp.getState, ds(), "excluding rows");
 
     const status = useApp.getState().status;
+    // Assert the PROPERTY (the reason is capped), with the total length only as a
+    // loose backstop — per docs/testing.md, a tight number on something that is
+    // really a "don't paste 500 chars in here" rule just breaks on rewording, and
+    // this message was reworded twice.
     expect(status).toContain("…");
-    expect(status.length).toBeLessThan(300);
+    expect(status).not.toContain("x".repeat(130));
+    expect(status.length).toBeLessThan(450);
   });
 });
 

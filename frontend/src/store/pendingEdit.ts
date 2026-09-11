@@ -87,6 +87,10 @@ export function pendingStatusMessage(ds: Dataset, action: string): string {
   // the LAST attempt, while saying that another is now running.
   return (
     `"${ds.name}" — the last attempt to load its full data failed (${truncateReason(failed)}). ` +
-    `${action} needs the whole book. Retrying now; if it keeps failing, relink or re-import the source.`
+    // "RE-IMPORT", deliberately NOT "relink": `store/relinkCommit.ts` writes
+    // `Dataset.source` and `versionOf` only — it never clears `pending`, so
+    // relinking alone cannot revive a book. The first version of this message
+    // advised it anyway.
+    `${action} needs the whole book. Retrying now; if it keeps failing, RE-IMPORT the file — relinking alone will not re-fetch it.`
   );
 }
