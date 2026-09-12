@@ -2,6 +2,12 @@
 // Tree rows. This file owns only target plumbing and modal editor fallbacks;
 // action labels, gating, confirmation, and execution remain canonical in the
 // existing dataset/workbook/folder registries.
+//
+// L1.4 (Details rename/move parity): the DETAILS renderer consumes this same
+// builder too, so all three views compose one menu from one set of
+// registries. Its only difference is the rename PROMPT — see
+// `TileMenuHooks.rename` / `renamePrompt` below; the rename commit itself is
+// `libraryRename.ts` for every view.
 
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
@@ -12,6 +18,7 @@ import { useApp } from "../../store/useApp";
 import { buildDatasetRowMenu } from "./datasetRowMenu";
 import { buildFolderRowMenu } from "./folderRowMenu";
 import { buildWorkbookRowMenu } from "./workbookRowMenu";
+import { renameLibraryNode } from "../../lib/libraryRename";
 
 export interface TileMenuHooks {
   browse: (node: LibraryNode) => void;
@@ -23,13 +30,29 @@ export interface TileMenuHooks {
    *  datasets through activateFromLibrary's originBookClickOpens=
    *  "worksheet" detour, undoing setActive's unconditional plot intent. */
   stageReturn: () => void;
+  /** L1.4 rename parity: override HOW the "Rename…" item collects the new
+   *  name. Omitted (Tiles) = the modal `askParams` prompt below, unchanged.
+   *  The Details renderer supplies its own inline row editor here, matching
+   *  the Tree's "the menu opens an in-place input" convention. Either way
+   *  the COMMIT goes through `renameLibraryNode`, so only the prompt
+   *  differs — never which store action fires. */
+  rename?: (node: LibraryNode) => void;
 }
 
-function renameDialog(title: string, name: string, commit: (value: string) => void): void {
-  void askParams(title, [{ key: "name", label: "Name", type: "text", default: name }]).then((result) => {
-    const next = result && String(result.name).trim();
-    if (next) commit(next);
-  });
+/** The default (Tiles) rename prompt: a modal name field committing through
+ *  the shared `renameLibraryNode` dispatcher. `hooks.rename`, when supplied,
+ *  replaces this prompt — never the dispatcher. */
+function renamePrompt(node: LibraryNode, hooks: TileMenuHooks): () => void {
+  const override = hooks.rename;
+  if (override) return () => override(node);
+  return () => {
+    void askParams(`Rename "${node.name}"`, [
+      { key: "name", label: "Name", type: "text", default: node.name },
+    ]).then((result) => {
+      const next = result && String(result.name).trim();
+      if (next) renameLibraryNode(node, next);
+    });
+  };
 }
 
 function tagDialog(id: string, name: string): void {
@@ -54,14 +77,13 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       state.folders,
       index > 0,
       index >= 0 && index < state.datasets.length - 1,
-      () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameDataset(node.entityId, name)),
+      renamePrompt(node, hooks),
       () => tagDialog(node.entityId, node.name),
       hooks.stageReturn,
     );
   }
   if (node.kind === "workbook") {
-    return buildWorkbookRowMenu(node, () =>
-      renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameWorkbook(node.entityId, name)),
+    return buildWorkbookRowMenu(node, renamePrompt(node, hooks),
     () => hooks.browse(node),
     () => hooks.open(node),
     hooks.stageReturn);
@@ -75,7 +97,7 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
     return buildFolderRowMenu(
       node.entity,
       subtreeCount(state.folders, state.datasets, node.entityId),
-      () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameFolder(node.entityId, name)),
+      renamePrompt(node, hooks),
       () => hooks.browse(node),
     );
   }

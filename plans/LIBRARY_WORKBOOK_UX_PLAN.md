@@ -724,8 +724,16 @@ Library presentation without changing organization or duplicating objects.
     mounted Tree as tile navigation, and returns through Escape/**Back to
     plot** with a canonical reveal target and focus retry. Thumbnail/rapid-
     switching cancellation remains E-c.
-- [ ] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
+- [~] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
+  **RESIDUAL (2026-09-12): Tiles has no drag/drop at all** — grepped
+  `LibraryWorkspace.tsx`, `TilePreview.tsx` and `useTileVirtualization.ts`:
+  zero `draggable` / `onDragStart` / `onDragOver` / `onDrop` / `dataTransfer`
+  occurrences, so a tile can be renamed and moved only through its context
+  menu. Tree and Details now match on all seven verbs; this box closes when a
+  tile becomes a drag source and a folder tile a drop target, reusing
+  `dnd.ts`'s three payload types and `useDetailsDragDrop.ts`'s "into"-only
+  contract (a tile grid has no above/below band either).
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
@@ -739,6 +747,27 @@ Library presentation without changing organization or duplicating objects.
     this booking described no longer exist. L1.4's BROADER claim (full
     rename/move/drag-drop parity across all three views) remains unverified
     and this parent checkbox stays open for that reason alone.
+  - [x] **Details rename / move / drag-drop (2026-09-12).** The audit that
+    booking asked for, run across all three renderers, found Details missing
+    MORE than the survey suggested: its right-click opened a menu only on the
+    five artifact kinds, so folder/workbook/worksheet rows had no Rename… and
+    no "Move to …" at all, and no row of any kind was a drag source or a drop
+    target. Closed by routing every Details row's menu through the SAME
+    `buildLibraryTileMenu` the Tile workspace uses (which composes the same
+    dataset/folder/workbook/artifact registries the Tree rows use — no second
+    action path), adding the TREE's rename gesture (menu "Rename…" opens an
+    in-place `.qzk-folder-rename` input; Enter/blur commit, Escape reverts)
+    rather than the Tiles modal, and adding a `.qzk-drag-handle` grip as the
+    only draggable element with folder rows as "into" drop targets. The
+    kind→store-action rename mapping, previously written out twice
+    (`libraryTileMenu.ts` and `artifactContextActions.ts`), is now
+    `lib/libraryRename.ts` once. Two selection-invariant fixes fell out:
+    right-click on an already-selected Details row no longer COLLAPSES a live
+    multi-selection (DatasetRow's `selectForMenu` rule, which Details did not
+    have), and the inline editor's keystrokes can no longer reach the row or
+    the table's roving navigation (LibraryTree's P2 keyboard-hijack hazard,
+    which an input inside a `[data-lib-row]` row reintroduces). 17 DOM-layer
+    tests in `LibraryDetails.parity.test.tsx`, each sabotage-verified.
 - [x] **L1.5 Wide tile surface design:** produced thorough mockups and confirmed
   the main-workspace Library in L0.15. Implementation remains in PR E; do not
   squeeze production tiles into the default 210 px sidebar.
@@ -2403,6 +2432,40 @@ back to the owner. No Library implementation is authorized by this pause.
   results remain understandable and do not create Origin-like clutter.
 
 ## Completed
+
+- **2026-09-12 — Group X, Details rename / move / drag-drop parity (worktree
+  agent):** L1.4's Details half. Verified first, and the plan's own
+  description was understated: `LibraryDetails.tsx` lacked not just a rename
+  affordance and drag/drop but any context menu on folder, workbook and
+  worksheet rows (right-click reached `buildArtifactMenu` only, E-b2's
+  artifact-kind slice), so neither Rename… nor "Move to …" existed there for
+  those three kinds. Tiles was audited in the same pass: it HAS rename and
+  move (through `buildLibraryTileMenu`) but no drag/drop whatsoever, so L1.4
+  is `[~]` with that residual named on the item rather than ticked.
+  Shipped: `components/Library/DetailsRow.tsx` (the `<tr>` extracted out of
+  `LibraryDetails.tsx`, which was at 393 of the 400-line ceiling — it is 297
+  now, the row 274), `components/Library/useDetailsDragDrop.ts` (drag source
+  + "into"-only folder drop target over `dnd.ts`'s existing payload types and
+  the same `moveFolder`/`moveWorkbookToFolder` actions FolderRow's drop
+  calls), and `lib/libraryRename.ts` (the kind→store-action rename dispatcher
+  that `libraryTileMenu.ts` and `artifactContextActions.ts` each used to spell
+  out separately; `TileMenuHooks.rename` now overrides only the PROMPT, so
+  Tiles keeps its modal and Details gets the Tree's inline input over one
+  shared commit). Two selection-invariant defects fixed in passing:
+  Details' right-click collapsed a live multi-selection (it called
+  `selectLibraryNode` unconditionally where DatasetRow's `selectForMenu`
+  returns early for an already-selected row), and an inline editor inside a
+  `[data-lib-row]` row reintroduces LibraryTree's P2 keyboard-hijack hazard
+  (`.closest()` resolves the input to its row), guarded now in both the row
+  and the table's nav handler. 17 DOM-layer tests
+  (`LibraryDetails.parity.test.tsx`); 14 sabotages each produced a failing
+  test. Gate: `tsc -b --force` clean, eslint 0, full vitest 10,110/10,110 in
+  626 files, eager bundle 896.9 kB vs the 897.1 kB measured on `fe40adb5`
+  (−0.2 kB; budget 897.3 kB). NOT done, deliberately: Details still has no
+  Ctrl/Shift click multi-select of its own (a multi-selection can only arrive
+  from the Tree or the store) — that is a click-gesture gap, not a
+  rename/move/drag one, and it is adjacent to the selection invariants this
+  slice was asked to protect rather than extend.
 
 - **2026-08-19 — Claude Opus 5, PR I + PR I2 implementation (worktree agent,
   sprint Day-5, `claude/i-transfer-locking`, pending review):** cross-instance
