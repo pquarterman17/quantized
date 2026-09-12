@@ -22,8 +22,8 @@ This is a working document, not a claim that every observation is already reprod
 
 | ID | Priority | Area | Issue | Owner | Status/evidence |
 |---|---:|---|---|---|---|
-| BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Unassigned | Owner screenshot, 2026-09-08 |
-| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Unassigned | Owner screenshot, 2026-09-08 |
+| BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
+| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
@@ -43,12 +43,12 @@ This is a working document, not a claim that every observation is already reprod
 **State:** Open — every CODE-VERIFIABLE checklist box is now closed (2026-09-12);
 what remains needs a human or an external file: the owner's Windows visual
 check on the reported file (Acceptance criteria), the reproduction-checklist
-item asking to check a Reductus variant beyond the repository fixture, the
-reproduction-checklist item asking for a manual Error-Columns UI check "in
-the current release" (a running-app check, not a unit test), and
-plot-window-rebinding preservation of the declared roles (drag/drop a
-dataset onto an existing window) — see the Completion record's 2026-09-12
-entry.  
+item asking to check a Reductus variant beyond the repository fixture, and
+the reproduction-checklist item asking for a manual Error-Columns UI check
+"in the current release" (a running-app check, not a unit test).
+Plot-window-rebinding preservation of the declared roles (drag/drop a
+dataset onto an existing window) is now also verified — see the Completion
+record's second 2026-09-12 entry.  
 **Reported:** 2026-09-08 by owner  
 **Investigated:** 2026-09-08 by ChatGPT-Sol  
 **Suggested implementation owner/model:** Claude Sonnet for parser/state reliability; ChatGPT-Sol for final interaction and visual review  
@@ -101,7 +101,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Preserve all imported numeric columns in the worksheet; do not alter raw values.
 - [x] Keep every role overridable through the import/error-column UI. NCNR-`.refl`-SPECIFIC (2026-09-12, Claude): `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s "NCNR .refl error roles are overridable through the store action ErrorRolesCard calls" describe block imports the real fixture's declared roles via `useApp.importPaths`, confirms they land, then overrides one binding through `useApp.getState().setErrorRoles` — the EXACT action `ErrorRolesCard.tsx`'s Side `<Select>` `onChange` calls via its `patch` helper — and confirms both that the store keeps the override (not the parser's declaration) and that the NEXT render of the real `usePlotPayload` hook draws accordingly (the resolution binding's horizontal whisker disappears once its `side` is overridden to an incomplete asymmetric pair; the untouched Y/uncertainty whisker is unaffected). Sabotage-verified: making `setErrorRoles` a no-op (write back the dataset's existing roles instead of the new ones) made both new tests fail; reverted.
 - [x] Handle files that omit uncertainty, omit resolution, or contain additional value columns without shifting indices incorrectly.
-- [x] Ensure workspace save/reopen and duplication preserve the intended roles. **Save/reopen, confirmed 2026-09-12 (Claude):** `frontend/src/lib/workspace.test.ts:2149` ("BUG-001: an NCNR .refl's declared Y+X roles round-trip through a workspace save/reopen", landed 2026-09-09) already round-trips the exact declared Y+X shape through `serializeWorkspace`/`parseWorkspace` — read and confirmed, not re-done. **Reimport (the store's `reimportDataset` action), unchanged-shape case, now also covered:** `frontend/src/store/reimport.test.ts`'s BUG-001 describe block (see the visibility item below) asserts the declared `errorRoles` survive a same-shape reimport unchanged. **Still open:** plot-window rebinding (dragging/dropping a dataset onto an existing window) is not independently verified for this shape.
+- [x] Ensure workspace save/reopen and duplication preserve the intended roles. **Save/reopen, confirmed 2026-09-12 (Claude):** `frontend/src/lib/workspace.test.ts:2149` ("BUG-001: an NCNR .refl's declared Y+X roles round-trip through a workspace save/reopen", landed 2026-09-09) already round-trips the exact declared Y+X shape through `serializeWorkspace`/`parseWorkspace` — read and confirmed, not re-done. **Reimport (the store's `reimportDataset` action), unchanged-shape case, now also covered:** `frontend/src/store/reimport.test.ts`'s BUG-001 describe block (see the visibility item below) asserts the declared `errorRoles` survive a same-shape reimport unchanged. **Plot-window rebinding (dragging/dropping a dataset onto an existing window), confirmed 2026-09-12 (Claude):** `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s "rebindWindow (drag/drop) preserves an NCNR .refl's declared error roles (BUG-001, plot-window rebinding)" describe block drives the real `useApp.getState().rebindWindow` action (not a hand-built window record) against a real NCNR `.refl` import, covering both the FOCUSED-window rebind path and the BACKGROUND (unfocused) window rebind path, and confirms the resulting window's own payload (via the real `usePlotPayload` hook, fed `documentErrors` exactly as `PlotStage`/`BackgroundPlotWindow` thread it) draws both the Y and X whiskers. A third case confirms an explicit `setErrorRoles` override made on the dataset BEFORE the rebind survives it — the rebind reads the dataset's CURRENT roles, not a stale parser default.
 - [x] Verify that user-customized channel visibility is not overwritten after the initial default is established. NCNR-`.refl`-SPECIFIC (2026-09-12, Claude): `frontend/src/store/reimport.test.ts`'s "reimportDataset — NCNR .refl channel-visibility customization survives a same-shape reimport" describe block confirms the default (`defaultDenseChannels` on the fixture's own shape returns `[0]` only — the measured channel alone), then customizes BOTH directions — widen (`yKeys: [0, 1]`, plotting `uncertainty` as an ordinary series) and hide (`hiddenChannels: [0]`, hiding the default series) — and reimports the SAME-shape fixture (real rows 5-9 of `tests/golden/ncnr_j395_default.json` fed in place of rows 0-4): both customizations, and the declared `errorRoles`, survive untouched. Sabotage-verified: forcing `store/reimport.ts`'s `viewReset` to always fire (dropping the `shapeChanged` gate) made all three new assertions fail — and also broke the PRE-EXISTING generic pin ("keeps the live view's channel-keyed state when the shape is unchanged"), confirming the sabotage genuinely exercised the shared chokepoint; reverted.
 
 ### Automated-test checklist
@@ -143,8 +143,8 @@ The implementation must use the file format's semantics, not merely the exact di
   (`reimport.test.ts`); the "role overridable through the UI" and
   "user-customized visibility is not overwritten" criteria are now covered by
   NCNR-`.refl`-specific tests (2026-09-12, Claude — see the Implementation
-  checklist above). Plot-window-rebinding preservation for this shape remains
-  unverified.
+  checklist above). Plot-window-rebinding preservation for this shape is now
+  covered too (2026-09-12, Claude, second pass — see below).
 - Owner verification: pending — required for this item (Windows, reported file)
 - Notes: the fix needed a contract gap closed first. `metadata["error_roles"]`
   was written by the backend and read by NOTHING, so no parser could express an
@@ -257,8 +257,9 @@ The implementation must use the file format's semantics, not merely the exact di
     already covers the exact NCNR Y+X shape (landed 2026-09-09, confirmed by
     reading it, not redone). The reimport half is now genuinely covered too
     (this pass, unchanged-shape case). Plot-window rebinding (drag/drop onto
-    an existing window) is the one sub-case of this item that remains
-    unverified.
+    an existing window) was the one sub-case of this item that remained
+    unverified after this pass — now covered, see the follow-up 2026-09-12
+    entry below.
   - **Automated-test checklist item "Relevant backend, frontend, type-check,
     and production-build gates pass."**: run in full this pass (previously
     deferred to the requester).
@@ -283,7 +284,60 @@ The implementation must use the file format's semantics, not merely the exact di
     fixture" and "confirm manual Error-Columns assignment in the current
     release" reproduction-checklist items (need a human/external file);
     plot-window-rebinding preservation of the declared roles across a
-    reshape/rebind.
+    reshape/rebind — now covered, see the follow-up 2026-09-12 entry below.
+
+- **2026-09-12 (Claude), second pass — the plot-window-rebinding checklist box
+  closed (the last code-verifiable box on this item):**
+  - Found the existing rebind action: `store/windows.ts`'s `rebindWindow` (the
+    EXPLICIT drag/drop gesture) already threaded `errors: ds?.errorRoles,
+    resetErrors: true` into `store/windowDocuments.ts`'s `syncPlotWindow` for
+    BOTH the focused-window path (`focusedRebindPatch`) and the
+    background-window path — reading the dataset's rich `errorRoles` fresh off
+    the store at rebind time, not a value captured at import. Reading the code
+    first (per the verify-before-building rule) found the wiring already
+    correct; the gap was verification, not implementation.
+  - New tests: `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s
+    "rebindWindow (drag/drop) preserves an NCNR .refl's declared error roles
+    (BUG-001, plot-window rebinding)" describe block (3 cases), mirroring the
+    file's own established fixture-loading pattern (the real
+    `useApp.getState().importPaths` against a hand-built payload matching
+    `tests/golden/ncnr_j395_default.json`'s first five rows, exactly as the
+    two describe blocks above it and `store/reimport.test.ts`'s BUG-001 block
+    already do):
+    1. A FOCUSED window opened on a plain dataset, then rebound via the real
+       `rebindWindow` action onto the NCNR dataset: the window's own
+       `document.bindings.errors` equals the parser-declared roles, AND the
+       window's own rendered payload (the real `usePlotPayload` hook, fed
+       `documentErrors` exactly as `PlotStage` threads it for a focused
+       window) draws both the Y (uncertainty) and X (resolution) whiskers.
+    2. The SAME rebind onto a BACKGROUND (unfocused) window: the declared
+       roles land on that window's own document too, and rebinding it never
+       touches `focusedWindowId` or the other (focused) window's binding —
+       exercises `rebindWindow`'s OTHER branch (the non-focused-window `else`
+       in `store/windows.ts`).
+    3. An explicit `setErrorRoles` override applied to the NCNR dataset
+       BEFORE it is ever dropped onto a window: the rebound window ends up
+       with the OVERRIDE, not the parser's original declaration — confirming
+       `rebindWindow` reads the dataset's CURRENT roles, not a stale value.
+  - Sabotage-verified, each restored immediately after: removing
+    `errors: ds?.errorRoles, resetErrors: true` from `focusedRebindPatch`'s
+    `syncPlotWindow` call made cases 1 and 3 FAIL (2 failed/8); separately
+    removing the same option from `rebindWindow`'s background-window
+    `syncPlotWindow` call made case 2 FAIL (1 failed/8, exactly the
+    background test) — confirming both branches are independently covered
+    and the tests genuinely exercise the code they guard, not a shared
+    incidental path.
+  - Gates run (frontend-only; no `src/quantized/` code touched, so no backend
+    gate): `npx tsc -b --force` clean (exit 0); `npx eslint` on every touched
+    file clean; targeted `npx vitest run` (the new/touched file plus
+    `architecture.test.ts` and every DatasetRow/FigureRow/WorkbookRow/
+    FolderRow/ArtifactRow/window test this pass also touched for UX-001) —
+    671 passed, 0 failed; FULL `npx vitest run` (after `npm ci`) — see the
+    combined gate summary at the end of the UX-001 entry below (this session
+    ran ONE full suite + build covering both items).
+  - Not done / out of scope: the owner's Windows visual check, the Reductus
+    variant check, and the manual Error-Columns UI check remain open (need a
+    human/external file, per the item's own State line) — not touched here.
 
 ---
 
@@ -315,7 +369,7 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 ### Research and decision checklist
 
 - [x] Inventory every row/card type that can appear beneath an imported Origin folder and workbook. — `LibraryTree.tsx`'s dispatcher: `worksheet`→`DatasetRow`, `origin-figure`→`FigureRow`, `workbook`→`WorkbookRow`, `folder`→`FolderRow`, everything else→`ArtifactRow`.
-- [ ] Document what each existing icon and badge means and which actions are duplicated elsewhere. — done only for the worksheet row's own icons (relocated, not re-audited tree-wide); a full icon/badge audit across every row kind is still open.
+- [x] Document what each existing icon and badge means and which actions are duplicated elsewhere. **Tree-wide audit, 2026-09-12 (Claude):** `frontend/src/components/Library/rowIconAccessibility.test.tsx` renders each of the five row kinds (`DatasetRow` in both its full-card and compact-Tree layouts, `FigureRow`, `WorkbookRow`, `FolderRow`, `ArtifactRow`) and asserts every icon-only interactive control (`<button>`/`role="button"`) carries an `aria-label` or `title` — all already did except none found needing a fix on the interactive side. A second describe block in the same file targets informative count/icon BADGES (non-interactive) the same way and found one real inconsistency: `FolderRow`'s dataset-count chip had no `title` at all, unlike `WorkbookRow`'s identically-shaped worksheet-count chip — fixed by giving it one (`FolderRow.tsx`). No duplicated action was found among any row's icon-only controls (each names a distinct action — drag/menu/expand/duplicate/remove/move/tag-add/tag-remove/preview-toggle/open-in-new-window/etc.) — a read-through finding, not test-asserted, since "no duplicate" has no single automatable signal here.
 - [x] Determine why the reported worksheets render as large cards while Graph2/Graph8/Graph9 render as compact rows. — a component choice, not CSS: `DatasetRow.tsx` rendered a 4-part stacked card with an always-mounted `Sparkline`; `FigureRow.tsx` was already a single-line `.qzk-fig-item`.
 - [x] Check whether the current Tree/Tiles/Details preference already provides a compact alternative for these exact nodes. — `LibraryDetails.tsx` already renders every kind as a uniform compact `<tr>`; this was a Tree-view component gap, not a missing capability.
 - [x] Reconcile this item against unfinished work in `LIBRARY_WORKBOOK_UX_PLAN.md`; do not create a second competing hierarchy model. — the fix changes only how a `worksheet` node renders inside Tree; `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy`/`flattenLibraryHierarchy` is untouched and still the single structural truth.
@@ -331,7 +385,7 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 - [x] Give icon-only actions one-sentence tooltips and accessible names. — within the rows touched: added `aria-label` to Duplicate/Move up/Move down (previously title-only); the preview toggle and every relocated `DatasetRowControls` icon carry both. Not a full tree-wide icon audit (see the open research item above).
 - [x] Make the primary row click behavior consistent and discoverable. — click/dblclick/selection semantics (L0.25) are unchanged, just relocated behind the same handlers.
 - [x] Put secondary actions in a consistent right-click/overflow menu; avoid a permanent strip of unexplained icons. — the compact row drops the always-visible ▲▼⧉✕ strip; Duplicate/Remove/Add tag/etc. stay reachable through the existing "⋯"/context menu (`datasetRowMenu.ts`), unchanged.
-- [ ] Clearly distinguish selection from the item currently open in a plot or worksheet. — pre-existing `.active`/`.selected` styling carried over as-is; not newly addressed by this pass.
+- [x] Clearly distinguish selection from the item currently open in a plot or worksheet. **2026-09-12 (Claude):** "open" reads as the dataset shown in the ACTIVE window (the obvious reading per this item's own steer) — the existing `activeId` store state `LibraryTree.tsx` already passes to `DatasetRow` as `active={node.entity.id === activeId}`, no new state added. The `.active` CSS class (distinct from multi-select's `.selected` — separate border/box-shadow vs. background recipes in `shell.css`, both design tokens only) already carried this visually; the gap was a semantic marker, so `DatasetRow.tsx`'s row now also carries `aria-current="true"` exactly when `active`, independent of `selected` in both directions (a row can be plotted AND part of a multi-selection at once). Tested at the DOM layer: `frontend/src/components/Library/DatasetRow.test.tsx`'s "DatasetRow — aria-current marks the OPEN item, independent of multi-select (UX-001)" describe block (5 cases: active-only, selected-only, both, neither, and the compact Tree layout) asserts the `aria-current` attribute and both classes independently. Sabotage-verified: removing the `aria-current` prop made exactly the 3 cases that expect it present FAIL (3 failed/50), the 2 negative-case tests stayed green; reverted.
 - [x] Preserve keyboard navigation, multiselect, drag/drop, and context-menu behavior. — `LibraryTree.test.tsx` (705 lines) and `DatasetRow.test.tsx` (538 lines) pass unmodified against the new layout.
 - [x] Ensure large projects remain performant when thumbnails are collapsed. — the always-mounted `Sparkline` (~120+ synchronous SVG builds per Tree render) is now opt-in per row.
 - [x] Do not lose Origin book/sheet provenance or saved-graph relationships when simplifying the presentation. — sheet chip, Origin routing, `DerivedWorksheetMark`, drag/drop all preserved verbatim in `DatasetRowParts.tsx`'s `DatasetRowControls`.
@@ -362,7 +416,45 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 - Automated tests: `frontend/src/components/Library/DatasetRowCompact.test.tsx` (new, 7 cases — compact-row shape, glyph, meta text, opt-in preview mount/unmount, no-selection-change, localStorage persistence, flat-mode regression guard) and `frontend/src/lib/libraryPreviewPrefs.test.ts` (new, 3 cases) all pass and were individually sabotage-verified (broke the code path each covers, confirmed the test failed, restored). Full existing suite green (see Agent verification) — `DatasetRow.test.tsx` and `LibraryTree.test.tsx` pass with ZERO changes to their assertions.
 - Agent verification: worksheet Tree rows are now a single compact line (glyph + name + `N pts · Mch` + opt-in preview toggle), matching `FigureRow`'s existing compact shape; the sparkline no longer mounts unconditionally; expanding/collapsing it never touches `selectedIds`/`activeId`; all pre-existing keyboard/drag/context-menu/roving-focus behavior is unchanged (same tests, same assertions, all passing). `tsc --noEmit`, `eslint src`, and the full `vitest run` suite are clean; `npm run build` + the bundle-size ratchet are clean (see gate numbers in the implementation session's own report).
 - Owner verification: pending — required for this item (visual review of the reported Origin project, real-viewport row-count check, narrow-panel truncation check).
-- Notes: scope was deliberately narrow — only `DatasetRow.tsx`'s `treeMode` (Tree) branch changed; the flat/search-list and Smart Folders card, Tiles, Details, and `LIBRARY_WORKBOOK_UX_PLAN.md`'s hierarchy model are all untouched. A full tree-wide icon/badge audit and the "distinguish selection from the item open in a plot" item remain open — out of this pass's scope, not forgotten. The eager-bundle ratchet (`frontend/scripts/check-bundle-size.mjs`) needed a raise — 910,748 → 912,503 bytes (+1,755, budget raised to measured + 1,024 = 913,527) — after a measured `React.lazy()` split of the preview toggle came back WORSE (fragmented Sparkline's own shared chunks) and was reverted, and deduplicating the two row layouts' shared JSX/logic recovered 415 of the original 1,146-byte overage; the dated history entry in that file has the full measurement trail.
+- Notes: scope was deliberately narrow — only `DatasetRow.tsx`'s `treeMode` (Tree) branch changed; the flat/search-list and Smart Folders card, Tiles, Details, and `LIBRARY_WORKBOOK_UX_PLAN.md`'s hierarchy model are all untouched. A full tree-wide icon/badge audit and the "distinguish selection from the item open in a plot" item remained open at the time this note was written — both closed 2026-09-12 (Claude), see the dated entry below. The eager-bundle ratchet (`frontend/scripts/check-bundle-size.mjs`) needed a raise — 910,748 → 912,503 bytes (+1,755, budget raised to measured + 1,024 = 913,527) — after a measured `React.lazy()` split of the preview toggle came back WORSE (fragmented Sparkline's own shared chunks) and was reverted, and deduplicating the two row layouts' shared JSX/logic recovered 415 of the original 1,146-byte overage; the dated history entry in that file has the full measurement trail.
+
+- **2026-09-12 (Claude), the two remaining UX-001 residuals closed:**
+  - **(a) Tree-wide icon/badge audit**: new test file
+    `frontend/src/components/Library/rowIconAccessibility.test.tsx` renders
+    all five Library row kinds and asserts every icon-only `<button>`/
+    `role="button"` carries an `aria-label` or `title`; all already did.
+    A second describe block applies the same requirement to non-interactive
+    count/icon badges and found one real gap: `FolderRow.tsx`'s dataset-count
+    chip had neither, unlike `WorkbookRow.tsx`'s sibling worksheet-count chip
+    — fixed with a `title` (`FolderRow.tsx`), mirroring the existing
+    convention. Sabotage-verified: reverting the `FolderRow.tsx` fix made
+    exactly the one targeted test FAIL (1 failed/8); every other row kind's
+    test passed both before and after (no fix was needed there), confirming
+    the audit is real, not vacuous.
+  - **(b) Selected vs. open**: "open" = the dataset shown in the ACTIVE
+    window — the existing `activeId` state `LibraryTree.tsx` already threads
+    into `DatasetRow`'s `active` prop (no new state). `DatasetRow.tsx` now
+    also sets `aria-current="true"` on the row when `active`, independent of
+    `selected`; the pre-existing `.active`/`.selected` CSS classes (both
+    design-token-only) already distinguished the two visually. Tested at the
+    DOM layer in `DatasetRow.test.tsx` (5 cases covering all four
+    active×selected combinations plus the compact Tree layout);
+    sabotage-verified (removing the prop failed exactly the 3 cases that
+    require it, 3 failed/50; reverted).
+  - Gates (frontend-only; `src/quantized/` untouched): `npx tsc -b --force`
+    clean; `npx eslint` on every touched file clean; targeted `npx vitest
+    run` (all five row-kind test files + `rowIconAccessibility.test.tsx` +
+    `usePlotPayload.errorRoles.test.ts`/`.test.ts` + `useApp.test.ts` +
+    `windows.test.ts`/`windowDocuments.test.ts`/`reimport.test.ts` +
+    `architecture.test.ts`) — 671 passed, 0 failed. `DatasetRow.tsx` landed
+    exactly AT the 400-line `.tsx` ceiling (400 after trimming the added
+    comment) — no extraction needed, no pin raised. See the combined FULL
+    suite + build numbers at the end of this entry (one gate run covered
+    both this pass and BUG-001's plot-window-rebinding pass above).
+  - Not done / explicitly out of scope, per this item's own steer: the "pick
+    the obvious reading" note above IS the product decision for (b) — no
+    further decision needed; owner visual verification of the reported
+    Origin project remains pending (unchanged from the prior pass).
 
 ---
 
@@ -1346,7 +1438,7 @@ differs from its input's — and that is what turned up sites 7-9.
   So the flag fixed one path and not the other, and the label path is the one
   this booked item is about. (My first edit here claimed both were fixed, having
   verified `rowSidecars.ts` and generalised to a module that does not use it.)
-- [ ] **Booked by site 10's fix, rescoped 2026-09-12:** recovering the LABEL
+- [x] **Booked by site 10's fix, rescoped 2026-09-12:** recovering the LABEL
   path's text labels — for a sampled preview AND for a trimmed one, since that
   path cannot see the flag — needs the backend to send which rows the decimator
   kept. Cheaper than the original note assumed:
@@ -1394,6 +1486,25 @@ differs from its input's — and that is what turned up sites 7-9.
   columns and NO `cat_levels`, so for the datasets this guard actually affects
   the fallback IS the numbers.
   `lib/projectSearchSidecars.ts` reads keys only and is fine.
+  **SHIPPED — reconciled 2026-09-12.** Landed as the metadata option decided
+  above: backend `e524d4ff` (`preview_rows`, omitted when the rows already
+  correspond), frontend `8711dab5` (`lib/rowSidecars.ts`'s
+  `PREVIEW_SOURCE_ROWS`/`asPreviewSourceRows`, read by
+  `lib/barlayout.ts::textLabelsFor` via `meta[PREVIEW_SOURCE_ROWS]`), review
+  fixes `3145fe33` (composed map on a row slice, duplicate-index rejection,
+  identity map for a trimmed prefix, facet-picker fix); merged as #355
+  (`fe40adb5`). `store/importDatasets.ts` writes the map onto the preview's
+  metadata; `lib/rowSidecars.ts::composePreviewSourceRows`/`sliceRowSidecars`
+  keep it correct across a row slice.
+  **Residuals recorded, not further open work:** (1) a text column shorter
+  than the book reads an out-of-range map entry as `undefined` -> blank per
+  CELL, fail-closed one row at a time rather than disabling the whole map
+  (`lib/barlayout.ts::textLabelsFor`'s unbounded-validator comment); (2)
+  `mergeDatasets` (`lib/merge.ts` via `withoutRowSidecars`) and every
+  worksheet reshape (`lib/worksheetTransforms.ts`'s `provenance()`) DROP the
+  map outright rather than compose or carry it, deliberately — `stack`'s
+  recoverable row mapping is booked but not done (see `rowSidecars.ts`'s
+  `PREVIEW_SOURCE_ROWS` doc comment).
 
 #### Second review round, on the fix itself — all fixed here
 
@@ -1751,10 +1862,20 @@ lose an edit:
   truncates them earlier), but it carries its own design question — should a `.dwk`'s
   exclusions survive a pending load at all? — so it is not a drive-by fix.
 
-- [ ] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
+- [x] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
   while `clearRowExclusions` does. So building a filter and pressing undo restores a
   snapshot from before the filter change and silently discards it. Pre-existing and
   untouched by the guard pass; worth its own fix.
+  **SHIPPED — reconciled 2026-09-12.** Fixed by `0da3bf20` (#354, Group S,
+  "the Data Filter belongs to undo"): `store/rowState.ts`'s `setDatasetFilter`
+  calls `recordHistoryCoalesced("data filter", ...)` and `clearDatasetFilter`
+  calls `recordHistory("clear data filter")`; `store/dataIntake.ts` calls
+  `endHistoryRun()` to terminate a slider/typing run. Pinned in
+  `store/rowState.test.ts`'s "Group S — a filter edit is undoable" and
+  "Group S — clearing the filter" describes ("Ctrl+Z gives back the state
+  from before the filter", "a whole EDITING RUN is one undo step, not one per
+  event", "is its own undo step, and undoing it gives the filter back",
+  "records NOTHING when there is no filter to clear", among others).
 
 ### STILL OPEN — the structural fix
 

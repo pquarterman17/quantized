@@ -384,22 +384,35 @@ as a CSS-only tree redesign.
   `lib/dependencyImpact.ts` (PR M slice 1, merged `ab3861a`); move preview
   is `lib/workbookSeparate.ts`'s `computeSeparatePlan` (PR J slice 1, merged
   `abbf0ae`) — both build the affected-item list before the user commits.
-- [~] Preserve formulas, pipeline parameters, units, exclusions, and provenance
+- [x] Preserve formulas, pipeline parameters, units, exclusions, and provenance
   through project save/load and workbook copy/paste. **Verification pass
-  (2026-09-09), corrected in review the same day.** SAVE/LOAD: all five survive
-  in full. COPY/PASTE: four survive in full; PROVENANCE is partial —
-  cross-workbook lineage (`versionOf`, and a `derivedFrom` whose target is
-  outside the copied workbook) is DROPPED, by design, because carrying it would
-  dangle an id into a project the destination may not have open. That is the
-  right call, but it is not "preserved", and the box stays `[~]` until the loss
-  is at least surfaced. `versionOf` is affected on essentially every copy:
-  "Import as new version" (`store/relink.ts:303`) tags the new dataset with the
-  OLD dataset's id while that import created a brand-new workbook
+  (2026-09-09), corrected in review the same day; reconciled to `[x]`
+  2026-09-12.** SAVE/LOAD: all five survive in full. COPY/PASTE: four survive
+  in full; PROVENANCE is partial — cross-workbook lineage (`versionOf`, and a
+  `derivedFrom` whose target is outside the copied workbook) is DROPPED, by
+  design, because carrying it would dangle an id into a project the
+  destination may not have open. That is the right call, but it is not
+  "preserved" outright, and this box was held at `[~]` until the loss was at
+  least surfaced. `versionOf` is affected on essentially every copy: "Import
+  as new version" (`store/relink.ts:303`) tags the new dataset with the OLD
+  dataset's id while that import created a brand-new workbook
   (`store/importDatasets.ts:271`), so the link always crosses a workbook
-  boundary. `droppedExternalRefs` counts these, but no non-test code reads it,
-  so the user is told nothing — tracked as **UX-002** in
-  `plans/BUGS_AND_ISSUES.md`. Pinned by `workbookTransfer.test.ts`'s "drops
-  cross-workbook lineage rather than dangling it".
+  boundary.
+  **The surfacing shipped 2026-09-09** (`b6fa3c83`, #335 — Group J, tracked
+  as UX-002's first fix-checklist item in `plans/BUGS_AND_ISSUES.md`):
+  `store/workbookTransfer.ts`'s `refNote()` appends "— N reference(s) to data
+  outside the copy not carried" to both the persistent status line and the
+  toast, for Paste and Duplicate, for both `droppedExternalRefs` and the
+  separately-counted `droppedBackgroundRefs`; six sabotage-verified tests in
+  `store/workbookTransfer.test.ts`. That closes the "no least surfaced" gate
+  this box was held open for, so it moves to `[x]`. Pinned by
+  `lib/workbookTransfer.test.ts`'s "drops cross-workbook lineage rather than
+  dangling it".
+  **Residual, deliberately NOT resolved here — UX-002's second fix-checklist
+  item, owner-gated:** whether a dropped link is worth preserving as inert
+  historical text (e.g. the source dataset's name) rather than a resolvable
+  id is a semantics call about what lineage means across a transfer boundary;
+  see `plans/BUGS_AND_ISSUES.md`'s UX-002 entry.
 
   The rest already rode through both round trips via the existing mechanism
   (dataset fields serialize/parse verbatim in
@@ -742,10 +755,17 @@ The owner confirmed the milestone order on 2026-08-14. Each step remains a
 reviewable stacked PR with targeted unit tests, typecheck, lint, production
 build, and focused interaction coverage where appropriate.
 
-1. [ ] **PR A — canonical hierarchy specification and workspace migration.**
-   Introduce a first-class workbook identity without breaking existing `.dwk`
-   projects or Origin provenance. Provide deterministic migration for current
-   folder/dataset structures.
+1. [x] ~~**PR A — canonical hierarchy specification and workspace migration.**~~
+   **Reconciled 2026-09-12** — this heading was left unchecked after its own
+   four-way decomposition and acceptance gates were all ticked. Sub-PRs A1-A4
+   (below, ~2223-2231) shipped `8a6d0e6`/`c1adf97`/`914042e`,
+   `e41308d`/`64af36c`, `152c3d8`, `aa789bc`; all six PR A acceptance gates
+   (~2234-2260) are `[x]` with cited tests (`lib/workspaceMigration.test.ts`,
+   `lib/workbooks.test.ts`, `store/appendWorkbooks.test.ts`,
+   `lib/autosave.test.ts`, `store/useApp.test.ts`,
+   `src/architecture.test.ts`). Introduced a first-class workbook identity
+   without breaking existing `.dwk` projects or Origin provenance, with
+   deterministic migration for prior folder/dataset structures.
 2. [x] ~~**PR B — shared Library hierarchy view model.**~~ Added a pure,
    renderer-independent hierarchy over folders, workbooks, worksheets, and
    heterogeneous artifacts without importing renderer concerns into the

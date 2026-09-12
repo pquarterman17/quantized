@@ -47,6 +47,7 @@
 
 import { useState } from "react";
 
+import { plural } from "../../lib/plural";
 import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { buildFolderRowMenu } from "./folderRowMenu";
 import ContextMenu from "../overlays/ContextMenu";
@@ -313,7 +314,12 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
           {folder.name}
         </span>
       )}
-      <span className="qzk-group-count">{count}</span>
+      {/* UX-001 tree-wide icon/badge audit: matches WorkbookRow's own
+       *  worksheet-count chip, which already carried a title explaining what
+       *  the bare number means — this one didn't. */}
+      <span className="qzk-group-count" title={`${count} dataset${plural(count)} in this folder (including subfolders)`}>
+        {count}
+      </span>
     </div>
   );
 }

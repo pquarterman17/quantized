@@ -295,6 +295,10 @@ export default function DatasetRow({
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
       tabIndex={0}
+      // UX-001: `active` = shown in the focused window (LibraryTree passes
+      // `id === activeId`) -- semantic marker for the `.active` CSS class,
+      // independent of multi-select's `selected`/`.selected`.
+      aria-current={active ? "true" : undefined}
       onKeyDown={onRowKeyDown}
       onClick={onRowClick}
       // L0.25 tree open gesture; the NAME span's dbl-click rename wins over it.

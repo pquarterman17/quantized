@@ -254,3 +254,144 @@ describe("NCNR .refl error roles are overridable through the store action ErrorR
     expect(y!.plus).toEqual([0.020429255703, 0.011740351611, 0.0093020629222, 0.0074678843633, 0.0065797453572]);
   });
 });
+
+// BUGS_AND_ISSUES BUG-001, the last code-verifiable checklist box: "plot-
+// window rebinding (dragging/dropping a dataset onto an existing plot
+// window) preserves the declared error roles" -- previously open in the
+// item's own Completion record ("plot-window-rebinding preservation of the
+// declared roles ... remains unverified"). `rebindWindow` (store/windows.ts)
+// is the EXPLICIT drop gesture: it threads `errors: ds?.errorRoles,
+// resetErrors: true` into `syncPlotWindow` (store/windowDocuments.ts) for
+// BOTH the focused-window path (`focusedRebindPatch`) and the background-
+// window path, reading the dataset's CURRENT `errorRoles` off the store at
+// rebind time -- not a stale value captured at import. This pins that wiring
+// end to end (dataset -> window.document.bindings.errors -> the rendered
+// payload) through the real `rebindWindow` action, on the real NCNR .refl
+// fixture, mirroring the import-then-assert pattern the describe block above
+// already established.
+describe("rebindWindow (drag/drop) preserves an NCNR .refl's declared error roles (BUG-001, plot-window rebinding)", () => {
+  const declaredRoles: ErrorBinding[] = [
+    { channel: 1, target: 0, axis: "y", side: "both" },
+    { channel: 2, target: -1, axis: "x", side: "both" },
+  ];
+
+  const reflPayload = () => ({
+    time: [0.0074473497059, 0.0078680679047, 0.008342898412, 0.0088334445027, 0.009338185424],
+    values: [
+      [1.086612118, 0.020429255703, 0.00091856511932],
+      [1.07206817, 0.011740351611, 0.00095669551269],
+      [1.0641516064, 0.0093020629222, 0.00097803208734],
+      [1.0518306308, 0.0074678843633, 0.0010077631213],
+      [1.044353347, 0.0065797453572, 0.0010242748316],
+    ],
+    labels: ["Intensity", "uncertainty", "resolution"],
+    units: ["counts", "counts", "1/Ang"],
+    metadata: {
+      x_column_name: "Qz",
+      parser_name: "import_ncnr_refl",
+      default_value_channels: [0],
+      error_roles: declaredRoles,
+      error_channels: { 0: 1 },
+    },
+  });
+
+  // An ordinary dataset with no error roles at all -- "opens a plot window
+  // on one dataset" (the pre-rebind state a drop target starts from).
+  const plainDataset: Dataset = {
+    id: "plain-1",
+    name: "plain.dat",
+    data: { time: [0, 1, 2], values: [[1], [2], [3]], labels: ["Y"], units: [""], metadata: {} },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useApp.setState({
+      datasets: [],
+      folders: [],
+      activeId: null,
+      selectedIds: [],
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+    vi.mocked(importFile).mockResolvedValue(reflPayload());
+    vi.mocked(probeSource).mockResolvedValue(null);
+  });
+
+  it("a FOCUSED window's rebind onto the NCNR dataset carries its declared roles into the window's own payload", async () => {
+    // Import the NCNR dataset FIRST, while no window exists, so import's OWN
+    // passive rebind (addDataset -> rebindFocusedPlotWindow) has nothing to
+    // touch -- the only rebind this test exercises is the EXPLICIT one below.
+    await useApp.getState().importPaths(["/data/j395.refl"]);
+    const ncnrId = useApp.getState().datasets[0].id;
+
+    useApp.getState().addDataset(plainDataset);
+    const winId = useApp.getState().createWindow(plainDataset.id);
+    useApp.getState().focusWindow(winId);
+    expect(useApp.getState().plotWindows.find((w) => w.id === winId)?.datasetId).toBe(plainDataset.id);
+
+    // The explicit drag/drop gesture under test.
+    useApp.getState().rebindWindow(winId, ncnrId);
+
+    const win = useApp.getState().plotWindows.find((w) => w.id === winId)!;
+    expect(win.datasetId).toBe(ncnrId);
+    expect(win.document?.bindings.errors).toEqual(declaredRoles);
+
+    // And the window's own PAYLOAD, not just the store record, actually
+    // draws from them -- feed usePlotPayload the same `documentErrors`
+    // PlotStage threads for the focused window (window.document.bindings.errors).
+    const ncnrDataset = useApp.getState().datasets.find((d) => d.id === ncnrId)!;
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({ active: ncnrDataset, documentErrors: win.document?.bindings.errors }),
+    });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+    expect(result.current.plotted).toEqual([0]);
+    const spans = result.current.errorSpans.get(1) ?? [];
+    expect(spans.find((s) => s.axis === "y")).toBeDefined(); // uncertainty -> vertical whisker
+    expect(spans.find((s) => s.axis === "x")).toBeDefined(); // resolution -> horizontal whisker
+  });
+
+  it("a BACKGROUND (unfocused) window's rebind onto the NCNR dataset also carries its declared roles, without touching focus", async () => {
+    await useApp.getState().importPaths(["/data/j395.refl"]);
+    const ncnrId = useApp.getState().datasets[0].id;
+
+    useApp.getState().addDataset(plainDataset);
+    const focusedWinId = useApp.getState().createWindow(plainDataset.id);
+    useApp.getState().focusWindow(focusedWinId);
+    const bgWinId = useApp.getState().createWindow(plainDataset.id); // stays unfocused
+    expect(useApp.getState().focusedWindowId).toBe(focusedWinId);
+
+    // This exercises rebindWindow's OTHER branch (store/windows.ts:
+    // `windowId === s.focusedWindowId ? ... : ...`).
+    useApp.getState().rebindWindow(bgWinId, ncnrId);
+
+    const bgWin = useApp.getState().plotWindows.find((w) => w.id === bgWinId)!;
+    expect(bgWin.datasetId).toBe(ncnrId);
+    expect(bgWin.document?.bindings.errors).toEqual(declaredRoles);
+    // Rebinding the background window never touched focus or the OTHER window.
+    expect(useApp.getState().focusedWindowId).toBe(focusedWinId);
+    expect(useApp.getState().plotWindows.find((w) => w.id === focusedWinId)?.datasetId).toBe(plainDataset.id);
+  });
+
+  it("an explicit setErrorRoles override made BEFORE the rebind survives it (the dataset's CURRENT roles win, not the parser default)", async () => {
+    await useApp.getState().importPaths(["/data/j395.refl"]);
+    const ncnrId = useApp.getState().datasets[0].id;
+
+    // Override ONE declared role on the NCNR dataset itself -- the same
+    // action ErrorRolesCard.tsx calls -- BEFORE the dataset is ever dropped
+    // onto a window.
+    const overridden = declaredRoles.map((r, k) => (k === 1 ? { ...r, side: "+" as const } : r));
+    useApp.getState().setErrorRoles(ncnrId, overridden);
+    expect(useApp.getState().datasets.find((d) => d.id === ncnrId)?.errorRoles).toEqual(overridden);
+
+    useApp.getState().addDataset(plainDataset);
+    const winId = useApp.getState().createWindow(plainDataset.id);
+    useApp.getState().focusWindow(winId);
+
+    useApp.getState().rebindWindow(winId, ncnrId);
+
+    const win = useApp.getState().plotWindows.find((w) => w.id === winId)!;
+    // The OVERRIDE landed on the window, not the parser's original declaration.
+    expect(win.document?.bindings.errors).toEqual(overridden);
+    expect(win.document?.bindings.errors).not.toEqual(declaredRoles);
+  });
+});
