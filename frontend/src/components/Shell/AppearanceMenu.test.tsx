@@ -9,6 +9,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import AppearanceMenu from "./AppearanceMenu";
+import { autoSeriesStylesEnabled } from "../../lib/seriesStyleCycle";
+import { useApp } from "../../store/useApp";
 
 function open(): void {
   fireEvent.click(screen.getByTitle("Appearance (theme · accent · density · palette)"));
@@ -16,6 +18,7 @@ function open(): void {
 
 afterEach(() => {
   window.history.pushState({}, "", "/");
+  useApp.getState().setPref("autoSeriesStyles", false);
 });
 
 describe("AppearanceMenu — full app (default view)", () => {
@@ -36,6 +39,21 @@ describe("AppearanceMenu — full app (default view)", () => {
     render(<AppearanceMenu />);
     open();
     expect(screen.getByText("All preferences…")).toBeInTheDocument();
+  });
+
+  // P3.3 non-colour encodings: the auto dash/marker cycle is opt-in from the
+  // SAME menu the palette lives in (hue there, non-hue here), and toggling it
+  // has to reach lib/seriesStyleCycle — which is what the canvas and the
+  // publication export actually read.
+  it("offers the P3.3 dash/marker switch beside the palette, off by default, and turning it on reaches the cycle", () => {
+    render(<AppearanceMenu />);
+    open();
+    const box = screen.getByLabelText("Vary dash & marker", { selector: "input" });
+    expect(box).not.toBeChecked();
+    expect(autoSeriesStylesEnabled()).toBe(false);
+    fireEvent.click(box);
+    expect(useApp.getState().autoSeriesStyles).toBe(true);
+    expect(autoSeriesStylesEnabled()).toBe(true);
   });
 });
 

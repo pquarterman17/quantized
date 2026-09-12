@@ -39,4 +39,21 @@ describe("sanitizeExportSeriesStyles", () => {
     const out = sanitizeExportSeriesStyles([{ color: "#fff" }]);
     expect(out?.[0]).not.toHaveProperty("step");
   });
+
+  // Found while wiring the P3.3 dash/marker cycle: `marker_shape` was added to
+  // the wire type and to `buildExportStyles`, but NOT here — so a saved
+  // FigureDocument's exact publication styles came back shape-less and every
+  // marker reverted to a circle on re-export. Same parity break the backend
+  // `_MARKER` table closed, one layer down.
+  it("restores marker_shape (a saved figure's glyphs must survive re-export)", () => {
+    const out = sanitizeExportSeriesStyles([{ marker: true, marker_shape: "star" }]);
+    expect(out).toEqual([{ marker: true, marker_shape: "star" }]);
+  });
+
+  it("drops a non-string marker_shape and omits it when unset", () => {
+    expect(sanitizeExportSeriesStyles([{ marker: true, marker_shape: 7 }])?.[0]).toEqual({
+      marker: true,
+    });
+    expect(sanitizeExportSeriesStyles([{ color: "#fff" }])?.[0]).not.toHaveProperty("marker_shape");
+  });
 });

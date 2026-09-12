@@ -9,6 +9,7 @@
 
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
+import { setAutoSeriesStyles } from "../lib/seriesStyleCycle";
 import type { PanelFit } from "../lib/panelLayout";
 import type {
   Accent,
@@ -58,6 +59,14 @@ export interface Prefs {
   accent: Accent;
   density: Density;
   palette: string;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 — the NON-colour half of the series
+   *  cycle. On, a series with no explicit dash/marker glyph gets one by
+   *  display position, so two series differ by more than hue on screen, in
+   *  print and in the publication export (`lib/seriesStyleCycle.ts`).
+   *  OFF by default: opt-in, and off reproduces the previous rendering
+   *  exactly. Lives beside `palette` because it is the same mechanism —
+   *  one pref in this blob, pushed into a pure lib module by syncPrefs. */
+  autoSeriesStyles: boolean;
   reduceMotion: boolean;
   wheelZoom: boolean;
   defaultTrace: string;
@@ -90,6 +99,7 @@ export const PREF_DEFAULTS: Prefs = {
   accent: "violet",
   density: "regular",
   palette: "default",
+  autoSeriesStyles: false,
   reduceMotion: false,
   wheelZoom: true,
   defaultTrace: "Line",
@@ -118,6 +128,7 @@ export function loadPrefs(): Prefs {
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
       palette: normalizePalette(p.palette),
+      autoSeriesStyles: bool(p.autoSeriesStyles, fb.autoSeriesStyles),
       reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
       wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
       defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
@@ -154,6 +165,7 @@ export function prefsOf(s: AppState): Prefs {
     accent: s.accent,
     density: s.density,
     palette: s.palette,
+    autoSeriesStyles: s.autoSeriesStyles,
     reduceMotion: s.reduceMotion,
     wheelZoom: s.wheelZoom,
     defaultTrace: s.defaultTrace,
@@ -176,6 +188,10 @@ export function prefsOf(s: AppState): Prefs {
  *  data-* attributes; data-reduce-motion drives the motion-killing rule). */
 export function syncPrefs(s: AppState): void {
   applyPalette(s.palette);
+  // The non-colour cycle rides the SAME push-a-pref-into-a-pure-lib path as
+  // applyPalette above and setFormatOpts below, which is what makes the canvas
+  // and the publication export read one flag instead of each being told.
+  setAutoSeriesStyles(s.autoSeriesStyles);
   const el = document.documentElement;
   el.dataset.theme = s.theme;
   el.dataset.accent = s.accent;

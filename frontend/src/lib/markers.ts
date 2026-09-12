@@ -5,7 +5,7 @@
 
 import type uPlot from "uplot";
 
-import type { MarkerShape } from "./types";
+import type { MarkerShape, SeriesStyle } from "./types";
 
 export const MARKER_SHAPES: { value: MarkerShape; label: string }[] = [
   { value: "circle", label: "● circle" },
@@ -94,4 +94,30 @@ export function markerPaths(
     }
     return { stroke: path, fill: closed ? path : null };
   };
+}
+
+/**
+ * The uPlot `points` config for one series: whether markers draw at all, and
+ * with which glyph/size. ONE decision for the explicit `SeriesStyle.marker`
+ * and for the `Scatter` / `Line + markers` default-trace preference — they draw
+ * the same glyph, and keeping them apart in `uplotOpts.ts` meant a default-trace
+ * marker silently ignored `markerShape`/`markerSize`.
+ *
+ * `style` is the EFFECTIVE style (`seriesStyleCycle.resolveSeriesStyle`), so the
+ * P3.3 auto glyph cycle arrives here already applied. `stroke` is the series'
+ * resolved colour: open glyphs (+ x *) stroke only, closed ones fill with it.
+ * A circle returns no paths builder — uPlot's own built-in draws it.
+ */
+export function seriesPoints(
+  style: SeriesStyle | undefined,
+  trace: string,
+  stroke: string,
+): uPlot.Series.Points {
+  if (!style?.marker && trace !== "Scatter" && trace !== "Line + markers") return { show: false };
+  const size = style?.markerSize ?? 5;
+  const shape = style?.markerShape ?? "circle";
+  const paths = markerPaths(shape, size);
+  return paths
+    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
+    : { show: true, size };
 }

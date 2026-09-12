@@ -19,6 +19,7 @@ import type { SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import LegendSample from "./LegendSample";
+import { resolveSeriesStyle } from "../../lib/seriesStyleCycle";
 
 interface PlotLegendProps {
   series: PlotSeriesSpec[];
@@ -231,7 +232,7 @@ export default function PlotLegend({
         if (editing && editing.channel === channel) {
           return (
             <div className="it" key={s.label}>
-              <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
+              <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i)} defaultTrace={defaultTrace} />
               <input
                 className="qz-input"
                 autoFocus
@@ -299,7 +300,7 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
+            <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i)} defaultTrace={defaultTrace} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
             {interactive && plotted.length > 1 && (

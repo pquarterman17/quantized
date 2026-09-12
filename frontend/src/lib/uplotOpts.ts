@@ -6,7 +6,8 @@ import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { resolveDrawColor } from "./contrastColor";
-import { FILLED_SHAPES, markerPaths } from "./markers";
+import { seriesPoints } from "./markers";
+import { DASH, resolveSeriesStyle } from "./seriesStyleCycle";
 import type { Measurement } from "./measure";
 import type { FwhmResult } from "./peakwidth";
 import type { PlotBg } from "./plotview";
@@ -15,7 +16,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
+import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
@@ -142,13 +143,6 @@ export const SERIES_VARS = [
   "--series-7",
   "--series-8",
 ];
-
-/** Dash patterns (canvas setLineDash arrays) per line style; solid = no dash. */
-const DASH: Record<LineStyle, number[] | undefined> = {
-  solid: undefined,
-  dashed: [8, 4],
-  dotted: [2, 4],
-};
 
 /** A uPlot axis `values` callback: maps tick split values to label strings. */
 type TickValues = (
@@ -1304,7 +1298,10 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
     { sorted: xAscending ? 1 : 0 },
     ...payload.series.map((s, i) => {
-      const style = seriesStyles?.[i];
+      // The EFFECTIVE style: this series' own, plus P3.3's opt-in auto dash/
+      // glyph by display position (the identity when off). The SAME resolver
+      // `lib/exportStyles.ts` calls — see `seriesStyleCycle.ts`'s header.
+      const style = resolveSeriesStyle(seriesStyles?.[i], i);
       // Literal per-series overrides (e.g. an Origin-imported figure's
       // saved line colour) are checked for contrast against THIS window's
       // effective background and swapped for the ink token when they'd be
@@ -1341,23 +1338,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       // Default trace shape (Preferences) when the series has no explicit style:
       // Scatter = markers, no line; Line + markers = both; Step = stepped line.
       const trace = args.defaultTrace ?? "Line";
-      const scatter = trace === "Scatter";
-      const width = style?.width ?? (scatter ? 0 : (args.baseLineWidth ?? 1.5));
+      const width = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const dash = style?.line ? DASH[style.line] : undefined;
-      // Optional markers. Default is a filled circle (uPlot built-in); other
-      // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
-      // closed glyphs fill with the series colour.
-      let points: uPlot.Series.Points = { show: false };
-      if (style?.marker) {
-        const size = style.markerSize ?? 5;
-        const shape = style.markerShape ?? "circle";
-        const paths = markerPaths(shape, size);
-        points = paths
-          ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
-          : { show: true, size };
-      } else if (scatter || trace === "Line + markers") {
-        points = { show: true, size: 5 };
-      }
+      // Markers: glyph + size for an explicit `marker` style OR the Scatter /
+      // Line + markers default trace — `markers.seriesPoints` owns that one
+      // decision now (two branches here, the second ignoring markerShape).
+      const points = seriesPoints(style, trace, stroke);
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
@@ -1375,9 +1361,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
           : style.step === "mid" ? args.steppedPathsMid
           : args.steppedPaths;
         if (builder) def.paths = xAscending ? builder : fullLine(builder);
-      } else if (trace === "Step" && !style?.line && args.steppedPaths) {
+      } else if (trace === "Step" && !seriesStyles?.[i]?.line && args.steppedPaths) {
         // Stepped trace: apply the caller-supplied step-after path builder
         // (there's no per-series line-shape override, so it's a global default).
+        // RAW list, not the resolved `style`: a P3.3 auto dash is a DEFAULT and
+        // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.

@@ -8,6 +8,11 @@ import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
+// Direct file import, not the barrel: the barrel's header forbids re-exporting
+// Checkbox because every OTHER consumer is a lazy panel. This menu is eager, so
+// it pays for those ~30 lines itself rather than making the barrel drag them in
+// for everyone.
+import { Checkbox } from "../primitives/Checkbox";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 
 const THEMES: Theme[] = ["dark", "light"];
@@ -30,6 +35,8 @@ export default function AppearanceMenu() {
   const setDensity = useApp((s) => s.setDensity);
   const palette = useApp((s) => s.palette);
   const setPalette = useApp((s) => s.setPalette);
+  const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
+  const setPref = useApp((s) => s.setPref);
   const setPrefsOpen = useApp((s) => s.setPrefsOpen);
 
   useEffect(() => {
@@ -93,6 +100,18 @@ export default function AppearanceMenu() {
             value={palette}
             onChange={(e) => setPalette(e.target.value)}
           />
+          {/* P3.3 non-colour encodings — deliberately right under the palette,
+              because it is the same cycle: the palette varies hue, this varies
+              dash + marker glyph so series stay tellable apart in greyscale, in
+              print, and with a colour-vision deficiency. Off by default
+              (opt-in); on, it reaches the canvas, the legend swatch AND the
+              publication export through one resolver (lib/seriesStyleCycle). */}
+          <Checkbox
+            checked={autoSeriesStyles}
+            onChange={(v) => setPref("autoSeriesStyles", v)}
+          >
+            Vary dash &amp; marker
+          </Checkbox>
           {/* Preferences (and the rest of the app shell it belongs to) isn't
               mounted in the calc-only shell (?view=calc, MAIN_PLAN #22) — the
               footer link would open a dialog nothing else in that shell

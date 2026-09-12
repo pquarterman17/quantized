@@ -5,6 +5,7 @@
 
 import { resolveToHex } from "./color";
 import type { ExportSeriesStyle } from "./publicationStyles";
+import { resolveSeriesStyle } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 import { seriesColor } from "./uplotOpts";
 
@@ -17,7 +18,15 @@ export function buildExportStyles(
   seriesStyles: Record<number, SeriesStyle>,
 ): (ExportSeriesStyle | null)[] {
   return plotted.map((ch, i) => {
-    const st = seriesStyles[ch];
+    // The EFFECTIVE style — the stored per-channel style plus the P3.3 auto
+    // dash/marker cycle when that preference is on. This is the ONE reason the
+    // export cannot diverge from the canvas: `uplotOpts.buildOpts` calls the
+    // same `resolveSeriesStyle(style, i)` with the same display position, so
+    // the backend never learns that a cycle exists — it just receives an
+    // ordinary explicit `line`/`marker_shape` and renders it (the faceted-
+    // styling attempt that shipped a screen-only change is FEATURE-001 in
+    // plans/BUGS_AND_ISSUES.md; this is the shape that avoids repeating it).
+    const st = resolveSeriesStyle(seriesStyles[ch], i);
     const spec: ExportSeriesStyle = {};
     const hex = resolveToHex(seriesColor(i, st)); // palette-by-position or override
     if (hex) spec.color = hex;

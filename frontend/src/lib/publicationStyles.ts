@@ -43,6 +43,11 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     if (typeof raw.width === "number" && Number.isFinite(raw.width) && raw.width >= 0) style.width = raw.width;
     if (raw.line === "solid" || raw.line === "dashed" || raw.line === "dotted" || raw.line === "none") style.line = raw.line;
     if (typeof raw.marker === "boolean") style.marker = raw.marker;
+    // Restored alongside `marker`: without this a saved FigureDocument's exact
+    // publication styles came back shape-less and every marker reverted to a
+    // circle on re-export — the same parity break `marker_shape` was added to
+    // close, one layer down (the sanitizer was missed when the field landed).
+    if (typeof raw.marker_shape === "string") style.marker_shape = raw.marker_shape;
     if (typeof raw.marker_size === "number" && Number.isFinite(raw.marker_size) && raw.marker_size >= 0) style.marker_size = raw.marker_size;
     if (raw.fill === "under") style.fill = raw.fill;
     else {

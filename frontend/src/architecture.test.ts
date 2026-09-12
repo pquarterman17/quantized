@@ -258,7 +258,14 @@ const STORE_PINS: Record<string, number> = {
   // Pinned TIGHT at the post-extraction size, which is what the 2818 entry
   // below said the next extraction after that sprint should do — the slack it
   // banked for seven parallel lanes is now reclaimed.
-  "/store/useApp.ts": 2334,
+  // 2334 -> 2328 (2026-09-12, P3.3 auto dash/marker cycle): the pin sat 2 lines
+  // above the file, so the new `autoSeriesStyles` pref field could not simply be
+  // appended. Paid for by seeding the whole prefs block with ONE `..._initialPrefs`
+  // spread instead of a hand-maintained `x: _initialPrefs.x` line per preference
+  // (17 of them) — every Prefs key is already an AppState field of the same name,
+  // which is exactly what `prefsOf(s)` relies on to read them back out, so the
+  // list could only ever drift. Same anti-drift move as `PrefKey = keyof Prefs`.
+  "/store/useApp.ts": 2328,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -484,7 +491,16 @@ const TS_CEILING = 500;
 // These 16 files are the discovered overage set from the RSM/ROI campaigns. Future
 // growth in any of them must fund an extraction, not a ceiling bump.
 const TS_MODULE_PINS: Record<string, number> = {
-  "/lib/uplotOpts.ts": 1446,
+  // 1446 -> 1434 (2026-09-12, PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 auto dash/marker
+  // cycle): the new pref had to be READ here, so two cohesive siblings moved out
+  // rather than the pin moving up — the `DASH` table to the new
+  // lib/seriesStyleCycle.ts (the dash vocabulary belongs with the cycle that
+  // assigns it, and the export-parity test compares against it without pulling
+  // in the plot builder), and the marker `points` decision to
+  // lib/markers.seriesPoints (which already owned every other marker concern;
+  // the two branches it merges also fixed a default-trace marker silently
+  // ignoring markerShape/markerSize). Ratcheted to what the file actually is.
+  "/lib/uplotOpts.ts": 1434,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
@@ -1780,6 +1796,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   accent: "prefs",
   density: "prefs",
   palette: "prefs",
+  autoSeriesStyles: "prefs (P3.3 auto dash/marker cycle; sits beside palette)",
   reduceMotion: "prefs",
   wheelZoom: "prefs",
   defaultTrace: "prefs",

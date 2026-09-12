@@ -211,6 +211,75 @@ def test_marker_shape_renders_in_svg() -> None:
     assert out[:5] == b"<?xml"
 
 
+# ── Per-series dash/marker CYCLE parity (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3) ──
+# The frontend resolves the auto dash/marker cycle itself and sends the result
+# as an ORDINARY explicit style (frontend/src/lib/seriesStyleCycle.ts ->
+# exportStyles.buildExportStyles), so this layer never learns a cycle exists.
+# What it owes in return: a spec that carries a different `line`/`marker_shape`
+# per series must actually render them differently, per series, not collapse
+# them. That is the backend half of the FEATURE-001 guard.
+
+
+def test_per_series_line_styles_map_independently() -> None:
+    # The exact three-series spec the ON cycle produces for an unstyled plot.
+    cycle = [{"line": "solid"}, {"line": "dashed"}, {"line": "dotted"}]
+    styles = [_plot_kwargs(1.5, 5.0, spec)["linestyle"] for spec in cycle]
+    assert styles == ["-", "--", ":"]
+    assert len(set(styles)) == 3, "three cycle positions must be three distinct linestyles"
+
+
+def test_per_series_marker_shapes_map_independently() -> None:
+    # The first three glyphs of AUTO_MARKER_CYCLE.
+    cycle = [
+        {"marker": True, "marker_shape": "circle"},
+        {"marker": True, "marker_shape": "square"},
+        {"marker": True, "marker_shape": "triangle"},
+    ]
+    codes = [_plot_kwargs(1.5, 5.0, spec)["marker"] for spec in cycle]
+    assert codes == ["o", "s", "^"]
+    assert len(set(codes)) == 3
+
+
+def test_cycled_dashes_reach_the_rendered_vector_output() -> None:
+    # Not just the kwargs: the dash has to survive into the drawn artists. An
+    # SVG carries stroke-dasharray per path, so a dashed/dotted pair shows up as
+    # two distinct dash patterns where an all-solid render has none.
+    x = np.linspace(0, 10, 20)
+    series = [("a", x), ("b", x + 1.0), ("c", x + 2.0)]
+    cycled = render_figure(
+        x,
+        series,
+        fmt="svg",
+        series_styles=[{"line": "solid"}, {"line": "dashed"}, {"line": "dotted"}],
+    )
+    plain = render_figure(x, series, fmt="svg")
+    patterns = set(re.findall(rb"stroke-dasharray:\s*([0-9.,\s]+)", cycled))
+    plain_patterns = set(re.findall(rb"stroke-dasharray:\s*([0-9.,\s]+)", plain))
+    # The dashed and the dotted series each contribute their own pattern; the
+    # solid one contributes none. (Axis spines/grid may add their own, so this
+    # asserts the DELTA the cycle is responsible for, not an absolute count.)
+    assert len(patterns - plain_patterns) >= 2, (patterns, plain_patterns)
+
+
+def test_cycled_marker_shapes_reach_the_rendered_vector_output() -> None:
+    x = np.linspace(0, 10, 20)
+    series = [("a", x), ("b", x + 1.0), ("c", x + 2.0)]
+    same = render_figure(
+        x, series, fmt="svg", series_styles=[{"marker": True, "marker_shape": "circle"}] * 3
+    )
+    varied = render_figure(
+        x,
+        series,
+        fmt="svg",
+        series_styles=[
+            {"marker": True, "marker_shape": "circle"},
+            {"marker": True, "marker_shape": "square"},
+            {"marker": True, "marker_shape": "triangle"},
+        ],
+    )
+    assert varied != same, "three different glyphs must not render identically to three circles"
+
+
 # ── Fill under/between curves (MAIN #13) ─────────────────────────────────────
 def test_fill_under_renders_and_changes_output() -> None:
     x = np.linspace(0, 10, 30)

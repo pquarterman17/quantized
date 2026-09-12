@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { loadPrefs, LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "./prefs";
 import { useApp } from "./useApp";
 import { fmtNum } from "../lib/format";
+import { autoSeriesStylesEnabled, setAutoSeriesStyles } from "../lib/seriesStyleCycle";
 
 afterEach(() => {
   // Reset the prefs we touch so other suites see defaults.
@@ -15,6 +16,7 @@ afterEach(() => {
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
   s.setPref("libraryPanelWidth", 210);
+  s.setPref("autoSeriesStyles", false);
 });
 
 describe("preferences", () => {
@@ -67,6 +69,29 @@ describe("preferences", () => {
     expect(useApp.getState().libraryPanelWidth).toBe(260);
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(260);
     expect(document.documentElement.style.getPropertyValue("--lw")).toBe("260px");
+  });
+
+  // P3.3 non-colour encodings. Mirrors the palette preference's own mechanism,
+  // so it is pinned the way every other pref in this blob is — plus the one
+  // thing palette does not have: a pure-lib module that has to be TOLD.
+  it("autoSeriesStyles (P3.3) defaults to off and persists when turned on", () => {
+    expect(useApp.getState().autoSeriesStyles).toBe(false);
+    expect(autoSeriesStylesEnabled()).toBe(false);
+    useApp.getState().setPref("autoSeriesStyles", true);
+    expect(useApp.getState().autoSeriesStyles).toBe(true);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").autoSeriesStyles).toBe(true);
+    // syncPrefs must push it into lib/seriesStyleCycle — the canvas and the
+    // export read THAT, not the store, so a pref that stops here does nothing.
+    expect(autoSeriesStylesEnabled()).toBe(true);
+  });
+
+  it("autoSeriesStyles survives a localStorage round-trip and reaches the cycle module", () => {
+    setAutoSeriesStyles(false);
+    localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: true }));
+    expect(loadPrefs().autoSeriesStyles).toBe(true);
+    // A non-boolean (hand-edited blob, older client) falls back to the default.
+    localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: "yes" }));
+    expect(loadPrefs().autoSeriesStyles).toBe(false);
   });
 
   it("libraryPanelWidth clamps out-of-range values on load", () => {

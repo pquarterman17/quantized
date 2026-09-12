@@ -2872,15 +2872,93 @@ covers a much smaller subset and guards focus on Analyze.
   - Per-series `line` style (`solid`/`dashed`/`dotted`) and eight marker SHAPES
     (`lib/types.ts` `MarkerShape`), both settable and both honoured on screen.
 
-  DOES NOT EXIST, and this is the real gap:
-  - **No automatic non-colour differentiator.** Plot five series and touch
-    nothing and they differ ONLY by hue — `uplotOpts.ts`'s dash is applied only
-    when a per-series `style.line` was explicitly set, and markers only when
-    explicitly enabled or via a plot-wide default-trace preference. Dash and
-    marker shape are available but never cycled. A colour-blind reader, or
-    anyone printing greyscale, gets no help by default. Closing this means an
-    opt-in auto dash/marker cycle mirroring the palette mechanism, WITH export
-    parity — booked, not built.
+  DID NOT EXIST at the 2026-09-09 audit. The FIRST of the three is now built
+  (2026-09-12, detail below); the other two are still open, which is why this
+  box stays `[~]`:
+  - ~~**No automatic non-colour differentiator.**~~ **BUILT 2026-09-12 — the
+    auto dash/marker cycle now exists, opt-in, with export parity.** What
+    shipped, precisely:
+
+    - **The preference.** `autoSeriesStyles` in the `qz.prefs` blob
+      (`store/prefs.ts`: `Prefs` field, `PREF_DEFAULTS` **false**, guarded
+      `loadPrefs` parse, `prefsOf` snapshot, `syncPrefs` apply), reached through
+      the existing generic `setPref`. Exposed as a **"Vary dash & marker"**
+      checkbox in `Shell/AppearanceMenu.tsx` **directly under "Series
+      palette"** — the same menu, because it is the same cycle: the palette
+      varies hue, this varies what survives greyscale. Pinned by
+      `store/prefs.test.ts` (default off, persists, survives a localStorage
+      round-trip, a non-boolean falls back) and `AppearanceMenu.test.tsx`.
+    - **The cycles** (`lib/seriesStyleCycle.ts`, new). Dash:
+      `solid → dashed → dotted`, three entries because `LineStyle` and the wire
+      type `ExportSeriesStyle.line` → `calc.figure._LINESTYLE` carry exactly
+      those three, so the cycle uses the vocabulary that already round-trips
+      (3 dashes × 8 palette colours = 24 combinations before a repeat).
+      Markers: `circle, square, triangle, diamond, downtriangle, plus, cross,
+      star` — all eight `MarkerShape`s, closed glyphs first. **Both start at the
+      value that reproduces today's look for series 1** (`solid`/`circle`).
+      Assignment is by SERIES DISPLAY POSITION and deterministic.
+    - **Explicit always wins**, including an explicit `"solid"`/`"circle"` —
+      that is a deliberate "no encoding here", not an absence.
+    - **Off is the identity.** `resolveSeriesStyle` returns the CALLER'S OWN
+      reference when the pref is off (asserted with `toBe`, not `toEqual` — a
+      copy would compare equal and still break prop identity downstream), and
+      `buildOpts` output for an unstyled plot is pinned dash-free/marker-free.
+    - **How parity is guaranteed** (this is the FEATURE-001 lesson applied).
+      ONE resolver, called by BOTH renderers at the same display position:
+      `uplotOpts.buildOpts` for every canvas (Stage, multi-panel cell, inset,
+      snapshot, background window) and `exportStyles.buildExportStyles` for
+      every publication producer (figureSpec, spatialPageExport, legacyFigure,
+      useGraphTemplates, plotSpecFigure). The backend is handed an **ordinary
+      explicit `line`/`marker_shape`** and never learns a cycle exists. The
+      on/off flag is a module-level singleton pushed in by `syncPrefs`, exactly
+      as `applyPalette`/`setFormatOpts` are — deliberately NOT threaded through
+      `buildOpts` args, because a dozen call sites is a dozen chances to miss
+      one, which is precisely how a screen-only styling change gets shipped.
+      `PlotLegend`'s swatch resolves through the same function so the legend
+      cannot disagree with its own plot.
+      Guarded by `exportStyles.test.ts`'s "canvas/export parity (FEATURE-001
+      guard)" block, which drives both real builders over one plot and asserts
+      the two resolved sets are **EQUAL series-for-series** (plus that the
+      agreement is non-trivial: three distinct dashes), not merely non-empty.
+      Backend half in `tests/test_calc_figure.py`: three cycle positions map to
+      three distinct matplotlib linestyles/markers, and both reach the rendered
+      SVG (dash patterns appear that an all-solid render lacks; three glyphs do
+      not render identically to three circles).
+    - **Two things the work turned up.** (1) `sanitizeExportSeriesStyles` never
+      restored `marker_shape`, so a saved FigureDocument's exact publication
+      styles came back shape-less and every marker reverted to a circle on
+      re-export — the same parity break the `_MARKER` table closed, one layer
+      down; fixed + tested. (2) Sabotaging the opt-in gate exposed a REAL bug in
+      the first cut: `uplotOpts`'s ambient-`Step`-trace branch tests
+      `!style.line`, so with the cycle on every series had a dash and the plot
+      silently stopped stepping. Fixed by reading the RAW style list there — an
+      auto dash is a DEFAULT and must never impersonate the user's explicit
+      choice. Both halves pinned.
+    - **Ceilings hit.** `lib/uplotOpts.ts` was pinned at 1446 and the pin only
+      ratchets down, so two cohesive siblings moved OUT instead: the `DASH`
+      table to `lib/seriesStyleCycle.ts` (the dash vocabulary belongs with the
+      cycle that assigns it, and the parity test can then compare against it
+      without importing the plot builder) and the marker `points` decision to
+      `lib/markers.seriesPoints` (which already owned every other marker
+      concern). Pin → **1434**. `store/useApp.ts` was pinned at 2334 with the
+      file at 2332, so the new field was funded by replacing 17
+      hand-maintained `x: _initialPrefs.x` lines with one `..._initialPrefs`
+      spread — every `Prefs` key is already an AppState field of the same name,
+      which is what `prefsOf` relies on, so the list could only ever drift.
+      Pin → **2328**. Eager bundle 896.9 kB against the 897.3 kB budget
+      (0.4 kB under), so no budget move was needed.
+    - **Deliberately NOT done.** Merging the two marker branches means the glyph
+      cycle reaches a `Scatter`/`Line + markers` default trace on screen; the
+      EXPORT ignores `defaultTrace` entirely (it emits a marker only for an
+      explicit `style.marker`), which is a **pre-existing** gap this change
+      neither widens nor fixes — the cycle is deliberately independent of the
+      ambient trace so it cannot build a new divergence in. Faceted panels stay
+      uncycled on screen AND on export, because they pass no per-series styles
+      to either (FEATURE-001); `SpatialPanelLegend` is left alone for the same
+      reason — its per-panel index space does not line up with the per-cell
+      style lists, so cycling only there could contradict its own canvas. No
+      fourth dash pattern (it would need the Inspector picker, the wire type and
+      `_LINESTYLE` extended together).
   - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
     there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls

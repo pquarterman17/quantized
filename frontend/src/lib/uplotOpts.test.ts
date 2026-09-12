@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
+import { setAutoSeriesStyles } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 
 const payload: PlotPayload = {
@@ -1552,5 +1553,121 @@ describe("resolvePlotBg follows the app theme (owner request 2026-07-25)", () =>
     const pinned = resolvePlotBg("dark");
     const following = resolvePlotBg("theme");
     expect(pinned.axesBg).not.toBe(following.axesBg);
+  });
+});
+
+// ── P3.3 auto dash/marker cycle (non-colour encodings) ──────────────────────
+// The canvas half. Its export counterpart — and the assertion that the two
+// resolve to the SAME dash/glyph per series, which is what FEATURE-001 in
+// plans/BUGS_AND_ISSUES.md is about — lives in `exportStyles.test.ts`.
+describe("buildOpts auto dash/marker cycle (P3.3)", () => {
+  const three: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [1, 2, 3],
+      [2, 3, 4],
+      [3, 4, 5],
+    ],
+    series: [{ label: "A", unit: "" }, { label: "B", unit: "" }, { label: "C", unit: "" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+  const args = { ...base, yScale: "linear" as const, tool: "zoom" as const };
+  const dashes = (opts: ReturnType<typeof buildOpts>) =>
+    (opts.series ?? []).slice(1).map((s) => (s as { dash?: number[] }).dash);
+
+  afterEach(() => setAutoSeriesStyles(false));
+
+  it("OFF: three unstyled series are dash-free and marker-free — today's output", () => {
+    const opts = buildOpts(three, args);
+    expect(dashes(opts)).toEqual([undefined, undefined, undefined]);
+    expect((opts.series ?? []).slice(1).map((s) => s.points?.show)).toEqual([false, false, false]);
+  });
+
+  it("OFF: passing a style list of empty/absent entries is deep-equal to passing none", () => {
+    // The "turning the preference off restores exactly today's behaviour" pin:
+    // whatever route the styles arrive by, an unstyled plot builds the same opts.
+    const withList = buildOpts(three, { ...args, seriesStyles: [undefined, {}, undefined] });
+    const without = buildOpts(three, args);
+    expect(JSON.stringify(withList)).toBe(JSON.stringify(without));
+  });
+
+  it("ON: three unstyled series get three DISTINCT dashes", () => {
+    setAutoSeriesStyles(true);
+    const d = dashes(buildOpts(three, args));
+    expect(d).toEqual([undefined, [8, 4], [2, 4]]); // solid / dashed / dotted
+    expect(new Set(d.map((x) => JSON.stringify(x))).size).toBe(3);
+  });
+
+  it("ON: an explicit per-series style on series 2 survives the cycle", () => {
+    setAutoSeriesStyles(true);
+    const opts = buildOpts(three, {
+      ...args,
+      seriesStyles: [undefined, { line: "solid", width: 4 }, undefined],
+    });
+    expect(dashes(opts)).toEqual([undefined, undefined, [2, 4]]);
+    expect((opts.series?.[2] as { width?: number }).width).toBe(4);
+  });
+
+  it("ON: marker glyphs cycle too — series 1 keeps uPlot's built-in circle, 2/3 get paths", () => {
+    setAutoSeriesStyles(true);
+    const opts = buildOpts(three, {
+      ...args,
+      seriesStyles: [{ marker: true }, { marker: true }, { marker: true }],
+    });
+    const pts = (opts.series ?? []).slice(1).map((s) => s.points);
+    expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+    expect(pts[0]?.paths).toBeUndefined(); // circle == uPlot's own renderer
+    expect(pts[1]?.paths).toBeTypeOf("function"); // square
+    expect(pts[2]?.paths).toBeTypeOf("function"); // triangle
+  });
+
+  it("ON: the glyph cycle also reaches the Scatter / Line + markers default trace", () => {
+    setAutoSeriesStyles(true);
+    for (const defaultTrace of ["Scatter", "Line + markers"]) {
+      const pts = (buildOpts(three, { ...args, defaultTrace }).series ?? [])
+        .slice(1)
+        .map((s) => s.points);
+      expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+      expect(pts[0]?.paths).toBeUndefined();
+      expect(pts[1]?.paths).toBeTypeOf("function");
+    }
+  });
+
+  // Found by sabotaging the opt-in gate: with the cycle ON every series has a
+  // `line`, and the ambient-Step branch tests `!style.line`, so the plot
+  // silently stopped stepping. An auto dash is a DEFAULT; only the user's own
+  // explicit dash may suppress the Step trace. Both halves are pinned here.
+  it("ON: the Step default trace still steps, and still varies the dash", () => {
+    setAutoSeriesStyles(true);
+    const fn = vi.fn();
+    const opts = buildOpts(three, {
+      ...args,
+      defaultTrace: "Step",
+      steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+    });
+    expect((opts.series ?? []).slice(1).map((s) => s.paths)).toEqual([fn, fn, fn]);
+    expect(dashes(opts)).toEqual([undefined, [8, 4], [2, 4]]);
+  });
+
+  it("ON: an EXPLICIT dash still suppresses the Step default trace (behaviour unchanged)", () => {
+    setAutoSeriesStyles(true);
+    const fn = vi.fn();
+    const opts = buildOpts(three, {
+      ...args,
+      defaultTrace: "Step",
+      seriesStyles: [{ line: "dashed" }, undefined, undefined],
+      steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+    });
+    expect((opts.series ?? []).slice(1).map((s) => s.paths)).toEqual([undefined, fn, fn]);
+  });
+
+  it("OFF: the default trace still draws plain circles (the merged marker branch is inert)", () => {
+    const pts = (buildOpts(three, { ...args, defaultTrace: "Scatter" }).series ?? [])
+      .slice(1)
+      .map((s) => s.points);
+    expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+    expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);
+    expect(pts.map((p) => p?.size)).toEqual([5, 5, 5]);
   });
 });
