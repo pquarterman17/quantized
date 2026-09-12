@@ -406,7 +406,7 @@ as a CSS-only tree redesign.
   separately-counted `droppedBackgroundRefs`; six sabotage-verified tests in
   `store/workbookTransfer.test.ts`. That closes the "no least surfaced" gate
   this box was held open for, so it moves to `[x]`. Pinned by
-  `workbookTransfer.test.ts`'s "drops cross-workbook lineage rather than
+  `lib/workbookTransfer.test.ts`'s "drops cross-workbook lineage rather than
   dangling it".
   **Residual, deliberately NOT resolved here — UX-002's second fix-checklist
   item, owner-gated:** whether a dropped link is worth preserving as inert
