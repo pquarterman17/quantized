@@ -29,6 +29,7 @@ import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import type { WorkbookNode } from "../lib/workbooks";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { figureLabel, figureLayerFamily } from "../lib/originFigures";
+import type { RegionPick } from "../lib/regionSelect";
 import { originApplyLibs } from "./originApplyLibs"; // apply-only half: lazy chunk
 import {
   dedupeWindowTitle,
@@ -427,9 +428,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // ABOVE this line are the FOCUSED window's LIVE view — see the facade doc
   // on WindowsSlice.
   plotTool: PlotTool;
-  // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
-  // workshop consumes it then resets to null. Drag direction is normalized away.
-  regionPicked: [number, number] | null;
+  // Last range picked by the region rubber-band (x, + an optional 2-D
+  // `yRange`, GAP #96/#20); the baseline workshop consumes it then resets null.
+  regionPicked: RegionPick | null;
   // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
@@ -706,7 +707,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (createWindow … windowsForSave — the window-management actions — are
   // declared on WindowsSlice; see store/windows.ts.)
   setPlotTool: (tool: PlotTool) => void;
-  setRegionPicked: (range: [number, number] | null) => void;
+  setRegionPicked: (range: RegionPick | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
   // (the quick-fit / ROI-gadget family's state + actions moved to

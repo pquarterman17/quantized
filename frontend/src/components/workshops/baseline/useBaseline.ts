@@ -38,6 +38,11 @@ export interface BaselineParams {
   maxWindowDeg: number; // SNIP clipping window
   regionXMin: number; // region: box left edge (NaN -> data min)
   regionXMax: number; // region: box right edge (NaN -> data max)
+  // Optional 2-D y-box (MATLAB `onBGMouseUp` parity, GAP #96/#20): NaN on
+  // either edge means "no y constraint" (NOT "full data range" — unlike
+  // regionXMin/Max, an unset y edge is omitted from the request entirely).
+  regionYMin: number;
+  regionYMax: number;
   maxIter: number; // Shirley iteration cap
   anchorMethod: string; // anchor interpolation: linear | pchip | spline
 }
@@ -45,6 +50,7 @@ export interface BaselineParams {
 const DEFAULTS: BaselineParams = {
   lam: 1e6, p: 0.01, radius: 100, order: 5, maxWindowDeg: 2.0,
   regionXMin: Number.NaN, regionXMax: Number.NaN,
+  regionYMin: Number.NaN, regionYMax: Number.NaN,
   maxIter: 50, anchorMethod: "pchip",
 };
 
@@ -161,10 +167,17 @@ function callBaseline(
       const useBox = method === "region";
       const xMin = useBox && Number.isFinite(p.regionXMin) ? p.regionXMin : lo;
       const xMax = useBox && Number.isFinite(p.regionXMax) ? p.regionXMax : hi;
+      // Optional 2-D y-box (MATLAB `onBGMouseUp` parity, GAP #96/#20): unlike
+      // x, an unset edge sends `undefined` (dropped by JSON.stringify), NOT
+      // a full-range default — omitting both is exactly today's request body,
+      // byte-identical. Only the box method itself uses it; the always-
+      // full-range analytic methods (#8) never did and still don't.
+      const yMin = useBox && Number.isFinite(p.regionYMin) ? p.regionYMin : undefined;
+      const yMax = useBox && Number.isFinite(p.regionYMax) ? p.regionYMax : undefined;
       // The region endpoint returns the polynomial as `background`; adapt to `baseline`.
-      return baselineRegion({ x, y, x_min: xMin, x_max: xMax, order: regionOrder(method, p) }).then(
-        (r) => ({ baseline: r.background }),
-      );
+      return baselineRegion({
+        x, y, x_min: xMin, x_max: xMax, y_min: yMin, y_max: yMax, order: regionOrder(method, p),
+      }).then((r) => ({ baseline: r.background }));
     }
   }
 }
@@ -215,12 +228,17 @@ export function useBaseline(): BaselineState {
   const setParams = (patch: Partial<BaselineParams>): void =>
     setParamsState((p) => ({ ...p, ...patch }));
 
-  // The plot's rubber-band writes its [x_min,x_max] to the store; pull it into
-  // the box-edge params (already ordered + clamped) and consume it once.
+  // The plot's rubber-band writes its pick to the store (x always, y only
+  // for a genuine 2-D box drag); pull it into the box-edge params (already
+  // ordered + clamped) and consume it once. A fresh pick always sets BOTH
+  // y edges (to NaN when yRange is absent) rather than only setting them
+  // when present — otherwise an x-only re-drag after an earlier box pick
+  // would silently keep masking against the stale y-box.
   useEffect(() => {
     if (!regionPicked) return;
-    const [lo, hi] = regionPicked;
-    setParamsState((p) => ({ ...p, regionXMin: lo, regionXMax: hi }));
+    const [xLo, xHi] = regionPicked.x;
+    const [yLo, yHi] = regionPicked.yRange ?? [Number.NaN, Number.NaN];
+    setParamsState((p) => ({ ...p, regionXMin: xLo, regionXMax: xHi, regionYMin: yLo, regionYMax: yHi }));
     setRegionPicked(null);
   }, [regionPicked, setRegionPicked]);
 

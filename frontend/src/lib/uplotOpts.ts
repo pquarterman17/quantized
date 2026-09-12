@@ -256,6 +256,8 @@ export function utcTzDate(ts: number): Date {
   return new Date(at.getTime() + at.getTimezoneOffset() * 60_000);
 }
 
+const MIN_BOX_HEIGHT_PX = 6; // "region" 2-D box (GAP #96/#20): min vertical px for a deliberate y-box.
+
 const SECONDS_PER_DAY = 86_400;
 const SECONDS_PER_MINUTE = 60;
 const _dateFormatters = new Map<string, Intl.DateTimeFormat>();
@@ -565,9 +567,9 @@ export interface BuildOptsArgs {
   xScale: AxisScale;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
-  /** In `region` tool: called with the two data-x edges of a completed drag
-   *  (unordered). Used by the baseline "Fit from region" rubber-band. */
-  onRegionSelect?: (x0: number, x1: number) => void;
+  /** In `region` tool: the drag's x edges (unordered); y0/y1 too past
+   *  `MIN_BOX_HEIGHT_PX` (2-D box, GAP #96/#20). Baseline's region fit. */
+  onRegionSelect?: (x0: number, x1: number, y0?: number, y1?: number) => void;
   /** #50 plot-brush: drag-end x-band edges for the "select" tool. */
   onRangeSelect?: (x0: number, x1: number) => void;
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
@@ -1377,32 +1379,30 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     width,
     height,
     ...(args.title?.trim() ? { title: args.title.trim() } : {}),
-    // Box-zoom in zoom AND pointer mode (MAIN #18 — empty-canvas drag keeps
-    // the muscle-memory box-zoom gesture even in the new default tool; an
-    // object hit takes capture-phase priority over it, see annotationPlugin/
-    // refLinePlugin); region drags an x-band without rescaling
-    // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
-    // Pointer mode ALSO suppresses uPlot's own dashed crosshair (x/y: false)
-    // — the owner's "reads as measurement mode" complaint — while every
-    // other tool keeps it (uPlot's default, unset here).
+    // Box-zoom in zoom/pointer (MAIN #18); select drags x-only, region also
+    // tracks y (2-D box, MATLAB `onBGMouseUp` parity, GAP #96/#20), neither
+    // rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
     cursor: {
       drag:
-        tool === "region" || tool === "select"
-          ? { x: true, y: false, setScale: false, uni: 1 }
-          : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
+        tool === "region" ? { x: true, y: true, setScale: false, uni: 1 }
+        : tool === "select" ? { x: true, y: false, setScale: false, uni: 1 }
+        : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
       ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
-    // Region / select rubber-band: on drag end, hand the two data-x edges to the
-    // matching caller. posToVal does the pixel->data mapping (linear or log x);
-    // the caller orders/clamps. Guard width>0 so a click (zero-width) is ignored.
+    // Region/select rubber-band -> matching caller (posToVal maps px->data;
+    // caller orders/clamps); width<=0 (click) ignored. region also reads y
+    // past MIN_BOX_HEIGHT_PX; below that an x-only drag stays x-only.
     hooks: {
       setSelect: [
         (u: uPlot): void => {
-          const cb = tool === "region" ? onRegionSelect : tool === "select" ? args.onRangeSelect : null;
-          if (!cb) return;
-          const w = u.select.width;
-          if (w <= 0) return;
-          cb(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + w, "x"));
+          if (u.select.width <= 0) return;
+          const x0 = u.posToVal(u.select.left, "x");
+          const x1 = u.posToVal(u.select.left + u.select.width, "x");
+          if (tool === "select") return void args.onRangeSelect?.(x0, x1);
+          if (tool !== "region" || !onRegionSelect) return;
+          const h = u.select.height ?? 0;
+          if (h < MIN_BOX_HEIGHT_PX) return void onRegionSelect(x0, x1);
+          onRegionSelect(x0, x1, u.posToVal(u.select.top ?? 0, "y"), u.posToVal((u.select.top ?? 0) + h, "y"));
         },
       ],
     },

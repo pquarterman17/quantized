@@ -849,6 +849,59 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
   });
 });
 
+describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#20)", () => {
+  // Scale-aware mock: x divides by 100, y divides by 10 — distinguishes the
+  // two axes so a test can tell which one a given posToVal call read.
+  const posToVal = (px: number, scale?: string) => (scale === "y" ? px / 10 : px / 100);
+
+  it("tracks y (not rescaling) for the region tool, unlike select", () => {
+    const region = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    expect(region.cursor?.drag).toMatchObject({ x: true, y: true, setScale: false });
+  });
+
+  it("calls back with just x0/x1 when the drag has no height at all", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50 }, posToVal };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
+  });
+
+  it("stays x-only for a sub-threshold vertical span (mouse jitter on an x-only drag)", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 5 }, posToVal }; // 5px < MIN_BOX_HEIGHT_PX
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
+  });
+
+  it("also reads back y0/y1 once the vertical span clears the pixel threshold", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal }; // 30px box
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5, 2, 5); // top/10, (top+h)/10
+  });
+
+  it("ignores a zero-width region drag even with a real vertical span", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 0, top: 20, height: 30 }, posToVal };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).not.toHaveBeenCalled();
+  });
+
+  it("routes the drag-end band to onRegionSelect, not onRangeSelect", () => {
+    const onRangeSelect = vi.fn();
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRangeSelect, onRegionSelect });
+    const u = { select: { left: 100, width: 50 }, posToVal };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalled();
+    expect(onRangeSelect).not.toHaveBeenCalled();
+  });
+});
+
 describe("buildOpts non-monotonic x (hysteresis loops)", () => {
   // An M-vs-H loop: field sweeps up then back down — x is NOT ascending.
   const loop: PlotPayload = {

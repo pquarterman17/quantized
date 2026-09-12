@@ -1290,6 +1290,46 @@ import { fileURLToPath } from "node:url";
  *  different order, and that is the kind of silent wrongness this whole group
  *  exists to remove.
  */
+/*  NO MOVE (2026-09-12, Group AB: baseline "Fit from region" — the
+ *  optional 2-D y-box, MATLAB `onBGMouseUp` parity, PORT_CHECKLIST's last
+ *  "Remaining (optional)" item on that row). Built on fe40adb5 it measured
+ *  919,177 after `npm ci` (377 over the 918,800 budget of the time) and moved
+ *  the pin to 920,201; integrated on top of Group U's 920,400 move below, the
+ *  combined tree measures 919,699 B (898.1 kB) after `npm ci`, inside that budget,
+ *  so this entry records the cost and its reductions without a second move.
+ *
+ *  WHAT THE WEIGHT IS, and why none of it can be lazy: the rubber-band gesture
+ *  itself — `lib/uplotOpts.ts`'s `cursor.drag`/`setSelect` (region now tracks y
+ *  too, past a pixel threshold) and `components/Stage/usePlotStageActions.ts`'s
+ *  `onRegionSelect` (clamps the y span to the plotted y-extent) plus
+ *  `lib/regionSelect.ts`'s `withYRange`. All three sit on the plot's core drag
+ *  path, built and wired the instant the Stage mounts — the same reachability
+ *  every OTHER interactive plot tool (zoom/pan/measure/select) already has, not
+ *  a baseline-specific add. The baseline-specific HALF (the workshop's y-min/
+ *  y-max fields, `useBaseline.ts`'s params, the request wiring) costs nothing
+ *  here: `BaselinePanel`/`useBaseline.ts` load only from `AppOverlays.tsx`'s
+ *  `lazyPanel()`, so that half was already off this budget before it was written.
+ *
+ *  TWO REDUCTIONS WERE TAKEN FIRST:
+ *    1. The y-extent scan reuses `plotDecimate.xExtent` (already eager via
+ *       PlotViewport) per plotted series instead of a duplicate min/max loop —
+ *       measured in isolation (uplotOpts.ts held at its pre-feature version):
+ *       342 B added with a self-contained loop, 329 B with the reused scanner.
+ *       Saved 13 B.
+ *    2. Two UI hint strings ("Drag to select a background range…") gained a
+ *       "(drag down too for a y-box)" aside in `lib/plotToolbarDefs.ts` and
+ *       `components/Stage/PlotReadouts.tsx`. Both reverted to their original
+ *       text — the region tool's own box-edge fields already show the y-range
+ *       once picked, so the aside was decoration, not the readout. Saved 56 B
+ *       (919,233 -> 919,177).
+ *
+ *  A THIRD "REDUCTION" WAS REJECTED: dropping the y-extent clamp (send the raw
+ *  drag's y0/y1 straight through) would read as a savings but is a behavior
+ *  cut, not an implementation one — it is the one bit of parity with the
+ *  existing x-only clamp (`clampPlottedRange`) this feature exists to extend,
+ *  and `usePlotStageActions.test.ts`'s own "clamps the y-range to the plotted
+ *  y-extent" case would go red for real, not as a sabotage.
+ */
 /*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
  *  cycle, reworked after adversarial review). Measured 919,393 after `npm ci`
  *  — 593 over the old budget — leaving ~1 kB of headroom, the same margin the

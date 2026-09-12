@@ -12,8 +12,10 @@ import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
+import { xExtent } from "../../lib/plotDecimate";
 import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
+import { withYRange } from "../../lib/regionSelect";
 // Bundle: `copyFigureCommand` (and the whole `figureSpec` transport builder
 // behind it) is click-only — loaded via dynamic import in `copyFigure`/
 // `copyFigureSvg` below, keeping it off the eager pre-paint path. The command
@@ -40,6 +42,18 @@ export interface PlotStageActions {
   snapshot: () => void;
 }
 
+/** [min, max] across every plotted y series (skips the x column, `cols[0]`):
+ *  the y-box's clamp target, via plotDecimate's already-eager `xExtent`
+ *  reused per series (same "finite [min,max] of one array" shape). */
+function plottedYExtent(cols: (number | null)[][]): [number, number] | null {
+  let lo = Infinity, hi = -Infinity;
+  for (let s = 1; s < cols.length; s++) {
+    const e = xExtent(cols[s]);
+    if (e) { lo = Math.min(lo, e[0]); hi = Math.max(hi, e[1]); }
+  }
+  return lo <= hi ? [lo, hi] : null;
+}
+
 /** Build the toolbar/context-menu action callbacks for the active plot, plus
  *  the two PlotViewport drag-gesture callbacks (onRegionSelect/onRangeSelect)
  *  — a separate return shape, not folded into PlotStageActions, since
@@ -50,7 +64,7 @@ export function usePlotStageActions(
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
 ): PlotStageActions & {
-  onRegionSelect: (x0: number, x1: number) => void;
+  onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
 } {
   function resetView() {
@@ -130,12 +144,20 @@ export function usePlotStageActions(
     });
   }
 
-  // Baseline-workshop region pick (drag on the "region" tool): clamp to the
-  // plotted x-extent, stash it via setRegionPicked, then exit to "zoom".
-  function onRegionSelect(x0: number, x1: number) {
+  // Baseline-workshop region pick (drag on the "region" tool): clamp x to the
+  // plotted x-extent exactly as before. A genuine 2-D box drag (MATLAB
+  // `onBGMouseUp` parity, GAP #96/#20) also carries y0/y1 — buildOpts only
+  // supplies them once the drag's vertical span clears its own pixel
+  // threshold, so an ordinary x-only drag arrives here with y0/y1 undefined
+  // and `withYRange` leaves the pick x-only, byte-identical to before this
+  // existed. Stash via setRegionPicked, then exit to "zoom".
+  function onRegionSelect(x0: number, x1: number, y0?: number, y1?: number) {
     if (!displayPayload) return;
-    const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    if (range) useApp.getState().setRegionPicked(range);
+    const x = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
+    if (!x) return;
+    const yExtent = plottedYExtent(displayPayload.data as (number | null)[][]);
+    const picked = withYRange(x, y0, y1, yExtent ? { min: yExtent[0], max: yExtent[1] } : undefined);
+    useApp.getState().setRegionPicked(picked);
     useApp.getState().setPlotTool("zoom");
   }
 
