@@ -417,6 +417,20 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     expect(result.current.drawFacets).toBeNull();
   });
 
+  // The StatStage picker for "facet by" omits whatever is currently picked
+  // as "group by" (and "then by") -- but that is a PICKER-level exclusion,
+  // not a mask on the value. A Graph Builder seed is another entry point
+  // entirely (`spec.zones.facet?.channel`, no relation to the spec's group
+  // zone), so a seed that happens to carry the same channel in both slots
+  // must still land unmasked: the seed effect just assigns state, it never
+  // consults the picker's option list or `maskStaleCategoricalPicks`.
+  it("a Graph Builder seed with facetCol equal to groupCol still applies facetCol unmasked", () => {
+    const seed: StatStageSeed = { mode: "box", groupCol: 0, valueCol: 1, facetCol: 0 };
+    const { result } = renderHook(() => useStatStage(baseParams({ seed })));
+    expect(result.current.groupCol).toBe(0);
+    expect(result.current.facetCol).toBe(0);
+  });
+
   it("switching facetCol back to null returns to the flat single-panel draw", async () => {
     vi.mocked(statsBox).mockResolvedValue({
       n_groups: 2,

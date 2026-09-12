@@ -1198,12 +1198,27 @@ output, not a caught error).
   (`lib/statstage.connectMeansBreaks`) for the same reason the channel fallback
   refuses it: a line from `lot = 0 / wafer = 1` to `lot = 1 / wafer = 0` asserts
   a trend between two lots that share no wafer.
-  **Known residual, not fixed here:** "facet by" does not exclude the column
-  picked as "then by" (nor, as before this change, the one picked as "group
-  by"). Facet by `site` + then by `site` gives every box in a panel the same
-  constant nested half. The data stays correct and the existing facet/group
-  overlap has the same shape, so widening the picker's exclusion rule is booked
-  rather than bolted on here.
+  **Residual fixed (follow-up to this change):** `facetByOptions` now omits
+  BOTH the current `groupCol` and the current `group2Col`, the same shape
+  `thenByOptions` already used to omit `groupCol`. Facet by `site` + then by
+  `site` gave every box in a panel the same constant nested half; faceting by
+  the "group by" column was equally degenerate (one level per panel -> one
+  box). Both are picker-level exclusions in `StatStage.tsx` — the data was
+  always correct, only the plot was noise, so this is a UI-layer fix with no
+  calc change. `lib/statstage.ts`'s `maskStaleCategoricalPicks` deliberately
+  stays untouched: it does not mask `facetCol` at all (see its comment) — the
+  Graph Builder seeds `facetCol` from `spec.zones.facet?.channel` with no
+  categorical gate, and faceting on a non-categorical column is a supported
+  configuration; masking `facetCol` was already tried once and reverted as a
+  regression. Picker-level exclusion is the right layer: it stops the user
+  from ASKING for the degenerate case through this picker, while a value that
+  arrives another way (a Graph Builder seed, or "group by" moving onto the
+  current facet afterwards) is left alone because the data stays correct
+  either way. Covered by `StatStage.test.tsx` (facet-by omits `groupCol`;
+  facet-by omits `group2Col`; both sabotage-verified — removing either half of
+  the filter turned the corresponding new test red) and
+  `useStatStage.test.ts` (a Graph Builder seed with `facetCol` equal to
+  `groupCol` still applies `facetCol` unmasked — also sabotage-verified).
   **No backend change, as predicted and now asserted:**
   `routes/export_statplots.py` takes pre-aggregated `data[][]` + `labels[]`, so
   it is already group-count-agnostic and composite labels flow through as
