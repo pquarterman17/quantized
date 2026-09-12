@@ -944,10 +944,18 @@ output, not a caught error).
   Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
   `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
   Wizard UI) territory — this contract is what they now build against.
-- [ ] Multiple ordered factors and missing-value policy — level ORDER is
+- [x] Multiple ordered factors and missing-value policy — level ORDER is
   represented (the tuple's own order; NaN = missing is the representation's
-  missing-value policy) but user-settable REORDERING (J1's ask) is not
-  built yet; that is J2/recode territory.
+  missing-value policy). **Verified 2026-09-12, shipped 2026-09-10 commit
+  `09f88d6e` (#345), "the level reorder UI (Group O-2b)":** user-settable
+  REORDERING (J1's ask, this box's original text called it "not built yet")
+  is now a real UI — `components/workshops/levelorder/LevelOrderPanel.tsx` +
+  `LevelOrderTable.tsx`, reachable from the worksheet column context menu
+  ("Reorder levels…", `WorksheetPane.tsx:280`) — that writes
+  `DataStruct.level_order` (`lib/categorical.ts`). The order round-trips
+  through `.dwk` (`workspace.test.ts:2430-2457`) and is consumed by
+  `calc/plotting.py:185`, so it reaches matplotlib export too. See
+  `JMP_GAP_PLAN.md` J1's own level-ordering box for the full evidence.
 - [~] Preserve factors through derived data, filter/join, reopen, recipes,
   and export — reopen (`.dwk` round-trip) is proven, now via the SHARED wire
   fixture (`lib/workspace.test.ts` + `tests/test_wire_fixtures.py`), not
@@ -1592,6 +1600,13 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   figure labels) but do not yet RENDER it as a visible cell distinct from
   the editable `name` input — that visual half remains open, is a frontend
   (not backend/import-contract) change, and is unbooked.
+  **Closed 2026-09-12, shipped 2026-09-07 commit `3b1ad5a1` (#314), "show
+  metadata and effective legend labels":** `PreviewTable.tsx`'s header cell
+  (lines 96-104) now renders `Legend label: {c.effective_name}` whenever
+  it differs from the editable `c.name`, styled distinctly (`--accent`) and
+  titled to explain what it means; `PreviewTable.test.tsx` (lines 71-80)
+  pins it showing for a changed column and staying absent for an unchanged
+  one.
 - [x] No guess can silently attach error to the wrong signal — pinned
   red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
@@ -2779,10 +2794,23 @@ covers a much smaller subset and guards focus on Analyze.
 - [x] Edit, View, Analyze, and Help commands use the shared description
   contract; the separate 17-item Analyze help catalog was deleted
   (2026-07-25).
-- [ ] Extend the same source to Inspector cards, context actions, and
-  workshops, then add contextual `?` links. Still open: the contextual `?`
-  links on workshops/context actions themselves — see the (separate,
-  narrower) fix below, which only closed the *search-coverage* half.
+- [~] Extend the same source to Inspector cards, context actions, and
+  workshops, then add contextual `?` links. **Narrowed 2026-09-12 — the
+  WORKSHOPS half is shipped, checked separately from context actions
+  rather than assumed together:** `lib/workshopHelp.ts`'s `WORKSHOP_HELP`
+  map (PR #266, commit `8a44f9fe`) keys every workshop `ToolWindow` id to
+  a Help search query — `ToolWindow` looks its own id up so no per-panel
+  edit is needed, and `workshopHelp.test.ts` fails if an entry stops
+  matching a real command, the same discipline the Inspector-card `?`
+  actions below already use. Inspector cards were already `[x]` in this
+  same box (2026-07-25). Still open, verified 2026-09-12 by reading both
+  files rather than trusting a grep alone: contextual `?` links on
+  right-click CONTEXT ACTIONS — neither
+  `components/overlays/ContextMenu.tsx` (the file's real path; not
+  `components/ContextMenu.tsx`) nor `lib/contextActions.ts` carries a help
+  affordance of any kind. That is what keeps this box `[~]` rather than
+  `[x]`; see the (separate, narrower) fix below, which only closed the
+  *search-coverage* half for registry commands, not this UI gap.
 - [x] Channels, Error columns, Corrections, Series style, and Axes Inspector
   cards have compact `?` actions that open Help with a relevant search already
   applied (2026-07-25).
@@ -4161,6 +4189,9 @@ work (its BACKLOG row).
   above updated to record it SHIPPED rather than re-adding the field. The
   frontend's `PreviewTable` doesn't yet RENDER `effective_name` as a
   visible cell — flagged as a separate, unbooked, frontend-only follow-up.
+  **Closed 2026-09-12** — see the P1.6 item's own box above (~line 1578)
+  for the evidence: shipped 2026-09-07, commit `3b1ad5a1` (#314),
+  `PreviewTable.tsx:96-104` + `PreviewTable.test.tsx:71-80`.
 - Part C: `io/import_categorical_guards.py` (new, 118 lines) adds two
   guards around `delimited._encode_categorical` WITHOUT touching its
   lossless round trip or level order: a level-count cap
