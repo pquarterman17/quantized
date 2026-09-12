@@ -554,6 +554,80 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
       expect(spec.dataset.time).toEqual([0, 2, 3]);
       expect(spec.dataset.metadata.text_columns).toEqual({ category: ["A", "C", "D"] });
     });
+
+    // The module doc for this line (`buildFigureSpecForView`, MAIN #36) claims
+    // error_spans is "built from `wireDataset`, not the raw `data`, so a
+    // pruned row's magnitude can never outnumber (and misalign with) the
+    // pruned `dataset`/`y_keys` rows above" -- but nothing above exercises a
+    // dataset with an ERROR BINDING *and* a pruned row together (the sidecar
+    // case just above has no `errors` at all). Pin the claim directly: an
+    // excluded row's uncertainty value must vanish from error_spans in the
+    // same position it vanishes from `dataset`, not just leave the ARRAY
+    // shorter by coincidence -- so this asserts the SURVIVING values, not
+    // merely their count.
+    it("prunes error_spans to match the pruned dataset, keeping row alignment (excluded row)", () => {
+      const errData: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10, 1], [20, 2], [30, 3], [40, 4]],
+        labels: ["signal", "sigma"],
+        units: ["V", "V"],
+        metadata: {},
+      };
+      // Row 1 (signal=20, sigma=2) is excluded -- surviving rows are 0, 2, 3.
+      const excludedErrorDataset: Dataset = {
+        id: "flat-error-excluded", name: "err.csv", data: errData, excludedRows: [1],
+      };
+      const document = createFigureDocument({
+        id: "flat-error-excluded-doc",
+        name: "Flat error excluded",
+        datasetId: excludedErrorDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+        // Channel 1 ("sigma") is a symmetric Y error for channel 0 ("signal").
+        errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      });
+
+      const spec = buildFigureSpecFromDocument(document, excludedErrorDataset, "flat-error-excluded");
+
+      expect(spec.dataset.time).toEqual([0, 2, 3]); // sanity: the exclusion actually dropped a row
+      expect(spec.error_spans).toHaveLength(1); // one entry per plotted series (y_keys: [0])
+      // The three SURVIVING sigma values (rows 0, 2, 3), in row order -- not
+      // re-derived by calling exportErrorSpans/buildErrorSpans again (that
+      // would only prove the helper agrees with itself), but the literal
+      // numbers `errData` holds at the kept rows.
+      expect(spec.error_spans?.[0]).toEqual({ y: { plus: [1, 3, 4], minus: [1, 3, 4] } });
+    });
+
+    it("prunes error_spans to match the pruned dataset, keeping row alignment (Data Filter)", () => {
+      const errData: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10, 1], [20, 2], [30, 3], [40, 4]],
+        labels: ["signal", "sigma"],
+        units: ["V", "V"],
+        metadata: {},
+      };
+      // Row 0 (signal=10 < 15) fails the filter -- surviving rows are 1, 2, 3.
+      const filteredErrorDataset: Dataset = {
+        id: "flat-error-filtered",
+        name: "err.csv",
+        data: errData,
+        filter: [{ col: 0, kind: "range", min: 15 }],
+      };
+      const document = createFigureDocument({
+        id: "flat-error-filtered-doc",
+        name: "Flat error filtered",
+        datasetId: filteredErrorDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+        errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      });
+
+      const spec = buildFigureSpecFromDocument(document, filteredErrorDataset, "flat-error-filtered");
+
+      expect(spec.dataset.time).toEqual([1, 2, 3]); // sanity: the filter actually dropped row 0
+      expect(spec.error_spans).toHaveLength(1);
+      // The three SURVIVING sigma values (rows 1, 2, 3), literal, same reason
+      // as above.
+      expect(spec.error_spans?.[0]).toEqual({ y: { plus: [2, 3, 4], minus: [2, 3, 4] } });
+    });
   });
 
   // Fix-round C5: mirrors the SCREEN's own fallback for the identical state
