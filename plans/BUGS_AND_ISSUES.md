@@ -1309,11 +1309,23 @@ differs from its input's — and that is what turned up sites 7-9.
   FULL-LENGTH text sidecars beside a 200-row preview. Slicing those to the
   preview rows would make `rows.length === by.length` hold naturally — labels
   correct at all 30 sites with NO frontend change, and a SMALLER payload than
-  today. It needs its own check first: the producer-side STRIP was reverted in
-  review because other readers need the sidecar, and slicing is not stripping
-  (`projectSearchSidecars.ts` reads keys only; the Inspector's Origin provenance
-  card shows content and would show preview rows). Do not swap the wire shape
-  for every lazy book without checking that card.
+  today. CHECKED 2026-09-12 AND REJECTED, by reading the reader that made it a
+  question: `components/Inspector/OriginProvenanceCard.tsx` renders that
+  sidecar's CELLS (`ColumnStringsSection`) and counts its keys in the card
+  header, so slicing on the wire would silently show a SUBSET of a provenance
+  card whose entire job is reporting what the file contained, with nothing on
+  screen saying it was narrowed. `projectSearchSidecars.ts` reads keys only and
+  would have been fine; the card is what rules it out. The payload saving is real
+  and deliberately forgone — the map is additive and lossless, a sliced sidecar
+  is lossy for a reader that wants the whole thing.
+  So the shape is the MAP, and what remains is getting it to `textLabelsFor`.
+  NOT a one-liner, and the backend field is INERT until it is done: the map
+  belongs to the preview while `textLabelsFor` takes a bare `DataStruct`, and
+  both homes cost something — `metadata` round-trips it into the `.dwk` and adds
+  another row-indexed-ish key to the family that already cost four review rounds,
+  while an optional parameter spares 29 of 30 call sites but must be threaded
+  through every path that labels a possibly-pending dataset (bar/box/violin/
+  strip, Tabulate, Data Filter, plotdata). Decide it deliberately.
   `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
   row-indexed. NOTE that is a narrow claim: an Origin `.opj` import carries text
   columns and NO `cat_levels`, so for the datasets this guard actually affects
