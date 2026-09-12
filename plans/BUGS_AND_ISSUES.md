@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-09  
+**Updated:** 2026-09-12  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -40,7 +40,15 @@ This is a working document, not a claim that every observation is already reprod
 ## BUG-001 — NCNR `.refl` uncertainty roles are plotted incorrectly
 
 **Priority:** P0 — scientifically misleading default visualization  
-**State:** Open  
+**State:** Open — every CODE-VERIFIABLE checklist box is now closed (2026-09-12);
+what remains needs a human or an external file: the owner's Windows visual
+check on the reported file (Acceptance criteria), the reproduction-checklist
+item asking to check a Reductus variant beyond the repository fixture, the
+reproduction-checklist item asking for a manual Error-Columns UI check "in
+the current release" (a running-app check, not a unit test), and
+plot-window-rebinding preservation of the declared roles (drag/drop a
+dataset onto an existing window) — see the Completion record's 2026-09-12
+entry.  
 **Reported:** 2026-09-08 by owner  
 **Investigated:** 2026-09-08 by ChatGPT-Sol  
 **Suggested implementation owner/model:** Claude Sonnet for parser/state reliability; ChatGPT-Sol for final interaction and visual review  
@@ -91,10 +99,10 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Bind resolution/dQ as symmetric X error using the canonical rich error-role model.
 - [x] Ensure bound error columns do not appear as independent curves or ordinary legend entries by default.
 - [x] Preserve all imported numeric columns in the worksheet; do not alter raw values.
-- [ ] Keep every role overridable through the import/error-column UI. (Generic coverage pre-exists in `ErrorRolesCard.test.tsx`; not re-verified against an NCNR `.refl` specifically in this pass.)
+- [x] Keep every role overridable through the import/error-column UI. NCNR-`.refl`-SPECIFIC (2026-09-12, Claude): `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s "NCNR .refl error roles are overridable through the store action ErrorRolesCard calls" describe block imports the real fixture's declared roles via `useApp.importPaths`, confirms they land, then overrides one binding through `useApp.getState().setErrorRoles` — the EXACT action `ErrorRolesCard.tsx`'s Side `<Select>` `onChange` calls via its `patch` helper — and confirms both that the store keeps the override (not the parser's declaration) and that the NEXT render of the real `usePlotPayload` hook draws accordingly (the resolution binding's horizontal whisker disappears once its `side` is overridden to an incomplete asymmetric pair; the untouched Y/uncertainty whisker is unaffected). Sabotage-verified: making `setErrorRoles` a no-op (write back the dataset's existing roles instead of the new ones) made both new tests fail; reverted.
 - [x] Handle files that omit uncertainty, omit resolution, or contain additional value columns without shifting indices incorrectly.
-- [x] Ensure workspace save/reopen and duplication preserve the intended roles. Reimport and plot-window rebinding still NOT independently verified — see Completion record.
-- [ ] Verify that user-customized channel visibility is not overwritten after the initial default is established. (Not exercised this pass.)
+- [x] Ensure workspace save/reopen and duplication preserve the intended roles. **Save/reopen, confirmed 2026-09-12 (Claude):** `frontend/src/lib/workspace.test.ts:2149` ("BUG-001: an NCNR .refl's declared Y+X roles round-trip through a workspace save/reopen", landed 2026-09-09) already round-trips the exact declared Y+X shape through `serializeWorkspace`/`parseWorkspace` — read and confirmed, not re-done. **Reimport (the store's `reimportDataset` action), unchanged-shape case, now also covered:** `frontend/src/store/reimport.test.ts`'s BUG-001 describe block (see the visibility item below) asserts the declared `errorRoles` survive a same-shape reimport unchanged. **Still open:** plot-window rebinding (dragging/dropping a dataset onto an existing window) is not independently verified for this shape.
+- [x] Verify that user-customized channel visibility is not overwritten after the initial default is established. NCNR-`.refl`-SPECIFIC (2026-09-12, Claude): `frontend/src/store/reimport.test.ts`'s "reimportDataset — NCNR .refl channel-visibility customization survives a same-shape reimport" describe block confirms the default (`defaultDenseChannels` on the fixture's own shape returns `[0]` only — the measured channel alone), then customizes BOTH directions — widen (`yKeys: [0, 1]`, plotting `uncertainty` as an ordinary series) and hide (`hiddenChannels: [0]`, hiding the default series) — and reimports the SAME-shape fixture (real rows 5-9 of `tests/golden/ncnr_j395_default.json` fed in place of rows 0-4): both customizations, and the declared `errorRoles`, survive untouched. Sabotage-verified: forcing `store/reimport.ts`'s `viewReset` to always fire (dropping the `shapeChanged` gate) made all three new assertions fail — and also broke the PRE-EXISTING generic pin ("keeps the live view's channel-keyed state when the shape is unchanged"), confirming the sabotage genuinely exercised the shared chokepoint; reverted.
 
 ### Automated-test checklist
 
@@ -105,7 +113,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Rendering/payload test asserts uncertainty and resolution are absent as standalone series.
 - [x] Overlay test asserts Y uncertainty and X resolution produce vertical and horizontal spans respectively.
 - [x] Log-axis regression test confirms valid uncertainty rendering without changing the underlying data.
-- [ ] Relevant backend, frontend, type-check, and production-build gates pass. (Targeted gates pass -- see Completion record; full frontend suite/`npm run build` intentionally deferred to the requester.)
+- [x] Relevant backend, frontend, type-check, and production-build gates pass. Run in full 2026-09-12 (see Completion record): `npx tsc -b --force` clean; `npx eslint` (touched files) clean; targeted `npx vitest run` (touched/new files + `architecture.test.ts`) 468 passed/0 failed; FULL `npx vitest run` **625 test files, 10049 tests, all passed, 0 failed**; `npm run build` (via `npm ci` first) succeeded — `tsc -b && vite build` clean, bundle 896.3 kB eager (budget 897.3 kB, 0.9 kB headroom).
 
 ### Acceptance criteria
 
@@ -127,11 +135,16 @@ The implementation must use the file format's semantics, not merely the exact di
   including the X binding, precedence over the label guess, malformed entries
   dropped with fallback intact). The two behavioural frontend tests were
   verified to fail without the change.
-- Agent verification: partial — the parser emits the roles and the store now
-  stores them. NOT yet verified: that the rendered plot actually draws
-  horizontal whiskers from an X binding on this dataset, reimport/save/reopen
-  round-tripping of the declared roles, or the "user-customized visibility is
-  not overwritten" criterion. Those remain open below.
+- Agent verification: the parser emits the roles and the store stores them;
+  the rendered plot draws horizontal whiskers from an X binding on this
+  dataset (`usePlotPayload.errorRoles.test.ts`); save/reopen round-tripping of
+  the declared roles is confirmed (`workspace.test.ts:2149`) and same-shape
+  reimport round-tripping of them is now covered too
+  (`reimport.test.ts`); the "role overridable through the UI" and
+  "user-customized visibility is not overwritten" criteria are now covered by
+  NCNR-`.refl`-specific tests (2026-09-12, Claude — see the Implementation
+  checklist above). Plot-window-rebinding preservation for this shape remains
+  unverified.
 - Owner verification: pending — required for this item (Windows, reported file)
 - Notes: the fix needed a contract gap closed first. `metadata["error_roles"]`
   was written by the backend and read by NOTHING, so no parser could express an
@@ -191,7 +204,9 @@ The implementation must use the file format's semantics, not merely the exact di
     pre-existing F5 test only covered the `errorRoles: []` marker, not a rich
     binding — confirming the clone gets an independent array with the same
     bindings. Reimport and plot-window-rebinding preservation were NOT
-    exercised this pass; still open.
+    exercised this pass; still open (2026-09-12: reimport round-tripping is
+    now covered — see below and the Implementation checklist; plot-window
+    rebinding remains open).
   - **Review round (same day), two real defects in the above, both fixed:**
     (1) `_measured_channel_for_uncertainty` rejected a BLANK unit outright, so a
     dimensionless reflectivity — `R`/`dR` with no units, an ordinary reductus
@@ -225,6 +240,50 @@ The implementation must use the file format's semantics, not merely the exact di
     "user-customized visibility survives the default" criteria (no NCNR-.refl-
     specific test written for either); reimport and plot-window-rebinding
     round-tripping.
+
+- **2026-09-12 (Claude), closing the remaining code-verifiable checklist
+  boxes (owner/hardware boxes untouched):**
+  - **Implementation checklist item "Keep every role overridable..."**:
+    NCNR-`.refl`-specific test added, `frontend/src/components/Stage/
+    usePlotPayload.errorRoles.test.ts` — see that checklist line for detail.
+    Sabotage-verified (no-op override) FAILED both new tests before revert.
+  - **Implementation checklist item "Verify that user-customized channel
+    visibility is not overwritten..."**: NCNR-`.refl`-specific test added,
+    `frontend/src/store/reimport.test.ts` — see that checklist line for
+    detail. Sabotage-verified (always-reset `viewReset`) FAILED all three new
+    assertions (and the pre-existing generic pin) before revert.
+  - **Stale-record reconciliation**: the "reimport/save/reopen round-trip"
+    mention above was stale for the save/reopen half — `workspace.test.ts:2149`
+    already covers the exact NCNR Y+X shape (landed 2026-09-09, confirmed by
+    reading it, not redone). The reimport half is now genuinely covered too
+    (this pass, unchanged-shape case). Plot-window rebinding (drag/drop onto
+    an existing window) is the one sub-case of this item that remains
+    unverified.
+  - **Automated-test checklist item "Relevant backend, frontend, type-check,
+    and production-build gates pass."**: run in full this pass (previously
+    deferred to the requester).
+    - `npx tsc -b --force`: clean (exit 0).
+    - `npx eslint src/components/Stage/usePlotPayload.errorRoles.test.ts
+      src/store/reimport.test.ts src/store/importErrorRoles.ts
+      src/store/reimport.ts --max-warnings=0`: clean.
+    - `npx vitest run` (targeted: both new/touched files + every file this
+      item's Completion record already names + `architecture.test.ts`): 468
+      passed, 0 failed.
+    - `npx vitest run` (FULL suite, 2026-09-12, after `npm ci`): **625 test
+      files, 10049 tests, all passed, 0 failed** (606s).
+    - `npm run build` (via `npm ci` first, per this repo's own
+      "vite's transform cache also lies" lesson): **succeeded** — `tsc -b`
+      clean, `vite build` clean (955 modules), `check-bundle-size.mjs`:
+      "bundle-size: OK — 896.3 kB eager, 0.9 kB under budget" (897.3 kB).
+  - No backend/parser code touched this pass (scope was additive frontend
+    tests + this plan file), so `uv run pytest tests/test_io_ncnr.py -q`
+    (26 passed, per the prior pass) was not re-run.
+  - Still open after this pass: owner's Windows visual check on the reported
+    file (Acceptance criteria); the "check a Reductus variant beyond the
+    fixture" and "confirm manual Error-Columns assignment in the current
+    release" reproduction-checklist items (need a human/external file);
+    plot-window-rebinding preservation of the declared roles across a
+    reshape/rebind.
 
 ---
 

@@ -15,10 +15,13 @@
 // `usePlotPayload.quickFigureParity.test.ts`.
 
 import { renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { importFile } from "../../lib/api";
+import { probeSource } from "../../lib/desktopBridge";
 import type { ErrorBinding } from "../../lib/errorRoles";
 import type { Dataset } from "../../lib/types";
+import { useApp } from "../../store/useApp";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
 
 vi.mock("../../lib/plotdata", async (importOriginal) => {
@@ -35,6 +38,20 @@ vi.mock("../../lib/plotdata", async (importOriginal) => {
     ) => actual.buildColumns(ds, y2Keys, xKey, yKeys),
   };
 });
+
+// items 1-2 below also touch the STORE (import + override), unlike the items
+// 1-3 block above which hands the hook a plain, hand-built Dataset -- so
+// these two need the store's own api/desktopBridge mocks (the same ones
+// `store/importDatasets.test.ts` uses for `importPaths`).
+vi.mock("../../lib/api", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  importFile: vi.fn(),
+  uploadFile: vi.fn(),
+}));
+vi.mock("../../lib/desktopBridge", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  probeSource: vi.fn(),
+}));
 
 // The EXACT shape `quantized.io.ncnr._refl_role_metadata` declares for a
 // reductus `.refl`: Qz -> time, three value channels, only the first
@@ -132,5 +149,108 @@ describe("usePlotPayload — NCNR .refl declared roles render correctly (BUG-001
     // these points on a log axis (the plugin, not this hook, decides how a
     // non-positive whisker end is drawn -- see uplotOverlays.test.ts).
     expect(result.current.displayPayload!.data[1]).toEqual([100, 90, 80]);
+  });
+});
+
+// BUGS_AND_ISSUES BUG-001, implementation checklist item 1 ("Keep every role
+// overridable through the import/error-column UI"): generic override
+// coverage pre-existed in ErrorRolesCard.test.tsx, but never against an NCNR
+// `.refl`'s ACTUAL declared roles, and never through to the rendered plot.
+// This imports a real NCNR-reductus-shaped file through the real store
+// (`useApp.importPaths`, mocked at the `importFile` boundary -- the values
+// below are the fixture's own first five rows, from
+// `tests/golden/ncnr_j395_default.json`, the frozen parse of
+// `tests/fixtures/ncnr_j395.refl`), confirms the roles the parser declared
+// land on the dataset, then overrides ONE of them through
+// `useApp.getState().setErrorRoles` -- the EXACT action
+// `ErrorRolesCard.tsx`'s Select `onChange` handlers call (see its `patch`
+// helper: `setErrorRoles(active.id, roles.map((r, k) => k === i ? {...r,
+// ...next} : r))`) -- and confirms both that the override wins in the store
+// AND that the next render of the real hook draws accordingly.
+describe("NCNR .refl error roles are overridable through the store action ErrorRolesCard calls (BUG-001 checklist item 1)", () => {
+  // The parser's OWN declared roles for this file
+  // (`quantized.io.ncnr._refl_role_metadata`, pinned by
+  // `test_refl_declares_uncertainty_and_resolution_roles` in
+  // `tests/test_io_ncnr.py`): symmetric Y error on Intensity from
+  // `uncertainty`, symmetric X error (Q resolution) from `resolution`.
+  const declaredRoles: ErrorBinding[] = [
+    { channel: 1, target: 0, axis: "y", side: "both" },
+    { channel: 2, target: -1, axis: "x", side: "both" },
+  ];
+
+  const reflPayload = () => ({
+    // The fixture's own first five rows (Qz, Intensity, uncertainty,
+    // resolution) -- real numbers, not synthesized, so this is genuinely
+    // "the NCNR .refl fixture", not a shape lookalike.
+    time: [0.0074473497059, 0.0078680679047, 0.008342898412, 0.0088334445027, 0.009338185424],
+    values: [
+      [1.086612118, 0.020429255703, 0.00091856511932],
+      [1.07206817, 0.011740351611, 0.00095669551269],
+      [1.0641516064, 0.0093020629222, 0.00097803208734],
+      [1.0518306308, 0.0074678843633, 0.0010077631213],
+      [1.044353347, 0.0065797453572, 0.0010242748316],
+    ],
+    labels: ["Intensity", "uncertainty", "resolution"],
+    units: ["counts", "counts", "1/Ang"],
+    metadata: {
+      x_column_name: "Qz",
+      parser_name: "import_ncnr_refl",
+      default_value_channels: [0],
+      error_roles: declaredRoles,
+      error_channels: { 0: 1 },
+    },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useApp.setState({ datasets: [], folders: [], activeId: null, selectedIds: [], plotWindows: [] });
+    vi.mocked(importFile).mockResolvedValue(reflPayload());
+    vi.mocked(probeSource).mockResolvedValue(null);
+  });
+
+  it("imports with the parser-declared roles, then a store-action override wins over them", async () => {
+    await useApp.getState().importPaths(["/data/j395.refl"]);
+    const id = useApp.getState().datasets[0].id;
+
+    // Confirm the inferred/declared roles landed exactly as the parser says.
+    expect(useApp.getState().datasets[0].errorRoles).toEqual(declaredRoles);
+
+    // Override ONE role through the identical store action
+    // ErrorRolesCard.tsx's Side <Select> calls: `patch(1, { side: "+" })`.
+    const roles = useApp.getState().datasets[0].errorRoles!;
+    const overridden = roles.map((r, k) => (k === 1 ? { ...r, side: "+" as const } : r));
+    useApp.getState().setErrorRoles(id, overridden);
+
+    // The override wins -- it is NOT the declared side, and it is NOT
+    // silently reverted by anything else touching the dataset.
+    expect(useApp.getState().datasets[0].errorRoles).toEqual(overridden);
+    expect(useApp.getState().datasets[0].errorRoles![1].side).toBe("+");
+    expect(useApp.getState().datasets[0].errorRoles).not.toEqual(declaredRoles);
+  });
+
+  it("the overridden role changes what the NEXT render of the real plot payload draws", async () => {
+    await useApp.getState().importPaths(["/data/j395.refl"]);
+    const id = useApp.getState().datasets[0].id;
+    const roles = useApp.getState().datasets[0].errorRoles!;
+    // A lone "+" with no matching "-" is an INCOMPLETE asymmetric pair --
+    // `asymmetricPair`/`buildErrorSpans` (lib/errorbars.ts) draw nothing for
+    // it rather than invent the missing half. So this override should make
+    // the resolution's horizontal (x) whisker disappear from the payload
+    // entirely, while the unrelated Y (uncertainty) whisker is untouched.
+    useApp.getState().setErrorRoles(id, roles.map((r, k) => (k === 1 ? { ...r, side: "+" as const } : r)));
+
+    const overriddenDataset = useApp.getState().datasets[0];
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), {
+      initialProps: params({ active: overriddenDataset }),
+    });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+
+    expect(result.current.plotted).toEqual([0]); // still only the measured channel
+    const spans = result.current.errorSpans.get(1) ?? [];
+    const x = spans.find((s) => s.axis === "x");
+    const y = spans.find((s) => s.axis === "y");
+    expect(x).toBeUndefined(); // the override broke the X pair -- no horizontal whisker now
+    expect(y).toBeDefined(); // the untouched Y (uncertainty) binding still draws
+    expect(y!.plus).toEqual([0.020429255703, 0.011740351611, 0.0093020629222, 0.0074678843633, 0.0065797453572]);
   });
 });

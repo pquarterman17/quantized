@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyCorrections as applyCorrectionsApi, importFile, uploadFile } from "../lib/api";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
+import { defaultDenseChannels } from "../lib/plotdata";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
@@ -134,6 +135,120 @@ describe("reimportDataset — shape preserved", () => {
     expect(ds.tags).toEqual(["MvsH"]);
     expect(ds.group).toBe("batch1");
     expect(ds.notes).toBe("sample A");
+  });
+});
+
+// BUGS_AND_ISSUES BUG-001, implementation checklist item 2 ("Verify that
+// user-customized channel visibility is not overwritten after the initial
+// default is established"). The "keeps the live view's channel-keyed state
+// when the shape is unchanged" test above already pins the GENERIC guarantee
+// (store/reimport.ts: `viewReset` is only computed `shapeChanged ? ... :
+// null`, so an unchanged-shape reimport never touches `yKeys`/
+// `hiddenChannels`); this is the NCNR-.refl-SPECIFIC case the checklist item
+// asked for, because for THIS file the "initial default" is not the usual
+// "everything plotted" -- it's the parser's `default_value_channels: [0]`
+// hint (`lib/plotdata.ts`'s `defaultDenseChannels`), and the risk is a
+// re-derivation collapsing a deliberate widening of that default back down.
+//
+// Values below are five real rows of `tests/golden/ncnr_j395_default.json`
+// (the frozen parse of `tests/fixtures/ncnr_j395.refl`) -- "base" is rows
+// 0-4, "fresh" is rows 5-9 of the SAME file, standing in for an instrument
+// re-run that rewrites the same columns with new numbers.
+describe("reimportDataset — NCNR .refl channel-visibility customization survives a same-shape reimport (BUG-001 checklist item 2)", () => {
+  const reflLabels = ["Intensity", "uncertainty", "resolution"];
+  const reflUnits = ["counts", "counts", "1/Ang"];
+  const reflMetadata = {
+    x_column_name: "Qz",
+    parser_name: "import_ncnr_refl",
+    default_value_channels: [0],
+    error_roles: [
+      { channel: 1, target: 0, axis: "y" as const, side: "both" as const },
+      { channel: 2, target: -1, axis: "x" as const, side: "both" as const },
+    ],
+    error_channels: { 0: 1 },
+  };
+
+  const reflBase: DataStruct = {
+    time: [0.0074473497059, 0.0078680679047, 0.008342898412, 0.0088334445027, 0.009338185424],
+    values: [
+      [1.086612118, 0.020429255703, 0.00091856511932],
+      [1.07206817, 0.011740351611, 0.00095669551269],
+      [1.0641516064, 0.0093020629222, 0.00097803208734],
+      [1.0518306308, 0.0074678843633, 0.0010077631213],
+      [1.044353347, 0.0065797453572, 0.0010242748316],
+    ],
+    labels: reflLabels,
+    units: reflUnits,
+    metadata: reflMetadata,
+  };
+
+  // Same columns, same row count -- reimportShapeChanged/reimportColumnsChanged
+  // must both read false against this pair.
+  const reflFresh: DataStruct = {
+    time: [0.0098346085646, 0.010331653015, 0.010820676984, 0.011323238578, 0.011828358518],
+    values: [
+      [1.028032216, 0.0058593323704, 0.0010535395023],
+      [1.036627133, 0.0053986612779, 0.0010631912032],
+      [1.0456216961, 0.0050783894897, 0.0010788482498],
+      [1.0288188458, 0.0047557644572, 0.0010819135333],
+      [0.99449471054, 0.0045888117936, 0.0010726269878],
+    ],
+    labels: reflLabels,
+    units: reflUnits,
+    metadata: reflMetadata,
+  };
+
+  it("only the measured channel is the default (before any customization)", () => {
+    // lib/plotdata.ts's default-visibility logic (the acceptance criterion:
+    // "opens with only its measured reflectivity/intensity curve selected").
+    expect(defaultDenseChannels(reflBase, null)).toEqual([0]);
+  });
+
+  it("a customization that WIDENS the default (plotting uncertainty as an ordinary series) survives a same-shape reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue(reflFresh);
+    useApp.setState({
+      datasets: [baseDataset({ data: reflBase, errorRoles: reflMetadata.error_roles })],
+      activeId: "d1",
+      yKeys: null, // the untouched default -- resolves to [0] via defaultDenseChannels
+      hiddenChannels: [],
+    });
+
+    // The user explicitly chooses to also plot "uncertainty" as a normal
+    // series (e.g. the Channels card's checkbox) -- exactly what the
+    // acceptance criteria says must stay possible AND stick.
+    useApp.setState({ yKeys: [0, 1] });
+    expect(useApp.getState().yKeys).toEqual([0, 1]);
+
+    await useApp.getState().reimportDataset("d1");
+
+    const s = useApp.getState();
+    // Same shape -> viewReset is null -> yKeys must NOT be re-derived back
+    // down to the bare default.
+    expect(s.yKeys).toEqual([0, 1]);
+    expect(s.datasets[0].data).toEqual(reflFresh); // the reimport itself did happen
+    // Same-shape reimport doesn't touch `errorRoles` at all (only the
+    // `columnsChanged` branch does) -- the parser-declared Y/X roles must
+    // still be exactly what they were (BUGS_AND_ISSUES BUG-001's other open
+    // "reimport round-tripping of the declared roles" question).
+    expect(s.datasets[0].errorRoles).toEqual(reflMetadata.error_roles);
+  });
+
+  it("a customization that HIDES the default series survives a same-shape reimport", async () => {
+    vi.mocked(importFile).mockResolvedValue(reflFresh);
+    useApp.setState({
+      datasets: [baseDataset({ data: reflBase, errorRoles: reflMetadata.error_roles })],
+      activeId: "d1",
+      yKeys: null,
+      hiddenChannels: [],
+    });
+
+    // The user hides the (only) default-plotted series via the interactive
+    // legend, leaving nothing drawn on purpose.
+    useApp.setState({ hiddenChannels: [0] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    expect(useApp.getState().hiddenChannels).toEqual([0]);
   });
 });
 
