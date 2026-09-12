@@ -84,14 +84,161 @@ function sliceOneSidecar(raw: unknown, rowIndexes: readonly number[]): unknown {
   return out;
 }
 
+/** The metadata key a lazily-loaded book's PREVIEW carries its row map under:
+ *  for each preview row `r`, WHICH source row it is (`LazyBookEntry.preview_rows`
+ *  on the wire -> `preview.metadata.preview_source_rows` on the DataStruct, put
+ *  there by `store/importDatasets.ts`). Present whenever the preview's rows do
+ *  not already stand one-for-one against the book's: for a SAMPLED preview the
+ *  backend sends the map, and for a merely padding-TRIMMED one the importer
+ *  SYNTHESIZES the identity map the backend deliberately omits (the trim leaves a
+ *  strict PREFIX whose row r IS source row r —
+ *  `io/origin_project/preview.py::decimate_with_alignment` — so the wire needs no
+ *  map, but a reader with only a length comparison cannot tell that prefix from a
+ *  sample, and the identity map is what lets it stop guessing). ABSENT, therefore,
+ *  in two cases: a preview that is the whole book (nothing to explain), and a
+ *  payload whose `preview_sampled` is missing entirely — an older backend cannot
+ *  vouch for the prefix, so its readers keep degrading rather than be handed a
+ *  map nobody stands behind.
+ *
+ *  Deliberately NOT in `ROW_INDEXED_SIDECARS`, and the reasons are worth writing
+ *  down because "one rule, one place" is this module's whole point:
+ *    * different SHAPE. Those keys hold `{column: [cell per row]}`; this is a
+ *      bare `number[]`, which `sliceOneSidecar` returns UNTOUCHED (its
+ *      `Array.isArray` rejection). Registering it would buy no slicing at all,
+ *      only the false impression that slicing handles it.
+ *    * different INDEX SPACE. Those are indexed by SOURCE row; this is indexed
+ *      by PREVIEW row and its cells ARE source-row numbers, so a row operation
+ *      has to COMPOSE it, not slice it.
+ *  What each row operation does with it is therefore stated at that operation,
+ *  and stated because the first version of this note instead argued that no
+ *  operation could mislabel — while one of them already was:
+ *    * `sliceRowSidecars` COMPOSES it and leaves the source-space sidecars alone
+ *      (see there). Slicing a source-space column with preview-row indices was
+ *      the defect: on the 6-row fixture in `lib/barlayout.test.ts`, faceting by
+ *      the text column's own channel captioned the panels correctly and then
+ *      labelled the level-2 panel's box `B1`.
+ *    * `withoutRowSidecars` DROPS it, so a caller that rebuilds the sidecars in
+ *      its own row space (`mergeDatasets`) cannot leave a map from a different
+ *      row space standing over them.
+ *  A genuinely ROW-INDEXED sidecar added by a parser still belongs in the list
+ *  above — this exemption is about this key's shape, not a loosening. */
+export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
+
+/** `raw` as a usable preview->source row map, or `null` if it is anything else.
+ *
+ *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the
+ *  wire field) and the consumer (`lib/barlayout.ts`'s label resolution, against
+ *  the metadata key), because the two must agree on what counts as usable. A map
+ *  that passed the producer and then failed the consumer would be worse than no
+ *  map: labels silently absent while a key in the file claims otherwise.
+ *
+ *  FAILS CLOSED on everything — not an array, a non-integer or negative entry, a
+ *  REPEATED entry, a length other than `previewRowCount`, or (when
+ *  `sourceRowCount` is given) an entry naming a row the source does not have.
+ *  This key round-trips into the `.dwk` (`lib/workspaceSerialize.ts` writes
+ *  `d.data` whole), and a `.dwk` is hand-editable, so none of that is
+ *  hypothetical.
+ *
+ *  REPEATS are the one malformation that produces confident WRONG names instead
+ *  of degradation, which is why they are rejected rather than tolerated: with
+ *  `[0,0,0,0]` every preview row reads source row 0's cell, so the per-level
+ *  agreement check in `lib/barlayout.ts` sees no contradiction and every level is
+ *  labelled from row 0. Distinctness costs an honest producer nothing — the
+ *  sampler builds its index list from `sorted(keep)` over a `set`
+ *  (`io/origin_project/preview.py::_decimate`).
+ *
+ *  ORDER is deliberately NOT required. A reader that only looks up
+ *  `sidecar[map[r]]` is correct for ANY permutation, so rejecting an unsorted map
+ *  would trade a working label source for a guess about the producer.
+ *
+ *  `sourceRowCount` bounds the entries, and the two call sites mean different
+ *  things by it on purpose: the producer passes `book.rows` — the whole book, the
+ *  bound the map is actually about — while the consumer passes NONE, because
+ *  there the only number to hand is one text column's cell count and an Origin
+ *  text column may legitimately be shorter than the book (`io/origin_project/
+ *  opj.py` pads only numeric columns). See `lib/barlayout.ts` for what an entry
+ *  past that column's end reads as instead. */
+export function asPreviewSourceRows(
+  raw: unknown,
+  previewRowCount: number,
+  sourceRowCount?: number,
+): number[] | null {
+  if (!Array.isArray(raw) || raw.length !== previewRowCount) return null;
+  const bound = sourceRowCount ?? Number.POSITIVE_INFINITY;
+  for (const i of raw) {
+    if (typeof i !== "number" || !Number.isInteger(i) || i < 0 || i >= bound) return null;
+  }
+  if (new Set(raw as number[]).size !== raw.length) return null;
+  return raw as number[];
+}
+
+/** `map` composed with `rowIndexes`: the preview->source map a row operation's
+ *  OUTPUT rows need, given the map its INPUT rows had. Output row k is input row
+ *  `rowIndexes[k]`, which is source row `map[rowIndexes[k]]`.
+ *
+ *  `null` means DROP the map rather than guess. Three ways to get there: the
+ *  input is not a usable map at all; an index falls outside it (an
+ *  `insertRowIndexes` `-1` blank slot — an inserted row came from no source row,
+ *  and there is no honest entry to write for it); or the composed map would not
+ *  itself validate, which today means a repeated index (a stack-shaped
+ *  `[0,0,1,1]` list) composing to a repeated source row. Re-validating the
+ *  OUTPUT is what keeps this module's stored maps and its validator in
+ *  agreement: nothing here writes a map that `asPreviewSourceRows` would refuse.
+ *
+ *  `asPreviewSourceRows` is reused for its ENTRY checks; its LENGTH check is
+ *  satisfied trivially on purpose, by passing the map's own length, because a
+ *  slice is not told the preview's row count. The load-bearing check is the
+ *  `undefined` test in the loop — every index being sliced must land inside the
+ *  map — which is the stronger statement anyway. */
+function composePreviewSourceRows(
+  raw: unknown,
+  rowIndexes: readonly number[],
+): number[] | null {
+  if (!Array.isArray(raw)) return null;
+  const map = asPreviewSourceRows(raw, raw.length);
+  if (map === null) return null;
+  const composed: number[] = [];
+  for (const r of rowIndexes) {
+    const src = map[r];
+    if (src === undefined) return null;
+    composed.push(src);
+  }
+  return asPreviewSourceRows(composed, composed.length);
+}
+
 /** A copy of `metadata` with every row-indexed sidecar sliced to `rowIndexes`
  *  and everything else carried through unchanged. Cheap and allocation-free-ish
- *  when the dataset carries no such sidecar, which is the common case. */
+ *  when the dataset carries no such sidecar, which is the common case.
+ *
+ *  ONE EXCEPTION, and it is the whole reason this function knows about
+ *  `PREVIEW_SOURCE_ROWS`: that key says the sidecars are indexed by SOURCE row
+ *  while `rowIndexes` names PREVIEW rows. The two index spaces are not
+ *  interchangeable, so the sidecars are left ALONE and the MAP is composed
+ *  instead — `map'[k] = map[rowIndexes[k]]`. Slicing a source-space column with
+ *  preview-row indices does not produce a smaller version of that column, it
+ *  produces different cells: measured on the 6-row book in
+ *  `lib/barlayout.test.ts` (levels [0,0,1,1,2,2], text A0,A0,B1,B1,C2,C2,
+ *  preview keeping rows [0,2,3,5]), faceting by that column's own channel
+ *  captioned the panels correctly and labelled the level-2 panel's box `B1`, and
+ *  excluding one row of a 3-row preview turned ["A0","B1"] into ["A0","A0"].
+ *  Composition gives both the right labels, and the composed map still describes
+ *  exactly the rows it travels with.
+ *
+ *  A map that cannot be composed is DROPPED (see `composePreviewSourceRows`),
+ *  which leaves the source-space sidecars standing with no map — the shape every
+ *  reader's length check degrades to numbers. Fail closed, the same posture
+ *  `rowsAreSampled` takes. */
 export function sliceRowSidecars(
   metadata: Record<string, unknown>,
   rowIndexes: readonly number[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...metadata };
+  if (PREVIEW_SOURCE_ROWS in out) {
+    const composed = composePreviewSourceRows(out[PREVIEW_SOURCE_ROWS], rowIndexes);
+    if (composed === null) delete out[PREVIEW_SOURCE_ROWS];
+    else out[PREVIEW_SOURCE_ROWS] = composed;
+    return out;
+  }
   for (const key of ROW_INDEXED_SIDECARS) {
     if (key in out) out[key] = sliceOneSidecar(out[key], rowIndexes);
   }
@@ -129,32 +276,46 @@ export function sliceRowSidecars(
  *  `lib/workspaceDatasetParse.parsePending` applies the same `!== false` rule when
  *  reading it back.
  *
- *  NOT SUPERSEDED by `PREVIEW_SOURCE_ROWS` below, though that map does let ONE
+ *  NOT SUPERSEDED by `PREVIEW_SOURCE_ROWS` above, though that map does let ONE
  *  path stop refusing: `lib/barlayout.ts` resolves a category LABEL through
  *  `sidecar[map[r]]`, which is a read whose whole answer is the cell's text. The
- *  two callers here stay conservative on purpose, because their rows mean more
- *  than their cells do:
- *    * the worksheet grid (`worksheet/textColumns.ts`) would put a real cell on a
- *      row whose neighbours are absent — a grid that looks contiguous and is not.
- *    * a row EDIT (`store/cellEdit.ts`) would write through the map into a book
- *      whose other rows this session has never seen, and then persist it. BUG-009's
- *      guard refuses edits on a pending dataset anyway, so nothing here is the
- *      only thing standing between that edit and the file.
- *  Mapping a label is recoverable if wrong; mapping a write is not. */
+ *  ONE caller here — the worksheet grid, `worksheet/textColumns.ts:36`, the only
+ *  call site in the tree — stays conservative on purpose, because its rows mean
+ *  more than their cells do: mapping the grid's cells would put a real cell on a
+ *  row whose neighbours are absent, a grid that looks contiguous and is not.
+ *  Mapping a label is recoverable if wrong; mapping a grid is a claim about which
+ *  rows exist.
+ *
+ *  A row EDIT does NOT consult this predicate, and the history paragraph above
+ *  says why: the `store/cellEdit.ts` copy was removed. `store/pendingEdit.ts`'s
+ *  `refusePendingEdit` refuses every edit on a pending dataset (BUG-009), which
+ *  is both stronger and a different question — it does not care whether the
+ *  preview was sampled — so `cellEdit.ts` neither imports this nor needs to. */
 export function rowsAreSampled(pending: Dataset["pending"]): boolean {
   return pending != null && pending.previewSampled !== false;
 }
 
 
-/** A copy of `metadata` with every row-indexed sidecar key REMOVED.
+/** A copy of `metadata` with every row-indexed sidecar key REMOVED — and
+ *  `PREVIEW_SOURCE_ROWS` with them.
  *
  *  For a caller that is about to REBUILD them (merge) or that has no rows to
  *  describe. `concatRowSidecars` omits a key no input contributes a cell for, so
  *  a spread-then-overwrite left the old sidecar standing in exactly that case —
- *  strip first, then add back what the rebuild produced. */
+ *  strip first, then add back what the rebuild produced.
+ *
+ *  The preview->source map goes too, because a rebuild happens in the CALLER's
+ *  row space and that map is about someone else's: `mergeDatasets` inherits
+ *  dataset 0's non-row-indexed metadata wholesale, so without this a merged grid
+ *  could carry dataset 0's map over freshly concatenated row-space sidecars.
+ *  `concatRowSidecars` emits every column at exactly the summed span, so today a
+ *  reader's length check would not consult that map anyway — stripping it is what
+ *  makes the safety a property of this module instead of an accident of the
+ *  merge's arithmetic. */
 export function withoutRowSidecars(metadata: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...metadata };
   for (const key of ROW_INDEXED_SIDECARS) delete out[key];
+  delete out[PREVIEW_SOURCE_ROWS];
   return out;
 }
 
@@ -269,64 +430,4 @@ export function insertRowIndexes(rowCount: number, at: number, count: number): n
     ...Array.from({ length: n }, () => -1),
     ...Array.from({ length: rowCount - clamped }, (_, i) => clamped + i),
   ];
-}
-
-/** The metadata key a lazily-loaded book's PREVIEW carries its row map under:
- *  for each preview row `r`, WHICH source row it is (`LazyBookEntry.preview_rows`
- *  on the wire -> `preview.metadata.preview_source_rows` on the DataStruct, put
- *  there by `store/importDatasets.ts`). Present only when the rows do NOT
- *  already correspond — the backend omits it for an untouched or merely
- *  padding-trimmed preview, which is a strict PREFIX whose row r IS source row r
- *  (`io/origin_project/preview.py::decimate_with_alignment`).
- *
- *  Deliberately NOT in `ROW_INDEXED_SIDECARS`, and the reasons are worth writing
- *  down because "one rule, one place" is this module's whole point:
- *    * different SHAPE. Those keys hold `{column: [cell per row]}`; this is a
- *      bare `number[]`, which `sliceOneSidecar` returns UNTOUCHED (its
- *      `Array.isArray` rejection). Registering it would buy no slicing at all,
- *      only the false impression that slicing handles it.
- *    * different INDEX SPACE. Those are indexed by SOURCE row; this is indexed
- *      by PREVIEW row and its cells ARE source-row numbers, so a row operation
- *      would have to COMPOSE it, not slice it.
- *    * it needs neither, because every reader consults the map ONLY when a
- *      sidecar's length disagrees with the row count, and re-validates it
- *      through `asPreviewSourceRows` at that moment. An operation that REBUILDS
- *      the sidecars to match its own rows (`concatRowSidecars` on a merge) makes
- *      the map dead weight that is never read again; one that leaves a stale map
- *      behind fails the length/bounds check and degrades to numbers. Neither can
- *      mislabel. That is the same fail-closed posture `rowsAreSampled` takes,
- *      reached by validation rather than by enumeration.
- *  A genuinely ROW-INDEXED sidecar added by a parser still belongs in the list
- *  above — this exemption is about this key's shape, not a loosening. */
-export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
-
-/** `raw` as a usable preview->source row map, or `null` if it is anything else.
- *
- *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the
- *  wire field) and the consumer (`lib/barlayout.ts`'s label resolution, against
- *  the metadata key), because the two must agree on what counts as usable. A map
- *  that passed the producer and then failed the consumer would be worse than no
- *  map: labels silently absent while a key in the file claims otherwise.
- *
- *  FAILS CLOSED on everything — not an array, a non-integer or negative entry, a
- *  length other than `previewRowCount`, or (when `sourceRowCount` is given) an
- *  entry naming a row the source does not have. This key round-trips into the
- *  `.dwk` (`lib/workspaceSerialize.ts` writes `d.data` whole), and a `.dwk` is
- *  hand-editable, so none of that is hypothetical.
- *
- *  Deliberately NOT checked: that the entries ascend, or are distinct. The
- *  backend's sampler emits them sorted, but a reader that only looks up
- *  `sidecar[map[r]]` is correct for ANY permutation, so rejecting one would
- *  trade a working label source for a guess about the producer. */
-export function asPreviewSourceRows(
-  raw: unknown,
-  previewRowCount: number,
-  sourceRowCount?: number,
-): number[] | null {
-  if (!Array.isArray(raw) || raw.length !== previewRowCount) return null;
-  const bound = sourceRowCount ?? Number.POSITIVE_INFINITY;
-  for (const i of raw) {
-    if (typeof i !== "number" || !Number.isInteger(i) || i < 0 || i >= bound) return null;
-  }
-  return raw as number[];
 }

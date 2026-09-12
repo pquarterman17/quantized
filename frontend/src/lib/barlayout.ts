@@ -95,18 +95,35 @@ function textLabelsFor(
     // and a map of the wrong length or naming a cell the sidecar lacks must
     // degrade, not mislabel.
     //
-    // WITHOUT a usable map a length mismatch is still SUPPRESSED, which leaves
-    // one known cost: a merely padding-TRIMMED preview is a genuine PREFIX whose
-    // cells DO line up, but it carries no map (its rows correspond, so the
-    // backend deliberately sends nothing) and no length test can tell that prefix
-    // from a sample. Those labels still read as formatted numbers until the book
-    // resolves — a DEGRADATION, self-healing, deliberately preferred over the
-    // wrong names above. The same suppression covers an older backend and any
-    // `.dwk` whose map fails validation.
+    // WITHOUT a usable map a length mismatch is still SUPPRESSED — degrade to
+    // formatted numbers rather than risk the wrong names. What reaches that
+    // suppression is now only what genuinely cannot be reindexed: an older
+    // backend that sends no map, a `.dwk` whose map fails validation, or a row
+    // operation that could not compose its map (`lib/rowSidecars.ts`). A merely
+    // padding-TRIMMED preview is NOT in that set any more: its rows are a strict
+    // PREFIX, the backend omits the map because they correspond, and
+    // `store/importDatasets.ts` synthesizes the identity map for exactly that
+    // case — so a trimmed book's labels resolve here instead of waiting for the
+    // fetch. No length test could have told that prefix from a sample; the
+    // identity map is what removes the need to.
+    //
+    // The validator is called WITHOUT a source bound on purpose, and this is the
+    // one place the two call sites differ (the producer passes `book.rows`). The
+    // only bound available here is `rows.length`, ONE text column's cell count,
+    // and `io/origin_project/opj.py` pads only NUMERIC columns to the block's
+    // longest — so an Origin text column is legitimately allowed to be shorter
+    // than the book. Passing it would make every entry past that column's end
+    // fatal to the whole map, disabling the feature for every other column of a
+    // shape the unsampled path handles fine. Unbounded, such an entry reads as
+    // `undefined` -> `""` -> the blank the loop below already skips, so the cost
+    // is confined to the rows that column does not cover: the levels it still
+    // covers keep their names, and a level left uncovered falls through to the
+    // numbers via the `levels.every` check. An entry can never read ANOTHER
+    // column's cell — it indexes this column only.
     const map =
       rows.length === by.length
         ? null
-        : asPreviewSourceRows(meta[PREVIEW_SOURCE_ROWS], by.length, rows.length);
+        : asPreviewSourceRows(meta[PREVIEW_SOURCE_ROWS], by.length);
     if (map === null && rows.length !== by.length) continue;
     const perLevel = new Map<number, string>();
     let ok = true;

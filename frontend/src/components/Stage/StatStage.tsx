@@ -104,10 +104,29 @@ export default function StatStage() {
   // user from asking for the degenerate case through THIS picker — a value
   // that arrives another way, or that "group by" moves onto afterwards, is
   // left alone because the data stays correct either way.)
+  //
+  // WHICH IS EXACTLY WHY the filter spares the CURRENT `facetCol`, degenerate
+  // or not: `st.facetCol` is the RAW state (`effectiveFacetCol`), unlike
+  // `st.group2Col`, which `maskStaleCategoricalPicks` nulls whenever it
+  // collides with "group by" — so `thenByOptions` can never omit its own
+  // value and this list could. It did: with "group by" moved onto the faceted
+  // column, the stage kept drawing one panel per level while this `<select>`
+  // read "(none)", and since "(none)" was already `selectedIndex` 0 choosing
+  // it fired no `change` event — `setFacetCol(null)` was unreachable and the
+  // facet could not be cleared from its own picker. A degenerate combination
+  // is worth not OFFERING; it is never worth misreporting the live state.
+  // Narrow claim, and the narrowness is pre-existing: this list is built from
+  // `categoricalCols`, so a `facetCol` the Graph Builder seeded onto a
+  // NON-categorical column still has no option of its own and still reads
+  // "(none)". That predates this filter and is unchanged by it — what the
+  // filter guarantees is that a facet column this picker could have offered is
+  // always the value it displays.
   const facetByOptions = [
     { value: "none", label: "(none)" },
     ...st.categoricalCols
-      .filter((c) => c.index !== st.groupCol && c.index !== st.group2Col)
+      .filter(
+        (c) => c.index === st.facetCol || (c.index !== st.groupCol && c.index !== st.group2Col),
+      )
       .map((c) => ({ value: String(c.index), label: c.label })),
   ];
 

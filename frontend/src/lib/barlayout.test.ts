@@ -395,12 +395,39 @@ describe("a sampled preview's category labels come from its row map (BUG-006 sit
     expect(resolveCategoryLabels(sampled([1, 2, 4]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
   });
 
-  it("ignores a map whose index is OUT OF RANGE for the sidecar", () => {
-    // Row 6 does not exist in a 6-cell column. Indexing it yields `undefined`,
-    // which the walk would read as a blank — so level 2 would lose its name
-    // while levels 0 and 1 kept theirs. Reject the whole map instead: a map that
-    // is wrong about one row is not evidence about the others.
-    expect(resolveCategoryLabels(sampled([1, 2, 4, 6]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  it("reads an entry past the SIDECAR's end as a blank cell, per entry", () => {
+    // Review finding 6. The validator's `sourceRowCount` bound is the PRODUCER's
+    // (`book.rows`); the only bound available here is ONE text column's cell
+    // count, and an Origin text column is allowed to be shorter than the book —
+    // `io/origin_project/opj.py` pads only NUMERIC columns to the block's
+    // longest. Bounding the map by it would make every entry past that column's
+    // end fatal to the whole map and disable the feature for a shape the
+    // unsampled path handles fine, so an out-of-range entry reads `undefined` ->
+    // "" -> the blank the walk already skips.
+    //
+    // The mechanism, spelled out for THIS fixture because the previous version of
+    // this comment described one that was false for it: map [1,2,4,6] over
+    // preview levels [0,1,2,2] names cells 1 ("A0"), 2 ("B1") and 4 ("C2") for
+    // levels 0, 1 and 2, and only the fourth entry — cell 6, past the 6-cell
+    // column — is blank. Level 2 is already covered by the third entry, so every
+    // level keeps its real name.
+    expect(resolveCategoryLabels(sampled([1, 2, 4, 6]), 0, [0, 1, 2])).toEqual(["A0", "B1", "C2"]);
+  });
+
+  it("degrades when an out-of-range entry is a level's ONLY cell", () => {
+    // The other half of the per-entry rule, so "blank" cannot be read as
+    // "harmless": map [1,2,6,7] leaves level 2 with no cell at all (both of its
+    // rows point past the column), `levels.every(has)` fails, and the labels fall
+    // back to numbers. A blank never invents a name.
+    expect(resolveCategoryLabels(sampled([1, 2, 6, 7]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  it("ignores a map with a REPEATED entry — the malformation that would name every level from one cell", () => {
+    // Review finding 3. `[0,0,0,0]` is internally CONSISTENT, so the per-level
+    // agreement check below cannot catch it: every level reads source row 0's
+    // cell and the resolver returned ["A0","A0","A0"] with no sign of trouble.
+    // `asPreviewSourceRows` rejects repeats for exactly this case.
+    expect(resolveCategoryLabels(sampled([0, 0, 0, 0]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
   });
 
   // These two land on the numbers by TWO routes — rejected by the validator, or
@@ -419,9 +446,18 @@ describe("a sampled preview's category labels come from its row map (BUG-006 sit
   });
 
   it("is NOT consulted when the sidecar already matches the rows", () => {
-    // A full-length dataset carrying a stale map (a merge rebuilt the sidecars,
-    // say) must read its own cells straight through. The map here is a
-    // deliberate lie — reversed — and the answer is still the honest one.
+    // The length gate on its own terms: a dataset whose sidecar covers exactly
+    // its own rows reads its cells straight through, so a map cannot disturb a
+    // dataset that does not need one. The map here is a deliberate lie —
+    // reversed — and the answer is still the honest one.
+    //
+    // Which operations can leave a map behind at all is settled in
+    // `lib/rowSidecars.ts`, and an earlier version of this comment got it wrong
+    // by naming the slice: `withoutRowSidecars` STRIPS the map for the rebuild
+    // that concatenates sidecars in its own row space, and `sliceRowSidecars`
+    // COMPOSES it rather than leaving a source-space sidecar behind. So this gate
+    // is what keeps a hand-edited `.dwk`'s stale map harmless — not what keeps a
+    // row operation honest.
     const full: DataStruct = {
       time: [1, 2, 3, 4, 5, 6],
       values: [[0], [0], [1], [1], [2], [2]],

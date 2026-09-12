@@ -201,7 +201,24 @@ function addFromPayload(
         // replacing `.data` wholesale on arrival retires it at the same instant
         // the preview it describes stops existing. Validated here (and again at
         // every read) so a hand-edited `.dwk` cannot turn it into wrong labels.
-        const sourceRows = asPreviewSourceRows(book.preview_rows, book.preview.time.length, book.rows);
+        //
+        // A preview the backend did NOT sample but that is still SHORTER than the
+        // book gets the IDENTITY map synthesized here. That shape is the padding
+        // trim (`preview.py::_trim_trailing_padding`; Book15 drops 19 of 180
+        // rows), a strict PREFIX whose row r IS source row r — so the backend
+        // correctly sends no map. But a reader holding only the DataStruct sees a
+        // sidecar longer than its rows and cannot tell that prefix from a sample,
+        // so it degraded to numbers. The identity map is the missing evidence,
+        // built from a row count this branch already has, for zero wire cost.
+        // `preview_sampled === false` is the load-bearing half: `undefined` (an
+        // older backend) stays unmapped, since the prefix is what it cannot
+        // vouch for.
+        const previewRows = book.preview.time.length;
+        const sourceRows =
+          asPreviewSourceRows(book.preview_rows, previewRows, book.rows) ??
+          (book.preview_sampled === false && previewRows < book.rows
+            ? Array.from({ length: previewRows }, (_, i) => i)
+            : null);
         const bookMeta = sourceRows
           ? { ...book.metadata, [PREVIEW_SOURCE_ROWS]: sourceRows }
           : book.metadata;

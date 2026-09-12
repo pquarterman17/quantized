@@ -323,9 +323,13 @@ class TestDecimateWithAlignment:
 
     def test_a_large_book_IS_sampled_and_reports_WHICH_rows_it_kept(self) -> None:
         """The map has to be usable, not merely present: every entry must name the
-        source row whose numbers the preview actually carries. Asserted by reading
-        the source back THROUGH the map, which is the only check that fails if the
-        indices are off by one, unsorted, or taken before the padding trim."""
+        source row whose numbers the preview actually carries. The load-bearing
+        assertion reads the source back THROUGH the map, which is what fails if an
+        index is off by one or was taken before the padding trim — but it is an
+        identity for ANY order, so it cannot see unsortedness at all. The separate
+        `sorted(source_rows)` and `set(...)` assertions below are what pin the
+        output order and the distinctness downstream readers rely on
+        (`lib/rowSidecars.asPreviewSourceRows` rejects a repeated entry)."""
         book = self._book(1000)
         preview, source_rows = decimate_with_alignment(book, target_points=200)
         assert source_rows is not None

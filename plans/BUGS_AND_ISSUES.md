@@ -1382,7 +1382,11 @@ differs from its input's — and that is what turned up sites 7-9.
   belongs to the preview while `textLabelsFor` takes a bare `DataStruct`, and
   both homes cost something — `metadata` round-trips it into the `.dwk` and adds
   another row-indexed-ish key to the family that already cost four review rounds,
-  while an optional parameter spares 29 of 30 call sites but must be threaded
+  while an optional parameter spares all but one of `resolveCategoryLabels`'
+  call sites — 11 invocations outside `lib/barlayout.ts`, 12 counting the one
+  inside it, measured with `grep -o 'resolveCategoryLabels('` over non-test
+  sources; the "29 of 30" an earlier draft of this note claimed was a count of
+  textual references (imports and prose included), not of calls — but must be threaded
   through every path that labels a possibly-pending dataset (bar/box/violin/
   strip, Tabulate, Data Filter, plotdata). Decide it deliberately.
   `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
