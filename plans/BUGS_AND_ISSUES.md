@@ -1271,16 +1271,27 @@ differs from its input's — and that is what turned up sites 7-9.
     the shared `rowsAreSampled` predicate, so an older backend's `undefined`
     FAILED OPEN and reopened the bug. Site 9 had already chosen the right shape
     and said so in its own header; the strip contradicted it.
-  **KNOWN COST, accepted and tested:** a padding-TRIMMED preview is a genuine
-  PREFIX whose cells DO line up, but its sidecar is full-length too and no
-  length test can tell a prefix from a sample — so its labels also degrade to
-  formatted numbers until the book resolves. A degradation, deliberately
-  preferred over wrong names.
-- [ ] **Booked by site 10's fix:** recovering a TRIMMED preview's text labels
-  needs the backend to send which rows the decimator kept (or to slice the
-  sidecar to the preview on the trim path, where the mapping is a known
-  prefix). Then the guard can be exact instead of conservative. A wire/preview
-  contract change, deliberately not invented inside the fix.
+  **KNOWN COST — as first written, and CORRECTED 2026-09-12 (Claude):** the
+  paragraph here used to say a padding-TRIMMED preview's labels "also degrade to
+  formatted numbers", on the argument that "no length test can tell a prefix
+  from a sample". The premise is right and the conclusion is stale: the fix
+  stopped using a length test. `_decimate` trims padding and THEN returns
+  `(ds, False)` when `n <= target_points`, so a trimmed prefix reports
+  `preview_sampled: false`, and `lib/rowSidecars.rowsAreSampled` reads that flag
+  (`previewSampled !== false`) rather than the old `pending.rows >
+  data.time.length` proxy. A trimmed preview's sidecar IS indexed today and its
+  labels DO resolve. Verified by reading both modules, not inferred.
+  The real degradation is narrower than the paragraph claimed: it applies to a
+  SAMPLED preview only, where row r genuinely is an arbitrary source row.
+- [ ] **Booked by site 10's fix, rescoped 2026-09-12:** recovering a SAMPLED
+  preview's text labels (not a trimmed one — see above) needs the backend to
+  send which rows the decimator kept. Cheaper than the original note assumed:
+  `_decimate` ALREADY computes them (`idx = np.fromiter(sorted(keep), ...)`,
+  `io/origin_project/preview.py`) and discards them, so nothing needs
+  recomputing — the wire field is the whole backend cost, and only when sampled
+  (unsampled, the map is the identity and pure waste). Then the guard can be
+  exact instead of conservative for the label path. Still a wire/preview
+  contract change, deliberately not invented inside the original fix.
   `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
   row-indexed. NOTE that is a narrow claim: an Origin `.opj` import carries text
   columns and NO `cat_levels`, so for the datasets this guard actually affects
