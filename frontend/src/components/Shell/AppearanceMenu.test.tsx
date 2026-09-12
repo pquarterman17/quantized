@@ -9,7 +9,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import AppearanceMenu from "./AppearanceMenu";
-import { autoSeriesStylesEnabled } from "../../lib/seriesStyleCycle";
 import { useApp } from "../../store/useApp";
 
 function open(): void {
@@ -42,18 +41,17 @@ describe("AppearanceMenu — full app (default view)", () => {
   });
 
   // P3.3 non-colour encodings: the auto dash/marker cycle is opt-in from the
-  // SAME menu the palette lives in (hue there, non-hue here), and toggling it
-  // has to reach lib/seriesStyleCycle — which is what the canvas and the
-  // publication export actually read.
-  it("offers the P3.3 dash/marker switch beside the palette, off by default, and turning it on reaches the cycle", () => {
+  // SAME menu the palette lives in (hue there, non-hue here). The markup is
+  // hand-written rather than `primitives/Checkbox` (bundle — see the comment at
+  // the call site), so this also pins that the hand-written version is still a
+  // real labelled checkbox wired to `setPref`.
+  it("offers the P3.3 dash/marker switch beside the palette, off by default, and writes the pref", () => {
     render(<AppearanceMenu />);
     open();
     const box = screen.getByLabelText("Vary dash & marker", { selector: "input" });
     expect(box).not.toBeChecked();
-    expect(autoSeriesStylesEnabled()).toBe(false);
     fireEvent.click(box);
     expect(useApp.getState().autoSeriesStyles).toBe(true);
-    expect(autoSeriesStylesEnabled()).toBe(true);
   });
 });
 

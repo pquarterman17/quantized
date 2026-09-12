@@ -180,6 +180,11 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
     items.push({ swatches: colorSwatches(s, ctx) });
     items.push({
       label: "Line style",
+      // Shows the STORED choice. With P3.3's auto cycle on, a series with no
+      // stored line reads "solid" here while the canvas draws its cycled dash —
+      // a known gap (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3, "not done"). Picking any
+      // entry stores it and the cycle steps aside, so the menu is never WRONG
+      // about what a click will do, only about what is currently drawn.
       submenu: LINE_OPTS.map((o) => ({
         label: o.label,
         run: () => ctx.setLine(s.channel, o.value),

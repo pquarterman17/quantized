@@ -9,7 +9,6 @@
 
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
-import { setAutoSeriesStyles } from "../lib/seriesStyleCycle";
 import type { PanelFit } from "../lib/panelLayout";
 import type {
   Accent,
@@ -64,8 +63,11 @@ export interface Prefs {
    *  display position, so two series differ by more than hue on screen, in
    *  print and in the publication export (`lib/seriesStyleCycle.ts`).
    *  OFF by default: opt-in, and off reproduces the previous rendering
-   *  exactly. Lives beside `palette` because it is the same mechanism —
-   *  one pref in this blob, pushed into a pure lib module by syncPrefs. */
+   *  exactly. Lives beside `palette` because it varies the same thing by
+   *  another channel — but UNLIKE `palette` it is not pushed into a lib
+   *  singleton by `syncPrefs`: only the render paths that have a matching
+   *  export read it, as an explicit argument. See that function and
+   *  `lib/seriesStyleCycle.ts`'s header for why. */
   autoSeriesStyles: boolean;
   reduceMotion: boolean;
   wheelZoom: boolean;
@@ -188,10 +190,13 @@ export function prefsOf(s: AppState): Prefs {
  *  data-* attributes; data-reduce-motion drives the motion-killing rule). */
 export function syncPrefs(s: AppState): void {
   applyPalette(s.palette);
-  // The non-colour cycle rides the SAME push-a-pref-into-a-pure-lib path as
-  // applyPalette above and setFormatOpts below, which is what makes the canvas
-  // and the publication export read one flag instead of each being told.
-  setAutoSeriesStyles(s.autoSeriesStyles);
+  // `autoSeriesStyles` deliberately gets NO push-into-a-pure-lib line here,
+  // unlike applyPalette above and setFormatOpts below. A module-level flag is
+  // read by whoever happens to call the resolver, which is exactly how the
+  // first cut cycled five render paths whose exports could not follow. The
+  // cycle is instead handed to the two render pairs that have export parity, as
+  // an explicit argument, from the store field directly — see
+  // `lib/seriesStyleCycle.ts`'s header.
   const el = document.documentElement;
   el.dataset.theme = s.theme;
   el.dataset.accent = s.accent;

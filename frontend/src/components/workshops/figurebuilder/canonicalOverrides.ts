@@ -13,7 +13,7 @@
 
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { compactOverrides, mergeFigureOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
-import { viewOverrides } from "../../../lib/figureSpec";
+import { viewOverrides } from "../../../lib/figureViewOverrides";
 
 /** The overrides the canonical preview actually renders with. Mirrors
  *  `buildFigureSpecForView`'s merge minus the two render-time-only extras

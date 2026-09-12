@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { MARKER_SHAPES } from "./markers";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
 
 describe("sanitizeExportSeriesStyles", () => {
@@ -55,5 +56,21 @@ describe("sanitizeExportSeriesStyles", () => {
       marker: true,
     });
     expect(sanitizeExportSeriesStyles([{ color: "#fff" }])?.[0]).not.toHaveProperty("marker_shape");
+  });
+
+  // Value-checked like `line`/`step`, and against the SAME `MARKER_SHAPE_VALUES`
+  // set `plotspec2.ts`'s view-style sanitizer uses — a hand-edited or
+  // future-client blob must not smuggle an unknown glyph as far as the backend's
+  // `_MARKER` table to be silently downgraded to a circle there.
+  it("rejects a marker_shape that is not one of the eight real glyphs", () => {
+    for (const shape of ["hexagon", "", "Circle", "o"]) {
+      expect(sanitizeExportSeriesStyles([{ marker: true, marker_shape: shape }])?.[0]).toEqual({
+        marker: true,
+      });
+    }
+    // …and every real one still round-trips.
+    for (const shape of MARKER_SHAPES.map((m) => m.value)) {
+      expect(sanitizeExportSeriesStyles([{ marker_shape: shape }])?.[0]).toEqual({ marker_shape: shape });
+    }
   });
 });

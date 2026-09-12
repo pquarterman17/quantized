@@ -10,7 +10,7 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
-import { liveViewOverrides } from "./figureSpec";
+import { liveViewOverrides } from "./figureViewOverrides";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
 import { useApp } from "../store/useApp";

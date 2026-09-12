@@ -11,15 +11,21 @@ import "uplot/dist/uPlot.min.css";
 import { centralRange } from "../../lib/inset";
 import type { PlotPayload } from "../../lib/plotdata";
 import { buildOpts } from "../../lib/uplotOpts";
+import type { SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
 interface Props {
   payload: PlotPayload;
   styleList?: (SeriesStyle | undefined)[];
+  /** P3.3: the SAME cycle positions the stage behind this magnifier was built
+   *  with (`lib/seriesStyleCycle.ts`). The inset is a second view of exactly
+   *  those series at exactly those display positions, so it must resolve the
+   *  same dash/glyph — it has no export of its own to disagree with. */
+  seriesCycle?: SeriesCycle;
 }
 
-export default function InsetPlot({ payload, styleList }: Props) {
+export default function InsetPlot({ payload, styleList, seriesCycle }: Props) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const setInsetMode = useApp((s) => s.setInsetMode);
@@ -41,6 +47,7 @@ export default function InsetPlot({ payload, styleList }: Props) {
       tool: "zoom", // drag to re-zoom the inset
       onReadout: () => {},
       seriesStyles: styleList,
+      seriesCycle,
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });
@@ -69,7 +76,7 @@ export default function InsetPlot({ payload, styleList }: Props) {
       plotRef.current?.destroy();
       plotRef.current = null;
     };
-  }, [payload, styleList, theme, accent]);
+  }, [payload, styleList, seriesCycle, theme, accent]);
 
   return (
     <div

@@ -310,3 +310,59 @@ describe("buildSpatialPageRequest", () => {
     expect(buildSpatialPageRequest([panel()], new Map(), defaultPageSetup())).toBeNull();
   });
 });
+
+// ── P3.3 auto dash/marker cycle: the spatial page's half ────────────────────
+// The spatial cells are the second (and only other) render pair that cycles.
+// The first cut skipped them on the grounds that "its per-panel index space
+// does not line up with the per-cell style lists" — it does, exactly:
+// `useMultiPanelStage.ts` builds its cell styles, its legend entries AND this
+// request's `series_styles` from the same `spatialPlottedChannels(panel)` list,
+// hidden channels already dropped on both sides. So plain display order is one
+// shared position space and the two can be pinned against each other.
+describe("auto dash/marker cycle — spatial page export (P3.3)", () => {
+  const appearance = {
+    xFmt: { mode: "auto" as const, digits: 2 },
+    yFmt: { mode: "auto" as const, digits: 2 },
+    showGrid: true,
+    showAxisBox: false,
+  };
+  const request = (over: Partial<SpatialPanel>, autoSeriesStyles: boolean) =>
+    buildSpatialPageRequest([panel(over)], new Map([["ds1", ds()]]), defaultPageSetup(), {
+      ...appearance,
+      autoSeriesStyles,
+    });
+  const lines = (spec: ReturnType<typeof buildSpatialPageRequest>) =>
+    (spec!.panels[0].figure.series_styles ?? []).map((s) => s?.line);
+
+  it("OFF: no dash is encoded — the request is what it was before the cycle", () => {
+    expect(lines(request({ yKeys: [1, 2] }, false))).toEqual([undefined, undefined]);
+  });
+
+  it("ON: each panel's series cycle by their position within THAT panel", () => {
+    // Per-panel, not page-wide: the cell canvas indexes its own series list
+    // from 0, so panel 2's first curve is solid there and must be solid here.
+    expect(lines(request({ yKeys: [1, 2] }, true))).toEqual(["solid", "dashed"]);
+  });
+
+  it("ON: a hidden channel is dropped on BOTH sides, so positions still line up", () => {
+    // `spatialPlottedChannels` filters hidden for the canvas and for this
+    // request alike — unlike the single-figure path, there is no unfiltered
+    // list to reconcile against, and this pins that it stays that way.
+    const spec = request({ yKeys: [1, 2], hiddenChannels: [1] }, true);
+    expect(spec!.panels[0].figure.y_keys).toEqual([2]);
+    expect(lines(spec)).toEqual(["solid"]);
+  });
+
+  it("ON: an explicit per-series line still wins", () => {
+    const spec = request({ yKeys: [1, 2], seriesStyles: { 2: { line: "solid" } } }, true);
+    expect(lines(spec)).toEqual(["solid", "solid"]);
+  });
+
+  it("no appearance bag at all leaves the request uncycled (the default)", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect((spec!.panels[0].figure.series_styles ?? []).map((s) => s?.line)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+});

@@ -35,13 +35,18 @@ import { resolveFacetsOrThrow } from "./figureSpecFacets";
 import {
   compactOverrides,
   gateY2Overrides,
-  legendPosToLoc,
   mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
+// The screen-parity override projection moved to lib/figureViewOverrides.ts to
+// fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
+// re-exported: a barrel here would make every importer of this module pull the
+// projection in whether it uses it or not.
+import { viewOverrides } from "./figureViewOverrides";
+import { overlayExportsSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
 import { axisFmtParam } from "./types";
@@ -64,6 +69,13 @@ export interface FigureRenderOpts {
 export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
   transparent?: boolean;
   filename?: string | null;
+  /** P3.3: opt IN to the auto dash/marker cycle. Only `buildStageFigureSpec`
+   *  passes it, and only because the LIVE Stage canvas beside it is cycling the
+   *  same series. A document rendered from anywhere else (a Figure Page panel,
+   *  the Figure Builder preview, `previewExport`) is uncycled — which is what
+   *  keeps a saved document's styles the RAW user styles and stops it
+   *  disagreeing with itself when the preference is later flipped. */
+  autoSeriesStyles?: boolean;
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -95,13 +107,17 @@ export function buildFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
+  extras: { autoSeriesStyles?: boolean } = {},
 ): FigureSpec {
   const raw = s();
   // R7: `raw` is the live singleton, which a refocus-mid-export race can
   // desync from `ds` -- neutralize facetKey rather than resolve it against
   // the wrong dataset's channels.
   const st = raw.activeId === ds.id ? raw : { ...raw, facetKey: null };
-  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, { liveDataset: ds });
+  return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
+    liveDataset: ds,
+    autoSeriesStyles: extras.autoSeriesStyles,
+  });
 }
 
 /** Build the common export transport from a complete PlotView projection. The
@@ -127,6 +143,12 @@ function buildFigureSpecForView(
     allowExplicitXAsY?: boolean;
     /** C2: bound live `Dataset` (absent for frozen), used to prune facets to its analysisData view. */
     liveDataset?: Dataset | null;
+    /** P3.3: opt IN to the auto dash/marker cycle for THIS request. Only the
+     *  live-stage export entry point (`buildStageFigureSpec`) passes it, and
+     *  only because the focused Stage canvas is cycling the same series at the
+     *  same positions. Absent everywhere else on purpose — see `seriesCycle`
+     *  below. */
+    autoSeriesStyles?: boolean;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
@@ -145,13 +167,19 @@ function buildFigureSpecForView(
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend
   // entries are both visible-state decisions. Multi-X Origin books also
   // require the live xKey instead of silently falling back to time.
-  const plotted = effectiveChannels(
+  // The UNFILTERED display list is kept: it is the canvas' own index space
+  // (`usePlotPayload` leaves a hidden series in `payload.series` with
+  // `show:false`), and P3.3's dash/marker cycle plus the series palette are
+  // both resolved against it below so the export cannot land a channel on a
+  // different display position than the screen did.
+  const displayChannels = effectiveChannels(
     data,
     st.yKeys,
     extras.allowExplicitXAsY && st.yKeys !== null ? null : st.xKey,
     channelRoles,
     st.seriesOrder,
-  ).filter((ch) => !st.hiddenChannels.includes(ch));
+  );
+  const plotted = displayChannels.filter((ch) => !st.hiddenChannels.includes(ch));
 
   // Legend renames / decoded Origin captions are channel-keyed. Apply them to a
   // request-local DataStruct label copy so the backend series builder and legend
@@ -166,6 +194,38 @@ function buildFigureSpecForView(
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
   const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
+
+  // P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`). OPT-IN, in two
+  // senses: `extras.autoSeriesStyles` is passed by the LIVE stage export
+  // (`buildStageFigureSpec`) and by nothing else — a saved document, a Figure
+  // Page panel, a Figure Builder preview and a graph template all render
+  // uncycled, which is what keeps a persisted `publication.seriesStyles` array
+  // the user's RAW styles and makes a document authored with the preference on
+  // reopen identically with it off. And `overlayExportsSeriesStyles` refuses the
+  // views this route cannot style series-by-series anyway (`group_col` and
+  // `facets` are documented as ignoring `series_styles` in
+  // `routes/export_figures.py`; `stackMode` is the screen-only panel split that
+  // this single-figure request does not reproduce) — the SAME predicate
+  // `PlotStage.tsx` gates its canvas on, so the two cannot disagree about which
+  // views cycle. Positions come from the UNFILTERED display list so a hidden
+  // series does not shift every later channel's dash (and colour) by one.
+  // (No separate `facets === undefined` clause: `facets` is non-undefined only
+  // when `st.facetKey` is set, which the predicate below already refuses. A
+  // clause no sabotage can make fail is dead code, not defence in depth.)
+  const seriesCycle =
+    extras.autoSeriesStyles &&
+    overlayExportsSeriesStyles({
+      // `extras.groupKey` is what actually rides the wire; `st.groupKey` is the
+      // view's own binding, which the plain live entry point does NOT forward —
+      // a grouped view exported through it already renders an ungrouped overlay
+      // while the screen shows one series per level, so either being set is
+      // enough to refuse.
+      groupKey: extras.groupKey ?? st.groupKey,
+      facetKey: st.facetKey,
+      stackMode: st.stackMode,
+    })
+      ? plotted.map((ch) => displayChannels.indexOf(ch))
+      : null;
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -217,7 +277,7 @@ function buildFigureSpecForView(
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
     ...(extras.publicationSeriesStyles === undefined
-      ? { series_styles: buildExportStyles(plotted, st.seriesStyles) }
+      ? { series_styles: buildExportStyles(plotted, st.seriesStyles, seriesCycle) }
       : extras.publicationSeriesStyles === null
         ? {}
         : { series_styles: structuredClone(extras.publicationSeriesStyles) }),
@@ -274,6 +334,7 @@ export function buildFigureSpecFromDocument(
       publicationOverrides: document.publication?.overrides,
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
+      autoSeriesStyles: overrides.autoSeriesStyles,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );
@@ -334,6 +395,18 @@ export function buildStageFigureSpec(
   const canRouteThroughDocument =
     document !== undefined &&
     (document.data.mode === "frozen" || document.bindings.datasetId === ds.id);
+  // P3.3: this is THE export the focused Stage canvas produces — Copy figure,
+  // Copy figure (vector), Export figure… — so it is the one entry point that
+  // opts into the auto dash/marker cycle. `PlotStage.tsx` gates its canvas on
+  // the same preference and the same `overlayExportsSeriesStyles` view test
+  // that `buildFigureSpecForView` re-applies, so screen and PDF cycle together
+  // or not at all.
+  // Gated against the LIVE view as well as the rendered one: the document this
+  // may route through carries its own copy of the view, and only the live
+  // singleton is guaranteed to be what PlotStage is drawing right now.
+  const autoSeriesStyles =
+    st.autoSeriesStyles &&
+    overlayExportsSeriesStyles({ groupKey: st.groupKey, facetKey: st.facetKey, stackMode: st.stackMode });
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -343,134 +416,10 @@ export function buildStageFigureSpec(
         xLabel: o.xLabel,
         yLabel: o.yLabel,
         filename: null,
+        autoSeriesStyles,
       })
-    : buildFigureSpec(s, ds, stem, o);
+    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
-}
-
-/** Screen-parity overrides (MAIN #18): annotations (with their pointer-tool
- *  `size` override) + the legend's screen position — free `legendXY`
- *  (fractions) maps to matplotlib's `loc: "custom"` + `anchor`
- *  (`calc.figure_overrides`' pre-existing #14 drag-to-place handling); a
- *  corner `legendPos` maps through `legendPosToLoc`. A page-anchored
- *  annotation (MAIN #21) carries `anchor: "page"` through so the backend
- *  renders it as figure-fraction placement instead of axes-data coords —
- *  see `calc.figure_overrides._apply_overrides`'s y-flip. MAIN #27 adds
- *  `shapes` (drawn arrow/line/rect/ellipse marks) and an annotation's
- *  `frame` ("text box") — see `calc.figure_shapes._apply_shapes`.
- *  The same override carries live finite x/y limits, grid, axis-box spines,
- *  and log minor-tick state through fields the backend already supports.
- *  A live secondary-axis range (`y2Lim`) rides `y2_lim` through this SAME
- *  override mechanism (only meaningful alongside a request that also sets
- *  `y2_keys`). Export-fidelity gap (2026-08-11) closed: `refLines` and
- *  `regionShades` now ride `ref_lines`/`region_shades` the same way —
- *  see `calc.figure_decor`. Error-bar concepts remain unsupported HERE
- *  (they ride a separate `error_spans` field built by `exportErrorSpans`
- *  below, not this override object). */
-export function viewOverrides(st: Pick<
-  PlotView,
-  | "legendTitle"
-  | "showLegend"
-  | "legendFrameXY"
-  | "legendXY"
-  | "legendPos"
-  | "annotations"
-  | "shapes"
-  | "refLines"
-  | "regionShades"
-  | "xLim"
-  | "yLim"
-  | "y2Lim"
-  | "showGrid"
-  | "showAxisBox"
-  | "xScale"
-  | "yScale"
->): FigureOverrides | undefined {
-  // Decode #52: the legend title (Origin's bold header) rides the legend
-  // override so vector export matches the screen's static legend.
-  const legendTitle = st.legendTitle ? { title: st.legendTitle } : {};
-  // Precedence matches the screen (decode #52): a frame anchor (`legendFrameXY`,
-  // an AXES fraction — `loc: "axes"`, exact via ax.transAxes) beats a free
-  // container fraction (`legendXY` → figure-fraction `loc: "custom"`, MAIN #14),
-  // which beats the corner preset.
-  const legend: FigureOverrides["legend"] = st.showLegend
-    ? st.legendFrameXY
-      ? { show: true, loc: "axes", anchor: st.legendFrameXY, ...legendTitle }
-      : st.legendXY
-        ? { show: true, loc: "custom", anchor: st.legendXY, ...legendTitle }
-        : { show: true, loc: legendPosToLoc(st.legendPos), ...legendTitle }
-    : { show: false };
-  const annotations = st.annotations
-    .filter((a) => Number.isFinite(a.x) && Number.isFinite(a.y))
-    .map((a) => ({
-      x: a.x,
-      y: a.y,
-      text: a.text,
-      ...(a.size ? { size: a.size } : {}),
-      ...(a.anchor === "page" ? { anchor: "page" as const } : {}),
-      ...(a.frame ? { frame: a.frame } : {}),
-    }));
-  // MAIN #27: drawn shapes, wire-shaped (no `id` — the render request needs no
-  // identity, unlike the screen's editable list).
-  const shapes = st.shapes
-    .filter((s) => [s.x1, s.y1, s.x2, s.y2].every(Number.isFinite))
-    .map((s) => ({
-      kind: s.kind,
-      x1: s.x1,
-      y1: s.y1,
-      x2: s.x2,
-      y2: s.y2,
-      ...(s.anchor === "page" ? { anchor: "page" as const } : {}),
-      ...(s.stroke ? { stroke: s.stroke } : {}),
-      ...(s.fill ? { fill: s.fill } : {}),
-      ...(s.opacity != null ? { opacity: s.opacity } : {}),
-      ...(s.width != null ? { width: s.width } : {}),
-      ...(s.dash ? { dash: s.dash } : {}),
-    }));
-  // Export-fidelity gap (2026-08-11): fixed X/Y reference lines (Hc/Tc
-  // markers…), wire-shaped (no `id` — same reasoning as `shapes` above).
-  const refLines = st.refLines
-    .filter((r) => Number.isFinite(r.value))
-    .map((r) => ({ axis: r.axis, value: r.value }));
-  // Filled region bands (Origin `Rect*` shading, decode-plan #41). `axis: 1`
-  // rides through explicitly; 0/absent are equivalent (both mean primary to
-  // every consumer, screen and backend alike) so both are omitted the same
-  // way — `calc.figure_decor` resolves the axis-1-without-a-real-y2-axis
-  // fallback on the backend itself, mirroring the screen's own
-  // `regionShadePlugin` fallback, so this mapping does not need to know
-  // whether `y2Keys` is actually set.
-  const regionShades = st.regionShades
-    .filter((r) => [r.x1, r.x2, r.y1, r.y2].every(Number.isFinite))
-    .map((r) => ({
-      x1: r.x1,
-      x2: r.x2,
-      y1: r.y1,
-      y2: r.y2,
-      fill: r.fill,
-      ...(r.axis === 1 ? { axis: 1 as const } : {}),
-    }));
-  const finiteLim = (lim: [number, number] | null): [number, number] | undefined =>
-    lim && lim.every(Number.isFinite) ? lim : undefined;
-  return (
-    compactOverrides({
-      legend,
-      annotations,
-      shapes,
-      ref_lines: refLines,
-      region_shades: regionShades,
-      x_lim: finiteLim(st.xLim),
-      y_lim: finiteLim(st.yLim),
-      y2_lim: finiteLim(st.y2Lim),
-      grid: st.showGrid,
-      spines: { top: st.showAxisBox, right: st.showAxisBox },
-      ticks: st.xScale === "log" || st.yScale === "log" ? { minor: true } : undefined,
-    }) ?? undefined
-  );
-}
-
-/** Store facade retained for existing callers and tests. */
-export function liveViewOverrides(s: StoreGet): FigureOverrides | undefined {
-  return viewOverrides(s());
 }
 
 /** Project the canvas error spans onto the export wire shape.

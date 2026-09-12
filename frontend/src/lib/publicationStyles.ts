@@ -1,6 +1,11 @@
 /** Publication wire styles plus their persistence sanitizer. Kept separate
  * from exportStyles so FigureDocument persistence never pulls screen colour code
  * into the eager store bundle. */
+// The one exception to that: the marker-shape vocabulary, a plain string Set
+// with no drawing code attached, imported so this sanitizer and the view-style
+// sanitizer cannot drift apart about which glyphs exist.
+import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
+
 export interface ExportSeriesStyle {
   color?: string;
   width?: number;
@@ -47,7 +52,12 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     // publication styles came back shape-less and every marker reverted to a
     // circle on re-export — the same parity break `marker_shape` was added to
     // close, one layer down (the sanitizer was missed when the field landed).
-    if (typeof raw.marker_shape === "string") style.marker_shape = raw.marker_shape;
+    // Value-checked like `line`/`step` two lines away, against the SAME set the
+    // view-style sanitizer uses: a persisted junk shape must not reach the
+    // backend's `_MARKER` table to be silently downgraded there.
+    if (typeof raw.marker_shape === "string" && MARKER_SHAPE_VALUES.has(raw.marker_shape)) {
+      style.marker_shape = raw.marker_shape;
+    }
     if (typeof raw.marker_size === "number" && Number.isFinite(raw.marker_size) && raw.marker_size >= 0) style.marker_size = raw.marker_size;
     if (raw.fill === "under") style.fill = raw.fill;
     else {

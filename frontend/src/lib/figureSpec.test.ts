@@ -5,8 +5,8 @@ import {
   buildFigureSpecFromDocument,
   buildStageFigureSpec,
   resolveFigureDocumentData,
-  viewOverrides,
 } from "./figureSpec";
+import { viewOverrides } from "./figureViewOverrides";
 import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { facetCompositionFromBinding } from "./facet";
@@ -710,5 +710,184 @@ describe("viewOverrides — reference lines and region shades", () => {
     const ov = viewOverrides(defaultPlotView());
     expect(ov?.ref_lines).toBeUndefined();
     expect(ov?.region_shades).toBeUndefined();
+  });
+});
+
+// ── P3.3 auto dash/marker cycle: the EXPORT side, end to end ────────────────
+// `exportStyles.test.ts` pins the resolver and the canvas/export agreement on
+// synthetic position lists. This block pins the thing those lists are supposed
+// to be — what the real builder derives from a real view — plus the two gates
+// that decide whether the cycle happens at all:
+//
+//   * WHICH VIEWS. A grouped, faceted or stacked view is refused, because the
+//     render route ignores `series_styles` for the first two and renders one
+//     panel for the third, while the screen splits into several.
+//   * WHICH CALLERS. Only `buildStageFigureSpec` — the export the live Stage
+//     canvas produces — opts in. A document rendered from a Figure Page panel
+//     or the Figure Builder is uncycled, which is what makes a SAVED document
+//     independent of whoever's preference is on when it is reopened.
+describe("auto dash/marker cycle — figure requests (P3.3)", () => {
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
+  /** yKeys chosen so display order is [1, 2, 3] with nothing hidden. */
+  const cycleView = (over: Record<string, unknown> = {}) => ({
+    ...defaultPlotView(),
+    xKey: 0,
+    yKeys: [1, 2, 3],
+    ...over,
+  });
+  const stageGet = (over: Record<string, unknown> = {}) =>
+    (() => ({
+      ...cycleView(),
+      autoSeriesStyles: true,
+      focusedWindowId: null,
+      windowsForSave: () => [],
+      ...over,
+    })) as never;
+  const lines = (spec: ReturnType<typeof buildFigureSpec>) =>
+    (spec.series_styles ?? []).map((s) => s?.line);
+
+  it("OFF: the request carries no line at all — byte-identical to before", () => {
+    const spec = buildStageFigureSpec(stageGet({ autoSeriesStyles: false }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: the Stage export cycles the plotted series by display position", () => {
+    const spec = buildStageFigureSpec(stageGet(), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([1, 2, 3]);
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
+  it("ON: a HIDDEN channel does not renumber the survivors (finding 2)", () => {
+    // Channel 2 sits at display position 1 and the canvas keeps it there with
+    // `show:false`. Dropping it from the request must leave channel 3 on
+    // position 2 — DOTTED — not slide it up into position 1's dashed.
+    const spec = buildStageFigureSpec(stageGet({ hiddenChannels: [2] }), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([1, 3]);
+    expect(lines(spec)).toEqual(["solid", "dotted"]);
+  });
+
+  it("ON: a reordered legend follows seriesOrder, not channel number", () => {
+    const spec = buildStageFigureSpec(stageGet({ seriesOrder: [3, 1, 2] }), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([3, 1, 2]);
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
+  it("ON: an explicit per-series line still wins", () => {
+    const spec = buildStageFigureSpec(
+      stageGet({ seriesStyles: { 2: { line: "solid" as const } } }),
+      dataset,
+      "d",
+      opts,
+    );
+    expect(lines(spec)).toEqual(["solid", "solid", "dotted"]);
+  });
+
+  // ── The views that must NOT cycle, on either side ─────────────────────────
+  it("ON: a GROUPED view is refused — the renderer ignores series_styles there", () => {
+    const document = createFigureDocument({
+      id: "grouped",
+      name: "Grouped",
+      datasetId: dataset.id,
+      view: cycleView(),
+      groupKey: 0,
+    });
+    const spec = buildStageFigureSpec(
+      stageGet({
+        groupKey: 0,
+        focusedWindowId: "w",
+        windowsForSave: () => [{ id: "w", kind: "plot", document }],
+      }),
+      dataset,
+      "d",
+      opts,
+    );
+    expect(spec.group_col).toBe(0);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: a FACETED view is refused — facets make series_styles unused", () => {
+    const spec = buildStageFigureSpec(stageGet({ facetKey: 0 }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: a STACKED view is refused — the screen shows panels the figure does not", () => {
+    const spec = buildStageFigureSpec(stageGet({ stackMode: true }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // ── Saved documents: the cycle is never baked in (finding 10) ─────────────
+  describe("a saved FigureDocument is independent of the preference", () => {
+    const document = () =>
+      createFigureDocument({
+        id: "doc",
+        name: "Doc",
+        datasetId: dataset.id,
+        view: cycleView(),
+      });
+
+    it("renders uncycled from every non-Stage caller, whatever the preference is", () => {
+      // The Figure Page panel / Figure Builder preview / previewExport path.
+      // They pass no `autoSeriesStyles`, so they cannot cycle even while the
+      // live preference is on — and the document beside them has no uPlot
+      // canvas of its own to disagree with.
+      expect(lines(buildFigureSpecFromDocument(document(), dataset, "doc"))).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
+    });
+
+    it("authored with the preference ON, reopened with it OFF, renders the same", () => {
+      const authored = document();
+      // Authoring does not touch publication.seriesStyles: the cycle is applied
+      // at export-build time, never persisted. That is the whole fix — a doc
+      // whose stored styles carried a cycled `line` would export dashed on a
+      // colleague's machine while their canvas drew solid.
+      expect(authored.publication?.seriesStyles).toBeUndefined();
+      const onSpec = buildFigureSpecFromDocument(authored, dataset, "doc", { autoSeriesStyles: true });
+      const offSpec = buildFigureSpecFromDocument(authored, dataset, "doc", { autoSeriesStyles: false });
+      expect(lines(onSpec)).toEqual(["solid", "dashed", "dotted"]);
+      expect(lines(offSpec)).toEqual([undefined, undefined, undefined]);
+      // Neither render mutated the document.
+      expect(authored.publication?.seriesStyles).toBeUndefined();
+      // And the default — every caller that is not the live Stage — is OFF.
+      expect(buildFigureSpecFromDocument(authored, dataset, "doc")).toEqual(offSpec);
+    });
+
+    // `buildStageFigureSpec` gates on the LIVE view, but the document it routes
+    // through carries its OWN copy of that view, and only the second gate —
+    // inside `buildFigureSpecForView` — sees the view actually being rendered.
+    // Driven through `buildFigureSpecFromDocument` so the live gate is bypassed
+    // and the inner one is the only thing under test.
+    it.each([
+      // groupKey/facetKey are BINDINGS on a FigureDocument, not view fields
+      // (`figureDocument.ts`'s `FigureViewState` omits them); stackMode is a
+      // view field. Both spellings have to reach the gate.
+      ["grouped", { groupKey: 0 }, {}],
+      ["faceted", { facetKey: 0 }, {}],
+      ["stacked", {}, { stackMode: true }],
+    ])("refuses the cycle for a %s DOCUMENT view, even when asked for it", (_name, bindings, view) => {
+      const doc = createFigureDocument({
+        id: "doc3",
+        name: "Doc3",
+        datasetId: dataset.id,
+        view: cycleView(view),
+        ...bindings,
+      });
+      const spec = buildFigureSpecFromDocument(doc, dataset, "doc3", { autoSeriesStyles: true });
+      expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it("an EXACT publication style array stays exact — the cycle never edits it", () => {
+      const pinned = createFigureDocument({
+        id: "doc2",
+        name: "Doc2",
+        datasetId: dataset.id,
+        view: cycleView(),
+        publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null, null] },
+      });
+      const spec = buildFigureSpecFromDocument(pinned, dataset, "doc2", { autoSeriesStyles: true });
+      expect(spec.series_styles).toEqual([{ color: "#3366cc" }, null, null]);
+    });
   });
 });

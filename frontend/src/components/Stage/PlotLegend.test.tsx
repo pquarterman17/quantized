@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PlotLegend from "./PlotLegend";
 import { CHANNEL_DND, decodeChannelDrag } from "../../lib/dragaxis";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
+import { displayPositions } from "../../lib/seriesStyleCycle";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
@@ -354,5 +355,73 @@ describe("PlotLegend trace samples", () => {
     const sample = container.querySelector(".qzk-legend .it .qzk-legend-sample") as SVGElement;
     expect(sample).toHaveAttribute("data-line", "true");
     expect(sample).toHaveAttribute("data-marker", "circle");
+  });
+});
+
+// ── P3.3: the legend swatch must resolve the SAME cycle its canvas did ──────
+// The legend is the third renderer of a series' look, after the canvas and the
+// publication export, and it is the one a reader checks the other two against.
+// Nothing pinned it in the first cut: reverting both `resolveSeriesStyle` calls
+// in PlotLegend.tsx to the raw `styleList?.[i]` left the whole Stage suite
+// green, because no test anywhere turned the cycle on and rendered a legend.
+describe("PlotLegend — auto dash/marker cycle (P3.3)", () => {
+  const three: PlotSeriesSpec[] = [
+    { label: "A", unit: "" },
+    { label: "B", unit: "" },
+    { label: "C", unit: "" },
+  ];
+  const samples = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll(".qzk-legend .it .qzk-legend-sample")) as SVGElement[];
+  const dashOf = (sample: SVGElement) => sample.querySelector("line")?.getAttribute("stroke-dasharray");
+
+  it("draws no dash without a cycle — unchanged from before the feature", () => {
+    const { container } = render(<PlotLegend series={three} plotted={[0, 1, 2]} />);
+    expect(samples(container).map(dashOf)).toEqual([null, null, null]);
+  });
+
+  it("draws the cycle's dash per display position when its canvas is cycling", () => {
+    const { container } = render(
+      <PlotLegend series={three} plotted={[0, 1, 2]} seriesCycle={displayPositions(true, 3)} />,
+    );
+    // LegendSample's own SVG spelling of solid / dashed / dotted.
+    expect(samples(container).map(dashOf)).toEqual([null, "6 3", "1.5 3"]);
+  });
+
+  it("reads the DISPLAY POSITION the canvas used, not the legend row index", () => {
+    // The hidden-series case, from the legend's side: the canvas kept the
+    // hidden series in place, so B and C are still at positions 1 and 2 even
+    // though a filtered list would renumber them.
+    const { container } = render(
+      <PlotLegend series={three} plotted={[0, 1, 2]} seriesCycle={[2, 0, 1]} />,
+    );
+    expect(samples(container).map(dashOf)).toEqual(["1.5 3", null, "6 3"]);
+  });
+
+  it("an explicit per-series dash still wins in the legend, as on the canvas", () => {
+    const { container } = render(
+      <PlotLegend
+        series={three}
+        plotted={[0, 1, 2]}
+        styleList={[undefined, { line: "solid" }, undefined]}
+        seriesCycle={displayPositions(true, 3)}
+      />,
+    );
+    expect(samples(container).map(dashOf)).toEqual([null, null, "1.5 3"]);
+  });
+
+  it("cycles the glyph only for a series that actually draws markers", () => {
+    const { container } = render(
+      <PlotLegend
+        series={three}
+        plotted={[0, 1, 2]}
+        styleList={[{ marker: true }, { marker: true }, undefined]}
+        seriesCycle={displayPositions(true, 3)}
+      />,
+    );
+    expect(samples(container).map((s) => s.getAttribute("data-marker"))).toEqual([
+      "circle",
+      "square",
+      "none",
+    ]);
   });
 });

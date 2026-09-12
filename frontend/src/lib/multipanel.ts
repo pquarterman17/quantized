@@ -6,6 +6,7 @@ import type uPlot from "uplot";
 
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PlotPayload } from "./plotdata";
+import { displayPositions, resolveSeriesStyle, type SeriesCycle } from "./seriesStyleCycle";
 import type { Annotation, RegionShade, SeriesStyle } from "./types";
 
 /** One payload per plotted series: each keeps the shared x column + a single
@@ -211,5 +212,41 @@ export function xZoomSyncHook(
       if (other !== u) other.setScale("x", { min, max });
     }
     syncing = false;
+  };
+}
+
+/** Everything one SPATIAL cell is styled from, derived once so the cell's uPlot
+ *  canvas, its legend swatches and `lib/spatialPageExport`'s request for the
+ *  same panel cannot drift apart.
+ *
+ *  `autoSeriesStyles` is P3.3's opt-in (`lib/seriesStyleCycle.ts`). The spatial
+ *  page is one of only two render paths that take it, and it can because the
+ *  export builds its `series_styles` over this exact `spatialPlottedChannels`
+ *  list — hidden channels already dropped on BOTH sides — so plain display
+ *  order is a single shared position space. `legendEntries` carries the
+ *  EFFECTIVE style: a key showing a solid line beside a dashed curve is the
+ *  contradiction the cycle exists to remove. */
+export function spatialCellStyling(
+  panel: Pick<SpatialPanel, "yKeys" | "hiddenChannels" | "seriesStyles" | "seriesLabels">,
+  autoSeriesStyles: boolean,
+): {
+  plottedChannels: number[];
+  cellStyles: (SeriesStyle | undefined)[];
+  cellLabels: (string | undefined)[];
+  cellCycle: SeriesCycle;
+  legendEntries: { label: string; style?: SeriesStyle; displayIndex: number }[];
+} {
+  const plottedChannels = spatialPlottedChannels(panel);
+  const cellCycle = displayPositions(autoSeriesStyles, plottedChannels.length);
+  return {
+    plottedChannels,
+    cellCycle,
+    cellStyles: plottedChannels.map((ch) => panel.seriesStyles?.[ch]),
+    cellLabels: plottedChannels.map((ch) => panel.seriesLabels?.[ch]),
+    legendEntries: plottedChannels.flatMap((ch, displayIndex) => {
+      const label = panel.seriesLabels?.[ch];
+      const style = resolveSeriesStyle(panel.seriesStyles?.[ch], displayIndex, cellCycle);
+      return label ? [{ label, style, displayIndex }] : [];
+    }),
   };
 }

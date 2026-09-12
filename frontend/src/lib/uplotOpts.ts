@@ -7,7 +7,13 @@ import type uPlot from "uplot";
 import type { ColorScatterSpec } from "./colorscatter";
 import { resolveDrawColor } from "./contrastColor";
 import { seriesPoints } from "./markers";
-import { DASH, resolveSeriesStyle } from "./seriesStyleCycle";
+// The palette (cssVar / SERIES_VARS / seriesColor) now lives beside the P3.3
+// cycle in ./seriesStyleCycle: hue by display position there, dash and glyph by
+// display position there too, one position space for both. Moved to fund this
+// file's shrink-only pin, and so lib/exportStyles.ts no longer imports the whole
+// plot builder to resolve a colour; re-exported so no importer had to change.
+export { cssVar, SERIES_VARS, seriesColor } from "./seriesStyleCycle";
+import { cssVar, DASH, resolveSeriesStyle, seriesColor, type SeriesCycle } from "./seriesStyleCycle";
 import type { Measurement } from "./measure";
 import type { FwhmResult } from "./peakwidth";
 import type { PlotBg } from "./plotview";
@@ -57,13 +63,6 @@ export type PlotTool =
   | "integ"
   | "fwhm"
   | "qfit";
-
-/** Exported for `useAnnotationEdit`'s Frame "Solid" preset (MAIN #27), which
- *  needs a concrete resolved surface color to draw behind text — a canvas
- *  `fillStyle` can't take a live `var(--x)` reference the way DOM CSS can. */
-export function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
 
 /** uPlot concatenates every plugin hook value and later calls each entry.
  * Optional draw-only hooks are represented as `undefined` by several plugin
@@ -132,17 +131,6 @@ export function resolvePlotBg(bg?: PlotBg): PlotBgTokens {
     isDark: true,
   };
 }
-
-export const SERIES_VARS = [
-  "--series-1",
-  "--series-2",
-  "--series-3",
-  "--series-4",
-  "--series-5",
-  "--series-6",
-  "--series-7",
-  "--series-8",
-];
 
 /** A uPlot axis `values` callback: maps tick split values to label strings. */
 type TickValues = (
@@ -566,15 +554,6 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
   return true;
 }
 
-/** Effective stroke for display-series `i`: an explicit override (token name or
- *  literal hex) wins, else the palette color by position. A `"--token"` color is
- *  resolved through `cssVar` so it stays re-themeable; a literal passes through. */
-export function seriesColor(i: number, style?: SeriesStyle): string {
-  const c = style?.color;
-  if (c) return c.startsWith("--") ? cssVar(c) || c : c;
-  return cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
-}
-
 export interface BuildOptsArgs {
   width: number;
   height: number;
@@ -692,6 +671,17 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`): the DISPLAY
+   *  POSITION of each series, or `null`/absent to draw exactly what this
+   *  builder drew before the cycle existed. Absent is the default on purpose —
+   *  a render path cycles only once someone has wired an export that renders
+   *  the same dash/glyph for the same series, so a NEW caller is uncycled until
+   *  it does. Today that is the focused Stage overlay (`PlotStage.tsx`, paired
+   *  with `figureSpec.ts`) and the spatial page cells (`useMultiPanelStage.ts`,
+   *  paired with `spatialPageExport.ts`); the waterfall, the reflectometry
+   *  panel, faceted/stacked/break panels and every background/snapshot/panel
+   *  window deliberately pass nothing. */
+  seriesCycle?: SeriesCycle;
   /** Dataset-channel index for each plotted display-series (`usePlotPayload`'s
    *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` and `colorBy`
    *  are expressed in). Only needed to resolve a `fill: {vs: channel}`
@@ -1298,10 +1288,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
     { sorted: xAscending ? 1 : 0 },
     ...payload.series.map((s, i) => {
-      // The EFFECTIVE style: this series' own, plus P3.3's opt-in auto dash/
-      // glyph by display position (the identity when off). The SAME resolver
+      // The EFFECTIVE style: this series' own, plus P3.3's auto dash/glyph at
+      // this series' DISPLAY POSITION — but only for a caller that opted in by
+      // passing `seriesCycle` (the identity function otherwise, returning the
+      // caller's own reference). The SAME resolver, at the SAME position,
       // `lib/exportStyles.ts` calls — see `seriesStyleCycle.ts`'s header.
-      const style = resolveSeriesStyle(seriesStyles?.[i], i);
+      const style = resolveSeriesStyle(seriesStyles?.[i], i, args.seriesCycle ?? null);
       // Literal per-series overrides (e.g. an Origin-imported figure's
       // saved line colour) are checked for contrast against THIS window's
       // effective background and swapped for the ink token when they'd be
@@ -1340,9 +1332,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       const trace = args.defaultTrace ?? "Line";
       const width = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const dash = style?.line ? DASH[style.line] : undefined;
-      // Markers: glyph + size for an explicit `marker` style OR the Scatter /
-      // Line + markers default trace — `markers.seriesPoints` owns that one
-      // decision now (two branches here, the second ignoring markerShape).
+      // Markers: glyph + size for an explicit `marker` style, or the plain 5px
+      // circle of the Scatter / Line + markers default trace —
+      // `markers.seriesPoints` owns that decision now, and its doc records why
+      // the two branches must NOT be merged (the export emits a marker only for
+      // an explicit `marker`).
       const points = seriesPoints(style, trace, stroke);
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a

@@ -491,16 +491,18 @@ const TS_CEILING = 500;
 // These 16 files are the discovered overage set from the RSM/ROI campaigns. Future
 // growth in any of them must fund an extraction, not a ceiling bump.
 const TS_MODULE_PINS: Record<string, number> = {
-  // 1446 -> 1434 (2026-09-12, PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 auto dash/marker
-  // cycle): the new pref had to be READ here, so two cohesive siblings moved out
-  // rather than the pin moving up — the `DASH` table to the new
-  // lib/seriesStyleCycle.ts (the dash vocabulary belongs with the cycle that
+  // 1446 -> 1428 (2026-09-12, PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 auto dash/marker
+  // cycle): `buildOpts` had to gain a `seriesCycle` argument, so THREE cohesive
+  // siblings moved out rather than the pin moving up — the `DASH` table to the
+  // new lib/seriesStyleCycle.ts (the dash vocabulary belongs with the cycle that
   // assigns it, and the export-parity test compares against it without pulling
-  // in the plot builder), and the marker `points` decision to
-  // lib/markers.seriesPoints (which already owned every other marker concern;
-  // the two branches it merges also fixed a default-trace marker silently
-  // ignoring markerShape/markerSize). Ratcheted to what the file actually is.
-  "/lib/uplotOpts.ts": 1434,
+  // in the plot builder), the marker `points` decision to
+  // lib/markers.seriesPoints (which already owned every other marker concern),
+  // and the palette (cssVar / SERIES_VARS / seriesColor) to lib/seriesColor.ts —
+  // which also stops lib/exportStyles.ts importing the whole uPlot options
+  // builder just to resolve a colour. All three re-exported from here, so no
+  // importer changed. Ratcheted to what the file actually is.
+  "/lib/uplotOpts.ts": 1428,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
@@ -520,6 +522,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // store loads on demand via store/originApplyLibs.ts. Like lib/api.ts
   // above this was an EAGER-BYTES extraction, not a line-count one:
   // measured 890.2 -> 885.3 kB eager (local, same environment).
+  // Unchanged at 791 (2026-09-12, P3.3): the spatial cells' opt-in to the
+  // dash/marker cycle paid for itself — the per-cell styles/labels/legend
+  // derivation moved to `lib/multipanel.spatialCellStyling`, where the spatial
+  // EXPORT's own channel list already lives, so the two cannot drift.
   "/components/Stage/useMultiPanelStage.ts": 791,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
@@ -547,7 +553,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // for the import exactly — net zero, so there is no ratchet to record here.
   "/components/Stage/worksheet/useWorksheetView.ts": 648,
   "/lib/roi.ts": 638,
-  "/lib/plotspec2.ts": 637,
+  // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
+  // to lib/markers.ts beside `MARKER_SHAPES`, so `publicationStyles.ts`'s wire
+  // sanitizer validates `marker_shape` against the SAME list this view-style
+  // sanitizer uses instead of accepting any string.
+  "/lib/plotspec2.ts": 636,
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
   // canonicalSession.ts's selectSessionLiveDrifted, where the subscription
   // contract it documents actually lives. Ratchet, not a bump.

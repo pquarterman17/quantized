@@ -1290,7 +1290,61 @@ import { fileURLToPath } from "node:url";
  *  different order, and that is the kind of silent wrongness this whole group
  *  exists to remove.
  */
-const EAGER_JS_BUDGET = 918_800;
+/*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
+ *  cycle, reworked after adversarial review). Measured 919,393 after `npm ci`
+ *  — 593 over the old budget — leaving ~1 kB of headroom, the same margin the
+ *  three moves below this one left. Every number here is post-`npm ci` on the
+ *  same tree; the base it is measured against (3145fe33, no feature) is 918,658.
+ *
+ *  WHAT THE WEIGHT IS. The cycle itself is small: one resolver, two vocabulary
+ *  arrays and a view predicate in lib/seriesStyleCycle.ts. The eager cost is the
+ *  PARITY WIRING around it, which is the whole point of the rework. The first
+ *  cut of this feature kept the on/off flag in a module-level singleton that
+ *  every `buildOpts`/`buildExportStyles` caller inherited silently, and review
+ *  found five render paths cycling on screen with no export that could reproduce
+ *  them. The fix makes the cycle an explicit argument — display POSITIONS — that
+ *  a call site must pass, so the canvas (`PlotStage` -> `PlotViewport`, plus the
+ *  legend swatch and the magnifier inset) and the export it produces
+ *  (`buildStageFigureSpec` -> `buildExportStyles`) are wired as one pair, and a
+ *  render path that has not wired its export stays uncycled by default. That
+ *  threading — a hook, two props, one extras field on each of two entry points —
+ *  is the byte cost, and it cannot be lazy: it runs during the first paint of
+ *  the default plot.
+ *
+ *  THREE REDUCTIONS WERE TAKEN FIRST, worth 448 bytes together, all measured on
+ *  this tree rather than argued:
+ *    1. The palette (`cssVar` / `SERIES_VARS` / `seriesColor`) and the
+ *       marker-shape vocabulary were first given their own modules; folding both
+ *       into lib/seriesStyleCycle.ts instead — where the dash/glyph cycle they
+ *       are indexed alongside already lives — and dropping the
+ *       `viewOverrides` re-export barrel that lib/figureSpec.ts had grown, took
+ *       919,772 -> 919,393. Worth 379 B, and it also stops lib/exportStyles.ts
+ *       importing the entire uPlot options builder to resolve one colour.
+ *    2. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
+ *       rather than `primitives/Checkbox`, which is deliberately NOT in the
+ *       eager bundle (its header records that every other consumer is a lazy
+ *       panel). Measured both ways here: 919,467 with the import, 919,393
+ *       without. Worth 74 B — the review predicted ~590 B from the original
+ *       commit's module graph, and on the reworked graph it is not; the number
+ *       is what counts.
+ *    3. `resolveSeriesStyle` carries no "nothing left to assign" fast path and
+ *       no `Number.isFinite` index guard. The positions array is the gate now,
+ *       so an out-of-range index simply has no entry and the function returns
+ *       the caller's own reference.
+ *
+ *  A FOURTH REDUCTION WAS REJECTED: collapsing the two `buildOpts` marker
+ *  branches back into one (an explicit `style.marker` and the ambient Scatter /
+ *  Line + markers default trace) is shorter code and is exactly what the first
+ *  cut did. It is also the bug in finding 5 — the export emits a marker only for
+ *  an explicit `style.marker`, so a glyph taken from the default trace is drawn
+ *  on screen and dropped from the PDF. Bytes do not buy that back.
+ *
+ *  FOR THE RECORD, since the first cut's own budget note was wrong: the feature
+ *  commit as written measures 919,249 here (449 over the old budget, i.e. CI
+ *  red), not the "896.9 kB, 0.4 kB under" it claimed. That number came off a
+ *  warm vite transform cache. Everything above was measured after `npm ci`.
+ */
+const EAGER_JS_BUDGET = 920_400;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

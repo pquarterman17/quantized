@@ -2881,13 +2881,19 @@ covers a much smaller subset and guards focus on Analyze.
 
     - **The preference.** `autoSeriesStyles` in the `qz.prefs` blob
       (`store/prefs.ts`: `Prefs` field, `PREF_DEFAULTS` **false**, guarded
-      `loadPrefs` parse, `prefsOf` snapshot, `syncPrefs` apply), reached through
-      the existing generic `setPref`. Exposed as a **"Vary dash & marker"**
-      checkbox in `Shell/AppearanceMenu.tsx` **directly under "Series
-      palette"** — the same menu, because it is the same cycle: the palette
-      varies hue, this varies what survives greyscale. Pinned by
-      `store/prefs.test.ts` (default off, persists, survives a localStorage
-      round-trip, a non-boolean falls back) and `AppearanceMenu.test.tsx`.
+      `loadPrefs` parse, `prefsOf` snapshot), reached through the existing
+      generic `setPref`. Unlike `palette`, `syncPrefs` does **not** push it into
+      a lib singleton — see "how parity is guaranteed" below for why that was
+      the first cut's central mistake; the render paths that have a matching
+      export read the store field directly and pass it on as an argument.
+      Exposed as a **"Vary dash & marker"** checkbox in
+      `Shell/AppearanceMenu.tsx` **directly under "Series palette"** — the same
+      menu, because it is the same cycle: the palette varies hue, this varies
+      what survives greyscale. (Hand-written `qz-check` markup rather than
+      `primitives/Checkbox`, which is deliberately not in the eager bundle.)
+      Pinned by `store/prefs.test.ts` (default off, persists, survives a
+      localStorage round-trip, a non-boolean falls back) and
+      `AppearanceMenu.test.tsx`.
     - **The cycles** (`lib/seriesStyleCycle.ts`, new). Dash:
       `solid → dashed → dotted`, three entries because `LineStyle` and the wire
       type `ExportSeriesStyle.line` → `calc.figure._LINESTYLE` carry exactly
@@ -2900,65 +2906,159 @@ covers a much smaller subset and guards focus on Analyze.
     - **Explicit always wins**, including an explicit `"solid"`/`"circle"` —
       that is a deliberate "no encoding here", not an absence.
     - **Off is the identity.** `resolveSeriesStyle` returns the CALLER'S OWN
-      reference when the pref is off (asserted with `toBe`, not `toEqual` — a
-      copy would compare equal and still break prop identity downstream), and
+      reference with no cycle (asserted with `toBe`, not `toEqual` — a copy
+      would compare equal and still break prop identity downstream), and
       `buildOpts` output for an unstyled plot is pinned dash-free/marker-free.
-    - **How parity is guaranteed** (this is the FEATURE-001 lesson applied).
-      ONE resolver, called by BOTH renderers at the same display position:
-      `uplotOpts.buildOpts` for every canvas (Stage, multi-panel cell, inset,
-      snapshot, background window) and `exportStyles.buildExportStyles` for
-      every publication producer (figureSpec, spatialPageExport, legacyFigure,
-      useGraphTemplates, plotSpecFigure). The backend is handed an **ordinary
-      explicit `line`/`marker_shape`** and never learns a cycle exists. The
-      on/off flag is a module-level singleton pushed in by `syncPrefs`, exactly
-      as `applyPalette`/`setFormatOpts` are — deliberately NOT threaded through
-      `buildOpts` args, because a dozen call sites is a dozen chances to miss
-      one, which is precisely how a screen-only styling change gets shipped.
-      `PlotLegend`'s swatch resolves through the same function so the legend
-      cannot disagree with its own plot.
-      Guarded by `exportStyles.test.ts`'s "canvas/export parity (FEATURE-001
-      guard)" block, which drives both real builders over one plot and asserts
-      the two resolved sets are **EQUAL series-for-series** (plus that the
-      agreement is non-trivial: three distinct dashes), not merely non-empty.
+      "Off" now means two things that are both pinned: the preference is off,
+      OR the call site passed no positions — an explicit `null` cycle is
+      asserted deep-equal to omitting the argument entirely.
+    - **How parity is guaranteed** (this is the FEATURE-001 lesson applied, and
+      the first cut of it got this WRONG — see "what the review found" below).
+      The cycle is an **explicit argument**, not an ambient flag: a
+      `SeriesCycle` is the list of DISPLAY POSITIONS of the series a render path
+      draws, and both `uplotOpts.buildOpts` (via `BuildOptsArgs.seriesCycle`)
+      and `exportStyles.buildExportStyles` (via a third parameter) are the
+      identity function without one. A render path therefore cycles only if
+      somebody wired its export and passed positions, and a NEW render path is
+      uncycled until they do. The backend is still handed an **ordinary explicit
+      `line`/`marker_shape`** and never learns a cycle exists.
+
+      **Exactly two pairs are wired, and nothing else cycles on either side:**
+
+      | Canvas | Export it produces | Cycles? |
+      |---|---|---|
+      | Focused Stage, plain single-panel overlay (`PlotStage` → `PlotViewport`, plus `PlotLegend`'s swatch and `InsetPlot`) | `figureSpec.buildStageFigureSpec` → `buildExportStyles` (Copy figure, Copy figure (vector), Export figure…) | **yes** |
+      | Spatial page cells (`useMultiPanelStage` → `multipanel.spatialCellStyling`, incl. `SpatialPanelLegend`'s entries) | `spatialPageExport.spatialPanelFigure` → `buildExportStyles` (Export page…) | **yes** |
+      | Grouped (`group_col`) view | `series_styles` **not applied** — `routes/export_figures.py:114-117` | no, both sides |
+      | Faceted view | `series_styles` **unused once `facets` is set** — `:125-127` | no, both sides |
+      | Stacked / x-break panels (`stackMode`) | one single-panel figure; the screen shows N panels | no, both sides |
+      | Waterfall (`WaterfallView`), reflectometry (`ReflPanel`) | none | no |
+      | Background / snapshot / panel windows (`PlotViewport` without the arg) | none | no |
+      | Figure Builder, Figure Page panels, graph templates, `plotSpecFigure`, `legacyFigure` | server-rendered from a saved document/template | no, both sides |
+
+      The three "no, both sides" view rows are decided by **one predicate**,
+      `seriesStyleCycle.overlayExportsSeriesStyles({groupKey, facetKey,
+      stackMode})`, which the canvas (`useStageSeriesCycle`) and the export
+      (`buildFigureSpecForView`) both call — so they cannot drift into
+      disagreeing about which views cycle. `buildStageFigureSpec` applies it a
+      second time against the LIVE view, because the document it may route
+      through carries its own copy of that view.
+
+      **Hidden series resolve at the same position on both sides.** The canvas
+      leaves a hidden series in `payload.series` with `show:false`, so a
+      channel's display position is its index in the UNFILTERED plotted list;
+      the export drops hidden channels from `y_keys` entirely. Two
+      independently-derived indices meant channel B drew dashed on screen and
+      solid in the PDF. `figureSpec` now keeps the unfiltered `displayChannels`
+      list and hands `buildExportStyles` each surviving channel's position in
+      IT. The positions also stop at `plotted.length`, so the fit / baseline /
+      peak / derivative overlays spliced on after the channels — which no export
+      draws — stay undashed.
+
+      **The palette rides the same positions**, but only when the cycle is on.
+      `seriesColor(i)` had the identical skew (a hidden series shifted every
+      later channel's hue in the PDF but not on screen); `buildExportStyles`
+      now indexes it by the supplied position too. RESIDUAL, stated precisely:
+      with the preference **off** the export passes no positions, so that
+      pre-existing palette skew remains exactly as it was — deliberate, because
+      "off is byte-identical to before" is the stronger invariant and is pinned
+      by a test ("OFF: a hidden series leaves the export byte-identical to
+      before the cycle"). Turning the preference on fixes the hue skew as a side
+      effect; that is tested too.
+
+      **Guards.** `exportStyles.test.ts`'s "canvas/export parity (FEATURE-001
+      guard)" block drives both real builders over one plot and asserts the two
+      resolved sets are **EQUAL series-for-series** — over a NON-IDENTITY
+      plotted list (`[2,0,1]`, a reordered legend) and with a hidden series,
+      because with `plotted[i] === i` resolving by channel and resolving by
+      position are the same function and the guard proves nothing.
+      `figureSpec.test.ts` pins the same thing end to end through the real
+      request builders, plus every "no, both sides" row above.
+      `useStageSeriesCycle.test.ts` pins the canvas half of those refusals.
+      `PlotLegend.test.ts` and `multipanel.test.ts` pin that the two legends
+      resolve through the same function as their own canvases.
       Backend half in `tests/test_calc_figure.py`: three cycle positions map to
       three distinct matplotlib linestyles/markers, and both reach the rendered
-      SVG (dash patterns appear that an all-solid render lacks; three glyphs do
-      not render identically to three circles).
+      output.
+    - **Saved documents never bake the cycle in.** `publication.seriesStyles`
+      is an "exact" array (the F2.1a contract), so a cycled `line` frozen into
+      one would keep exporting dashed on a machine whose preference is off. The
+      producers that PERSIST styles — `legacyFigure`'s `saveAsFigure`,
+      `useGraphTemplates` — pass no cycle at all, so what they store is the raw
+      user style; and `buildFigureSpecFromDocument` cycles only when
+      `buildStageFigureSpec` explicitly asks it to, which is the live Stage
+      export and nothing else. A document authored with the preference ON and
+      reopened with it OFF therefore renders identically, and vice versa — both
+      directions tested, along with "an exact publication style array stays
+      exact".
     - **Two things the work turned up.** (1) `sanitizeExportSeriesStyles` never
       restored `marker_shape`, so a saved FigureDocument's exact publication
       styles came back shape-less and every marker reverted to a circle on
       re-export — the same parity break the `_MARKER` table closed, one layer
-      down; fixed + tested. (2) Sabotaging the opt-in gate exposed a REAL bug in
-      the first cut: `uplotOpts`'s ambient-`Step`-trace branch tests
-      `!style.line`, so with the cycle on every series had a dash and the plot
-      silently stopped stepping. Fixed by reading the RAW style list there — an
-      auto dash is a DEFAULT and must never impersonate the user's explicit
-      choice. Both halves pinned.
-    - **Ceilings hit.** `lib/uplotOpts.ts` was pinned at 1446 and the pin only
-      ratchets down, so two cohesive siblings moved OUT instead: the `DASH`
-      table to `lib/seriesStyleCycle.ts` (the dash vocabulary belongs with the
-      cycle that assigns it, and the parity test can then compare against it
-      without importing the plot builder) and the marker `points` decision to
-      `lib/markers.seriesPoints` (which already owned every other marker
-      concern). Pin → **1434**. `store/useApp.ts` was pinned at 2334 with the
-      file at 2332, so the new field was funded by replacing 17
+      down; fixed, and now value-checked against `MARKER_SHAPE_VALUES` like
+      `line`/`step` beside it rather than accepting any string. (2) Sabotaging
+      the opt-in gate exposed a REAL bug in the first cut: `uplotOpts`'s
+      ambient-`Step`-trace branch tests `!style.line`, so with the cycle on
+      every series had a dash and the plot silently stopped stepping. Fixed by
+      reading the RAW style list there — an auto dash is a DEFAULT and must
+      never impersonate the user's explicit choice. Both halves pinned.
+    - **Ceilings hit.** Growth was funded by extraction every time, never by
+      raising a pin. `lib/uplotOpts.ts` (pinned 1446) gave up three cohesive
+      siblings: the `DASH` table and the palette (`cssVar` / `SERIES_VARS` /
+      `seriesColor`) to `lib/seriesStyleCycle.ts` — which also stops
+      `lib/exportStyles.ts` importing the whole plot builder to resolve one
+      colour — and the marker `points` decision to `lib/markers.seriesPoints`.
+      Pin → **1428**. `lib/figureSpec.ts` had five lines under the general
+      500-line ceiling, so the screen-parity override projection moved to
+      `lib/figureViewOverrides.ts` (unchanged, three importers repointed).
+      `components/Stage/PlotStage.tsx` had one line under the 400-line component
+      ceiling, so its opt-in is a named hook, `useStageSeriesCycle`.
+      `useMultiPanelStage.ts` (pinned 791) paid for the spatial opt-in by moving
+      its per-cell styles/labels/legend derivation to
+      `multipanel.spatialCellStyling` — where the spatial EXPORT's own channel
+      list already lives, so the two cannot drift. Pin unchanged.
+      `lib/plotspec2.ts` → **636** (its private `MARKER_SHAPE_VALUES` moved to
+      the shared module). `store/useApp.ts` → **2328**, funded by replacing 17
       hand-maintained `x: _initialPrefs.x` lines with one `..._initialPrefs`
-      spread — every `Prefs` key is already an AppState field of the same name,
-      which is what `prefsOf` relies on, so the list could only ever drift.
-      Pin → **2328**. Eager bundle 896.9 kB against the 897.3 kB budget
-      (0.4 kB under), so no budget move was needed.
-    - **Deliberately NOT done.** Merging the two marker branches means the glyph
-      cycle reaches a `Scatter`/`Line + markers` default trace on screen; the
-      EXPORT ignores `defaultTrace` entirely (it emits a marker only for an
-      explicit `style.marker`), which is a **pre-existing** gap this change
-      neither widens nor fixes — the cycle is deliberately independent of the
-      ambient trace so it cannot build a new divergence in. Faceted panels stay
-      uncycled on screen AND on export, because they pass no per-series styles
-      to either (FEATURE-001); `SpatialPanelLegend` is left alone for the same
-      reason — its per-panel index space does not line up with the per-cell
-      style lists, so cycling only there could contradict its own canvas. No
-      fourth dash pattern (it would need the Inspector picker, the wire type and
-      `_LINESTYLE` extended together).
+      spread. Eager bundle: measured **919,393 B** after `npm ci` against a
+      918,658 B base; budget moved 918,800 → 920,400 with the full measured
+      justification in `scripts/check-bundle-size.mjs`.
+    - **Deliberately NOT done.** The glyph cycle does **not** reach the ambient
+      `Scatter` / `Line + markers` default trace, and `markers.seriesPoints`
+      keeps those two branches apart on purpose: the export emits a marker only
+      for an EXPLICIT `style.marker`, so a glyph taken from the default trace
+      would be drawn on screen and dropped from the PDF. (The first cut merged
+      them, which both widened that gap and made a stored
+      `{marker:false, markerShape:"star", markerSize:11}` — reachable, since
+      `SeriesStyleCard` keeps both fields when "Markers" is unticked — start
+      rendering an 11px star with the preference OFF.) The Inspector's "Line"
+      picker and the plot context menu still show the STORED value, so an
+      unstyled series reads "solid" there while the canvas draws its cycled
+      dash; picking an entry still does exactly what it says, and the stored
+      value then wins everywhere, but the display is a known gap. `thumbnailSvg`
+      draws no dashes at all (it never did). No fourth dash pattern (it would
+      need the Inspector picker, the wire type and `_LINESTYLE` extended
+      together).
+    - **What the adversarial review found**, and what the rework did about it.
+      All twelve findings were confirmed by a reviewer who ran them. The first
+      cut kept the on/off flag in a module-level singleton that `syncPrefs`
+      pushed in, on the argument that threading it was "a dozen chances to miss
+      one". The opposite was true: an ambient flag meant every `buildOpts` and
+      `buildExportStyles` caller opted in by default, and five render paths
+      (facets, `group_col`, waterfall, reflectometry, stacked panels) cycled on
+      screen with no export that could reproduce them. The singleton is gone;
+      the positions argument replaced it, and forgetting it now fails safe. The
+      other confirmed findings, all addressed above: the hidden-series position
+      skew; the widened default-trace marker divergence; `SpatialPanelLegend`
+      contradicting its own canvas (whose "index spaces do not line up"
+      justification was simply false — both come from
+      `spatialPlottedChannels`); parity tests that used an identity `plotted`
+      and so could not catch a channel-vs-position mix-up; a legend half that no
+      test exercised; an SVG-bytes backend test that could not fail because
+      matplotlib stamps `<dc:date>` (now `fmt="png"`, with a determinism
+      assertion above it so the comparison means something); cycled styles
+      frozen into saved documents; `marker_shape` restored without value
+      validation; and a bundle number measured off a warm vite cache.
   - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
     there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
-import { setAutoSeriesStyles } from "./seriesStyleCycle";
+import { displayPositions } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 
 const payload: PlotPayload = {
@@ -1556,10 +1556,17 @@ describe("resolvePlotBg follows the app theme (owner request 2026-07-25)", () =>
   });
 });
 
+
 // ── P3.3 auto dash/marker cycle (non-colour encodings) ──────────────────────
 // The canvas half. Its export counterpart — and the assertion that the two
 // resolve to the SAME dash/glyph per series, which is what FEATURE-001 in
 // plans/BUGS_AND_ISSUES.md is about — lives in `exportStyles.test.ts`.
+//
+// Note what the opt-in is: `seriesCycle`, an ARGUMENT. There is no ambient flag
+// to set. A caller that passes nothing draws what it always drew, which is what
+// keeps the waterfall, the reflectometry panel, faceted/stacked/break panels and
+// every background window off the cycle without each of them remembering to opt
+// out.
 describe("buildOpts auto dash/marker cycle (P3.3)", () => {
   const three: PlotPayload = {
     data: [
@@ -1573,15 +1580,16 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
     xUnit: "",
   };
   const args = { ...base, yScale: "linear" as const, tool: "zoom" as const };
+  const cycled = { ...args, seriesCycle: displayPositions(true, 3) };
   const dashes = (opts: ReturnType<typeof buildOpts>) =>
     (opts.series ?? []).slice(1).map((s) => (s as { dash?: number[] }).dash);
-
-  afterEach(() => setAutoSeriesStyles(false));
+  const points = (opts: ReturnType<typeof buildOpts>) =>
+    (opts.series ?? []).slice(1).map((s) => s.points);
 
   it("OFF: three unstyled series are dash-free and marker-free — today's output", () => {
     const opts = buildOpts(three, args);
     expect(dashes(opts)).toEqual([undefined, undefined, undefined]);
-    expect((opts.series ?? []).slice(1).map((s) => s.points?.show)).toEqual([false, false, false]);
+    expect(points(opts).map((p) => p?.show)).toEqual([false, false, false]);
   });
 
   it("OFF: passing a style list of empty/absent entries is deep-equal to passing none", () => {
@@ -1592,46 +1600,86 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
     expect(JSON.stringify(withList)).toBe(JSON.stringify(without));
   });
 
+  it("OFF: an explicit null cycle is the same as no cycle argument at all", () => {
+    expect(JSON.stringify(buildOpts(three, { ...args, seriesCycle: null }))).toBe(
+      JSON.stringify(buildOpts(three, args)),
+    );
+  });
+
   it("ON: three unstyled series get three DISTINCT dashes", () => {
-    setAutoSeriesStyles(true);
-    const d = dashes(buildOpts(three, args));
+    const d = dashes(buildOpts(three, cycled));
     expect(d).toEqual([undefined, [8, 4], [2, 4]]); // solid / dashed / dotted
     expect(new Set(d.map((x) => JSON.stringify(x))).size).toBe(3);
   });
 
   it("ON: an explicit per-series style on series 2 survives the cycle", () => {
-    setAutoSeriesStyles(true);
     const opts = buildOpts(three, {
-      ...args,
+      ...cycled,
       seriesStyles: [undefined, { line: "solid", width: 4 }, undefined],
     });
     expect(dashes(opts)).toEqual([undefined, undefined, [2, 4]]);
     expect((opts.series?.[2] as { width?: number }).width).toBe(4);
   });
 
+  it("ON: a series past the cycle's length is untouched — the overlay guard", () => {
+    // PlotStage sizes the positions to `plotted.length`, so a fit/baseline/peak
+    // overlay spliced on after the plotted channels keeps its plain line. The
+    // export draws no overlays at all, so cycling them could only ever be a
+    // screen-only encoding.
+    const d = dashes(buildOpts(three, { ...args, seriesCycle: displayPositions(true, 2) }));
+    expect(d).toEqual([undefined, [8, 4], undefined]);
+  });
+
   it("ON: marker glyphs cycle too — series 1 keeps uPlot's built-in circle, 2/3 get paths", () => {
-    setAutoSeriesStyles(true);
-    const opts = buildOpts(three, {
-      ...args,
-      seriesStyles: [{ marker: true }, { marker: true }, { marker: true }],
-    });
-    const pts = (opts.series ?? []).slice(1).map((s) => s.points);
+    const pts = points(
+      buildOpts(three, {
+        ...cycled,
+        seriesStyles: [{ marker: true }, { marker: true }, { marker: true }],
+      }),
+    );
     expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
     expect(pts[0]?.paths).toBeUndefined(); // circle == uPlot's own renderer
     expect(pts[1]?.paths).toBeTypeOf("function"); // square
     expect(pts[2]?.paths).toBeTypeOf("function"); // triangle
   });
 
-  it("ON: the glyph cycle also reaches the Scatter / Line + markers default trace", () => {
-    setAutoSeriesStyles(true);
+  // ── The default trace is DELIBERATELY outside the glyph cycle ─────────────
+  // `exportStyles.buildExportStyles` emits a marker only for an EXPLICIT
+  // `style.marker`, so anything the ambient Scatter / Line + markers trace draws
+  // has no export counterpart. Cycling glyphs onto it would show eight shapes on
+  // screen that every PDF renders as eight circles — the precise thing this
+  // feature promises not to do.
+  it("ON: the glyph cycle does NOT reach the Scatter / Line + markers default trace", () => {
     for (const defaultTrace of ["Scatter", "Line + markers"]) {
-      const pts = (buildOpts(three, { ...args, defaultTrace }).series ?? [])
-        .slice(1)
-        .map((s) => s.points);
+      const pts = points(buildOpts(three, { ...cycled, defaultTrace }));
       expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
-      expect(pts[0]?.paths).toBeUndefined();
-      expect(pts[1]?.paths).toBeTypeOf("function");
+      expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);
+      expect(pts.map((p) => p?.size)).toEqual([5, 5, 5]);
     }
+  });
+
+  it("OFF: a stored markerShape/markerSize with markers UNTICKED stays inert", () => {
+    // `Inspector/SeriesStyleCard.tsx` keeps both fields when "Markers" is
+    // unticked, so `{marker:false, markerShape:"star", markerSize:11}` is a
+    // reachable stored shape. On a Scatter default trace it must still draw the
+    // plain 5px circle it drew before this feature existed — an 11px star here
+    // is a screen-only change the export cannot reproduce.
+    const styles: (SeriesStyle | undefined)[] = [
+      { marker: false, markerShape: "star", markerSize: 11 },
+      undefined,
+      undefined,
+    ];
+    for (const a of [args, cycled]) {
+      const pts = points(buildOpts(three, { ...a, defaultTrace: "Scatter", seriesStyles: styles }));
+      expect(pts[0]).toEqual({ show: true, size: 5 });
+    }
+  });
+
+  it("an EXPLICIT marker still honours its shape and size, cycle or not", () => {
+    const styles: (SeriesStyle | undefined)[] = [{ marker: true, markerShape: "star", markerSize: 11 }];
+    const pts = points(buildOpts(three, { ...args, seriesStyles: styles }));
+    expect(pts[0]?.size).toBe(11);
+    expect(pts[0]?.paths).toBeTypeOf("function");
   });
 
   // Found by sabotaging the opt-in gate: with the cycle ON every series has a
@@ -1639,10 +1687,9 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
   // silently stopped stepping. An auto dash is a DEFAULT; only the user's own
   // explicit dash may suppress the Step trace. Both halves are pinned here.
   it("ON: the Step default trace still steps, and still varies the dash", () => {
-    setAutoSeriesStyles(true);
     const fn = vi.fn();
     const opts = buildOpts(three, {
-      ...args,
+      ...cycled,
       defaultTrace: "Step",
       steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
     });
@@ -1651,10 +1698,9 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
   });
 
   it("ON: an EXPLICIT dash still suppresses the Step default trace (behaviour unchanged)", () => {
-    setAutoSeriesStyles(true);
     const fn = vi.fn();
     const opts = buildOpts(three, {
-      ...args,
+      ...cycled,
       defaultTrace: "Step",
       seriesStyles: [{ line: "dashed" }, undefined, undefined],
       steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
@@ -1662,10 +1708,8 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
     expect((opts.series ?? []).slice(1).map((s) => s.paths)).toEqual([undefined, fn, fn]);
   });
 
-  it("OFF: the default trace still draws plain circles (the merged marker branch is inert)", () => {
-    const pts = (buildOpts(three, { ...args, defaultTrace: "Scatter" }).series ?? [])
-      .slice(1)
-      .map((s) => s.points);
+  it("OFF: the default trace still draws plain circles (the marker branch is inert)", () => {
+    const pts = points(buildOpts(three, { ...args, defaultTrace: "Scatter" }));
     expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
     expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);
     expect(pts.map((p) => p?.size)).toEqual([5, 5, 5]);

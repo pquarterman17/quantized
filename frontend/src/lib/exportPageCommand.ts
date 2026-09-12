@@ -46,6 +46,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
           yFmt: live.yFmt,
           showGrid: live.showGrid,
           showAxisBox: live.showAxisBox,
+          autoSeriesStyles: live.autoSeriesStyles,
         });
     if (!spec) {
       const msg = "export page failed: a panel's dataset or page geometry is no longer available";

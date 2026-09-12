@@ -164,6 +164,11 @@ function StyleRow({
           <span className="qzk-field-lbl" style={{ margin: 0 }}>
             Line
           </span>
+          {/* The STORED choice, not the drawn one: with P3.3's auto cycle on,
+              an unstyled series reads "solid" here while the canvas draws its
+              cycled dash. Known gap, recorded in PRIMARY_SOFTWARE_AUDIT_PLAN
+              P3.3 — picking an entry still does exactly what it says, and the
+              stored value then wins over the cycle everywhere. */}
           <SegmentedControl<LineStyle>
             options={LINE_OPTS}
             value={style.line ?? "solid"}

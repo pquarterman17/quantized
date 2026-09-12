@@ -261,16 +261,24 @@ def test_cycled_dashes_reach_the_rendered_vector_output() -> None:
     assert len(patterns - plain_patterns) >= 2, (patterns, plain_patterns)
 
 
-def test_cycled_marker_shapes_reach_the_rendered_vector_output() -> None:
+def test_cycled_marker_shapes_reach_the_rendered_output() -> None:
+    # PNG, deliberately NOT svg. matplotlib stamps `<dc:date>` into every SVG
+    # with microsecond precision, so two renders of the IDENTICAL spec already
+    # differ and a `varied != same` assertion on SVG bytes cannot fail — it
+    # passed on this exact code before the marker shapes were plumbed at all.
+    # The first assertion below proves the medium is deterministic, so the
+    # second one carries real weight.
     x = np.linspace(0, 10, 20)
     series = [("a", x), ("b", x + 1.0), ("c", x + 2.0)]
-    same = render_figure(
-        x, series, fmt="svg", series_styles=[{"marker": True, "marker_shape": "circle"}] * 3
+    circles = [{"marker": True, "marker_shape": "circle"}] * 3
+    same = render_figure(x, series, fmt="png", series_styles=circles)
+    assert render_figure(x, series, fmt="png", series_styles=circles) == same, (
+        "png renders must be byte-deterministic for the comparison below to mean anything"
     )
     varied = render_figure(
         x,
         series,
-        fmt="svg",
+        fmt="png",
         series_styles=[
             {"marker": True, "marker_shape": "circle"},
             {"marker": True, "marker_shape": "square"},

@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildExportStyles } from "./exportStyles";
 import type { PlotPayload } from "./plotdata";
-import { DASH, setAutoSeriesStyles } from "./seriesStyleCycle";
+import { DASH, displayPositions } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 import { buildOpts } from "./uplotOpts";
 
@@ -76,15 +76,26 @@ describe("buildExportStyles", () => {
 // there precisely because it would have made the export honour something the
 // screen did not. So this block does not check that each side "has some dash";
 // it drives BOTH real builders over the SAME plot and asserts the two resolved
-// sets are EQUAL, series for series, in both directions:
+// sets are EQUAL, series for series:
 //
 //   canvas   : buildOpts(...).series[i + 1].dash   / .points.paths
-//   export   : buildExportStyles(...)[i].line      / .marker_shape
+//   export   : buildExportStyles(...)[j].line      / .marker_shape
 //
-// They can only agree because one function (`resolveSeriesStyle`) decides, and
-// the backend is handed an ordinary explicit style — `calc.figure._LINESTYLE` /
-// `_MARKER` never learn that a cycle exists.
+// Two things the first cut of this block could not catch, and which every case
+// here is built to:
+//
+//   * `plotted` is NON-IDENTITY ([2,0,1], a reordered legend). With
+//     plotted[i] === i, resolving the cycle by CHANNEL and resolving it by
+//     DISPLAY POSITION are the same function, and a sabotage that swapped one
+//     for the other sailed through the whole suite.
+//   * one series is HIDDEN. The canvas keeps it in `payload.series` with
+//     `show:false`; the export drops it. So the export's own index for a
+//     channel is NOT the canvas' display position, and the two sides can only
+//     agree if the export is handed the canvas' positions.
 describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", () => {
+  // Channels 0,1,2 with a legend reordered to [2,0,1] — `seriesOrder` on the
+  // real Stage, spelled out here as the plotted list both builders receive.
+  const PLOTTED = [2, 0, 1];
   const payload: PlotPayload = {
     data: [
       [0, 1, 2],
@@ -92,11 +103,10 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
       [2, 3, 4],
       [3, 4, 5],
     ],
-    series: [{ label: "A", unit: "" }, { label: "B", unit: "" }, { label: "C", unit: "" }],
+    series: [{ label: "C", unit: "" }, { label: "A", unit: "" }, { label: "B", unit: "" }],
     xLabel: "x",
     xUnit: "",
   };
-  const plotted = [0, 1, 2];
   const optsArgs = {
     width: 600,
     height: 400,
@@ -106,76 +116,133 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
     onReadout: vi.fn(),
   };
 
-  /** The dash the CANVAS will draw for each series, in display order. */
-  const canvasDashes = (styles: Record<number, SeriesStyle>) =>
-    (buildOpts(payload, { ...optsArgs, seriesStyles: plotted.map((ch) => styles[ch]) }).series ?? [])
-      .slice(1)
-      .map((s) => (s as { dash?: number[] }).dash);
+  /** The uPlot series config the CANVAS builds, in display order. */
+  const canvasSeries = (styles: Record<number, SeriesStyle>, on: boolean) =>
+    (
+      buildOpts(payload, {
+        ...optsArgs,
+        seriesStyles: PLOTTED.map((ch) => styles[ch]),
+        // Exactly what `PlotStage.tsx` passes: plain display order over the
+        // series it draws.
+        seriesCycle: displayPositions(on, PLOTTED.length),
+      }).series ?? []
+    ).slice(1);
 
-  /** The dash the EXPORT will draw for each series, translated through the same
-   *  DASH table the canvas uses, so the two are comparable values. The wire
-   *  type's extra `"none"` (point-only scatter) has no canvas dash by
-   *  definition, so it maps to undefined like `"solid"` does. */
-  const exportDashes = (styles: Record<number, SeriesStyle>) =>
-    buildExportStyles(plotted, styles).map((spec) =>
-      spec?.line && spec.line !== "none" ? DASH[spec.line] : undefined,
-    );
+  /** The dash the CANVAS will draw for each display series. */
+  const canvasDashes = (styles: Record<number, SeriesStyle>, on: boolean) =>
+    canvasSeries(styles, on).map((s) => (s as { dash?: number[] }).dash);
 
-  afterEach(() => setAutoSeriesStyles(false));
+  /** The dash the EXPORT will draw, translated through the same DASH table so
+   *  the two are comparable values. The wire type's extra `"none"` (point-only
+   *  scatter) has no canvas dash by definition, so it maps to undefined like
+   *  `"solid"` does. */
+  const toDash = (specs: ReturnType<typeof buildExportStyles>) =>
+    specs.map((spec) => (spec?.line && spec.line !== "none" ? DASH[spec.line] : undefined));
+
+  /** What `lib/figureSpec.ts` builds: the hidden-FILTERED channel list, plus
+   *  each survivor's position in the UNFILTERED display list. */
+  const exportSpecs = (styles: Record<number, SeriesStyle>, on: boolean, hidden: number[] = []) => {
+    const visible = PLOTTED.filter((ch) => !hidden.includes(ch));
+    return buildExportStyles(visible, styles, on ? visible.map((ch) => PLOTTED.indexOf(ch)) : null);
+  };
 
   it("OFF: neither side encodes a dash (and they agree about that)", () => {
-    expect(canvasDashes({})).toEqual([undefined, undefined, undefined]);
-    expect(exportDashes({})).toEqual([undefined, undefined, undefined]);
-    expect(buildExportStyles(plotted, {}).map((s) => s?.line)).toEqual([
-      undefined,
-      undefined,
-      undefined,
-    ]);
+    expect(canvasDashes({}, false)).toEqual([undefined, undefined, undefined]);
+    expect(toDash(exportSpecs({}, false))).toEqual([undefined, undefined, undefined]);
+    expect(exportSpecs({}, false).map((s) => s?.line)).toEqual([undefined, undefined, undefined]);
   });
 
   it("ON: the export spec carries the SAME dash per series the canvas draws", () => {
-    setAutoSeriesStyles(true);
-    const canvas = canvasDashes({});
-    const exported = exportDashes({});
-    expect(exported).toEqual(canvas); // the parity assertion itself
+    const canvas = canvasDashes({}, true);
+    expect(toDash(exportSpecs({}, true))).toEqual(canvas); // the parity assertion
     // …and it is a meaningful agreement, not two empty lists agreeing:
     expect(new Set(canvas.map((d) => JSON.stringify(d))).size).toBe(3);
   });
 
+  it("ON: parity survives a reordered legend — the cycle follows POSITION, not channel", () => {
+    // Channel 2 draws FIRST, so it is the solid one; channel 0 is second and
+    // dashed. Resolving by channel would swap them and still look plausible.
+    const specs = exportSpecs({}, true);
+    expect(specs.map((s) => s?.line)).toEqual(["solid", "dashed", "dotted"]);
+    expect(toDash(specs)).toEqual(canvasDashes({}, true));
+  });
+
+  it("ON: parity holds with a HIDDEN series — the export uses the canvas' positions", () => {
+    // Hide channel 0, which sits at display position 1. The two survivors keep
+    // positions 0 and 2, so channel 1 stays DOTTED on both sides; an export
+    // that re-indexed its own filtered list would draw it dashed.
+    const hidden = [0];
+    const canvas = canvasDashes({}, true);
+    const specs = exportSpecs({}, true, hidden);
+    expect(specs.map((s) => s?.line)).toEqual(["solid", "dotted"]);
+    // Compare series-for-series against the canvas entries still drawn.
+    const visibleCanvas = PLOTTED.map((ch, i) => [ch, canvas[i]] as const)
+      .filter(([ch]) => !hidden.includes(ch))
+      .map(([, d]) => d);
+    expect(toDash(specs)).toEqual(visibleCanvas);
+  });
+
+  it("ON: the palette rides the same positions, so a hidden series cannot skew it", () => {
+    // The pre-existing half of the same bug: `seriesColor(i)` on both sides
+    // with two different `i`. Channel 1 is the export's SECOND entry but the
+    // canvas' THIRD display position, so it must take --series-3, not
+    // --series-2 — which is what indexing by the filtered position gave it.
+    //
+    // The palette tokens have to be real for this: `seriesColor` reads
+    // `--series-N` off the document, and jsdom's stylesheet has none, so every
+    // index would otherwise fall back to the same literal and the assertion
+    // could not fail.
+    const root = document.documentElement;
+    // Light, mutually distinct paints: the canvas runs its stroke through the
+    // same `resolveDrawColor` contrast check a literal override gets, and a
+    // near-black token would be substituted for the ink colour instead.
+    const paint = ["#ffcccc", "#ccffcc", "#ccccff"];
+    paint.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    try {
+      const canvasStrokes = canvasSeries({}, true).map((s) => s.stroke);
+      expect(canvasStrokes).toEqual(paint); // display positions 0,1,2
+      const tokens = exportSpecs({}, true, [0]).map((s) => s?.color);
+      expect(tokens).toEqual([paint[0], paint[2]]); // positions 0 and 2 survive
+    } finally {
+      paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
+  });
+
+  it("OFF: a hidden series leaves the export byte-identical to before the cycle", () => {
+    // The invariant the cycle must not quietly buy its correctness with: with
+    // the preference off, `buildExportStyles` is exactly the two-argument
+    // function it was — palette skew and all.
+    const styles: Record<number, SeriesStyle> = { 1: { width: 3 }, 2: { line: "dotted" } };
+    const visible = PLOTTED.filter((ch) => ch !== 0);
+    expect(exportSpecs(styles, false, [0])).toEqual(buildExportStyles(visible, styles));
+  });
+
   it("ON: parity holds when some series are explicitly styled and some are not", () => {
-    setAutoSeriesStyles(true);
-    const styles: Record<number, SeriesStyle> = { 1: { line: "dotted" }, 2: { width: 3 } };
-    expect(exportDashes(styles)).toEqual(canvasDashes(styles));
-    // series 2 keeps its explicit dotted despite the cycle wanting "dashed"
-    expect(buildExportStyles(plotted, styles)[1]?.line).toBe("dotted");
+    const styles: Record<number, SeriesStyle> = { 0: { line: "dotted" }, 1: { width: 3 } };
+    expect(toDash(exportSpecs(styles, true))).toEqual(canvasDashes(styles, true));
+    // channel 0 sits at position 1 (which wants "dashed") and keeps its dotted
+    expect(exportSpecs(styles, true)[1]?.line).toBe("dotted");
   });
 
   it("ON: the exported marker_shape is the SAME glyph the canvas paths builder uses", () => {
-    setAutoSeriesStyles(true);
     const styles: Record<number, SeriesStyle> = {
+      2: { marker: true },
       0: { marker: true },
-      1: { marker: true },
-      2: { marker: true, markerShape: "star" },
+      1: { marker: true, markerShape: "star" },
     };
-    const shapes = buildExportStyles(plotted, styles).map((s) => s?.marker_shape);
+    const shapes = exportSpecs(styles, true).map((s) => s?.marker_shape);
     expect(shapes).toEqual(["circle", "square", "star"]); // cycle, cycle, explicit
     // The canvas side agrees: a circle is uPlot's own renderer (no paths
     // builder), every other glyph supplies one — so "has a builder" is exactly
     // "is not a circle", which is what the shape list above claims.
-    const pts = (buildOpts(payload, { ...optsArgs, seriesStyles: plotted.map((ch) => styles[ch]) })
-      .series ?? [])
-      .slice(1)
-      .map((s) => s.points);
-    expect(pts.map((p) => typeof p?.paths === "function")).toEqual(
-      shapes.map((sh) => sh !== "circle"),
-    );
+    const pts = canvasSeries(styles, true).map((s) => s.points);
+    expect(pts.map((p) => typeof p?.paths === "function")).toEqual(shapes.map((sh) => sh !== "circle"));
   });
 
   it("ON: no marker_shape leaks onto a series that draws no marker", () => {
     // The glyph is resolved for every series but stays behind the `marker` gate
     // on BOTH sides, so a line-only plot exports exactly as before.
-    setAutoSeriesStyles(true);
-    const out = buildExportStyles(plotted, {});
+    const out = exportSpecs({}, true);
     expect(out.map((s) => s?.marker)).toEqual([undefined, undefined, undefined]);
     expect(out.map((s) => s?.marker_shape)).toEqual([undefined, undefined, undefined]);
   });

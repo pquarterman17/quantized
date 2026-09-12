@@ -78,7 +78,7 @@
 // must not flip that spec to version 2.
 
 import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, StepMode, TickMode } from "./types";
-import { MARKER_SHAPES } from "./markers";
+import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import { LEGEND_POS, legendXYOrNull, sanitizeAnnotations, sanitizeShapes, type LegendPos } from "./plotview";
@@ -222,7 +222,6 @@ const LINE_STYLES: readonly LineStyle[] = ["solid", "dashed", "dotted"];
 const STEP_MODES: readonly StepMode[] = ["pre", "post", "mid"];
 const AXIS_SCALES: readonly AxisScale[] = ["linear", "log", "reciprocal"];
 const TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
-const MARKER_SHAPE_VALUES: ReadonlySet<MarkerShape> = new Set(MARKER_SHAPES.map((m) => m.value));
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
@@ -258,7 +257,7 @@ function validateSeriesDisplay(v: unknown): SeriesDisplay | null {
   if (typeof o.color === "string") out.color = o.color;
   if (isValidWidth(o.width)) out.width = o.width;
   if (typeof o.marker === "boolean") out.marker = o.marker;
-  if (typeof o.markerShape === "string" && MARKER_SHAPE_VALUES.has(o.markerShape as MarkerShape)) {
+  if (typeof o.markerShape === "string" && MARKER_SHAPE_VALUES.has(o.markerShape)) {
     out.markerShape = o.markerShape as MarkerShape;
   }
   if (typeof o.line === "string" && (LINE_STYLES as readonly string[]).includes(o.line)) {

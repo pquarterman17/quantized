@@ -1,40 +1,62 @@
 // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 — the auto dash/marker cycle's own unit
 // contract. The behaviours the canvas, the legend and the export all lean on:
-// OFF is the IDENTITY (not "a copy that happens to look the same"), ON assigns
-// by display position, and an explicit style always wins.
+// no cycle is the IDENTITY (not "a copy that happens to look the same"), a
+// cycle assigns by DISPLAY POSITION (which is not always the caller's own
+// index), and an explicit style always wins.
 
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
+import { MARKER_SHAPES } from "./markers";
 import {
   AUTO_DASH_CYCLE,
   AUTO_MARKER_CYCLE,
   DASH,
-  autoSeriesStylesEnabled,
+  displayPositions,
+  overlayExportsSeriesStyles,
   resolveSeriesStyle,
-  setAutoSeriesStyles,
 } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 
-afterEach(() => setAutoSeriesStyles(false)); // module-level flag: never leak it
+/** Plain display order for `n` series — what every canvas passes. */
+const ident = (n: number) => displayPositions(true, n);
 
-describe("setAutoSeriesStyles / autoSeriesStylesEnabled", () => {
-  it("defaults to off", () => {
-    expect(autoSeriesStylesEnabled()).toBe(false);
+describe("displayPositions", () => {
+  it("is null when the preference is off — the ONLY switch there is", () => {
+    expect(displayPositions(false, 5)).toBeNull();
   });
 
-  it("round-trips", () => {
-    setAutoSeriesStyles(true);
-    expect(autoSeriesStylesEnabled()).toBe(true);
-    setAutoSeriesStyles(false);
-    expect(autoSeriesStylesEnabled()).toBe(false);
+  it("is plain display order when on", () => {
+    expect(displayPositions(true, 3)).toEqual([0, 1, 2]);
+    expect(displayPositions(true, 0)).toEqual([]);
   });
 });
 
-describe("resolveSeriesStyle with the cycle OFF", () => {
+describe("overlayExportsSeriesStyles — the ONE view test both sides gate on", () => {
+  const overlay = { groupKey: null, facetKey: null, stackMode: false };
+
+  it("accepts the plain single-panel overlay", () => {
+    expect(overlayExportsSeriesStyles(overlay)).toBe(true);
+    expect(overlayExportsSeriesStyles({ ...overlay, groupKey: undefined })).toBe(true);
+  });
+
+  it("refuses every view whose export cannot apply per-series styles", () => {
+    // group_col: export_figures.py:114-117 ("series_styles is not applied in
+    // this path either") — the screen splits each channel into per-level series.
+    expect(overlayExportsSeriesStyles({ ...overlay, groupKey: 3 })).toBe(false);
+    // facets: export_figures.py:125-127 ("series_styles ... UNUSED once facets
+    // is set") — yet the screen's facet panels would happily cycle.
+    expect(overlayExportsSeriesStyles({ ...overlay, facetKey: 2 })).toBe(false);
+    // stackMode: the screen-only panel split (and the gate PlotStage puts every
+    // other multi-panel arrangement behind) that a single figure cannot show.
+    expect(overlayExportsSeriesStyles({ ...overlay, stackMode: true })).toBe(false);
+  });
+});
+
+describe("resolveSeriesStyle with NO cycle", () => {
   it("returns undefined for an unstyled series — no object is invented", () => {
-    expect(resolveSeriesStyle(undefined, 0)).toBeUndefined();
-    expect(resolveSeriesStyle(undefined, 1)).toBeUndefined();
-    expect(resolveSeriesStyle(undefined, 7)).toBeUndefined();
+    expect(resolveSeriesStyle(undefined, 0, null)).toBeUndefined();
+    expect(resolveSeriesStyle(undefined, 1, null)).toBeUndefined();
+    expect(resolveSeriesStyle(undefined, 7, null)).toBeUndefined();
   });
 
   it("returns the caller's OWN reference, not a shallow copy", () => {
@@ -42,21 +64,41 @@ describe("resolveSeriesStyle with the cycle OFF", () => {
     // Reference identity, deliberately: `toBe`, not `toEqual`. A copy would
     // compare equal here and still break every `useMemo`/prop-identity check
     // downstream, which is what "off changes nothing" has to mean.
-    expect(resolveSeriesStyle(style, 4)).toBe(style);
+    expect(resolveSeriesStyle(style, 4, null)).toBe(style);
+  });
+
+  it("leaves an index the cycle does not cover alone — the overlay guard", () => {
+    // A fit/baseline/peak overlay is appended PAST the plotted channels and the
+    // export draws none of them, so PlotStage's positions stop at
+    // `plotted.length` and index 3 here falls off the end.
+    const style: SeriesStyle = { width: 1 };
+    expect(resolveSeriesStyle(style, 3, ident(3))).toBe(style);
+    expect(resolveSeriesStyle(undefined, 3, ident(3))).toBeUndefined();
   });
 });
 
-describe("resolveSeriesStyle with the cycle ON", () => {
+describe("resolveSeriesStyle with a cycle", () => {
   it("assigns a dash + glyph by display position to an unstyled series", () => {
-    setAutoSeriesStyles(true);
-    expect(resolveSeriesStyle(undefined, 0)).toEqual({ line: "solid", markerShape: "circle" });
-    expect(resolveSeriesStyle(undefined, 1)).toEqual({ line: "dashed", markerShape: "square" });
-    expect(resolveSeriesStyle(undefined, 2)).toEqual({ line: "dotted", markerShape: "triangle" });
+    const c = ident(3);
+    expect(resolveSeriesStyle(undefined, 0, c)).toEqual({ line: "solid", markerShape: "circle" });
+    expect(resolveSeriesStyle(undefined, 1, c)).toEqual({ line: "dashed", markerShape: "square" });
+    expect(resolveSeriesStyle(undefined, 2, c)).toEqual({ line: "dotted", markerShape: "triangle" });
+  });
+
+  it("reads the DISPLAY POSITION, not the caller's own index", () => {
+    // This is finding 2 in one assertion. The export's own index for a channel
+    // is its slot in the hidden-FILTERED list; the canvas kept the hidden
+    // series in place, so the same channel's display position is 2 there. Given
+    // the canvas' positions, index 0 must resolve to position 2's dotted — if
+    // this function used `index` the test reads "solid" and the PDF disagrees
+    // with the screen.
+    expect(resolveSeriesStyle(undefined, 0, [2, 3])?.line).toBe("dotted");
+    expect(resolveSeriesStyle(undefined, 1, [2, 3])?.line).toBe("solid"); // 3 % 3
+    expect(resolveSeriesStyle(undefined, 1, [2, 3])?.markerShape).toBe("diamond"); // 3 of 8
   });
 
   it("gives three consecutive series three DISTINCT dashes and glyphs", () => {
-    setAutoSeriesStyles(true);
-    const three = [0, 1, 2].map((i) => resolveSeriesStyle(undefined, i)!);
+    const three = [0, 1, 2].map((i) => resolveSeriesStyle(undefined, i, ident(3))!);
     expect(new Set(three.map((s) => s.line)).size).toBe(3);
     expect(new Set(three.map((s) => s.markerShape)).size).toBe(3);
     // and the dashes are visually distinct too, not three names for one pattern
@@ -64,44 +106,35 @@ describe("resolveSeriesStyle with the cycle ON", () => {
   });
 
   it("wraps at each cycle's own length, independently", () => {
-    setAutoSeriesStyles(true);
-    expect(resolveSeriesStyle(undefined, 3)?.line).toBe("solid"); // 3 dashes
-    expect(resolveSeriesStyle(undefined, 3)?.markerShape).toBe("diamond"); // 8 glyphs
-    expect(resolveSeriesStyle(undefined, 8)?.markerShape).toBe(AUTO_MARKER_CYCLE[0]);
-    expect(resolveSeriesStyle(undefined, 9)?.line).toBe(AUTO_DASH_CYCLE[0]);
+    const c = ident(10);
+    expect(resolveSeriesStyle(undefined, 3, c)?.line).toBe("solid"); // 3 dashes
+    expect(resolveSeriesStyle(undefined, 3, c)?.markerShape).toBe("diamond"); // 8 glyphs
+    expect(resolveSeriesStyle(undefined, 8, c)?.markerShape).toBe(AUTO_MARKER_CYCLE[0]);
+    expect(resolveSeriesStyle(undefined, 9, c)?.line).toBe(AUTO_DASH_CYCLE[0]);
   });
 
   it("an explicit line/markerShape WINS over the cycle — including solid/circle", () => {
-    setAutoSeriesStyles(true);
+    const c = ident(3);
     // position 1 would otherwise be dashed/square
-    expect(resolveSeriesStyle({ line: "solid" }, 1)).toEqual({ line: "solid", markerShape: "square" });
-    expect(resolveSeriesStyle({ markerShape: "circle" }, 1)).toEqual({
+    expect(resolveSeriesStyle({ line: "solid" }, 1, c)).toEqual({ line: "solid", markerShape: "square" });
+    expect(resolveSeriesStyle({ markerShape: "circle" }, 1, c)).toEqual({
       line: "dashed",
       markerShape: "circle",
     });
-    const both: SeriesStyle = { line: "dotted", markerShape: "star" };
-    expect(resolveSeriesStyle(both, 1)).toBe(both); // fully explicit: untouched
+    expect(resolveSeriesStyle({ line: "dotted", markerShape: "star" }, 1, c)).toEqual({
+      line: "dotted",
+      markerShape: "star",
+    });
   });
 
   it("preserves every other field of the caller's style", () => {
-    setAutoSeriesStyles(true);
     const style: SeriesStyle = { color: "#123456", width: 2.5, marker: true, markerSize: 9, step: "mid" };
-    expect(resolveSeriesStyle(style, 1)).toEqual({ ...style, line: "dashed", markerShape: "square" });
+    expect(resolveSeriesStyle(style, 1, ident(2))).toEqual({ ...style, line: "dashed", markerShape: "square" });
   });
 
   it("never turns markers ON by itself — the glyph is inert until something does", () => {
-    setAutoSeriesStyles(true);
-    expect(resolveSeriesStyle(undefined, 1)?.marker).toBeUndefined();
-    expect(resolveSeriesStyle({ marker: false }, 1)?.marker).toBe(false);
-  });
-
-  it("clamps a nonsense index instead of producing an undefined style value", () => {
-    setAutoSeriesStyles(true);
-    for (const i of [-1, 1.6, Number.NaN]) {
-      const s = resolveSeriesStyle(undefined, i)!;
-      expect(AUTO_DASH_CYCLE).toContain(s.line);
-      expect(AUTO_MARKER_CYCLE).toContain(s.markerShape);
-    }
+    expect(resolveSeriesStyle(undefined, 1, ident(2))?.marker).toBeUndefined();
+    expect(resolveSeriesStyle({ marker: false }, 1, ident(2))?.marker).toBe(false);
   });
 });
 
@@ -110,7 +143,9 @@ describe("the cycles themselves", () => {
     expect(new Set(AUTO_DASH_CYCLE).size).toBe(AUTO_DASH_CYCLE.length);
     expect(new Set(AUTO_MARKER_CYCLE).size).toBe(AUTO_MARKER_CYCLE.length);
     expect([...AUTO_DASH_CYCLE].sort()).toEqual(Object.keys(DASH).sort());
-    expect(AUTO_MARKER_CYCLE.length).toBe(8);
+    // Against the real shape list, not the magic number 8: a ninth glyph must
+    // either join the cycle or make this fail, never silently stay unreachable.
+    expect([...AUTO_MARKER_CYCLE].sort()).toEqual(MARKER_SHAPES.map((m) => m.value).sort());
   });
 
   it("starts at the values that reproduce today's default look for series 1", () => {

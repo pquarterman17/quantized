@@ -14,6 +14,7 @@ import { facetPanelsOf, spatialPanelsOf } from "../../lib/composition";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
+import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -220,24 +221,17 @@ export default function PlotStage() {
     if (active?.pending) useApp.getState().ensureBookData(active.id);
   }, [active?.id, active?.pending]);
 
-  const {
-    resetView,
-    smartScale,
-    savePng,
-    copyData,
-    copyFigure,
-    copyFigureSvg,
-    snapshot,
-    onRegionSelect,
-    onRangeSelect,
-  } = usePlotStageActions(
-    plotRef,
-    displayPayload,
-    active,
-  );
+  // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
+  // this file is on the 400-line component ceiling. Same nine names.)
+  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect } =
+    usePlotStageActions(plotRef, displayPayload, active);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).
+  // P3.3 auto dash/marker cycle — the canvas half of its ONE opt-in pair (the
+  // export half is `figureSpec.buildStageFigureSpec`, same gate). See its doc.
+  const seriesCycle = useStageSeriesCycle(groupKey, plotted.length);
+
   useLiveSnapshotPublish({
     active,
     polarMode,
@@ -324,6 +318,7 @@ export default function PlotStage() {
         shapeDraw={shapeDraw}
         regionShades={regionShades}
         seriesStyles={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
@@ -378,6 +373,7 @@ export default function PlotStage() {
         insetMode={insetMode}
         showLegend={showLegend}
         styleList={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         hidden={hidden}
         colorByColumns={colorByColumns}

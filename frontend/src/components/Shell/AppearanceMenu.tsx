@@ -8,11 +8,6 @@ import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
-// Direct file import, not the barrel: the barrel's header forbids re-exporting
-// Checkbox because every OTHER consumer is a lazy panel. This menu is eager, so
-// it pays for those ~30 lines itself rather than making the barrel drag them in
-// for everyone.
-import { Checkbox } from "../primitives/Checkbox";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 
 const THEMES: Theme[] = ["dark", "light"];
@@ -104,14 +99,24 @@ export default function AppearanceMenu() {
               because it is the same cycle: the palette varies hue, this varies
               dash + marker glyph so series stay tellable apart in greyscale, in
               print, and with a colour-vision deficiency. Off by default
-              (opt-in); on, it reaches the canvas, the legend swatch AND the
-              publication export through one resolver (lib/seriesStyleCycle). */}
-          <Checkbox
-            checked={autoSeriesStyles}
-            onChange={(v) => setPref("autoSeriesStyles", v)}
-          >
+              (opt-in); on, the Stage canvas, its legend swatch and the figure
+              export it produces all resolve through one function
+              (lib/seriesStyleCycle) at one display position.
+
+              Spelled out rather than using `primitives/Checkbox`: this menu is
+              EAGER and that component is not in the eager bundle (its header
+              records that every other consumer is a lazy panel), so importing
+              it pulled ~590 B of component + clsx wiring into the startup chunk
+              for one static, never-disabled checkbox. Same `qz-check` markup
+              the primitive emits. */}
+          <label className="qz-check">
+            <input
+              type="checkbox"
+              checked={autoSeriesStyles}
+              onChange={(e) => setPref("autoSeriesStyles", e.target.checked)}
+            />
             Vary dash &amp; marker
-          </Checkbox>
+          </label>
           {/* Preferences (and the rest of the app shell it belongs to) isn't
               mounted in the calc-only shell (?view=calc, MAIN_PLAN #22) — the
               footer link would open a dialog nothing else in that shell
