@@ -486,10 +486,31 @@ as a CSS-only tree redesign.
   resurrect, but focus continuity ACROSS A RENDERER SWAP to an off-window row
   is NOT restored and is not demonstrated. That is what keeps this box open.
 
-- [ ] Generate plot/result thumbnails lazily, prioritize visible tiles, cache
+- [x] Generate plot/result thumbnails lazily, prioritize visible tiles, cache
   them by canonical item revision, and cancel obsolete off-screen work.
-- [ ] Render immediate placeholders and metadata so opening the Library does
-  not wait for thumbnails.
+  **Verified 2026-09-12 (PR #149, E-c1/E-c2 — this box was stale, not this
+  slice's own work):** visibility gating is a real `IntersectionObserver` —
+  `components/Library/useThumbnail.ts`'s `useBecameVisible` (lines 55-68)
+  holds a tile at `idle` until it first intersects the viewport, and
+  generation is skipped entirely for an off-screen tile (the effect at
+  lines 91-114 short-circuits on `!visible`). Cancellation is a real
+  `AbortController`: aborted on unmount and whenever the request's
+  `(key, fingerprint)` changes mid-flight (line 109; E-c3's virtualized grid
+  unmounting an off-window tile triggers this the same way). The cache is
+  keyed by canonical revision, not time: `lib/thumbnailCache.ts`'s
+  `entityRevision` (lines 74-81) WeakMap-tags each store object, and
+  `lib/thumbnailRequest.ts` joins the node's own tag with every
+  preview-relevant DEPENDENCY's tag (referenced figures for a page,
+  live source datasets) into one fingerprint, so editing a dependency
+  invalidates the cache too — a stronger cache key than "item revision"
+  alone asked for. Bounded 300-entry LRU (`thumbnailCache.ts:85-116`).
+- [x] Render immediate placeholders and metadata so opening the Library does
+  not wait for thumbnails. **Verified 2026-09-12:**
+  `components/Library/TilePreview.tsx`'s `ArtifactPreview` (lines 74-107)
+  renders the kind glyph immediately for every non-ready state (`idle`,
+  `loading` adds a skeleton, `error`/`unsupported` get their own caption)
+  and only swaps in the real `<img>` once `useThumbnail` reports `ready` —
+  opening the Library never blocks on thumbnail generation.
 - [x] Keep folder counts and selection operations indexed; avoid rescanning all
   workbook payloads on every render or keystroke. **Verification pass
   (2026-09-09), MEASURED before claiming.** FOLDER COUNTS: `LibraryTree.tsx`'s

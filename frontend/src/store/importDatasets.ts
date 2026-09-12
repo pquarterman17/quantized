@@ -35,6 +35,7 @@ import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
+import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
   isPrimaryBookMarker,
@@ -191,7 +192,37 @@ function addFromPayload(
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
-        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: book.metadata };
+        // The preview's rows are the book's FULL metadata's rows only when the
+        // backend says so; when it sampled them it also says WHICH rows it kept,
+        // and that map travels on the PREVIEW's own metadata (BUG-006 site 10).
+        // It belongs there, not on `pending`: the 30-odd readers of a row-indexed
+        // sidecar hold a `DataStruct` and nothing else, and the map describes
+        // exactly the rows it travels with — so `bookData.installBookData`
+        // replacing `.data` wholesale on arrival retires it at the same instant
+        // the preview it describes stops existing. Validated here (and again at
+        // every read) so a hand-edited `.dwk` cannot turn it into wrong labels.
+        //
+        // A preview the backend did NOT sample but that is still SHORTER than the
+        // book gets the IDENTITY map synthesized here. That shape is the padding
+        // trim (`preview.py::_trim_trailing_padding`; Book15 drops 19 of 180
+        // rows), a strict PREFIX whose row r IS source row r — so the backend
+        // correctly sends no map. But a reader holding only the DataStruct sees a
+        // sidecar longer than its rows and cannot tell that prefix from a sample,
+        // so it degraded to numbers. The identity map is the missing evidence,
+        // built from a row count this branch already has, for zero wire cost.
+        // `preview_sampled === false` is the load-bearing half: `undefined` (an
+        // older backend) stays unmapped, since the prefix is what it cannot
+        // vouch for.
+        const previewRows = book.preview.time.length;
+        const sourceRows =
+          asPreviewSourceRows(book.preview_rows, previewRows, book.rows) ??
+          (book.preview_sampled === false && previewRows < book.rows
+            ? Array.from({ length: previewRows }, (_, i) => i)
+            : null);
+        const bookMeta = sourceRows
+          ? { ...book.metadata, [PREVIEW_SOURCE_ROWS]: sourceRows }
+          : book.metadata;
+        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: bookMeta };
         get().addDataset({
           id,
           name,

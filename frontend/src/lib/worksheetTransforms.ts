@@ -1,4 +1,4 @@
-import { ROW_INDEXED_SIDECARS } from "./rowSidecars";
+import { PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 export type JoinMode = "inner" | "left" | "right" | "full";
@@ -46,12 +46,19 @@ function provenance(ds: DataStruct, operation: string): Record<string, unknown> 
   // `origin_text_columns`: a stale `text_columns` surviving here beat it
   // outright, since `lib/columnmeta.ts` reads
   // `text_columns ?? origin_text_columns`.
+  // `PREVIEW_SOURCE_ROWS` goes with them, and it is not decoration: `stack`
+  // writes its OWN row-space `origin_text_columns: {Source}` below, so a
+  // surviving preview->source map would sit over a sidecar it knows nothing
+  // about — and a later slice of that output (facet, exclude) would compose the
+  // map and index Source through it. Every transform here rebuilds or discards
+  // the rows the map described, so none of them can carry it.
   const rest: Record<string, unknown> = { ...ds.metadata };
   for (const k of [
     "time_is_datetime",
     "time_timezone",
     "x_column_name",
     "x_column_unit",
+    PREVIEW_SOURCE_ROWS,
     ...ROW_INDEXED_SIDECARS,
   ]) {
     delete rest[k];

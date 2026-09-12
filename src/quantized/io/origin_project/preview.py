@@ -99,12 +99,15 @@ def decimate_datastruct(ds: DataStruct, target_points: int = 200) -> DataStruct:
     return _decimate(ds, target_points)[0]
 
 
-def decimate_with_alignment(ds: DataStruct, target_points: int = 200) -> tuple[DataStruct, bool]:
-    """:func:`decimate_datastruct`, plus whether the result's rows are a SAMPLE.
+def decimate_with_alignment(
+    ds: DataStruct, target_points: int = 200
+) -> tuple[DataStruct, list[int] | None]:
+    """:func:`decimate_datastruct`, plus HOW the result's rows map to the source.
 
-    ``(preview, sampled)``. ``sampled`` is ``True`` only when the bucketed min/max
-    pick below actually ran -- the one case where output row ``r`` is NOT source
-    row ``r``.
+    ``(preview, source_rows)``. ``source_rows`` is ``None`` when output row ``r``
+    IS source row ``r`` -- an untouched or merely padding-trimmed preview, a
+    strict prefix. It is the list of kept source indices, in output order, only
+    when the bucketed min/max pick below actually ran.
 
     Exists because only this module can answer that, and a consumer holding just
     the two DataStructs cannot infer it: BOTH the padding trim and the sampling
@@ -115,15 +118,21 @@ def decimate_with_alignment(ds: DataStruct, target_points: int = 200) -> tuple[D
     :func:`_trim_trailing_padding` had removed ANY over-allocated row
     (corpus-attested: Book15 drops 19 of 180), even though a trimmed preview is a
     strict PREFIX whose sidecar cells line up exactly.
+
+    USED TO RETURN A BOOL (``sampled``), which was only ever "is there a mapping?"
+    -- so it now returns the mapping and lets the caller derive the bool. The
+    sampler already had these indices and threw them away, which is what made a
+    SAMPLED preview's row-indexed sidecars unreadable rather than merely
+    reordered: with the map, cell ``r`` is ``sidecar[source_rows[r]]``, exactly.
     """
     return _decimate(ds, target_points)
 
 
-def _decimate(ds: DataStruct, target_points: int) -> tuple[DataStruct, bool]:
+def _decimate(ds: DataStruct, target_points: int) -> tuple[DataStruct, list[int] | None]:
     ds = _trim_trailing_padding(ds)
     n = ds.n_points
     if n <= target_points or ds.n_channels == 0:
-        return ds, False
+        return ds, None
 
     finite_counts = np.count_nonzero(np.isfinite(ds.values), axis=0)
     densest = int(np.argmax(finite_counts))
@@ -155,5 +164,5 @@ def _decimate(ds: DataStruct, target_points: int) -> tuple[DataStruct, bool]:
             units=ds.units,
             metadata=ds.metadata,
         ),
-        True,
+        [int(i) for i in idx],
     )

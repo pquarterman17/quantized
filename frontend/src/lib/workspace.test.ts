@@ -747,6 +747,21 @@ describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", 
     expect(restored.pending?.previewSampled).toBe(true);
   });
 
+  // Group T: `preview_source_rows` rides in the PREVIEW's own metadata, so unlike
+  // `previewSampled` it needs no `parsePending` clause — but that is a claim about
+  // `serializeWorkspace` writing `d.data` whole and `sanitizeDataStruct` leaving
+  // unknown metadata keys alone, and both are exactly the kind of thing a future
+  // metadata allowlist would break silently. Reopen a saved project and a sampled
+  // book's category labels must still read A0/B1/C2, not 0/1/2.
+  it("round-trips a preview's preview_source_rows map (it lives in metadata, not pending)", () => {
+    const ds = makeDataset("a", "lazy book");
+    ds.data = { ...ds.data, metadata: { ...ds.data.metadata, preview_source_rows: [1, 2, 4] } };
+    ds.pending = { kind: "path", path: "/p.opj", bookId: "B2", rows: 500, cols: 2, previewSampled: true };
+    const [restored] = parse(ser([ds]));
+    expect(restored.data.metadata?.["preview_source_rows"]).toEqual([1, 2, 4]);
+    expect(restored.data.metadata?.["source"]).toBe("test"); // the rest of metadata too
+  });
+
   it("does NOT invent previewSampled for a legacy .dwk that never had it", () => {
     // Absent must stay absent, so `rowsAreSampled`'s `!== false` fails closed
     // rather than a default here quietly deciding the question. Also keeps a legacy

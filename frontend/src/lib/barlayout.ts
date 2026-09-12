@@ -10,6 +10,7 @@
 // clustered bar chart needs within one category slot.
 
 import { categoryLevels, columnOf, isCategoricalChannel, levelLabel } from "./categorical";
+import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 // ── Category levels + label resolution ──────────────────────────────────────
@@ -76,31 +77,59 @@ function textLabelsFor(
     // below passed and it returned ["A0","A0","B1"] for levels [0,1,2]. The
     // truth is A0/B1/C2. Confident wrong category names on a bar chart.
     //
-    // SUPPRESS, never reindex, and never DELETE — the shape site 9 chose
-    // (`components/Stage/worksheet/textColumns.ts`). Reindexing is impossible:
-    // the preview does not record which rows the sampler kept. Deleting the
-    // sidecar at the producer was tried and REVERTED in review: several
-    // legitimate readers do not row-index it at all (the Inspector's Origin
-    // provenance card, `lib/projectSearchSidecars.ts`'s name search) and a
-    // producer-side strip destroyed their data too — persistently, since
-    // `lib/workspaceSerialize.ts` then wrote the stripped metadata into the
-    // `.dwk`. Declining to INDEX costs nothing but this one label source.
+    // NEVER DELETE the sidecar. That was tried at the producer and REVERTED in
+    // review: several legitimate readers do not row-index it at all (the
+    // Inspector's Origin provenance card, `lib/projectSearchSidecars.ts`'s name
+    // search) and a producer-side strip destroyed their data too —
+    // persistently, since `lib/workspaceSerialize.ts` then wrote the stripped
+    // metadata into the `.dwk`. That ruling stands; this resolver touches only
+    // what it INDEXES, never what exists.
     //
-    // KNOWN COST, accepted: a merely padding-TRIMMED preview is a genuine
-    // PREFIX whose cells DO line up, and its sidecar is full-length too, so
-    // this guard also suppresses it and those labels fall back to formatted
-    // numbers until the book resolves. A length test cannot tell a prefix from
-    // a sample. That is a DEGRADATION (numbers instead of names, self-healing
-    // on resolve) where the alternative is WRONG names, so it is the right way
-    // to be wrong. Recovering it properly needs the backend to send which rows
-    // the decimator kept — booked in plans/BUGS_AND_ISSUES.md, not invented
-    // here.
-    if (rows.length !== by.length) continue;
+    // REINDEX when, and only when, the preview says how. The sampler knows which
+    // rows it kept and now sends them (`preview.py::decimate_with_alignment` ->
+    // the wire's `preview_rows` -> this DataStruct's own
+    // `metadata.preview_source_rows`, put there by `store/importDatasets.ts`), so
+    // `rows[map[r]]` is exactly the cell preview row r came from and the measured
+    // defect above resolves to A0/B1/C2 instead of degrading. The map is
+    // RE-VALIDATED here rather than trusted — it round-trips through the `.dwk`,
+    // and a map of the wrong length or naming a cell the sidecar lacks must
+    // degrade, not mislabel.
+    //
+    // WITHOUT a usable map a length mismatch is still SUPPRESSED — degrade to
+    // formatted numbers rather than risk the wrong names. What reaches that
+    // suppression is now only what genuinely cannot be reindexed: an older
+    // backend that sends no map, a `.dwk` whose map fails validation, or a row
+    // operation that could not compose its map (`lib/rowSidecars.ts`). A merely
+    // padding-TRIMMED preview is NOT in that set any more: its rows are a strict
+    // PREFIX, the backend omits the map because they correspond, and
+    // `store/importDatasets.ts` synthesizes the identity map for exactly that
+    // case — so a trimmed book's labels resolve here instead of waiting for the
+    // fetch. No length test could have told that prefix from a sample; the
+    // identity map is what removes the need to.
+    //
+    // The validator is called WITHOUT a source bound on purpose, and this is the
+    // one place the two call sites differ (the producer passes `book.rows`). The
+    // only bound available here is `rows.length`, ONE text column's cell count,
+    // and `io/origin_project/opj.py` pads only NUMERIC columns to the block's
+    // longest — so an Origin text column is legitimately allowed to be shorter
+    // than the book. Passing it would make every entry past that column's end
+    // fatal to the whole map, disabling the feature for every other column of a
+    // shape the unsampled path handles fine. Unbounded, such an entry reads as
+    // `undefined` -> `""` -> the blank the loop below already skips, so the cost
+    // is confined to the rows that column does not cover: the levels it still
+    // covers keep their names, and a level left uncovered falls through to the
+    // numbers via the `levels.every` check. An entry can never read ANOTHER
+    // column's cell — it indexes this column only.
+    const map =
+      rows.length === by.length
+        ? null
+        : asPreviewSourceRows(meta[PREVIEW_SOURCE_ROWS], by.length);
+    if (map === null && rows.length !== by.length) continue;
     const perLevel = new Map<number, string>();
     let ok = true;
     for (let r = 0; r < by.length && ok; r++) {
       if (!Number.isFinite(by[r])) continue;
-      const text = String(rows[r] ?? "").trim();
+      const text = String((map === null ? rows[r] : rows[map[r]]) ?? "").trim();
       if (!text) continue; // a blank cell is uninformative, not disqualifying
       const seen = perLevel.get(by[r]);
       if (seen === undefined) perLevel.set(by[r], text);

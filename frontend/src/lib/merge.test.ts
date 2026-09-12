@@ -390,3 +390,42 @@ describe("merge carries the level order through the code remap", () => {
     expect("level_order" in merged).toBe(false);
   });
 });
+
+// Review finding 2, last part: the rebuild concatenates sidecars in the OUTPUT's
+// row space, so a preview->source map inherited from input 0 would describe rows
+// that no longer exist. `withoutRowSidecars` strips it.
+describe("a combined dataset carries no preview->source row map", () => {
+  const lazy: DataStruct = {
+    time: [1, 2],
+    values: [[10], [20]],
+    labels: ["M"],
+    units: ["emu"],
+    // A lazily-loaded book's preview: the sidecar is the WHOLE book's, and the
+    // map says which of its rows these two are.
+    metadata: {
+      source: "lazy.opj",
+      text_columns: { Group: ["A", "B", "C", "D"] },
+      preview_source_rows: [0, 2],
+    },
+  };
+
+  it("drops the map while still concatenating the sidecars", () => {
+    const m = mergeDatasets([lazy, b], ["lazy.opj", "b.dat"]);
+    expect("preview_source_rows" in m.metadata).toBe(false);
+    // The rebuild itself is unchanged, and it is what makes the strip matter:
+    // input 0's SPAN is its sidecar's 4 cells, not its 2 numeric rows
+    // (`sidecarRowCount`), so the combined column is those four cells followed by
+    // input 1's two blanks — and the inherited map, which described 2 preview
+    // rows, would have been a map for a different grid entirely.
+    expect((m.metadata["text_columns"] as Record<string, unknown[]>).Group).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "",
+      "",
+    ]);
+    // Non-row-indexed metadata still comes from input 0.
+    expect(m.metadata["source"]).toBe("lazy.opj");
+  });
+});

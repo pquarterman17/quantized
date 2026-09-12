@@ -180,8 +180,14 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 1 — High Impact (fails any JMP-shaped workflow)
 
-1. **[~] J1 — String categorical levels end-to-end** (with P1.4; design
-   the contract once). Acceptance beyond P1.4's own boxes:
+1. ~~**J1 — String categorical levels end-to-end**~~ **SHIPPED — struck
+   2026-09-12; the evidence stays inline because other plans cite it by
+   line, and the Completed log carries the closing entry.** (With P1.4;
+   design the contract once.) **Reconciled 2026-09-12:** every sub-box below is
+   now `[x]` — the last two open items (categorical wiring into Facet/Data
+   Filter/Tabulate/Stat Stage/matplotlib export, and user-settable level
+   ordering) closed this pass; see their own entries for evidence. Acceptance
+   beyond P1.4's own boxes:
    - [x] **Contract designed once (2026-08-17, P1.4 Slice 1 + same-day
      review round, `claude/p14-categorical-contract`).** A text column
      imports as a first-class categorical channel via BOTH generic import
@@ -232,7 +238,7 @@ replacements and its priority case is now stronger, not different.
      tests (~line 4249, including the non-active-dataset-by-explicit-id
      case). The MODELING-TYPE half noted below was already landed; this
      closes the worksheet-UI half (P1.6 territory referenced here).
-   - [~] Categorical columns drive Graph Builder X/Group/Facet, Stat Stage
+   - [x] Categorical columns drive Graph Builder X/Group/Facet, Stat Stage
      group/facet, Data Filter level-sets, Tabulate wells, legend labels,
      and `facet-by-column` — with their **string** labels on axes/legends
      everywhere including matplotlib export. DONE this slice: the box/bar
@@ -246,15 +252,45 @@ replacements and its priority case is now stronger, not different.
      is a weaker guarantee than P1-1's shared-fixture wire parity above (it
      catches the two implementations drifting from EACH OTHER, not from
      the real wire shape — exactly the class of bug the shared fixture
-     exists to catch that this one could not have). NOT done: Facet/Data
-     Filter/Tabulate/`facet-by-column`/matplotlib export wiring (P1.5/P1.6
-     territory — they now build against this contract instead of
-     inventing their own).
-   - [ ] Level *ordering* is user-settable (ordinal value order) and
-     survives `.dwk` round-trip and export. The representation CARRIES an
-     order (the level tuple's own order, first-appearance from import) and
-     it survives `.dwk` round-trip (proven, `workspace.test.ts`); making it
-     USER-settable is J2/recode territory, not built yet.
+     exists to catch that this one could not have).
+     **Reconciled 2026-09-12 — the "NOT done" list below was stale, each
+     item checked individually rather than trusted as a set:** Facet
+     (`facetKey` is a durable bindings-owned field reaching every
+     export/page/hitmap path — F4.4 campaign, already `[x]` in PRIMARY's
+     P1.5), Data Filter (`useDataFilter.ts` already ran every column
+     through `channelModelingType`→`isCategoricalChannel`, override
+     checked first — already `[x]` in P1.5), Tabulate (`useTabulate.ts`,
+     same chokepoint, override wins sabotage-verified — already `[x]` in
+     P1.5), and Stat Stage (`useStatStage.ts`'s group/facet `<Select>`
+     OPTION LISTS themselves gated on `lib/statstage.categoricalChannels`
+     — already `[x]` in P1.5, dated 2026-08-18) were each independently
+     confirmed shipped there — this box simply hadn't been updated to
+     match. `facet-by-column` and matplotlib export wiring were verified
+     directly here: `lib/facet.ts:55`'s `facetSlices` resolves panel
+     labels through `resolveCategoryLabels(data, facetCol, levels)`
+     (imported from `lib/barlayout.ts`, the same accessor bar charts use),
+     and `routes/export_figures.py`'s `FigureFacet.label: str` (line 57)
+     takes that resolved string verbatim from the frontend — `_facet_panels`
+     (line 292) never re-derives it server-side. All five wirings are
+     shipped; nothing here remains open.
+   - [x] Level *ordering* is user-settable (ordinal value order) and
+     survives `.dwk` round-trip and export. **Verified 2026-09-12, shipped
+     2026-09-10 commit `09f88d6e` (#345), "the level reorder UI (Group
+     O-2b)":** `components/workshops/levelorder/LevelOrderPanel.tsx` +
+     `LevelOrderTable.tsx` give a real move-up/move-down/"Sort by
+     label"/"Reset to code order" UI, backed by `store/levelOrder.ts`
+     (one `recordHistory` per reorder, so it undoes in one step) and
+     reachable from the worksheet column context menu ("Reorder levels…",
+     `WorksheetPane.tsx:280`) under the same
+     `menu.target >= 0 && isCategoricalChannel` guard `Recode…` uses.
+     Writes `DataStruct.level_order` (`lib/categorical.ts`), which
+     round-trips through `.dwk` (`workspace.test.ts:2430-2457`: "round-trips
+     a well-formed level_order unchanged", "a dataset with no level_order
+     round-trips with the key simply absent", "repairs a hand-edited
+     level_order instead of loading junk into the store") and is consumed
+     on the backend by `calc/plotting.py:185` (`order = (ds.level_order or
+     {}).get(channel)`), so an order set here reaches matplotlib export
+     too. Completes J1.
    - [x] Existing numeric-coded workflows migrate unchanged — additive by
      construction, proven by the full pre-existing suite passing
      unmodified plus a dedicated byte-identical-when-absent test.
@@ -358,6 +394,17 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**J1 — String categorical levels end-to-end**~~ (2026-09-12, plans
+  reconciliation): the last two open sub-boxes — categorical wiring into
+  Facet/Data Filter/Tabulate/Stat Stage/matplotlib export, and user-settable
+  level ordering — were re-verified against shipped code and ticked in the
+  same pass (`6e4627ca`), which left every J1 sub-box `[x]` in Tier 1
+  without the heading struck: exactly the drift
+  `test_plan_items_claiming_completion_are_moved_to_completed` guards. The
+  Tier 1 entry is now struck in place (its ~100-line evidence body is cited
+  by line from PRIMARY_SOFTWARE_AUDIT_PLAN.md and stays where it is); this
+  entry is the Completed-log record.
 
 - **2026-09-09 — Claude (plans reconciliation):** flipped J1's "Worksheet-
   visible, editable type C/O/N" box (Tier 1, line ~220) from `[ ]` to `[x]` —

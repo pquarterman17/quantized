@@ -141,7 +141,7 @@ def _book_preview_payload(ds: DataStruct) -> dict[str, Any]:
     sparkline renders without the full column data) — never the full
     ``.time``/``.values``. ``lazy: true`` is the frontend's discriminant
     between this shape and a full/primary entry."""
-    preview, sampled = decimate_with_alignment(ds, target_points=_PREVIEW_POINTS)
+    preview, source_rows = decimate_with_alignment(ds, target_points=_PREVIEW_POINTS)
     return {
         "lazy": True,
         "id": _origin_book_id(ds),
@@ -162,7 +162,20 @@ def _book_preview_payload(ds: DataStruct) -> dict[str, Any]:
         # FULL-length row-indexed metadata sidecars above can be indexed against
         # these numbers (BUG-006 site 9); it cannot infer it, because the trim and
         # the sampling both shorten the data and only one breaks correspondence.
-        "preview_sampled": sampled,
+        "preview_sampled": source_rows is not None,
+        # ...and WHICH source row each preview row is, when they differ, so a
+        # sampled preview's row-indexed sidecars can be read exactly
+        # (`sidecar[preview_rows[r]]`) instead of refused outright. Without it the
+        # frontend can only decline: a large book's category labels showed
+        # formatted numbers until the full book arrived.
+        #
+        # OMITTED, not sent as an identity map, when the rows already correspond.
+        # That keeps every unsampled payload byte-identical to before this field
+        # existed — which matters, since this whole entry exists to keep a
+        # project's book inventory light. At most `_PREVIEW_POINTS` integers when
+        # it IS sent, against a preview that already carries that many time values
+        # plus that many rows of every channel.
+        **({} if source_rows is None else {"preview_rows": source_rows}),
     }
 
 

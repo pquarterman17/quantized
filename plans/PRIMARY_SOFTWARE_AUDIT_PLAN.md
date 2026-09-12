@@ -944,10 +944,18 @@ output, not a caught error).
   Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
   `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
   Wizard UI) territory — this contract is what they now build against.
-- [ ] Multiple ordered factors and missing-value policy — level ORDER is
+- [x] Multiple ordered factors and missing-value policy — level ORDER is
   represented (the tuple's own order; NaN = missing is the representation's
-  missing-value policy) but user-settable REORDERING (J1's ask) is not
-  built yet; that is J2/recode territory.
+  missing-value policy). **Verified 2026-09-12, shipped 2026-09-10 commit
+  `09f88d6e` (#345), "the level reorder UI (Group O-2b)":** user-settable
+  REORDERING (J1's ask, this box's original text called it "not built yet")
+  is now a real UI — `components/workshops/levelorder/LevelOrderPanel.tsx` +
+  `LevelOrderTable.tsx`, reachable from the worksheet column context menu
+  ("Reorder levels…", `WorksheetPane.tsx:280`) — that writes
+  `DataStruct.level_order` (`lib/categorical.ts`). The order round-trips
+  through `.dwk` (`workspace.test.ts:2430-2457`) and is consumed by
+  `calc/plotting.py:185`, so it reaches matplotlib export too. See
+  `JMP_GAP_PLAN.md` J1's own level-ordering box for the full evidence.
 - [~] Preserve factors through derived data, filter/join, reopen, recipes,
   and export — reopen (`.dwk` round-trip) is proven, now via the SHARED wire
   fixture (`lib/workspace.test.ts` + `tests/test_wire_fixtures.py`), not
@@ -1198,12 +1206,27 @@ output, not a caught error).
   (`lib/statstage.connectMeansBreaks`) for the same reason the channel fallback
   refuses it: a line from `lot = 0 / wafer = 1` to `lot = 1 / wafer = 0` asserts
   a trend between two lots that share no wafer.
-  **Known residual, not fixed here:** "facet by" does not exclude the column
-  picked as "then by" (nor, as before this change, the one picked as "group
-  by"). Facet by `site` + then by `site` gives every box in a panel the same
-  constant nested half. The data stays correct and the existing facet/group
-  overlap has the same shape, so widening the picker's exclusion rule is booked
-  rather than bolted on here.
+  **Residual fixed (follow-up to this change):** `facetByOptions` now omits
+  BOTH the current `groupCol` and the current `group2Col`, the same shape
+  `thenByOptions` already used to omit `groupCol`. Facet by `site` + then by
+  `site` gave every box in a panel the same constant nested half; faceting by
+  the "group by" column was equally degenerate (one level per panel -> one
+  box). Both are picker-level exclusions in `StatStage.tsx` — the data was
+  always correct, only the plot was noise, so this is a UI-layer fix with no
+  calc change. `lib/statstage.ts`'s `maskStaleCategoricalPicks` deliberately
+  stays untouched: it does not mask `facetCol` at all (see its comment) — the
+  Graph Builder seeds `facetCol` from `spec.zones.facet?.channel` with no
+  categorical gate, and faceting on a non-categorical column is a supported
+  configuration; masking `facetCol` was already tried once and reverted as a
+  regression. Picker-level exclusion is the right layer: it stops the user
+  from ASKING for the degenerate case through this picker, while a value that
+  arrives another way (a Graph Builder seed, or "group by" moving onto the
+  current facet afterwards) is left alone because the data stays correct
+  either way. Covered by `StatStage.test.tsx` (facet-by omits `groupCol`;
+  facet-by omits `group2Col`; both sabotage-verified — removing either half of
+  the filter turned the corresponding new test red) and
+  `useStatStage.test.ts` (a Graph Builder seed with `facetCol` equal to
+  `groupCol` still applies `facetCol` unmasked — also sabotage-verified).
   **No backend change, as predicted and now asserted:**
   `routes/export_statplots.py` takes pre-aggregated `data[][]` + `labels[]`, so
   it is already group-count-agnostic and composite labels flow through as
@@ -1577,6 +1600,13 @@ only mounts while `importWizardOpen`, AppOverlays.tsx).
   figure labels) but do not yet RENDER it as a visible cell distinct from
   the editable `name` input — that visual half remains open, is a frontend
   (not backend/import-contract) change, and is unbooked.
+  **Closed 2026-09-12, shipped 2026-09-07 commit `3b1ad5a1` (#314), "show
+  metadata and effective legend labels":** `PreviewTable.tsx`'s header cell
+  (lines 96-104) now renders `Legend label: {c.effective_name}` whenever
+  it differs from the editable `c.name`, styled distinctly (`--accent`) and
+  titled to explain what it means; `PreviewTable.test.tsx` (lines 71-80)
+  pins it showing for a changed column and staying absent for an unchanged
+  one.
 - [x] No guess can silently attach error to the wrong signal — pinned
   red-first (`suggestErrorBindings` leaves a genuinely ambiguous column
   with NO suggestion at all; `confirmedErrorBindings` drops any row the
@@ -2764,10 +2794,23 @@ covers a much smaller subset and guards focus on Analyze.
 - [x] Edit, View, Analyze, and Help commands use the shared description
   contract; the separate 17-item Analyze help catalog was deleted
   (2026-07-25).
-- [ ] Extend the same source to Inspector cards, context actions, and
-  workshops, then add contextual `?` links. Still open: the contextual `?`
-  links on workshops/context actions themselves — see the (separate,
-  narrower) fix below, which only closed the *search-coverage* half.
+- [~] Extend the same source to Inspector cards, context actions, and
+  workshops, then add contextual `?` links. **Narrowed 2026-09-12 — the
+  WORKSHOPS half is shipped, checked separately from context actions
+  rather than assumed together:** `lib/workshopHelp.ts`'s `WORKSHOP_HELP`
+  map (PR #266, commit `8a44f9fe`) keys every workshop `ToolWindow` id to
+  a Help search query — `ToolWindow` looks its own id up so no per-panel
+  edit is needed, and `workshopHelp.test.ts` fails if an entry stops
+  matching a real command, the same discipline the Inspector-card `?`
+  actions below already use. Inspector cards were already `[x]` in this
+  same box (2026-07-25). Still open, verified 2026-09-12 by reading both
+  files rather than trusting a grep alone: contextual `?` links on
+  right-click CONTEXT ACTIONS — neither
+  `components/overlays/ContextMenu.tsx` (the file's real path; not
+  `components/ContextMenu.tsx`) nor `lib/contextActions.ts` carries a help
+  affordance of any kind. That is what keeps this box `[~]` rather than
+  `[x]`; see the (separate, narrower) fix below, which only closed the
+  *search-coverage* half for registry commands, not this UI gap.
 - [x] Channels, Error columns, Corrections, Series style, and Axes Inspector
   cards have compact `?` actions that open Help with a relevant search already
   applied (2026-07-25).
@@ -4146,6 +4189,9 @@ work (its BACKLOG row).
   above updated to record it SHIPPED rather than re-adding the field. The
   frontend's `PreviewTable` doesn't yet RENDER `effective_name` as a
   visible cell — flagged as a separate, unbooked, frontend-only follow-up.
+  **Closed 2026-09-12** — see the P1.6 item's own box above (~line 1578)
+  for the evidence: shipped 2026-09-07, commit `3b1ad5a1` (#314),
+  `PreviewTable.tsx:96-104` + `PreviewTable.test.tsx:71-80`.
 - Part C: `io/import_categorical_guards.py` (new, 118 lines) adds two
   guards around `delimited._encode_categorical` WITHOUT touching its
   lossless round trip or level order: a level-count cap

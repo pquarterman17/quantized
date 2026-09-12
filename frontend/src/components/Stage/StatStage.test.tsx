@@ -120,11 +120,70 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
   });
 
   it("the facet-by picker's options are the categorical columns, plus (none)", () => {
-    stateRef.current = makeState({ mode: "box", facetCol: 2 });
+    // groupCol: null so neither categorical column is omitted here — the
+    // omission-of-groupCol/group2Col behavior gets its own tests below.
+    stateRef.current = makeState({ mode: "box", groupCol: null, facetCol: 2 });
     render(<StatStage />);
     const picker = screen.getByRole("combobox", { name: "facet by" }) as HTMLSelectElement;
     expect(Array.from(picker.options).map((o) => o.textContent)).toEqual(["(none)", "grp", "fac"]);
     expect(picker.value).toBe("2");
+  });
+
+  it('the "facet by" picker omits the column already chosen as "group by"', () => {
+    // Faceting by the same column used to group puts exactly one level in
+    // every panel -- one box per panel, which is the pre-existing degenerate
+    // case this residual also covers.
+    stateRef.current = makeState({ mode: "box", groupCol: 0, facetCol: null });
+    const { rerender } = render(<StatStage />);
+    const picker = () => screen.getByRole("combobox", { name: "facet by" }) as HTMLSelectElement;
+    expect(Array.from(picker().options).map((o) => o.textContent)).toEqual(["(none)", "fac"]);
+
+    // ...and it follows "group by", rather than omitting a fixed column.
+    stateRef.current = makeState({ mode: "box", groupCol: 2, facetCol: null });
+    rerender(<StatStage />);
+    expect(Array.from(picker().options).map((o) => o.textContent)).toEqual(["(none)", "grp"]);
+  });
+
+  it('the "facet by" picker omits the column already chosen as "then by"', () => {
+    // Faceting by the same column used as the nested second factor makes
+    // every box in a panel share the same constant nested half.
+    stateRef.current = makeState({ mode: "box", groupCol: 0, group2Col: 2, facetCol: null });
+    render(<StatStage />);
+    const picker = screen.getByRole("combobox", { name: "facet by" }) as HTMLSelectElement;
+    // groupCol (0/"grp") and group2Col (2/"fac") are both omitted, leaving
+    // only "(none)".
+    expect(Array.from(picker.options).map((o) => o.textContent)).toEqual(["(none)"]);
+  });
+
+  it("the facet-by picker always shows the LIVE facet column, even when group/then-by make it degenerate", async () => {
+    // Review finding 1, in the three states it was measured in. The filter used
+    // to drop the very column the picker was displaying, so the `<select>` read
+    // "(none)" while the stage drew one panel per facet level — and because
+    // "(none)" was then already `selectedIndex` 0, choosing it fired no `change`
+    // event, `setFacetCol(null)` was never called, and the facet could not be
+    // cleared from its own control. Asserted at the DOM layer, which is the
+    // layer the defect lived at: the state was right the whole time.
+    const cases: { picks: Partial<StatStageState>; options: string[]; value: string }[] = [
+      { picks: { groupCol: 0, facetCol: 0 }, options: ["(none)", "grp", "fac"], value: "0" },
+      { picks: { groupCol: 2, facetCol: 2 }, options: ["(none)", "grp", "fac"], value: "2" },
+      { picks: { groupCol: 0, group2Col: 2, facetCol: 2 }, options: ["(none)", "fac"], value: "2" },
+    ];
+    for (const { picks, options, value } of cases) {
+      const where = JSON.stringify(picks);
+      const setFacetCol = vi.fn();
+      stateRef.current = makeState({ mode: "box", setFacetCol, ...picks });
+      const { unmount } = render(<StatStage />);
+      const picker = screen.getByRole("combobox", { name: "facet by" }) as HTMLSelectElement;
+      expect(Array.from(picker.options).map((o) => o.textContent), where).toEqual(options);
+      expect(picker.value, where).toBe(value);
+      expect(picker.value, where).not.toBe("none");
+      expect(picker.selectedIndex, where).toBeGreaterThan(0);
+      // The reachability half: clearing needs a real `change`, which the DOM
+      // only fires because the selection is moving off the facet column.
+      await userEvent.selectOptions(picker, "none");
+      expect(setFacetCol, where).toHaveBeenCalledWith(null);
+      unmount();
+    }
   });
 
   it('the "then by" picker omits the column already chosen as "group by" (Group R)', () => {

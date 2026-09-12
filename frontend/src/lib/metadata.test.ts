@@ -32,6 +32,14 @@ describe("metadataRows", () => {
     expect(rows.map(([k]) => k)).toEqual(["sample"]);
   });
 
+  it("hides the preview row map — wiring, and up to 200 integers of it", () => {
+    // Group T put `preview_source_rows` on a still-loading book's preview
+    // DataStruct. It is plumbing for the label resolver, not an instrument header
+    // field, and `formatMetaValue` would JSON it into one very long row.
+    const rows = metadataRows({ preview_source_rows: [1, 2, 4, 5], sample: "Si" });
+    expect(rows.map(([k]) => k)).toEqual(["sample"]);
+  });
+
   it("hides the Origin provenance keys (they have a dedicated card)", () => {
     const rows = metadataRows({
       origin_results_log: "log text",

@@ -232,3 +232,36 @@ describe("worksheet transforms", () => {
     expect(out.metadata.origin_text_columns).toEqual({ Source: ["A", "B", "A", "B"] });
   });
 });
+
+// Review finding 2, the third carrier: every transform here rebuilds or discards
+// the rows a lazily-loaded preview's map described, and `stack` writes its OWN
+// row-space `origin_text_columns`. A surviving map would sit over that fresh
+// sidecar, and a later facet/exclude of the output would compose the map and
+// index it — so `provenance` drops the map along with the sidecars.
+describe("a transform drops an inherited preview->source row map", () => {
+  const preview: DataStruct = {
+    time: [10, 20],
+    values: [[1, 2], [3, 4]],
+    labels: ["A", "B"],
+    units: ["uA", "uB"],
+    metadata: {
+      sample: "S1",
+      text_columns: { Group: ["g0", "g1", "g2", "g3"] },
+      preview_source_rows: [0, 2],
+    },
+  };
+
+  it("stack drops it, keeping its own fresh Source column", () => {
+    const out = stackWorksheet(preview, [0, 1]);
+    expect("preview_source_rows" in out.metadata).toBe(false);
+    expect("text_columns" in out.metadata).toBe(false);
+    expect(out.metadata["origin_text_columns"]).toEqual({ Source: ["A", "B", "A", "B"] });
+    expect(out.metadata["sample"]).toBe("S1");
+  });
+
+  it("transpose and unstack drop it too", () => {
+    expect("preview_source_rows" in transposeWorksheet(preview).metadata).toBe(false);
+    const un = unstackWorksheet(preview, 0, 1, 1, "mean");
+    expect("preview_source_rows" in un.metadata).toBe(false);
+  });
+});

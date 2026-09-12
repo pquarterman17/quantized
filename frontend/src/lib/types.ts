@@ -132,6 +132,16 @@ export interface LazyBookEntry {
    *  shape and never appears in a `.dwk`; the persisted field is
    *  `BookSource.previewSampled` below. */
   preview_sampled?: boolean;
+  /** WHICH source row each preview row is, when they differ — so a sampled
+   *  preview's full-length row-indexed sidecars can be READ (`sidecar[
+   *  preview_rows[r]]`) instead of only refused (BUG-006 site 10). OMITTED, not
+   *  sent as an identity map, whenever `preview_sampled` is `false`: the rows
+   *  already correspond, and this inventory entry exists to stay light.
+   *  `store/importDatasets.ts` validates it and moves it onto the preview
+   *  DataStruct's own metadata as `preview_source_rows` (see
+   *  `lib/rowSidecars.PREVIEW_SOURCE_ROWS`), which is where it persists — this
+   *  wire field itself never appears in a `.dwk`. */
+  preview_rows?: number[];
 }
 
 /** One `books[]` entry: a full `DataStruct` (under the `full_books=true`

@@ -310,31 +310,67 @@ class TestDecimateWithAlignment:
             metadata={},
         )
 
-    def test_a_small_book_is_NOT_sampled(self) -> None:
-        preview, sampled = decimate_with_alignment(self._book(50), target_points=200)
-        assert sampled is False
+    def test_a_small_book_has_NO_row_map(self) -> None:
+        preview, source_rows = decimate_with_alignment(self._book(50), target_points=200)
+        assert source_rows is None
         assert preview.n_points == 50
 
-    def test_a_book_with_no_channels_is_NOT_sampled(self) -> None:
-        preview, sampled = decimate_with_alignment(self._book(500, channels=0), target_points=200)
-        assert sampled is False
+    def test_a_book_with_no_channels_has_NO_row_map(self) -> None:
+        preview, source_rows = decimate_with_alignment(
+            self._book(500, channels=0), target_points=200
+        )
+        assert source_rows is None
 
-    def test_a_large_book_IS_sampled(self) -> None:
-        preview, sampled = decimate_with_alignment(self._book(1000), target_points=200)
-        assert sampled is True
+    def test_a_large_book_IS_sampled_and_reports_WHICH_rows_it_kept(self) -> None:
+        """The map has to be usable, not merely present: every entry must name the
+        source row whose numbers the preview actually carries. The load-bearing
+        assertion reads the source back THROUGH the map, which is what fails if an
+        index is off by one or was taken before the padding trim — but it is an
+        identity for ANY order, so it cannot see unsortedness at all. The separate
+        `sorted(source_rows)` and `set(...)` assertions below are what pin the
+        output order and the distinctness downstream readers rely on
+        (`lib/rowSidecars.asPreviewSourceRows` rejects a repeated entry)."""
+        book = self._book(1000)
+        preview, source_rows = decimate_with_alignment(book, target_points=200)
+        assert source_rows is not None
         assert preview.n_points < 1000
+        assert len(source_rows) == preview.n_points
+        assert source_rows == sorted(source_rows)  # output order, ascending
+        assert len(set(source_rows)) == len(source_rows)  # no row twice
+        assert all(0 <= i < book.n_points for i in source_rows)
+        # The load-bearing assertion: the preview IS those source rows.
+        assert preview.time.tolist() == [book.time[i] for i in source_rows]
+        for c in range(book.n_channels):
+            assert preview.values[:, c].tolist() == [book.values[i, c] for i in source_rows]
 
-    def test_a_PADDING_TRIMMED_book_is_NOT_sampled_though_it_SHRANK(self) -> None:
-        """The distinction the whole flag exists for, and the one a row-count
+    def test_a_PADDING_TRIMMED_book_has_NO_row_map_though_it_SHRANK(self) -> None:
+        """The distinction the whole field exists for, and the one a row-count
         comparison cannot make: the trim shortens the preview while leaving it a
-        strict PREFIX, so its sidecar cells still line up."""
-        preview, sampled = decimate_with_alignment(
+        strict PREFIX, so its sidecar cells still line up and no map is needed."""
+        preview, source_rows = decimate_with_alignment(
             self._book(161, trailing_zero_rows=19), target_points=200
         )
-        assert sampled is False
+        assert source_rows is None
         assert preview.n_points == 161  # it DID shrink from 180 ...
         # ... and is still a prefix, which is why the cells remain aligned.
         assert preview.time.tolist() == list(range(161))
+
+    def test_the_map_is_taken_AFTER_the_padding_trim(self) -> None:
+        """A book big enough to sample AND padded: the indices must address the
+        trimmed rows, not the original allocation. Taking them before the trim
+        would shift every label by however many rows the trim removed — silently,
+        since both lengths still look plausible."""
+        # 1000 real rows PLUS 40 padding rows — `_book`'s second argument is
+        # additional, not a share of the first. (I asserted `< 960` first, off by
+        # exactly that misreading; the code was right.)
+        book = self._book(1000, trailing_zero_rows=40)
+        assert book.n_points == 1040
+        preview, source_rows = decimate_with_alignment(book, target_points=200)
+        assert source_rows is not None
+        # Every index must address a REAL row: the padding occupies 1000..1039,
+        # and `time[i] == i` holds only below that.
+        assert max(source_rows) < 1000
+        assert preview.time.tolist() == source_rows
 
     def test_decimate_datastruct_still_returns_just_the_preview(self) -> None:
         from quantized.io.origin_project.preview import decimate_datastruct
@@ -381,3 +417,27 @@ class TestPreviewSampledReachesTheWire:
         assert payload["preview_sampled"] is False
         assert payload["rows"] == 180  # pre-trim, so rows > len(preview.time) ...
         assert len(payload["preview"]["time"]) == 161  # ... yet perfectly aligned
+
+    def test_a_SAMPLED_book_also_sends_WHICH_rows_it_kept(self) -> None:
+        """Group T. Without this the frontend can only refuse a sampled preview's
+        row-indexed sidecars, so a large book's category labels read as formatted
+        numbers until the whole book arrives."""
+        payload = _book_preview_payload(self._ds(1000))
+        rows = payload["preview_rows"]
+        assert isinstance(rows, list)
+        assert len(rows) == len(payload["preview"]["time"])
+        # Usable, not merely present: the preview's own numbers must be the source
+        # rows these indices name. `time` is 0..999, so time[i] == i.
+        assert payload["preview"]["time"] == [float(i) for i in rows]
+        assert rows == sorted(set(rows))
+
+    def test_an_UNSAMPLED_payload_OMITS_the_row_map_entirely(self) -> None:
+        """Not an identity map, not `null` — absent. This entry exists to keep a
+        project's book inventory light, so an unsampled payload has to stay
+        byte-identical to what it was before the field existed; a `preview_rows`
+        that is always present would add `_PREVIEW_POINTS` integers to every book
+        in a project to say nothing at all."""
+        for ds in (self._ds(20), self._ds(161, trailing_zero_rows=19)):
+            payload = _book_preview_payload(ds)
+            assert payload["preview_sampled"] is False
+            assert "preview_rows" not in payload
