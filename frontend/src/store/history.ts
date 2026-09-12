@@ -22,6 +22,13 @@
 // role/type changes. Preferences and transient tool/selection state remain
 // excluded.
 //
+// Also the DATA FILTER, set and cleared (Group S). This list omitted it for as
+// long as the filter existed, which is how the omission in `store/rowState.ts`
+// went unnoticed — the doc that should have caught it had the same gap. The
+// filter is the one participant that records through
+// `recordHistoryCoalesced` rather than `recordHistory`, because its controls
+// fire on every `input` event; see that action for the whole argument.
+//
 // Snapshot shape: the persistent fields participating actions actually
 // mutate — `datasets`, `activeId`, `selectedIds`, `worksheetId`,
 // `originFigures`, `reports`, `figureDocs`, folder/spec collections,
@@ -155,6 +162,17 @@ export interface HistorySlice {
    *  just the kind: filtering dataset A and then dataset B are two edits, and a
    *  shared key would collapse them into one. */
   recordHistoryCoalesced: (label: string, key: string) => void;
+  /** Close any open coalescing run, so the NEXT `recordHistoryCoalesced` call
+   *  starts a fresh undo entry instead of folding into the last one.
+   *
+   *  Review round. Coalescing on its own has no notion of when a gesture ENDS —
+   *  the first design's only boundary was "somebody else recorded history", so a
+   *  drag now and a drag an hour later folded together and one Ctrl+Z threw both
+   *  away. That is the very failure Group S set out to remove, arriving from the
+   *  other side. Callers say where a gesture begins or ends (a pointerdown, a
+   *  blur, a discrete click); this is that signal. Cheap and idempotent, so
+   *  calling it when no run is open is fine. */
+  endHistoryRun: () => void;
   /** Run `fn` as ONE undo step, no matter how many `recordHistory` calls
    *  `fn` makes THROUGH THE TOKEN it's handed (store/relink.ts's
    *  `commit()` hand-rolled this exact shape for its own batch before this
@@ -279,13 +297,25 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
     recordHistoryCoalesced: (label, key) =>
       set((s) => {
         const top = s.history[s.history.length - 1];
-        // Already inside a run: the entry that is there holds the pre-run
-        // state, so keep it and only invalidate redo.
-        if (top?.coalesceKey === key) return { future: [] };
+        // A batch in flight ends the run rather than folding into it. R6's
+        // promise is that an edit which never received the batch's token keeps
+        // its OWN entry; letting it fold into a pre-batch snapshot instead
+        // would break exactly the isolation that round established.
+        const open = !s.historySuppressed && top?.coalesceKey === key;
+        // Inside a run: the entry already there holds the pre-run state, so keep
+        // it and only invalidate redo.
+        if (open) return { future: [] };
         return {
           history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key }].slice(-HISTORY_DEPTH),
           future: [],
         };
+      }),
+    endHistoryRun: () =>
+      set((s) => {
+        const top = s.history[s.history.length - 1];
+        if (!top?.coalesceKey) return {};
+        const { coalesceKey: _closed, ...rest } = top;
+        return { history: [...s.history.slice(0, -1), rest] };
       }),
     withHistoryBatch: async (label, fn) => {
       // Reentrant: run under the OUTER batch's own token so a nested call's
@@ -322,8 +352,20 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       set((s) => {
         const top = s.history[s.history.length - 1];
         if (!top) return {};
+        // Popping an entry re-exposes whatever was under it. If THAT entry
+        // still carries a `coalesceKey`, a later coalesced edit would fold into
+        // a snapshot from before its own run — review round, confirmed by test:
+        // filter, exclude a row, undo the exclusion, nudge the filter, and one
+        // Ctrl+Z discarded the whole filter rather than the nudge. A run that
+        // has been buried is finished, so the key comes off as it surfaces.
+        const under = s.history[s.history.length - 2];
+        const rest = s.history.slice(0, -1);
+        if (under?.coalesceKey) {
+          const { coalesceKey: _closed, ...bare } = under;
+          rest[rest.length - 1] = bare;
+        }
         return {
-          history: s.history.slice(0, -1),
+          history: rest,
           future: [...s.future, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),

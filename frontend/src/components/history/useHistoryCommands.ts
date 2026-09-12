@@ -29,11 +29,31 @@ import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
+/** Inputs that own Ctrl+Z themselves, so the app must not steal it.
+ *
+ *  Group S review finding 5: this used to be "any INPUT", which swallowed
+ *  Ctrl+Z for controls that have no text to undo. A native `<input
+ *  type="range">` keeps focus after a click-drag, so the Data Filter's slider
+ *  left the user pressing Ctrl+Z at a focused thumb and getting nothing — the
+ *  filter had only just become undoable, and the obvious way to reach it did
+ *  not work. Same for a checkbox, which keeps focus after a click.
+ *
+ *  A TEXT input is deliberately still excluded: there the browser's own
+ *  field-level undo is the right thing, and hijacking it to roll back a
+ *  dataset edit would be worse than the gap this closes. */
+const SELF_UNDOING_INPUT = new Set(["text", "search", "url", "tel", "email", "password", "number"]);
+
 function isEditing(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  if (tag === "INPUT") {
+    // `type` is "" for an <input> with no attribute, which the DOM treats as
+    // text — hence the default rather than a membership test on the raw value.
+    const type = (el as HTMLInputElement).type || "text";
+    return SELF_UNDOING_INPUT.has(type);
+  }
+  return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
 /** Undo the top history entry, or toast "nothing to undo" on an empty

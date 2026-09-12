@@ -150,6 +150,32 @@ describe("useHistoryCommands — keyboard shortcuts", () => {
     document.body.removeChild(input);
   });
 
+  it("DOES intercept Ctrl+Z from a range slider or checkbox — they have no text to undo", () => {
+    // Group S review finding 5. The guard used to be "any INPUT", which meant a
+    // native <input type="range"> — which keeps focus after a click-drag — ate
+    // Ctrl+Z. The Data Filter had just become undoable and the obvious way to
+    // reach it silently did nothing. A text input stays excluded (tested above),
+    // because there the browser's own field undo is the right behaviour.
+    for (const type of ["range", "checkbox"]) {
+      useApp.setState({ datasets: [], history: [], future: [] });
+      renderHook(() => useHistoryCommands());
+      act(() => {
+        useApp.getState().addDataset({ id: "d1", name: "a", data: raw });
+      });
+      expect(useApp.getState().datasets).toHaveLength(1);
+
+      const el = document.createElement("input");
+      el.type = type;
+      document.body.appendChild(el);
+      el.focus();
+      act(() => press("z", { ctrl: true }, el));
+
+      // Intercepted: undo ran, so the dataset is gone.
+      expect(useApp.getState().datasets).toHaveLength(0);
+      document.body.removeChild(el);
+    }
+  });
+
   it("removes its keydown listener on unmount", () => {
     const { unmount } = renderHook(() => useHistoryCommands());
     act(() => {

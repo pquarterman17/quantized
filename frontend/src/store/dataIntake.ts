@@ -26,7 +26,7 @@ import { guessImportSettings, parseImportText } from "../lib/api";
 import { plural } from "../lib/plural";
 import { installBookData } from "../lib/bookData";
 import { lit } from "../lib/macro";
-import type { Dataset } from "../lib/types";
+import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { nextDatasetId, type AppState } from "./useApp";
 
@@ -77,11 +77,27 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 
 export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeSlice {
+  /** `installBookData`, plus: a book ARRIVING closes any open coalescing run.
+   *
+   *  Group S review finding 8. The arrival replaces `.data` and wipes
+   *  `excludedRows`/`filter` (the preview's row indices mean nothing against the
+   *  real rows) and records NO history — so any undo entry taken before it
+   *  reverts the arrival. That hazard predates coalescing, but coalescing widens
+   *  it: without this, a filter edit after the arrival folds into the run's
+   *  entry, whose snapshot still has this dataset `pending` with a decimated
+   *  preview, and that stale snapshot stays the Ctrl+Z target indefinitely
+   *  instead of being buried by the next fresh one.
+   *
+   *  Closing the run means the next filter edit pushes a snapshot that includes
+   *  the arrived book, which is the behaviour plain `recordHistory` had. */
+  const install = (id: string, source: BookSource): Promise<void> =>
+    installBookData(set, id, source).finally(() => get().endHistoryRun());
+
   return {
     ensureBookData: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds?.pending) return;
-      installBookData(set, id, ds.pending).catch((e) => {
+      install(id, ds.pending).catch((e) => {
         toast(
           `couldn't load full data for "${ds.name}" — ${e instanceof Error ? e.message : "error"}`,
           "danger",
@@ -90,7 +106,7 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
     },
     resolvePendingDatasets: async () => {
       const pending = get().datasets.filter((d) => d.pending);
-      await Promise.all(pending.map((d) => installBookData(set, d.id, d.pending!)));
+      await Promise.all(pending.map((d) => install(d.id, d.pending!)));
     },
     resolveDataset: async (id) => {
       const ds = get().datasets.find((d) => d.id === id);
@@ -101,7 +117,7 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         toast(`fetching full data for "${ds.name}"…`);
       }, 400);
       try {
-        await installBookData(set, id, ds.pending);
+        await install(id, ds.pending);
       } finally {
         clearTimeout(timer);
       }

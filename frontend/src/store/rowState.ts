@@ -48,7 +48,7 @@
 
 import { isActive } from "../lib/datafilter";
 import { keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
-import type { DataFilter, Dataset } from "../lib/types";
+import type { ColumnFilter, DataFilter, Dataset } from "../lib/types";
 import { refusePendingEdit } from "./pendingEdit";
 import type { AppState } from "./useApp";
 
@@ -104,6 +104,26 @@ function worksheetOrActiveSelection(
  *  through, so a stale id cannot leave a dead undo entry behind. */
 function datasetOf(get: () => AppState, id: string): Dataset | null {
   return get().datasets.find((d) => d.id === id) ?? null;
+}
+
+/** Are these two filters the same CONSTRAINT? Compared field by field rather
+ *  than by JSON, so key order cannot make two identical filters look different,
+ *  and an absent filter reads equal to an empty one (both mean "no
+ *  constraint" — `setDatasetFilter` stores `undefined` for an empty list). */
+function sameFilter(a: DataFilter | undefined, b: readonly ColumnFilter[]): boolean {
+  const left = a ?? [];
+  if (left.length !== b.length) return false;
+  return left.every((p, i) => {
+    const q = b[i];
+    return (
+      p.col === q.col &&
+      p.kind === q.kind &&
+      p.min === q.min &&
+      p.max === q.max &&
+      (p.values?.length ?? -1) === (q.values?.length ?? -1) &&
+      (p.values ?? []).every((v, k) => v === (q.values ?? [])[k])
+    );
+  });
 }
 
 export function createRowStateSlice(
@@ -217,13 +237,20 @@ export function createRowStateSlice(
       // COALESCED, not plain: both controls that reach here fire per `input`
       // event (see `recordHistoryCoalesced`), so one entry per editing run.
       // Keyed per dataset — filtering A then B must stay two undo steps.
+      const next = filter.filter(isActive);
+      // Review round: a filter edit that changes NOTHING must record nothing.
+      // It is reachable — `DataFilterPanel`'s NumberField commits `undefined`
+      // when you type a bound and erase it (`parseBound("")`), and toggling a
+      // level off and back on lands on the same predicate set. The
+      // unconditional record pushed a phantom entry whose snapshot equals the
+      // present AND wiped `future`, inverting this group's own second bug into
+      // "a filter NON-change invalidates redo".
+      if (sameFilter(ds.filter, next)) return;
       get().recordHistoryCoalesced("data filter", `filter:${id}`);
       set((s) => ({
-        datasets: s.datasets.map((d) => {
-          if (d.id !== id) return d;
-          const active = filter.filter(isActive);
-          return { ...d, filter: active.length ? active : undefined };
-        }),
+        datasets: s.datasets.map((d) =>
+          d.id === id ? { ...d, filter: next.length ? next : undefined } : d,
+        ),
       }));
     },
 

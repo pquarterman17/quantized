@@ -85,6 +85,14 @@ describe("row-state writes are refused while a dataset is pending (BUG-009)", ()
     useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 15, max: 35 }]);
     expect(ds().filter).toBeUndefined();
     expect(useApp.getState().status).toMatch(/still loading its full data/);
+    // The history assertion its four siblings in this block all have, and the
+    // one this test was missing — which let a sabotage that moved the recorder
+    // ABOVE the pending guard pass the whole suite (review finding 6). Ordering
+    // is the point: a refused edit must leave no entry, or Ctrl+Z would restore
+    // a snapshot reached by an action that never happened, and BUG-009's own
+    // symptom ("no undo entry to notice") comes back inverted.
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().future).toHaveLength(0);
   });
 });
 
@@ -344,9 +352,10 @@ describe("Group S — a filter edit is undoable", () => {
 
     app().setDatasetFilter("d1", OTHER_FILTER);
 
+    // `future` being empty IS the assertion; a `redo()` here would be a no-op
+    // on an empty stack and prove nothing, which is how the first version of
+    // this test read as stronger evidence than it was (review nit).
     expect(app().future).toHaveLength(0);
-    app().redo();
-    expect(ds().filter).toEqual(OTHER_FILTER);
   });
 
   it("INVALIDATES REDO, like every other edit", () => {
@@ -391,5 +400,85 @@ describe("Group S — clearing the filter", () => {
     app().clearDatasetFilter("d1");
     app().clearDatasetFilter("d1");
     expect(app().history.map((h) => h.label)).toEqual(["data filter", "clear data filter"]);
+  });
+});
+
+// ── Review round: three ways the first coalescing design lost state ─────────
+// Written BEFORE the fix and confirmed failing against it, so each one is
+// demonstrating a real defect rather than describing one.
+
+describe("Group S review — a coalescing run must END", () => {
+  it("two SEPARATE gestures are two undo steps", () => {
+    // The first design's only run boundary was "somebody else recorded
+    // history". Nothing closed a run on pointerup, so a drag now and a drag an
+    // hour later folded together and one Ctrl+Z threw both away — the exact
+    // failure this group set out to remove, reintroduced from the other side.
+    app().setDatasetFilter("d1", FILTER);
+    app().endHistoryRun(); // what a pointerup / blur / click does
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history).toHaveLength(2);
+
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("UNDOING the interposing edit does not resurrect a finished run", () => {
+    // `coalesceKey` was only ever read off the TOP of the stack, so popping the
+    // entry that broke a run re-exposed the run's own entry, key intact — and
+    // its snapshot predates the filter entirely. Filter, exclude, undo the
+    // exclusion, nudge the filter: the nudge folded into a snapshot from before
+    // any filter existed, so Ctrl+Z discarded the whole filter instead of the
+    // nudge.
+    //
+    // This is the SAME sequence cited as the reachability proof for the mid-run
+    // `future: []` test above. That test was right and this hazard sat directly
+    // underneath it, unnoticed.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history).toHaveLength(2);
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a filter edit during a BATCH keeps its own entry (R6 isolation)", async () => {
+    // Found by sabotage, and predicted by review: the fold path originally read
+    // neither `historySuppressed` nor the active token, so an edit landing
+    // mid-batch folded into whatever run was open — into a snapshot from before
+    // the batch. R6's whole point is that an edit which never received the
+    // batch's token keeps its OWN entry, so a batch cannot silently absorb it.
+    app().setDatasetFilter("d1", FILTER); // opens a run
+    expect(app().history).toHaveLength(1);
+
+    await app().withHistoryBatch("bulk thing", async () => {
+      app().setDatasetFilter("d1", OTHER_FILTER);
+    });
+
+    expect(app().history).toHaveLength(2);
+    // And it is a USABLE entry, not a duplicate: undo returns the first filter.
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a filter edit that changes NOTHING records nothing", () => {
+    // Reachable by typing a bound and erasing it (parseBound("") commits
+    // `undefined`), or by toggling a level off and back on. The unconditional
+    // record pushed a phantom entry whose snapshot equals the present AND wiped
+    // `future` — inverting this group's own second bug into "a filter
+    // NON-change invalidates redo".
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+
+    app().setDatasetFilter("d1", []);
+
+    expect(ds().filter).toBeUndefined();
+    expect(app().history).toHaveLength(0);
+    expect(app().future).toHaveLength(1);
   });
 });

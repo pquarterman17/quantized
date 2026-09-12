@@ -23,6 +23,17 @@ beforeEach(() => {
   });
 });
 
+/** A nominal column (few repeated levels over enough rows for lib/modeling to
+ *  infer categorical), so the panel renders level checkboxes rather than a
+ *  range slider. */
+const CATEGORICAL: DataStruct = {
+  time: Array.from({ length: 12 }, (_, i) => i),
+  values: Array.from({ length: 12 }, (_, i) => [i % 3]),
+  labels: ["grp"],
+  units: [""],
+  metadata: { x_column_name: "T" },
+};
+
 const filterOf = () => useApp.getState().datasets.find((d) => d.id === "d1")?.filter;
 
 describe("DataFilterPanel — dual-thumb range slider (#53 item 7a)", () => {
@@ -130,17 +141,62 @@ describe("DataFilterPanel — one undo step per editing run (Group S)", () => {
     expect(filterOf()).toBeUndefined();
   });
 
-  it("dragging a SECOND column after the first still folds into one run", () => {
-    // Both thumbs and both columns are the same editing run as far as the user
-    // is concerned; nothing unrelated landed in between, so one Ctrl+Z should
-    // undo the lot.
+  it("a SECOND gesture is a second undo step", () => {
+    // Corrected in the review round. This test previously asserted the
+    // OPPOSITE — that a second column folded into the first run — and passed
+    // only because `fireEvent.change` fires neither pointerdown nor focus, so it
+    // never reached the gesture boundary the panel now marks. It was pinning the
+    // very bug the round fixed.
+    //
+    // Each gesture starts with a real pointerdown, which is what closes the
+    // previous run.
     render(<DataFilterPanel />);
-    fireEvent.change(screen.getByLabelText("val minimum"), { target: { value: "12" } });
-    fireEvent.change(screen.getByLabelText("T maximum"), { target: { value: "4" } });
+    const valMin = screen.getByLabelText("val minimum");
+    const tMax = screen.getByLabelText("T maximum");
 
-    expect(history().map((h) => h.label)).toEqual(["data filter"]);
+    fireEvent.pointerDown(valMin);
+    fireEvent.change(valMin, { target: { value: "12" } });
+    fireEvent.pointerDown(tMax);
+    fireEvent.change(tMax, { target: { value: "4" } });
 
+    expect(history()).toHaveLength(2);
+    // One Ctrl+Z undoes only the SECOND gesture: the val bound survives.
     useApp.getState().undo();
-    expect(filterOf()).toBeUndefined();
+    expect(filterOf()).toEqual([{ col: 0, kind: "range", min: 12 }]);
+  });
+
+  it("focus alone closes the previous run — the keyboard route", () => {
+    // A native range input is arrow/Home/End operable and the NumberField is
+    // reached by Tab, so pointerdown cannot be the only boundary.
+    render(<DataFilterPanel />);
+    const valMin = screen.getByLabelText("val minimum");
+    fireEvent.pointerDown(valMin);
+    fireEvent.change(valMin, { target: { value: "12" } });
+
+    const tMax = screen.getByLabelText("T maximum");
+    fireEvent.focus(tMax);
+    fireEvent.change(tMax, { target: { value: "4" } });
+
+    expect(history()).toHaveLength(2);
+  });
+
+  it("each level checkbox click is its own undo step", () => {
+    // Discrete gestures must not fold: three toggles collapsing into one Ctrl+Z
+    // would revert all three levels at once (review finding 9).
+    useApp.setState({
+      datasets: [{ id: "d1", name: "cat.dat", data: CATEGORICAL }],
+      activeId: "d1",
+      dataFilterOpen: true,
+      history: [],
+      future: [],
+    });
+    render(<DataFilterPanel />);
+    const boxes = screen.getAllByRole("checkbox");
+    expect(boxes.length).toBeGreaterThanOrEqual(3);
+
+    fireEvent.click(boxes[0]);
+    fireEvent.click(boxes[1]);
+
+    expect(history()).toHaveLength(2);
   });
 });
