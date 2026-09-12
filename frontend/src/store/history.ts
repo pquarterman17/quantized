@@ -212,6 +212,14 @@ export interface HistorySlice {
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** The same entry with its coalescing run closed, so nothing folds into it
+ *  again. Shared by `endHistoryRun` and `undo` — both have to do this, and two
+ *  copies of a destructuring rest-strip is one copy too many. */
+function closeRun(e: HistoryEntry): HistoryEntry {
+  const { coalesceKey: _closed, ...bare } = e;
+  return bare;
+}
+
 export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
   // Set by `recordHistory` whenever a call carrying the ACTIVE batch's own
   // token folds in — tells the (non-reentrant, so never more than one at a
@@ -314,8 +322,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       set((s) => {
         const top = s.history[s.history.length - 1];
         if (!top?.coalesceKey) return {};
-        const { coalesceKey: _closed, ...rest } = top;
-        return { history: [...s.history.slice(0, -1), rest] };
+        return { history: [...s.history.slice(0, -1), closeRun(top)] };
       }),
     withHistoryBatch: async (label, fn) => {
       // Reentrant: run under the OUTER batch's own token so a nested call's
@@ -360,10 +367,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         // has been buried is finished, so the key comes off as it surfaces.
         const under = s.history[s.history.length - 2];
         const rest = s.history.slice(0, -1);
-        if (under?.coalesceKey) {
-          const { coalesceKey: _closed, ...bare } = under;
-          rest[rest.length - 1] = bare;
-        }
+        if (under?.coalesceKey) rest[rest.length - 1] = closeRun(under);
         return {
           history: rest,
           future: [...s.future, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
