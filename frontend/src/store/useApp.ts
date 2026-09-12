@@ -29,7 +29,6 @@ import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import type { WorkbookNode } from "../lib/workbooks";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { figureLabel, figureLayerFamily } from "../lib/originFigures";
-import type { RegionPick } from "../lib/regionSelect";
 import { originApplyLibs } from "./originApplyLibs"; // apply-only half: lazy chunk
 import {
   dedupeWindowTitle,
@@ -428,9 +427,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // ABOVE this line are the FOCUSED window's LIVE view — see the facade doc
   // on WindowsSlice.
   plotTool: PlotTool;
-  // Last range picked by the region rubber-band (x, + an optional 2-D
-  // `yRange`, GAP #96/#20); the baseline workshop consumes it then resets null.
-  regionPicked: RegionPick | null;
   // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
@@ -707,7 +703,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (createWindow … windowsForSave — the window-management actions — are
   // declared on WindowsSlice; see store/windows.ts.)
   setPlotTool: (tool: PlotTool) => void;
-  setRegionPicked: (range: RegionPick | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
   // (the quick-fit / ROI-gadget family's state + actions moved to
@@ -905,7 +900,6 @@ export const useApp = create<AppState>((set, get) => ({
   hiddenChannels: [],
   waterfall: 0,
   plotTool: "pointer",
-  regionPicked: null,
   integral: null,
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in
@@ -2086,7 +2080,6 @@ export const useApp = create<AppState>((set, get) => ({
   // (the window-management action implementations moved to store/windows.ts —
   // composed via createWindowsSlice at the top of this literal.)
   setPlotTool: (plotTool) => set({ plotTool }),
-  setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),

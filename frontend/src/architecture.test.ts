@@ -265,7 +265,7 @@ const STORE_PINS: Record<string, number> = {
   // (17 of them) — every Prefs key is already an AppState field of the same name,
   // which is exactly what `prefsOf(s)` relies on to read them back out, so the
   // list could only ever drift. Same anti-drift move as `PrefKey = keyof Prefs`.
-  "/store/useApp.ts": 2328,
+  "/store/useApp.ts": 2322,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
