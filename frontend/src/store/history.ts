@@ -125,6 +125,12 @@ export interface HistoryEntry {
   /** Shown by the Edit menu / ⌘K as "Undo <label>" / "Redo <label>". */
   label: string;
   snapshot: HistorySnapshot;
+  /** Set only by `recordHistoryCoalesced` (Group S). Two CONSECUTIVE edits
+   *  carrying the same key collapse into the first one's entry, so a
+   *  continuously-firing control records once per editing run instead of once
+   *  per event. Absent on every ordinary `recordHistory` entry, which is what
+   *  makes an unrelated edit landing in between break the run. */
+  coalesceKey?: string;
 }
 
 /** R6 (POST_SPRINT_INDEPENDENT_REVIEW.md): the opaque handle `withHistoryBatch`
@@ -268,6 +274,37 @@ export interface HistorySlice {
    *  doesn't match the CURRENTLY active batch (stale, or no batch running
    *  at all) is treated exactly like no token — recorded on its own. */
   recordHistory: (label: string, batchToken?: HistoryBatchToken) => void;
+  /** One undo entry per continuous EDITING RUN, for a control that fires on
+   *  every event rather than once per gesture (Group S).
+   *
+   *  WHY THIS EXISTS. `setDatasetFilter` is driven by a dual-thumb
+   *  `<input type="range">` and a `NumberField`, both of which call it on every
+   *  `input` event — a single drag or a typed "12.5" is four-plus store writes.
+   *  A plain `recordHistory` there pushes an entry per event, and at
+   *  HISTORY_DEPTH 50 that silently evicts everything else the user had done:
+   *  a worse bug than the missing entry it set out to fix.
+   *
+   *  WHY NOT `withHistoryBatch`. That folds calls that are handed its token
+   *  inside one `await`ed function. A pointer drag is not a function — it spans
+   *  events with no promise to hold open — so the batch would have to be kept
+   *  alive by a listener, and every mutation threaded the token. Coalescing
+   *  needs neither.
+   *
+   *  WHY NOT record at gesture START instead (the other obvious design): it
+   *  works, but only for the slider, and only if the panel grows pointerdown
+   *  AND keydown handlers (native range inputs are arrow/Home/End operable) —
+   *  and it does nothing for the typed field. Coalescing covers every entry
+   *  point at once, in the store, where the invariant belongs.
+   *
+   *  The kept entry is the FIRST of the run, so its snapshot is the state
+   *  before the run began — which is what undo must restore. Later calls in the
+   *  run still clear `future`, because a redo across an edit is exactly the
+   *  thing that would destroy it.
+   *
+   *  `key` must name the thing being edited (e.g. `filter:<datasetId>`), not
+   *  just the kind: filtering dataset A and then dataset B are two edits, and a
+   *  shared key would collapse them into one. */
+  recordHistoryCoalesced: (label: string, key: string) => void;
   /** Run `fn` as ONE undo step, no matter how many `recordHistory` calls
    *  `fn` makes THROUGH THE TOKEN it's handed (store/relink.ts's
    *  `commit()` hand-rolled this exact shape for its own batch before this
@@ -389,6 +426,17 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         future: [],
       }));
     },
+    recordHistoryCoalesced: (label, key) =>
+      set((s) => {
+        const top = s.history[s.history.length - 1];
+        // Already inside a run: the entry that is there holds the pre-run
+        // state, so keep it and only invalidate redo.
+        if (top?.coalesceKey === key) return { future: [] };
+        return {
+          history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key }].slice(-HISTORY_DEPTH),
+          future: [],
+        };
+      }),
     withHistoryBatch: async (label, fn) => {
       // Reentrant: run under the OUTER batch's own token so a nested call's
       // own folded recordHistory calls still land in the one entry the

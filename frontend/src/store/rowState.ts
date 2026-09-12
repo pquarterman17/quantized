@@ -206,6 +206,18 @@ export function createRowStateSlice(
     setDatasetFilter: (id, filter) => {
       const ds = datasetOf(get, id);
       if (!ds || refusePendingEdit(get, ds, "filtering")) return;
+      // Group S: the filter is part of the dataset's ANALYSIS VIEW exactly as
+      // `excludedRows` is, and every exclusion path above records history.
+      // This one did not, which cost more than a missing "Undo data filter":
+      // `filter` LIVES ON the dataset, so it is inside every snapshot, and
+      // skipping the record also skipped the `future: []` that every edit owes
+      // redo. So an undo of some LATER unrelated action silently reverted the
+      // filter too, and a redo across a filter edit destroyed it.
+      //
+      // COALESCED, not plain: both controls that reach here fire per `input`
+      // event (see `recordHistoryCoalesced`), so one entry per editing run.
+      // Keyed per dataset — filtering A then B must stay two undo steps.
+      get().recordHistoryCoalesced("data filter", `filter:${id}`);
       set((s) => ({
         datasets: s.datasets.map((d) => {
           if (d.id !== id) return d;
@@ -216,9 +228,20 @@ export function createRowStateSlice(
     },
 
     // NOT pending-guarded, deliberately — see the module header.
-    clearDatasetFilter: (id) =>
+    clearDatasetFilter: (id) => {
+      // Nothing to clear is not an edit: recording here would push an undo
+      // entry for a no-op, and (worse) break a preceding "data filter" run's
+      // coalescing so the next slider nudge started a second entry.
+      const ds = datasetOf(get, id);
+      if (!ds?.filter) return;
+      // Its OWN label, and deliberately NOT coalesced: clearing is a discrete
+      // gesture with a discrete intent, and it must not fold into the editing
+      // run that preceded it — undoing a clear should give the filter back, not
+      // rewind to before the filter existed.
+      get().recordHistory("clear data filter");
       set((s) => ({
         datasets: s.datasets.map((d) => (d.id === id ? { ...d, filter: undefined } : d)),
-      })),
+      }));
+    },
   };
 }

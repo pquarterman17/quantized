@@ -241,3 +241,155 @@ describe("the windowId (MDI worksheet) route is guarded too (review L5)", () => 
     expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
   });
 });
+
+// ── Group S: the Data Filter belongs to undo ────────────────────────────────
+// It did not, and `filter` living ON the dataset made the omission worse than a
+// missing menu entry: the field is inside every snapshot, so skipping the
+// record also skipped the `future: []` that every edit owes redo.
+//
+// These assert what a USER does — press undo, press redo, drag a slider — not
+// that `recordHistory` was called. A "the setter records history" test would
+// have passed the naive fix that pushes one entry per pointermove, which is a
+// worse bug than the one being fixed.
+
+const FILTER = [{ col: 0, kind: "range" as const, min: 15 }];
+const OTHER_FILTER = [{ col: 0, kind: "range" as const, min: 25 }];
+const app = () => useApp.getState();
+
+describe("Group S — a filter edit is undoable", () => {
+  it("Ctrl+Z gives back the state from before the filter", () => {
+    app().setDatasetFilter("d1", FILTER);
+    expect(ds().filter).toEqual(FILTER);
+
+    app().undo();
+
+    expect(ds().filter).toBeUndefined();
+  });
+
+  it("...and Ctrl+Shift+Z brings it back", () => {
+    app().setDatasetFilter("d1", FILTER);
+    app().undo();
+
+    app().redo();
+
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a whole EDITING RUN is one undo step, not one per event", () => {
+    // The control is a dual-thumb <input type="range"> plus a NumberField, both
+    // of which fire on every `input` event: one drag or a typed "12.5" is many
+    // calls. At HISTORY_DEPTH 50, one entry each would silently evict
+    // everything else the user had done.
+    for (const min of [11, 12, 13, 14, 15, 16, 17, 18]) {
+      app().setDatasetFilter("d1", [{ col: 0, kind: "range", min }]);
+    }
+    expect(app().history).toHaveLength(1);
+
+    // And the one entry kept is the FIRST of the run, so undo lands before it
+    // began — not one nudge back.
+    app().undo();
+    expect(ds().filter).toBeUndefined();
+  });
+
+  it("an unrelated edit between two runs breaks the run", () => {
+    // Coalescing keys off the PREVIOUS entry, so anything landing in between
+    // makes the next filter edit start its own step. Otherwise a filter tweak
+    // an hour later would fold into this morning's.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history.map((h) => h.label)).toEqual([
+      "data filter",
+      "row exclusion",
+      "data filter",
+    ]);
+  });
+
+  it("filtering a DIFFERENT dataset is its own step", () => {
+    // The key carries the dataset id. A shared key would collapse "filter A"
+    // and "filter B" into one undo, and undoing it would revert both.
+    useApp.setState({
+      datasets: [dataset(), dataset({ id: "d2", name: "other.opj" })],
+      history: [],
+    });
+    app().setDatasetFilter("d1", FILTER);
+    app().setDatasetFilter("d2", FILTER);
+
+    expect(app().history).toHaveLength(2);
+
+    app().undo();
+    expect(useApp.getState().datasets[1].filter).toBeUndefined();
+    expect(useApp.getState().datasets[0].filter).toEqual(FILTER);
+  });
+
+  it("invalidates redo MID-RUN too, not just on the first edit of a run", () => {
+    // Found by sabotage: making the mid-run branch return `{}` instead of
+    // `{ future: [] }` left all 29 other tests green, because they only ever
+    // reach the FIRST call of a run — and that one clears `future` on the push
+    // path. The mid-run early-return needs its own clear.
+    //
+    // The state is reachable, which is what makes it a bug rather than a
+    // theoretical branch: a run is open (history's top carries the key) AND
+    // `future` is non-empty only if something landed after the run and was then
+    // undone. So — filter, exclude a row, undo the exclusion, nudge the filter
+    // again. Without the clear, a redo keypress restores the exclusion-era
+    // snapshot, which predates the nudge, and the nudge is destroyed.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+    // Still inside the filter run: the top of history is the run's own entry.
+    expect(app().history.at(-1)?.label).toBe("data filter");
+
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().future).toHaveLength(0);
+    app().redo();
+    expect(ds().filter).toEqual(OTHER_FILTER);
+  });
+
+  it("INVALIDATES REDO, like every other edit", () => {
+    // The second failure this fixes. `recordHistory` clears `future`; skipping
+    // it left a redo entry from before the filter existed, so Ctrl+Shift+Z
+    // destroyed the filter the user had just built.
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+
+    app().setDatasetFilter("d1", FILTER);
+
+    expect(app().future).toHaveLength(0);
+    // Proof it is not merely a counter: a redo keypress now cannot revert it.
+    app().redo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+});
+
+describe("Group S — clearing the filter", () => {
+  it("is its own undo step, and undoing it gives the filter back", () => {
+    // Deliberately NOT coalesced into the editing run before it: clearing is a
+    // discrete intent, and undoing a clear must restore the filter rather than
+    // rewind to before the filter existed.
+    app().setDatasetFilter("d1", FILTER);
+    app().clearDatasetFilter("d1");
+    expect(ds().filter).toBeUndefined();
+
+    app().undo();
+
+    expect(ds().filter).toEqual(FILTER);
+    expect(app().history.map((h) => h.label)).toEqual(["data filter"]);
+  });
+
+  it("records NOTHING when there is no filter to clear", () => {
+    // A no-op must not push an undo step. It also must not break a preceding
+    // run's coalescing — the next nudge would otherwise start a second entry.
+    app().clearDatasetFilter("d1");
+    expect(app().history).toHaveLength(0);
+
+    app().setDatasetFilter("d1", FILTER);
+    app().clearDatasetFilter("d1");
+    app().clearDatasetFilter("d1");
+    expect(app().history.map((h) => h.label)).toEqual(["data filter", "clear data filter"]);
+  });
+});

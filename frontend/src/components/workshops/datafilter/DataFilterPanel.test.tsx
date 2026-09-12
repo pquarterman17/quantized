@@ -18,6 +18,8 @@ beforeEach(() => {
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
     dataFilterOpen: true,
+    history: [],
+    future: [],
   });
 });
 
@@ -92,5 +94,53 @@ describe("DataFilterPanel — categorical labels (P1.4/P1.5)", () => {
 
     fireEvent.click(screen.getByText("Annealed"));
     expect(filterOf()).toEqual([{ col: 0, kind: "set", values: [0] }]);
+  });
+});
+
+describe("DataFilterPanel — one undo step per editing run (Group S)", () => {
+  // The store-level rules live in store/rowState.test.ts. What is pinned HERE
+  // is the thing that made this fix non-trivial: the control fires on every
+  // `input` event, so the naive "record history in the setter" fix produces one
+  // undo entry per drag step. Asserted through the real DOM control, because a
+  // store test driving setDatasetFilter in a loop cannot show that THIS
+  // component is what fires it repeatedly.
+  const history = () => useApp.getState().history;
+
+  it("dragging one thumb across many values records ONE entry, not one each", () => {
+    render(<DataFilterPanel />);
+    const valMin = screen.getByLabelText("val minimum");
+    for (const value of ["12", "14", "16", "18", "20", "22"]) {
+      fireEvent.change(valMin, { target: { value } });
+    }
+    expect(filterOf()).toEqual([{ col: 0, kind: "range", min: 22 }]);
+    expect(history().map((h) => h.label)).toEqual(["data filter"]);
+  });
+
+  it("undo after a drag returns to NO filter, not to the previous drag step", () => {
+    // The kept entry is the FIRST of the run, so its snapshot predates the
+    // whole gesture. Recording at gesture END instead would have captured the
+    // post-drag filter and made undo a no-op — the trap this design avoids.
+    render(<DataFilterPanel />);
+    const valMin = screen.getByLabelText("val minimum");
+    fireEvent.change(valMin, { target: { value: "12" } });
+    fireEvent.change(valMin, { target: { value: "30" } });
+
+    useApp.getState().undo();
+
+    expect(filterOf()).toBeUndefined();
+  });
+
+  it("dragging a SECOND column after the first still folds into one run", () => {
+    // Both thumbs and both columns are the same editing run as far as the user
+    // is concerned; nothing unrelated landed in between, so one Ctrl+Z should
+    // undo the lot.
+    render(<DataFilterPanel />);
+    fireEvent.change(screen.getByLabelText("val minimum"), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText("T maximum"), { target: { value: "4" } });
+
+    expect(history().map((h) => h.label)).toEqual(["data filter"]);
+
+    useApp.getState().undo();
+    expect(filterOf()).toBeUndefined();
   });
 });
