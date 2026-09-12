@@ -180,8 +180,10 @@ replacements and its priority case is now stronger, not different.
 
 ## Tier 1 — High Impact (fails any JMP-shaped workflow)
 
-1. **[x] J1 — String categorical levels end-to-end** (with P1.4; design
-   the contract once). **Reconciled 2026-09-12:** every sub-box below is
+1. ~~**J1 — String categorical levels end-to-end**~~ **SHIPPED — struck
+   2026-09-12; the evidence stays inline because other plans cite it by
+   line, and the Completed log carries the closing entry.** (With P1.4;
+   design the contract once.) **Reconciled 2026-09-12:** every sub-box below is
    now `[x]` — the last two open items (categorical wiring into Facet/Data
    Filter/Tabulate/Stat Stage/matplotlib export, and user-settable level
    ordering) closed this pass; see their own entries for evidence. Acceptance
@@ -392,6 +394,17 @@ enforces. New deps must stay permissive (statsmodels/scipy patterns;
 **no pingouin — GPL**).
 
 ## Completed
+
+- ~~**J1 — String categorical levels end-to-end**~~ (2026-09-12, plans
+  reconciliation): the last two open sub-boxes — categorical wiring into
+  Facet/Data Filter/Tabulate/Stat Stage/matplotlib export, and user-settable
+  level ordering — were re-verified against shipped code and ticked in the
+  same pass (`6e4627ca`), which left every J1 sub-box `[x]` in Tier 1
+  without the heading struck: exactly the drift
+  `test_plan_items_claiming_completion_are_moved_to_completed` guards. The
+  Tier 1 entry is now struck in place (its ~100-line evidence body is cited
+  by line from PRIMARY_SOFTWARE_AUDIT_PLAN.md and stays where it is); this
+  entry is the Completed-log record.
 
 - **2026-09-09 — Claude (plans reconciliation):** flipped J1's "Worksheet-
   visible, editable type C/O/N" box (Tier 1, line ~220) from `[ ]` to `[x]` —
