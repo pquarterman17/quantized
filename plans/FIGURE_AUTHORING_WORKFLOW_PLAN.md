@@ -646,6 +646,52 @@ with parent items P1.3 and P1.5.
       untouched and remains open — a candidate for its own slice, not
       silently inherited into facet's fix.
 
+      **2026-09-12 fix (Claude): the flat path's own slice, closed.** Verified
+      the gap was still live before building: `figureSpec.ts`'s flat branch
+      built `dataset` from raw `data`, and `liveDataset` was threaded only
+      into `resolveFacetsOrThrow`'s facet pruning — an excluded row or one
+      the Data Filter dropped still reached a flat PNG/SVG/PDF/clipboard
+      export. Fixed with the SAME substitution C2 made, factored into one
+      shared primitive rather than a second pruning path:
+      `lib/rowstate.pruneToLiveDataset` (`liveDataset ? pruneExcluded(data,
+      droppedRows(liveDataset)) : data`), now called by BOTH
+      `lib/figureSpecFacets.buildFacetSpecs` (replacing its own inline copy
+      of the same line) and `lib/figureSpec.ts`'s `buildFigureSpecForView`.
+      The flat branch's wire `dataset` is pruned exactly when the request is
+      genuinely flat (`facets === undefined`) — a faceted request's `dataset`
+      field stays raw, matching C7's existing, deliberate "unused server-side
+      beyond column-level label derivation" behavior byte-for-byte, so this
+      slice does not silently re-scope the closed facet item. `error_spans`
+      (MAIN #36, row-indexed magnitudes) is pruned the same way it would
+      otherwise misalign with the now-shorter `dataset`/`y_keys` rows.
+      Row-indexed metadata sidecars (`lib/rowSidecars.ts` — `text_columns`/
+      `origin_text_columns`/`preview_source_rows`) need no separate handling:
+      `pruneExcluded` already routes `metadata` through `sliceRowSidecars`,
+      so a bar/box category label resolved by row index stays aligned with
+      its row after pruning for free.
+      **Other export producers, checked for the same gap:** the Figure Page
+      composer (`components/workshops/figurepage/panelResolve.ts`) and the
+      Figure Builder preview (`previewExport.ts`) both already route through
+      `buildFigureSpecFromDocument` with the live `Dataset` bound, so they
+      inherit this fix automatically — no separate change needed. The
+      spatial "Export page…" command (`lib/exportPageCommand.ts`) had the
+      IDENTICAL gap, one layer further out: it resolved each panel from
+      `ds.data` raw before handing plain `DataStruct`s to
+      `lib/spatialPageExport.ts` (which never sees `Dataset.excludedRows`/
+      `filter` at all — its signature only ever took `DataStruct`). Fixed the
+      same one-line way, at the one call site that still has the live
+      `Dataset`: `analysisData(ds) ?? ds.data`. `lib/plotSpecFigure.ts`
+      (Graph Builder → Figure Builder) and `store/plotRecipes.ts` build a
+      `FigureDoc`/apply a recipe onto live `PlotView` state respectively —
+      neither builds a wire `FigureSpec` itself; the export that follows
+      already goes through the fixed path, so both are unaffected by
+      construction. Tests: `lib/figureSpec.test.ts`'s new "flat path: row
+      exclusion / Data Filter pruning" block (excluded row, Data Filter,
+      frozen/document-only no-op, and a text-column sidecar's category
+      labels surviving pruning) and `lib/exportPageCommand.test.ts`'s new
+      excluded-row page-export case; all sabotaged and confirmed failing,
+      then restored green.
+
       **2026-08-24 fix round 3 (Claude): 7 more findings, 6 fixed + 1
       accepted/none-needed.** (R1) `/api/export/figure-hitmap` ignored
       `req.facets` entirely — a facet-bound document's Figure Builder

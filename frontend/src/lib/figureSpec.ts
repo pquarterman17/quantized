@@ -41,6 +41,7 @@ import {
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
+import { pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
@@ -141,7 +142,10 @@ function buildFigureSpecForView(
     /** Preserve the valid canonical case where an explicitly selected channel
      * is deliberately used for both X and Y. */
     allowExplicitXAsY?: boolean;
-    /** C2: bound live `Dataset` (absent for frozen), used to prune facets to its analysisData view. */
+    /** C2/flat-path fix: bound live `Dataset` (absent for frozen), used to
+     * prune BOTH facets (via `resolveFacetsOrThrow`) and a flat export's own
+     * `dataset`/`error_spans` (via `wireDataset` above) to its analysisData
+     * view -- excluded rows and rows the Data Filter drops. */
     liveDataset?: Dataset | null;
     /** P3.3: opt IN to the auto dash/marker cycle for THIS request. Only the
      *  live-stage export entry point (`buildStageFigureSpec`) passes it, and
@@ -194,6 +198,20 @@ function buildFigureSpecForView(
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
   const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
+
+  // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
+  // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`
+  // used to be built straight off the raw, row-unpruned `data`, so an excluded
+  // row or one the Data Filter drops could still reach a PNG/SVG/PDF/clipboard
+  // export the on-screen plot never showed. `facets === undefined` is the
+  // "genuinely flat" gate -- a faceted request's `dataset` field is already
+  // documented (C7) as unused server-side beyond C4's column-level label
+  // derivation, so it is left exactly as `resolveFacetsOrThrow` above computed
+  // it (raw), matching the closed facet item byte-for-byte rather than
+  // silently re-scoping it. `pruneToLiveDataset` is a no-op (`=== data`
+  // fast-path) for a frozen/document-only call (`extras.liveDataset` absent),
+  // so that case is byte-identical to before this fix.
+  const wireDataset = facets === undefined ? pruneToLiveDataset(dataset, extras.liveDataset) : dataset;
 
   // P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`). OPT-IN, in two
   // senses: `extras.autoSeriesStyles` is passed by the LIVE stage export
@@ -253,7 +271,7 @@ function buildFigureSpecForView(
   });
 
   return {
-    dataset,
+    dataset: wireDataset,
     x_key: st.xKey ?? undefined,
     y_keys: plotted,
     x_scale: st.xScale,
@@ -282,9 +300,11 @@ function buildFigureSpecForView(
         ? {}
         : { series_styles: structuredClone(extras.publicationSeriesStyles) }),
     // MAIN #36: the SAME spans the canvas draws, so a PDF cannot quietly
-    // understate the uncertainty the screen showed.
+    // understate the uncertainty the screen showed. Built from `wireDataset`,
+    // not the raw `data`, so a pruned row's magnitude can never outnumber
+    // (and misalign with) the pruned `dataset`/`y_keys` rows above.
     ...(errors?.length
-      ? { error_spans: exportErrorSpans(data, plotted, errors) }
+      ? { error_spans: exportErrorSpans(wireDataset, plotted, errors) }
       : {}),
     overrides: gatedOverrides,
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),

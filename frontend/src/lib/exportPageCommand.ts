@@ -11,13 +11,21 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialPanelsOf } from "./composition";
 import type { StoreGet } from "./exportActive";
+import { analysisData } from "./rowstate";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
 import { toast } from "../store/toasts";
 import type { DataStruct } from "./types";
 
 /** Resolve every panel's dataset to full data first (the #38 lazy-book
  *  discipline every other export path follows — a pending preview must
- *  never export small), then build + submit the export request. */
+ *  never export small), then build + submit the export request.
+ *
+ *  FIGURE_AUTHORING_WORKFLOW_PLAN F4.4's flat-path row-exclusion fix applies
+ *  here too: each panel's dataset is resolved through `analysisData`, not
+ *  its raw `.data`, so an excluded row or one the Data Filter drops is gone
+ *  from the exported page the same way it is gone from the on-screen spatial
+ *  grid — `analysisData` is the identity fast-path when neither is active,
+ *  so an unedited dataset's export stays byte-identical. */
 export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
   const st = s();
   const panels = spatialPanelsOf(st.composition);
@@ -31,7 +39,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     const entries = await Promise.all(
       panels!.map(async (p) => {
         const ds = await s().resolveDataset(p.datasetId);
-        return ds ? ([p.datasetId, ds.data] as const) : null;
+        return ds ? ([p.datasetId, analysisData(ds) ?? ds.data] as const) : null;
       }),
     );
     const missing = entries.some((e) => e === null);

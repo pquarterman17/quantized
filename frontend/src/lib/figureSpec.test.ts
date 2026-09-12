@@ -11,6 +11,7 @@ import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
+import { analysisData } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -459,6 +460,100 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(screenLabels).toEqual(["200", "300"]); // sanity: the exclusion actually dropped a level
     expect(spec.facets).toHaveLength(2);
     expect(spec.facets?.map((f) => f.label)).toEqual(screenLabels);
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN: the flat (non-faceted) path's own,
+  // separate row-exclusion gap -- explicitly left open when C2 fixed only
+  // the facet path above ("a candidate for its own slice, not silently
+  // inherited into facet's fix"). `buildFigureSpecForView` used to build the
+  // wire `dataset` straight off the raw, row-unpruned `data`, so an excluded
+  // row could reach a flat PNG/SVG/PDF/clipboard export the on-screen plot
+  // never showed at all.
+  describe("flat path: row exclusion / Data Filter pruning (the C2 note's own slice)", () => {
+    it("prunes an excluded row from the exported dataset, matching the screen's analysisData view", () => {
+      const excludedDataset: Dataset = { ...dataset, id: "flat-excluded", excludedRows: [0] }; // drops the row where signal=100
+      const document = createFigureDocument({
+        id: "flat-excluded-doc", name: "Flat excluded", datasetId: excludedDataset.id, view: richView(),
+      });
+
+      const spec = buildFigureSpecFromDocument(document, excludedDataset, "flat-excluded");
+
+      expect(spec.facets).toBeUndefined(); // sanity: genuinely flat, not the facet path C2 already fixed
+
+      // The screen's own analysis view for the IDENTICAL dataset -- the
+      // ground truth this export must never disagree with.
+      const screenView = analysisData(excludedDataset)!;
+      expect(spec.dataset.time).toEqual([1, 2]); // sanity: the exclusion actually dropped a row
+      expect(spec.dataset.time).toEqual(screenView.time);
+      expect(spec.dataset.values).toEqual(screenView.values);
+      expect(spec.dataset.metadata).toEqual(screenView.metadata);
+    });
+
+    it("prunes a Data-Filter-dropped row from the exported dataset, matching analysisData", () => {
+      // Channel 1 ("signal") holds 100/200/300 -- a min:150 range filter
+      // drops row 0 the same way an on-screen Data Filter card would.
+      const filteredDataset: Dataset = {
+        ...dataset,
+        id: "flat-filtered",
+        filter: [{ col: 1, kind: "range", min: 150 }],
+      };
+      const document = createFigureDocument({
+        id: "flat-filtered-doc", name: "Flat filtered", datasetId: filteredDataset.id, view: richView(),
+      });
+
+      const spec = buildFigureSpecFromDocument(document, filteredDataset, "flat-filtered");
+
+      const screenView = analysisData(filteredDataset)!;
+      expect(spec.dataset.time).toEqual([1, 2]); // sanity: the filter actually dropped row 0
+      expect(spec.dataset.time).toEqual(screenView.time);
+      expect(spec.dataset.values).toEqual(screenView.values);
+    });
+
+    it("leaves a document-only (frozen) export's dataset untouched -- no live dataset to prune against", () => {
+      const frozen = createFigureDocument({
+        id: "flat-frozen", name: "Flat frozen", datasetId: null, view: defaultPlotView(),
+        data: { mode: "frozen", snapshot: data },
+      });
+      // A dataset argument that WOULD prune a row if the frozen branch
+      // consulted it -- proving it genuinely does not
+      // (`resolveFigureDocumentData` never reads a frozen document's
+      // `dataset` argument, and `buildFigureSpecFromDocument` nulls
+      // `liveDataset` for `data.mode === "frozen"` regardless).
+      const wouldPruneIfLive: Dataset = { ...dataset, id: "flat-frozen-live-lookalike", excludedRows: [0] };
+
+      const spec = buildFigureSpecFromDocument(frozen, wouldPruneIfLive, "flat-frozen");
+
+      expect(spec.dataset).toEqual(data); // byte-identical to the raw snapshot, every row present
+    });
+
+    // rowSidecars.ts (BUG-006): `text_columns`/`origin_text_columns` are
+    // ROW-indexed -- a bar/box export resolving a category label by row
+    // index must see the SAME row dropped from both the numeric columns and
+    // the sidecar, or a label shifts onto a different row's cell than the
+    // one it actually describes.
+    it("keeps a row-indexed text-column sidecar aligned with its rows after pruning (bar/box category labels)", () => {
+      const withTextColumn: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10], [20], [30], [40]],
+        labels: ["signal"],
+        units: [""],
+        metadata: { text_columns: { category: ["A", "B", "C", "D"] } },
+      };
+      const sidecarDataset: Dataset = {
+        id: "flat-sidecar", name: "sidecar.csv", data: withTextColumn, excludedRows: [1],
+      };
+      const document = createFigureDocument({
+        id: "flat-sidecar-doc", name: "Flat sidecar", datasetId: sidecarDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+      });
+
+      const spec = buildFigureSpecFromDocument(document, sidecarDataset, "flat-sidecar");
+
+      // Row 1 ("B") is dropped -- and its cell drops WITH it, not some
+      // other row's.
+      expect(spec.dataset.time).toEqual([0, 2, 3]);
+      expect(spec.dataset.metadata.text_columns).toEqual({ category: ["A", "C", "D"] });
+    });
   });
 
   // Fix-round C5: mirrors the SCREEN's own fallback for the identical state

@@ -65,4 +65,33 @@ describe("runExportSpatialPageCommand", () => {
       ticks: { minor: true },
     });
   });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN flat-path fix: the SAME row-exclusion
+  // gap the single-figure flat path had -- this command used to resolve
+  // each panel from the raw `ds.data`, so an excluded row could reach the
+  // exported page even though the on-screen spatial grid never showed it.
+  it("prunes an excluded row from a panel's exported dataset, like the on-screen spatial grid", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book",
+          data: {
+            time: [0, 1],
+            values: [[1], [2]],
+            labels: ["signal"],
+            units: [""],
+            metadata: {},
+          },
+          excludedRows: [0],
+        },
+      ],
+    });
+
+    return runExportSpatialPageCommand(useApp.getState).then(() => {
+      const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+      expect(body.panels[0].figure.dataset.time).toEqual([1]);
+      expect(body.panels[0].figure.dataset.values).toEqual([[2]]);
+    });
+  });
 });
