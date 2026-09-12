@@ -35,6 +35,56 @@ beforeEach(() => {
   useApp.setState({ datasets: [], activeId: null, selectedIds: [], staleDatasets: [], staleFits: [] });
 });
 
+// BUGS_AND_ISSUES UX-001 interaction checklist: "Clearly distinguish
+// selection from the item currently open in a plot or worksheet" -- open
+// item = the dataset shown in the ACTIVE window (LibraryTree.tsx already
+// computes `active={node.entity.id === activeId}` from the store's existing
+// `activeId`; no new state needed). `active` already drove the `.active`
+// CSS class distinctly from multi-select's `.selected` (shell.css: separate
+// border/box-shadow vs. background recipes) -- the gap this closes is a
+// semantic marker (`aria-current`) so the distinction survives past sighted
+// users, independent of `selected` in both directions.
+describe("DatasetRow — aria-current marks the OPEN item, independent of multi-select (UX-001)", () => {
+  it("active (open) and not selected: aria-current is set, .active is present, .selected is not", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} active selected={false} />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).toHaveAttribute("aria-current", "true");
+    expect(row).toHaveClass("active");
+    expect(row).not.toHaveClass("selected");
+  });
+
+  it("selected (multi-select) but not active: no aria-current, .selected is present, .active is not", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} active={false} selected />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).not.toHaveAttribute("aria-current");
+    expect(row).toHaveClass("selected");
+    expect(row).not.toHaveClass("active");
+  });
+
+  it("both active AND part of the multi-selection at once: aria-current AND .selected both hold (independent flags)", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} active selected />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).toHaveAttribute("aria-current", "true");
+    expect(row).toHaveClass("active");
+    expect(row).toHaveClass("selected");
+  });
+
+  it("neither active nor selected: no aria-current, no distinguishing class", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} active={false} selected={false} />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).not.toHaveAttribute("aria-current");
+    expect(row).not.toHaveClass("active");
+    expect(row).not.toHaveClass("selected");
+  });
+
+  it("holds in the compact Tree row layout too (treeMode), not only the full card", () => {
+    const { container } = render(<DatasetRow dataset={plain} {...baseProps} active selected={false} treeMode />);
+    const row = container.querySelector(".qzk-ds")!;
+    expect(row).toHaveAttribute("aria-current", "true");
+    expect(row).toHaveClass("active");
+  });
+});
+
 describe("DatasetRow sheet affordance", () => {
   it("renders no sheet chip or indent for an ordinary dataset", () => {
     const { container } = render(<DatasetRow dataset={plain} {...baseProps} />);
