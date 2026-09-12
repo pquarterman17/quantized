@@ -1346,7 +1346,7 @@ differs from its input's — and that is what turned up sites 7-9.
   So the flag fixed one path and not the other, and the label path is the one
   this booked item is about. (My first edit here claimed both were fixed, having
   verified `rowSidecars.ts` and generalised to a module that does not use it.)
-- [ ] **Booked by site 10's fix, rescoped 2026-09-12:** recovering the LABEL
+- [x] **Booked by site 10's fix, rescoped 2026-09-12:** recovering the LABEL
   path's text labels — for a sampled preview AND for a trimmed one, since that
   path cannot see the flag — needs the backend to send which rows the decimator
   kept. Cheaper than the original note assumed:
@@ -1394,6 +1394,25 @@ differs from its input's — and that is what turned up sites 7-9.
   columns and NO `cat_levels`, so for the datasets this guard actually affects
   the fallback IS the numbers.
   `lib/projectSearchSidecars.ts` reads keys only and is fine.
+  **SHIPPED — reconciled 2026-09-12.** Landed as the metadata option decided
+  above: backend `e524d4ff` (`preview_rows`, omitted when the rows already
+  correspond), frontend `8711dab5` (`lib/rowSidecars.ts`'s
+  `PREVIEW_SOURCE_ROWS`/`asPreviewSourceRows`, read by
+  `lib/barlayout.ts::textLabelsFor` via `meta[PREVIEW_SOURCE_ROWS]`), review
+  fixes `3145fe33` (composed map on a row slice, duplicate-index rejection,
+  identity map for a trimmed prefix, facet-picker fix); merged as #355
+  (`fe40adb5`). `store/importDatasets.ts` writes the map onto the preview's
+  metadata; `lib/rowSidecars.ts::composePreviewSourceRows`/`sliceRowSidecars`
+  keep it correct across a row slice.
+  **Residuals recorded, not further open work:** (1) a text column shorter
+  than the book reads an out-of-range map entry as `undefined` -> blank per
+  CELL, fail-closed one row at a time rather than disabling the whole map
+  (`lib/barlayout.ts::textLabelsFor`'s unbounded-validator comment); (2)
+  `mergeDatasets` (`lib/merge.ts` via `withoutRowSidecars`) and every
+  worksheet reshape (`lib/worksheetTransforms.ts`'s `provenance()`) DROP the
+  map outright rather than compose or carry it, deliberately — `stack`'s
+  recoverable row mapping is booked but not done (see `rowSidecars.ts`'s
+  `PREVIEW_SOURCE_ROWS` doc comment).
 
 #### Second review round, on the fix itself — all fixed here
 
@@ -1751,10 +1770,20 @@ lose an edit:
   truncates them earlier), but it carries its own design question — should a `.dwk`'s
   exclusions survive a pending load at all? — so it is not a drive-by fix.
 
-- [ ] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
+- [x] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
   while `clearRowExclusions` does. So building a filter and pressing undo restores a
   snapshot from before the filter change and silently discards it. Pre-existing and
   untouched by the guard pass; worth its own fix.
+  **SHIPPED — reconciled 2026-09-12.** Fixed by `0da3bf20` (#354, Group S,
+  "the Data Filter belongs to undo"): `store/rowState.ts`'s `setDatasetFilter`
+  calls `recordHistoryCoalesced("data filter", ...)` and `clearDatasetFilter`
+  calls `recordHistory("clear data filter")`; `store/dataIntake.ts` calls
+  `endHistoryRun()` to terminate a slider/typing run. Pinned in
+  `store/rowState.test.ts`'s "Group S — a filter edit is undoable" and
+  "Group S — clearing the filter" describes ("Ctrl+Z gives back the state
+  from before the filter", "a whole EDITING RUN is one undo step, not one per
+  event", "is its own undo step, and undoing it gives the filter back",
+  "records NOTHING when there is no filter to clear", among others).
 
 ### STILL OPEN — the structural fix
 
