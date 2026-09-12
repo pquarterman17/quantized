@@ -85,6 +85,14 @@ describe("row-state writes are refused while a dataset is pending (BUG-009)", ()
     useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 15, max: 35 }]);
     expect(ds().filter).toBeUndefined();
     expect(useApp.getState().status).toMatch(/still loading its full data/);
+    // The history assertion its four siblings in this block all have, and the
+    // one this test was missing — which let a sabotage that moved the recorder
+    // ABOVE the pending guard pass the whole suite (review finding 6). Ordering
+    // is the point: a refused edit must leave no entry, or Ctrl+Z would restore
+    // a snapshot reached by an action that never happened, and BUG-009's own
+    // symptom ("no undo entry to notice") comes back inverted.
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().future).toHaveLength(0);
   });
 });
 
@@ -239,5 +247,238 @@ describe("the windowId (MDI worksheet) route is guarded too (review L5)", () => 
     useApp.getState().excludeSelectedRows("ws1");
     expect(ds().excludedRows).toEqual([1, 2]);
     expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
+  });
+});
+
+// ── Group S: the Data Filter belongs to undo ────────────────────────────────
+// It did not, and `filter` living ON the dataset made the omission worse than a
+// missing menu entry: the field is inside every snapshot, so skipping the
+// record also skipped the `future: []` that every edit owes redo.
+//
+// These assert what a USER does — press undo, press redo, drag a slider — not
+// that `recordHistory` was called. A "the setter records history" test would
+// have passed the naive fix that pushes one entry per pointermove, which is a
+// worse bug than the one being fixed.
+
+const FILTER = [{ col: 0, kind: "range" as const, min: 15 }];
+const OTHER_FILTER = [{ col: 0, kind: "range" as const, min: 25 }];
+const app = () => useApp.getState();
+
+describe("Group S — a filter edit is undoable", () => {
+  it("Ctrl+Z gives back the state from before the filter", () => {
+    app().setDatasetFilter("d1", FILTER);
+    expect(ds().filter).toEqual(FILTER);
+
+    app().undo();
+
+    expect(ds().filter).toBeUndefined();
+  });
+
+  it("...and Ctrl+Shift+Z brings it back", () => {
+    app().setDatasetFilter("d1", FILTER);
+    app().undo();
+
+    app().redo();
+
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a whole EDITING RUN is one undo step, not one per event", () => {
+    // The control is a dual-thumb <input type="range"> plus a NumberField, both
+    // of which fire on every `input` event: one drag or a typed "12.5" is many
+    // calls. At HISTORY_DEPTH 50, one entry each would silently evict
+    // everything else the user had done.
+    for (const min of [11, 12, 13, 14, 15, 16, 17, 18]) {
+      app().setDatasetFilter("d1", [{ col: 0, kind: "range", min }]);
+    }
+    expect(app().history).toHaveLength(1);
+
+    // And the one entry kept is the FIRST of the run, so undo lands before it
+    // began — not one nudge back.
+    app().undo();
+    expect(ds().filter).toBeUndefined();
+  });
+
+  it("an unrelated edit between two runs breaks the run", () => {
+    // Coalescing keys off the PREVIOUS entry, so anything landing in between
+    // makes the next filter edit start its own step. Otherwise a filter tweak
+    // an hour later would fold into this morning's.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history.map((h) => h.label)).toEqual([
+      "data filter",
+      "row exclusion",
+      "data filter",
+    ]);
+  });
+
+  it("filtering a DIFFERENT dataset is its own step", () => {
+    // The key carries the dataset id. A shared key would collapse "filter A"
+    // and "filter B" into one undo, and undoing it would revert both.
+    useApp.setState({
+      datasets: [dataset(), dataset({ id: "d2", name: "other.opj" })],
+      history: [],
+    });
+    app().setDatasetFilter("d1", FILTER);
+    app().setDatasetFilter("d2", FILTER);
+
+    expect(app().history).toHaveLength(2);
+
+    app().undo();
+    expect(useApp.getState().datasets[1].filter).toBeUndefined();
+    expect(useApp.getState().datasets[0].filter).toEqual(FILTER);
+  });
+
+  it("invalidates redo MID-RUN too, not just on the first edit of a run", () => {
+    // Found by sabotage: making the mid-run branch return `{}` instead of
+    // `{ future: [] }` left all 29 other tests green, because they only ever
+    // reach the FIRST call of a run — and that one clears `future` on the push
+    // path. The mid-run early-return needs its own clear.
+    //
+    // The state is reachable, which is what makes it a bug rather than a
+    // theoretical branch: a run is open (history's top carries the key) AND
+    // `future` is non-empty only if something landed after the run and was then
+    // undone. So — filter, exclude a row, undo the exclusion, nudge the filter
+    // again. Without the clear, a redo keypress restores the exclusion-era
+    // snapshot, which predates the nudge, and the nudge is destroyed.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+    // Still inside the filter run: the top of history is the run's own entry.
+    expect(app().history.at(-1)?.label).toBe("data filter");
+
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    // `future` being empty IS the assertion; a `redo()` here would be a no-op
+    // on an empty stack and prove nothing, which is how the first version of
+    // this test read as stronger evidence than it was (review nit).
+    expect(app().future).toHaveLength(0);
+  });
+
+  it("INVALIDATES REDO, like every other edit", () => {
+    // The second failure this fixes. `recordHistory` clears `future`; skipping
+    // it left a redo entry from before the filter existed, so Ctrl+Shift+Z
+    // destroyed the filter the user had just built.
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+
+    app().setDatasetFilter("d1", FILTER);
+
+    expect(app().future).toHaveLength(0);
+    // Proof it is not merely a counter: a redo keypress now cannot revert it.
+    app().redo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+});
+
+describe("Group S — clearing the filter", () => {
+  it("is its own undo step, and undoing it gives the filter back", () => {
+    // Deliberately NOT coalesced into the editing run before it: clearing is a
+    // discrete intent, and undoing a clear must restore the filter rather than
+    // rewind to before the filter existed.
+    app().setDatasetFilter("d1", FILTER);
+    app().clearDatasetFilter("d1");
+    expect(ds().filter).toBeUndefined();
+
+    app().undo();
+
+    expect(ds().filter).toEqual(FILTER);
+    expect(app().history.map((h) => h.label)).toEqual(["data filter"]);
+  });
+
+  it("records NOTHING when there is no filter to clear", () => {
+    // A no-op must not push an undo step. It also must not break a preceding
+    // run's coalescing — the next nudge would otherwise start a second entry.
+    app().clearDatasetFilter("d1");
+    expect(app().history).toHaveLength(0);
+
+    app().setDatasetFilter("d1", FILTER);
+    app().clearDatasetFilter("d1");
+    app().clearDatasetFilter("d1");
+    expect(app().history.map((h) => h.label)).toEqual(["data filter", "clear data filter"]);
+  });
+});
+
+// ── Review round: three ways the first coalescing design lost state ─────────
+// Written BEFORE the fix and confirmed failing against it, so each one is
+// demonstrating a real defect rather than describing one.
+
+describe("Group S review — a coalescing run must END", () => {
+  it("two SEPARATE gestures are two undo steps", () => {
+    // The first design's only run boundary was "somebody else recorded
+    // history". Nothing closed a run on pointerup, so a drag now and a drag an
+    // hour later folded together and one Ctrl+Z threw both away — the exact
+    // failure this group set out to remove, reintroduced from the other side.
+    app().setDatasetFilter("d1", FILTER);
+    app().endHistoryRun(); // what a pointerup / blur / click does
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history).toHaveLength(2);
+
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("UNDOING the interposing edit does not resurrect a finished run", () => {
+    // `coalesceKey` was only ever read off the TOP of the stack, so popping the
+    // entry that broke a run re-exposed the run's own entry, key intact — and
+    // its snapshot predates the filter entirely. Filter, exclude, undo the
+    // exclusion, nudge the filter: the nudge folded into a snapshot from before
+    // any filter existed, so Ctrl+Z discarded the whole filter instead of the
+    // nudge.
+    //
+    // This is the SAME sequence cited as the reachability proof for the mid-run
+    // `future: []` test above. That test was right and this hazard sat directly
+    // underneath it, unnoticed.
+    app().setDatasetFilter("d1", FILTER);
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+
+    app().setDatasetFilter("d1", OTHER_FILTER);
+
+    expect(app().history).toHaveLength(2);
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a filter edit during a BATCH keeps its own entry (R6 isolation)", async () => {
+    // Found by sabotage, and predicted by review: the fold path originally read
+    // neither `historySuppressed` nor the active token, so an edit landing
+    // mid-batch folded into whatever run was open — into a snapshot from before
+    // the batch. R6's whole point is that an edit which never received the
+    // batch's token keeps its OWN entry, so a batch cannot silently absorb it.
+    app().setDatasetFilter("d1", FILTER); // opens a run
+    expect(app().history).toHaveLength(1);
+
+    await app().withHistoryBatch("bulk thing", async () => {
+      app().setDatasetFilter("d1", OTHER_FILTER);
+    });
+
+    expect(app().history).toHaveLength(2);
+    // And it is a USABLE entry, not a duplicate: undo returns the first filter.
+    app().undo();
+    expect(ds().filter).toEqual(FILTER);
+  });
+
+  it("a filter edit that changes NOTHING records nothing", () => {
+    // Reachable by typing a bound and erasing it (parseBound("") commits
+    // `undefined`), or by toggling a level off and back on. The unconditional
+    // record pushed a phantom entry whose snapshot equals the present AND wiped
+    // `future` — inverting this group's own second bug into "a filter
+    // NON-change invalidates redo".
+    app().toggleRowExcluded("d1", 0);
+    app().undo();
+    expect(app().future).toHaveLength(1);
+
+    app().setDatasetFilter("d1", []);
+
+    expect(ds().filter).toBeUndefined();
+    expect(app().history).toHaveLength(0);
+    expect(app().future).toHaveLength(1);
   });
 });

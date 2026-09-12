@@ -1262,7 +1262,35 @@ import { fileURLToPath } from "node:url";
  *  and be willing to throw it away — twice now the number has disagreed with a
  *  sound-sounding argument.
  */
-const EAGER_JS_BUDGET = 917_635;
+/*  917,635 -> 918,800 (2026-09-12, Group S: the Data Filter joins undo, plus its
+ *  review round). Measured 917,829 after `npm ci` — 194 over — leaving ~1 kB of
+ *  headroom, the same margin the two moves before this left.
+ *
+ *  WHAT THE WEIGHT IS, and why none of it can be lazy: this is UNDO machinery on
+ *  the store's eager path. `recordHistoryCoalesced` + `endHistoryRun` + `closeRun`
+ *  in store/history.ts, `sameFilter` in store/rowState.ts, the gesture-boundary
+ *  handlers in DataFilterPanel, and a narrowed `isEditing`. Every one of them
+ *  runs while the user is editing; there is no "after a user action" boundary to
+ *  put a dynamic import() behind, because the action IS the trigger. The lazy
+ *  prescription in the failure text does not apply here — unlike the R2b case
+ *  below it, where it did apply, was tried, and lost on the numbers anyway.
+ *
+ *  TWO REDUCTIONS WERE TAKEN FIRST, worth ~100 bytes together (896.4 -> 896.3 kB):
+ *    1. `isEditing`'s type check was an allowlist of seven text-like input types
+ *       in a Set; it is now a three-alternative regex naming the types that have
+ *       NO text to undo. Smaller, and the default flipped to the safe side — an
+ *       input type nobody has considered yet now keeps the browser's own field
+ *       undo instead of having Ctrl+Z stolen.
+ *    2. `undo` and `endHistoryRun` both strip a `coalesceKey` off an entry; that
+ *       destructuring rest-strip is now one shared `closeRun` helper.
+ *
+ *  A THIRD REDUCTION WAS REJECTED: replacing `sameFilter`'s field-by-field
+ *  comparison with a JSON.stringify compare would be shorter code. It would also
+ *  be wrong the first time two identical filters were built with their keys in a
+ *  different order, and that is the kind of silent wrongness this whole group
+ *  exists to remove.
+ */
+const EAGER_JS_BUDGET = 918_800;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

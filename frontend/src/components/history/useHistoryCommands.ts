@@ -29,11 +29,29 @@ import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
+/** Input types with no text of their own to undo, so the app's Ctrl+Z should
+ *  win there.
+ *
+ *  Group S review finding 5: this guard used to treat ANY `<input>` as
+ *  text-editing, which swallowed Ctrl+Z for controls that have nothing to
+ *  undo. A native `<input type="range">` keeps focus after a click-drag, so the
+ *  Data Filter's slider left the user pressing Ctrl+Z at a focused thumb and
+ *  getting nothing — the filter had only just become undoable and the obvious
+ *  way to reach it did not work.
+ *
+ *  Stated as the SHORT list rather than enumerating the text-like types,
+ *  because that makes the default the safe one: an input type nobody has
+ *  thought about yet keeps the browser's own field-level undo, which is the
+ *  right answer for anything text-shaped. Hijacking a real text field's Ctrl+Z
+ *  to roll back a dataset edit would be worse than the gap this closes. */
+const NO_TEXT_TO_UNDO = /^(range|checkbox|radio)$/;
+
 function isEditing(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  if (tag === "INPUT") return !NO_TEXT_TO_UNDO.test((el as HTMLInputElement).type);
+  return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
 
 /** Undo the top history entry, or toast "nothing to undo" on an empty

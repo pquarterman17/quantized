@@ -26,6 +26,7 @@ const parseBound = (s: string): { commit: boolean; value: number | undefined } =
 
 export default function DataFilterPanel() {
   const setOpen = useApp((s) => s.setDataFilterOpen);
+  const endHistoryRun = useApp((s) => s.endHistoryRun);
   const activeId = useApp((s) => s.activeId);
   const f = useDataFilter();
   // Local text per range field, keyed by dataset so a switch starts fresh.
@@ -80,7 +81,24 @@ export default function DataFilterPanel() {
               <div key={c.index}>
                 <label className="qzk-field-lbl">{c.label}</label>
                 {c.kind === "range" ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  // `onPointerDown`/`onFocus`/`onKeyDown` mark where one filter
+                  // GESTURE begins. Both controls below fire on every `input`
+                  // event, so the store coalesces consecutive edits into one
+                  // undo entry — and coalescing with no terminator folded a drag
+                  // now into a drag an hour ago (review round). This is the
+                  // terminator: closing the previous run means the next event
+                  // starts a fresh entry. Capture phase, so it lands before the
+                  // control's own handler fires.
+                  //
+                  // `onKeyDown` is not redundant with `onPointerDown`: a native
+                  // range input is arrow/Home/End/PageUp operable, and the
+                  // NumberField is reached by Tab.
+                  <div
+                    style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                    onPointerDownCapture={endHistoryRun}
+                    onFocusCapture={endHistoryRun}
+                    onKeyDownCapture={endHistoryRun}
+                  >
                     {c.dataMin != null && c.dataMax != null && c.dataMax > c.dataMin && (
                       <RangeSlider
                         min={c.dataMin}
@@ -119,7 +137,13 @@ export default function DataFilterPanel() {
                         <Checkbox
                           key={lv}
                           checked={allowed}
-                          onChange={() => f.toggleLevel(c.index, lv)}
+                          onChange={() => {
+                            // A checkbox click is a DISCRETE gesture: each one
+                            // gets its own undo entry, or three level toggles
+                            // would collapse into one Ctrl+Z (review finding 9).
+                            endHistoryRun();
+                            f.toggleLevel(c.index, lv);
+                          }}
                         >
                           {c.levelLabels[levelIndex] ?? fmtNum(lv)}
                         </Checkbox>

@@ -1877,10 +1877,14 @@ const HISTORY_EXCLUDED: Record<string, string> = {
 
 describe("HistorySnapshot field coverage (GUI_INTERACTION_PLAN #21)", () => {
   it("every persistent store field is either in HistorySnapshot or HISTORY_EXCLUDED", () => {
-    // Load the HistorySnapshot type definition
-    const historySrc = sources().find(([p]) => p.endsWith("/store/history.ts"))?.[1] ?? "";
+    // Load the HistorySnapshot type definition. It lives in
+    // store/historySnapshot.ts, which store/history.ts re-exports — the type
+    // moved there (with snapshotOf/restorePatch) when history.ts crossed the
+    // 500-line ceiling. This guard reads the SOURCE, so it follows the
+    // definition, not the re-export.
+    const historySrc = sources().find(([p]) => p.endsWith("/store/historySnapshot.ts"))?.[1] ?? "";
     if (!historySrc) {
-      throw new Error("Could not find history.ts source");
+      throw new Error("Could not find historySnapshot.ts source");
     }
 
     // Extract field names from HistorySnapshot interface
