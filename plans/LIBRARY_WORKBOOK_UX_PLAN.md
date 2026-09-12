@@ -2551,10 +2551,12 @@ back to the owner. No Library implementation is authorized by this pause.
   libraryTileMenu}.ts`, plus `LibraryDetails.parity.test.tsx` (+12 tests, 29
   total) and `FolderRow.test.tsx` (+2, 38 total). 15 sabotages, each producing
   exactly the intended failing test. Gate: `tsc -b --force` clean, eslint 0
-  warnings, full vitest 10,220/10,220 in 629 files, eager bundle 919,215 B
-  (897.7 kB) against the 920,400 B budget — 1,185 B under, and byte-identical
-  to the 919,215 B measured on the base `298baeb9` (both builds after the same
-  `npm ci`): every file this round touches lands in the LAZY
+  warnings, full vitest 10,220/10,220 in 629 files, eager bundle 919,746 B
+  (898.2 kB) against the 920,400 B budget — 654 B under, and byte-identical
+  to the 919,746 B measured on its REAL parent `2b60d4e6` (both builds after
+  the same `npm ci`; the fix round first cited 919,215 B, which is `298baeb9`,
+  three unrelated commits earlier — the re-review caught it): every file this
+  round touches lands in the LAZY
   `LibraryDetails-*.js` chunk, which grew 10.96 → 11.63 kB, so the eager cost
   is zero. `tests/test_repo_integrity.py` 12 passed. NOT done: L1.4's remaining
   residual is still Tiles' total absence of drag/drop, named on the item
