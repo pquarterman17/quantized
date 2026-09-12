@@ -127,7 +127,20 @@ export function sliceRowSidecars(
  *  FAILS CLOSED: `undefined` counts as sampled, so a `.dwk` predating the field
  *  or a hand-edited one is treated as unsafe to index rather than assumed fine.
  *  `lib/workspaceDatasetParse.parsePending` applies the same `!== false` rule when
- *  reading it back. */
+ *  reading it back.
+ *
+ *  NOT SUPERSEDED by `PREVIEW_SOURCE_ROWS` below, though that map does let ONE
+ *  path stop refusing: `lib/barlayout.ts` resolves a category LABEL through
+ *  `sidecar[map[r]]`, which is a read whose whole answer is the cell's text. The
+ *  two callers here stay conservative on purpose, because their rows mean more
+ *  than their cells do:
+ *    * the worksheet grid (`worksheet/textColumns.ts`) would put a real cell on a
+ *      row whose neighbours are absent — a grid that looks contiguous and is not.
+ *    * a row EDIT (`store/cellEdit.ts`) would write through the map into a book
+ *      whose other rows this session has never seen, and then persist it. BUG-009's
+ *      guard refuses edits on a pending dataset anyway, so nothing here is the
+ *      only thing standing between that edit and the file.
+ *  Mapping a label is recoverable if wrong; mapping a write is not. */
 export function rowsAreSampled(pending: Dataset["pending"]): boolean {
   return pending != null && pending.previewSampled !== false;
 }
@@ -256,4 +269,64 @@ export function insertRowIndexes(rowCount: number, at: number, count: number): n
     ...Array.from({ length: n }, () => -1),
     ...Array.from({ length: rowCount - clamped }, (_, i) => clamped + i),
   ];
+}
+
+/** The metadata key a lazily-loaded book's PREVIEW carries its row map under:
+ *  for each preview row `r`, WHICH source row it is (`LazyBookEntry.preview_rows`
+ *  on the wire -> `preview.metadata.preview_source_rows` on the DataStruct, put
+ *  there by `store/importDatasets.ts`). Present only when the rows do NOT
+ *  already correspond — the backend omits it for an untouched or merely
+ *  padding-trimmed preview, which is a strict PREFIX whose row r IS source row r
+ *  (`io/origin_project/preview.py::decimate_with_alignment`).
+ *
+ *  Deliberately NOT in `ROW_INDEXED_SIDECARS`, and the reasons are worth writing
+ *  down because "one rule, one place" is this module's whole point:
+ *    * different SHAPE. Those keys hold `{column: [cell per row]}`; this is a
+ *      bare `number[]`, which `sliceOneSidecar` returns UNTOUCHED (its
+ *      `Array.isArray` rejection). Registering it would buy no slicing at all,
+ *      only the false impression that slicing handles it.
+ *    * different INDEX SPACE. Those are indexed by SOURCE row; this is indexed
+ *      by PREVIEW row and its cells ARE source-row numbers, so a row operation
+ *      would have to COMPOSE it, not slice it.
+ *    * it needs neither, because every reader consults the map ONLY when a
+ *      sidecar's length disagrees with the row count, and re-validates it
+ *      through `asPreviewSourceRows` at that moment. An operation that REBUILDS
+ *      the sidecars to match its own rows (`concatRowSidecars` on a merge) makes
+ *      the map dead weight that is never read again; one that leaves a stale map
+ *      behind fails the length/bounds check and degrades to numbers. Neither can
+ *      mislabel. That is the same fail-closed posture `rowsAreSampled` takes,
+ *      reached by validation rather than by enumeration.
+ *  A genuinely ROW-INDEXED sidecar added by a parser still belongs in the list
+ *  above — this exemption is about this key's shape, not a loosening. */
+export const PREVIEW_SOURCE_ROWS = "preview_source_rows";
+
+/** `raw` as a usable preview->source row map, or `null` if it is anything else.
+ *
+ *  ONE validator, shared by the producer (`store/importDatasets.ts`, against the
+ *  wire field) and the consumer (`lib/barlayout.ts`'s label resolution, against
+ *  the metadata key), because the two must agree on what counts as usable. A map
+ *  that passed the producer and then failed the consumer would be worse than no
+ *  map: labels silently absent while a key in the file claims otherwise.
+ *
+ *  FAILS CLOSED on everything — not an array, a non-integer or negative entry, a
+ *  length other than `previewRowCount`, or (when `sourceRowCount` is given) an
+ *  entry naming a row the source does not have. This key round-trips into the
+ *  `.dwk` (`lib/workspaceSerialize.ts` writes `d.data` whole), and a `.dwk` is
+ *  hand-editable, so none of that is hypothetical.
+ *
+ *  Deliberately NOT checked: that the entries ascend, or are distinct. The
+ *  backend's sampler emits them sorted, but a reader that only looks up
+ *  `sidecar[map[r]]` is correct for ANY permutation, so rejecting one would
+ *  trade a working label source for a guess about the producer. */
+export function asPreviewSourceRows(
+  raw: unknown,
+  previewRowCount: number,
+  sourceRowCount?: number,
+): number[] | null {
+  if (!Array.isArray(raw) || raw.length !== previewRowCount) return null;
+  const bound = sourceRowCount ?? Number.POSITIVE_INFINITY;
+  for (const i of raw) {
+    if (typeof i !== "number" || !Number.isInteger(i) || i < 0 || i >= bound) return null;
+  }
+  return raw as number[];
 }

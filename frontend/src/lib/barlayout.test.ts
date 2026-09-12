@@ -299,10 +299,12 @@ describe("category labels never come from a sidecar that does not match the rows
     metadata: { text_columns: SIDECAR, instrument: "PPMS" },
   });
 
-  it("a SAMPLED preview falls back to numbers instead of confident WRONG names", () => {
+  it("a SAMPLED preview with NO row map falls back to numbers, not confident WRONG names", () => {
     // The measured defect. Pre-guard this returned ["A0","A0","B1"]: every
     // level covered and each internally consistent, so the agreement check
-    // passed. The truth is A0/B1/C2.
+    // passed. The truth is A0/B1/C2. This is now also the NEGATIVE CONTROL for
+    // the row map below — an older backend, or a `.dwk` whose map did not
+    // survive validation, must keep landing on the numbers.
     const sampled = preview([1, 2, 4, 5], [[0], [1], [2], [2]]);
     const labels = resolveCategoryLabels(sampled, 0, [0, 1, 2]);
     expect(labels).not.toEqual(["A0", "A0", "B1"]);
@@ -325,12 +327,13 @@ describe("category labels never come from a sidecar that does not match the rows
     expect(resolveCategoryLabels(resolved, 0, [0, 1, 2])).toEqual(["A0", "B1", "C2"]);
   });
 
-  it("KNOWN COST: a padding-trimmed preview also degrades to numbers", () => {
+  it("KNOWN COST: a padding-trimmed preview still degrades to numbers", () => {
     // A trim is a genuine PREFIX whose cells DO line up, but its sidecar is
-    // full-length too, and no length test can tell a prefix from a sample. So
-    // these labels are correct-but-unavailable until the book resolves. A
-    // degradation, deliberately preferred over the wrong names above. Recovering
-    // it needs the backend to send which rows the decimator kept (booked).
+    // full-length too, and no length test can tell a prefix from a sample. The
+    // row map does not help here BY DESIGN: the backend omits it exactly when
+    // the rows correspond, so a trimmed preview arrives with nothing to read.
+    // Still correct-but-unavailable until the book resolves — a degradation,
+    // deliberately preferred over the wrong names above.
     const trimmed = preview([1, 2, 3, 4], [[0], [0], [1], [1]]);
     expect(resolveCategoryLabels(trimmed, 0, [0, 1])).toEqual(["0", "1"]);
   });
@@ -345,5 +348,109 @@ describe("category labels never come from a sidecar that does not match the rows
       cat_levels: { 0: ["Low", "Mid", "High"] },
     };
     expect(resolveCategoryLabels(withTable, 0, [0, 1, 2])).toEqual(["Low", "Mid", "High"]);
+  });
+});
+
+// Group T: the sampled preview's labels are RECOVERED, not refused, once the
+// backend says which rows it kept (`preview.py::decimate_with_alignment` ->
+// `LazyBookEntry.preview_rows` -> `metadata.preview_source_rows`). Same 6-row
+// book as the block above, so every case here is the measured defect's own
+// fixture with one key added.
+describe("a sampled preview's category labels come from its row map (BUG-006 site 10, Group T)", () => {
+  const SIDECAR = { Group: ["A0", "A0", "B1", "B1", "C2", "C2"] };
+  // Rows 1, 2, 4 and 5 of the 6-row book, i.e. levels [0, 1, 2, 2] — the sample
+  // whose naive walk produced ["A0","A0","B1"].
+  const KEPT = [1, 2, 4, 5];
+  const sampled = (map: unknown): DataStruct => ({
+    time: [1, 2, 4, 5],
+    values: [[0], [1], [2], [2]],
+    labels: ["Group"],
+    units: [""],
+    metadata:
+      map === undefined
+        ? { text_columns: SIDECAR }
+        : { text_columns: SIDECAR, preview_source_rows: map },
+  });
+
+  it("resolves the RIGHT label per level — A0/B1/C2, not A0/A0/B1", () => {
+    expect(resolveCategoryLabels(sampled(KEPT), 0, [0, 1, 2])).toEqual(["A0", "B1", "C2"]);
+  });
+
+  it("reads the map's cell, not row r's — every level is a DIFFERENT cell", () => {
+    // The sharper form of the claim above: `rows[r]` and `rows[map[r]]` are
+    // different cells for r >= 1 here, so a resolver that quietly kept indexing
+    // by r cannot produce this answer. Level 2's label is the give-away: "C2"
+    // lives at source rows 4/5, which a 4-row walk over `rows[r]` never reaches.
+    const labels = resolveCategoryLabels(sampled(KEPT), 0, [0, 1, 2]);
+    expect(labels?.[2]).toBe("C2");
+    expect(SIDECAR.Group[2]).toBe("B1"); // what `rows[2]` would have said
+    // Level 0's row is kept row 1, not kept row 0 — so an off-by-one in the
+    // lookup (`rows[map[r] + 1]`) reads "B1" here and this line catches it.
+    expect(labels?.[0]).toBe("A0");
+  });
+
+  it("ignores a map of the WRONG LENGTH and degrades to numbers", () => {
+    // One entry short of the preview's 4 rows: a hand-edited `.dwk`, or a map
+    // saved against a preview that has since been sliced. Unusable — refuse.
+    expect(resolveCategoryLabels(sampled([1, 2, 4]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  it("ignores a map whose index is OUT OF RANGE for the sidecar", () => {
+    // Row 6 does not exist in a 6-cell column. Indexing it yields `undefined`,
+    // which the walk would read as a blank — so level 2 would lose its name
+    // while levels 0 and 1 kept theirs. Reject the whole map instead: a map that
+    // is wrong about one row is not evidence about the others.
+    expect(resolveCategoryLabels(sampled([1, 2, 4, 6]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  // These two land on the numbers by TWO routes — rejected by the validator, or
+  // accepted and then read as a blank cell that leaves a level uncovered — so
+  // they pin the user-visible outcome but cannot prove the validation ran.
+  // `lib/rowSidecars.test.ts`'s "rejects every malformed shape" does that.
+  it("ignores a NEGATIVE or fractional index", () => {
+    expect(resolveCategoryLabels(sampled([-1, 2, 4, 5]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+    expect(resolveCategoryLabels(sampled([1.5, 2, 4, 5]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  it("ignores a map that is not an array of numbers at all", () => {
+    expect(resolveCategoryLabels(sampled("1,2,4,5"), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+    expect(resolveCategoryLabels(sampled(["1", "2", "4", "5"]), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+    expect(resolveCategoryLabels(sampled({ 0: 1 }), 0, [0, 1, 2])).toEqual(["0", "1", "2"]);
+  });
+
+  it("is NOT consulted when the sidecar already matches the rows", () => {
+    // A full-length dataset carrying a stale map (a merge rebuilt the sidecars,
+    // say) must read its own cells straight through. The map here is a
+    // deliberate lie — reversed — and the answer is still the honest one.
+    const full: DataStruct = {
+      time: [1, 2, 3, 4, 5, 6],
+      values: [[0], [0], [1], [1], [2], [2]],
+      labels: ["Group"],
+      units: [""],
+      metadata: { text_columns: SIDECAR, preview_source_rows: [5, 4, 3, 2, 1, 0] },
+    };
+    expect(resolveCategoryLabels(full, 0, [0, 1, 2])).toEqual(["A0", "B1", "C2"]);
+  });
+
+  it("a map cannot rescue a sidecar that genuinely DISAGREES with itself", () => {
+    // The per-level agreement check still runs, on the MAPPED cells. Levels
+    // [0,0,1,1] over kept rows [0,2,4,5] read "A0","B1","C2","C2", so level 0
+    // claims both "A0" and "B1" — the disagreement the check exists to catch. A
+    // map buys the right cells, not permission to skip that check.
+    const ds: DataStruct = {
+      time: [0, 2, 4, 5],
+      values: [[0], [0], [1], [1]],
+      labels: ["Group"],
+      units: [""],
+      metadata: { text_columns: SIDECAR, preview_source_rows: [0, 2, 4, 5] },
+    };
+    expect(resolveCategoryLabels(ds, 0, [0, 1])).toEqual(["0", "1"]);
+  });
+
+  it("does not mutate or consume the map — it stays in metadata for the next read", () => {
+    const ds = sampled(KEPT);
+    resolveCategoryLabels(ds, 0, [0, 1, 2]);
+    expect(ds.metadata?.["preview_source_rows"]).toEqual(KEPT);
+    expect(ds.metadata?.["text_columns"]).toEqual(SIDECAR);
   });
 });

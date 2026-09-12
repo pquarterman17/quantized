@@ -2,6 +2,8 @@
 // sample, temperature, comments, raw header keys…) for the Inspector card. Pure
 // + testable; the card just renders these rows.
 
+import { PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+
 /** Format a metadata value for display: scalars as-is, objects/arrays as compact
  *  JSON, null/undefined as a dash. */
 export function formatMetaValue(v: unknown): string {
@@ -21,7 +23,13 @@ export function formatMetaValue(v: unknown): string {
  *  Origin provenance keys (`origin_results_log[_records]`, `origin_notes`,
  *  `origin_report_sheets`, `origin_text_columns`) are also dropped — they
  *  have their own dedicated Inspector card (OriginProvenanceCard) that
- *  renders them readably instead of as raw text/JSON rows. */
+ *  renders them readably instead of as raw text/JSON rows.
+ *
+ *  `preview_source_rows` (`lib/rowSidecars.PREVIEW_SOURCE_ROWS`) is dropped for
+ *  the same reason as the plot-x hints: it is WIRING — which source row each row
+ *  of a still-loading book's preview is — and `formatMetaValue` would render it
+ *  as one JSON row of up to 200 integers in a card meant for instrument header
+ *  fields. */
 export function metadataRows(metadata: Record<string, unknown>): [string, string][] {
   const hidden = new Set([
     "x_column_name",
@@ -31,6 +39,7 @@ export function metadataRows(metadata: Record<string, unknown>): [string, string
     "origin_notes",
     "origin_report_sheets",
     "origin_text_columns",
+    PREVIEW_SOURCE_ROWS,
   ]);
   return Object.keys(metadata)
     .filter((k) => !hidden.has(k))

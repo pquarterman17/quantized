@@ -10,6 +10,7 @@
 // clustered bar chart needs within one category slot.
 
 import { categoryLevels, columnOf, isCategoricalChannel, levelLabel } from "./categorical";
+import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
 // ── Category levels + label resolution ──────────────────────────────────────
@@ -76,31 +77,42 @@ function textLabelsFor(
     // below passed and it returned ["A0","A0","B1"] for levels [0,1,2]. The
     // truth is A0/B1/C2. Confident wrong category names on a bar chart.
     //
-    // SUPPRESS, never reindex, and never DELETE — the shape site 9 chose
-    // (`components/Stage/worksheet/textColumns.ts`). Reindexing is impossible:
-    // the preview does not record which rows the sampler kept. Deleting the
-    // sidecar at the producer was tried and REVERTED in review: several
-    // legitimate readers do not row-index it at all (the Inspector's Origin
-    // provenance card, `lib/projectSearchSidecars.ts`'s name search) and a
-    // producer-side strip destroyed their data too — persistently, since
-    // `lib/workspaceSerialize.ts` then wrote the stripped metadata into the
-    // `.dwk`. Declining to INDEX costs nothing but this one label source.
+    // NEVER DELETE the sidecar. That was tried at the producer and REVERTED in
+    // review: several legitimate readers do not row-index it at all (the
+    // Inspector's Origin provenance card, `lib/projectSearchSidecars.ts`'s name
+    // search) and a producer-side strip destroyed their data too —
+    // persistently, since `lib/workspaceSerialize.ts` then wrote the stripped
+    // metadata into the `.dwk`. That ruling stands; this resolver touches only
+    // what it INDEXES, never what exists.
     //
-    // KNOWN COST, accepted: a merely padding-TRIMMED preview is a genuine
-    // PREFIX whose cells DO line up, and its sidecar is full-length too, so
-    // this guard also suppresses it and those labels fall back to formatted
-    // numbers until the book resolves. A length test cannot tell a prefix from
-    // a sample. That is a DEGRADATION (numbers instead of names, self-healing
-    // on resolve) where the alternative is WRONG names, so it is the right way
-    // to be wrong. Recovering it properly needs the backend to send which rows
-    // the decimator kept — booked in plans/BUGS_AND_ISSUES.md, not invented
-    // here.
-    if (rows.length !== by.length) continue;
+    // REINDEX when, and only when, the preview says how. The sampler knows which
+    // rows it kept and now sends them (`preview.py::decimate_with_alignment` ->
+    // the wire's `preview_rows` -> this DataStruct's own
+    // `metadata.preview_source_rows`, put there by `store/importDatasets.ts`), so
+    // `rows[map[r]]` is exactly the cell preview row r came from and the measured
+    // defect above resolves to A0/B1/C2 instead of degrading. The map is
+    // RE-VALIDATED here rather than trusted — it round-trips through the `.dwk`,
+    // and a map of the wrong length or naming a cell the sidecar lacks must
+    // degrade, not mislabel.
+    //
+    // WITHOUT a usable map a length mismatch is still SUPPRESSED, which leaves
+    // one known cost: a merely padding-TRIMMED preview is a genuine PREFIX whose
+    // cells DO line up, but it carries no map (its rows correspond, so the
+    // backend deliberately sends nothing) and no length test can tell that prefix
+    // from a sample. Those labels still read as formatted numbers until the book
+    // resolves — a DEGRADATION, self-healing, deliberately preferred over the
+    // wrong names above. The same suppression covers an older backend and any
+    // `.dwk` whose map fails validation.
+    const map =
+      rows.length === by.length
+        ? null
+        : asPreviewSourceRows(meta[PREVIEW_SOURCE_ROWS], by.length, rows.length);
+    if (map === null && rows.length !== by.length) continue;
     const perLevel = new Map<number, string>();
     let ok = true;
     for (let r = 0; r < by.length && ok; r++) {
       if (!Number.isFinite(by[r])) continue;
-      const text = String(rows[r] ?? "").trim();
+      const text = String((map === null ? rows[r] : rows[map[r]]) ?? "").trim();
       if (!text) continue; // a blank cell is uninformative, not disqualifying
       const seen = perLevel.get(by[r]);
       if (seen === undefined) perLevel.set(by[r], text);

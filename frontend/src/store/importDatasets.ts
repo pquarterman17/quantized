@@ -35,6 +35,7 @@ import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
 import { planOriginImport } from "../lib/originFolders";
+import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "../lib/rowSidecars";
 import {
   isLazyBookEntry,
   isPrimaryBookMarker,
@@ -191,7 +192,20 @@ function addFromPayload(
         const bookData = { time: data.time, values: data.values, labels: book.labels, units: book.units, metadata: book.metadata };
         get().addDataset({ id, name, data: bookData, ...src, ...roles, importedAt }, historyToken);
       } else if (isLazyBookEntry(book)) {
-        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: book.metadata };
+        // The preview's rows are the book's FULL metadata's rows only when the
+        // backend says so; when it sampled them it also says WHICH rows it kept,
+        // and that map travels on the PREVIEW's own metadata (BUG-006 site 10).
+        // It belongs there, not on `pending`: the 30-odd readers of a row-indexed
+        // sidecar hold a `DataStruct` and nothing else, and the map describes
+        // exactly the rows it travels with — so `bookData.installBookData`
+        // replacing `.data` wholesale on arrival retires it at the same instant
+        // the preview it describes stops existing. Validated here (and again at
+        // every read) so a hand-edited `.dwk` cannot turn it into wrong labels.
+        const sourceRows = asPreviewSourceRows(book.preview_rows, book.preview.time.length, book.rows);
+        const bookMeta = sourceRows
+          ? { ...book.metadata, [PREVIEW_SOURCE_ROWS]: sourceRows }
+          : book.metadata;
+        const bookData = { time: book.preview.time, values: book.preview.values, labels: book.labels, units: book.units, metadata: bookMeta };
         get().addDataset({
           id,
           name,

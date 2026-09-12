@@ -7,8 +7,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  asPreviewSourceRows,
   concatRowSidecars,
   insertRowIndexes,
+  PREVIEW_SOURCE_ROWS,
+  ROW_INDEXED_SIDECARS,
   sidecarRowCount,
   sliceRowSidecars,
   withoutRowSidecars,
@@ -167,5 +170,51 @@ describe("withoutRowSidecars", () => {
     const meta = { text_columns: { A: ["a"] } };
     withoutRowSidecars(meta);
     expect(meta.text_columns).toBeDefined();
+  });
+});
+
+// The two claims `asPreviewSourceRows`' own doc makes that the layer tests above
+// it (lib/barlayout.test.ts, store/importDatasets.test.ts) exercise only
+// indirectly.
+describe("asPreviewSourceRows", () => {
+  it("accepts a PERMUTATION — order is deliberately not required", () => {
+    // The doc says a reader looking up `sidecar[map[r]]` is correct for any
+    // permutation, so rejecting an unsorted map would throw away a working label
+    // source over a guess about the producer. That promise needs a test.
+    expect(asPreviewSourceRows([5, 1, 4, 2], 4, 6)).toEqual([5, 1, 4, 2]);
+    expect(asPreviewSourceRows([2, 2], 2, 6)).toEqual([2, 2]); // repeats too
+  });
+
+  it("rejects every malformed shape, returning null", () => {
+    // The DISCRIMINATING home for the negative/fractional cases: at the
+    // barlayout layer a bad index reads as a blank cell and the labels degrade to
+    // numbers whether or not anything validated, so only an assertion on the
+    // validator's own answer can tell a rejection from a coincidence.
+    expect(asPreviewSourceRows([1, 2, 4], 4, 6)).toBeNull(); // short
+    expect(asPreviewSourceRows([1, 2, 4, 5, 0], 4, 6)).toBeNull(); // long
+    expect(asPreviewSourceRows([-1, 2, 4, 5], 4, 6)).toBeNull(); // negative
+    expect(asPreviewSourceRows([1.5, 2, 4, 5], 4, 6)).toBeNull(); // fractional
+    expect(asPreviewSourceRows([1, 2, 4, 6], 4, 6)).toBeNull(); // past the source
+    expect(asPreviewSourceRows([1, 2, 4, Number.NaN], 4, 6)).toBeNull();
+    expect(asPreviewSourceRows(["1", "2", "4", "5"], 4, 6)).toBeNull();
+    expect(asPreviewSourceRows("1,2,4,5", 4, 6)).toBeNull();
+    expect(asPreviewSourceRows({ 0: 1, length: 4 }, 4, 6)).toBeNull();
+    expect(asPreviewSourceRows(null, 4, 6)).toBeNull();
+    expect(asPreviewSourceRows(undefined, 4, 6)).toBeNull();
+  });
+
+  it("treats an omitted sourceRowCount as unbounded, not as zero", () => {
+    // A consumer that knows the preview's row count but not the source's (there
+    // is no such caller today) must still get its map, not a silent refusal from
+    // an accidental `?? 0`.
+    expect(asPreviewSourceRows([9999], 1)).toEqual([9999]);
+  });
+
+  it("is NOT one of the row-indexed sidecars — that exemption is load-bearing", () => {
+    // `sliceOneSidecar` returns a bare array untouched, so registering this key
+    // would buy no slicing and imply one. See its doc for the full argument; this
+    // pins the decision so a future "add every new metadata key to the list"
+    // sweep has to read it first.
+    expect([...ROW_INDEXED_SIDECARS] as string[]).not.toContain(PREVIEW_SOURCE_ROWS as string);
   });
 });

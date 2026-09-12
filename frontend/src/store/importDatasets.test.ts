@@ -1209,3 +1209,73 @@ describe("a lazy book's preview_sampled reaches its pending ref", () => {
     expect((await importOne(undefined))?.previewSampled).toBeUndefined();
   });
 });
+
+// Group T: the flag says a preview's rows ARE a sample; `preview_rows` says WHICH
+// rows, and that map has to land on the PREVIEW DataStruct's own metadata — the
+// only place `lib/barlayout.ts`'s label resolver (holding a DataStruct and nothing
+// else) can reach it. Lose this line and every sampled Origin book's bar-chart
+// categories silently revert to formatted numbers.
+describe("a lazy book's preview_rows lands on the preview's metadata", () => {
+  const files = (...names: string[]) => names.map((n) => new File(["x"], n));
+
+  const payload = (previewRows: unknown) => ({
+    time: [0, 1],
+    values: [[0], [1]],
+    labels: ["Y"],
+    units: [""],
+    metadata: { origin_book: "Primary" },
+    book_source: { kind: "path" as const, path: "/p.opj" },
+    books: [
+      { lazy: false as const, primary: true as const, id: "b0", labels: ["Y"], units: [""], metadata: { origin_book: "Primary" }, rows: 2, cols: 1 },
+      {
+        lazy: true as const,
+        id: "b1",
+        labels: ["Y"],
+        units: [""],
+        // A row-indexed sidecar for the WHOLE 500-row book, which is the shape
+        // that makes the map worth carrying at all.
+        metadata: { origin_book: "Lazy", text_columns: { Group: ["A", "B"] } },
+        rows: 500,
+        cols: 1,
+        // Two preview rows, sampled from a 500-row book.
+        preview: { time: [0, 1], values: [[0], [1]] },
+        preview_sampled: true,
+        ...(previewRows === undefined ? {} : { preview_rows: previewRows }),
+      },
+    ],
+  });
+
+  // Clears the store on every call, not just every test: the malformed-map case
+  // below imports several payloads in one `it`, and `find` would otherwise keep
+  // answering with the first import's dataset and pass no matter what.
+  const importOne = async (previewRows: unknown) => {
+    useApp.setState({ datasets: [], folders: [], activeId: null, selectedIds: [] });
+    vi.mocked(uploadFile).mockResolvedValueOnce(payload(previewRows) as never);
+    await useApp.getState().importFiles(files("p.opj"));
+    return useApp.getState().datasets.find((d) => d.pending != null)?.data;
+  };
+
+  it("carries a valid map onto the preview as preview_source_rows", async () => {
+    const data = await importOne([17, 402]);
+    expect(data?.metadata?.["preview_source_rows"]).toEqual([17, 402]);
+    // ...alongside the book metadata it travels with, not instead of it.
+    expect(data?.metadata?.["origin_book"]).toBe("Lazy");
+    expect(data?.metadata?.["text_columns"]).toEqual({ Group: ["A", "B"] });
+  });
+
+  it("adds nothing when the backend sends no map (an unsampled or older payload)", async () => {
+    const data = await importOne(undefined);
+    expect(data?.metadata && "preview_source_rows" in data.metadata).toBe(false);
+  });
+
+  it("DROPS a malformed map instead of persisting it — the reader must degrade, not mislabel", async () => {
+    // Each of these would survive into the `.dwk` if the producer trusted the
+    // wire: a length that disagrees with the preview's row count, a
+    // non-integer/negative index, an index past the book's own 500 rows, and a
+    // value that is not an array of numbers at all.
+    for (const bad of [[17], [17, 402, 403], [1.5, 2], [-1, 2], [17, 500], "17,402", ["17", "402"], null]) {
+      const data = await importOne(bad);
+      expect(data?.metadata && "preview_source_rows" in data.metadata, JSON.stringify(bad)).toBe(false);
+    }
+  });
+});
