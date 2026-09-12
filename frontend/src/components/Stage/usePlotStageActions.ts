@@ -13,7 +13,7 @@ import type uPlot from "uplot";
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
 import { xExtent } from "../../lib/plotDecimate";
-import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
+import { clampPlottedRange, rowsInXRange, type PlotPayload, type PlotSeriesSpec } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
 import { withYRange } from "../../lib/regionSelect";
 // Bundle: `copyFigureCommand` (and the whole `figureSpec` transport builder
@@ -42,12 +42,18 @@ export interface PlotStageActions {
   snapshot: () => void;
 }
 
-/** [min, max] across every plotted y series (skips the x column, `cols[0]`):
- *  the y-box's clamp target, via plotDecimate's already-eager `xExtent`
- *  reused per series (same "finite [min,max] of one array" shape). */
-function plottedYExtent(cols: (number | null)[][]): [number, number] | null {
+/** [min, max] across every plotted PRIMARY-axis y series (skips the x column,
+ *  `cols[0]`, AND any series on the secondary axis, `series[s-1].axis===1`
+ *  — `cols[s]` aligns with `series[s-1]`, one x column ahead, e.g. a dy/dx
+ *  differentiate overlay or a dual-Y channel): the y-box clamps against the
+ *  SAME primary-axis data the baseline fit reads (uplotOpts's
+ *  `regionYScale`), never against a secondary axis's differently-calibrated
+ *  range. Via plotDecimate's already-eager `xExtent` reused per series (same
+ *  "finite [min,max] of one array" shape). */
+function plottedYExtent(cols: (number | null)[][], series: PlotSeriesSpec[]): [number, number] | null {
   let lo = Infinity, hi = -Infinity;
   for (let s = 1; s < cols.length; s++) {
+    if ((series[s - 1]?.axis ?? 0) === 1) continue;
     const e = xExtent(cols[s]);
     if (e) { lo = Math.min(lo, e[0]); hi = Math.max(hi, e[1]); }
   }
@@ -155,7 +161,7 @@ export function usePlotStageActions(
     if (!displayPayload) return;
     const x = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
     if (!x) return;
-    const yExtent = plottedYExtent(displayPayload.data as (number | null)[][]);
+    const yExtent = plottedYExtent(displayPayload.data as (number | null)[][], displayPayload.series);
     const picked = withYRange(x, y0, y1, yExtent ? { min: yExtent[0], max: yExtent[1] } : undefined);
     useApp.getState().setRegionPicked(picked);
     useApp.getState().setPlotTool("zoom");

@@ -900,6 +900,106 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
     expect(onRegionSelect).toHaveBeenCalled();
     expect(onRangeSelect).not.toHaveBeenCalled();
   });
+
+  // Finding 2 (Group AB adversarial review, round 2): the y read-back must
+  // resolve the FIT DATA's own scale (mirrors uplotOverlays.ts's own
+  // `axis===1 && hasY2 ? "y2" : "y"`), not always literal "y".
+  it("reads y0/y1 back on the plotted baseline series' own axis, not always \"y\"", () => {
+    const onRegionSelect = vi.fn();
+    // series[0] (the fit data) lives on the SECONDARY axis; a dy/dx-style
+    // overlay on the primary would be series[1]. y and y2 use different
+    // divisors so a test can tell which scale posToVal was actually asked for.
+    const dualAxis: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [1, 2, 3],
+      ],
+      series: [
+        { label: "M", unit: "emu", axis: 1 },
+        { label: "aux", unit: "", axis: 0 },
+      ],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 100);
+    const opts = buildOpts(dualAxis, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 14, height: 21 }, posToVal: scaleAwarePosToVal };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5, 2, 5); // 14/7, (14+21)/7 — read on "y2"
+  });
+
+  it("stays on \"y\" when the fit data is primary even though a y2 overlay exists", () => {
+    const onRegionSelect = vi.fn();
+    const withOverlay: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [1, 2, 3],
+      ],
+      series: [
+        { label: "M", unit: "emu" }, // primary (default axis 0) — the actual fit data
+        { label: "dy/dx", unit: "", axis: 1 }, // secondary-axis overlay, appended after
+      ],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
+    const opts = buildOpts(withOverlay, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // read on "y" (20/10, 50/10)
+  });
+});
+
+describe("buildOpts region tool live drag rendering (Finding 1, Group AB adversarial review)", () => {
+  // Mock enough of `u` for the setCursor hook: a `.select` (uPlot's real,
+  // untouched drag geometry), `.over` (the `.u-over` DOM element the real
+  // `.u-select` div lives under) with a `clientHeight` and a `querySelector`
+  // stub returning a fake element whose `.style` this hook may write to.
+  function fakeU(selectHeight: number) {
+    const band = { style: {} as Record<string, string> };
+    const querySelector = vi.fn(() => band);
+    const u = {
+      select: { left: 10, width: 50, top: 40, height: selectHeight },
+      over: { clientHeight: 200, querySelector },
+    };
+    return { u, band, querySelector };
+  }
+
+  it("repaints .u-select back to full plot height while the real drag is under MIN_BOX_HEIGHT_PX", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const { u, band, querySelector } = fakeU(2); // 2px < MIN_BOX_HEIGHT_PX (6)
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).toHaveBeenCalledWith(".u-select");
+    expect(band.style.top).toBe("0px");
+    expect(band.style.height).toBe("200px"); // u.over.clientHeight, not the real 2px
+    // uPlot's own real drag geometry is left completely untouched — the
+    // drag-end `setSelect` hook must still see the true small height.
+    expect(u.select.height).toBe(2);
+    expect(u.select.top).toBe(40);
+  });
+
+  it("leaves the real box alone once the vertical span clears the threshold", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const { u, querySelector } = fakeU(30); // 30px >= MIN_BOX_HEIGHT_PX
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a zero-width select (no active drag)", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const u = { select: { left: 0, width: 0, top: 0, height: 0 }, over: { clientHeight: 200, querySelector: vi.fn() } };
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(u.over.querySelector).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for the \"select\" tool (x-only by design, never even starts y-tracking)", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
+    const { u, querySelector } = fakeU(2);
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).not.toHaveBeenCalled();
+  });
 });
 
 describe("buildOpts non-monotonic x (hysteresis loops)", () => {

@@ -73,3 +73,28 @@ describe("usePlotStageActions onRegionSelect", () => {
     expect(useApp.getState().plotTool).toBe("region"); // never exited
   });
 });
+
+// Finding 2 (Group AB adversarial review, round 2): plottedYExtent must skip
+// a secondary-axis (axis:1) series — e.g. a dy/dx differentiate overlay —
+// when clamping the y-box, since that series' range is on a totally
+// different calibration than the primary-axis data the baseline fit reads.
+describe("usePlotStageActions onRegionSelect y-extent skips secondary-axis series", () => {
+  const withY2Overlay: PlotPayload = {
+    data: [
+      [0, 1, 2, 3, 4],
+      [10, 20, 30, 40, 50], // primary (fit data)
+      [-500, 900, -700, 800, -600], // axis:1 overlay — wildly different range
+    ],
+    series: [{ label: "M", unit: "emu" }, { label: "dy/dx", unit: "", axis: 1 }],
+    xLabel: "Field",
+    xUnit: "Oe",
+  };
+
+  it("clamps to the primary series' own extent, ignoring the y2 overlay's range", () => {
+    const { result } = pickWithHook(withY2Overlay);
+    // A drag past both extremes: the primary data only reaches [10,50]; if
+    // the y2 overlay's [-700,900] leaked in, this would clamp to that instead.
+    result.current.onRegionSelect(1, 3, -1000, 1000);
+    expect(useApp.getState().regionPicked).toEqual({ x: [1, 3], yRange: [10, 50] });
+  });
+});

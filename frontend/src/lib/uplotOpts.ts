@@ -34,6 +34,7 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
+import { MIN_BOX_HEIGHT_PX, regionLiveBoxHook, regionYScale } from "./uplotRegionBox";
 import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
@@ -255,8 +256,6 @@ export function utcTzDate(ts: number): Date {
   const at = new Date(ts * 1_000);
   return new Date(at.getTime() + at.getTimezoneOffset() * 60_000);
 }
-
-const MIN_BOX_HEIGHT_PX = 6; // "region" 2-D box (GAP #96/#20): min vertical px for a deliberate y-box.
 
 const SECONDS_PER_DAY = 86_400;
 const SECONDS_PER_MINUTE = 60;
@@ -1393,6 +1392,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // caller orders/clamps); width<=0 (click) ignored. region also reads y
     // past MIN_BOX_HEIGHT_PX; below that an x-only drag stays x-only.
     hooks: {
+      setCursor: [regionLiveBoxHook(tool)],
       setSelect: [
         (u: uPlot): void => {
           if (u.select.width <= 0) return;
@@ -1402,7 +1402,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
           if (tool !== "region" || !onRegionSelect) return;
           const h = u.select.height ?? 0;
           if (h < MIN_BOX_HEIGHT_PX) return void onRegionSelect(x0, x1);
-          onRegionSelect(x0, x1, u.posToVal(u.select.top ?? 0, "y"), u.posToVal((u.select.top ?? 0) + h, "y"));
+          onRegionSelect(x0, x1, u.posToVal(u.select.top ?? 0, regionYScale(payload, hasY2)), u.posToVal((u.select.top ?? 0) + h, regionYScale(payload, hasY2)));
         },
       ],
     },
