@@ -14,11 +14,18 @@
 //     same dataset/folder/workbook/artifact registries the Tree rows use.
 //     Before this, a Details right-click opened a menu only on the five
 //     artifact kinds (E-b2), so folders, workbooks and worksheets had no
-//     Rename… and no "Move to …" in Details at all.
+//     Rename… and no "Move to …" in Details at all. The Tiles-only items are
+//     omitted rather than re-pointed: no `browse` hook is supplied, so
+//     "Browse" reports itself disabled ("available in Tiles view") exactly as
+//     it does on a Tree row.
 //   * Rename uses the TREE's gesture, not the Tiles modal: the menu's
 //     "Rename…" opens an in-place `.qzk-folder-rename` input on the row,
 //     committing on Enter/blur and reverting on Escape — the same class,
-//     the same keys, and the same `renameLibraryNode` commit.
+//     the same keys, and the same `renameLibraryNode` commit. The open
+//     editor's KEY and DRAFT live in LibraryDetails, not here: under
+//     virtualization this row unmounts when it scrolls out of the window, and
+//     React fires no blur on unmount, so row-local state would silently
+//     discard a half-typed name (review round).
 //   * A dedicated `.qzk-drag-handle` grip makes the row a drag SOURCE and a
 //     folder row a drop TARGET (see useDetailsDragDrop.ts for the contract
 //     and for the two deliberate differences from FolderRow's 3-zone drop).
@@ -28,8 +35,14 @@
 //   * Right-click SELECTS ONLY WHEN THE ROW IS NOT ALREADY SELECTED —
 //     DatasetRow's `selectForMenu` rule. The old unconditional
 //     `selectLibraryNode` collapsed a live multi-selection to one row on
-//     right-click, which made the multi-selection menu entries ("Move N
-//     selected to …", "Remove N selected") unreachable from Details.
+//     right-click. Note what that does and does not buy: a WORKSHEET row
+//     already inside the live multi-selection now keeps it, which is what
+//     makes the multi-selection entries ("Move N selected to …", "Remove N
+//     selected") reachable from Details. A folder or workbook row is never
+//     part of `selectedIds`, so right-clicking one still runs
+//     `selectLibraryNode` and still clears `selectedIds` — identical to the
+//     Tree, and deliberate: those menus act on the container, not on a
+//     worksheet selection.
 //   * Renaming touches names only. It never selects, never opens, and never
 //     writes `selectedIds`/`librarySelection`.
 //   * A drag that is cancelled or dropped somewhere illegal writes nothing
@@ -38,11 +51,11 @@
 
 import { useState, type CSSProperties } from "react";
 
-import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
+import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import { renameLibraryNode } from "../../lib/libraryRename";
-import { useDetailsDragDrop } from "./useDetailsDragDrop";
+import { useDetailsDragDrop, type DetailsDragDropContext } from "./useDetailsDragDrop";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { LibraryDetailsRow } from "../../lib/libraryDetails";
@@ -65,6 +78,13 @@ interface Column {
   className?: string;
 }
 
+/** The table's one open inline editor: which row owns it, and the live draft.
+ *  Held by LibraryDetails so it outlives this row's unmount. */
+export interface DetailsRenameState {
+  key: string;
+  draft: string;
+}
+
 interface Props {
   row: LibraryDetailsRow;
   columns: readonly Column[];
@@ -82,6 +102,12 @@ interface Props {
   rovingKey: string | null;
   indent: number;
   searching: boolean;
+  /** This row's rename draft when IT owns the table's open editor, else null. */
+  renameDraft: string | null;
+  /** Open (with the node's current name), update, or close that editor. */
+  onRenameChange: (next: DetailsRenameState | null) => void;
+  /** The table's single set of drag/drop store subscriptions. */
+  dndContext: DetailsDragDropContext;
   onFocusRow: (key: string) => void;
   onShowInLibrary?: (node: LibraryNode) => void;
 }
@@ -96,21 +122,21 @@ export default function DetailsRow({
   rovingKey,
   indent,
   searching,
+  renameDraft,
+  onRenameChange,
+  dndContext,
   onFocusRow,
   onShowInLibrary,
 }: Props) {
   const node = row.node;
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  /** Non-null while this row's in-place rename editor is open; holds the
-   *  draft text, exactly like FolderRow/WorkbookRow's `rename` state. */
-  const [rename, setRename] = useState<string | null>(null);
-  const dnd = useDetailsDragDrop(node);
+  const [menu, setMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  const dnd = useDetailsDragDrop(node, dndContext);
   const selected = isSelected(node, selectedIdSet, selection);
   const isRoving = node.key === rovingKey;
 
   const commitRename = (): void => {
-    const next = rename?.trim();
-    setRename(null);
+    const next = renameDraft?.trim();
+    onRenameChange(null);
     // Blank reverts (an inline editor's empty field means "I changed my
     // mind", not "name this nothing"); an unchanged name records no history.
     if (next && next !== node.name) renameLibraryNode(node, next);
@@ -122,23 +148,30 @@ export default function DetailsRow({
     if (!selected) selectLibraryNode(node);
   };
 
-  // Built ON OPEN, never per render: `buildLibraryTileMenu` reads the store
-  // and, for a worksheet, scans `datasets` for the row's index — so building
-  // it eagerly would cost O(rendered rows × datasets) on every single render
-  // of the table, for a menu that is almost never showing.
+  // Built ONCE PER OPEN and parked in `menu`, never rebuilt while showing:
+  // `buildLibraryTileMenu` reads the store and, for a worksheet, scans
+  // `datasets` for the row's index, so rebuilding it on every render of an
+  // open menu would cost O(datasets) per render for a list that cannot change
+  // under the user's cursor anyway.
   const buildMenu = (): ContextMenuItem[] =>
     buildLibraryTileMenu(node, {
-      browse: () => selectLibraryNode(node),
+      // No `browse`: "Browse" navigates the TILE WORKSPACE into a node, which
+      // Details has no equivalent of. Omitting the hook is what makes the
+      // item honestly disabled ("available in Tiles view") instead of an
+      // enabled no-op that merely re-selects the row.
       open: () => openLibraryNode(node),
       // Details lives in the Library panel beside the Stage — there is no
       // tile workspace covering the plot to return from.
       stageReturn: () => {},
-      rename: () => setRename(node.name),
-    })
-    // `buildLibraryTileMenu` returns null only for a kind with no registry;
-    // every kind the hierarchy produces has one, and artifacts fall back to
-    // the same builder Tree/Tiles use.
-    ?? (isArtifactNode(node) ? buildArtifactMenu(node) : []);
+      // A new subfolder needs no reveal here: the Details projection is flat
+      // and already lists every descendant, so the child appears on the next
+      // render. (Passing a selection writer would move the highlight to the
+      // PARENT instead — the bug this hook exists to prevent.)
+      expandFolder: () => {},
+      rename: () => onRenameChange({ key: node.key, draft: node.name }),
+    });
+
+  const openMenuAt = (x: number, y: number): void => setMenu({ x, y, items: buildMenu() });
 
   const onKeyDown = (event: React.KeyboardEvent): void => {
     // The rename input owns every key while it is open.
@@ -147,7 +180,7 @@ export default function DetailsRow({
       event.preventDefault();
       selectForMenu();
       const rect = event.currentTarget.getBoundingClientRect();
-      setMenu({ x: rect.left + 8, y: rect.bottom });
+      openMenuAt(rect.left + 8, rect.bottom);
       return;
     }
     if (event.key === "Delete" || event.key === "Backspace") {
@@ -178,7 +211,7 @@ export default function DetailsRow({
 
   return (
     <tr
-      className={`${selected ? "selected" : ""}${dnd.dropActive ? " drop-candidate" : ""}`.trim() || undefined}
+      className={`${selected ? "selected" : ""}${dnd.dropCue ? ` ${dnd.dropCue}` : ""}`.trim() || undefined}
       data-lib-row={node.key}
       {...(ariaRowIndex != null ? { "aria-rowindex": ariaRowIndex } : {})}
       data-ds-id={node.kind === "worksheet" ? node.entityId : undefined}
@@ -191,52 +224,59 @@ export default function DetailsRow({
       onContextMenu={(event) => {
         event.preventDefault();
         selectForMenu();
-        setMenu({ x: event.clientX, y: event.clientY });
+        openMenuAt(event.clientX, event.clientY);
       }}
       onKeyDown={onKeyDown}
       {...dnd.rowProps}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={buildMenu()} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
       <td className="qzk-details-name" style={{ paddingLeft: indent } as CSSProperties}>
-        {dnd.handleProps && (
+        {dnd.handleProps ? (
           <span
             className="qzk-drag-handle"
             title="Drag to move"
             // Pointer-only affordance, and deliberately NOT a tab stop or an
             // AT target — unlike the Tree's grips, which are `tabIndex={0}`
-            // `role="button"`. Two reasons. (a) Details' sequential tab
-            // surface is contractually exactly two stops (the header row and
-            // the roving data row; see LibraryDetails.tsx's note and the
-            // "ONLY sequential tab stop" test) — a per-row grip would make it
-            // three. (b) An HTML5 drag cannot be STARTED from the keyboard at
-            // all, so a focusable grip would be a focus stop that does
-            // nothing; the keyboard/AT route to the identical move is the row
-            // menu's "Move to …" items, which are complete for folders and
-            // workbooks.
+            // `role="button"`. Two reasons. (a) Details' RESTING sequential
+            // tab surface is two stops (the header row and the roving data
+            // row; see LibraryDetails.tsx's note and the "ONLY sequential tab
+            // stop" test) plus the transient controls a row can put in the
+            // roving row's own stop — the reveal button while searching, the
+            // rename input while open. A per-row grip would be a PERMANENT
+            // third stop on every row. (b) An HTML5 drag cannot be STARTED
+            // from the keyboard at all, so a focusable grip would be a focus
+            // stop that does nothing; the keyboard/AT route to the identical
+            // move is the row menu's "Move to …" items, which are complete
+            // for folders and workbooks. Row hover is therefore its only
+            // reveal — see shell.css's Details-scoped rule.
             aria-hidden="true"
             {...dnd.handleProps}
             // A native drag fights the input's own text selection, so the
             // grip stands down while this row is being renamed (FolderRow's
             // `draggable={rename == null}` rule).
-            draggable={rename == null}
+            draggable={renameDraft == null}
           >
             ⠿
           </span>
+        ) : (
+          // A kind with no drag source still reserves the grip's box, so every
+          // row's name starts at the same x (shell.css sizes both).
+          <span className="qzk-details-grip-space" aria-hidden="true" />
         )}
         <span aria-hidden="true">{node.kind === "folder" ? "▦" : node.kind === "workbook" ? "▤" : "·"}</span>
-        {rename != null ? (
+        {renameDraft != null ? (
           <input
             className="qz-input qzk-folder-rename"
             autoFocus
             aria-label={`Rename "${node.name}"`}
-            value={rename}
+            value={renameDraft}
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
-            onChange={(event) => setRename(event.target.value)}
+            onChange={(event) => onRenameChange({ key: node.key, draft: event.target.value })}
             onBlur={commitRename}
             onKeyDown={(event) => {
               if (event.key === "Enter") commitRename();
-              if (event.key === "Escape") setRename(null);
+              if (event.key === "Escape") onRenameChange(null);
             }}
           />
         ) : (

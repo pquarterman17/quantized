@@ -127,6 +127,45 @@ describe("FolderRow — workbook drop (PR C review fix: replaces the retired wor
   });
 });
 
+// L1.4 review round (F4), found in Details and identical here: both store
+// actions call `recordHistory` as their FIRST statement, so a drop onto the
+// container the node is ALREADY in left a do-nothing step on the undo stack —
+// one wasted Ctrl+Z per accidental re-drop.
+describe("FolderRow — a drop that changes nothing records nothing", () => {
+  it("a workbook dropped on the folder it already lives in records no undo step", () => {
+    useApp.setState({
+      datasets: [{ ...ds("d1"), workbookId: "wb1" }],
+      workbooks: [{ id: "wb1", name: "Book", folderId: "target" }],
+      folders: [fld("target", null, 0)],
+      expandedFolders: [],
+      history: [],
+    });
+    const { container } = render(<FolderRow folder={fld("target", null, 0)} {...baseProps} />);
+    fireDrag(container.querySelector(".qzk-folder-head")!, "drop", 0, workbookTransfer("wb1"));
+
+    expect(useApp.getState().workbooks.find((w) => w.id === "wb1")!.folderId).toBe("target");
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a folder dropped INTO the parent it already has records no undo step (and still expands it)", () => {
+    useApp.setState({
+      datasets: [],
+      workbooks: [],
+      folders: [fld("parent", null, 0), fld("child", "parent", 0)],
+      expandedFolders: [],
+      history: [],
+    });
+    const { container } = render(<FolderRow folder={fld("parent", null, 0)} {...baseProps} />);
+    const row = container.querySelector(".qzk-folder-head")!;
+    setRowRect(row);
+    fireDrag(row, "drop", 120, folderTransfer("child")); // middle band → "into"
+
+    expect(useApp.getState().folders.find((f) => f.id === "child")!.parentId).toBe("parent");
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().expandedFolders).toContain("parent");
+  });
+});
+
 describe("FolderRow — folder drop (project-organization plan item 3b)", () => {
   beforeEach(() => {
     useApp.setState({

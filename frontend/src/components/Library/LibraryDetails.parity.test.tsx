@@ -11,6 +11,9 @@
 // `dataTransfer` and dispatched through RTL's low-level fireEvent — the same
 // workaround FolderRow.test.tsx uses for the Tree's identical gestures.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -294,12 +297,244 @@ describe("LibraryDetails — L1.4 move / drag-drop parity", () => {
     expect(useApp.getState().history).toHaveLength(historyBefore);
   });
 
-  it("a LEGAL destination accepts the drag and shows the shared drop-candidate cue", () => {
+  // REVIEW ROUND (F2): Details shipped `drop-candidate` on the HOVERED row and
+  // never showed a resting candidate at all, inverting the Tree's two cues.
+  // They now mean here exactly what they mean there: `dropinto` = "this is
+  // where it would land", `drop-candidate` = "this row would accept it".
+  it("the hovered target shows `dropinto` while every OTHER legal target rests at `drop-candidate`", () => {
+    // A third top-level folder: a legal destination for the f2 drag that is
+    // NOT the one under the pointer.
+    applyToStore(() =>
+      useApp.setState({ folders: [...useApp.getState().folders, folder("f3", "Gamma", null, 2)] }),
+    );
     render(<Harness />);
+
     expect(beginDragOver("folder:f2", "folder:f1", FOLDER_DND, "f2")).toBe(true);
-    expect(rowFor("folder:f1").className).toContain("drop-candidate");
+    expect(rowFor("folder:f1").className).toContain("dropinto");
+    expect(rowFor("folder:f1").className).not.toContain("drop-candidate");
+    expect(rowFor("folder:f3").className).toContain("drop-candidate");
+    expect(rowFor("folder:f3").className).not.toContain("dropinto");
+    // The dragged folder itself is never a candidate for itself.
+    expect(rowFor("folder:f2").className).toBe("");
+    // Nor is a row that cannot accept a move at all.
+    expect(rowFor("worksheet:b").className).toBe("");
   });
 
+  // REVIEW ROUND (F4): both store actions call `recordHistory` as their FIRST
+  // statement, so a drop that changes nothing still left a do-nothing step on
+  // the undo stack.
+  it("dropping a workbook on the folder it is ALREADY in records no undo step", () => {
+    render(<Harness />);
+    const historyBefore = useApp.getState().history.length;
+
+    dragRowOnto("workbook:w", "folder:f1", WORKBOOK_DND, "w");
+
+    expect(useApp.getState().workbooks.find((w) => w.id === "w")!.folderId).toBe("f1");
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  it("dropping a folder on the parent it ALREADY has records no undo step", () => {
+    applyToStore(() =>
+      useApp.setState({ folders: [...useApp.getState().folders, folder("f3", "Child", "f2", 0)] }),
+    );
+    render(<Harness />);
+    const historyBefore = useApp.getState().history.length;
+
+    dragRowOnto("folder:f3", "folder:f2", FOLDER_DND, "f3");
+
+    expect(useApp.getState().folders.find((f) => f.id === "f3")!.parentId).toBe("f2");
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  // REVIEW ROUND (F5): the workbook branch of `onDrop` checked only the
+  // payload TYPE and a non-empty id, so a `drop` that never went through
+  // `dragover` — with no drag in flight at all — still performed the move.
+  it("a bare `drop` with no preceding dragover is refused for a workbook as it is for a folder", () => {
+    render(<Harness />);
+    const historyBefore = useApp.getState().history.length;
+
+    fireDrag(rowFor("folder:f2"), "drop", { ...transfer(WORKBOOK_DND, "w"), effectAllowed: "" });
+
+    expect(useApp.getState().workbooks.find((w) => w.id === "w")!.folderId).toBe("f1");
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  // REVIEW ROUND (F11): the grip stopped a single click from selecting but not
+  // a double-click from opening, so grabbing it twice quickly toggled a folder.
+  it("a double-click on the grip neither selects nor opens the row", () => {
+    render(<Harness />);
+    const grip = rowFor("folder:f2").querySelector(".qzk-drag-handle") as HTMLElement;
+
+    fireEvent.doubleClick(grip);
+
+    expect(useApp.getState().expandedFolders).toContain("f2");
+    expect(useApp.getState().librarySelection).toBeNull();
+  });
+});
+
+// REVIEW ROUND (F1): the parity suite asserted CLASS NAMES only, so the grip
+// shipped permanently INVISIBLE (`.qzk-drag-handle { opacity: 0 }` is revealed
+// by `.qzk-ds:hover` / `.qzk-folder-head:hover` / `:focus`, none of which a
+// Details grip matches — it lives in a <td> and is aria-hidden and
+// non-focusable) and a hovered Details folder row got no highlight at all
+// (`.drop-candidate` existed only for `.qzk-folder-head` and `.qzk-plotwin`).
+// These tests therefore assert against the real stylesheet: a cue counts only
+// if some rule keyed on it actually MATCHES the rendered element.
+describe("LibraryDetails — L1.4 cues are painted, not just classed", () => {
+  // Read from disk, the established pattern for a stylesheet assertion here
+  // (styles/reducedMotion.test.ts, workshops/peaks/PeakTable.test.tsx): Vite's
+  // CSS pipeline claims `.css` imports, so `?raw` returns an empty string.
+  const SHELL_CSS = readFileSync(join(__dirname, "../../styles/shell.css"), "utf8");
+
+  /** Every style rule in the sheet, flattened out of its `@media`/`@container`
+   *  blocks. Parsed from the text rather than through jsdom's CSSOM so an
+   *  unsupported modern property can never silently drop a rule these tests
+   *  are looking for. */
+  function flatRules(css: string): { selector: string; body: string }[] {
+    const src = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    const out: { selector: string; body: string }[] = [];
+    let i = 0;
+    while (i < src.length) {
+      const open = src.indexOf("{", i);
+      if (open < 0) break;
+      const prelude = src.slice(i, open).trim();
+      let depth = 1;
+      let j = open + 1;
+      while (j < src.length && depth > 0) {
+        if (src[j] === "{") depth++;
+        else if (src[j] === "}") depth--;
+        j++;
+      }
+      const body = src.slice(open + 1, j - 1);
+      if (prelude.startsWith("@")) out.push(...flatRules(body));
+      else out.push({ selector: prelude, body });
+      i = j;
+    }
+    return out;
+  }
+
+  /** Does this selector reach `el` when a pointer is over its row? `:hover` is
+   *  exactly what the pointer supplies, so it is erased before matching; a
+   *  `:focus`-gated rule is NOT an answer for the Details grip, which is
+   *  `aria-hidden` and has no tabindex, so those selectors are discarded. */
+  function reachesOnHover(selector: string, el: Element): boolean {
+    if (selector.includes(":focus")) return false;
+    return selector.split(",").some((part) => {
+      const stripped = part.trim().replace(/:hover/g, "");
+      try {
+        return stripped !== "" && el.matches(stripped);
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  const declares = (body: string, prop: string, value: string): boolean =>
+    new RegExp(`(^|[;{\\s])${prop}\\s*:\\s*${value}\\s*(;|$)`).test(body.trim());
+
+  it("the grip is hidden at rest AND revealed by a rule that reaches it on row hover", () => {
+    render(<Harness />);
+    const grip = rowFor("workbook:w").querySelector(".qzk-drag-handle") as HTMLElement;
+    const rules = flatRules(SHELL_CSS);
+
+    // The resting state that makes a reveal necessary in the first place.
+    expect(
+      rules.filter((r) => declares(r.body, "opacity", "0") && reachesOnHover(r.selector, grip)).length,
+    ).toBeGreaterThan(0);
+    // The reveal itself — this is what was missing for Details.
+    const revealing = rules
+      .filter((r) => declares(r.body, "opacity", "1") && reachesOnHover(r.selector, grip))
+      .map((r) => r.selector);
+    expect(revealing, "no stylesheet rule raises the Details grip's opacity — it is invisible").not.toEqual([]);
+  });
+
+  // F10: `.qzk-details-name > span { margin-right: 4px }` reaches the grip too,
+  // and `.qzk-drag-handle`'s own `width: 12px` is INERT on an inline span (it
+  // is a flex item only in the Tree's rows). So the grip and the empty slot a
+  // non-draggable kind gets must both be laid out as a 12px inline-block, or
+  // the two kinds' names start at different x positions.
+  it("the grip and the non-draggable slot are laid out as the same 12px inline-block box", () => {
+    render(<Harness />);
+    const rules = flatRules(SHELL_CSS);
+    const declared = (el: Element, prop: string): string[] =>
+      rules
+        .filter((r) => reachesOnHover(r.selector, el))
+        .flatMap((r) => {
+          const m = r.body.match(new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;]+)`));
+          return m ? [m[1].trim()] : [];
+        });
+    const grip = rowFor("workbook:w").querySelector(".qzk-drag-handle") as HTMLElement;
+    // The harness seeds no artifact rows, so the non-draggable branch's slot is
+    // materialized here and matched against the same sheet.
+    const slot = document.createElement("span");
+    slot.className = "qzk-details-grip-space";
+    (rowFor("workbook:w").querySelector(".qzk-details-name") as HTMLElement).appendChild(slot);
+
+    for (const el of [grip, slot]) {
+      expect(declared(el, "width")).toContain("12px");
+      expect(declared(el, "display")).toContain("inline-block");
+    }
+    slot.remove();
+  });
+
+  it.each(["drop-candidate", "dropinto"])("the `%s` cue on a Details <tr> is painted by the stylesheet", (cue) => {
+    render(<Harness />);
+    const row = rowFor("folder:f1");
+    const rules = flatRules(SHELL_CSS);
+
+    row.classList.add(cue);
+    const painting = rules
+      .filter((r) => r.selector.includes(cue) && reachesOnHover(r.selector, row))
+      .filter((r) => /(^|[;{\s])(outline|background|box-shadow)\s*:/.test(r.body))
+      .map((r) => r.selector);
+    row.classList.remove(cue);
+
+    expect(painting, `no rule keyed on .${cue} matches a Details row — the cue is invisible`).not.toEqual([]);
+  });
+});
+
+// REVIEW ROUND (F3): Details reused the TILES menu builder, which made one
+// Tiles-only item an enabled no-op and handed a SELECTION writer to the
+// folder-reveal hook.
+describe("LibraryDetails — L1.4 menu honesty", () => {
+  it("Browse renders DISABLED in Details rather than as an enabled row re-select", () => {
+    render(<Harness />);
+    fireEvent.contextMenu(rowFor("workbook:w"));
+    expect(screen.getByRole("menuitem", { name: /^Browse/ })).toHaveAttribute("aria-disabled", "true");
+  });
+
+  // F7: the header claimed the menu is "built ON OPEN, not per render" while
+  // `items={buildMenu()}` re-ran the O(datasets) builder on every render of an
+  // open menu. Parked in state now — which is observable: the item labels are
+  // the ones captured at open.
+  it("the menu is built once per OPEN — a store change behind it does not rebuild its items", () => {
+    render(<Harness />);
+    fireEvent.contextMenu(rowFor("workbook:w"));
+    expect(screen.getByRole("menuitem", { name: 'Move to "Beta"' })).toBeInTheDocument();
+
+    applyToStore(() => useApp.getState().renameFolder("f2", "Gamma"));
+
+    expect(screen.getByRole("menuitem", { name: 'Move to "Beta"' })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: 'Move to "Gamma"' })).toBeNull();
+  });
+
+  it("New subfolder creates the child WITHOUT writing selection", () => {
+    render(<Harness />);
+    fireEvent.contextMenu(rowFor("folder:f1"));
+    // The right-click itself selected f1 (L0.25). Move the highlight somewhere
+    // else so a selection write from the menu item is visible: with `browse`
+    // wired to the folder hook, "New subfolder" re-selected the PARENT.
+    applyToStore(() => useApp.getState().selectIds(["b"]));
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "New subfolder" }));
+
+    expect(useApp.getState().folders.some((f) => f.parentId === "f1")).toBe(true);
+    expect(useApp.getState().librarySelection).toBeNull();
+    expect(useApp.getState().selectedIds).toEqual(["b"]);
+  });
+});
+
+describe("LibraryDetails — L1.4 move / drag-drop parity (continued)", () => {
   it("a CANCELLED drag (dragstart then dragend, no drop) writes nothing at all", () => {
     render(<Harness />);
     applyToStore(() => useApp.getState().selectIds(["b", "a"]));
@@ -319,5 +554,33 @@ describe("LibraryDetails — L1.4 move / drag-drop parity", () => {
     render(<Harness />);
     dragRowOnto("workbook:w", "worksheet:a", WORKBOOK_DND, "w");
     expect(useApp.getState().workbooks.find((w) => w.id === "w")!.folderId).toBe("f1");
+  });
+});
+
+// REVIEW ROUND (F6): the editor and its draft were `useState` inside the ROW,
+// which the virtualizer unmounts when it scrolls out of the window. React
+// fires no blur on unmount, so nothing was committed and the typed name was
+// silently destroyed.
+describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
+  it("an open editor and its half-typed draft survive the row scrolling out of the window and back", () => {
+    applyToStore(() =>
+      useApp.setState({ datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)) }),
+    );
+    render(<Harness />);
+    menuAction("workbook:w", "Rename…");
+    const input = document.querySelector(".qzk-folder-rename") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Half typed" } });
+
+    const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+    // The row really is gone — otherwise this test proves nothing.
+    expect(rowFor("workbook:w")).toBeNull();
+    // And nothing was committed behind the user's back on the way out.
+    expect(useApp.getState().workbooks.find((w) => w.id === "w")!.name).toBe("Run");
+
+    fireEvent.scroll(panel, { target: { scrollTop: 0 } });
+    const reopened = rowFor("workbook:w").querySelector(".qzk-folder-rename") as HTMLInputElement | null;
+    expect(reopened, "the rename editor was destroyed by the scroll").not.toBeNull();
+    expect(reopened!.value).toBe("Half typed");
   });
 });

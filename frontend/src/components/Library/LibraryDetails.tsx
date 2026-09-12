@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import DetailsHeaderRow from "./DetailsHeaderRow";
-import DetailsRow, { isTextEditorTarget } from "./DetailsRow";
+import DetailsRow, { isTextEditorTarget, type DetailsRenameState } from "./DetailsRow";
+import { useDetailsDragDropContext } from "./useDetailsDragDrop";
 import { isSelected } from "./libraryOpen";
 import { useLibraryDetailsVirtualization } from "./useLibraryDetailsVirtualization";
 import {
@@ -95,6 +96,16 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   // and the browser keeps focus on a moved element, so `focusKey` survives a
   // sort untouched.
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  // L1.4 review round: the ONE open inline rename editor — which row owns it
+  // and the live draft — belongs here, beside `focusKey`, not inside the row.
+  // Under virtualization a row unmounts the moment it scrolls out of the
+  // window, and React fires no blur on unmount, so row-local state would
+  // silently destroy a half-typed name with nothing committed. Held here the
+  // draft survives the scroll and the editor comes back when the row does.
+  const [rename, setRename] = useState<DetailsRenameState | null>(null);
+  // ONE set of drag/drop store subscriptions for the whole table (the per-row
+  // hook used to hold five each — 200 for a 40-row window).
+  const dndContext = useDetailsDragDropContext();
   // Sol's PR #141 follow-on: the EIGHT sort headers were eight more Tab
   // stops. Same roving pattern as the rows — one header in the Tab order
   // (the last-focused, else the current sort column, else the first);
@@ -277,6 +288,9 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
                 rovingKey={effectiveRovingKey}
                 indent={!searching && sortKey === "manual" ? 8 + row.node.depth * 10 : 8}
                 searching={searching}
+                renameDraft={rename?.key === row.node.key ? rename.draft : null}
+                onRenameChange={setRename}
+                dndContext={dndContext}
                 onFocusRow={setFocusKey}
                 onShowInLibrary={onShowInLibrary}
               />

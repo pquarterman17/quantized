@@ -9,8 +9,12 @@
 //   * A drag may only start from the dedicated `.qzk-drag-handle` grip
 //     (GUI_INTERACTION #13 sub-item 1) — never the row body, whose click is
 //     select and whose double-click is open.
-//   * `activeDrag` is published so every legal drop target can light up
-//     (#3 sub-item 2b).
+//   * `activeDrag` is published so every legal drop target can light up at
+//     REST (#3 sub-item 2b), not only the one under the pointer: this hook
+//     returns FolderRow's two cue classes with FolderRow's two meanings —
+//     `drop-candidate` (dashed: this row would accept the drag in flight) on
+//     every legal target, `dropinto` (solid: this is where it would land) on
+//     the row actually hovered. shell.css carries the Details-scoped rules.
 //   * The MOVE itself is `moveFolder` / `moveWorkbookToFolder` — the same two
 //     store actions `FolderRow`'s drop and the "Move to …" menu items call.
 //     There is no Details-specific move path.
@@ -26,12 +30,19 @@
 //      placement is owned by the WORKBOOK, not by any one worksheet's own
 //      `folderId` (see dnd.ts's WORKBOOK_DND note). Its drag is the
 //      plot-target `DATASET_DND` the Tree row publishes, not a move.
+//
+// Every store read lives in `useDetailsDragDropContext`, which the TABLE
+// calls once and passes down (review round: the per-row hook held five
+// subscriptions, so a 40-row window carried 200). The per-row hook keeps only
+// its own hover flag.
 
 import { useState } from "react";
 
 import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { isSelfOrDescendant } from "../../lib/foldertree";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import type { FolderNode } from "../../lib/types";
+import type { WorkbookNode } from "../../lib/workbooks";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import type { ActiveDrag } from "../../store/libraryPanel";
@@ -49,6 +60,38 @@ function dragSourceOf(node: LibraryNode): { type: string; drag: ActiveDrag["kind
   return null;
 }
 
+export interface DetailsDragDropContext {
+  activeDrag: ActiveDrag | null;
+  setActiveDrag: (drag: ActiveDrag | null) => void;
+  // Mutable, not `readonly`: `isSelfOrDescendant` takes `FolderNode[]`.
+  folders: FolderNode[];
+  /** Only `folderId` is read, and only at drop time, to refuse a move to the
+   *  folder the workbook is already in. Subscribed (not `getState()`) because
+   *  `getState()` anywhere under components/ counts against
+   *  architecture.test.ts's getState()-in-render ratchet, which sits at its
+   *  pin — and at ONE subscription for the whole table it is not worth a
+   *  ratchet move. */
+  workbooks: readonly WorkbookNode[];
+  moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
+  moveWorkbookToFolder: (id: string, folderId: string | null) => void;
+}
+
+/** ONE subscription set for the whole table. `folders`/`workbooks` and
+ *  `activeDrag` must be subscribed rather than read imperatively: legality is
+ *  computed in the render body, and a `getState()` there would freeze the
+ *  folder tree at the render that happened to precede the drag
+ *  (architecture.test.ts's getState()-in-render ratchet). The two move
+ *  actions are stable identities, so they add no rerenders. */
+export function useDetailsDragDropContext(): DetailsDragDropContext {
+  const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
+  const activeDrag = useLibraryStore((s) => s.activeDrag);
+  const folders = useApp((s) => s.folders);
+  const workbooks = useApp((s) => s.workbooks);
+  const moveFolder = useApp((s) => s.moveFolder);
+  const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
+  return { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder };
+}
+
 export interface DetailsDragDrop {
   /** Props for the row's `.qzk-drag-handle` grip, or null when this kind has
    *  no drag source. */
@@ -57,6 +100,7 @@ export interface DetailsDragDrop {
     onDragStart: (event: React.DragEvent) => void;
     onDragEnd: () => void;
     onClick: (event: React.MouseEvent) => void;
+    onDoubleClick: (event: React.MouseEvent) => void;
   } | null;
   /** Props for the row itself as a drop target — empty for every kind but
    *  folder, and inert for a folder that is not a legal destination. */
@@ -65,24 +109,15 @@ export interface DetailsDragDrop {
     onDragLeave?: () => void;
     onDrop?: (event: React.DragEvent) => void;
   };
-  /** True while a legal drag is hovering THIS folder row — the caller adds
-   *  the same `drop-candidate` class FolderRow uses. */
-  dropActive: boolean;
+  /** The cue class this row should carry, or null — see the header note.
+   *  `dropinto` beats `drop-candidate` on the hovered row, exactly as
+   *  FolderRow's `isDropCandidate && !dropZone` guard arranges. */
+  dropCue: "dropinto" | "drop-candidate" | null;
 }
 
-export function useDetailsDragDrop(node: LibraryNode): DetailsDragDrop {
-  const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
-  const activeDrag = useLibraryStore((s) => s.activeDrag);
-  // Subscribed, not read imperatively: `legalDrag` below is computed IN THE
-  // RENDER BODY, so a `getState()` read would freeze the folder tree at the
-  // render that happened to precede the drag (architecture.test.ts's
-  // getState()-in-render ratchet). `folders`/the two move actions are stable
-  // identities between folder mutations, so this adds no rerenders in
-  // practice.
-  const folders = useApp((s) => s.folders);
-  const moveFolder = useApp((s) => s.moveFolder);
-  const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
-  const [dropActive, setDropActive] = useState(false);
+export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContext): DetailsDragDrop {
+  const { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder } = ctx;
+  const [hovered, setHovered] = useState(false);
 
   const source = dragSourceOf(node);
   const handleProps = source
@@ -95,12 +130,14 @@ export function useDetailsDragDrop(node: LibraryNode): DetailsDragDrop {
           setActiveDrag({ kind: source.drag, id: node.entityId });
         },
         onDragEnd: (): void => setActiveDrag(null),
-        // The grip is not a select/open target (Tree convention).
+        // The grip is not a select/open target (Tree convention) — neither on
+        // one click nor on two.
         onClick: (event: React.MouseEvent): void => event.stopPropagation(),
+        onDoubleClick: (event: React.MouseEvent): void => event.stopPropagation(),
       }
     : null;
 
-  if (node.kind !== "folder") return { handleProps, rowProps: {}, dropActive: false };
+  if (node.kind !== "folder") return { handleProps, rowProps: {}, dropCue: null };
   const folderId = node.entityId;
 
   // Only the drag KIND is readable during dragover (the payload is
@@ -118,37 +155,53 @@ export function useDetailsDragDrop(node: LibraryNode): DetailsDragDrop {
 
   return {
     handleProps,
-    dropActive,
+    dropCue: !legalDrag ? null : hovered ? "dropinto" : "drop-candidate",
     rowProps: {
       onDragOver: (event: React.DragEvent): void => {
         const types = event.dataTransfer.types;
         if (!types.includes(WORKBOOK_DND) && !types.includes(FOLDER_DND)) return;
         if (!legalDrag) return;
         event.preventDefault();
-        if (!dropActive) setDropActive(true);
+        if (!hovered) setHovered(true);
       },
-      onDragLeave: (): void => setDropActive(false),
+      onDragLeave: (): void => setHovered(false),
+      // Review round: this handler re-decides everything for itself. It never
+      // consults `hovered` (the flag dragover sets), so a `drop` that arrives
+      // with no preceding dragover — a synthetic event, or a browser that lost
+      // it — is held to exactly the same rules; and it refuses a drop onto the
+      // container the dragged node is ALREADY in, because both store actions
+      // record their undo step BEFORE doing anything and a no-op move would
+      // leave a do-nothing entry on the history stack.
       onDrop: (event: React.DragEvent): void => {
-        setDropActive(false);
-        if (event.dataTransfer.types.includes(WORKBOOK_DND)) {
+        setHovered(false);
+        const types = event.dataTransfer.types;
+        if (!types.includes(WORKBOOK_DND) && !types.includes(FOLDER_DND)) return;
+        // The SAME predicate `onDragOver` applies, not a flag it set: with no
+        // drag in flight (`activeDrag == null`) nothing is legal here.
+        if (!legalDrag) return;
+        if (types.includes(WORKBOOK_DND)) {
           const id = event.dataTransfer.getData(WORKBOOK_DND);
           if (!id) return;
+          const workbook = workbooks.find((w) => w.id === id);
+          if (!workbook || (workbook.folderId ?? null) === folderId) return;
           event.preventDefault();
           event.stopPropagation();
           moveWorkbookToFolder(id, folderId);
           return;
         }
-        if (event.dataTransfer.types.includes(FOLDER_DND)) {
-          const draggedId = event.dataTransfer.getData(FOLDER_DND);
-          // Dropped on itself, or on its own descendant: a no-op, NOT a
-          // move — `moveFolder` would refuse the cycle, and silently
-          // reparenting to something else would be worse than nothing.
-          // (`isSelfOrDescendant` covers the identity case, see above.)
-          if (!draggedId || isSelfOrDescendant(folders, draggedId, folderId)) return;
-          event.preventDefault();
-          event.stopPropagation();
-          moveFolder(draggedId, folderId);
-        }
+        const draggedId = event.dataTransfer.getData(FOLDER_DND);
+        // Dropped on itself, on its own descendant, or back into the parent it
+        // already has: a no-op, NOT a move — `moveFolder` would refuse the
+        // cycle (or reparent to where it already is) only after recording the
+        // undo step. (`isSelfOrDescendant` covers the identity case, see
+        // above; it is re-checked here against the PAYLOAD, which `activeDrag`
+        // is not a substitute for.)
+        if (!draggedId || isSelfOrDescendant(folders, draggedId, folderId)) return;
+        const dragged = folders.find((f) => f.id === draggedId);
+        if (!dragged || dragged.parentId === folderId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        moveFolder(draggedId, folderId);
       },
     },
   };

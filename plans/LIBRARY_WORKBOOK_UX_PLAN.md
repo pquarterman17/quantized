@@ -2443,8 +2443,9 @@ back to the owner. No Library implementation is authorized by this pause.
   move (through `buildLibraryTileMenu`) but no drag/drop whatsoever, so L1.4
   is `[~]` with that residual named on the item rather than ticked.
   Shipped: `components/Library/DetailsRow.tsx` (the `<tr>` extracted out of
-  `LibraryDetails.tsx`, which was at 393 of the 400-line ceiling — it is 297
-  now, the row 274), `components/Library/useDetailsDragDrop.ts` (drag source
+  `LibraryDetails.tsx`, which was at 393 of the 400-line ceiling — it was 297
+  after the extraction and the row 279, not the 274 first recorded here),
+  `components/Library/useDetailsDragDrop.ts` (drag source
   + "into"-only folder drop target over `dnd.ts`'s existing payload types and
   the same `moveFolder`/`moveWorkbookToFolder` actions FolderRow's drop
   calls), and `lib/libraryRename.ts` (the kind→store-action rename dispatcher
@@ -2454,18 +2455,111 @@ back to the owner. No Library implementation is authorized by this pause.
   shared commit). Two selection-invariant defects fixed in passing:
   Details' right-click collapsed a live multi-selection (it called
   `selectLibraryNode` unconditionally where DatasetRow's `selectForMenu`
-  returns early for an already-selected row), and an inline editor inside a
-  `[data-lib-row]` row reintroduces LibraryTree's P2 keyboard-hijack hazard
+  returns early for an already-selected row) — narrowed from the original
+  wording, which overclaimed: the fix applies to a WORKSHEET row that is
+  already inside `selectedIds`, which is what makes the "Move N selected to …"
+  entries reachable; a folder or workbook row is never part of `selectedIds`,
+  so right-clicking one still runs `selectLibraryNode` and still clears the
+  worksheet selection, exactly as the Tree does — and an inline editor inside
+  a `[data-lib-row]` row reintroduces LibraryTree's P2 keyboard-hijack hazard
   (`.closest()` resolves the input to its row), guarded now in both the row
   and the table's nav handler. 17 DOM-layer tests
   (`LibraryDetails.parity.test.tsx`); 14 sabotages each produced a failing
   test. Gate: `tsc -b --force` clean, eslint 0, full vitest 10,110/10,110 in
-  626 files, eager bundle 896.9 kB vs the 897.1 kB measured on `fe40adb5`
-  (−0.2 kB; budget 897.3 kB). NOT done, deliberately: Details still has no
+  626 files, eager bundle 896.9 kB against a budget of 897.3 kB. The baseline
+  cited here was wrong: the commit's parent is `500cc64d`, not `fe40adb5`, and
+  the review measured 897.2 kB on that parent, making the real delta −0.3 kB.
+  NOT done, deliberately: Details still has no
   Ctrl/Shift click multi-select of its own (a multi-selection can only arrive
   from the Tree or the store) — that is a click-gesture gap, not a
   rename/move/drag one, and it is adjacent to the selection invariants this
   slice was asked to protect rather than extend.
+  **FAILED ADVERSARIAL REVIEW; fix round below.**
+
+- **2026-09-12 — Group X fix round, the Details parity commit's eleven
+  confirmed review findings (worktree agent):** `d28fcd6e` above shipped the
+  gesture wiring but not the thing the user sees. The review, whose every
+  finding was reproduced by running the code, found:
+  1. **The drag grip was INVISIBLE and the drop target had no cue** (HIGH).
+     `.qzk-drag-handle { opacity: 0 }` is revealed only by
+     `.qzk-ds:hover`, `.qzk-folder-head:hover` and `.qzk-drag-handle:focus`; a
+     Details grip lives in `td.qzk-details-name` and is `aria-hidden` +
+     non-focusable, so it matched none of them and never appeared. `.drop-
+     candidate` likewise existed only for `.qzk-folder-head` and
+     `.qzk-plotwin`, so a hovered Details folder row lit up not at all. The
+     parity tests asserted CLASS NAMES only, which is exactly why this
+     shipped. Fixed with Details-scoped rules over existing tokens
+     (`shell.css`), and pinned by tests that read the real stylesheet and
+     require a rule keyed on each cue to actually MATCH the rendered element.
+  2. **Cue semantics were inverted.** In the Tree `dropinto` is the hovered
+     target and `drop-candidate` the resting legal one; Details used
+     `drop-candidate` for the hovered target and never showed resting
+     candidates, so `useDetailsDragDrop.ts`'s header claim ("`activeDrag` is
+     published so every legal drop target can light up") was false there. Both
+     states now exist with the Tree's meanings.
+  3. **A Tiles-only menu item was an enabled no-op.** `workbook.browse` is
+     gated on `t.onBrowse != null` with reason "available in Tiles view"; the
+     Tree passes nothing and renders it disabled, while Details passed
+     `browse: () => selectLibraryNode(node)` — so "Browse" was ENABLED and
+     merely re-selected the row. Worse, `buildFolderRowMenu`'s 4th parameter
+     is `onExpand` (how `folder.newSubfolder` reveals the child it just
+     created) and Details passed the same `browse` there, so "New subfolder"
+     moved the highlight to the PARENT through a selection writer.
+     `TileMenuHooks.browse` is optional now and Details omits it; a separate
+     `expandFolder` hook carries the reveal (Tiles falls back to `browse`,
+     where navigating in IS the reveal).
+  4. **A no-op drop recorded an undo step.** Dropping a workbook on the folder
+     it is already in called `moveWorkbookToFolder` unconditionally, and both
+     move actions call `recordHistory` as their first statement (measured:
+     `history.length` 0 → 1). Guarded in both branches — and `FolderRow` had
+     the identical hole on the Tree side, fixed and tested there too.
+  5. **The `drop` guard was not independent of `dragover`** for the workbook
+     branch: it checked only the payload type and a non-empty id, so a `drop`
+     with no drag in flight performed the move. `onDrop` now re-applies the
+     same legality predicate `onDragOver` uses plus payload-level checks, and
+     consults nothing `dragover` set.
+  6. **The rename editor and its draft died with the row.** They were
+     `useState` inside `DetailsRow`, which the virtualizer unmounts on scroll;
+     React fires no blur on unmount, so a half-typed name was silently
+     destroyed with nothing committed. `{key, draft}` now lives in
+     `LibraryDetails` beside `focusKey` (both files stay well under the
+     400-line ceiling: 319 and 311).
+  7. **Claim/code mismatches**, fixed at whichever end was wrong: the menu is
+     now genuinely built once per OPEN and parked in state (it was
+     `items={buildMenu()}`, re-run on every render while showing) and a test
+     pins it; the line counts and the bundle baseline above are corrected in
+     place; the grip's "tab surface is contractually two stops" note now says
+     what is actually true (two RESTING stops, plus the transient controls the
+     roving row hosts — the reveal button while searching, the rename input
+     while open) since the same commit added that input.
+  8. `buildLibraryTileMenu` is total over `LibraryNode`, so the unreachable
+     `?? (isArtifactNode(node) ? buildArtifactMenu(node) : [])` fallback —
+     which would have dropped the `open` hook had it ever run — is gone and
+     the builder's return type is no longer nullable.
+  9. **Five store subscriptions per rendered row** (200 for a 40-row window)
+     collapsed to one set for the whole table: `useDetailsDragDropContext()`
+     is called by `LibraryDetails` and passed down. The
+     `getState()`-in-render ratchet sits at exactly its 80-file pin, so the
+     workbook lookup the new no-op guard needs is a subscription, not a
+     `getState()`.
+  10/11. The grip now has its own 12px inline-block box matched by the slot a
+     non-draggable kind gets (`.qzk-details-name > span { margin-right: 4px }`
+     reached the grip too, shifting draggable kinds' names), and a
+     double-click on the grip no longer opens the node.
+  Files: `styles/shell.css`, `components/Library/{DetailsRow,LibraryDetails,
+  FolderRow,LibraryWorkspace}.tsx`, `components/Library/{useDetailsDragDrop,
+  libraryTileMenu}.ts`, plus `LibraryDetails.parity.test.tsx` (+12 tests, 29
+  total) and `FolderRow.test.tsx` (+2, 38 total). 15 sabotages, each producing
+  exactly the intended failing test. Gate: `tsc -b --force` clean, eslint 0
+  warnings, full vitest 10,220/10,220 in 629 files, eager bundle 919,215 B
+  (897.7 kB) against the 920,400 B budget — 1,185 B under, and byte-identical
+  to the 919,215 B measured on the base `298baeb9` (both builds after the same
+  `npm ci`): every file this round touches lands in the LAZY
+  `LibraryDetails-*.js` chunk, which grew 10.96 → 11.63 kB, so the eager cost
+  is zero. `tests/test_repo_integrity.py` 12 passed. NOT done: L1.4's remaining
+  residual is still Tiles' total absence of drag/drop, named on the item
+  itself; and the Details grip is still deliberately not a tab stop or an AT
+  target, with the menu's "Move to …" as the keyboard route.
 
 - **2026-08-19 — Claude Opus 5, PR I + PR I2 implementation (worktree agent,
   sprint Day-5, `claude/i-transfer-locking`, pending review):** cross-instance

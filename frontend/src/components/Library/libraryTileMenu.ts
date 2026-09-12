@@ -11,7 +11,7 @@
 
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
-import { buildArtifactMenu, isArtifactNode } from "./artifactContextActions";
+import { buildArtifactMenu } from "./artifactContextActions";
 import { subtreeCount } from "../../lib/foldertree";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
@@ -21,7 +21,21 @@ import { buildWorkbookRowMenu } from "./workbookRowMenu";
 import { renameLibraryNode } from "../../lib/libraryRename";
 
 export interface TileMenuHooks {
-  browse: (node: LibraryNode) => void;
+  /** Navigate the TILE WORKSPACE into this node — the only thing "Browse"
+   *  means. Optional, and deliberately omitted by a renderer that has no tile
+   *  workspace to navigate: `workbook.browse` is gated on exactly this hook
+   *  (`enabled: (t) => t.onBrowse != null`, `disabledReason: "available in
+   *  Tiles view"`), so omitting it renders the item DISABLED with that honest
+   *  reason — the same thing a Tree row's menu shows — instead of enabling a
+   *  Tiles-only item that quietly does something else. */
+  browse?: (node: LibraryNode) => void;
+  /** Reveal a folder's newly created child after `folder.newSubfolder`
+   *  (lib/contextActions.ts's `onExpand`, which the registry calls right
+   *  after `createFolder`). In Tiles that IS browsing into the folder, so it
+   *  falls back to `browse`; a renderer whose projection already shows every
+   *  descendant (Details) passes a no-op rather than letting a SELECTION
+   *  writer stand in for a reveal. */
+  expandFolder?: (node: LibraryNode) => void;
   open: (node: LibraryNode) => void;
   /** Close the workspace and return to the Stage AFTER an action that
    *  already performed its own plot-intent open (dataset.plot,
@@ -55,6 +69,15 @@ function renamePrompt(node: LibraryNode, hooks: TileMenuHooks): () => void {
   };
 }
 
+/** `folder.newSubfolder`'s reveal callback: the explicit `expandFolder` hook,
+ *  else `browse` (Tiles, where navigating in IS the reveal), else nothing —
+ *  never a substitute that writes selection instead. */
+function revealChild(node: LibraryNode, hooks: TileMenuHooks): () => void {
+  const reveal = hooks.expandFolder ?? hooks.browse;
+  if (!reveal) return () => {};
+  return () => reveal(node);
+}
+
 function tagDialog(id: string, name: string): void {
   void askParams(`Add tag to "${name}"`, [{ key: "tag", label: "Tag", type: "text", default: "" }]).then(
     (result) => {
@@ -64,9 +87,11 @@ function tagDialog(id: string, name: string): void {
   );
 }
 
-/** Null means this artifact kind intentionally waits for E-b2's shared
- * lifecycle registry; callers show an honest disabled menu in that slice. */
-export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): ContextMenuItem[] | null {
+/** Total over `LibraryNode`: the three container/leaf kinds below plus the
+ *  five `isArtifactNode` ones, which E-b2's shared lifecycle registry now
+ *  covers — so no "this kind has no registry yet" case is left to return null
+ *  for, and no caller needs a fallback branch. */
+export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): ContextMenuItem[] {
   const state = useApp.getState();
   if (node.kind === "worksheet") {
     const index = state.datasets.findIndex((dataset) => dataset.id === node.entityId);
@@ -83,8 +108,9 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
     );
   }
   if (node.kind === "workbook") {
+    const browse = hooks.browse;
     return buildWorkbookRowMenu(node, renamePrompt(node, hooks),
-    () => hooks.browse(node),
+    browse && (() => browse(node)),
     () => hooks.open(node),
     hooks.stageReturn);
   }
@@ -98,9 +124,11 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       node.entity,
       subtreeCount(state.folders, state.datasets, node.entityId),
       renamePrompt(node, hooks),
-      () => hooks.browse(node),
+      // `onExpand` — reveal the child `folder.newSubfolder` just created, NOT
+      // "browse into this folder". They coincide in Tiles; elsewhere they must
+      // not be confused (a Details `browse` would re-select the PARENT).
+      revealChild(node, hooks),
     );
   }
-  if (isArtifactNode(node)) return buildArtifactMenu(node, () => hooks.open(node));
-  return null;
+  return buildArtifactMenu(node, () => hooks.open(node));
 }
