@@ -1272,26 +1272,48 @@ differs from its input's — and that is what turned up sites 7-9.
     FAILED OPEN and reopened the bug. Site 9 had already chosen the right shape
     and said so in its own header; the strip contradicted it.
   **KNOWN COST — as first written, and CORRECTED 2026-09-12 (Claude):** the
-  paragraph here used to say a padding-TRIMMED preview's labels "also degrade to
+  paragraph here says a padding-TRIMMED preview's labels "also degrade to
   formatted numbers", on the argument that "no length test can tell a prefix
-  from a sample". The premise is right and the conclusion is stale: the fix
-  stopped using a length test. `_decimate` trims padding and THEN returns
-  `(ds, False)` when `n <= target_points`, so a trimmed prefix reports
-  `preview_sampled: false`, and `lib/rowSidecars.rowsAreSampled` reads that flag
-  (`previewSampled !== false`) rather than the old `pending.rows >
-  data.time.length` proxy. A trimmed preview's sidecar IS indexed today and its
-  labels DO resolve. Verified by reading both modules, not inferred.
-  The real degradation is narrower than the paragraph claimed: it applies to a
-  SAMPLED preview only, where row r genuinely is an arbitrary source row.
-- [ ] **Booked by site 10's fix, rescoped 2026-09-12:** recovering a SAMPLED
-  preview's text labels (not a trimmed one — see above) needs the backend to
-  send which rows the decimator kept. Cheaper than the original note assumed:
+  from a sample". That is TRUE OF THE LABEL PATH and the two halves of this bug
+  ended up on DIFFERENT guards, which is worth stating plainly because I first
+  corrected this row the wrong way round:
+    * the WORKSHEET text-column path (`worksheet/textColumns.ts`) gates on
+      `lib/rowSidecars.rowsAreSampled`, which reads the backend's
+      `preview_sampled` flag — so a TRIMMED preview's text columns DO show.
+    * the LABEL path (`lib/barlayout.textLabelsFor`) gates on a pure LENGTH test
+      (`rows.length !== by.length`) and takes a bare `DataStruct`, so it has no
+      access to `pending` and therefore no access to the flag. A trimmed preview
+      suppresses there exactly as the paragraph says.
+  So the flag fixed one path and not the other, and the label path is the one
+  this booked item is about. (My first edit here claimed both were fixed, having
+  verified `rowSidecars.ts` and generalised to a module that does not use it.)
+- [ ] **Booked by site 10's fix, rescoped 2026-09-12:** recovering the LABEL
+  path's text labels — for a sampled preview AND for a trimmed one, since that
+  path cannot see the flag — needs the backend to send which rows the decimator
+  kept. Cheaper than the original note assumed:
   `_decimate` ALREADY computes them (`idx = np.fromiter(sorted(keep), ...)`,
   `io/origin_project/preview.py`) and discards them, so nothing needs
   recomputing — the wire field is the whole backend cost, and only when sampled
   (unsampled, the map is the identity and pure waste). Then the guard can be
   exact instead of conservative for the label path. Still a wire/preview
   contract change, deliberately not invented inside the original fix.
+  **Backend half landed 2026-09-12** (`preview_rows`, omitted when the rows
+  already correspond). The frontend half is NOT a signature change: measured, 30
+  non-test call sites reach `resolveCategoryLabels`, most holding only a
+  `DataStruct`, so threading a `Dataset` through them is the blast radius this
+  bug's four review rounds warn about. Carry the map in the PREVIEW's own
+  metadata instead, where `textLabelsFor` already reads, and the change is ONE
+  site.
+  **Also measured, and a better option to weigh first:** `_slim_metadata` drops
+  only `origin_books`, so every lazy book's inventory entry currently ships its
+  FULL-LENGTH text sidecars beside a 200-row preview. Slicing those to the
+  preview rows would make `rows.length === by.length` hold naturally — labels
+  correct at all 30 sites with NO frontend change, and a SMALLER payload than
+  today. It needs its own check first: the producer-side STRIP was reverted in
+  review because other readers need the sidecar, and slicing is not stripping
+  (`projectSearchSidecars.ts` reads keys only; the Inspector's Origin provenance
+  card shows content and would show preview rows). Do not swap the wire shape
+  for every lazy book without checking that card.
   `catTableLabels` needed no change — `cat_levels` is channel-keyed, not
   row-indexed. NOTE that is a narrow claim: an Origin `.opj` import carries text
   columns and NO `cat_levels`, so for the datasets this guard actually affects
