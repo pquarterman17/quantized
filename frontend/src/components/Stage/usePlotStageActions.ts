@@ -42,18 +42,25 @@ export interface PlotStageActions {
   snapshot: () => void;
 }
 
-/** [min, max] across every plotted PRIMARY-axis y series (skips the x column,
- *  `cols[0]`, AND any series on the secondary axis, `series[s-1].axis===1`
- *  — `cols[s]` aligns with `series[s-1]`, one x column ahead, e.g. a dy/dx
- *  differentiate overlay or a dual-Y channel): the y-box clamps against the
- *  SAME primary-axis data the baseline fit reads (uplotOpts's
- *  `regionYScale`), never against a secondary axis's differently-calibrated
- *  range. Via plotDecimate's already-eager `xExtent` reused per series (same
+/** [min, max] across every plotted y series on the region box's own axis —
+ *  `cols[0]` (x) is always skipped, and `cols[s]` aligns with `series[s-1]`,
+ *  one x column ahead. Mirrors `uplotOpts`'s `regionYScale` EXACTLY (same
+ *  rule, same series) so the read-back and the clamp never disagree: any
+ *  secondary-axis (`axis:1`) series — a dy/dx differentiate overlay, or a
+ *  dual-Y channel the user toggled to Y2 — is skipped whenever at least one
+ *  PRIMARY series is plotted (its differently-calibrated range must never
+ *  leak into the primary clamp); only when EVERY plotted series is on the
+ *  secondary axis does the clamp fall back to ITS extent instead of skipping
+ *  the clamp altogether (round-2 finding 1 — a lone Y2-toggled series is
+ *  still a real, deliberately-fit series, not one with no extent at all).
+ *  Via plotDecimate's already-eager `xExtent` reused per series (same
  *  "finite [min,max] of one array" shape). */
 function plottedYExtent(cols: (number | null)[][], series: PlotSeriesSpec[]): [number, number] | null {
+  const hasPrimary = series.some((s) => (s.axis ?? 0) !== 1);
   let lo = Infinity, hi = -Infinity;
   for (let s = 1; s < cols.length; s++) {
-    if ((series[s - 1]?.axis ?? 0) === 1) continue;
+    const isSecondary = (series[s - 1]?.axis ?? 0) === 1;
+    if (hasPrimary ? isSecondary : !isSecondary) continue;
     const e = xExtent(cols[s]);
     if (e) { lo = Math.min(lo, e[0]); hi = Math.max(hi, e[1]); }
   }

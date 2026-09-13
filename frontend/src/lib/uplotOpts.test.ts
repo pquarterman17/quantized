@@ -862,7 +862,7 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
   it("calls back with just x0/x1 when the drag has no height at all", () => {
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 50 }, posToVal };
+    const u = { select: { left: 100, width: 50 }, posToVal, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
   });
@@ -870,7 +870,7 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
   it("stays x-only for a sub-threshold vertical span (mouse jitter on an x-only drag)", () => {
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 50, top: 20, height: 5 }, posToVal }; // 5px < MIN_BOX_HEIGHT_PX
+    const u = { select: { left: 100, width: 50, top: 20, height: 5 }, posToVal, setSelect: vi.fn() }; // 5px < MIN_BOX_HEIGHT_PX
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
   });
@@ -878,7 +878,7 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
   it("also reads back y0/y1 once the vertical span clears the pixel threshold", () => {
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal }; // 30px box
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal, setSelect: vi.fn() }; // 30px box
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5, 2, 5); // top/10, (top+h)/10
   });
@@ -886,29 +886,44 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
   it("ignores a zero-width region drag even with a real vertical span", () => {
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 0, top: 20, height: 30 }, posToVal };
+    const u = { select: { left: 100, width: 0, top: 20, height: 30 }, posToVal, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).not.toHaveBeenCalled();
+    expect(u.setSelect).not.toHaveBeenCalled(); // never started a drag; nothing to hide
   });
 
   it("routes the drag-end band to onRegionSelect, not onRangeSelect", () => {
     const onRangeSelect = vi.fn();
     const onRegionSelect = vi.fn();
     const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRangeSelect, onRegionSelect });
-    const u = { select: { left: 100, width: 50 }, posToVal };
+    const u = { select: { left: 100, width: 50 }, posToVal, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).toHaveBeenCalled();
     expect(onRangeSelect).not.toHaveBeenCalled();
   });
 
-  // Finding 2 (Group AB adversarial review, round 2): the y read-back must
-  // resolve the FIT DATA's own scale (mirrors uplotOverlays.ts's own
-  // `axis===1 && hasY2 ? "y2" : "y"`), not always literal "y".
-  it("reads y0/y1 back on the plotted baseline series' own axis, not always \"y\"", () => {
+  // Round-2 finding 2: uPlot's own mouseUp never calls hideSelect() for the
+  // region tool (its `drag.setScale:false` skips that branch entirely — see
+  // uplotRegionBox.ts's regionSelectPick doc), so the app's own setSelect
+  // hook must hide the just-painted sliver itself, synchronously.
+  it("hides the just-painted selection box after a drag-end pick (finding 2)", () => {
     const onRegionSelect = vi.fn();
-    // series[0] (the fit data) lives on the SECONDARY axis; a dy/dx-style
-    // overlay on the primary would be series[1]. y and y2 use different
-    // divisors so a test can tell which scale posToVal was actually asked for.
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(u.setSelect).toHaveBeenCalledWith({ left: 0, top: 0, width: 0, height: 0 }, false);
+  });
+
+  // Finding 1 (Group AB adversarial review, round 2): the y read-back must
+  // resolve the PRIMARY-axis series (mirrors uplotOverlays.ts's own
+  // `axis===1 && hasY2 ? "y2" : "y"`), never `payload.series[0]` alone — a
+  // dual-Y toggle (plotdata.ts's `y2Keys`) can put ANY channel on Y2,
+  // including the first, without reordering `payload.series`.
+  it("reads y0/y1 back on \"y\" even when series[0] is the Y2 one, as long as a later series is primary", () => {
+    const onRegionSelect = vi.fn();
+    // series[0] is on Y2; series[1] (no explicit axis -> primary) is the
+    // actual fit data being boxed. y and y2 use different divisors so a test
+    // can tell which scale posToVal was actually asked for.
     const dualAxis: PlotPayload = {
       data: [
         [0, 1, 2],
@@ -917,16 +932,16 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
       ],
       series: [
         { label: "M", unit: "emu", axis: 1 },
-        { label: "aux", unit: "", axis: 0 },
+        { label: "aux", unit: "" },
       ],
       xLabel: "Field",
       xUnit: "Oe",
     };
-    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 100);
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
     const opts = buildOpts(dualAxis, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 50, top: 14, height: 21 }, posToVal: scaleAwarePosToVal };
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
-    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5, 2, 5); // 14/7, (14+21)/7 — read on "y2"
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // 20/10, 50/10 — read on "y"
   });
 
   it("stays on \"y\" when the fit data is primary even though a y2 overlay exists", () => {
@@ -946,9 +961,27 @@ describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#2
     };
     const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
     const opts = buildOpts(withOverlay, { ...base, yScale: "linear", tool: "region", onRegionSelect });
-    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal };
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // read on "y" (20/10, 50/10)
+  });
+
+  it("reads back on \"y2\" only when EVERY plotted series is on the secondary axis", () => {
+    const onRegionSelect = vi.fn();
+    const allY2: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+      ],
+      series: [{ label: "M", unit: "emu", axis: 1 }],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
+    const opts = buildOpts(allY2, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 14, height: 21 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // 100/10, 150/10; 14/7, (14+21)/7 — read on "y2"
   });
 });
 

@@ -97,4 +97,25 @@ describe("usePlotStageActions onRegionSelect y-extent skips secondary-axis serie
     result.current.onRegionSelect(1, 3, -1000, 1000);
     expect(useApp.getState().regionPicked).toEqual({ x: [1, 3], yRange: [10, 50] });
   });
+
+  // Round-2 finding 1: when EVERY plotted series sits on the secondary axis
+  // (the dual-Y toggle applied to the plot's only channel), the clamp must
+  // fall back to THAT series' own extent — mirroring uplotOpts's
+  // `regionYScale`'s "y2 only when nothing is primary" rule — rather than
+  // skipping the clamp altogether, which would leave an unbounded y-range on
+  // a plot that plainly has real, finite data.
+  it("clamps to the y2 extent when every plotted series is on the secondary axis", () => {
+    const allY2: PlotPayload = {
+      data: [
+        [0, 1, 2, 3, 4],
+        [10, 20, 30, 40, 50],
+      ],
+      series: [{ label: "M", unit: "emu", axis: 1 }],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const { result } = pickWithHook(allY2);
+    result.current.onRegionSelect(1, 3, -1000, 1000);
+    expect(useApp.getState().regionPicked).toEqual({ x: [1, 3], yRange: [10, 50] });
+  });
 });

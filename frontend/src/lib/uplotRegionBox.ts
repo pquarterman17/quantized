@@ -36,15 +36,25 @@ import type { PlotTool } from "./uplotOpts";
 export const MIN_BOX_HEIGHT_PX = 6; // min vertical px for a deliberate y-box.
 
 /** Which scale ("y" or "y2") the region box's y read-back and y-extent clamp
- *  belong to: the FIT DATA's own axis — `payload.series[0]`, since a
- *  fit/derivative overlay is always appended AFTER it, never in front —
- *  mirroring uplotOverlays.ts's own per-mark `axis===1 && hasY2 ? "y2" :
- *  "y"` resolution rather than hardcoding "y". Today this is "y" at every
- *  real call site (overlays only ever add MORE series on y2, never move
- *  series[0] there), but a dual-Y plot whose sole/primary series is itself
- *  assigned to the secondary axis must read back on its own calibration. */
+ *  belong to. THE RULE (keep `usePlotStageActions.ts`'s `plottedYExtent` in
+ *  sync with this — same rule, same series, or the read-back and the clamp
+ *  silently disagree): the PRIMARY axis (`axis !== 1`) is the region's
+ *  target whenever ANY plotted series is primary; only when EVERY plotted
+ *  series sits on the secondary axis does the box belong to "y2".
+ *
+ *  Round-2 finding: this used to key off `payload.series[0]` alone, on the
+ *  premise that a fit/derivative overlay is always appended AFTER the fit
+ *  data it describes (true for `uplotOverlays.ts`'s own marks/shades). That
+ *  premise does not hold for the ordinary dual-Y feature — `plotdata.ts`'s
+ *  `buildColumns`/`y2Keys` lets a user toggle ANY plotted channel onto the
+ *  secondary axis, including the FIRST one, with no reordering — so
+ *  `series[0]` can be the Y2 channel while the primary channel actually
+ *  being boxed sits at `series[1]`. Resolving off "is there a primary
+ *  series at all" instead of "is series[0] primary" is correct regardless of
+ *  which index the user happened to toggle. */
 export function regionYScale(payload: PlotPayload, hasY2: boolean): "y" | "y2" {
-  return payload.series[0]?.axis === 1 && hasY2 ? "y2" : "y";
+  if (!hasY2) return "y";
+  return payload.series.some((s) => (s.axis ?? 0) !== 1) ? "y" : "y2";
 }
 
 /** Build the live-rendering `setCursor` hook described above, closed over
@@ -60,4 +70,45 @@ export function regionLiveBoxHook(tool: PlotTool): (u: uPlot) => void {
     band.style.top = "0px";
     band.style.height = `${u.over.clientHeight}px`;
   };
+}
+
+/** The region tool's drag-END pick (the app's own `setSelect` hook, called
+ *  by uPlot's `mouseUp` after IT has already restyled `.u-select` from the
+ *  real, untouched drag geometry — see `regionLiveBoxHook`'s doc for why
+ *  that geometry must stay untouched during the drag). Reads x0/x1 always;
+ *  y0/y1 too once the real span clears `MIN_BOX_HEIGHT_PX`, on `regionYScale`.
+ *
+ *  Round-2 finding 2: uPlot's `mouseUp` (`uPlot.cjs.js` ~5834-5889) calls
+ *  `setSelect(select)` UNCONDITIONALLY whenever the select changed — with no
+ *  `_fire` argument, so it re-fires this very hook — and only calls its own
+ *  `hideSelect()` inside the `if (drag.setScale && …)` branch. The region
+ *  tool sets `cursor.drag.setScale: false` (so a 2-D drag never rescales an
+ *  axis), which means that branch — and `hideSelect()` — never runs for
+ *  region at all. Left alone, a sub-threshold (x-only) drag ends with the
+ *  real, few-px `.u-select` sliver `regionLiveBoxHook` was overriding still
+ *  painted, visible until the next tool change tears down and rebuilds the
+ *  uPlot instance. Hiding it HERE, synchronously, in the same tick as the
+ *  pick, closes that gap: `u.setSelect({..0 rect..}, false)` is the EXACT
+ *  call uPlot's own `hideSelect()` makes internally (verified against its
+ *  `_hideProps`/`hideSelect` source), and passing `_fire: false` is what
+ *  stops it from re-invoking this hook — `setSelect`'s body only calls
+ *  `fire("setSelect")` when `_fire !== false`, so there is no re-entrancy to
+ *  guard against. */
+export function regionSelectPick(
+  u: uPlot,
+  payload: PlotPayload,
+  hasY2: boolean,
+  onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void,
+): void {
+  const x0 = u.posToVal(u.select.left, "x");
+  const x1 = u.posToVal(u.select.left + u.select.width, "x");
+  const h = u.select.height ?? 0;
+  if (h < MIN_BOX_HEIGHT_PX) {
+    onRegionSelect(x0, x1);
+  } else {
+    const scale = regionYScale(payload, hasY2);
+    const top = u.select.top ?? 0;
+    onRegionSelect(x0, x1, u.posToVal(top, scale), u.posToVal(top + h, scale));
+  }
+  u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
 }

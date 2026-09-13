@@ -34,7 +34,7 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
-import { MIN_BOX_HEIGHT_PX, regionLiveBoxHook, regionYScale } from "./uplotRegionBox";
+import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
 import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
@@ -1389,20 +1389,19 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
     // Region/select rubber-band -> matching caller (posToVal maps px->data;
-    // caller orders/clamps); width<=0 (click) ignored. region also reads y
-    // past MIN_BOX_HEIGHT_PX; below that an x-only drag stays x-only.
+    // caller orders/clamps); width<=0 (click) ignored. region's drag-end pick
+    // (incl. the y0/y1 threshold + read-back scale, and hiding the just-
+    // painted sliver box) is extracted to `regionSelectPick` — see its doc.
     hooks: {
       setCursor: [regionLiveBoxHook(tool)],
       setSelect: [
         (u: uPlot): void => {
           if (u.select.width <= 0) return;
-          const x0 = u.posToVal(u.select.left, "x");
-          const x1 = u.posToVal(u.select.left + u.select.width, "x");
-          if (tool === "select") return void args.onRangeSelect?.(x0, x1);
+          if (tool === "select") {
+            return void args.onRangeSelect?.(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + u.select.width, "x"));
+          }
           if (tool !== "region" || !onRegionSelect) return;
-          const h = u.select.height ?? 0;
-          if (h < MIN_BOX_HEIGHT_PX) return void onRegionSelect(x0, x1);
-          onRegionSelect(x0, x1, u.posToVal(u.select.top ?? 0, regionYScale(payload, hasY2)), u.posToVal((u.select.top ?? 0) + h, regionYScale(payload, hasY2)));
+          regionSelectPick(u, payload, hasY2, onRegionSelect);
         },
       ],
     },
