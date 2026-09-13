@@ -2896,6 +2896,15 @@ covers a much smaller subset and guards focus on Analyze.
   untouched). Covered by `StatusBar.test.tsx`'s "StatusBar pending-op live
   region (accessibility gap)" describe block. No other icon/plot/tree/dialog
   accessible-name gap was investigated as part of this slice.
+  **Fixed 2026-09-13 (round-2 review, F5):** the P3.4 F6 fix (one Cancel
+  control per concurrent op, instead of only the oldest) had multiplied
+  this exact gap instead of closing it — every Cancel control
+  still rendered the identical `aria-label="Cancel"`/`title="Cancel"`, so two
+  concurrent ops gave a screen-reader user "Cancel button, Cancel button"
+  with nothing to distinguish them. Each control's name/title is now
+  `Cancel ${op.label}` (e.g. "Cancel Importing a.dat…"), using the label
+  already in hand. Pinned by `StatusBar.test.tsx`'s "shows a Cancel control
+  for EVERY visible op … each with a distinct accessible name" test.
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 
@@ -3702,11 +3711,35 @@ Original acceptance criteria (unchanged):
   cancel target of anything on this list), `components/workshops/
   figurebuilder/previewExport.ts:53,77`, `components/Library/
   PagesSection.tsx:37`, `lib/api/exportMultivar.ts:31,54,80,98`, `lib/api/
-  figures.ts:161,180,202,257,301`, `lib/api/report.ts:37`, `components/
-  Library/MultiSelectBar.tsx:83`, `components/Stage/useStatStage.ts:485`.
+  figures.ts:169,188,210,265,309` (recounted 2026-09-13, round-2 review N7 —
+  this same commit's own doc edits to that file shifted these by a few
+  lines and the citation was not re-measured), `lib/api/report.ts:37`,
+  `components/Library/MultiSelectBar.tsx:83`,
+  `components/Stage/useStatStage.ts:485`.
   None of these registers a `pendingOp`, so none shows a Cancel control or
   even a busy indicator today — this is a partial win on the acceptance
-  criterion, not the full one.
+  criterion, not the full one. **Narrowed further 2026-09-13 (round-2
+  review, F1):** even inside the wired chokepoint, a clipboard copy (Copy
+  figure / Copy figure as SVG) is not actually cancellable once its render
+  blob is produced. `postBlob`'s own signal check (`lib/api/http.ts`) and
+  `lib/clipboard.ts`'s `copyImageAsync`/`copySvgAsync` re-check close the
+  race only up to the point the `ClipboardItem` is CONSTRUCTED — one
+  microtask after the render settles — not at the browser's own read of
+  that value promise or its actual write, for which there is no JS hook on
+  any engine. Cancel clicked after that point still stops the STATUS from
+  lying (fixed the same round: `exportActive.ts` no longer reports "copy
+  cancelled" when the write already went through) but does not, and cannot,
+  stop the clipboard write itself. Also found and left as a named residual
+  rather than fixed (F5/N6): the same unguarded `void import(...)` shape
+  F5 fixed via `runLazy` in `commands/fileCommands.ts` survives at
+  `components/Stage/usePlotStageActions.ts:134,140` (Copy figure / Copy
+  figure as SVG — the same P3.4 export/copy surface, just routed through a
+  different File menu), `components/Library/MultiSelectBar.tsx:83`,
+  `components/Library/PagesSection.tsx:82`,
+  `components/Library/EditableFiguresSection.tsx:67`,
+  `components/windows/useWindowCommands.ts:190`, and
+  `store/recordRecipeUse.ts:26` — a failed chunk load at any of these is
+  still a silent no-op plus an unhandled-rejection console warning.
 - [ ] Errors say what failed, whether data changed, and next action.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**

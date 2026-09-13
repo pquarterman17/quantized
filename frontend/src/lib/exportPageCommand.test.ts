@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialComposition } from "./composition";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
@@ -14,9 +15,24 @@ vi.mock("../components/overlays/ParamDialog", () => ({
 const toastSpy = vi.fn();
 vi.mock("../store/toasts", () => ({ toast: (...args: unknown[]) => toastSpy(...args) }));
 
+/** F7 (2026-09-13 round-2 review): the F4 test below (~line 230ish)
+ *  permanently overrides `askParams`'s resolved value with a Promise that
+ *  never settles — `vi.clearAllMocks()` clears CALL history, not this
+ *  implementation override, and there is no `restoreMocks`/`mockReset` in
+ *  `vitest.config.ts`, so without this the next test added to either
+ *  describe below that awaits a real `askParams()` call would hang for the
+ *  full 20s timeout. Restored explicitly every test, same as the `status`
+ *  reset the second describe already added for the identical leaked-state
+ *  reason. Sabotage: delete this line and add any test after the F4 one
+ *  that calls `runExportSpatialPageCommand` again — it times out. */
+function resetAskParamsMock(): void {
+  vi.mocked(askParams).mockResolvedValue({ fmt: "pdf", dpi: 300 });
+}
+
 describe("runExportSpatialPageCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAskParamsMock(); // F7 — see this function's own doc
     useApp.setState({
       datasets: [
         {
@@ -105,6 +121,15 @@ describe("runExportSpatialPageCommand", () => {
 describe("runExportSpatialPageCommand — safe cancel (P3.4)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAskParamsMock(); // F7 — see this function's own doc
+    // N8 (2026-09-13 round-2 review): explicit, not just incidental — this
+    // file has no real `useToasts` store to reset (`toast` is replaced
+    // wholesale by the `toastSpy` shim above), so the "no toast" assertions
+    // below rely on `vi.clearAllMocks()` also clearing `toastSpy`'s call
+    // history. That is true today but easy to break quietly (e.g. a future
+    // `mockImplementationOnce` that isn't a plain call-tracking `vi.fn()`
+    // anymore); make the reset explicit here alongside `status`'s.
+    toastSpy.mockClear();
     usePendingOps.setState({ ops: [] });
     useApp.setState({
       // Reset explicitly (not just merged datasets/composition below): a
@@ -220,15 +245,25 @@ describe("runExportSpatialPageCommand — safe cancel (P3.4)", () => {
   // aimed at a Cancel control drawn under that backdrop. Sabotage: move
   // `beginOp` back above the `askParams` call and this fails (ops.length > 0
   // while the mocked dialog is still pending).
+  // F6 (2026-09-13 round-2 review): this used to poll for the mocked dialog
+  // function having been invoked, wrapped the way `vi.mocked` wraps a mock —
+  // a weak-wait shape that evaded architecture.test.ts's ratchet only
+  // because that regex required a BARE identifier inside `expect(...)`, not
+  // a wrapped one (fixed alongside this, in architecture.test.ts itself).
+  // Rewritten to await a deferred that `askParams`'s own mock resolves —
+  // real synchronisation on the dialog actually having been opened, not a
+  // poll for "was the mock called yet".
   it("registers no pendingOp while the params dialog is open (prompt precedes beginOp)", async () => {
-    const { askParams } = await import("../components/overlays/ParamDialog");
     let resolveParams!: (v: { fmt: string; dpi: number } | null) => void;
-    vi.mocked(askParams).mockImplementation(
-      () => new Promise((r) => (resolveParams = r)),
-    );
+    let dialogOpened!: () => void;
+    const opened = new Promise<void>((r) => (dialogOpened = r));
+    vi.mocked(askParams).mockImplementation(() => {
+      dialogOpened();
+      return new Promise((r) => (resolveParams = r));
+    });
 
     const p = runExportSpatialPageCommand(useApp.getState);
-    await vi.waitFor(() => expect(vi.mocked(askParams)).toHaveBeenCalled());
+    await opened;
     expect(usePendingOps.getState().ops).toHaveLength(0);
 
     resolveParams(null); // user cancels the dialog itself

@@ -5,9 +5,10 @@
 // #38 deferred edge (ORIGIN_FILE_DECODE_PLAN): resolves a still-pending
 // (preview-only) dataset to full data FIRST, so this is the single chokepoint
 // that keeps every export from silently running on the small lazy-book
-// preview. A resolve failure reuses the same export-failed status/toast as
-// an ordinary export failure — the operation is aborted either way, never
-// falls through to the preview.
+// preview. A resolve failure — whether resolveDataset REJECTS or resolves to
+// `undefined` (the dataset vanished from the store mid-resolve) — reports the
+// same export-failed status/toast an ordinary export failure would; the
+// operation is aborted either way, never falls through to the preview.
 //
 // PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations):
 // this is also the ONE place every export/copy that goes through it gets a
@@ -33,32 +34,31 @@ import type { useApp } from "../store/useApp";
 
 export type StoreGet = typeof useApp.getState;
 
+/** N5 (2026-09-13 round-2 review): every caller in the repo passes exactly
+ *  one of these two verbs — narrowed from a bare `string` so a third one
+ *  (e.g. a future "save"/"move") is a compile error here, at the one place
+ *  that decides wording, instead of a silent runtime fallback nobody
+ *  reviews. */
+export type ExportActiveVerb = "export" | "copy";
+
 /** Wording for the status/toast messages. Defaults describe an export; "Copy
  *  figure" (MAIN #35) passes copy wording so it routes through this SAME lazy-
  *  resolve chokepoint instead of re-implementing the resolve and reopening the
  *  #38 preview-data bug. */
 export interface ExportActiveLabels {
   /** Infinitive, used in the failure paths: "no dataset to copy". */
-  verb?: string;
+  verb?: ExportActiveVerb;
   /** Past tense, used on success: "copied scan". */
   past?: string;
 }
 
-/** "export" -> "Export" for the pendingOps label ("Exporting scan.dat…"). */
-function capitalize(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-/** verb -> its pendingOps-label gerund. A plain `${capitalize(verb)}ing`
- *  concatenation is wrong for a silent-e verb (e.g. "save" -> "Saveing"
- *  instead of "Saving") — every verb actually passed today ("export",
- *  "copy") happens to survive that naively, which is exactly how this would
- *  ship unnoticed the day a "save"/"move"/"remove" caller is added. Fall
- *  back to the naive form for an unlisted verb rather than throwing — this
- *  is cosmetic, not a reason to break the export. */
-const GERUND: Record<string, string> = { export: "Exporting", copy: "Copying" };
-function gerund(verb: string): string {
-  return GERUND[verb] ?? `${capitalize(verb)}ing`;
+/** verb -> its pendingOps-label gerund. A closed, two-entry map now that
+ *  `verb` is a union type — no naive `${capitalize(verb)}ing` fallback to
+ *  keep honest for an unlisted verb, since there is no longer any way to
+ *  reach one. */
+const GERUND: Record<ExportActiveVerb, string> = { export: "Exporting", copy: "Copying" };
+function gerund(verb: ExportActiveVerb): string {
+  return GERUND[verb];
 }
 
 /** Report a cancellation the same way at every point it can land — set the
@@ -102,15 +102,38 @@ export async function exportActive(
       cancelled(s, verb);
       return;
     }
-    if (!ds) return;
+    // F4 (2026-09-13 round-2 review): resolveDataset can resolve to
+    // `undefined` WITHOUT throwing (the dataset vanished from the store
+    // mid-resolve) — a bare early return here used to be silent: no status,
+    // no toast, op just cleared. Reuse the same export-failed shape the
+    // catch block below reports for a resolve that actually throws (see
+    // this module's header).
+    if (!ds) {
+      const msg = `${verb} failed: dataset is no longer available`;
+      s().setStatus(msg);
+      toast(msg, "danger");
+      return;
+    }
     const stem = ds.name.replace(/\.[^.]+$/, "");
     await fn(stem, ds, controller.signal);
-    // Race guard: `fn` resolving successfully right as Cancel lands must
-    // never report success — the transport layer's own check (see this
-    // module's header) makes this unreachable for postDownload/postBlob
-    // callers today, but the guard is cheap and keeps that an
-    // implementation detail `fn` is not required to know about.
+    // Race guard: `fn` resolving successfully right as Cancel lands.
     if (controller.signal.aborted) {
+      // For a download (postDownload's throwIfAborted + synchronous
+      // saveBlob, no `await` between) this is unreachable — the transport
+      // itself would have rejected instead of resolving. For a clipboard
+      // copy it IS reachable (F1, 2026-09-13 round-2 review): `fn` resolving
+      // here means copyImageAsync/copySvgAsync already returned `true`,
+      // which only happens after `navigator.clipboard.write(...)` itself
+      // resolved — the write is DONE, not "maybe still racing". Reporting
+      // "copy cancelled" at that point would be a lie: the figure is
+      // already sitting on the user's clipboard. Report what actually
+      // happened instead of the generic cancelled status.
+      if (verb === "copy") {
+        const msg = `${past} ${stem} — cancel arrived too late to stop it`;
+        s().setStatus(msg);
+        toast(msg, "ok");
+        return;
+      }
       cancelled(s, verb);
       return;
     }

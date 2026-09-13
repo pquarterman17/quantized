@@ -65,9 +65,13 @@ function rejectIfImportRunning(): boolean {
  *  so THAT rejection doesn't itself go unhandled; a success from the
  *  module's own body never reaches this catch, so it can't double-toast a
  *  failure exportActive already reported through its own status/toast. */
+// N3 (2026-09-13 round-2 review): `label` is the pendingOps busy text
+// ("Loading CSV export…"), already gerund-shaped — appending "failed to
+// load" to it read as "Loading CSV export failed to load", doubling "load".
 export function runLazy<M>(label: string, load: () => Promise<M>): Promise<M> {
   return withOp(label, load).catch((e: unknown) => {
-    const msg = `${label.replace(/…$/, "")} failed to load: ${e instanceof Error ? e.message : "error"}`;
+    const what = label.replace(/^Loading\s+/, "").replace(/…$/, "");
+    const msg = `Could not load the ${what}: ${e instanceof Error ? e.message : "error"}`;
     toast(msg, "danger");
     throw e;
   });
@@ -309,7 +313,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // runLazy (F5) — see that function's own doc — covers the import step
       // itself, which sits outside exportActive's own error handling.
       run: () =>
-        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+        void runLazy("Loading CSV export…", () => import("./fileCommandsLazy"))
           .then((m) => m.runExportXrdCsv(s, exportXrdCsv))
           .catch(() => {
             /* runLazy already toasted a load failure; a run() failure
@@ -324,7 +328,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // Body lives in lazily-imported commands/fileCommandsLazy.ts — see
       // "export-csv" above (same `void`-prefix + runLazy reasoning).
       run: () =>
-        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+        void runLazy("Loading HDF5 export…", () => import("./fileCommandsLazy"))
           .then((m) => m.runExportHdf5(s, exportHdf5))
           .catch(() => {
             /* see "export-csv" above */
@@ -398,7 +402,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // (and the figureSpec transport builder behind it) off the eager path.
       // runLazy (F5) — see that function's own doc.
       run: () =>
-        void runLazy("Loading export…", () => import("../lib/exportFigureCommand"))
+        void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand"))
           .then((m) => m.runExportFigureCommand(s))
           .catch(() => {
             /* see "export-csv" above */
@@ -417,7 +421,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // registers its own cancellable pendingOp — see "export-csv" above.
       // runLazy (F5) — see that function's own doc.
       run: () =>
-        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+        void runLazy("Loading Origin export…", () => import("./fileCommandsLazy"))
           .then((m) => m.runExportOrigin(s, exportOrigin))
           .catch(() => {
             /* see "export-csv" above */
@@ -468,7 +472,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // would show two competing busy entries for one export. runLazy (F5)
       // — see that function's own doc.
       run: () =>
-        void runLazy("Loading export…", () => import("../lib/exportPageCommand"))
+        void runLazy("Loading page export…", () => import("../lib/exportPageCommand"))
           .then((m) => m.runExportSpatialPageCommand(s))
           .catch(() => {
             /* see "export-csv" above */

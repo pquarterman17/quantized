@@ -126,16 +126,21 @@ describe("File menu — export commands register exactly one pending op (no doub
     vi.unstubAllGlobals();
   });
 
-  it.each(["export-csv", "export-hdf5", "export-origin"])(
+  // F2 (2026-09-13 round-2 review): "export-figure" is `void`-prefixed for
+  // the identical reason (see fileCommands.ts) and was missing here too —
+  // the same hole F1's fix closed for "export-page" alone. Sabotage: delete
+  // the `void` at fileCommands.ts's "export-figure" run() and this fails.
+  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure"])(
     "%s via runAction registers exactly one pendingOps entry, with a cancel callback",
     async (id) => {
       const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);
       if (!cmd) throw new Error(`no ${id} command`);
       runAction(cmd);
       // Wait for the CANCELLABLE op specifically, not just "any op" — a
-      // transient, cancel-less "Loading export…" op (F5's runLazy, wrapping
-      // the dynamic import itself) exists briefly first and ends before the
-      // real one begins (sequential, never concurrent with it), so polling
+      // transient, cancel-less "Loading …" op (F5's runLazy, wrapping the
+      // dynamic import itself; N4: each site now has its own label) exists
+      // briefly first and ends before the real one begins (sequential,
+      // never concurrent with it), so polling
       // for "any op" can catch that one instead and see a `cancel` of
       // `undefined`.
       await vi.waitFor(() => expect(usePendingOps.getState().ops.some((o) => o.cancel)).toBe(true));
@@ -195,7 +200,7 @@ describe("File menu — export-page command registers exactly one pending op (no
     if (!cmd) throw new Error("no export-page command");
     runAction(cmd);
     // See the it.each block above: wait for the CANCELLABLE op, not "any op"
-    // — runLazy's transient "Loading export…" op has no cancel and ends
+    // — runLazy's transient "Loading …" op has no cancel and ends
     // before the real one begins.
     await vi.waitFor(() => expect(usePendingOps.getState().ops.some((o) => o.cancel)).toBe(true));
     // Exactly one -- a second, generic entry from runAction's own
@@ -219,12 +224,15 @@ describe("runLazy (F5: dynamic-import failures toast instead of vanishing)", () 
     useToasts.setState({ toasts: [] });
   });
 
+  // N3 (2026-09-13 round-2 review): the message used to double "load"
+  // ("Loading export failed to load: …") because it appended onto the
+  // already-gerund label instead of describing what failed.
   it("toasts a load failure and leaves no dangling pendingOp", async () => {
     const err = new Error("network error");
     await expect(runLazy("Loading export…", () => Promise.reject(err))).rejects.toBe(err);
     expect(usePendingOps.getState().ops).toHaveLength(0);
     expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual([
-      "Loading export failed to load: network error",
+      "Could not load the export: network error",
     ]);
   });
 

@@ -213,7 +213,12 @@ describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
     return write;
   }
 
-  it("copyImageAsync resolves false — never a completed write — when the render settles AFTER cancel", async () => {
+  // N1 (2026-09-13 round-2 review): renamed — this asserts "the signal is
+  // already aborted BEFORE copyImageAsync is even called", not "the render
+  // settles after cancel" (the render here is already settled at construction
+  // time, and abort() runs before the call, not after it). The actual "settles
+  // after cancel" race is the gated-read test below.
+  it("copyImageAsync resolves false when the signal is already aborted at call time (write attempted, value promise rejects)", async () => {
     const write = stubClipboardWrite();
     const controller = new AbortController();
     const pending = Promise.resolve(new Blob(["x"])); // the render "succeeded"...
@@ -227,7 +232,7 @@ describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
     await expect(write.mock.results[0]?.value).rejects.toThrow();
   });
 
-  it("copySvgAsync resolves false under the same race", async () => {
+  it("copySvgAsync resolves false when the signal is already aborted at call time (same as copyImageAsync)", async () => {
     const write = stubClipboardWrite();
     const controller = new AbortController();
     const pending = Promise.resolve(new Blob(["<svg/>"]));
@@ -239,16 +244,49 @@ describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
     await expect(write.mock.results[0]?.value).rejects.toThrow();
   });
 
-  it("copyImageAsync still writes normally when the signal is untouched (no regression)", async () => {
-    stubClipboardWrite();
-    const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])));
-    expect(ok).toBe(true);
+  // N1 (2026-09-13 round-2 review): THIS is the actual race the module's doc
+  // now describes, and the two tests above do not exercise it — the render
+  // settles, the eager `asBlob()` re-check runs and PASSES (signal not yet
+  // aborted), and only THEN does Cancel land, before "the browser" (the gated
+  // `write` mock below) ever reads the ClipboardItem's value promise. There is
+  // no JS hook at that later point (see clipboard.ts's own doc), so the write
+  // still completes — this pins that it does, not that it doesn't.
+  it("still completes the write when Cancel lands AFTER the eager re-check already passed (the gated-read race)", async () => {
+    let readValue!: () => void;
+    const readGate = new Promise<void>((resolve) => (readValue = resolve));
+    const write = vi.fn(async (items: FakeClipboardItem[]) => {
+      await readGate; // "the browser" reads the value on ITS OWN schedule
+      for (const item of items) {
+        for (const value of Object.values(item.items)) await value;
+      }
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+
+    let resolveRender!: (b: Blob) => void;
+    const pending = new Promise<Blob | null>((r) => (resolveRender = r));
+    const controller = new AbortController();
+
+    const p = copyImageAsync(pending, controller.signal);
+    resolveRender(new Blob(["x"])); // the render lands...
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort(); // ...Cancel is clicked AFTER the re-check already ran
+    readValue(); // only now does "the browser" read the value and write it
+
+    expect(await p).toBe(true); // the write still completes despite the later abort
   });
 
-  it("copyImageAsync still writes normally when signal is passed but never aborted", async () => {
+  // N2 (2026-09-13 round-2 review): merged two near-duplicate tests ("signal
+  // untouched" / "signal passed but never aborted") that asserted the exact
+  // same thing under slightly different setups.
+  it.each<[string, AbortSignal | undefined]>([
+    ["no signal argument at all", undefined],
+    ["a signal that is passed but never aborted", new AbortController().signal],
+  ])("copyImageAsync still writes normally with %s (no regression)", async (_desc, signal) => {
     stubClipboardWrite();
-    const controller = new AbortController();
-    const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])), controller.signal);
+    const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])), signal);
     expect(ok).toBe(true);
   });
 });

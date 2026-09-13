@@ -1427,7 +1427,15 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
     // Pattern: waitFor(() => expect(...).toHaveBeenCalled()) — the synchronisation barrier form.
     // Matches across line breaks; does NOT match bare expect(...).toHaveBeenCalled() which is correct.
     // The defect: waitFor returns as soon as the mock is invoked, not when its value reaches state.
-    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    // F6 (2026-09-13 round-2 review): the identifier inside expect(...) may
+    // optionally be wrapped in `vi.mocked(...)` — `expect(vi.mocked(askParams))
+    // .toHaveBeenCalled()` is the exact same synchronisation-barrier defect as
+    // the bare form and had been slipping past the original bare-identifier-only
+    // regex (exportPageCommand.test.ts's F4 test). `expect(vi.mocked(x).mock.
+    // calls.length).toBeGreaterThan(...)` (useStatStage.test.ts) is unaffected:
+    // it doesn't end in `.toHaveBeenCalled` right after the closing paren.
+    const weakWaitPattern =
+      /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\(\s*(?:vi\.mocked\s*\(\s*[A-Za-z_$][\w$]*\s*\)|[A-Za-z_$][\w$]*)\s*\)\s*\.\s*toHaveBeenCalled/;
     const over: string[] = [];
 
     for (const [p, src] of testSources()) {
@@ -1457,7 +1465,10 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
   });
 
   it("weak-wait pins stay honest — a file that dropped below its pin must lose it", () => {
-    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    // Kept identical to the pattern above (F6 round-2 widening included) —
+    // duplicated rather than shared so each `it` reads standalone.
+    const weakWaitPattern =
+      /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\(\s*(?:vi\.mocked\s*\(\s*[A-Za-z_$][\w$]*\s*\)|[A-Za-z_$][\w$]*)\s*\)\s*\.\s*toHaveBeenCalled/;
     const stale: string[] = [];
 
     for (const key of Object.keys(WEAK_WAIT_PINS)) {

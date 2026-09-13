@@ -1514,9 +1514,35 @@ import { fileURLToPath } from "node:url";
  *  cancel-during-resolve, the ParamDialog-backdrop-swallows-Cancel bug, and
  *  unhandled dynamic-import rejections — see lib/exportActive.ts's
  *  `cancelled`/`gerund` additions and commands/fileCommands.ts's
- *  `runLazy`): measured 916,153 B after `npm ci`, +515 B over the 915,638
- *  above for closing those gaps. Still 4,247 B under budget; still nowhere
- *  near the SLACK floor.
+ *  `runLazy`). REWRITTEN 2026-09-13 (second adversarial-review round, same
+ *  day): the original entry here recorded 916,153 B, "+515 B over the
+ *  915,638 above", "4,247 B under budget" — the delta was measured against
+ *  `d6e67fb7` (the P3.4 feature commit itself), not this commit's actual
+ *  parent, and the absolute figure was 51 B too high (exactly what
+ *  `95a211fc`, the dash/marker-cycle block above, shaved off on the same
+ *  day) — the tree that produced 916,153 did not contain that change.
+ *  Correct, measured against the real parent: 916,102 B, +515 B over the
+ *  parent's 915,587 B (`d6e67fb7` itself measured 915,638 B), 4,298 B under
+ *  budget.
+ *
+ *  Second adversarial-review round on THAT commit (honest clipboard-cancel
+ *  docs and status wording, the export-figure double-registration guard,
+ *  exportActive's silent resolve-to-`undefined` return, per-op Cancel
+ *  accessible names, a widened weak-wait-ratchet regex, and a couple of
+ *  test-hygiene fixes — see this same round's additions to
+ *  lib/exportActive.ts, lib/clipboard.ts, components/Shell/StatusBar.tsx,
+ *  and commands/fileCommands.ts). Its REAL parent on this branch is
+ *  `51346052` (the dash/marker-cycle round-four fix, which measures 916,102 B
+ *  — F4 there cost 0 B, so cd402c1b and 51346052 measure the same), NOT
+ *  `95a211fc`: the fix agent measured against 95a211fc and reported "+595 B",
+ *  which is the two export-cancel fix rounds ADDED TOGETHER. Both trees
+ *  re-measured by the orchestrator after `npm ci` and a `.vite` wipe:
+ *
+ *    51346052   916,102   this commit's real parent on this branch
+ *    this work  916,182   +80 B for the round-two fixes
+ *
+ *  4,218 B under the unmoved 920,400 budget, nowhere near the
+ *  `EAGER_JS_BUDGET - SLACK` floor.
  */
 const EAGER_JS_BUDGET = 920_400;
 

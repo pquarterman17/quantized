@@ -115,11 +115,15 @@ export async function postForm<T>(path: string, form: FormData, signal?: AbortSi
  *  That "nothing can race it" claim is exact for `postDownload`: `saveBlob`
  *  is a synchronous DOM call, so this check is genuinely the last word. It
  *  is only PARTIAL for `postBlob`'s clipboard callers: this closes the race
- *  up to the moment `postBlob` returns, but the browser's own read of the
- *  `ClipboardItem` value promise a caller builds from that blob happens
- *  later still, on the browser's own schedule — see lib/clipboard.ts's
- *  copyImageAsync/copySvgAsync, which re-check the same signal a second
- *  time right there for exactly that reason. */
+ *  up to the moment `postBlob` returns. `lib/clipboard.ts`'s copyImageAsync/
+ *  copySvgAsync re-check the same signal again, one microtask later, when
+ *  they build the `ClipboardItem` — that narrows the gap between this
+ *  return and that construction, nothing more. A cancel landing AFTER that
+ *  second check (while the browser is still reading the value promise, or
+ *  performing the write itself) is not observable from JS on any engine,
+ *  and the clipboard write completes regardless — see that module's own
+ *  doc, and `lib/exportActive.ts`'s post-`fn` abort check for how the
+ *  residual is honestly reported rather than mis-reported as "cancelled". */
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException("aborted", "AbortError");
 }

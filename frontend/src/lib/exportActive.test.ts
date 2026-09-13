@@ -25,11 +25,21 @@ function toastMsgs(): string[] {
   return useToasts.getState().toasts.map((t) => t.msg);
 }
 
+/** Captured once, before any test overrides it — several tests below (F3,
+ *  F4) replace `resolveDataset` with a controllable stand-in via
+ *  `useApp.setState({ resolveDataset: ... })`. Zustand's `setState` MERGES
+ *  by default, so that override otherwise LEAKS forward into every test
+ *  that runs after it in file order — not just the app's real `datasets`/
+ *  `activeId`/`status`, which the beforeEach below already re-sets every
+ *  time. Restoring this explicitly closes that leak. */
+const defaultResolveDataset = useApp.getState().resolveDataset;
+
 beforeEach(() => {
   vi.clearAllMocks();
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
   useApp.setState({
+    resolveDataset: defaultResolveDataset,
     datasets: [{ id: "d1", name: "scan.dat", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } }],
     activeId: "d1",
     status: "",
@@ -160,6 +170,56 @@ describe("exportActive — cancel outcome", () => {
     expect(fn).not.toHaveBeenCalled(); // never reached the actual export
     expect(useApp.getState().status).toBe("export cancelled");
     expect(toastMsgs()).toEqual([]);
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+  });
+
+  // F4 (2026-09-13 round-2 review): resolveDataset can resolve to
+  // `undefined` WITHOUT throwing (the dataset vanished from the store
+  // mid-resolve) — the sibling case to the test above, but with no abort at
+  // all. This used to hit a bare `if (!ds) return;` with no status/toast,
+  // the identical defect F3 fixed for the abort branch right next to it.
+  // Sabotage: revert the `!ds` branch to a bare `return;` and this fails.
+  it("reports export-failed (not silent) when the dataset resolves to undefined with no cancel involved", async () => {
+    type Ds = ReturnType<typeof useApp.getState>["datasets"][number];
+    useApp.setState({
+      resolveDataset: vi.fn(() => Promise.resolve(undefined as Ds | undefined)),
+    });
+    const fn = vi.fn();
+    await exportActive(useApp.getState, fn);
+
+    expect(fn).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("export failed: dataset is no longer available");
+    expect(toastMsgs()).toEqual(["export failed: dataset is no longer available"]);
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+  });
+
+  // F1 (2026-09-13 round-2 review of the fix round): the "discards a late
+  // resolve" test above pins the DOWNLOAD case, where the race is genuinely
+  // unreachable. For a COPY, `fn` resolving successfully here means
+  // copyImageAsync/copySvgAsync already returned `true` — which only
+  // happens after `navigator.clipboard.write(...)` itself resolved, i.e. the
+  // write is DONE. Reporting "copy cancelled" in that case is the exact
+  // user-visible lie the second review round found: the status bar would
+  // say nothing happened while the figure sits on the clipboard. This is
+  // the reviewer's own gated-read probe shape (abort landing strictly AFTER
+  // the copy's own promise has already settled). Sabotage: delete the
+  // `verb === "copy"` branch (fall through to `cancelled(s, verb)`
+  // unconditionally) and this fails — status would read "copy cancelled".
+  it("reports a copy as done, not cancelled, when fn (the clipboard write) resolves successfully AFTER cancel lands", async () => {
+    let resolveFn!: () => void;
+    const fn = vi.fn(() => new Promise<void>((r) => (resolveFn = r)));
+    const p = exportActive(useApp.getState, fn, { verb: "copy", past: "copied" });
+    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+
+    usePendingOps.getState().ops[0].cancel!();
+    // The clipboard write already completed by the time fn resolves — see
+    // this module's own "Race guard" comment.
+    resolveFn();
+    await p;
+
+    expect(useApp.getState().status).toBe("copied scan — cancel arrived too late to stop it");
+    expect(useApp.getState().status).not.toBe("copy cancelled");
+    expect(toastMsgs()).toEqual(["copied scan — cancel arrived too late to stop it"]);
     expect(usePendingOps.getState().ops).toHaveLength(0);
   });
 });

@@ -98,7 +98,18 @@ export default function StatusBar() {
               running used to have NO way to cancel it from the UI at all,
               since only visibleOps[0] ever rendered a control. The label/
               "+N more" text above still collapses to the oldest op only
-              (compact layout unchanged); only the controls fan out. */}
+              (compact layout unchanged); only the controls fan out.
+
+              F5 (2026-09-13 round-2 adversarial review): that fan-out then
+              multiplied a PRE-EXISTING a11y gap (PRIMARY_SOFTWARE_AUDIT_PLAN
+              P3.3's own Group I finding) instead of fixing it — every button
+              rendered the identical `aria-label="Cancel"`/`title="Cancel"`,
+              so two concurrent ops gave a screen-reader user "Cancel button,
+              Cancel button" with no way to tell them apart, and a sighted
+              user two identical ✕ glyphs. Each op's own label (already in
+              hand, already unique enough to distinguish "Importing a.dat…"
+              from "Importing b.dat…") makes both the name and the title
+              distinct per control. */}
           {visibleOps
             .filter((o) => o.cancel)
             .map((o) => (
@@ -106,8 +117,8 @@ export default function StatusBar() {
                 key={o.id}
                 type="button"
                 className="qzk-pending-cancel"
-                title="Cancel"
-                aria-label="Cancel"
+                title={`Cancel ${o.label}`}
+                aria-label={`Cancel ${o.label}`}
                 onClick={o.cancel}
               >
                 ✕

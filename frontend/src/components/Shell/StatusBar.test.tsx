@@ -179,10 +179,10 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
       vi.advanceTimersByTime(300);
     });
     expect(screen.getByText("Export figure…")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Cancel /i })).not.toBeInTheDocument();
   });
 
-  it("renders a Cancel control for an op that carries one, and clicking it calls cancel", () => {
+  it("renders a Cancel control for an op that carries one, named after that op, and clicking it calls cancel", () => {
     const cancel = vi.fn();
     render(<StatusBar />);
     act(() => {
@@ -191,7 +191,7 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    const btn = screen.getByRole("button", { name: "Cancel" });
+    const btn = screen.getByRole("button", { name: "Cancel Importing scan.dat…" });
     fireEvent.click(btn);
     expect(cancel).toHaveBeenCalledOnce();
   });
@@ -201,7 +201,16 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
   // started while another op was already running had NO way to cancel it
   // from the UI at all. Sabotage: filter back down to `visibleOps[0]` in
   // StatusBar.tsx and this fails (length 1, cancelB unreachable).
-  it("shows a Cancel control for EVERY visible op that carries one, not only the oldest", () => {
+  //
+  // F5 (2026-09-13 round-2 review): that fan-out gave every button the
+  // IDENTICAL name ("Cancel"), so a screen-reader user heard "Cancel
+  // button, Cancel button" with no way to tell them apart — this now
+  // asserts the two controls have DISTINCT accessible names, not just that
+  // there are two of them. Sabotage: revert StatusBar.tsx's aria-label back
+  // to the bare `"Cancel"` literal and this fails (both buttons collapse to
+  // the same accessible name, `getByRole` with a specific name throws
+  // "unable to find" instead of matching exactly one).
+  it("shows a Cancel control for EVERY visible op that carries one, not only the oldest, each with a distinct accessible name", () => {
     const cancelA = vi.fn();
     const cancelB = vi.fn();
     render(<StatusBar />);
@@ -212,12 +221,16 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    const btns = screen.getAllByRole("button", { name: "Cancel" });
+    const btns = screen.getAllByRole("button", { name: /^Cancel /i });
     expect(btns).toHaveLength(2);
-    fireEvent.click(btns[0]);
+    const names = btns.map((b) => b.getAttribute("aria-label"));
+    expect(new Set(names).size).toBe(2); // distinct, not two identical "Cancel"s
+    const btnA = screen.getByRole("button", { name: "Cancel Importing a.dat…" });
+    const btnB = screen.getByRole("button", { name: "Cancel Importing b.dat…" });
+    fireEvent.click(btnA);
     expect(cancelA).toHaveBeenCalledOnce();
     expect(cancelB).not.toHaveBeenCalled();
-    fireEvent.click(btns[1]);
+    fireEvent.click(btnB);
     expect(cancelB).toHaveBeenCalledOnce();
   });
 
@@ -231,7 +244,8 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^Cancel /i })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Cancel Importing b.dat…" })).toBeInTheDocument();
   });
 });
 
@@ -304,7 +318,11 @@ describe("StatusBar × export cancel (P3.4 safe-cancel-for-export)", () => {
     // awaits (askParams, exportActive's resolveDataset) rather than
     // synchronously, so fake timers would need to be pumped through every
     // microtask in between for no real benefit.
-    const cancelBtn = await screen.findByRole("button", { name: "Cancel" }, { timeout: 2000 });
+    const cancelBtn = await screen.findByRole(
+      "button",
+      { name: "Cancel Exporting scan.dat…" },
+      { timeout: 2000 },
+    );
     expect(screen.getByText("Exporting scan.dat…")).toBeInTheDocument();
     expect(capturedSignal?.aborted).toBe(false);
 
