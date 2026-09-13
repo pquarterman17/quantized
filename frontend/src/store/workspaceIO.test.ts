@@ -922,7 +922,10 @@ describe("BUG-011 residual — a book that goes pending DURING the resolve await
     expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
     expect(useToasts.getState().toasts.at(-1)?.msg).toContain('"book2.opj" was still loading');
     expect(saveBlob).not.toHaveBeenCalled();
-    // Never marked as saved -- projectDirty must stay whatever it already was.
-    expect(useApp.getState().currentProject).toBeNull();
+    // The book that turned pending mid-resolve is still pending afterwards --
+    // the refusal serialized nothing and resolved nothing on its behalf.
+    // (`currentProject` is not asserted: the browser-download fallback this
+    // spec exercises never touches it, so that check could not fail.)
+    expect(useApp.getState().datasets.find((d) => d.id === "book2")?.pending).toBeDefined();
   });
 });

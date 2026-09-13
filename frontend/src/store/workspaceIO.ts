@@ -85,8 +85,9 @@ async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
   // re-read above can still carry a dataset whose `pending` came back true
   // AFTER the resolve step finished with it. Refuse rather than serialize its
   // downsampled preview rows, mirroring `store/packProjectContent.ts`'s own
-  // post-await re-check (BUG-011 finding #2) — same refusal shape as the
-  // catch block just above, naming the book the same way.
+  // post-await re-check (BUG-011 finding #2) — same status + toast shape as
+  // the catch block just above (which reports the thrown reason and names no
+  // book); the by-name refusal itself mirrors `packProjectContent.ts`.
   const stillPending = s.datasets.find((d) => d.pending);
   if (stillPending) {
     const msg = `save failed — couldn't load full data for every book: "${stillPending.name}" was still loading`;
