@@ -3,6 +3,7 @@
 // delete behavior and disabled reasons cannot drift by renderer.
 
 import { openLibraryNode } from "./libraryOpen";
+import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
@@ -27,11 +28,10 @@ function renameArtifact(target: ArtifactTarget): void {
   ]).then((result) => {
     const name = result && String(result.name).trim();
     if (!name) return;
-    const state = useApp.getState();
-    if (node.kind === "editable-figure") state.renameEditableFigure(node.entityId, name);
-    else if (node.kind === "publication-figure") state.renameFigureDoc(node.entityId, name);
-    else if (node.kind === "page") state.renamePageDocument(node.entityId, name);
-    else if (node.kind === "report") state.renameReport(node.entityId, name);
+    // L1.4: the kind -> store-action mapping lives in ONE place now
+    // (libraryRename.ts) so the Details renderer's inline editor and this
+    // modal cannot drift apart on what "rename" calls.
+    renameLibraryNode(node, name);
   });
 }
 

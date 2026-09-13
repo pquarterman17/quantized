@@ -15,6 +15,7 @@ afterEach(() => {
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
   s.setPref("libraryPanelWidth", 210);
+  s.setPref("autoSeriesStyles", false);
 });
 
 describe("preferences", () => {
@@ -67,6 +68,25 @@ describe("preferences", () => {
     expect(useApp.getState().libraryPanelWidth).toBe(260);
     expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").libraryPanelWidth).toBe(260);
     expect(document.documentElement.style.getPropertyValue("--lw")).toBe("260px");
+  });
+
+  // P3.3 non-colour encodings. Pinned the way every other pref in this blob is.
+  // Note what is NOT asserted: a push into a lib singleton. `syncPrefs`
+  // deliberately does not have one — the cycle is handed to the two render
+  // pairs that have export parity, from this field, as an argument.
+  it("autoSeriesStyles (P3.3) defaults to off and persists when turned on", () => {
+    expect(useApp.getState().autoSeriesStyles).toBe(false);
+    useApp.getState().setPref("autoSeriesStyles", true);
+    expect(useApp.getState().autoSeriesStyles).toBe(true);
+    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").autoSeriesStyles).toBe(true);
+  });
+
+  it("autoSeriesStyles survives a localStorage round-trip, and junk falls back", () => {
+    localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: true }));
+    expect(loadPrefs().autoSeriesStyles).toBe(true);
+    // A non-boolean (hand-edited blob, older client) falls back to the default.
+    localStorage.setItem("qz.prefs", JSON.stringify({ autoSeriesStyles: "yes" }));
+    expect(loadPrefs().autoSeriesStyles).toBe(false);
   });
 
   it("libraryPanelWidth clamps out-of-range values on load", () => {

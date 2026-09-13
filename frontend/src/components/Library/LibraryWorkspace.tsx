@@ -177,8 +177,10 @@ export default function LibraryWorkspace({ onClose }: Props) {
     const alreadyInSelection =
       node.kind === "worksheet" && useApp.getState().selectedIds.includes(node.entityId);
     if (!alreadyInSelection) selectLibraryNode(node);
-    const menuItems = buildLibraryTileMenu(node, { browse: selectOrBrowse, open: openFromTile, stageReturn: close });
-    if (menuItems) setMenu({ x, y, items: menuItems });
+    // `browse` doubles as the folder-reveal hook here: navigating the tile
+    // workspace INTO a folder is exactly how a just-created subfolder becomes
+    // visible, so Tiles needs no separate `expandFolder`.
+    setMenu({ x, y, items: buildLibraryTileMenu(node, { browse: selectOrBrowse, open: openFromTile, stageReturn: close }) });
   };
 
   // OWNER DECISION (Paige, 2026-08-16, PR #145 review follow-up): an open

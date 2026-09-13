@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
 import type { ErrorBinding } from "./errorRoles";
+import type { DefaultTrace } from "./types";
 import {
   DECIMATE_MIN_POINTS,
   bucketsForWidth,
@@ -57,7 +58,7 @@ describe("decimationEligible", () => {
     xAscending: true,
     hasErrorBars: false,
     hasErrorSpans: false,
-    defaultTrace: "Line",
+    defaultTrace: "Line" as DefaultTrace,
     hasColorByColumns: false,
   };
 
@@ -189,7 +190,7 @@ describe("hasErrorMapEntries", () => {
 
 describe("decimationRequestEligible", () => {
   const base = {
-    defaultTrace: "Line",
+    defaultTrace: "Line" as DefaultTrace,
     hasErrorBars: false,
     hasErrorSpans: false,
     hasColorByColumns: false,

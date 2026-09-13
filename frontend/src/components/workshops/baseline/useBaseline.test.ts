@@ -124,17 +124,93 @@ describe("useBaseline", () => {
     const { result } = renderHook(() => useBaseline());
     act(() => result.current.setMethod("region"));
 
-    // The plot's rubber-band writes [x_min,x_max] to the store (already ordered).
-    act(() => useApp.getState().setRegionPicked([2, 3]));
+    // The plot's rubber-band writes the pick to the store (x already ordered).
+    act(() => useApp.getState().setRegionPicked({ x: [2, 3] }));
 
     // The hook pulls it into the params and consumes it (resets to null).
     expect(useApp.getState().regionPicked).toBeNull();
     expect(result.current.params.regionXMin).toBe(2);
+    expect(result.current.params.regionYMin).toBeNaN(); // x-only pick: no y constraint
     await act(async () => {
       await result.current.compute();
     });
     expect(baselineRegion).toHaveBeenCalledWith({
       x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 2, x_max: 3, order: 5,
+    });
+  });
+
+  // Optional 2-D y-box (MATLAB `onBGMouseUp` parity, GAP #96/#20).
+  it("consumes a store-picked y-range into the box edges and sends y_min/y_max", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [5, 5, 5, 5], coeffs: [0, 5], n_points: 2,
+      mean: 5, std: 0, min: 5, max: 5, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("region"));
+
+    act(() => useApp.getState().setRegionPicked({ x: [2, 3], yRange: [9, 12] }));
+
+    expect(useApp.getState().regionPicked).toBeNull();
+    expect(result.current.params.regionYMin).toBe(9);
+    expect(result.current.params.regionYMax).toBe(12);
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 2, x_max: 3, y_min: 9, y_max: 12, order: 5,
+    });
+  });
+
+  it("a fresh x-only pick clears a previously-set y-box (never combines stale y with a new drag)", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [5, 5, 5, 5], coeffs: [0, 5], n_points: 2,
+      mean: 5, std: 0, min: 5, max: 5, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("region"));
+    act(() => useApp.getState().setRegionPicked({ x: [2, 3], yRange: [9, 12] }));
+    expect(result.current.params.regionYMin).toBe(9);
+
+    act(() => useApp.getState().setRegionPicked({ x: [1, 4] })); // re-drag, x-only this time
+    expect(result.current.params.regionYMin).toBeNaN();
+    expect(result.current.params.regionYMax).toBeNaN();
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 1, x_max: 4, order: 5,
+    });
+  });
+
+  it("region uses explicit y-box edges when set directly (not just via a pick)", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [0, 0, 0, 0], coeffs: [0, 0], n_points: 2,
+      mean: 0, std: 0, min: 0, max: 0, order: 2,
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setMethod("region"));
+    act(() => result.current.setParams({ regionXMin: 2, regionXMax: 3, regionYMin: 9, regionYMax: 12, order: 2 }));
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(baselineRegion).toHaveBeenCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 2, x_max: 3, y_min: 9, y_max: 12, order: 2,
+    });
+  });
+
+  it("linear/quadratic/poly ignore a leftover y-box (always full range, like x)", async () => {
+    vi.mocked(baselineRegion).mockResolvedValue({
+      background: [0, 0, 0, 0], coeffs: [0, 0], n_points: 4,
+      mean: 0, std: 0, min: 0, max: 0, order: 1,
+    });
+    const { result } = renderHook(() => useBaseline());
+    act(() => result.current.setParams({ regionYMin: 9, regionYMax: 12 }));
+    act(() => result.current.setMethod("linear"));
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(baselineRegion).toHaveBeenLastCalledWith({
+      x: [1, 2, 3, 4], y: [10, 12, 11, 13], x_min: 1, x_max: 4, order: 1,
     });
   });
 

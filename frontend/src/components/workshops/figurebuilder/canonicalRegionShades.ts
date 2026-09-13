@@ -63,7 +63,7 @@ const DRAFT_PREFIX = "pshade-";
 
 /** Append a shade with a draft-namespaced id one past the highest existing
  *  draft id. Rejects a shade with any non-finite coordinate (returns the
- *  list unchanged) -- the same shape `viewOverrides` (figureSpec.ts) filters
+ *  list unchanged) -- the same shape `viewOverrides` (figureViewOverrides.ts) filters
  *  out of the render request, so an accepted-but-unrenderable shade can
  *  never reach the draft. */
 export function appendRegionShade(

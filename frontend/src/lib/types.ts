@@ -740,6 +740,12 @@ export interface RegionShade {
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
 
+/** The app-wide default-trace preference's four values (`store/prefs.ts`'s
+ *  `TRACES`, which sanitizes the persisted blob against exactly this list).
+ *  Beside `LineStyle`/`MarkerShape` rather than travelling as a bare `string`:
+ *  `markers.markerDecision` and `uplotOpts.buildOpts` branch on it BY VALUE. */
+export type DefaultTrace = "Line" | "Line + markers" | "Scatter" | "Step";
+
 /** Stepped-line alignment (GAP_PLOTTYPES — Graph Builder "step" mark), the
  *  same three-way vocabulary as matplotlib's `drawstyle` ("steps-pre"/
  *  "steps-post"/"steps-mid") and uPlot's `paths.stepped({align})`:

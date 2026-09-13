@@ -120,7 +120,7 @@ describe("refLineIdForHit", () => {
   });
 
   it("skips a non-finite line, exactly as the render request does", () => {
-    // figureSpec's viewOverrides drops it, so element `refline:1` is the THIRD
+    // figureViewOverrides' viewOverrides drops it, so element `refline:1` is the THIRD
     // draft line -- indexing the draft directly would drag the wrong one.
     const lines = [line("a", "x", 1), line("bad", "x", Number.NaN), line("c", "x", 3)];
     expect(refLineIdForHit(lines, 0)).toBe("a");

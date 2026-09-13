@@ -33,6 +33,7 @@ const errorMessage = (error: unknown): string =>
 export function computeCanonicalReadiness(
   document: FigureDocument | null,
   dataset: Dataset | null,
+  autoSeriesStyles = false,
 ): CanonicalReadiness | null {
   if (!document) return null;
   if (document.data.mode !== "frozen" && document.bindings.datasetId !== null && !dataset) {
@@ -48,7 +49,16 @@ export function computeCanonicalReadiness(
     return { state: "missing-source", error: `source unavailable: ${errorMessage(error)}` };
   }
   try {
-    return { state: "ready", data, spec: buildFigureSpecFromDocument(document, dataset, "preview") };
+    return {
+      state: "ready",
+      data,
+      // P3.3: `autoSeriesStyles` is true for a session whose TARGET window
+      // cycles per `windowCyclesSeriesStyles` — focused or not — see
+      // `canonicalSession`'s `selectSessionCyclesSeriesStyles`, which is the
+      // caller's source for it. The preview must show the dashes that
+      // window's Stage export will emit.
+      spec: buildFigureSpecFromDocument(document, dataset, "preview", { autoSeriesStyles }),
+    };
   } catch (error) {
     return {
       state: "invalid-spec",

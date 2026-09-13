@@ -18,19 +18,21 @@
 // already establish for the stat-stage facet grids.
 //
 // Fix-round C2: `liveDataset`, when given, is the bound live `Dataset` --
-// its exclusion/filter state prunes `data` (via `droppedRows`/
-// `pruneExcluded`, the exact primitives `lib/rowstate.analysisData` is
-// built from) BEFORE partitioning, so a facet export is drawn from the SAME
-// view the screen's own facet grid uses (`facetCompositionFromBinding`) and
-// can never contain excluded rows or grow an extra panel for a level that's
-// fully excluded on screen. Absent for a frozen document, which has no such
-// state of its own. (The flat, non-faceted export path has its own
-// separate, pre-existing row-exclusion gap -- untouched here; see
+// its exclusion/filter state prunes `data` (via the shared
+// `lib/rowstate.pruneToLiveDataset` -- the same primitives
+// `lib/rowstate.analysisData` is built from) BEFORE partitioning, so a facet
+// export is drawn from the SAME view the screen's own facet grid uses
+// (`facetCompositionFromBinding`) and can never contain excluded rows or grow
+// an extra panel for a level that's fully excluded on screen. Absent for a
+// frozen document, which has no such state of its own. (The flat,
+// non-faceted export path made the SAME substitution in a later slice --
+// `lib/figureSpec.ts`'s `buildFigureSpecForView` calls the identical
+// `pruneToLiveDataset` helper rather than duplicating this logic; see
 // `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md`'s F4.4 note.)
 
 import type { FigureFacetSpec } from "./api/figures";
 import { facetPayloads } from "./facet";
-import { droppedRows, pruneExcluded } from "./rowstate";
+import { pruneToLiveDataset } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
 /** Resolves `facetCol`'s row partition into wire-shaped panels. Returns
@@ -47,7 +49,7 @@ export function buildFacetSpecs(
   yKeys: number[] | null,
   liveDataset?: Dataset | null,
 ): FigureFacetSpec[] | undefined {
-  const view = liveDataset ? pruneExcluded(data, droppedRows(liveDataset)) : data;
+  const view = pruneToLiveDataset(data, liveDataset);
   const panels = facetPayloads(view, facetCol, xKey, yKeys);
   if (panels.length === 0) return undefined;
   return panels.map((p) => ({

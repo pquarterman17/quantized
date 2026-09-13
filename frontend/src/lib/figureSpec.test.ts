@@ -5,12 +5,13 @@ import {
   buildFigureSpecFromDocument,
   buildStageFigureSpec,
   resolveFigureDocumentData,
-  viewOverrides,
 } from "./figureSpec";
+import { viewOverrides } from "./figureViewOverrides";
 import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
+import { analysisData } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -255,6 +256,12 @@ describe("FigureDocument FigureSpec adapter", () => {
     const nullStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: null } });
     expect(buildFigureSpecFromDocument(nullStyles, dataset, "null")).not.toHaveProperty("series_styles");
 
+    // Nit 4 (round-4 review): the `[]` half of the exact-array branch ships
+    // `series_styles: []` on the wire — pinned here, not just at
+    // `documentPinsSeriesStyles([])` in seriesStyleCycle.test.ts.
+    const emptyStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([]);
+
     const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
     const publication = createFigureDocument({
       ...base,
@@ -459,6 +466,174 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(screenLabels).toEqual(["200", "300"]); // sanity: the exclusion actually dropped a level
     expect(spec.facets).toHaveLength(2);
     expect(spec.facets?.map((f) => f.label)).toEqual(screenLabels);
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN: the flat (non-faceted) path's own,
+  // separate row-exclusion gap -- explicitly left open when C2 fixed only
+  // the facet path above ("a candidate for its own slice, not silently
+  // inherited into facet's fix"). `buildFigureSpecForView` used to build the
+  // wire `dataset` straight off the raw, row-unpruned `data`, so an excluded
+  // row could reach a flat PNG/SVG/PDF/clipboard export the on-screen plot
+  // never showed at all.
+  describe("flat path: row exclusion / Data Filter pruning (the C2 note's own slice)", () => {
+    it("prunes an excluded row from the exported dataset, matching the screen's analysisData view", () => {
+      const excludedDataset: Dataset = { ...dataset, id: "flat-excluded", excludedRows: [0] }; // drops the row where signal=100
+      const document = createFigureDocument({
+        id: "flat-excluded-doc", name: "Flat excluded", datasetId: excludedDataset.id, view: richView(),
+      });
+
+      const spec = buildFigureSpecFromDocument(document, excludedDataset, "flat-excluded");
+
+      expect(spec.facets).toBeUndefined(); // sanity: genuinely flat, not the facet path C2 already fixed
+
+      // The screen's own analysis view for the IDENTICAL dataset -- the
+      // ground truth this export must never disagree with.
+      const screenView = analysisData(excludedDataset)!;
+      expect(spec.dataset.time).toEqual([1, 2]); // sanity: the exclusion actually dropped a row
+      expect(spec.dataset.time).toEqual(screenView.time);
+      expect(spec.dataset.values).toEqual(screenView.values);
+      expect(spec.dataset.metadata).toEqual(screenView.metadata);
+    });
+
+    it("prunes a Data-Filter-dropped row from the exported dataset, matching analysisData", () => {
+      // Channel 1 ("signal") holds 100/200/300 -- a min:150 range filter
+      // drops row 0 the same way an on-screen Data Filter card would.
+      const filteredDataset: Dataset = {
+        ...dataset,
+        id: "flat-filtered",
+        filter: [{ col: 1, kind: "range", min: 150 }],
+      };
+      const document = createFigureDocument({
+        id: "flat-filtered-doc", name: "Flat filtered", datasetId: filteredDataset.id, view: richView(),
+      });
+
+      const spec = buildFigureSpecFromDocument(document, filteredDataset, "flat-filtered");
+
+      const screenView = analysisData(filteredDataset)!;
+      expect(spec.dataset.time).toEqual([1, 2]); // sanity: the filter actually dropped row 0
+      expect(spec.dataset.time).toEqual(screenView.time);
+      expect(spec.dataset.values).toEqual(screenView.values);
+    });
+
+    it("leaves a document-only (frozen) export's dataset untouched -- no live dataset to prune against", () => {
+      const frozen = createFigureDocument({
+        id: "flat-frozen", name: "Flat frozen", datasetId: null, view: defaultPlotView(),
+        data: { mode: "frozen", snapshot: data },
+      });
+      // A dataset argument that WOULD prune a row if the frozen branch
+      // consulted it -- proving it genuinely does not
+      // (`resolveFigureDocumentData` never reads a frozen document's
+      // `dataset` argument, and `buildFigureSpecFromDocument` nulls
+      // `liveDataset` for `data.mode === "frozen"` regardless).
+      const wouldPruneIfLive: Dataset = { ...dataset, id: "flat-frozen-live-lookalike", excludedRows: [0] };
+
+      const spec = buildFigureSpecFromDocument(frozen, wouldPruneIfLive, "flat-frozen");
+
+      expect(spec.dataset).toEqual(data); // byte-identical to the raw snapshot, every row present
+    });
+
+    // rowSidecars.ts (BUG-006): `text_columns`/`origin_text_columns` are
+    // ROW-indexed -- a bar/box export resolving a category label by row
+    // index must see the SAME row dropped from both the numeric columns and
+    // the sidecar, or a label shifts onto a different row's cell than the
+    // one it actually describes.
+    it("keeps a row-indexed text-column sidecar aligned with its rows after pruning (bar/box category labels)", () => {
+      const withTextColumn: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10], [20], [30], [40]],
+        labels: ["signal"],
+        units: [""],
+        metadata: { text_columns: { category: ["A", "B", "C", "D"] } },
+      };
+      const sidecarDataset: Dataset = {
+        id: "flat-sidecar", name: "sidecar.csv", data: withTextColumn, excludedRows: [1],
+      };
+      const document = createFigureDocument({
+        id: "flat-sidecar-doc", name: "Flat sidecar", datasetId: sidecarDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+      });
+
+      const spec = buildFigureSpecFromDocument(document, sidecarDataset, "flat-sidecar");
+
+      // Row 1 ("B") is dropped -- and its cell drops WITH it, not some
+      // other row's.
+      expect(spec.dataset.time).toEqual([0, 2, 3]);
+      expect(spec.dataset.metadata.text_columns).toEqual({ category: ["A", "C", "D"] });
+    });
+
+    // The module doc for this line (`buildFigureSpecForView`, MAIN #36) claims
+    // error_spans is "built from `wireDataset`, not the raw `data`, so a
+    // pruned row's magnitude can never outnumber (and misalign with) the
+    // pruned `dataset`/`y_keys` rows above" -- but nothing above exercises a
+    // dataset with an ERROR BINDING *and* a pruned row together (the sidecar
+    // case just above has no `errors` at all). Pin the claim directly: an
+    // excluded row's uncertainty value must vanish from error_spans in the
+    // same position it vanishes from `dataset`, not just leave the ARRAY
+    // shorter by coincidence -- so this asserts the SURVIVING values, not
+    // merely their count.
+    it("prunes error_spans to match the pruned dataset, keeping row alignment (excluded row)", () => {
+      const errData: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10, 1], [20, 2], [30, 3], [40, 4]],
+        labels: ["signal", "sigma"],
+        units: ["V", "V"],
+        metadata: {},
+      };
+      // Row 1 (signal=20, sigma=2) is excluded -- surviving rows are 0, 2, 3.
+      const excludedErrorDataset: Dataset = {
+        id: "flat-error-excluded", name: "err.csv", data: errData, excludedRows: [1],
+      };
+      const document = createFigureDocument({
+        id: "flat-error-excluded-doc",
+        name: "Flat error excluded",
+        datasetId: excludedErrorDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+        // Channel 1 ("sigma") is a symmetric Y error for channel 0 ("signal").
+        errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      });
+
+      const spec = buildFigureSpecFromDocument(document, excludedErrorDataset, "flat-error-excluded");
+
+      expect(spec.dataset.time).toEqual([0, 2, 3]); // sanity: the exclusion actually dropped a row
+      expect(spec.error_spans).toHaveLength(1); // one entry per plotted series (y_keys: [0])
+      // The three SURVIVING sigma values (rows 0, 2, 3), in row order -- not
+      // re-derived by calling exportErrorSpans/buildErrorSpans again (that
+      // would only prove the helper agrees with itself), but the literal
+      // numbers `errData` holds at the kept rows.
+      expect(spec.error_spans?.[0]).toEqual({ y: { plus: [1, 3, 4], minus: [1, 3, 4] } });
+    });
+
+    it("prunes error_spans to match the pruned dataset, keeping row alignment (Data Filter)", () => {
+      const errData: DataStruct = {
+        time: [0, 1, 2, 3],
+        values: [[10, 1], [20, 2], [30, 3], [40, 4]],
+        labels: ["signal", "sigma"],
+        units: ["V", "V"],
+        metadata: {},
+      };
+      // Row 0 (signal=10 < 15) fails the filter -- surviving rows are 1, 2, 3.
+      const filteredErrorDataset: Dataset = {
+        id: "flat-error-filtered",
+        name: "err.csv",
+        data: errData,
+        filter: [{ col: 0, kind: "range", min: 15 }],
+      };
+      const document = createFigureDocument({
+        id: "flat-error-filtered-doc",
+        name: "Flat error filtered",
+        datasetId: filteredErrorDataset.id,
+        view: { ...defaultPlotView(), yKeys: [0] },
+        errors: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+      });
+
+      const spec = buildFigureSpecFromDocument(document, filteredErrorDataset, "flat-error-filtered");
+
+      expect(spec.dataset.time).toEqual([1, 2, 3]); // sanity: the filter actually dropped row 0
+      expect(spec.error_spans).toHaveLength(1);
+      // The three SURVIVING sigma values (rows 1, 2, 3), literal, same reason
+      // as above.
+      expect(spec.error_spans?.[0]).toEqual({ y: { plus: [2, 3, 4], minus: [2, 3, 4] } });
+    });
   });
 
   // Fix-round C5: mirrors the SCREEN's own fallback for the identical state
@@ -710,5 +885,261 @@ describe("viewOverrides — reference lines and region shades", () => {
     const ov = viewOverrides(defaultPlotView());
     expect(ov?.ref_lines).toBeUndefined();
     expect(ov?.region_shades).toBeUndefined();
+  });
+});
+
+// ── P3.3 auto dash/marker cycle: the EXPORT side, end to end ────────────────
+// `exportStyles.test.ts` pins the resolver and the canvas/export agreement on
+// synthetic position lists. This block pins the thing those lists are supposed
+// to be — what the real builder derives from a real view — plus the two gates
+// that decide whether the cycle happens at all:
+//
+//   * WHICH VIEWS. A grouped, faceted or stacked view is refused, because the
+//     render route ignores `series_styles` for the first two and renders one
+//     panel for the third, while the screen splits into several.
+//   * WHICH CALLERS. Only `buildStageFigureSpec` — the export the live Stage
+//     canvas produces — opts in. A document rendered from a Figure Page panel
+//     or the Figure Builder is uncycled, which is what makes a SAVED document
+//     independent of whoever's preference is on when it is reopened.
+describe("auto dash/marker cycle — figure requests (P3.3)", () => {
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
+  /** yKeys chosen so display order is [1, 2, 3] with nothing hidden. */
+  const cycleView = (over: Record<string, unknown> = {}) => ({
+    ...defaultPlotView(),
+    xKey: 0,
+    yKeys: [1, 2, 3],
+    ...over,
+  });
+  const stageGet = (over: Record<string, unknown> = {}) =>
+    (() => ({
+      ...cycleView(),
+      autoSeriesStyles: true,
+      focusedWindowId: null,
+      windowsForSave: () => [],
+      ...over,
+    })) as never;
+  const lines = (spec: ReturnType<typeof buildFigureSpec>) =>
+    (spec.series_styles ?? []).map((s) => s?.line);
+
+  it("OFF: the request carries no line at all — byte-identical to before", () => {
+    const spec = buildStageFigureSpec(stageGet({ autoSeriesStyles: false }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: the Stage export cycles the plotted series by display position", () => {
+    const spec = buildStageFigureSpec(stageGet(), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([1, 2, 3]);
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
+  it("ON: a HIDDEN channel does not renumber the survivors (finding 2)", () => {
+    // Channel 2 sits at display position 1 and the canvas keeps it there with
+    // `show:false`. Dropping it from the request must leave channel 3 on
+    // position 2 — DOTTED — not slide it up into position 1's dashed.
+    const spec = buildStageFigureSpec(stageGet({ hiddenChannels: [2] }), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([1, 3]);
+    expect(lines(spec)).toEqual(["solid", "dotted"]);
+  });
+
+  it("ON: a reordered legend follows seriesOrder, not channel number", () => {
+    const spec = buildStageFigureSpec(stageGet({ seriesOrder: [3, 1, 2] }), dataset, "d", opts);
+    expect(spec.y_keys).toEqual([3, 1, 2]);
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
+  it("ON: an explicit per-series line still wins", () => {
+    const spec = buildStageFigureSpec(
+      stageGet({ seriesStyles: { 2: { line: "solid" as const } } }),
+      dataset,
+      "d",
+      opts,
+    );
+    expect(lines(spec)).toEqual(["solid", "solid", "dotted"]);
+  });
+
+  // ── The views that must NOT cycle, on either side ─────────────────────────
+  it("ON: a GROUPED view is refused — the renderer ignores series_styles there", () => {
+    const document = createFigureDocument({
+      id: "grouped",
+      name: "Grouped",
+      datasetId: dataset.id,
+      view: cycleView(),
+      groupKey: 0,
+    });
+    const spec = buildStageFigureSpec(
+      stageGet({
+        groupKey: 0,
+        focusedWindowId: "w",
+        windowsForSave: () => [{ id: "w", kind: "plot", document }],
+      }),
+      dataset,
+      "d",
+      opts,
+    );
+    expect(spec.group_col).toBe(0);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: a FACETED view is refused — facets make series_styles unused", () => {
+    const spec = buildStageFigureSpec(stageGet({ facetKey: 0 }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: a STACKED view is refused — the screen shows panels the figure does not", () => {
+    const spec = buildStageFigureSpec(stageGet({ stackMode: true }), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // PlotStage early-returns to PolarStage / StatStage before the cycled XY
+  // viewport exists, but nothing gated this export on the render mode — so with
+  // the preference on, "Export figure…" in polar or stat mode emitted dashes for
+  // a figure the screen had never dashed.
+  it.each([
+    ["POLAR", { polarMode: true }],
+    ["STAT", { statMode: true }],
+  ])("ON: a %s view is refused — its canvas is not the XY one this figure renders", (_n, mode) => {
+    const spec = buildStageFigureSpec(stageGet(mode), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // The document path passes `allowExplicitXAsY`, which deliberately KEEPS an
+  // explicitly selected X channel in the display list as a Y series; the canvas'
+  // own `effectiveChannels` call always drops it. The two lists are then not the
+  // same display-position space, so there is no position to share and the cycle
+  // is refused rather than landing every later channel one dash off.
+  it("ON: refused when the X channel is also plotted as Y (the lists differ)", () => {
+    const xAsY = createFigureDocument({
+      id: "xasy",
+      name: "XasY",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 1, yKeys: [1, 2, 3] },
+    });
+    const spec = buildFigureSpecFromDocument(xAsY, dataset, "xasy", { autoSeriesStyles: true });
+    // The export really does keep channel 1 — that is the divergence, not a typo.
+    expect(spec.y_keys).toEqual([1, 2, 3]);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // The one case where `buildStageFigureSpec`'s OWN exact-styles refusal is load
+  // bearing rather than a restatement. Normally an exact publication array makes
+  // `buildFigureSpecForView` skip `buildExportStyles` entirely, so asking for the
+  // cycle changes nothing. But when the focused document's dataset disagrees with
+  // the one being exported — the documented refocus-mid-export race —
+  // `buildStageFigureSpec` FALLS BACK to the live-view builder, which never sees
+  // `document.publication` at all and would happily cycle, while the canvas
+  // (which reads the pin straight off the focused window) refuses.
+  it("ON: refused on the FALLBACK path too when the focused document pins exact styles", () => {
+    const pinnedElsewhere = createFigureDocument({
+      id: "pinned-other",
+      name: "Pinned",
+      datasetId: "some-other-dataset", // forces the fallback: live doc, wrong dataset
+      view: cycleView(),
+      publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null, null] },
+    });
+    const spec = buildStageFigureSpec(
+      stageGet({
+        focusedWindowId: "w",
+        windowsForSave: () => [{ id: "w", kind: "plot", document: pinnedElsewhere }],
+      }),
+      dataset,
+      "d",
+      opts,
+    );
+    // The fallback really was taken (styles are DERIVED, not the exact array).
+    expect(spec.series_styles).toHaveLength(3);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: still cycles when the X channel is NOT in yKeys (the lists agree)", () => {
+    const plain = createFigureDocument({
+      id: "plain",
+      name: "Plain",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1, 2, 3] },
+    });
+    const spec = buildFigureSpecFromDocument(plain, dataset, "plain", { autoSeriesStyles: true });
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
+  // ── Saved documents: the cycle is never baked in (finding 10) ─────────────
+  describe("a saved FigureDocument is independent of the preference", () => {
+    const document = () =>
+      createFigureDocument({
+        id: "doc",
+        name: "Doc",
+        datasetId: dataset.id,
+        view: cycleView(),
+      });
+
+    it("renders uncycled from every caller with no live canvas, whatever the preference", () => {
+      // A Figure Page panel, a graph template, a saved Library figure: they pass
+      // no `autoSeriesStyles`, so they cannot cycle even while the live
+      // preference is on — the document beside them has no uPlot canvas of its
+      // own to disagree with. (The Figure Builder's preview and Export DO pass
+      // it, but only when the session's TARGET window itself cycles per
+      // `windowCyclesSeriesStyles`, focused or not — see
+      // canonicalSession.selectSessionCyclesSeriesStyles and
+      // useFigureBuilder.test.ts.)
+      expect(lines(buildFigureSpecFromDocument(document(), dataset, "doc"))).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
+    });
+
+    it("authored with the preference ON, reopened with it OFF, renders the same", () => {
+      const authored = document();
+      // Authoring does not touch publication.seriesStyles: the cycle is applied
+      // at export-build time, never persisted. That is the whole fix — a doc
+      // whose stored styles carried a cycled `line` would export dashed on a
+      // colleague's machine while their canvas drew solid.
+      expect(authored.publication?.seriesStyles).toBeUndefined();
+      const onSpec = buildFigureSpecFromDocument(authored, dataset, "doc", { autoSeriesStyles: true });
+      const offSpec = buildFigureSpecFromDocument(authored, dataset, "doc", { autoSeriesStyles: false });
+      expect(lines(onSpec)).toEqual(["solid", "dashed", "dotted"]);
+      expect(lines(offSpec)).toEqual([undefined, undefined, undefined]);
+      // Neither render mutated the document.
+      expect(authored.publication?.seriesStyles).toBeUndefined();
+      // And the default — every caller that is not the live Stage — is OFF.
+      expect(buildFigureSpecFromDocument(authored, dataset, "doc")).toEqual(offSpec);
+    });
+
+    // `buildStageFigureSpec` gates on the LIVE view, but the document it routes
+    // through carries its OWN copy of that view, and only the second gate —
+    // inside `buildFigureSpecForView` — sees the view actually being rendered.
+    // Driven through `buildFigureSpecFromDocument` so the live gate is bypassed
+    // and the inner one is the only thing under test.
+    it.each([
+      // groupKey/facetKey are BINDINGS on a FigureDocument, not view fields
+      // (`figureDocument.ts`'s `FigureViewState` omits them); stackMode is a
+      // view field. Both spellings have to reach the gate.
+      ["grouped", { groupKey: 0 }, {}],
+      ["faceted", { facetKey: 0 }, {}],
+      ["stacked", {}, { stackMode: true }],
+      ["polar", {}, { polarMode: true }],
+      ["stat", {}, { statMode: true }],
+    ])("refuses the cycle for a %s DOCUMENT view, even when asked for it", (_name, bindings, view) => {
+      const doc = createFigureDocument({
+        id: "doc3",
+        name: "Doc3",
+        datasetId: dataset.id,
+        view: cycleView(view),
+        ...bindings,
+      });
+      const spec = buildFigureSpecFromDocument(doc, dataset, "doc3", { autoSeriesStyles: true });
+      expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+    });
+
+    it("an EXACT publication style array stays exact — the cycle never edits it", () => {
+      const pinned = createFigureDocument({
+        id: "doc2",
+        name: "Doc2",
+        datasetId: dataset.id,
+        view: cycleView(),
+        publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null, null] },
+      });
+      const spec = buildFigureSpecFromDocument(pinned, dataset, "doc2", { autoSeriesStyles: true });
+      expect(spec.series_styles).toEqual([{ color: "#3366cc" }, null, null]);
+    });
   });
 });

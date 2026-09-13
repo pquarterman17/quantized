@@ -14,7 +14,7 @@ import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalR
 import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
 import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
-import { selectSessionLiveDrifted } from "./canonicalSession";
+import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
@@ -132,15 +132,14 @@ export function useFigureBuilder() {
   const canonicalDataset = canonicalDocument?.bindings.datasetId
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
+  const cyclesStyles = useApp(selectSessionCyclesSeriesStyles); // P3.3 -- see that selector's doc
   // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a
   // pure function of document + dataset) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset),
-    [canonicalDocument, canonicalDataset],
+    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles),
+    [canonicalDocument, canonicalDataset, cyclesStyles],
   );
-  const canonicalData = canonicalReadiness?.state === "missing-source"
-    ? null
-    : canonicalReadiness?.data ?? null;
+  const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
     if (!canonical) return;
     patchFigurePublicationDraft((draft) => patch(draft));
@@ -397,7 +396,7 @@ export function useFigureBuilder() {
    *  live state. */
   const exportNow = (): Promise<void> =>
     exportPreviewFigure({
-      canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, setStatus,
+      canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, autoSeriesStyles: cyclesStyles, setStatus,
     });
 
   return {

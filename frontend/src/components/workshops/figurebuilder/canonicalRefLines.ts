@@ -68,8 +68,8 @@ export function removeRefLineFromList(lines: readonly RefLine[], id: string): Re
 
 /** Which draft line a preview hit element (`refline:N`) refers to, or null.
  *
- *  N is the RENDER REQUEST's array position, not the draft's: `figureSpec`'s
- *  `viewOverrides` builds `overrides.ref_lines` as
+ *  N is the RENDER REQUEST's array position, not the draft's:
+ *  `figureViewOverrides.viewOverrides` builds `overrides.ref_lines` as
  *  `st.refLines.filter((r) => Number.isFinite(r.value))`, so a draft holding a
  *  non-finite value (reachable from a legacy `.dwk` — `appendRefLine` and the
  *  Stage's own add both reject one) shifts every later index by one. Applying

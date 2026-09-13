@@ -30,6 +30,7 @@
 //    of gathered independently).
 
 import type { ErrorBinding } from "./errorRoles";
+import type { DefaultTrace } from "./types";
 import type uPlot from "uplot";
 
 function seriesBucketIndices(
@@ -261,7 +262,7 @@ export function decimationEligible(args: {
   xAscending: boolean;
   hasErrorBars: boolean;
   hasErrorSpans: boolean;
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   hasColorByColumns: boolean;
 }): boolean {
   if (!args.plottedCount || args.plottedCount <= 0) return false;
@@ -349,7 +350,7 @@ export function defaultDecimateWidthHint(): number {
  *  decimation already avoids it (see `decimationEligible`'s doc for all
  *  three in full). */
 export function decimationRequestEligible(args: {
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   hasErrorBars: boolean;
   hasErrorSpans: boolean;
   hasColorByColumns: boolean;

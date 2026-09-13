@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
-import type { SeriesStyle } from "./types";
+import { displayPositions } from "./seriesStyleCycle";
+import type { DefaultTrace, SeriesStyle } from "./types";
 
 const payload: PlotPayload = {
   data: [
@@ -271,7 +272,7 @@ describe("buildOpts", () => {
 
 describe("buildOpts defaultTrace", () => {
   type S = { width?: number; points?: { show?: boolean }; paths?: unknown };
-  const series = (trace: string): S =>
+  const series = (trace: DefaultTrace): S =>
     buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", defaultTrace: trace }).series?.[1] as S;
 
   it("Line: line only, no markers, no custom paths (default)", () => {
@@ -845,6 +846,192 @@ describe("buildOpts select tool (#50 plot-brush)", () => {
     const u = { select: { left: 100, width: 0 }, posToVal: (px: number) => px / 100 };
     opts.hooks?.setSelect?.[0]?.(u as never);
     expect(onRangeSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildOpts region tool 2-D y-box (MATLAB onBGMouseUp parity, GAP #96/#20)", () => {
+  // Scale-aware mock: x divides by 100, y divides by 10 — distinguishes the
+  // two axes so a test can tell which one a given posToVal call read.
+  const posToVal = (px: number, scale?: string) => (scale === "y" ? px / 10 : px / 100);
+
+  it("tracks y (not rescaling) for the region tool, unlike select", () => {
+    const region = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    expect(region.cursor?.drag).toMatchObject({ x: true, y: true, setScale: false });
+  });
+
+  it("calls back with just x0/x1 when the drag has no height at all", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50 }, posToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
+  });
+
+  it("stays x-only for a sub-threshold vertical span (mouse jitter on an x-only drag)", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 5 }, posToVal, setSelect: vi.fn() }; // 5px < MIN_BOX_HEIGHT_PX
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5);
+  });
+
+  it("also reads back y0/y1 once the vertical span clears the pixel threshold", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal, setSelect: vi.fn() }; // 30px box
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(1, 1.5, 2, 5); // top/10, (top+h)/10
+  });
+
+  it("ignores a zero-width region drag even with a real vertical span", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 0, top: 20, height: 30 }, posToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).not.toHaveBeenCalled();
+    expect(u.setSelect).not.toHaveBeenCalled(); // never started a drag; nothing to hide
+  });
+
+  it("routes the drag-end band to onRegionSelect, not onRangeSelect", () => {
+    const onRangeSelect = vi.fn();
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRangeSelect, onRegionSelect });
+    const u = { select: { left: 100, width: 50 }, posToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalled();
+    expect(onRangeSelect).not.toHaveBeenCalled();
+  });
+
+  // Round-2 finding 2: uPlot's own mouseUp never calls hideSelect() for the
+  // region tool (its `drag.setScale:false` skips that branch entirely — see
+  // uplotRegionBox.ts's regionSelectPick doc), so the app's own setSelect
+  // hook must hide the just-painted sliver itself, synchronously.
+  it("hides the just-painted selection box after a drag-end pick (finding 2)", () => {
+    const onRegionSelect = vi.fn();
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(u.setSelect).toHaveBeenCalledWith({ left: 0, top: 0, width: 0, height: 0 }, false);
+  });
+
+  // Finding 1 (Group AB adversarial review, round 2): the y read-back must
+  // resolve the PRIMARY-axis series (mirrors uplotOverlays.ts's own
+  // `axis===1 && hasY2 ? "y2" : "y"`), never `payload.series[0]` alone — a
+  // dual-Y toggle (plotdata.ts's `y2Keys`) can put ANY channel on Y2,
+  // including the first, without reordering `payload.series`.
+  it("reads y0/y1 back on \"y\" even when series[0] is the Y2 one, as long as a later series is primary", () => {
+    const onRegionSelect = vi.fn();
+    // series[0] is on Y2; series[1] (no explicit axis -> primary) is the
+    // actual fit data being boxed. y and y2 use different divisors so a test
+    // can tell which scale posToVal was actually asked for.
+    const dualAxis: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [1, 2, 3],
+      ],
+      series: [
+        { label: "M", unit: "emu", axis: 1 },
+        { label: "aux", unit: "" },
+      ],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
+    const opts = buildOpts(dualAxis, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // 20/10, 50/10 — read on "y"
+  });
+
+  it("stays on \"y\" when the fit data is primary even though a y2 overlay exists", () => {
+    const onRegionSelect = vi.fn();
+    const withOverlay: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [1, 2, 3],
+      ],
+      series: [
+        { label: "M", unit: "emu" }, // primary (default axis 0) — the actual fit data
+        { label: "dy/dx", unit: "", axis: 1 }, // secondary-axis overlay, appended after
+      ],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
+    const opts = buildOpts(withOverlay, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 20, height: 30 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // read on "y" (20/10, 50/10)
+  });
+
+  it("reads back on \"y2\" only when EVERY plotted series is on the secondary axis", () => {
+    const onRegionSelect = vi.fn();
+    const allY2: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+      ],
+      series: [{ label: "M", unit: "emu", axis: 1 }],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const scaleAwarePosToVal = (px: number, scale?: string) => (scale === "y2" ? px / 7 : px / 10);
+    const opts = buildOpts(allY2, { ...base, yScale: "linear", tool: "region", onRegionSelect });
+    const u = { select: { left: 100, width: 50, top: 14, height: 21 }, posToVal: scaleAwarePosToVal, setSelect: vi.fn() };
+    opts.hooks?.setSelect?.[0]?.(u as never);
+    expect(onRegionSelect).toHaveBeenCalledWith(10, 15, 2, 5); // 100/10, 150/10; 14/7, (14+21)/7 — read on "y2"
+  });
+});
+
+describe("buildOpts region tool live drag rendering (Finding 1, Group AB adversarial review)", () => {
+  // Mock enough of `u` for the setCursor hook: a `.select` (uPlot's real,
+  // untouched drag geometry), `.over` (the `.u-over` DOM element the real
+  // `.u-select` div lives under) with a `clientHeight` and a `querySelector`
+  // stub returning a fake element whose `.style` this hook may write to.
+  function fakeU(selectHeight: number) {
+    const band = { style: {} as Record<string, string> };
+    const querySelector = vi.fn(() => band);
+    const u = {
+      select: { left: 10, width: 50, top: 40, height: selectHeight },
+      over: { clientHeight: 200, querySelector },
+    };
+    return { u, band, querySelector };
+  }
+
+  it("repaints .u-select back to full plot height while the real drag is under MIN_BOX_HEIGHT_PX", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const { u, band, querySelector } = fakeU(2); // 2px < MIN_BOX_HEIGHT_PX (6)
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).toHaveBeenCalledWith(".u-select");
+    expect(band.style.top).toBe("0px");
+    expect(band.style.height).toBe("200px"); // u.over.clientHeight, not the real 2px
+    // uPlot's own real drag geometry is left completely untouched — the
+    // drag-end `setSelect` hook must still see the true small height.
+    expect(u.select.height).toBe(2);
+    expect(u.select.top).toBe(40);
+  });
+
+  it("leaves the real box alone once the vertical span clears the threshold", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const { u, querySelector } = fakeU(30); // 30px >= MIN_BOX_HEIGHT_PX
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for a zero-width select (no active drag)", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "region" });
+    const u = { select: { left: 0, width: 0, top: 0, height: 0 }, over: { clientHeight: 200, querySelector: vi.fn() } };
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(u.over.querySelector).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op for the \"select\" tool (x-only by design, never even starts y-tracking)", () => {
+    const opts = buildOpts(payload, { ...base, yScale: "linear", tool: "select" });
+    const { u, querySelector } = fakeU(2);
+    opts.hooks?.setCursor?.[0]?.(u as never);
+    expect(querySelector).not.toHaveBeenCalled();
   });
 });
 
@@ -1552,5 +1739,165 @@ describe("resolvePlotBg follows the app theme (owner request 2026-07-25)", () =>
     const pinned = resolvePlotBg("dark");
     const following = resolvePlotBg("theme");
     expect(pinned.axesBg).not.toBe(following.axesBg);
+  });
+});
+
+
+// ── P3.3 auto dash/marker cycle (non-colour encodings) ──────────────────────
+// The canvas half. Its export counterpart — and the assertion that the two
+// resolve to the SAME dash/glyph per series, which is what FEATURE-001 in
+// plans/BUGS_AND_ISSUES.md is about — lives in `exportStyles.test.ts`.
+//
+// Note what the opt-in is: `seriesCycle`, an ARGUMENT. There is no ambient flag
+// to set. A caller that passes nothing draws what it always drew, which is what
+// keeps the waterfall, the reflectometry panel, faceted/stacked/break panels and
+// every background window off the cycle without each of them remembering to opt
+// out.
+describe("buildOpts auto dash/marker cycle (P3.3)", () => {
+  const three: PlotPayload = {
+    data: [
+      [0, 1, 2],
+      [1, 2, 3],
+      [2, 3, 4],
+      [3, 4, 5],
+    ],
+    series: [{ label: "A", unit: "" }, { label: "B", unit: "" }, { label: "C", unit: "" }],
+    xLabel: "x",
+    xUnit: "",
+  };
+  const args = { ...base, yScale: "linear" as const, tool: "zoom" as const };
+  const cycled = { ...args, seriesCycle: displayPositions(true, 3) };
+  const dashes = (opts: ReturnType<typeof buildOpts>) =>
+    (opts.series ?? []).slice(1).map((s) => (s as { dash?: number[] }).dash);
+  const points = (opts: ReturnType<typeof buildOpts>) =>
+    (opts.series ?? []).slice(1).map((s) => s.points);
+
+  it("OFF: three unstyled series are dash-free and marker-free — today's output", () => {
+    const opts = buildOpts(three, args);
+    expect(dashes(opts)).toEqual([undefined, undefined, undefined]);
+    expect(points(opts).map((p) => p?.show)).toEqual([false, false, false]);
+  });
+
+  it("OFF: passing a style list of empty/absent entries is deep-equal to passing none", () => {
+    // The "turning the preference off restores exactly today's behaviour" pin:
+    // whatever route the styles arrive by, an unstyled plot builds the same opts.
+    const withList = buildOpts(three, { ...args, seriesStyles: [undefined, {}, undefined] });
+    const without = buildOpts(three, args);
+    expect(JSON.stringify(withList)).toBe(JSON.stringify(without));
+  });
+
+  it("OFF: an explicit null cycle is the same as no cycle argument at all", () => {
+    expect(JSON.stringify(buildOpts(three, { ...args, seriesCycle: null }))).toBe(
+      JSON.stringify(buildOpts(three, args)),
+    );
+  });
+
+  it("ON: three unstyled series get three DISTINCT dashes", () => {
+    const d = dashes(buildOpts(three, cycled));
+    expect(d).toEqual([undefined, [8, 4], [2, 4]]); // solid / dashed / dotted
+    expect(new Set(d.map((x) => JSON.stringify(x))).size).toBe(3);
+  });
+
+  it("ON: an explicit per-series style on series 2 survives the cycle", () => {
+    const opts = buildOpts(three, {
+      ...cycled,
+      seriesStyles: [undefined, { line: "solid", width: 4 }, undefined],
+    });
+    expect(dashes(opts)).toEqual([undefined, undefined, [2, 4]]);
+    expect((opts.series?.[2] as { width?: number }).width).toBe(4);
+  });
+
+  it("ON: a series past the cycle's length is untouched — the overlay guard", () => {
+    // PlotStage sizes the positions to `plotted.length`, so a fit/baseline/peak
+    // overlay spliced on after the plotted channels keeps its plain line. The
+    // export draws no overlays at all, so cycling them could only ever be a
+    // screen-only encoding.
+    const d = dashes(buildOpts(three, { ...args, seriesCycle: displayPositions(true, 2) }));
+    expect(d).toEqual([undefined, [8, 4], undefined]);
+  });
+
+  it("ON: marker glyphs cycle too — series 1 keeps uPlot's built-in circle, 2/3 get paths", () => {
+    const pts = points(
+      buildOpts(three, {
+        ...cycled,
+        seriesStyles: [{ marker: true }, { marker: true }, { marker: true }],
+      }),
+    );
+    expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+    expect(pts[0]?.paths).toBeUndefined(); // circle == uPlot's own renderer
+    expect(pts[1]?.paths).toBeTypeOf("function"); // square
+    expect(pts[2]?.paths).toBeTypeOf("function"); // triangle
+  });
+
+  // ── The default trace is DELIBERATELY outside the glyph cycle ─────────────
+  // `exportStyles.buildExportStyles` emits a marker only for an EXPLICIT
+  // `style.marker`, so anything the ambient Scatter / Line + markers trace draws
+  // has no export counterpart. Cycling glyphs onto it would show eight shapes on
+  // screen that every PDF renders as eight circles — the precise thing this
+  // feature promises not to do.
+  it("ON: the glyph cycle does NOT reach the Scatter / Line + markers default trace", () => {
+    for (const defaultTrace of ["Scatter", "Line + markers"] as DefaultTrace[]) {
+      const pts = points(buildOpts(three, { ...cycled, defaultTrace }));
+      expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+      expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);
+      expect(pts.map((p) => p?.size)).toEqual([5, 5, 5]);
+    }
+  });
+
+  it("OFF: a stored markerShape/markerSize with markers UNTICKED stays inert", () => {
+    // `Inspector/SeriesStyleCard.tsx` keeps both fields when "Markers" is
+    // unticked, so `{marker:false, markerShape:"star", markerSize:11}` is a
+    // reachable stored shape. On a Scatter default trace it must still draw the
+    // plain 5px circle it drew before this feature existed — an 11px star here
+    // is a screen-only change the export cannot reproduce.
+    const styles: (SeriesStyle | undefined)[] = [
+      { marker: false, markerShape: "star", markerSize: 11 },
+      undefined,
+      undefined,
+    ];
+    for (const a of [args, cycled]) {
+      const pts = points(buildOpts(three, { ...a, defaultTrace: "Scatter", seriesStyles: styles }));
+      expect(pts[0]).toEqual({ show: true, size: 5 });
+    }
+  });
+
+  it("an EXPLICIT marker still honours its shape and size, cycle or not", () => {
+    const styles: (SeriesStyle | undefined)[] = [{ marker: true, markerShape: "star", markerSize: 11 }];
+    const pts = points(buildOpts(three, { ...args, seriesStyles: styles }));
+    expect(pts[0]?.size).toBe(11);
+    expect(pts[0]?.paths).toBeTypeOf("function");
+  });
+
+  // Found by sabotaging the opt-in gate: with the cycle ON every series has a
+  // `line`, and the ambient-Step branch tests `!style.line`, so the plot
+  // silently stopped stepping. An auto dash is a DEFAULT; only the user's own
+  // explicit dash may suppress the Step trace. Both halves are pinned here.
+  it("ON: the Step default trace still steps, and still varies the dash", () => {
+    const fn = vi.fn();
+    const opts = buildOpts(three, {
+      ...cycled,
+      defaultTrace: "Step",
+      steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+    });
+    expect((opts.series ?? []).slice(1).map((s) => s.paths)).toEqual([fn, fn, fn]);
+    expect(dashes(opts)).toEqual([undefined, [8, 4], [2, 4]]);
+  });
+
+  it("ON: an EXPLICIT dash still suppresses the Step default trace (behaviour unchanged)", () => {
+    const fn = vi.fn();
+    const opts = buildOpts(three, {
+      ...cycled,
+      defaultTrace: "Step",
+      seriesStyles: [{ line: "dashed" }, undefined, undefined],
+      steppedPaths: fn as unknown as Parameters<typeof buildOpts>[1]["steppedPaths"],
+    });
+    expect((opts.series ?? []).slice(1).map((s) => s.paths)).toEqual([undefined, fn, fn]);
+  });
+
+  it("OFF: the default trace still draws plain circles (the marker branch is inert)", () => {
+    const pts = points(buildOpts(three, { ...args, defaultTrace: "Scatter" }));
+    expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
+    expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);
+    expect(pts.map((p) => p?.size)).toEqual([5, 5, 5]);
   });
 });

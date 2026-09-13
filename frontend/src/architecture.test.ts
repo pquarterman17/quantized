@@ -258,7 +258,14 @@ const STORE_PINS: Record<string, number> = {
   // Pinned TIGHT at the post-extraction size, which is what the 2818 entry
   // below said the next extraction after that sprint should do — the slack it
   // banked for seven parallel lanes is now reclaimed.
-  "/store/useApp.ts": 2334,
+  // 2334 -> 2328 (2026-09-12, P3.3 auto dash/marker cycle): the pin sat 2 lines
+  // above the file, so the new `autoSeriesStyles` pref field could not simply be
+  // appended. Paid for by seeding the whole prefs block with ONE `..._initialPrefs`
+  // spread instead of a hand-maintained `x: _initialPrefs.x` line per preference
+  // (17 of them) — every Prefs key is already an AppState field of the same name,
+  // which is exactly what `prefsOf(s)` relies on to read them back out, so the
+  // list could only ever drift. Same anti-drift move as `PrefKey = keyof Prefs`.
+  "/store/useApp.ts": 2322,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -484,7 +491,20 @@ const TS_CEILING = 500;
 // These 16 files are the discovered overage set from the RSM/ROI campaigns. Future
 // growth in any of them must fund an extraction, not a ceiling bump.
 const TS_MODULE_PINS: Record<string, number> = {
-  "/lib/uplotOpts.ts": 1446,
+  // 1446 -> 1428 (2026-09-12, PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 auto dash/marker
+  // cycle): `buildOpts` had to gain a `seriesCycle` argument, so THREE cohesive
+  // siblings moved out rather than the pin moving up — the `DASH` table to the
+  // new lib/seriesStyleCycle.ts (the dash vocabulary belongs with the cycle that
+  // assigns it, and the export-parity test compares against it without pulling
+  // in the plot builder), the marker `points` decision to
+  // lib/markers.seriesPoints (which already owned every other marker concern),
+  // and the palette (cssVar / SERIES_VARS / seriesColor) to
+  // lib/seriesStyleCycle.ts as well (hue by display position beside dash and
+  // glyph by display position) — which also stops lib/exportStyles.ts importing
+  // the whole uPlot options builder just to resolve a colour. The palette is
+  // re-exported from here, so no importer changed. Ratcheted to what the file
+  // actually is.
+  "/lib/uplotOpts.ts": 1428,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
@@ -504,6 +524,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // store loads on demand via store/originApplyLibs.ts. Like lib/api.ts
   // above this was an EAGER-BYTES extraction, not a line-count one:
   // measured 890.2 -> 885.3 kB eager (local, same environment).
+  // Unchanged at 791 (2026-09-12, P3.3): the spatial cells' opt-in to the
+  // dash/marker cycle paid for itself — the per-cell styles/labels/legend
+  // derivation moved to `lib/multipanel.spatialCellStyling`, where the spatial
+  // EXPORT's own channel list already lives, so the two cannot drift.
   "/components/Stage/useMultiPanelStage.ts": 791,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
@@ -531,7 +555,13 @@ const TS_MODULE_PINS: Record<string, number> = {
   // for the import exactly — net zero, so there is no ratchet to record here.
   "/components/Stage/worksheet/useWorksheetView.ts": 648,
   "/lib/roi.ts": 638,
-  "/lib/plotspec2.ts": 637,
+  // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
+  // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so
+  // `publicationStyles.ts`'s wire sanitizer validates `marker_shape` against
+  // the SAME list this view-style sanitizer uses instead of accepting any
+  // string. (Not lib/markers.ts: that module carries the canvas path builders,
+  // and the persistence layer is kept clear of them.)
+  "/lib/plotspec2.ts": 636,
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
   // canonicalSession.ts's selectSessionLiveDrifted, where the subscription
   // contract it documents actually lives. Ratchet, not a bump.
@@ -1397,7 +1427,15 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
     // Pattern: waitFor(() => expect(...).toHaveBeenCalled()) — the synchronisation barrier form.
     // Matches across line breaks; does NOT match bare expect(...).toHaveBeenCalled() which is correct.
     // The defect: waitFor returns as soon as the mock is invoked, not when its value reaches state.
-    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    // F6 (2026-09-13 round-2 review): the identifier inside expect(...) may
+    // optionally be wrapped in `vi.mocked(...)` — `expect(vi.mocked(askParams))
+    // .toHaveBeenCalled()` is the exact same synchronisation-barrier defect as
+    // the bare form and had been slipping past the original bare-identifier-only
+    // regex (exportPageCommand.test.ts's F4 test). `expect(vi.mocked(x).mock.
+    // calls.length).toBeGreaterThan(...)` (useStatStage.test.ts) is unaffected:
+    // it doesn't end in `.toHaveBeenCalled` right after the closing paren.
+    const weakWaitPattern =
+      /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\(\s*(?:vi\.mocked\s*\(\s*[A-Za-z_$][\w$]*\s*\)|[A-Za-z_$][\w$]*)\s*\)\s*\.\s*toHaveBeenCalled/;
     const over: string[] = [];
 
     for (const [p, src] of testSources()) {
@@ -1427,7 +1465,10 @@ describe("weak-wait ratchet (TEST_DETERMINISM_PLAN #6)", () => {
   });
 
   it("weak-wait pins stay honest — a file that dropped below its pin must lose it", () => {
-    const weakWaitPattern = /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\([A-Za-z_$][\w$]*\)\s*\.\s*toHaveBeenCalled/;
+    // Kept identical to the pattern above (F6 round-2 widening included) —
+    // duplicated rather than shared so each `it` reads standalone.
+    const weakWaitPattern =
+      /waitFor\s*\(\s*\(\s*\)\s*=>\s*expect\s*\(\s*(?:vi\.mocked\s*\(\s*[A-Za-z_$][\w$]*\s*\)|[A-Za-z_$][\w$]*)\s*\)\s*\.\s*toHaveBeenCalled/;
     const stale: string[] = [];
 
     for (const key of Object.keys(WEAK_WAIT_PINS)) {
@@ -1780,6 +1821,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   accent: "prefs",
   density: "prefs",
   palette: "prefs",
+  autoSeriesStyles: "prefs (P3.3 auto dash/marker cycle; sits beside palette)",
   reduceMotion: "prefs",
   wheelZoom: "prefs",
   defaultTrace: "prefs",

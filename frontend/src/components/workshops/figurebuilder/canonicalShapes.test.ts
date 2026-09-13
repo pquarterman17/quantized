@@ -83,7 +83,7 @@ describe("shapeIdForHit", () => {
   });
 
   it("skips a non-finite shape, exactly as the render request does", () => {
-    // figureSpec's viewOverrides drops it, so element `shape:1` is the THIRD
+    // figureViewOverrides' viewOverrides drops it, so element `shape:1` is the THIRD
     // draft shape -- indexing the draft directly would drag the wrong one.
     const bad: Shape = { id: "bad", kind: "rect", x1: 0, y1: 0, x2: Number.NaN, y2: 1 };
     const shapes = [shape("s1", "arrow"), bad, shape("s3", "line")];

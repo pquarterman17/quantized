@@ -123,7 +123,7 @@ import type {
   BaselineOverlay,
   ChannelRole,
   Dataset,
-  DataStruct,
+  DataStruct, DefaultTrace,
   FitOverlay, FitSpec,
   FolderNode,
   ModelingType,
@@ -328,11 +328,14 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   accent: Accent;
   density: Density;
   palette: string; // series colour-cycle preset (overrides --series-1..8)
+  // P3.3: the non-colour half of that cycle — auto dash/marker by series
+  // position, opt-in. Full rationale on `Prefs.autoSeriesStyles` (prefs.ts).
+  autoSeriesStyles: boolean;
   // Behavioural prefs (Preferences dialog). reduceMotion + sigFigs/notation apply
   // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
   reduceMotion: boolean;
   wheelZoom: boolean;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   defaultLineWidth: number;
   defaultGrid: boolean;
   /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */
@@ -424,9 +427,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // ABOVE this line are the FOCUSED window's LIVE view — see the facade doc
   // on WindowsSlice.
   plotTool: PlotTool;
-  // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
-  // workshop consumes it then resets to null. Drag direction is normalized away.
-  regionPicked: [number, number] | null;
   // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
@@ -703,7 +703,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (createWindow … windowsForSave — the window-management actions — are
   // declared on WindowsSlice; see store/windows.ts.)
   setPlotTool: (tool: PlotTool) => void;
-  setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
   // (the quick-fit / ROI-gadget family's state + actions moved to
@@ -847,23 +846,15 @@ export const useApp = create<AppState>((set, get) => ({
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
-  theme: _initialPrefs.theme,
-  accent: _initialPrefs.accent,
-  density: _initialPrefs.density,
-  palette: _initialPrefs.palette,
-  reduceMotion: _initialPrefs.reduceMotion,
-  wheelZoom: _initialPrefs.wheelZoom,
-  defaultTrace: _initialPrefs.defaultTrace,
-  defaultLineWidth: _initialPrefs.defaultLineWidth,
-  defaultGrid: _initialPrefs.defaultGrid,
-  copyFigureTransparent: _initialPrefs.copyFigureTransparent,
-  antialias: _initialPrefs.antialias,
-  excludedDisplay: _initialPrefs.excludedDisplay,
-  originBookClickOpens: _initialPrefs.originBookClickOpens,
-  sigFigs: _initialPrefs.sigFigs,
-  notation: _initialPrefs.notation,
-  confirmRemove: _initialPrefs.confirmRemove,
-  defaultPanelFit: _initialPrefs.defaultPanelFit,
+  // Every `Prefs` key IS an AppState field of the same name — that is how
+  // `prefsOf(s)` reads them straight back out — so the persisted blob seeds
+  // them in ONE spread instead of a hand-maintained line per preference that
+  // every new pref had to remember to add (the same anti-drift move
+  // `PrefKey = keyof Prefs` made for the key union; #35's note above records
+  // the 18 lines that union cost before it was derived). `libraryPanelWidth`
+  // is re-assigned here with the IDENTICAL value `createLibraryPanelSlice`
+  // above was already constructed from, so the order of the two is immaterial.
+  ..._initialPrefs,
   prefsOpen: false,
   yScale: "linear",
   xScale: "linear",
@@ -909,7 +900,6 @@ export const useApp = create<AppState>((set, get) => ({
   hiddenChannels: [],
   waterfall: 0,
   plotTool: "pointer",
-  regionPicked: null,
   integral: null,
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in
@@ -2090,7 +2080,6 @@ export const useApp = create<AppState>((set, get) => ({
   // (the window-management action implementations moved to store/windows.ts —
   // composed via createWindowsSlice at the top of this literal.)
   setPlotTool: (plotTool) => set({ plotTool }),
-  setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),

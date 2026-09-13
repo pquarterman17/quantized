@@ -240,6 +240,14 @@ body {
 .qzk-details-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .qzk-details-name { width: 65%; color: var(--text) !important; }
 .qzk-details-name > span { margin-right: 4px; }
+/* L1.4 review round: the grip and the empty slot a non-draggable kind gets
+   instead must occupy the SAME box, or a folder/workbook/worksheet row's name
+   sits 16px right of an artifact row's. `.qzk-drag-handle`'s own `width: 12px`
+   is inert on an inline span (it is a flex item in the Tree's rows, not here),
+   so both get `display: inline-block` and the shared 12px width; the 4px comes
+   from the `> span` rule above, which reaches both. */
+.qzk-details-name > .qzk-drag-handle,
+.qzk-details-name > .qzk-details-grip-space { display: inline-block; width: 12px; }
 .qzk-details-name small { display: block; overflow: hidden; margin-top: 2px; color: var(--text-faint); font-size: inherit; text-overflow: ellipsis; }
 .qzk-details-medium, .qzk-details-wide { display: none; }
 /* PR D2 search-results reveal action ("Show in Library") — link-styled like
@@ -390,6 +398,23 @@ body {
    hovered row shows instead (FolderRow drops the class there — see its
    `!dropZone` guard). */
 .qzk-folder-head.drop-candidate { outline: 1px dashed var(--accent); outline-offset: -2px; }
+
+/* L1.4 review round — the Details renderer's share of both cues above. Its
+   grip sits in `.qzk-details-table tbody tr > td.qzk-details-name`, which
+   matches none of the `.qzk-ds` / `.qzk-folder-head` reveal selectors, and its
+   rows are `<tr>`s, which match neither `.drop-candidate` rule — so the grip
+   shipped permanently invisible and a hovered Details folder row showed no
+   highlight at all. The Details grip is aria-hidden and non-focusable
+   (DetailsRow.tsx explains why), so row hover is its ONLY reveal. The two drop
+   states carry the same meanings they carry in the Tree: `drop-candidate` is
+   the resting "this row would accept the drag" dashed outline on every legal
+   target, `dropinto` the stronger solid one on the row actually under the
+   pointer. Outline (not box-shadow) because `border-collapse: collapse` drops
+   a box-shadow on a <tr>; `tr:focus-visible` above already uses outline. */
+.qzk-details-table tbody tr:hover .qzk-drag-handle { opacity: 1; }
+.qzk-details-table tbody tr.drop-candidate { outline: 1px dashed var(--accent); outline-offset: -2px; }
+.qzk-details-table tbody tr.dropinto { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-details-table tbody tr.dropinto > td { background: var(--surface-2); }
 
 /* GUI_INTERACTION #3 sub-item 3: the floating "here's what this drop does"
    label — one small element per FolderRow, positioned near the pointer and

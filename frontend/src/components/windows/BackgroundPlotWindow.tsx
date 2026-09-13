@@ -48,6 +48,7 @@ import { useApp } from "../../store/useApp";
 import InsetPlot from "../Stage/InsetPlot";
 import PlotViewport from "../Stage/PlotViewport";
 import { usePlotPayload } from "../Stage/usePlotPayload";
+import { useWindowSeriesCycle } from "../Stage/useStageSeriesCycle";
 import {
   BackgroundPolarWindow,
   BackgroundStackWindow,
@@ -186,6 +187,17 @@ function BackgroundXYWindow({
       defaultTrace,
     });
 
+  // P3.3 (`lib/seriesStyleCycle.ts`): the SAME opt-in the focused Stage makes,
+  // from THIS window's own view and document. A background window is a live
+  // preview tiled beside the focused one for side-by-side comparison, so focus
+  // must not decide how a series looks: before this, series 2 and 3 were dashed
+  // in the focused window and solid in the one next to it, and clicking either
+  // one swapped them — the "window silently changing appearance on focus move"
+  // class this file's header names. It is export-backed for the same reason:
+  // this window's own publication export (`buildStageFigureSpec`, reached the
+  // moment it is focused) cycles these exact positions.
+  const seriesCycle = useWindowSeriesCycle(view, document, plotted.length);
+
   return (
     <>
       <PlotViewport
@@ -226,6 +238,7 @@ function BackgroundXYWindow({
         annotations={view.annotations}
         regionShades={view.regionShades}
         seriesStyles={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
@@ -245,7 +258,7 @@ function BackgroundXYWindow({
           zoom/close affordances are moot here: the frame's capture-phase
           pointerdown focuses the window first (decision #2). */}
       {view.insetMode && displayPayload && (
-        <InsetPlot payload={displayPayload} styleList={styleList} />
+        <InsetPlot payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} />
       )}
     </>
   );

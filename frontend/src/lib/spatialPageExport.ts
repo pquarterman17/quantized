@@ -46,6 +46,7 @@ import {
   secondaryAxisWire,
 } from "./axisspec";
 import { buildExportStyles } from "./exportStyles";
+import { displayPositions } from "./seriesStyleCycle";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
@@ -65,6 +66,13 @@ export interface SpatialPageAppearance {
   yFmt: AxisFormat;
   showGrid: boolean;
   showAxisBox: boolean;
+  /** P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`) — the EXPORT half
+   *  of the spatial pair. `useMultiPanelStage.ts` opts each cell canvas in from
+   *  the same preference, and both index the cycle by plain display position
+   *  over the same `spatialPlottedChannels(panel)` list, so a cell's curve and
+   *  its page panel get the same dash. Absent/false = no cycle, byte-identical
+   *  to before the cycle existed. */
+  autoSeriesStyles?: boolean;
 }
 
 function panelOverrides(
@@ -181,7 +189,11 @@ function spatialPanelFigure(
     y_fmt: appearance ? axisFmtParam(appearance.yFmt) : undefined,
     x_step: panel.xStep,
     y_step: panel.yStep,
-    series_styles: buildExportStyles(plotted, panel.seriesStyles ?? {}),
+    series_styles: buildExportStyles(
+      plotted,
+      panel.seriesStyles ?? {},
+      displayPositions(appearance?.autoSeriesStyles ?? false, plotted.length),
+    ),
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
       y2Plotted: y2Axis !== null,
       minorTicks,

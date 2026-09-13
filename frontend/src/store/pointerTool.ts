@@ -1,8 +1,9 @@
 // The pointer-tool slice (MAIN #18): free legend position + the annotation
 // selection/update action, composed into the ONE useApp store instance
-// exactly like ./reductions (read its header first — this is the smallest of
-// the extracted slices, same "kept tiny so it doesn't grow useApp.ts past its
-// store-size ratchet pin" reasoning). `legendXY` is a genuine PlotView field
+// exactly like ./reductions (read its header first — same "kept out of
+// useApp.ts so it doesn't grow past its own store-size ratchet pin"
+// reasoning; this is one of several such extracted slices, not the smallest
+// of them). `legendXY` is a genuine PlotView field
 // (participates in the focused-window facade's snapshotView/hydrateView and
 // `.dwk` sanitizeView — see lib/plotview.ts) even though it's declared here
 // rather than inline in useApp.ts's own field list: Zustand slices merge into
@@ -21,10 +22,18 @@
 
 import { clampAnnotationSize } from "../lib/uplotOverlays";
 import type { Annotation, AxisKey, AxisLabelOffsets, AxisLabelStyle, AxisLabelStyles } from "../lib/types";
+import type { RegionPick } from "../lib/regionSelect";
 import type { HistoryBatchToken } from "./history";
 import type { AppState } from "./useApp";
 
 export interface PointerToolSlice {
+  /** Last range picked by the region rubber-band (x, plus an optional 2-D
+   *  `yRange`, GAP #96/#20); the baseline workshop consumes it then resets
+   *  null. Lives on this slice because the rubber-band IS a pointer tool, and
+   *  because useApp.ts sits at its store-size ratchet pin (the 2-D box added
+   *  one import line there; the ratchet's answer is "move it to a slice"). */
+  regionPicked: RegionPick | null;
+  setRegionPicked: (range: RegionPick | null) => void;
   /** Free legend position (MAIN #18), FRACTIONS of the plot area — see
    *  `PlotView.legendXY`'s doc. */
   legendXY: [number, number] | null;
@@ -81,6 +90,8 @@ type SliceGet = () => AppState;
 
 export function createPointerToolSlice(set: SliceSet, get: SliceGet): PointerToolSlice {
   return {
+    regionPicked: null,
+    setRegionPicked: (regionPicked) => set({ regionPicked }),
     legendXY: null,
     legendFrameXY: null,
     // Clears the frame anchor too (decode #52) — see the interface doc.

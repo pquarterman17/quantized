@@ -68,7 +68,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const xl = asStr(params.x_label).trim();
   const yl = asStr(params.y_label).trim();
   const titleStr = asStr(params.title).trim();
-  await exportActive(s, (stem, ds) =>
+  await exportActive(s, (stem, ds, signal) =>
     exportFigure(
       buildStageFigureSpec(s, ds, stem, {
         fmt: params.fmt as string,
@@ -78,6 +78,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
         xLabel: xl,
         yLabel: yl,
       }),
+      signal,
     ),
   );
 }

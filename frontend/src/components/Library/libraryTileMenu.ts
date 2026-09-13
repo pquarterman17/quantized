@@ -2,19 +2,40 @@
 // Tree rows. This file owns only target plumbing and modal editor fallbacks;
 // action labels, gating, confirmation, and execution remain canonical in the
 // existing dataset/workbook/folder registries.
+//
+// L1.4 (Details rename/move parity): the DETAILS renderer consumes this same
+// builder too, so all three views compose one menu from one set of
+// registries. Its only difference is the rename PROMPT — see
+// `TileMenuHooks.rename` / `renamePrompt` below; the rename commit itself is
+// `libraryRename.ts` for every view.
 
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
-import { buildArtifactMenu, isArtifactNode } from "./artifactContextActions";
+import { buildArtifactMenu } from "./artifactContextActions";
 import { subtreeCount } from "../../lib/foldertree";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { buildDatasetRowMenu } from "./datasetRowMenu";
 import { buildFolderRowMenu } from "./folderRowMenu";
 import { buildWorkbookRowMenu } from "./workbookRowMenu";
+import { renameLibraryNode } from "../../lib/libraryRename";
 
 export interface TileMenuHooks {
-  browse: (node: LibraryNode) => void;
+  /** Navigate the TILE WORKSPACE into this node — the only thing "Browse"
+   *  means. Optional, and deliberately omitted by a renderer that has no tile
+   *  workspace to navigate: `workbook.browse` is gated on exactly this hook
+   *  (`enabled: (t) => t.onBrowse != null`, `disabledReason: "available in
+   *  Tiles view"`), so omitting it renders the item DISABLED with that honest
+   *  reason — the same thing a Tree row's menu shows — instead of enabling a
+   *  Tiles-only item that quietly does something else. */
+  browse?: (node: LibraryNode) => void;
+  /** Reveal a folder's newly created child after `folder.newSubfolder`
+   *  (lib/contextActions.ts's `onExpand`, which the registry calls right
+   *  after `createFolder`). In Tiles that IS browsing into the folder, so it
+   *  falls back to `browse`; a renderer whose projection already shows every
+   *  descendant (Details) passes a no-op rather than letting a SELECTION
+   *  writer stand in for a reveal. */
+  expandFolder?: (node: LibraryNode) => void;
   open: (node: LibraryNode) => void;
   /** Close the workspace and return to the Stage AFTER an action that
    *  already performed its own plot-intent open (dataset.plot,
@@ -23,13 +44,38 @@ export interface TileMenuHooks {
    *  datasets through activateFromLibrary's originBookClickOpens=
    *  "worksheet" detour, undoing setActive's unconditional plot intent. */
   stageReturn: () => void;
+  /** L1.4 rename parity: override HOW the "Rename…" item collects the new
+   *  name. Omitted (Tiles) = the modal `askParams` prompt below, unchanged.
+   *  The Details renderer supplies its own inline row editor here, matching
+   *  the Tree's "the menu opens an in-place input" convention. Either way
+   *  the COMMIT goes through `renameLibraryNode`, so only the prompt
+   *  differs — never which store action fires. */
+  rename?: (node: LibraryNode) => void;
 }
 
-function renameDialog(title: string, name: string, commit: (value: string) => void): void {
-  void askParams(title, [{ key: "name", label: "Name", type: "text", default: name }]).then((result) => {
-    const next = result && String(result.name).trim();
-    if (next) commit(next);
-  });
+/** The default (Tiles) rename prompt: a modal name field committing through
+ *  the shared `renameLibraryNode` dispatcher. `hooks.rename`, when supplied,
+ *  replaces this prompt — never the dispatcher. */
+function renamePrompt(node: LibraryNode, hooks: TileMenuHooks): () => void {
+  const override = hooks.rename;
+  if (override) return () => override(node);
+  return () => {
+    void askParams(`Rename "${node.name}"`, [
+      { key: "name", label: "Name", type: "text", default: node.name },
+    ]).then((result) => {
+      const next = result && String(result.name).trim();
+      if (next) renameLibraryNode(node, next);
+    });
+  };
+}
+
+/** `folder.newSubfolder`'s reveal callback: the explicit `expandFolder` hook,
+ *  else `browse` (Tiles, where navigating in IS the reveal), else nothing —
+ *  never a substitute that writes selection instead. */
+function revealChild(node: LibraryNode, hooks: TileMenuHooks): () => void {
+  const reveal = hooks.expandFolder ?? hooks.browse;
+  if (!reveal) return () => {};
+  return () => reveal(node);
 }
 
 function tagDialog(id: string, name: string): void {
@@ -41,9 +87,11 @@ function tagDialog(id: string, name: string): void {
   );
 }
 
-/** Null means this artifact kind intentionally waits for E-b2's shared
- * lifecycle registry; callers show an honest disabled menu in that slice. */
-export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): ContextMenuItem[] | null {
+/** Total over `LibraryNode`: the three container/leaf kinds below plus the
+ *  five `isArtifactNode` ones, which E-b2's shared lifecycle registry now
+ *  covers — so no "this kind has no registry yet" case is left to return null
+ *  for, and no caller needs a fallback branch. */
+export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): ContextMenuItem[] {
   const state = useApp.getState();
   if (node.kind === "worksheet") {
     const index = state.datasets.findIndex((dataset) => dataset.id === node.entityId);
@@ -54,15 +102,15 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
       state.folders,
       index > 0,
       index >= 0 && index < state.datasets.length - 1,
-      () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameDataset(node.entityId, name)),
+      renamePrompt(node, hooks),
       () => tagDialog(node.entityId, node.name),
       hooks.stageReturn,
     );
   }
   if (node.kind === "workbook") {
-    return buildWorkbookRowMenu(node, () =>
-      renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameWorkbook(node.entityId, name)),
-    () => hooks.browse(node),
+    const browse = hooks.browse;
+    return buildWorkbookRowMenu(node, renamePrompt(node, hooks),
+    browse && (() => browse(node)),
     () => hooks.open(node),
     hooks.stageReturn);
   }
@@ -75,10 +123,12 @@ export function buildLibraryTileMenu(node: LibraryNode, hooks: TileMenuHooks): C
     return buildFolderRowMenu(
       node.entity,
       subtreeCount(state.folders, state.datasets, node.entityId),
-      () => renameDialog(`Rename "${node.name}"`, node.name, (name) => state.renameFolder(node.entityId, name)),
-      () => hooks.browse(node),
+      renamePrompt(node, hooks),
+      // `onExpand` — reveal the child `folder.newSubfolder` just created, NOT
+      // "browse into this folder". They coincide in Tiles; elsewhere they must
+      // not be confused (a Details `browse` would re-select the PARENT).
+      revealChild(node, hooks),
     );
   }
-  if (isArtifactNode(node)) return buildArtifactMenu(node, () => hooks.open(node));
-  return null;
+  return buildArtifactMenu(node, () => hooks.open(node));
 }

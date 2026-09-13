@@ -42,6 +42,7 @@ import {
   facetGridSize,
   panelHeights,
   spatialGridSize,
+  spatialCellStyling,
   spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
@@ -57,7 +58,7 @@ import {
 } from "../../lib/panelLayout";
 import type { PageSetup } from "../../lib/pagesetup";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
-import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "../../lib/types";
+import type { AxisFormat, AxisScale, Dataset, DefaultTrace, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
@@ -139,9 +140,11 @@ export interface MultiPanelStageParams {
    * not silently fall back to uPlot's 12px/1.5px/Line defaults. */
   fontSize?: number;
   baseLineWidth?: number;
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
+  /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
+  autoSeriesStyles?: boolean;
   xKey: number | null;
   yKeys: number[] | null;
   y2Keys: number[] | null;
@@ -194,6 +197,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     defaultTrace,
     refLines,
     seriesStyles,
+    autoSeriesStyles = false,
     xKey,
     yKeys,
     y2Keys,
@@ -432,13 +436,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // Item A: styles/labels line up with the SAME hidden-filtered channel
         // order the payload was fetched in (`spatialPlottedChannels`), not
         // the raw `p.yKeys` (which still includes a dropped error column).
-        const plottedChannels = spatialPlottedChannels(p);
-        const cellStyles = plottedChannels.map((ch) => p.seriesStyles?.[ch]);
-        const cellLabels = plottedChannels.map((ch) => p.seriesLabels?.[ch]);
-        const legendEntries: SpatialLegendEntry[] = plottedChannels.flatMap((ch, displayIndex) => {
-          const label = p.seriesLabels?.[ch];
-          return label ? [{ label, style: p.seriesStyles?.[ch], displayIndex }] : [];
-        });
+        const { cellStyles, cellLabels, cellCycle, legendEntries } = spatialCellStyling(p, autoSeriesStyles);
         const opts = buildOpts(pp, {
           width: rect.width,
           height: rect.height,
@@ -473,6 +471,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
           tool,
           onReadout: setReadout,
           seriesStyles: cellStyles,
+          seriesCycle: cellCycle,
           seriesLabels: cellLabels,
           // Item A (PNR.opj Book14 Graph11 repro): draw whiskers for this
           // panel's Y-error-designated columns instead of the multi-panel
@@ -754,6 +753,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     defaultTrace,
     refLines,
     styleList,
+    autoSeriesStyles,
     errorBarsList,
     tool,
     theme,
