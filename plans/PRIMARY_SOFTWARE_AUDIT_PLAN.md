@@ -3456,11 +3456,50 @@ covers a much smaller subset and guards focus on Analyze.
       was four plus one wrong — fixed above); and the `[]` half of fix 3 — an
       empty `seriesStyles` array ships as `series_styles: []` on the wire — had
       no test, now pinned in `figureSpec.test.ts`.
-  - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
+  - ~~`contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
-    there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls
-    the palette "color-blind-aware", which is a claim about palette CHOICE, not
-    a check.
+    there is no CVD simulation anywhere.~~ **CLOSED as a CHECK (2026-09-13) —
+    and the check FOUND the palette does not clear its own bar, which is now
+    an OPEN OWNER DECISION.** `lib/cvd.ts` (pure, canvas-free) adds: CVD
+    simulation for protan/deutan/tritan via the Machado, Oliveira & Fernandes
+    (2009) severity-1.0 matrices applied in linear RGB; CIE76 ΔE in CIELAB;
+    `seriesDistinguishability` (worst pairwise ΔE, per simulation, with the
+    losing pair's indices); `distinguishabilityVerdict` (pass/fail against a
+    documented default threshold of 10 — well above the ~2.3 ΔE "just
+    noticeable difference" floor, sized for confident at-a-glance reading of
+    thin plotted lines, not a side-by-side swatch comparison). Known-answer
+    tests in `lib/cvd.test.ts` (10 cases: red-vs-green contrast collapses
+    under protan/deutan and mostly survives tritan; grey is invariant; a
+    hand-built quartet's deutan-only-confusable pair is found correctly).
+    `styles/seriesPalette.cvd.test.ts` is THE CHECK THAT MATTERS: it decodes
+    the actual `--series-1..8` OKLCH tokens out of `styles/colors.css` (both
+    themes' base blocks; a pure OKLCH decoder transcribed from the CSS Color
+    4 spec's reference implementation, because the `canvas` package this
+    repo's tests run on does not parse `oklch()` — verified directly, and
+    documented in the test file so no one "fixes" it back to the silently-
+    wrong canvas path) and runs the real audit. Series-vs-background
+    legibility is reused (not reimplemented) via `contrastColor.ts`'s own
+    `resolveDrawColor` and is unregressed. **Measured result: the shipped
+    8-series cycle FAILS `distinguishabilityVerdict` (threshold 10) in BOTH
+    themes** — dark theme's global worst is series-1 vs series-6 under
+    deutan simulation (ΔE ~3.23; normal vision alone is fine at ΔE ~19.18),
+    light theme's global worst is series-5 vs series-7 under deutan (ΔE
+    ~1.98, i.e. below even the raw ~2.3 JND floor; light theme's own normal-
+    vision worst pair, series-4 vs series-7, is already only ΔE ~6.62 before
+    any CVD simulation is applied). Full per-simulation breakdown for both
+    themes is in the test file's header comment and the closing commit body.
+    Per this plan's stated policy, the failure is NOT hidden by loosening the
+    threshold or silently reshuffling the palette: both audit assertions are
+    kept as documented `it.fails` (a real palette fix must flip them back to
+    `it`, or the ratchet catches the silent case where they start passing
+    without anyone noticing). **OPEN OWNER DECISION:** `plans/design/
+    DESIGN_GUIDE.md`'s "color-blind-aware" line is left as written — it is a
+    claim about the 8 hues being CB-conscious choices (true: several derive
+    from Okabe-Ito), not a claim this test ever validated — but the owner now
+    has the numbers to decide whether the default 8-slot series cycle should
+    be redesigned, whether fewer series should be treated as the "safe"
+    simultaneous count, or whether the gap is accepted as-is for a niche
+    8-series plot.
   - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
     (aps/report/web) have no greyscale variant.
 
