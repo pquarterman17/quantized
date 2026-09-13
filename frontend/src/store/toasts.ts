@@ -67,3 +67,17 @@ export const useToasts = create<ToastsState>((set, get) => ({
 export function toast(msg: string, kind?: ToastKind, opts?: ToastOptions): void {
   useToasts.getState().push(msg, kind, opts);
 }
+
+/** BUG-010: fire ONE toast summarizing `warnings` (a load/merge path's
+ *  `migrationWarnings` — a skipped/degraded field from an older or
+ *  unsupported saved document) — the first warning's text plus a "(+N more)"
+ *  count, never one toast per warning. No-op when empty, so every load/merge
+ *  call site can call this unconditionally. Lives here (not a separate lib
+ *  module) because every call site already imports `toast` from this exact
+ *  module — one shared helper with no new module edge to pay for. See
+ *  BUGS_AND_ISSUES.md's BUG-010 entry for why `useApp.ts`'s own
+ *  `migrationNotice` status-line fold (File ▸ Open only) isn't enough. */
+export function notifyMigrationWarnings(warnings: readonly string[]): void {
+  if (!warnings.length) return;
+  toast(warnings[0] + (warnings.length > 1 ? ` (+${warnings.length - 1} more)` : ""), "info");
+}

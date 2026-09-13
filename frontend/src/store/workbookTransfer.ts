@@ -55,7 +55,7 @@ import type { AppState } from "./useApp";
 import { nextDatasetId } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 import { nextFigureId } from "./figureLifecycle";
-import { toast } from "./toasts";
+import { notifyMigrationWarnings, toast } from "./toasts";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -242,6 +242,12 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       applyPasteResult(set, result);
       const n = result.datasets.length;
       succeed(get, result, `pasted "${result.workbook.name}" (${n} worksheet${plural(n)})`);
+      // BUG-010: a package built by an OLDER instance can carry a
+      // FigureDocument version this build no longer understands
+      // (parseTransferPackage skips it and records why) — the only place
+      // that can be non-empty, since a same-session duplicate below always
+      // round-trips already-current-version live data.
+      notifyMigrationWarnings(parsed.migrationWarnings);
     },
 
     duplicateWorkbook: async (workbookId) => {

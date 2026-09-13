@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FigureDocument } from "./figureDocument";
+import { FIGURE_DOCUMENT_SCHEMA, type FigureDocument } from "./figureDocument";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
 import type { Dataset } from "./types";
@@ -254,6 +254,39 @@ describe("parseTransferPackage", () => {
     expect(() => parseTransferPackage(JSON.stringify(broken))).not.toThrow();
     const result = parseTransferPackage(JSON.stringify(broken));
     expect(result.ok).toBe(false);
+  });
+
+  it("a clean package parses with no migrationWarnings", () => {
+    const built = buildTransferPackage("wb-1", makeState());
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const result = parseTransferPackage(built.text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.migrationWarnings).toEqual([]);
+  });
+
+  // BUG-010: `parseTransferPackage` reuses `parseWorkspace`'s own sanitizers
+  // (this module's header), which means an unsupported FigureDocument
+  // version inside a workbook package is a real, reachable case — not just
+  // a theoretical one this module's own build path could ever produce. The
+  // bug was that `loaded.migrationWarnings` was computed and then dropped on
+  // the floor entirely.
+  it("surfaces migrationWarnings from an unsupported FigureDocument version inside the package (BUG-010)", () => {
+    const built = buildTransferPackage("wb-1", makeState());
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const withFutureFigure = {
+      ...built.pkg,
+      editableFigures: [{ schema: FIGURE_DOCUMENT_SCHEMA, version: 99, id: "future-fig" }],
+    };
+    const result = parseTransferPackage(JSON.stringify(withFutureFigure));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pkg.editableFigures).toEqual([]); // skipped, per the version-skip rule
+    expect(result.migrationWarnings).toEqual([
+      'skipped saved FigureDocument "future-fig" with unsupported version 99',
+    ]);
   });
 });
 

@@ -1545,6 +1545,19 @@ import { fileURLToPath } from "node:url";
  *
  *  4,218 B under the unmoved 920,400 budget, nowhere near the
  *  `EAGER_JS_BUDGET - SLACK` floor.
+ *
+ *  2026-09-13 — BUG-010 (`migrationWarnings` reach the user on every load
+ *  path): one shared `notifyMigrationWarnings` toast helper in
+ *  store/toasts.ts, called from lib/applyRecoveryChoice.ts (already lazy,
+ *  free), useWorkspaceAutosave.ts, store/workspaceIO.ts and
+ *  store/workbookTransfer.ts — three eager sites plus the helper. The fix
+ *  agent measured its work on a stale tree (500cc64d, budget then 918,800)
+ *  and raised the pin there; that raise was DROPPED on cherry-pick because
+ *  this tree has headroom. Measured here by the orchestrator against the
+ *  real parent (`npm ci`-fresh node_modules, `.vite` wiped):
+ *
+ *    bc8f14fa   916,182   parent (greyscale export commit)
+ *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
 const EAGER_JS_BUDGET = 920_400;
 
