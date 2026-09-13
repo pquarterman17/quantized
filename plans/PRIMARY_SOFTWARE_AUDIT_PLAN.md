@@ -2773,12 +2773,50 @@ Expose the existing backend only if GOTO Q8 and a real project justify it.
 **Current evidence:** roughly 94 command labels exist, while searchable help
 covers a much smaller subset and guards focus on Analyze.
 
-- [ ] One metadata source for name, one-sentence tooltip, keywords, context,
-  shortcut, and help target.
-- [ ] Generate help coverage/tests from it.
+- [x] One metadata source for name, one-sentence tooltip, keywords, context,
+  shortcut, and help target. **Verified 2026-09-13:** `store/commands.ts`'s
+  `Action` interface carries all of it in one place — `label` (name),
+  `description` (one-sentence tooltip, `>20` chars enforced), `keywords`,
+  `group`/`section` (context), `shortcut`, and `id` (the help target key
+  both `actionToHelpItem` and the command palette resolve by) — consumed
+  identically by `lib/helpContent.ts` and the palette so the two discovery
+  surfaces cannot drift into parallel catalogs.
+- [x] Generate help coverage/tests from it. **Verified 2026-09-13, tests
+  run:** `helpContent.test.ts`'s "documents every curated command at its
+  command definition" fails the build if any of the >80 `buildAppActions`
+  commands lacks a `description`; `workshopHelp.test.ts` fails if a
+  `WORKSHOP_HELP` entry stops matching a real command. Ran
+  `npx vitest run src/lib/helpContent.test.ts src/lib/workshopHelp.test.ts
+  src/components/overlays/HelpDialog.test.tsx` — 81 passed.
 - [ ] Small contextual `?` links on complex workshops/property groups.
 - [ ] Progressive disclosure; tooltips remain one sentence.
-- [ ] Audit stale capability wording.
+- [x] Audit stale capability wording. **Audited 2026-09-13** against the
+  three most recent capability changes: P3.3's dash/marker cycle (this
+  branch's HEAD, `1b60872a`), L1.4 Details parity (LIBRARY_WORKBOOK_UX_PLAN
+  L1.4), and the baseline "Fit from region" 2-D y-box (`65097f6e`/
+  `ed596ec3`/`5f65ec8a`). Grepped help/tooltip/description strings across
+  `frontend/src` for each.
+  - P3.3 dash/marker cycle and L1.4 Details parity: no stale wording found.
+    `AppearanceMenu.tsx`'s "Vary dash & marker" copy and comment already
+    describe the shipped one-function/one-position invariant; the
+    `SeriesStyleCard.tsx` "STORED choice, not the drawn one" comment and its
+    PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 cross-reference (~3141-3145, "Deliberately
+    NOT done") both describe a still-current, deliberate limitation, not a
+    stale claim. `DetailsRow.tsx`'s header describes the Tree/Details parity
+    change accurately as before/after history, and its "available in Tiles
+    view" disabled-Browse tooltip is accurate — Browse is not one of L1.4's
+    seven parity verbs.
+  - 2-D region box: ONE real gap found, already on record but not
+    cross-referenced here — `frontend/src/lib/plotToolbarDefs.ts:78`'s
+    `REGION_TOOL.desc` ("Drag to select a background range for baseline
+    fitting") never mentions that a taller drag also picks a y-range, even
+    though the y-box shipped. Not editing it here per this item's own
+    scope (the string lives in `frontend/src`, not `plans/`); it is also
+    already recorded, in more detail, as PORT_CHECKLIST.md's own "Residual"
+    note on the 2-D y-box entry (~line 96: "a hint update was dropped for
+    bundle bytes, so the feature is discoverable only by trying it or
+    reading this checklist") — a deliberate, budget-driven omission, not an
+    oversight.
 
 **Progress**
 
@@ -3353,11 +3391,29 @@ Prioritized slices (in pain order):
 
 Original acceptance criteria (unchanged):
 
-- [ ] Consistent progress location and job identity.
+- [~] Consistent progress location and job identity. **Narrowed
+  2026-09-13:** slices 1-4 gave import, command-palette actions, and
+  workspace open ONE shared location (`StatusBar.tsx`'s `.qzk-pending`
+  span reading `store/pendingOps.ts`) and ONE identity scheme (`OpId`, a
+  monotonic `beginOp`/`endOp` sequence number). Verified NOT extended to
+  the job-queue path: `useBumpsFit.ts` keeps its own `progress` state and
+  `job_id` (`jobRef`, from `lib/jobs.ts`'s poll loop), rendered only inside
+  `BumpsSection.tsx`'s own panel — `StatusBar.tsx` imports only
+  `usePendingOps` and never reads a job-queue id, so a DREAM/fit-scan job's
+  progress and identity are invisible to the shared location. Two
+  progress systems coexist, not one; box stays open for that specific gap.
 - [ ] Safe cancel for long import/fit/batch/export.
 - [ ] Errors say what failed, whether data changed, and next action.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
-- [ ] Persistent recovery/write-failure notices.
+- [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
+  write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
+  (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"
+  (`store/autosaveStatus.ts` header) rather than a toast that scrolls away.
+  Recovery — `RecoveryChoiceDialog.tsx` (P1.2) has no auto-dismiss and no
+  default action ("Cancel touches nothing... there is no default/auto
+  action" per its own header); it stays up until the user makes an
+  explicit Cancel/Keep/Recover choice. Both notices persist until resolved
+  rather than expiring on their own.
 
 ### P3.5 — Unified recipe library
 

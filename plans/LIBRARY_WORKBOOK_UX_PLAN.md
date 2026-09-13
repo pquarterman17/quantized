@@ -715,8 +715,14 @@ Library presentation without changing organization or duplicating objects.
     after its approved wide Library workspace exists.
   - [x] PR E-a enables Tiles, persists it through the same preference, and
     routes it to the wide main workspace rather than the 210 px sidebar.
-- [ ] **L1.3 State continuity:** switching views preserves selection, active
+- [x] **L1.3 State continuity:** switching views preserves selection, active
   workbook/child, expansion where applicable, search, and keyboard focus.
+  **Reconciled 2026-09-13:** both residual notes below point at E-c, which
+  is marked COMPLETE at L1.4's E-c entry (E-c1 cache -> E-c2 previews ->
+  E-c3 scale, ~996-997); verified `useThumbnail.ts` implements the claimed
+  `AbortController` cancellation on unmount/fingerprint change (line 94) and
+  `LibraryWorkspace.tsx` implements the claimed Escape/"Back to plot" return
+  path. Both sub-bullets are `[x]`; the parent was never flipped to match.
   - [x] PR D proves continuity between Tree and Details, including disclosure
     of a focused Details child's ancestors when returning to Tree. Tiles
     continuity remains a PR E acceptance gate.

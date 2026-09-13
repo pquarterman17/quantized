@@ -957,8 +957,16 @@ everywhere, not just mask its display) — that call is not made here.
   without depending on a groupCol the UI could never actually offer.
 - [x] Type-check/build/repository gates pass — see the PR/commit that
   introduces this entry.
-- [ ] Agent verifies acceptance criteria — the fix and its regression tests
-  are agent-verified; a manual click-through was not performed this slice.
+- [x] Agent verifies acceptance criteria — **verified 2026-09-13:** read
+  `maskStaleCategoricalPicks` (`frontend/src/lib/statstage.ts`) in full —
+  `groupCol`/`group2Col` mask to `null` when absent from the freshly
+  computed `categoricalCols` index, `facetCol` passes through unmasked,
+  matching this entry's "Fix implemented" description exactly. Ran
+  `npx vitest run src/components/Stage/useStatStage.test.ts
+  src/lib/statstage.test.ts` — 89 passed, including the cited "de-
+  categorizing the picked groupCol masks the picker AND stops the grouping
+  math from using it" and "a non-categorical facetCol SURVIVES" cases.
+  A manual click-through was not performed this slice.
 - [ ] Owner verifies when required.
 
 #### Completion record
