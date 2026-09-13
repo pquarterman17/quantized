@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-12  
+**Updated:** 2026-09-13  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -32,7 +32,9 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open |
+| BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
+| BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Unassigned | Found 2026-09-13 reviewing Group AF; design-time finding, not yet fixed |
+| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolves pending datasets before serializing, so packing a workspace with an unopened lazy Origin book ships that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Unassigned | Found 2026-09-13 reviewing Group AF; design-time finding, not yet fixed |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1870,6 +1872,80 @@ lose an edit:
   truncates them earlier), but it carries its own design question — should a `.dwk`'s
   exclusions survive a pending load at all? — so it is not a drive-by fix.
 
+  **ATTEMPTED AND REVERTED (2026-09-13, Group AF).** A fix was built, reviewed
+  adversarially, and taken back out before it reached `main` — the branch that
+  carried it never merged forward, so the code here is still the pre-attempt
+  original above. Recorded honestly rather than silently dropped, per this
+  document's own purpose.
+
+  What was built: `lib/workspaceDatasetParse.ts`'s restore refused BOTH
+  `excludedRows` and `filter` outright whenever the parsed dataset was `pending`
+  — dropping both fields instead of clamping the first — and pushed a named
+  notice into `parseWorkspace`'s `migrationWarnings`, on the reasoning that
+  `pending` is set on a brand-new import with no row state
+  (`store/importDatasets.ts:232`) and every row-state writer now refuses on
+  `pending` (`store/rowState.ts`'s five `refusePendingEdit` call sites at lines
+  138/151/197/212/228; `store/cellEdit.ts`; `store/derivedWorksheets.ts:94`
+  throws; `store/split.ts:123` resolves the source first), so the `.dwk` round
+  trip (`lib/workspaceSerialize.ts` writes `excludedRows` (line 214), `filter`
+  (line 215) and `pending` (line 225) independently — see that last field's own
+  comment, lines 217-224, for why it argued this could only be an autosave
+  snapshot — and `workspaceDatasetParse.ts` restores all three independently)
+  reads as the only path that can hand a live dataset `pending` together with
+  row state.
+
+  Why it was reverted — adversarial review found the fix was a net regression,
+  not a hardening, for the case it mattered most:
+  - `installBookData` (`lib/bookData.ts` lines 106-119) clears `excludedRows`/
+    `filter` only in its **success** handler; on a failed fetch (a moved
+    `.opj`, an expired upload token — `_bookErrors`, the BUG-009 message fix
+    above) or a book the user simply never reopens, `pending` stays set
+    **indefinitely**, and the old (clamp, don't refuse) behaviour kept the
+    user's exclusions against the exact preview rows they struck out. Refusing
+    at load deletes those exclusions on the very next autosave — permanently,
+    for a document with no other route back to that state, since an explicit
+    Save aborts rather than writes when a book can't be resolved
+    (`store/workspaceIO.ts`'s `prepareWorkspaceState`, lines 63-91, abort block at
+    69-80) and
+    autosave is therefore that user's only persistence for a stuck book.
+  - The `migrationWarnings` notice the fix relied on to make the loss loud is
+    unreachable on every path that can actually carry `pending` into
+    `loadWorkspace`: crash recovery (`lib/applyRecoveryChoice.ts`'s
+    `applyRecoverAutosave`, line 29 calls `loadWorkspace` then line 34
+    overwrites `status` with its own message), the silent startup autosave
+    restore (`useWorkspaceAutosave.ts` lines 422-431, same shape), Append
+    Project (`store/workspaceIO.ts`'s `runAppendWorkspace`, line 468, which
+    doesn't call `loadWorkspace` at all and writes its own `status`), and
+    workbook-package import (`lib/workbookTransfer.ts`'s
+    `parseWorkbookPackage`, line 288, which reads `loaded.workbooks`/
+    `loaded.datasets` off `parseWorkspace`'s result and never touches
+    `loaded.migrationWarnings`). Only a plain File ▸ Open reaches
+    `store/useApp.ts`'s `loadWorkspace` (migration notice folded into `status`
+    at line 1565) without a follow-up overwrite — so the one loud case was the
+    one path least likely to be the one that actually happens. Booked as its
+    own bug below (BUG-010) since it outlives this attempt.
+  - `filter` is a column+value predicate, valid in both preview and source row
+    space (the backend preview payload keeps the full label/unit roster —
+    `routes/parsers.py`'s `_book_preview_payload`, lines 148-149 — only the
+    row-indexed `time`/`values` are decimated), so refusing it for a row-SPACE
+    reason was never justified by the same logic as `excludedRows`; whether
+    `installBookData` should keep clearing it on arrival is the pre-existing,
+    still-open `#50`/`#53` product decision, not something this fix should
+    have settled by fiat.
+
+  **Plan of record (not built):** keep the restored row state in PREVIEW space
+  through the pending phase — i.e. restore it as today, unguarded — and make
+  `lib/bookData.ts`'s `installBookData` COMPOSE it through the
+  `lib/rowSidecars.PREVIEW_SOURCE_ROWS` map (Group T) into source space at the
+  one moment both row spaces are known, falling back to today's drop only when
+  no such map exists (a pre-`preview_sampled` backend, or a hand-edited file).
+  Every reader stays as-is: `lib/rowstate.ts`'s `droppedRows` (lines 97-104)
+  already reads `excludedRows`/`filter` against whatever `ds.data` currently
+  is, so a value that is always in the same space as the `data` it travels
+  with needs no reader change. This touches `lib/bookData.ts`, whose clearing
+  behaviour is itself a deliberate #50/#53 fix, so it is a separate,
+  owner-visible change — not attempted here either.
+
 - [x] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
   while `clearRowExclusions` does. So building a filter and pressing undo restores a
   snapshot from before the filter change and silently discards it. Pre-existing and
@@ -1987,6 +2063,231 @@ save: resolve FIRST, then apply, and surface a genuine failure.
 - PR/commit: the round-5 response on the Group P branch (2026-09-10).
 - Owner verification: — (the resolve-then-apply refactor is a design call worth
   an owner's read before it is built).
+
+---
+
+## BUG-010 — `migrationWarnings` are unreachable on every load path except a plain File ▸ Open
+
+**Priority:** P2 — no data is corrupted, but the ONE mechanism this repo has for
+telling a user "something in your saved document was dropped or downgraded on
+load" silently says nothing on three of the four ways a document can load. A
+diagnostic that only fires on the least common path is worse than it looks: it
+lets a future fix (like the reverted Group AF attempt above) believe it has
+made a loss loud when it has not.
+
+**State:** Open
+
+**Reported:** 2026-09-13, by Claude, during adversarial review of the Group AF
+`.dwk` load-path attempt on the BUG-009-adjacent item above — that attempt's
+loudness story depended on this channel and the review measured that it does
+not reach the user on any path a real pending-dataset document is likely to
+take.
+
+**Investigated:** root cause confirmed by reading every caller, not inferred —
+see Evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** BUG-009 (the pending-dataset contract) above; the item this
+was found while reviewing.
+
+#### User-visible problem
+
+`store/useApp.ts`'s `loadWorkspace` is the one place that folds a document's
+`migrationWarnings` into the load status: it builds `migrationNotice` from
+`migrationWarnings[0]` (line 1431) and appends it to the `"loaded workspace — N
+datasets…"` status string (line 1565). That machinery exists today for
+unrelated migration cases (e.g. a saved `FigureDocument` with an unsupported
+version — `lib/workspace.ts`'s `parseEditableFigures`, line 183) and is exactly
+what the reverted Group AF fix planned to reuse for "your saved row exclusions
+were dropped because the book hadn't finished loading."
+
+The problem: every OTHER entry point that can load a workspace either never
+calls `loadWorkspace` at all, or calls it and then overwrites `status` one or
+two statements later with its own message that never reads
+`ws.migrationWarnings`. A warning pushed into that array is therefore visible
+only when the user does a plain File ▸ Open — not on the two paths (crash
+recovery, silent autosave restore) that are how a pending-dataset document is
+actually most likely to come back, and not on Append Project or a workbook
+package import either.
+
+#### Root cause
+
+Four call sites, each confirmed by reading the code:
+
+- **`lib/applyRecoveryChoice.ts`'s `applyRecoverAutosave`** (the "Recover
+  autosaved work" crash-recovery choice): line 29 calls
+  `s().loadWorkspace(prompt.workspace)`, then line 34 calls
+  `s().setStatus(msg)` with a hand-built `"recovered N datasets from
+  autosave…"` string that never reads `prompt.workspace.migrationWarnings`.
+  Whatever `loadWorkspace` just wrote to `status` is gone before the user sees
+  it.
+- **`frontend/src/useWorkspaceAutosave.ts`'s silent startup restore**: line 422
+  calls `useApp.getState().loadWorkspace(restored)`, then lines 427/430 call
+  `setStatus` with one of two hand-built strings
+  (`"recovered … after an unexpected close"` / `"restored … from autosave"`),
+  again never touching `restored.migrationWarnings`. This is the path that
+  runs on every ordinary app start when an autosave generation exists — the
+  most common way a `pending` dataset re-enters the live store.
+- **`store/workspaceIO.ts`'s `runAppendWorkspace`** (Append Project): does not
+  call `loadWorkspace` at all — it calls `mergeWorkspace` directly and, at line
+  468, sets `status: msg` to its own `"appended N datasets (M renamed)…"`
+  string. `ws.migrationWarnings` from the parsed `.dwk` is never read anywhere
+  in this function.
+- **`lib/workbookTransfer.ts`'s `parseWorkbookPackage`**: line 288 calls
+  `parseWorkspace(...)` and stores the result in `loaded`, then reads only
+  `loaded.workbooks` (line 292) and `loaded.datasets`; `loaded.migrationWarnings`
+  is never referenced anywhere in the file — confirmed by a whole-file search.
+
+So of the four loaders that can carry a document's `migrationWarnings` into
+the live store, three actively discard it and the fourth (plain File ▸ Open,
+`store/useApp.ts`'s `loadWorkspace` itself) is the only one where it survives
+to the status bar.
+
+#### Fix checklist
+
+- [ ] Give `migrationWarnings` a delivery channel a caller cannot silently
+  clobber by writing to `status` afterward — e.g. a toast fired from inside
+  `loadWorkspace` itself (mirroring the existing "recovered … — check your
+  latest edits" toast pattern in `useWorkspaceAutosave.ts`), rather than a
+  string every caller must remember to fold into its own message.
+- [ ] Pin it at `applyRecoverAutosave` first — it is the site the Group AF
+  attempt actually needed and the one whose overwrite is a single, easy-to-see
+  statement (line 34).
+- [ ] Decide and implement the same fix shape for the silent autosave restore
+  and `runAppendWorkspace`, or explicitly narrow the promise (e.g. document
+  that `migrationWarnings` is File ▸ Open-only) if a store-wide channel is
+  judged out of scope.
+- [ ] Decide whether `parseWorkbookPackage` should surface
+  `loaded.migrationWarnings` at all — a workbook package is a narrower object
+  than a full workspace, so this may be a deliberate non-goal rather than a
+  gap; state it either way.
+- [ ] A regression test per fixed site: assert the notice actually reaches the
+  user-visible surface (status/toast) after each of the three currently-silent
+  loaders, not just that `migrationWarnings` was computed.
+
+#### Evidence
+
+- `frontend/src/store/useApp.ts:1431` (`migrationNotice` built),
+  `frontend/src/store/useApp.ts:1565` (folded into `status` — the one path
+  that works).
+- `frontend/src/lib/applyRecoveryChoice.ts:29` (`loadWorkspace` call),
+  `frontend/src/lib/applyRecoveryChoice.ts:34` (`setStatus` overwrite).
+- `frontend/src/useWorkspaceAutosave.ts:422` (`loadWorkspace` call),
+  `frontend/src/useWorkspaceAutosave.ts:427,430` (`setStatus` overwrites).
+- `frontend/src/store/workspaceIO.ts:448` (`runAppendWorkspace` definition),
+  `frontend/src/store/workspaceIO.ts:468` (`status: msg`, no `migrationWarnings`
+  read anywhere in the function).
+- `frontend/src/lib/workbookTransfer.ts:288` (`parseWorkspace` call),
+  `frontend/src/lib/workbookTransfer.ts:292` (`loaded.workbooks` read;
+  `loaded.migrationWarnings` never appears in the file).
+- Agent verification: each call site read directly; no test added yet (this is
+  a design-time finding from adversarial review, not a user report).
+- Owner verification: — not required to confirm the gap (it is a static
+  reachability fact), but the chosen delivery-channel shape is a product call.
+
+---
+
+## BUG-011 — Pack Project can silently ship a lazy book's PREVIEW rows as the packed project's real data
+
+**Priority:** P1 — this is the scientific-data-integrity bar this document's
+priority key names explicitly ("P0: data loss or scientifically incorrect
+result that can escape notice"; capped at P1 rather than P0 only because it
+requires an in-progress lazy Origin import at the moment of packing, not the
+common case). Pack Project is the mechanism for handing a portable, self-
+contained project to someone else; if the payload it writes is a ~200-row
+downsampled preview instead of the real book, the recipient has no way to
+know their analysis is running on decimated data.
+
+**State:** Open
+
+**Reported:** 2026-09-13, by Claude, during adversarial review of the Group AF
+`.dwk` load-path attempt above. Found by comparing `packProjectRun.ts`'s
+serialization call against its two siblings that serialize a workspace for
+export, not by a failing test.
+
+**Investigated:** root cause confirmed by reading the code; not yet reproduced
+end-to-end with a real pack run against a lazy book.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** BUG-009 (the pending-dataset contract) above.
+
+#### User-visible problem
+
+`store/packProjectRun.ts`'s `serializeCurrentWorkspaceForPack` (lines 44-52) is
+the content both the pack preview and the actual "Start pack" action send to
+the backend's `pack_project`. It calls:
+
+```ts
+return serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+```
+
+directly against the live `useApp` state `s`, with **no** call to
+`resolvePendingDatasets()` anywhere in the function or the file (confirmed by
+a whole-file search — the only `pending*` identifiers in `packProjectRun.ts`
+are the unrelated `pendingTimer`/`pendingApply` poll-throttle variables). If
+any dataset in the workspace is still `pending` (a lazy Origin book whose full
+data hasn't been fetched yet — normal for a workbook the user hasn't opened),
+`serializeWorkspace` writes that dataset's `d.data`, which **is the downsampled
+preview** for as long as `pending` is set, into the packed payload — and writes
+`pending` itself into it too, since nothing cleared it first.
+
+This directly falsifies the comment `lib/workspaceSerialize.ts` carries about
+its own `pending` field (lines 217-224): "an explicit 'Save workspace (.dwk)…'
+resolves every pending dataset FIRST … so `d.pending` is never set in a real
+exported .dwk — only autosave … can legitimately still have one." Pack Project
+is a second explicit-export path that comment did not account for, and it does
+not resolve first.
+
+#### Root cause
+
+- `store/workspaceIO.ts` line 73 (inside `prepareWorkspaceState`, the shared
+  preface for Save and Save As) calls `await get().resolvePendingDatasets()`
+  before serializing, and aborts the save with a status/toast if it fails.
+- `store/workbookTransfer.ts` lines 189 and 254 (the two workbook-transfer
+  export paths) likewise call `await get().resolvePendingDatasets()` before
+  building their payload.
+- `store/packProjectRun.ts`'s `serializeCurrentWorkspaceForPack` has no
+  equivalent call. It is also **synchronous** (returns a `string`, not a
+  `Promise`), which is itself evidence the resolve step was never wired in —
+  `resolvePendingDatasets()` is async.
+
+#### Fix checklist
+
+- [ ] Make `serializeCurrentWorkspaceForPack` (or its caller in
+  `packProjectRun.ts`) `await get().resolvePendingDatasets()` before calling
+  `serializeWorkspace`, mirroring `workspaceIO.ts`'s `prepareWorkspaceState`.
+- [ ] Decide the failure UX to mirror: `workspaceIO.ts` aborts the whole save
+  with a named status/toast when a book can't be resolved (`store/workspaceIO.ts`
+  lines 69-80) — Pack Project's preview and Start-pack actions need the same
+  "can't pack: couldn't load book X" abort rather than silently packing the
+  preview.
+- [ ] Once fixed, correct or narrow `lib/workspaceSerialize.ts`'s lines
+  217-224 comment, which currently claims (falsely, for Pack Project as it
+  stands) that `pending` can only survive into a real export via autosave.
+- [ ] Regression test: build a workspace with a `pending` dataset, call
+  `serializeCurrentWorkspaceForPack`-equivalent packing content, and assert
+  either the packed payload's `data` matches the FULL book (post-fix) or that
+  packing is refused with a named reason — not that it silently ships the
+  preview (pre-fix / today's actual behaviour).
+
+#### Evidence
+
+- `frontend/src/store/packProjectRun.ts:44-52` (`serializeCurrentWorkspaceForPack`,
+  no `resolvePendingDatasets` call; synchronous return type).
+- `frontend/src/store/workspaceIO.ts:73` (`await get().resolvePendingDatasets()`
+  inside `prepareWorkspaceState`, whose abort block is lines 69-80).
+- `frontend/src/store/workbookTransfer.ts:189` and `:254` (the two sibling
+  `await get().resolvePendingDatasets()` calls).
+- `frontend/src/lib/workspaceSerialize.ts:217-224` (the comment this bug
+  falsifies).
+- Agent verification: read `packProjectRun.ts` in full, confirmed no
+  `resolvePendingDatasets`/`pending` reference besides the unrelated poll
+  timer names; compared against both sibling export paths that do call it.
+  Not yet reproduced against a live backend pack run.
+- Owner verification: — needed to confirm the severity call (P1 vs P2) and the
+  chosen abort-vs-resolve UX before implementation.
 
 ---
 
@@ -2260,3 +2561,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-09 | Claude | BUG-001: parser-declared roles in `io/ncnr.py` + the missing `metadata.error_roles` reader; corrected one investigation line that measurement disproved | BUG-001 partially implemented, still open pending render/round-trip and owner checks |
 | 2026-09-09 | Claude | Added BUG-003 (Data Filter: a stale kind-mismatched predicate survives a column type change invisibly) from the Data Filter categorical-wiring slice | Display-masking half implemented + sabotage-verified; row-filtering half open pending owner call |
 | 2026-09-09 | Claude | Verified Tabulate/Stat Stage `is_categorical` wiring (PRIMARY_SOFTWARE_AUDIT_PLAN); added BUG-004 (Stat Stage: a stale groupCol/facetCol survives a column type change) and fixed it fully (display + computation, self-contained hook) | BUG-004 fixed + sabotage-verified; Tabulate confirmed self-healing (no analogous bug), also sabotage-verified |
+| 2026-09-13 | Claude | Recorded the Group AF outcome on BUG-009's load-path item (`.dwk` load refusing `excludedRows`/`filter` on a pending dataset): built, adversarially reviewed, reverted before reaching `main`; wrote the net-regression finding and the unbuilt plan of record into the item honestly. Added BUG-010 (`migrationWarnings` unreachable on recovery/append/workbook-import loaders) and BUG-011 (Pack Project serializes a pending dataset's preview rows, unlike Save/Save As and workbook transfer) from the same review | Both new entries are design-time findings, code-read and cited by file:line, not yet fixed; BUG-009's item stays `[ ]` open, code unchanged from pre-attempt |
