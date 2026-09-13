@@ -126,7 +126,7 @@ describe("documentPinsSeriesStyles — only an ABSENT field leaves styles deriva
 
 // F6 (round-4 review): `windowCyclesSeriesStyles` is the one function this
 // module's whole P3.3 story is named for, and it had no test that called it
-// directly — only through its five callers (both `useStageSeriesCycle` hooks,
+// directly — only through its four callers (both `useStageSeriesCycle` hooks,
 // `canonicalSession`, and `figureSpec`'s two builders). Sabotage
 // (`return on && overlayExportsSeriesStyles(view);`, dropping the document
 // clause) turns every case below that pins a document into a false pass.

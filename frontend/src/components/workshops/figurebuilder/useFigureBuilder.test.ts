@@ -636,8 +636,8 @@ describe("useFigureBuilder", () => {
   // dashed Stage canvas, a dashed Stage export, a SOLID Figure Builder preview
   // and a solid Figure Builder Export. MAIN #35's whole point is that Copy and
   // Export render through ONE path; this was a third and fourth. The preview and
-  // Export now apply the cycle for exactly the session that previews the FOCUSED
-  // window's own figure, and for no other.
+  // Export now apply the cycle exactly when the session's TARGET window cycles
+  // per `windowCyclesSeriesStyles` (its own view + document), focused or not.
   describe("auto dash/marker cycle (P3.3)", () => {
     const win = (id: string): PlotWindow => ({
       id, kind: "plot", title: id, datasetId: "d1",

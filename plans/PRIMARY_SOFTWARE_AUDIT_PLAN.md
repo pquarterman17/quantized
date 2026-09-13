@@ -3251,10 +3251,12 @@ covers a much smaller subset and guards focus on Analyze.
       subscriptions to one.
 
       **Eager bundle, measured on THIS tree after `npm ci` and a
-      `node_modules/.vite` wipe (2026-09-13, FOURTH round, re-measured against
-      the real parent):** parent `6797e77c` **915,638 B**; this commit
-      **915,587 B** — 51 B smaller, and 4,813 B under the 920,400 budget, which
-      therefore does NOT move.
+      `node_modules/.vite` wipe (2026-09-13, re-measured in the FOURTH round
+      against the THIRD round's real parent):** parent `6797e77c` **915,638 B**;
+      third-round commit `95a211fc` **915,587 B** — 51 B smaller, and 4,813 B
+      under the 920,400 budget, which therefore does NOT move. The fourth
+      round's own fix measures 916,102 -> 916,102 against ITS parent
+      `cd402c1b` (0 B; see round-four finding 2 below).
 
       All three earlier blocks' numbers are superseded and must not be quoted
       forward, for three rounds of the same mistake. The original measured
@@ -3371,10 +3373,12 @@ covers a much smaller subset and guards focus on Analyze.
          predicate is `!== undefined`, so ONLY an absent field derives styles),
          and `[]` counting as pinned is stated at the code.
       4. The bundle justification block measured against `2b60d4e6`, an ancestor
-         three commits behind that round's actual parent `5f65ec8a` — the second
-         round repeating the first round's mistake in a subtler form, and the
-         810 B of headroom it claimed was really 311 B. Rewritten against
-         `dc0dbae9`, measured here.
+         FIVE commits behind that round's actual parent `5f65ec8a` (only the
+         last two of them region y-box work) — the second round repeating the
+         first round's mistake in a subtler form, and the 810 B of headroom it
+         claimed was really 311 B. The third round then rewrote it against
+         `dc0dbae9`, which was ITSELF an ancestor and not the parent; the fourth
+         round re-measured against the real parent `6797e77c` (see below).
       5. "With it OFF every render path is byte-identical to before the feature"
          is false for the legend swatch, and the change is CORRECT rather than
          accidental. Narrowed to what holds, with the exact case frozen as a
@@ -3425,7 +3429,7 @@ covers a much smaller subset and guards focus on Analyze.
          ONE function" — narrowed to every plot-WINDOW row, above.
       4. `windowCyclesSeriesStyles` — the one function this round's whole
          subject is about — had no direct unit test of its own; it was
-         exercised only through its five callers. Added a dedicated block to
+         exercised only through its four callers. Added a dedicated block to
          `seriesStyleCycle.test.ts`: off; on with a pinning document (`null` and
          `[]`); on with each of the view-disagreement clauses in turn
          (`groupKey`, `facetKey`, `stackMode`, `polarMode`, `statMode`, and the

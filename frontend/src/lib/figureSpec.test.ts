@@ -1076,9 +1076,10 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
       // no `autoSeriesStyles`, so they cannot cycle even while the live
       // preference is on — the document beside them has no uPlot canvas of its
       // own to disagree with. (The Figure Builder's preview and Export DO pass
-      // it, but only for a session previewing the FOCUSED window's figure, whose
-      // canvas is cycling — see canonicalSession.selectSessionCyclesSeriesStyles
-      // and useFigureBuilder.test.ts.)
+      // it, but only when the session's TARGET window itself cycles per
+      // `windowCyclesSeriesStyles`, focused or not — see
+      // canonicalSession.selectSessionCyclesSeriesStyles and
+      // useFigureBuilder.test.ts.)
       expect(lines(buildFigureSpecFromDocument(document(), dataset, "doc"))).toEqual([
         undefined,
         undefined,

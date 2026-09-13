@@ -1368,11 +1368,13 @@ import { fileURLToPath } from "node:url";
  *  followed by `npm run build` (the workflow's own two steps), eager total
  *  summed exactly as this script sums it:
  *
- *    6797e77c   915,638   THIS commit's real parent on this branch
- *    95a211fc   915,587   this commit
+ *    6797e77c   915,638   the THIRD round's real parent on this branch
+ *    95a211fc   915,587   the third round's commit
  *
- *  So this commit is 51 B SMALLER than the tree it actually builds on, and
- *  4,813 B under the 920,400 budget. The saving is a wash rather than a diet:
+ *  So the third round was 51 B SMALLER than the tree it actually built on, and
+ *  4,813 B under the 920,400 budget. (The FOURTH round's own numbers are the
+ *  cd402c1b / 916,102 table below — a different parent, because the export-
+ *  cancel work landed in between.) The saving is a wash rather than a diet:
  *  the display-list refusal moved OUT of `figureSpec.ts` and the three-clause
  *  cycle gate the four call sites each spelled out became one shared
  *  `seriesStyleCycle.windowCyclesSeriesStyles`, which paid for the two new
