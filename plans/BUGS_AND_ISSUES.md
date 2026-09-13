@@ -33,7 +33,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
-| BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal |
+| BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup — see the entry. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
@@ -1911,15 +1911,17 @@ lose an edit:
   - The `migrationWarnings` notice the fix relied on to make the loss loud is
     unreachable on every path that can actually carry `pending` into
     `loadWorkspace`: crash recovery (`lib/applyRecoveryChoice.ts`'s
-    `applyRecoverAutosave`, line 29 calls `loadWorkspace` then line 34
+    `applyRecoverAutosave`, line 29 calls `loadWorkspace` then line 36
     overwrites `status` with its own message), the silent startup autosave
-    restore (`useWorkspaceAutosave.ts` lines 422-431, same shape), Append
-    Project (`store/workspaceIO.ts`'s `runAppendWorkspace`, line 468, which
-    doesn't call `loadWorkspace` at all and writes its own `status`), and
-    workbook-package import (`lib/workbookTransfer.ts`'s
-    `parseWorkbookPackage`, line 288, which reads `loaded.workbooks`/
-    `loaded.datasets` off `parseWorkspace`'s result and never touches
-    `loaded.migrationWarnings`). Only a plain File ▸ Open reaches
+    restore (`useWorkspaceAutosave.ts` line 422 calls `loadWorkspace`, then
+    lines 427/434 overwrite `status` with one of two hand-built messages),
+    Append Project (`store/workspaceIO.ts`'s `runAppendWorkspace`, line 468,
+    which doesn't call `loadWorkspace` at all and writes its own `status`),
+    and workbook-package import (`store/workbookTransfer.ts`'s
+    `pasteWorkbookFromClipboard`, line 233 calls `lib/workbookTransfer.ts`'s
+    `parseTransferPackage`, whose own internal `parseWorkspace` call — that
+    module's line 300 — computes `migrationWarnings` that the store file
+    then never reads off the parse result). Only a plain File ▸ Open reaches
     `store/useApp.ts`'s `loadWorkspace` (migration notice folded into `status`
     at line 1565) without a follow-up overwrite — so the one loud case was the
     one path least likely to be the one that actually happens. Booked as its
@@ -2075,7 +2077,7 @@ diagnostic that only fires on the least common path is worse than it looks: it
 lets a future fix (like the reverted Group AF attempt above) believe it has
 made a loss loud when it has not.
 
-**State:** Fixed (commit pending merge), 2026-09-13 — see "Fix implemented" below; the workbook-package decision is recorded there.
+**State:** Fixed (commit pending merge), 2026-09-13 — see "Fix implemented" below; the workbook-package decision is recorded there. A same-day review round found one real coverage gap (File ▸ Open) plus several stale/inaccurate prose citations — see "Review round, 2026-09-13" near the end of this entry.
 
 **Reported:** 2026-09-13, by Claude, during adversarial review of the Group AF
 `.dwk` load-path attempt on the BUG-009-adjacent item above — that attempt's
@@ -2117,13 +2119,13 @@ Four call sites, each confirmed by reading the code:
 
 - **`lib/applyRecoveryChoice.ts`'s `applyRecoverAutosave`** (the "Recover
   autosaved work" crash-recovery choice): line 29 calls
-  `s().loadWorkspace(prompt.workspace)`, then line 34 calls
+  `s().loadWorkspace(prompt.workspace)`, then line 36 calls
   `s().setStatus(msg)` with a hand-built `"recovered N datasets from
   autosave…"` string that never reads `prompt.workspace.migrationWarnings`.
   Whatever `loadWorkspace` just wrote to `status` is gone before the user sees
   it.
 - **`frontend/src/useWorkspaceAutosave.ts`'s silent startup restore**: line 422
-  calls `useApp.getState().loadWorkspace(restored)`, then lines 427/430 call
+  calls `useApp.getState().loadWorkspace(restored)`, then lines 427/434 call
   `setStatus` with one of two hand-built strings
   (`"recovered … after an unexpected close"` / `"restored … from autosave"`),
   again never touching `restored.migrationWarnings`. This is the path that
@@ -2134,37 +2136,51 @@ Four call sites, each confirmed by reading the code:
   468, sets `status: msg` to its own `"appended N datasets (M renamed)…"`
   string. `ws.migrationWarnings` from the parsed `.dwk` is never read anywhere
   in this function.
-- **`lib/workbookTransfer.ts`'s `parseWorkbookPackage`**: line 288 calls
-  `parseWorkspace(...)` and stores the result in `loaded`, then reads only
-  `loaded.workbooks` (line 292) and `loaded.datasets`; `loaded.migrationWarnings`
-  is never referenced anywhere in the file — confirmed by a whole-file search.
+- **`store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`**: line 233
+  calls `lib/workbookTransfer.ts`'s `parseTransferPackage(text)` (that
+  function, in turn, calls `parseWorkspace(...)` internally at its own line
+  300) and stores the result in `parsed`, then reads only `parsed.pkg` fields
+  (workbook/datasets/etc.); the sibling `parsed.migrationWarnings` the parse
+  already computed is never read anywhere in the store file — confirmed by a
+  whole-file search.
 
 So of the four loaders that can carry a document's `migrationWarnings` into
 the live store, three actively discard it and the fourth (plain File ▸ Open,
 `store/useApp.ts`'s `loadWorkspace` itself) is the only one where it survives
-to the status bar.
+to the status bar. (A later review round found File ▸ Open's own toast
+coverage was itself incomplete — see the 2026-09-13 review paragraph near the
+end of this entry.)
 
 #### Fix checklist
 
 - [x] Give `migrationWarnings` a delivery channel a caller cannot silently
-  clobber by writing to `status` afterward — e.g. a toast fired from inside
-  `loadWorkspace` itself (mirroring the existing "recovered … — check your
-  latest edits" toast pattern in `useWorkspaceAutosave.ts`), rather than a
-  string every caller must remember to fold into its own message.
+  clobber by writing to `status` afterward — shipped as a shared toast
+  helper (`notifyMigrationWarnings` in `store/toasts.ts`, mirroring the
+  existing "recovered … — check your latest edits" toast pattern in
+  `useWorkspaceAutosave.ts`) called explicitly at every loader, rather than a
+  toast fired automatically from inside `loadWorkspace` itself — a shared
+  `loadWorkspace`-internal toast would fire even for File ▸ Open's own
+  browser-picker/native-open plumbing paths that don't want one, and would
+  still miss Append Project and workbook-package import, which never call
+  `loadWorkspace` at all — and rather than a `status` string every caller
+  must remember to fold into its own message.
 - [x] Pin it at `applyRecoverAutosave` first — it is the site the Group AF
   attempt actually needed and the one whose overwrite is a single, easy-to-see
-  statement (line 34).
+  statement (line 36).
 - [x] Decide and implement the same fix shape for the silent autosave restore
   and `runAppendWorkspace`, or explicitly narrow the promise (e.g. document
   that `migrationWarnings` is File ▸ Open-only) if a store-wide channel is
   judged out of scope.
-- [x] Decide whether `parseWorkbookPackage` should surface
-  `loaded.migrationWarnings` at all — a workbook package is a narrower object
-  than a full workspace, so this may be a deliberate non-goal rather than a
-  gap; state it either way.
+- [x] Decide whether `store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`
+  should surface `parseTransferPackage`'s `migrationWarnings` at all — a
+  workbook package is a narrower object than a full workspace, so this may be
+  a deliberate non-goal rather than a gap; state it either way.
 - [x] A regression test per fixed site: assert the notice actually reaches the
-  user-visible surface (status/toast) after each of the three currently-silent
-  loaders, not just that `migrationWarnings` was computed.
+  user-visible surface (status/toast) after each of the four currently-silent
+  loaders, not just that `migrationWarnings` was computed. (A fifth loader —
+  File ▸ Open's own `replaceWorkspace`/`replaceWorkspaceSafely` — was found
+  silent too in a later review round; see the dated paragraph near the end of
+  this entry.)
 
 #### Fix implemented
 
@@ -2174,26 +2190,38 @@ A delivery channel no caller's later `setStatus` can clobber: a toast
 "first warning + (+N more) count" format (mirroring `useApp.ts`'s own
 `migrationNotice` local) and the "one toast for N warnings, never one per
 warning" rule live in exactly one place. `useApp.ts`'s existing status-line
-fold for File ▸ Open is UNCHANGED (so that path shows both the status line
-and, now, the toast) — this is additive, not a reroute.
+fold for File ▸ Open is UNCHANGED — this is additive, not a reroute — and,
+after the review round below, File ▸ Open shows BOTH the status line and the
+toast, exactly like every other load path.
 
 Call sites, each now calling `notifyMigrationWarnings`:
 
-1. `lib/applyRecoveryChoice.ts:39` (`applyRecoverAutosave`) — called with
+1. `lib/applyRecoveryChoice.ts:38` (`applyRecoverAutosave`) — called with
    `prompt.workspace.migrationWarnings`, right after the `setStatus` that
    would otherwise be the only signal.
-2. `useWorkspaceAutosave.ts:437` (unconditionally, after both the
+2. `useWorkspaceAutosave.ts:436` (unconditionally, after both the
    "unclean"/silent status branches) — called with
    `restored.migrationWarnings`.
-3. `store/workspaceIO.ts:474` (`runAppendWorkspace`, end of function) —
+3. `store/workspaceIO.ts:473` (`runAppendWorkspace`, end of function) —
    called with `ws.migrationWarnings`; this path had no status-line fold to
    begin with, so the toast is its only surface.
-4. `store/workbookTransfer.ts:251` (`pasteWorkbookFromClipboard`, after a
-   successful parse) — called with `parsed.pkg.migrationWarnings`, which
-   required widening `WorkbookTransferPackage` (`lib/workbookTransfer.ts`)
-   with a `migrationWarnings: string[]` field, set to `[]` by
-   `buildTransferPackage` and to `loaded.migrationWarnings` by
-   `parseTransferPackage`.
+4. `store/workbookTransfer.ts:250` (`pasteWorkbookFromClipboard`, after a
+   successful parse) — called with `parsed.migrationWarnings`. The field
+   lives on the `ParseTransferResult` success variant (`lib/workbookTransfer
+   .ts`'s `ParseTransferResult`, a sibling of `pkg` rather than a field ON
+   it — a live session's own `buildTransferPackage` has no equivalent, since
+   it can never itself hold a version-skipped figure, so there is no shared
+   persisted shape to keep in sync, only a parse-time result to report).
+   `WorkbookTransferPackage` itself is unchanged; no new field was added to
+   it.
+5. `lib/openWorkspaceReplace.ts` (File ▸ Open / Open without layout, both via
+   `replaceWorkspace`/`replaceWorkspaceSafely`) — called right after each
+   function's own `loadWorkspace(ws)` call, with `ws.migrationWarnings`.
+   Added in a review round (below) after this site's own status-line fold
+   was mistaken for full coverage — it survives untouched (nothing later in
+   either function writes `status`), but a status line alone is easy to
+   miss on a large load, and every OTHER loader here already gets a toast
+   too.
 
 **Workbook-package decision (item 4, explicit):** `migrationWarnings` CAN be
 non-empty for a workbook-transfer package — confirmed structurally, not
@@ -2230,7 +2258,9 @@ carries a migration warning (structural, not a live path)".
 
 #### Investigation
 
-- [x] Likely owning components/modules identified — the four files above.
+- [x] Likely owning components/modules identified — the files named above,
+  plus `lib/openWorkspaceReplace.ts` once the review round below found its
+  gap.
 - [x] Root cause confirmed rather than inferred — read every caller of
   `loadWorkspace`, `appendWorkspace`, and `parseTransferPackage` before
   writing the fix; confirmed `useApp.ts`'s status-line fold is the ONLY
@@ -2246,14 +2276,18 @@ carries a migration warning (structural, not a live path)".
 - [x] Minimal safe behavior defined — one shared, side-effect-only helper
   (`notifyMigrationWarnings`), a no-op on an empty array, called
   additively at each site; `useApp.ts` itself is untouched (kept under its
-  store-size ratchet — the helper lives in a sibling `lib/` module).
+  own store-size ratchet — the helper lives in `store/toasts.ts`, the
+  module every call site already imports `toast` from, not a new sibling
+  module).
 - [x] Failure and ambiguous-data behavior defined — unchanged; this only
   adds a NOTICE of an already-correct skip/degrade, never new fallback
   logic of its own.
 - [x] Data integrity and backward compatibility considered — no persisted
-  shape changes; `WorkbookTransferPackage.migrationWarnings` is transient,
-  mirroring `LoadedWorkspace.migrationWarnings`'s own "never serialized
-  back" contract.
+  shape changes; `ParseTransferResult.migrationWarnings` (the field that
+  carries a workbook-package parse's notices — see "Fix implemented" item
+  4 above) is transient, mirroring `LoadedWorkspace.migrationWarnings`'s own
+  "never serialized back" contract; `WorkbookTransferPackage` itself gained
+  no field.
 - [x] UI wording/tooltips/accessibility included where relevant — reuses
   the existing toast component/store (`store/toasts.ts`) verbatim; the
   message text is the warning's own text (already user-facing English),
@@ -2267,12 +2301,18 @@ carries a migration warning (structural, not a live path)".
 - [x] Relevant focused tests pass — `lib/applyRecoveryChoice.test.ts`,
   `useWorkspaceAutosave.test.ts`, `store/appendWorkbooks.test.ts`,
   `lib/workbookTransfer.test.ts`, `store/workbookTransfer.test.ts`,
-  `architecture.test.ts` — 147 tests, all green.
+  `architecture.test.ts` — 147 tests, all green. (The review round added
+  `lib/openWorkspaceReplace.test.ts` and `store/toasts.test.ts` cases; see
+  its own gate table below rather than this original count.)
 - [x] Type-check/build/repository gates pass — `npx tsc -b --force`,
-  `npx eslint src --max-warnings=0`, full `npx vitest run` (10108/10109;
-  the one pre-existing failure and two flaked-then-passed-in-isolation
-  files are unrelated to this change — see the commit body), `npm run
-  build` after `npm ci`, `uv run pytest -q tests/test_repo_integrity.py`.
+  `npx eslint src --max-warnings=0`, `npm run build` after `npm ci`,
+  `uv run pytest -q tests/test_repo_integrity.py`. The full `npx vitest run`
+  count recorded here at the original fix (10108/10109) and the count the
+  commit body recorded (10116/10116) were BOTH stale — different snapshots
+  of a moving suite, neither reproducible against this entry's own HEAD.
+  Per agent_rules.md's "never estimate a number that will be recorded",
+  this is not corrected in place; the review round below measured its own
+  number fresh instead.
 - [x] Agent verifies acceptance criteria — this entry.
 - [ ] Owner verifies when required.
 
@@ -2291,23 +2331,135 @@ carries a migration warning (structural, not a live path)".
 
 #### Evidence
 
+Recounted at this entry's HEAD (a review round found the original cites had
+drifted off by one or more lines — the fix's own inserted comments pushed
+several of the statements they name a few lines further down — and one
+symbol name, `parseWorkbookPackage`, was never a real export; the actual
+function is `parseTransferPackage`):
+
 - `frontend/src/store/useApp.ts:1431` (`migrationNotice` built),
   `frontend/src/store/useApp.ts:1565` (folded into `status` — the one path
-  that works).
+  that worked pre-fix).
 - `frontend/src/lib/applyRecoveryChoice.ts:29` (`loadWorkspace` call),
-  `frontend/src/lib/applyRecoveryChoice.ts:34` (`setStatus` overwrite).
+  `frontend/src/lib/applyRecoveryChoice.ts:36` (`setStatus` overwrite; cited
+  line moved from the original finding's :34 once the fix's own
+  `notifyMigrationWarnings` call and its preceding comment landed above it).
 - `frontend/src/useWorkspaceAutosave.ts:422` (`loadWorkspace` call),
-  `frontend/src/useWorkspaceAutosave.ts:427,430` (`setStatus` overwrites).
+  `frontend/src/useWorkspaceAutosave.ts:427,434` (`setStatus` overwrites, one
+  per branch; the second moved from :430 for the same reason as above).
 - `frontend/src/store/workspaceIO.ts:448` (`runAppendWorkspace` definition),
-  `frontend/src/store/workspaceIO.ts:468` (`status: msg`, no `migrationWarnings`
-  read anywhere in the function).
-- `frontend/src/lib/workbookTransfer.ts:288` (`parseWorkspace` call),
-  `frontend/src/lib/workbookTransfer.ts:292` (`loaded.workbooks` read;
-  `loaded.migrationWarnings` never appears in the file).
-- Agent verification: each call site read directly; no test added yet (this is
-  a design-time finding from adversarial review, not a user report).
+  `frontend/src/store/workspaceIO.ts:468` (`status: msg` — unmoved by the
+  fix, since its own `notifyMigrationWarnings` call lands AFTER this line).
+- `frontend/src/lib/workbookTransfer.ts`'s `parseTransferPackage`: at the
+  ORIGINAL finding, its internal `parseWorkspace(...)` call sat at line 288
+  and the function read only `loaded.workbooks`/`loaded.datasets` off the
+  result, never `loaded.migrationWarnings`. Both lines moved once the fix
+  landed (the `parseWorkspace(...)` call is now at `:300`); the fix itself
+  is what ADDED the previously-missing read, now `migrationWarnings: loaded
+  .migrationWarnings` at `:323` — so, unlike the four cites above (which
+  still describe standing gaps this fix closed elsewhere), this one now
+  describes a gap the fix closed IN THIS SAME FILE, before the result ever
+  reached `store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`
+  (`:250`, see "Fix implemented" above).
+- Agent verification: each call site read directly at the original finding;
+  re-verified line-for-line against this entry's HEAD during the 2026-09-13
+  review round below.
 - Owner verification: — not required to confirm the gap (it is a static
   reachability fact), but the chosen delivery-channel shape is a product call.
+
+#### Review round, 2026-09-13 (adversarial review of commit `762e00c1`)
+
+The code fix was found correct and complete on every one of its four sites —
+all sabotage-verified again, full suite green — but the review found the
+PROSE around it inaccurate in several places, plus one real coverage gap:
+
+1. **File ▸ Open never joined the toast channel.** `replaceWorkspace`/
+   `replaceWorkspaceSafely` (`lib/openWorkspaceReplace.ts`) route every
+   native/browser-picker open into `loadWorkspace`, whose own
+   `migrationNotice` status-line fold survives there (nothing downstream
+   overwrites `status`) — but no call to `notifyMigrationWarnings` existed
+   on that path, so File ▸ Open was the one loader with a status line and
+   no toast, contradicting the "that path now shows both" sentence this
+   entry and the original commit body both made. Fixed: both functions now
+   call `notifyMigrationWarnings(ws.migrationWarnings)` right after their
+   own `loadWorkspace` call, the same "after the status fold" placement
+   every other fixed site uses. Regression test:
+   `lib/openWorkspaceReplace.test.ts`'s new "migrationWarnings join the
+   toast channel (BUG-010 review F1)" describe block, asserting against the
+   real `useToasts` store (not the mock the file already carries for its
+   unrelated lock-registration assertions) — sabotage-verified (removing
+   either call fails exactly its own test).
+2. **Three sentences described a design that was never shipped.** The
+   "Fix implemented"/"Implementation" sections above have been rewritten to
+   say what actually landed: the `migrationWarnings` field for a workbook
+   package lives on `ParseTransferResult`'s success variant (a sibling of
+   `pkg`), the call site reads `parsed.migrationWarnings` (not
+   `parsed.pkg.migrationWarnings`, and `WorkbookTransferPackage` gained no
+   field), and the helper lives in `store/toasts.ts` (not a "sibling `lib/`
+   module" — `useApp.ts`'s own store-size ratchet was never at stake since
+   the helper was never a candidate for living inside `useApp.ts` itself).
+3. **Every "Fix implemented" file:line citation was off by one, and one
+   symbol name didn't exist.** `parseWorkbookPackage` is not a real export —
+   the function is `parseTransferPackage`. The four call-site line numbers
+   and several pre-fix "Evidence" citations have been recounted against
+   this entry's HEAD (see "Fix implemented" and "Evidence" above for the
+   corrected numbers and why each moved).
+4. **The plan and the original commit body quoted two different, both
+   stale, full-suite counts.** Measured fresh in this review round (see the
+   gate table below) rather than repeated from either source.
+5. **The `duplicateWorkbook` "pinned by its own test" claim couldn't
+   actually fail.** The prior version of `store/workbookTransfer.test.ts`'s
+   "duplicate's own round trip never carries a migration warning" test
+   asserted the ABSENCE of a `notifyMigrationWarnings` call — true for every
+   input, since `duplicateWorkbook` never calls that helper at all, so the
+   assertion could not fail even if the structural claim behind it were
+   false (confirmed: adding the call back left the suite green). The test
+   now asserts the STRUCTURAL claim directly — `buildTransferPackage` +
+   `parseTransferPackage` on a live workbook carrying a version-1
+   `FigureDocument` yields `migrationWarnings === []` and a version rewritten
+   to `FIGURE_DOCUMENT_VERSION` — and fails when that claim is sabotaged
+   (verified: forcing the fixture's version to an unsupported value turns
+   the assertion red).
+6. **The toast on sites 1-2 is the ONLY surface, and used to self-dismiss in
+   1.9 s.** On `applyRecoverAutosave` and the silent autosave restore, a
+   later `setStatus` deliberately overwrites `loadWorkspace`'s status-line
+   fold, so the toast is the one place "part of your saved document was
+   dropped" is said at all — worth a longer look than the default `TOAST_TTL`
+   gives. `notifyMigrationWarnings` (`store/toasts.ts`) now passes
+   `{ ttlMs: TOAST_ACTION_TTL }` (6 s, not 1.9 s). `ToastKind` has no
+   dedicated "warning" value (`"info" | "ok" | "danger"`); kept `"info"` —
+   the same kind `useWorkspaceAutosave.ts`'s "Recovered … check your latest
+   edits" toast already uses for an analogous "something was silently
+   changed, go look" notice, since a migration warning is a successful load
+   that dropped one degraded piece, not the outright failure `"danger"` is
+   reserved for. Pinned by a new test in `store/toasts.test.ts`.
+7. **The helper's own "one toast, never one per warning" and "(+N more)"
+   rules had no direct test.** Every existing call-site test passed exactly
+   one warning. `store/toasts.test.ts` now covers zero/one/many warnings
+   directly against `notifyMigrationWarnings`.
+
+Nits also addressed: the checklist's first fix-checklist box (previously
+ticked against "a toast fired from inside `loadWorkspace` itself") reworded
+to describe what shipped — a shared helper called explicitly at every
+loader; a stray doubled blank line before `## New issue template` (merge
+noise) removed.
+
+Not addressed, and why: the ORIGINAL commit body (`762e00c1`) still carries a
+stale bundle paragraph ahead of the orchestrator note that retracts it — a
+past commit's message is frozen history; nothing a later commit does can
+edit it, so this stays a known wrinkle in `git log` rather than something
+"fixed" here.
+
+**Gate (this review round, `frontend/`):**
+
+| gate | result |
+|---|---|
+| `npx tsc -b --force` | exit 0 |
+| `npx eslint src --max-warnings=0` | exit 0 |
+| targeted vitest (`toasts.test.ts`, `openWorkspaceReplace.test.ts`, `workbookTransfer.test.ts` x2) | 74 passed, exit 0 |
+| full `npx vitest run` | 636 files / 10424 tests (10422 passed, 2 expected-fail), 0 `FAIL` lines, exit 0 (720.6 s) |
+| `npm run build` (eager JS) | 916,453 B vs 916,384 B at `HEAD~1` (`384f2bc9`) — +69 B, 3,947 B under the unmoved 920,400 B budget |
+| `uv run pytest -q tests/test_repo_integrity.py` | 12 passed |
 
 ---
 
@@ -2759,7 +2911,6 @@ ratchet tighter than it has been all session. Full rationale in
 
 ---
 
-
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -2829,3 +2980,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | BUG-011 fixed: both Pack Project serialization entry points (the preview and "Start pack") now `await resolvePendingDatasets()` before `serializeWorkspace` and abort with a named `pending_unresolved` error + status + danger toast when a book can't be fetched, mirroring `workspaceIO.ts`'s Save path. The workspace-content slice moved to the new `store/packProjectContent.ts` so the 500-line `.ts` ceiling was met by extraction, not a pin raise; `lib/workspaceSerialize.ts`'s `pending` comment corrected to name all three explicit export paths | All four Fix-checklist boxes ticked with file:line evidence; 5 new specs, each sabotage-verified (4 sabotage rounds, source restored byte-identical); full frontend suite 634 files / 10,381 tests green; eager bundle unchanged at 916,182 B (budget 920,400). Owner call on abort-vs-partial-pack left open in the entry |
 | 2026-09-13 | Claude | Added and fixed BUG-010 (`migrationWarnings` reached the user on a plain File ▸ Open only — autosave recovery, silent autosave restore, Append workspace, and workbook Paste all folded or dropped the notice): one shared `notifyMigrationWarnings` toast helper (`store/toasts.ts`) called from all four sites; `duplicateWorkbook` deliberately excluded (structural non-goal, pinned by test) | BUG-010 fixed + sabotage-verified (one regression test per site); `uv run pytest -q tests/test_repo_integrity.py` passed |
 | 2026-09-13 | Claude | Adversarial review round on the BUG-011 fix (commit `1b7ec2cf`): closed both CONFIRMED code findings — "Start pack"'s own book-resolve await had no generation guard (a cancel/reset during it was silently overwritten, and a second click ran a second concurrent attempt), and a book that turned pending DURING the resolve await was still serialized from its preview rows. Also named the failing book in the refusal (finding #5), corrected two stale cross-references and an understated sabotage count, added a status on the resolve step's success path, and renamed a shadowing `type Set` alias. Recorded the identical `workspaceIO.ts`/`workbookTransfer.ts` narrower window as a residual rather than fixing it (those files are being edited concurrently for BUG-010) | 4 new specs + 2 existing specs strengthened (65 passing, was 61), every new/strengthened assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0`/scoped vitest/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +15 B (916,182 B at the `2d779065` parent -> 916,197 B here, from nit 3's in-flight flag in the eager `store/packProject.ts`), 4,203 B under the unmoved 920,400 budget |
+| 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `384f2bc9` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |

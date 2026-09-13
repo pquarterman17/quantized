@@ -11,14 +11,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LoadedWorkspace } from "./workspace";
 import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace";
-import { toast } from "../store/toasts";
+import { toast, useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { LockRecord } from "./lockState";
 import { useRecentProjects } from "../store/recentProjects";
 import { useRelink } from "../store/relink";
 
-vi.mock("../store/toasts", () => ({ toast: vi.fn() }));
+// `toast` alone is mocked (asserted directly by the lock-registration tests
+// below); `notifyMigrationWarnings` stays the REAL implementation so the
+// BUG-010 (review F1) tests further down can assert against the real
+// `useToasts` store, the same pattern every other fixed call site's test
+// uses (lib/applyRecoveryChoice.test.ts, useWorkspaceAutosave.test.ts,
+// store/appendWorkbooks.test.ts, store/workbookTransfer.test.ts) — waiting
+// on STATE, not on a mock.
+vi.mock("../store/toasts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../store/toasts")>()),
+  toast: vi.fn(),
+}));
 
 function emptyWorkspace(): LoadedWorkspace {
   return {
@@ -106,6 +116,7 @@ beforeEach(() => {
     provider: pathKeyedProvider(),
   });
   useRecentProjects.setState({ recentProjects: [] });
+  useToasts.setState({ toasts: [] });
 });
 
 describe("replaceWorkspace — PR I2 lock registration", () => {
@@ -232,5 +243,40 @@ describe("replaceWorkspace / replaceWorkspaceSafely — relink panel close (C1 F
     replaceWorkspaceSafely(() => useApp.getState(), emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
     expect(useRelink.getState().open).toBe(false);
     expect(useRelink.getState().newRootConsented).toBe(false);
+  });
+});
+
+// BUG-010 (review F1): File ▸ Open / Open without layout — the two commands
+// that route through replaceWorkspace/replaceWorkspaceSafely — were the ONE
+// load path with no toast at all; every other loader (recovery, silent
+// autosave restore, append, paste) already joined this channel. Asserted
+// against the REAL useToasts store (see the module mock's comment above),
+// same as every other fixed call site's test — not a mock call assertion.
+describe("replaceWorkspace / replaceWorkspaceSafely — migrationWarnings join the toast channel (BUG-010 review F1)", () => {
+  function workspaceWithWarnings(): LoadedWorkspace {
+    return {
+      ...emptyWorkspace(),
+      migrationWarnings: ['skipped saved FigureDocument "future-fig" with unsupported version 99'],
+    };
+  }
+
+  it("replaceWorkspace toasts the migration warning AND keeps loadWorkspace's status-line fold — both surfaces, not just one", () => {
+    const s = () => useApp.getState();
+    replaceWorkspace(s, workspaceWithWarnings(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(s().status).toContain("unsupported version 99");
+    expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
+  });
+
+  it("replaceWorkspaceSafely does the same", () => {
+    const s = () => useApp.getState();
+    replaceWorkspaceSafely(s, workspaceWithWarnings(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(s().status).toContain("unsupported version 99");
+    expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
+  });
+
+  it("no migrationWarnings — no toast fired (the common case stays quiet)", () => {
+    const s = () => useApp.getState();
+    replaceWorkspace(s, emptyWorkspace(), { name: "demo.dwk", path: "/p/demo.dwk" });
+    expect(useToasts.getState().toasts).toHaveLength(0);
   });
 });

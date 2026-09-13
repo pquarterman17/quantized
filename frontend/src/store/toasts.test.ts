@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TOAST_ACTION_TTL, TOAST_TTL, toast, useToasts } from "./toasts";
+import { TOAST_ACTION_TTL, TOAST_TTL, notifyMigrationWarnings, toast, useToasts } from "./toasts";
 
 describe("toasts store", () => {
   beforeEach(() => {
@@ -78,5 +78,52 @@ describe("toast actions (PLOT_WORKFLOW_PLAN #4)", () => {
     expect(useToasts.getState().toasts).toHaveLength(1); // still here — longer TTL
     vi.advanceTimersByTime(TOAST_ACTION_TTL);
     expect(useToasts.getState().toasts).toHaveLength(0); // gone — the override elapsed
+  });
+});
+
+// BUG-010 review (F6/F7): the helper's own promises — "ONE toast, never one
+// per warning", the "(+N more)" format, no-op on empty — had no direct test;
+// every call-site test only ever passed exactly one warning. Also pins the
+// review's F6 finding: this is the ONLY surface on two call sites whose
+// later setStatus overwrites loadWorkspace's status-line fold, so it uses
+// TOAST_ACTION_TTL (6s), not the default 1.9s, and the "info" kind — the
+// same kind useWorkspaceAutosave.ts's "Recovered … check your latest edits"
+// notice uses for an analogous silent-change-happened message (ToastKind has
+// no dedicated "warning" value; "danger" is reserved for an outright failure,
+// which a migration warning is not — the load still succeeded).
+describe("notifyMigrationWarnings (BUG-010 review F6/F7)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useToasts.setState({ toasts: [] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("no warnings — no-op, no toast fired", () => {
+    notifyMigrationWarnings([]);
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
+
+  it("exactly one warning — fires it verbatim, no '(+N more)' suffix", () => {
+    notifyMigrationWarnings(["skipped saved FigureDocument with unsupported version 99"]);
+    const { toasts } = useToasts.getState();
+    expect(toasts).toHaveLength(1);
+    expect(toasts[0].msg).toBe("skipped saved FigureDocument with unsupported version 99");
+  });
+
+  it("two or more warnings — exactly ONE toast, first warning's text plus '(+N more)'", () => {
+    notifyMigrationWarnings(["a", "b", "c"]);
+    const { toasts } = useToasts.getState();
+    expect(toasts).toHaveLength(1); // never one toast per warning
+    expect(toasts[0].msg).toBe("a (+2 more)");
+  });
+
+  it("uses the 'info' kind and TOAST_ACTION_TTL — the longer-lived, non-clobberable notice (F6)", () => {
+    notifyMigrationWarnings(["a"]);
+    const { toasts } = useToasts.getState();
+    expect(toasts[0].kind).toBe("info");
+    vi.advanceTimersByTime(TOAST_TTL + 10);
+    expect(useToasts.getState().toasts).toHaveLength(1); // outlives the default TTL
+    vi.advanceTimersByTime(TOAST_ACTION_TTL - TOAST_TTL);
+    expect(useToasts.getState().toasts).toHaveLength(0); // gone once TOAST_ACTION_TTL elapses
   });
 });

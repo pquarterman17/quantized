@@ -10,7 +10,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FIGURE_DOCUMENT_SCHEMA } from "../lib/figureDocument";
+import { FIGURE_DOCUMENT_SCHEMA, FIGURE_DOCUMENT_VERSION, type FigureDocument } from "../lib/figureDocument";
+import { buildTransferPackage, parseTransferPackage } from "../lib/workbookTransfer";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
 import { useApp, type AppState } from "./useApp";
@@ -340,7 +341,47 @@ describe("workbookTransfer slice — migrationWarnings notice on paste (BUG-010)
   // ORIGINAL load that put it into live state). No call to
   // `notifyMigrationWarnings` was added on the duplicate path for exactly
   // this reason — see store/workbookTransfer.ts's `duplicateWorkbook`.
+  //
+  // Review fix (F5): the previous version of this test asserted the ABSENCE
+  // of a toast — true for every input, since `duplicateWorkbook` never calls
+  // `notifyMigrationWarnings` at all, so the assertion could not fail even
+  // if the structural claim above were false (confirmed by sabotage below).
+  // Pin the STRUCTURAL claim directly instead, against the exact round trip
+  // `duplicateWorkbook` performs internally (`buildTransferPackage` ->
+  // `parseTransferPackage`): a figure built from LIVE state — schema-valid,
+  // version 1, the oldest version `sanitizeFigureDocument` still accepts —
+  // always comes back with ZERO migration warnings, and its version is
+  // rewritten forward to the current `FIGURE_DOCUMENT_VERSION` rather than
+  // staying at 1 (`sanitizeFigureDocument` always returns the current
+  // version — lib/figureDocument.ts).
   it("duplicate's own round trip never carries a migration warning (structural, not a live path)", async () => {
+    const liveFigure: FigureDocument = {
+      schema: FIGURE_DOCUMENT_SCHEMA,
+      version: 1,
+      id: "fig-1",
+      name: "fig",
+      bindings: { datasetId: "d1", xKey: null, yKeys: null, y2Keys: null, groupKey: null, facetKey: null, errors: [] },
+      data: { mode: "live" },
+      // `sanitizeFigureDocument` (lib/figureDocument.ts) only requires `plot`
+      // to be an object — every field inside it (mark, view, axisBreaks)
+      // defaults on its own, so an empty object round-trips cleanly.
+      plot: {},
+      output: {},
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    useApp.setState({ editableFigures: [liveFigure] } as Partial<AppState>);
+
+    // Same round trip `duplicateWorkbook` performs internally (frozen-scope
+    // item 6's "same core as Paste").
+    const built = buildTransferPackage("w1", useApp.getState());
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const parsed = parseTransferPackage(built.text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.migrationWarnings).toEqual([]);
+    expect(parsed.pkg.editableFigures[0]?.version).toBe(FIGURE_DOCUMENT_VERSION);
+
     await useApp.getState().duplicateWorkbook("w1");
     expect(useToasts.getState().toasts.some((t) => /unsupported version/.test(t.msg))).toBe(false);
   });
