@@ -9,6 +9,12 @@
 // `usePackProject` is mounted, and stops itself the moment the backend
 // reports a terminal phase — never on unmount, because there is no
 // mount to tie it to.
+//
+// The workspace-CONTENT half (what a pack sends, and the refusal when a
+// pending book can't be resolved for it) lives in the sibling
+// store/packProjectContent.ts — extracted under the .ts size ceiling when
+// BUG-011's resolve step landed. `useApp`/`serializeWorkspace` are reached
+// through it now, still only inside this lazy chunk.
 
 import {
   CANCELLED,
@@ -20,7 +26,6 @@ import {
   pickPackDestination,
   type PackStatus,
 } from "../lib/desktopPackBridge";
-import { serializeWorkspace } from "../lib/workspaceSerialize";
 import {
   packError,
   EMPTY_PACK_PROGRESS,
@@ -29,7 +34,12 @@ import {
   type PackProjectProgress,
   type PackProjectState,
 } from "./packProject";
-import { useApp } from "./useApp";
+import {
+  contentFingerprint,
+  deriveProjectName,
+  refusePack,
+  serializeCurrentWorkspaceForPack,
+} from "./packProjectContent";
 
 import type { PortableManifest } from "../lib/desktopPackBridge";
 
@@ -38,43 +48,6 @@ type Set = (partial: Partial<PackProjectState>) => void;
 
 const POLL_INTERVAL_MS = 250;
 const THROTTLE_MS = 200;
-
-// -- workspace content (shared by preview + start, so they can only ever
-// disagree because the project actually changed in between) --------------
-
-function serializeCurrentWorkspaceForPack(): string {
-  const s = useApp.getState();
-  // No `projectDir` here on purpose: the content sent to the backend
-  // always names its ORIGINAL absolute source paths (`kind: "path"`) —
-  // `pack_project`'s own `rewrite_payload_for_bundle` is what turns the
-  // packed sources into `kind: "bundle"` entries; this is a different
-  // concern from a native Save's own bundle-relative round trip.
-  return serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
-}
-
-function deriveProjectName(): string {
-  const name = useApp.getState().currentProject?.name;
-  if (!name) return "workspace";
-  return name.replace(/\.(dwk|json)$/i, "") || "workspace";
-}
-
-/** A comparable fingerprint of serialized workspace content that ignores
- *  `serializeWorkspace`'s own `savedAt` stamp — `savedAt` is a FRESH
- *  timestamp on every single call, so a raw string compare between two
- *  serializations of the IDENTICAL workspace would always read as
- *  "changed" purely from the clock, never actually detecting a real edit.
- *  Never throws: malformed input (never produced by our own serializer,
- *  but defensive regardless) falls back to the raw string, which still
- *  degrades safely to "treat as different" rather than crashing. */
-function contentFingerprint(content: string): string {
-  try {
-    const parsed = JSON.parse(content) as Record<string, unknown>;
-    delete parsed.savedAt;
-    return JSON.stringify(parsed);
-  } catch {
-    return content;
-  }
-}
 
 // -- generation counter (review finding #3) --------------------------------
 //
@@ -153,7 +126,17 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
   }
 
   set({ phase: "scanning" });
-  const content = serializeCurrentWorkspaceForPack();
+  const serialized = await serializeCurrentWorkspaceForPack();
+  // A third await in this continuation (BUG-011's resolve step), so it needs
+  // the same generation check as the two above it — a cancel/reset while a
+  // slow book fetch was in flight must not be overwritten by this refusal
+  // or by the preview it would otherwise go on to request.
+  if (generation !== myGeneration) return;
+  if (!serialized.ok) {
+    refusePack(set, serialized.message);
+    return;
+  }
+  const content = serialized.content;
   const projectName = deriveProjectName();
   const result = await packPreview(content, projectName, destinationParent);
   if (generation !== myGeneration) return; // cancelled/reset while packPreview was in flight
@@ -352,7 +335,8 @@ function startPolling(get: Get, set: Set): void {
  *  doc) catches the OTHER staleness case: the project itself changed
  *  since preview, even though the manifest reference is still current.
  *  Either mismatch rejects LOCALLY — the bridge is never called with data
- *  the store itself already knows is stale. When nothing changed, the
+ *  the store itself already knows is stale, and so does a book that can no
+ *  longer be fetched (BUG-011's refusal). When nothing changed, the
  *  EXACT `preview.content` string (not a fresh re-serialization) is what
  *  goes to `pack_start` — byte-identical to what `pack_preview` sent,
  *  which is what lets the backend's own `sha256(content)` check pass
@@ -366,7 +350,12 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
     });
     return;
   }
-  const fresh = serializeCurrentWorkspaceForPack();
+  const serialized = await serializeCurrentWorkspaceForPack();
+  if (!serialized.ok) {
+    refusePack(set, serialized.message);
+    return;
+  }
+  const fresh = serialized.content;
   if (contentFingerprint(fresh) !== contentFingerprint(preview.content)) {
     set({
       phase: "failed",

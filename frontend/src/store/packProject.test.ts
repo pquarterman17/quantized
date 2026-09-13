@@ -5,8 +5,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
+import { resetBookTransportForTests } from "../lib/bookData";
 import * as bridge from "../lib/desktopPackBridge";
 import type { PackStatus, PortableManifest } from "../lib/desktopPackBridge";
+import type { Dataset, DataStruct } from "../lib/types";
 import {
   EMPTY_PACK_PROGRESS,
   usePackProject,
@@ -21,7 +24,15 @@ import {
   scheduleStatusApply,
   stopPolling,
 } from "./packProjectRun";
+import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
+
+// Only the lazy-book fetch is faked (the BUG-011 specs at the bottom drive it);
+// everything else in lib/api stays real, the desktopPackBridge mock's own shape.
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  fetchBookData: vi.fn(),
+}));
 
 vi.mock("../lib/desktopPackBridge", async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -704,5 +715,180 @@ describe("overlapping poll responses resolving out of order", () => {
     await firstPoll;
 
     expect(get().phase).toBe("completed"); // never overwritten by the straggler
+  });
+});
+
+// -- BUG-011: a PENDING lazy book is resolved before anything is serialized --
+//
+// A `pending` dataset's `data` is the backend's downsampled PREVIEW, not the
+// book. Packing it would write decimated rows into a portable bundle as the
+// recipient's real measurement, with nothing in the payload saying so. Both
+// entry points that serialize (the pack PREVIEW and "Start pack") must resolve
+// first and ABORT if a book cannot be fetched — the same contract
+// `store/workspaceIO.ts`'s `prepareWorkspaceState` and
+// `store/workbookTransfer.ts`'s two export paths already hold.
+
+describe("BUG-011 — pending datasets are resolved before serializing for a pack", () => {
+  const previewRows: DataStruct = {
+    time: [0, 5],
+    values: [[1], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: { lazy_preview: true },
+  };
+  const fullRows: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [[1], [2], [3], [4], [5], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: {},
+  };
+
+  function lazyBook(id = "lazy1"): Dataset {
+    return {
+      id,
+      name: `${id}.opj`,
+      data: previewRows,
+      pending: { kind: "path", path: `/${id}.opj`, bookId: "Book2", rows: 6, cols: 1 },
+    };
+  }
+
+  /** The serialized dataset the bridge was handed, by dataset id. */
+  function packedDataset(content: string, id: string): Record<string, unknown> {
+    const doc = JSON.parse(content) as { datasets: Record<string, unknown>[] };
+    return doc.datasets.find((d) => d.id === id)!;
+  }
+
+  beforeEach(() => {
+    resetBookTransportForTests();
+    useToasts.setState({ toasts: [] });
+    vi.mocked(fetchBookData).mockReset();
+  });
+
+  it("the pack PREVIEW sends the FULL book, with no `pending` field in the payload", async () => {
+    useApp.setState({ datasets: [lazyBook()], plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockResolvedValue(fullRows);
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-1",
+      manifest: okManifest(),
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+
+    await usePackProject.getState().previewPackProject("/dest");
+
+    expect(usePackProject.getState().phase).toBe("awaiting_confirmation");
+    const [content] = vi.mocked(bridge.packPreview).mock.calls[0];
+    const packed = packedDataset(content, "lazy1");
+    expect(packed.data).toEqual(fullRows); // the book, not the 2-row preview
+    expect(packed).not.toHaveProperty("pending");
+    expect(content).not.toContain('"pending"');
+  });
+
+  it("a book that cannot be fetched REFUSES the preview by name, and never calls the bridge", async () => {
+    useApp.setState({ datasets: [lazyBook()], plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("moved or deleted"));
+
+    await usePackProject.getState().previewPackProject("/dest");
+
+    const s = usePackProject.getState();
+    expect(s.phase).toBe("failed");
+    expect(s.errors).toHaveLength(1);
+    expect(s.errors[0].code).toBe("pending_unresolved");
+    expect(s.errors[0].message).toContain("couldn't load full data for every book");
+    expect(s.errors[0].message).toContain("moved or deleted");
+    expect(s.errors[0].originalsModified).toBe(false);
+    // The refusal is local: nothing was ever sent to the backend.
+    expect(bridge.packPreview).not.toHaveBeenCalled();
+    // ...and it is visible outside the pack panel too, like the sibling save.
+    expect(useApp.getState().status).toContain("couldn't load full data for every book");
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
+  });
+
+  it("`Start pack` sends the FULL book too — the content reaching `pack_start` carries no `pending`", async () => {
+    useApp.setState({ datasets: [lazyBook()], plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockResolvedValue(fullRows);
+    const manifest = okManifest();
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-1",
+      manifest,
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+
+    await usePackProject.getState().previewPackProject("/dest");
+    await usePackProject.getState().startPackProject(manifest);
+    stopPolling(); // the real 250ms interval has no business outliving this spec
+
+    expect(vi.mocked(bridge.packStart)).toHaveBeenCalledTimes(1);
+    const [, content] = vi.mocked(bridge.packStart).mock.calls[0];
+    const packed = packedDataset(content, "lazy1");
+    expect(packed.data).toEqual(fullRows);
+    expect(packed).not.toHaveProperty("pending");
+  });
+
+  it("`Start pack` resolves too: a book added after the preview that cannot be fetched refuses by name, not as a stale preview", async () => {
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.csv", data: fullRows }],
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+    const manifest = okManifest();
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-1",
+      manifest,
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+    await usePackProject.getState().previewPackProject("/dest");
+    expect(usePackProject.getState().phase).toBe("awaiting_confirmation");
+
+    // A lazy book lands between review and confirm (an import finishing) and
+    // its source is already gone.
+    useApp.setState({ datasets: [...useApp.getState().datasets, lazyBook("lazy2")] });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("upload token expired"));
+
+    await usePackProject.getState().startPackProject(manifest);
+
+    const s = usePackProject.getState();
+    expect(s.phase).toBe("failed");
+    // `pending_unresolved`, NOT `stale_preview`: without the resolve step the
+    // preview rows would serialize cleanly and this would read as a mere
+    // content change, hiding the dead book entirely.
+    expect(s.errors[0].code).toBe("pending_unresolved");
+    expect(s.errors[0].message).toContain("upload token expired");
+    expect(bridge.packStart).not.toHaveBeenCalled();
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger")).toBe(true);
+  });
+
+  it("cancelling while the book fetch is in flight is not overwritten when that fetch fails late", async () => {
+    useApp.setState({ datasets: [lazyBook()], plotWindows: [], focusedWindowId: null });
+    let failFetch: (e: Error) => void = () => {};
+    vi.mocked(fetchBookData).mockReturnValue(
+      new Promise((_resolve, reject) => {
+        failFetch = reject;
+      }),
+    );
+
+    const previewCall = usePackProject.getState().previewPackProject("/dest");
+    // The resolve step is the THIRD await in this continuation, so it needs
+    // the same generation guard the destination pick and `packPreview` have.
+    await vi.waitFor(() => expect(usePackProject.getState().phase).toBe("scanning"));
+    await usePackProject.getState().cancelPackProject();
+    expect(usePackProject.getState().phase).toBe("cancelled");
+
+    failFetch(new Error("moved or deleted"));
+    await previewCall;
+
+    expect(usePackProject.getState().phase).toBe("cancelled"); // not flipped to "failed"
+    expect(usePackProject.getState().errors).toEqual([]);
+    expect(bridge.packPreview).not.toHaveBeenCalled();
   });
 });

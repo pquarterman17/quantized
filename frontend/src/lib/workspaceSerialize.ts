@@ -214,14 +214,23 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
-      // ORIGIN_FILE_DECODE_PLAN #38: an explicit "Save workspace (.dwk)…"
-      // resolves every pending dataset FIRST (App.tsx's save command calls
-      // `resolvePendingDatasets` before this runs), so `d.pending` is never
-      // set in a real exported .dwk — only autosave (lib/autosave.ts, which
-      // reuses this same serializer for its localStorage snapshot) can
-      // legitimately still have one, and it's fine for that round-trip to
-      // carry it: the render-side ensureBookData hooks re-fetch it the next
-      // time that dataset is shown after a reload.
+      // ORIGIN_FILE_DECODE_PLAN #38: EVERY explicit export path resolves
+      // every pending dataset FIRST, and aborts with a named status/toast
+      // if a book can't be fetched rather than exporting the preview —
+      // Save and Save As (store/workspaceIO.ts's `prepareWorkspaceState`,
+      // resolve at line 73, abort block 69-80), workbook Copy/Duplicate
+      // (store/workbookTransfer.ts:189 and :254 — its own package
+      // serializer, same rule), and Pack Project
+      // (store/packProjectRun.ts's `serializeCurrentWorkspaceForPack`,
+      // both its preview and Start-pack callers — added by BUG-011's fix,
+      // which is why this comment previously named only the first of the
+      // three and claimed autosave was the sole route).
+      // So `d.pending` is never set in a real exported .dwk or packed
+      // bundle — only autosave (lib/autosave.ts, which reuses this same
+      // serializer for its localStorage snapshot) can legitimately still
+      // have one, and it's fine for that round-trip to carry it: the
+      // render-side ensureBookData hooks re-fetch it the next time that
+      // dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
