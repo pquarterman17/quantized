@@ -984,6 +984,77 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
     expect(lines(spec)).toEqual([undefined, undefined, undefined]);
   });
 
+  // PlotStage early-returns to PolarStage / StatStage before the cycled XY
+  // viewport exists, but nothing gated this export on the render mode — so with
+  // the preference on, "Export figure…" in polar or stat mode emitted dashes for
+  // a figure the screen had never dashed.
+  it.each([
+    ["POLAR", { polarMode: true }],
+    ["STAT", { statMode: true }],
+  ])("ON: a %s view is refused — its canvas is not the XY one this figure renders", (_n, mode) => {
+    const spec = buildStageFigureSpec(stageGet(mode), dataset, "d", opts);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // The document path passes `allowExplicitXAsY`, which deliberately KEEPS an
+  // explicitly selected X channel in the display list as a Y series; the canvas'
+  // own `effectiveChannels` call always drops it. The two lists are then not the
+  // same display-position space, so there is no position to share and the cycle
+  // is refused rather than landing every later channel one dash off.
+  it("ON: refused when the X channel is also plotted as Y (the lists differ)", () => {
+    const xAsY = createFigureDocument({
+      id: "xasy",
+      name: "XasY",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 1, yKeys: [1, 2, 3] },
+    });
+    const spec = buildFigureSpecFromDocument(xAsY, dataset, "xasy", { autoSeriesStyles: true });
+    // The export really does keep channel 1 — that is the divergence, not a typo.
+    expect(spec.y_keys).toEqual([1, 2, 3]);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // The one case where `buildStageFigureSpec`'s OWN exact-styles refusal is load
+  // bearing rather than a restatement. Normally an exact publication array makes
+  // `buildFigureSpecForView` skip `buildExportStyles` entirely, so asking for the
+  // cycle changes nothing. But when the focused document's dataset disagrees with
+  // the one being exported — the documented refocus-mid-export race —
+  // `buildStageFigureSpec` FALLS BACK to the live-view builder, which never sees
+  // `document.publication` at all and would happily cycle, while the canvas
+  // (which reads the pin straight off the focused window) refuses.
+  it("ON: refused on the FALLBACK path too when the focused document pins exact styles", () => {
+    const pinnedElsewhere = createFigureDocument({
+      id: "pinned-other",
+      name: "Pinned",
+      datasetId: "some-other-dataset", // forces the fallback: live doc, wrong dataset
+      view: cycleView(),
+      publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null, null] },
+    });
+    const spec = buildStageFigureSpec(
+      stageGet({
+        focusedWindowId: "w",
+        windowsForSave: () => [{ id: "w", kind: "plot", document: pinnedElsewhere }],
+      }),
+      dataset,
+      "d",
+      opts,
+    );
+    // The fallback really was taken (styles are DERIVED, not the exact array).
+    expect(spec.series_styles).toHaveLength(3);
+    expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: still cycles when the X channel is NOT in yKeys (the lists agree)", () => {
+    const plain = createFigureDocument({
+      id: "plain",
+      name: "Plain",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1, 2, 3] },
+    });
+    const spec = buildFigureSpecFromDocument(plain, dataset, "plain", { autoSeriesStyles: true });
+    expect(lines(spec)).toEqual(["solid", "dashed", "dotted"]);
+  });
+
   // ── Saved documents: the cycle is never baked in (finding 10) ─────────────
   describe("a saved FigureDocument is independent of the preference", () => {
     const document = () =>
@@ -994,11 +1065,14 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
         view: cycleView(),
       });
 
-    it("renders uncycled from every non-Stage caller, whatever the preference is", () => {
-      // The Figure Page panel / Figure Builder preview / previewExport path.
-      // They pass no `autoSeriesStyles`, so they cannot cycle even while the
-      // live preference is on — and the document beside them has no uPlot
-      // canvas of its own to disagree with.
+    it("renders uncycled from every caller with no live canvas, whatever the preference", () => {
+      // A Figure Page panel, a graph template, a saved Library figure: they pass
+      // no `autoSeriesStyles`, so they cannot cycle even while the live
+      // preference is on — the document beside them has no uPlot canvas of its
+      // own to disagree with. (The Figure Builder's preview and Export DO pass
+      // it, but only for a session previewing the FOCUSED window's figure, whose
+      // canvas is cycling — see canonicalSession.selectSessionCyclesSeriesStyles
+      // and useFigureBuilder.test.ts.)
       expect(lines(buildFigureSpecFromDocument(document(), dataset, "doc"))).toEqual([
         undefined,
         undefined,
@@ -1035,6 +1109,8 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
       ["grouped", { groupKey: 0 }, {}],
       ["faceted", { facetKey: 0 }, {}],
       ["stacked", {}, { stackMode: true }],
+      ["polar", {}, { polarMode: true }],
+      ["stat", {}, { statMode: true }],
     ])("refuses the cycle for a %s DOCUMENT view, even when asked for it", (_name, bindings, view) => {
       const doc = createFigureDocument({
         id: "doc3",

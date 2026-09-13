@@ -56,6 +56,7 @@ beforeEach(() => {
     figureDocSeed: null,
     figurePublicationSession: null,
     figureBuilderOpen: false,
+    autoSeriesStyles: false, // P3.3 default; the cycle block below opts in per test
     status: "",
   });
 });
@@ -622,6 +623,98 @@ describe("useFigureBuilder", () => {
   // `window`), and `canApply`'s dirty-check branch (only `new-editable`
   // skips it) all already treat `library` exactly like `window` with no code
   // changes here -- this end-to-end pass is what proves that.
+  // ── P3.3: the preview is the "what will I get" widget ────────────────────
+  // One focused window with the preference on used to give four answers: a
+  // dashed Stage canvas, a dashed Stage export, a SOLID Figure Builder preview
+  // and a solid Figure Builder Export. MAIN #35's whole point is that Copy and
+  // Export render through ONE path; this was a third and fourth. The preview and
+  // Export now apply the cycle for exactly the session that previews the FOCUSED
+  // window's own figure, and for no other.
+  describe("auto dash/marker cycle (P3.3)", () => {
+    const win = (id: string): PlotWindow => ({
+      id, kind: "plot", title: id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+    });
+    const doc = () =>
+      createFigureDocument({ id: "figure-cyc", name: "Live plot", datasetId: "d1", view: defaultPlotView() });
+    const windowSession = (windowId: string) => {
+      const baseline = doc();
+      return { target: "window" as const, windowId, baseline, draft: baseline };
+    };
+    const previewLines = () => {
+      const calls = vi.mocked(renderFigureHitmap).mock.calls;
+      const spec = calls[calls.length - 1][0] as { series_styles?: ({ line?: string } | null)[] };
+      return (spec.series_styles ?? []).map((st) => st?.line);
+    };
+
+    it("cycles the preview for a session previewing the FOCUSED window's figure", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual(["solid", "dashed"]);
+    });
+
+    it("and its Export emits the same dashes the preview showed", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      const spec = vi.mocked(exportFigure).mock.calls[0][0] as {
+        series_styles?: ({ line?: string } | null)[];
+      };
+      expect((spec.series_styles ?? []).map((st) => st?.line)).toEqual(["solid", "dashed"]);
+    });
+
+    it("does NOT cycle with the preference off — unchanged from before the feature", async () => {
+      useApp.setState({
+        autoSeriesStyles: false,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    it("does NOT cycle once the target window loses focus — it is no longer previewing that canvas", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1"), win("w2")],
+        focusedWindowId: "w2",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    it("does NOT cycle a detached (new-editable) session — a document with no canvas beside it", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: { target: "new-editable", windowId: null, baseline: doc(), draft: doc() },
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+  });
+
   describe("library-target Apply (edit a saved figure in place)", () => {
     const savedFigure = (id: string) => createFigureDocument({
       id, name: "Library figure", datasetId: "d1", view: defaultPlotView(),

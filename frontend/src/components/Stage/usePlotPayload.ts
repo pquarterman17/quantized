@@ -33,7 +33,7 @@ import {
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, groupSplitChannelMap } from "../../lib/plotGroupSplit";
 import { droppedRows } from "../../lib/rowstate";
-import type { AxisScale, BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
+import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
 
 export interface PlotPayloadParams {
@@ -71,7 +71,7 @@ export interface PlotPayloadParams {
    *  here too — P3.4) — Scatter disqualifies a server-decimation request the
    *  same way it disqualifies the client-side path (see plotDecimate.ts's
    *  decimationRequestEligible). Undefined defaults to "Line" (eligible). */
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   /** Committed X view limits — the store's `xLim` (P3.4 zoom-refetch
    *  residual). When the currently loaded BASE payload came back
    *  server-decimated, a committed zoom/pan (this changing to a non-null

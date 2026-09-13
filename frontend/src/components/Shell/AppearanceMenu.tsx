@@ -106,9 +106,14 @@ export default function AppearanceMenu() {
               Spelled out rather than using `primitives/Checkbox`: this menu is
               EAGER and that component is not in the eager bundle (its header
               records that every other consumer is a lazy panel), so importing
-              it pulled ~590 B of component + clsx wiring into the startup chunk
-              for one static, never-disabled checkbox. Same `qz-check` markup
-              the primitive emits. */}
+              it pulls component + clsx wiring into the startup chunk for one
+              static, never-disabled checkbox. Measured both ways on this tree
+              after `npm ci` (2026-09-13): 919,701 B with the import, 919,590 B
+              with this markup — 111 B. (The first review predicted ~590 B off
+              the original commit's module graph and the first rework measured
+              74 B off its own; the number moves with the graph, so it is
+              re-measured rather than quoted.) Same `qz-check` markup the
+              primitive emits. */}
           <label className="qz-check">
             <input
               type="checkbox"

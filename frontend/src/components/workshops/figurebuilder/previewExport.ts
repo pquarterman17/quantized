@@ -25,6 +25,11 @@ export interface PreviewExportDeps {
   active: Dataset | null;
   fmt: string;
   dpi: number;
+  /** P3.3: opt IN to the auto dash/marker cycle — true only when this session
+   *  previews the FOCUSED window's own figure, so this Export emits the same
+   *  dashes that window's Stage export (and its canvas) shows. Sourced from
+   *  `canonicalSession.selectSessionCyclesSeriesStyles`. */
+  autoSeriesStyles: boolean;
   setStatus: (status: string) => void;
 }
 
@@ -33,7 +38,7 @@ export interface PreviewExportDeps {
  *  resolve a still-pending dataset before exporting (#38) so the request
  *  never silently ships the small preview subset. */
 export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void> {
-  const { canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, setStatus } = deps;
+  const { canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, autoSeriesStyles, setStatus } = deps;
   if (canonicalDocument) {
     if (canonicalReadiness?.state !== "ready") {
       const msg = `export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`;
@@ -45,7 +50,10 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
       let dataset = canonicalDataset;
       if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
       const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
-      await exportFigure({ ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem), filename: stem });
+      await exportFigure({
+        ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles }),
+        filename: stem,
+      });
       setStatus(`exported ${stem}.${canonicalDocument.output.format}`);
     } catch (e) {
       const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;

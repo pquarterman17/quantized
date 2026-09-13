@@ -1,9 +1,10 @@
-import type { MarkerShape, SeriesStyle } from "../../lib/types";
+import { markerDecision } from "../../lib/markers";
+import type { DefaultTrace, MarkerShape, SeriesStyle } from "../../lib/types";
 
 interface LegendSampleProps {
   color: string;
   style?: SeriesStyle;
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
 }
 
 const DASH: Record<string, string | undefined> = {
@@ -38,14 +39,23 @@ function marker(shape: MarkerShape, color: string, radius: number) {
   }
 }
 
-/** Compact legend sample using the same trace/style precedence as buildOpts. */
+/** Compact legend sample using the same trace/style precedence as buildOpts.
+ *
+ *  The marker half is not restated here — it comes from `markers.markerDecision`,
+ *  the SAME function `markers.seriesPoints` builds the canvas' `points` config
+ *  from. Restating it is how this swatch drifted: it took the glyph from
+ *  `style.markerShape` whenever markers showed at all, so with P3.3's cycle on
+ *  and a `Scatter` / `Line + markers` default trace the legend drew
+ *  circle/square/triangle while the canvas drew three plain 5px circles and the
+ *  export emitted no marker at all. Sharing the rule also means a stored
+ *  `{marker:false, markerShape:"star", markerSize:11}` on a default-trace series
+ *  — which the canvas has always drawn as a plain circle — no longer shows as an
+ *  11px star here. */
 export default function LegendSample({ color, style, defaultTrace = "Line" }: LegendSampleProps) {
-  const scatter = defaultTrace === "Scatter";
-  const width = style?.width ?? (scatter ? 0 : 1.5);
+  const width = style?.width ?? (defaultTrace === "Scatter" ? 0 : 1.5);
   const showLine = width > 0;
-  const showMarker = Boolean(style?.marker || scatter || defaultTrace === "Line + markers");
-  const shape = style?.markerShape ?? "circle";
-  const radius = Math.max(2, Math.min(4.5, (style?.markerSize ?? 5) / 2));
+  const { show: showMarker, shape, size } = markerDecision(style, defaultTrace);
+  const radius = Math.max(2, Math.min(4.5, size / 2));
 
   return (
     <svg

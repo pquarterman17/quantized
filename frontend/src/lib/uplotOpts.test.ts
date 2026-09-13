@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
 import { displayPositions } from "./seriesStyleCycle";
-import type { SeriesStyle } from "./types";
+import type { DefaultTrace, SeriesStyle } from "./types";
 
 const payload: PlotPayload = {
   data: [
@@ -272,7 +272,7 @@ describe("buildOpts", () => {
 
 describe("buildOpts defaultTrace", () => {
   type S = { width?: number; points?: { show?: boolean }; paths?: unknown };
-  const series = (trace: string): S =>
+  const series = (trace: DefaultTrace): S =>
     buildOpts(payload, { ...base, yScale: "linear", tool: "zoom", defaultTrace: trace }).series?.[1] as S;
 
   it("Line: line only, no markers, no custom paths (default)", () => {
@@ -1836,7 +1836,7 @@ describe("buildOpts auto dash/marker cycle (P3.3)", () => {
   // screen that every PDF renders as eight circles — the precise thing this
   // feature promises not to do.
   it("ON: the glyph cycle does NOT reach the Scatter / Line + markers default trace", () => {
-    for (const defaultTrace of ["Scatter", "Line + markers"]) {
+    for (const defaultTrace of ["Scatter", "Line + markers"] as DefaultTrace[]) {
       const pts = points(buildOpts(three, { ...cycled, defaultTrace }));
       expect(pts.map((p) => p?.show)).toEqual([true, true, true]);
       expect(pts.map((p) => p?.paths)).toEqual([undefined, undefined, undefined]);

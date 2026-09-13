@@ -23,6 +23,19 @@
 // NEW render path is uncycled until somebody wires its export and passes one;
 // forgetting fails safe.
 //
+// THE UNIT THAT CYCLES IS A PLOT WINDOW, not the focused Stage. Focus is a
+// transient UI state, so a window tiled beside the focused one for comparison
+// resolves the same positions from its own view (`useWindowSeriesCycle`), and so
+// does every export that reproduces that window's current appearance — its
+// Copy/Export figure, and the Figure Builder preview and Export of a
+// `window`-target publication session. What renders a STORED artifact instead —
+// a Figure Page panel, a graph template, a saved Library figure, a snapshot
+// window's frozen bundle — never re-derives a cycle, so a document's output does
+// not depend on the reader's preference. (A snapshot instead freezes the
+// RESOLVED styles at freeze time, which is what keeps "freezes exactly what's on
+// screen" true; see `Stage/useLiveSnapshotPublish.ts`.) The full table, with the
+// one residual this leaves, is in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3.
+//
 // THE POSITIONS ARE ALSO THE FIX FOR THE HIDDEN-SERIES SKEW. The canvas keeps a
 // hidden series in `payload.series` and merely sets `show: false`
 // (`usePlotPayload.ts` -> `uplotOpts.ts`), so a channel's display position is
@@ -94,29 +107,63 @@ export const AUTO_MARKER_CYCLE: readonly MarkerShape[] = [
   "star",
 ];
 
-/** The single-panel overlay is the ONLY live view whose publication export
- *  renders the plotted series one-for-one — same set, same display order, same
- *  per-series styles. Grouped views send `group_col`, which the renderer splits
- *  into synthetic per-level series that `series_styles` cannot address
- *  (`routes/export_figures.py:114-117`); faceted views send `facets`, for which
- *  `series_styles` is explicitly unused (`:125-127`); and `stackMode` is a
- *  screen-only split (one panel per channel, plus the break/facet/spatial
- *  arrangements, all of which `PlotStage` gates behind it) that the
- *  single-figure export does not reproduce at all. Both the Stage canvas and
- *  `figureSpec` ask THIS function, so the two cannot drift into disagreement
- *  about which views cycle. */
-export function overlayExportsSeriesStyles(v: {
-  groupKey: number | null | undefined;
+/** The fields of a `PlotView` that decide whether its export can reproduce the
+ *  canvas series-for-series. A plain structural type, not `PlotView` itself, so
+ *  a caller holding the live store singletons can ask without assembling one. */
+export interface CycleView {
+  groupKey: number | null;
   facetKey: number | null;
   stackMode: boolean;
-}): boolean {
-  return (v.groupKey === null || v.groupKey === undefined) && v.facetKey === null && !v.stackMode;
+  polarMode: boolean;
+  statMode: boolean;
+}
+
+/** The plain single-panel XY overlay is the ONLY live view whose publication
+ *  export renders the plotted series one-for-one — same set, same display order,
+ *  same per-series styles. Grouped views send `group_col`, which the renderer
+ *  splits into synthetic per-level series that `series_styles` cannot address
+ *  (`routes/export_figures.py:114-117`); faceted views send `facets`, for which
+ *  `series_styles` is explicitly unused (`:125-127`); `stackMode` is a
+ *  screen-only split (one panel per channel, plus the break/facet/spatial
+ *  arrangements, all of which `PlotStage` gates behind it) that the
+ *  single-figure export does not reproduce at all; and `polarMode`/`statMode`
+ *  replace the XY canvas entirely (`PlotStage` early-returns to `PolarStage` /
+ *  `StatStage`, and both own their own export paths) while a plain
+ *  `buildFigureSpec`/`buildStageFigureSpec` request still emits an ordinary XY
+ *  figure — so with the preference on, "Export figure…" in polar or stat mode
+ *  used to emit dashes for a figure the screen had never dashed. Both the
+ *  canvases (`useStageSeriesCycle`) and the export (`buildFigureSpecForView`,
+ *  `buildStageFigureSpec`) ask THIS function, so the two cannot drift into
+ *  disagreement about which views cycle. */
+export function overlayExportsSeriesStyles(v: CycleView): boolean {
+  return (
+    v.groupKey === null && v.facetKey === null && !v.stackMode && !v.polarMode && !v.statMode
+  );
+}
+
+/** An EXACT `publication.seriesStyles` array is the document's final word on
+ *  every series' style (the F2.1a contract): `figureSpec` ships it verbatim and
+ *  never calls `buildExportStyles` at all, so the cycle cannot reach that
+ *  export — and the canvas beside it must therefore not cycle either. Reachable
+ *  through `useGraphBuilder` -> `figureLifecycle.promoteLegacyFigureDoc` ->
+ *  `figureDocumentFromLegacyFigureDoc` -> `openEditableFigure`, which lands such
+ *  a document in a focused plot window. */
+export function documentPinsSeriesStyles(
+  doc: { publication?: { seriesStyles?: readonly unknown[] | null } } | null | undefined,
+): boolean {
+  return Array.isArray(doc?.publication?.seriesStyles);
 }
 
 /** The display positions of `count` series in their own natural order — the
- *  opt-in every canvas passes, since a canvas indexes its series by display
- *  position already. Returns `null` when `on` is false so the call site reads
- *  as one expression. */
+ *  opt-in a canvas passes, since a canvas indexes its series by display position
+ *  already. THREE of the eight `buildOpts` call sites can pass one:
+ *  `Stage/PlotViewport.tsx` (the plot-window XY overlay, focused or background),
+ *  `Stage/InsetPlot.tsx` (a second view of those same series) and
+ *  `useMultiPanelStage`'s SPATIAL cell branch. The other five — that hook's
+ *  stack, facet and x-break branches, `WaterfallView` and `ReflPanel` — have no
+ *  export that could follow and pass nothing. See the table in
+ *  `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3. Returns `null` when `on` is false
+ *  so the call site reads as one expression. */
 export function displayPositions(on: boolean, count: number): SeriesCycle {
   return on ? Array.from({ length: count }, (_, i) => i) : null;
 }

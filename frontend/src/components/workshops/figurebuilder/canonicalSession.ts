@@ -40,6 +40,36 @@ export function sessionLiveDrifted(
   return live !== null && JSON.stringify(live) !== JSON.stringify(session.baseline);
 }
 
+/** P3.3 (`lib/seriesStyleCycle.ts`): does the Publication Preview currently
+ *  render the FOCUSED plot window's own figure?
+ *
+ *  Only then may its preview and its Export apply the auto dash/marker cycle,
+ *  and then they MUST: the preview is the "what will I get" widget for the very
+ *  canvas behind the dialog, and that canvas's other export
+ *  (`figureSpec.buildStageFigureSpec` — Copy figure / Export figure…) cycles. It
+ *  drifted before this: one focused window with the preference on gave a dashed
+ *  Stage canvas, a dashed Stage export, and a SOLID Figure Builder preview and
+ *  Export — a third rendering of the same figure, which is exactly what
+ *  MAIN #35's one-path invariant exists to prevent.
+ *
+ *  A `library` or `new-editable` session is a saved DOCUMENT with no live canvas
+ *  beside it, so it stays uncycled — the same rule that keeps a Figure Page
+ *  panel and a graph template uncycled, and what makes a saved document render
+ *  identically however the preference is set. The `window`-target test is the
+ *  same one `targetBlocked` makes: a session whose window lost focus is no
+ *  longer previewing what the Stage draws. The exact-publication-styles refusal
+ *  is not repeated here — `buildFigureSpecForView` ships such an array verbatim
+ *  and never calls `buildExportStyles`, so the cycle cannot reach it. */
+export function selectSessionCyclesSeriesStyles(state: AppState): boolean {
+  const session = state.figurePublicationSession;
+  return (
+    state.autoSeriesStyles &&
+    session !== null &&
+    session.target === "window" &&
+    session.windowId === state.focusedWindowId
+  );
+}
+
 /** Zustand SELECTOR form of the check above -- the form `useFigureBuilder`
  *  must use.
  *

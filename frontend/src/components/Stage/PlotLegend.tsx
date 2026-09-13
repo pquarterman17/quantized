@@ -15,7 +15,7 @@ import { fmtNum } from "../../lib/format";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { nearestLegendCorner } from "../../lib/plotview";
 import { frameAnchorStyle } from "../../lib/uplotFrameVars";
-import type { SeriesStyle } from "../../lib/types";
+import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import LegendSample from "./LegendSample";
@@ -49,7 +49,7 @@ interface PlotLegendProps {
    *  switch exactly like the canvas does. */
   inkColor?: string;
   /** Global trace fallback when a series has no explicit style. */
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
 }
 
 export default function PlotLegend({

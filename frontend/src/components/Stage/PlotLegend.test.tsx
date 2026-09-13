@@ -1,11 +1,12 @@
 import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import LegendSample from "./LegendSample";
 import PlotLegend from "./PlotLegend";
 import { CHANNEL_DND, decodeChannelDrag } from "../../lib/dragaxis";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { displayPositions } from "../../lib/seriesStyleCycle";
-import type { DataStruct } from "../../lib/types";
+import type { DataStruct, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
 const series: PlotSeriesSpec[] = [
@@ -423,5 +424,105 @@ describe("PlotLegend — auto dash/marker cycle (P3.3)", () => {
       "square",
       "none",
     ]);
+  });
+
+  // The case the test above could not see, because it never set `defaultTrace`.
+  // An AMBIENT Scatter / Line + markers trace draws markers without any
+  // `style.marker`, and the swatch used to take the glyph from
+  // `style.markerShape` whenever markers showed at all — so with the cycle on it
+  // drew circle / square / triangle while `buildOpts` gave all three uPlot's own
+  // plain 5px circle and `buildExportStyles` emitted no marker whatsoever.
+  // Measured before the fix: data-marker ["circle","square","triangle"] against a
+  // canvas of three {show:true,size:5}.
+  it.each(["Scatter", "Line + markers"] as const)(
+    "does NOT cycle the glyph for the ambient %s default trace (nor does the canvas)",
+    (defaultTrace) => {
+      const { container } = render(
+        <PlotLegend
+          series={three}
+          plotted={[0, 1, 2]}
+          defaultTrace={defaultTrace}
+          seriesCycle={displayPositions(true, 3)}
+        />,
+      );
+      expect(samples(container).map((s) => s.getAttribute("data-marker"))).toEqual([
+        "circle",
+        "circle",
+        "circle",
+      ]);
+    },
+  );
+
+  it("an EXPLICIT marker still cycles its glyph under a default trace", () => {
+    // `style.marker` is what the export keys on, so an explicit marker is the one
+    // case where a cycled glyph does reach the PDF — and the legend must show it.
+    const { container } = render(
+      <PlotLegend
+        series={three}
+        plotted={[0, 1, 2]}
+        defaultTrace="Scatter"
+        styleList={[{ marker: true }, { marker: true }, { marker: true }]}
+        seriesCycle={displayPositions(true, 3)}
+      />,
+    );
+    expect(samples(container).map((s) => s.getAttribute("data-marker"))).toEqual([
+      "circle",
+      "square",
+      "triangle",
+    ]);
+  });
+
+  // The legend's half of the differential OFF proof the review made for
+  // `buildOpts` (288 combinations) and `buildFigureSpecFromDocument` (16): with no
+  // cycle, PlotLegend's `resolveSeriesStyle` call must be the identity, so the
+  // swatch it renders has to be the SAME DOM as handing `LegendSample` the raw
+  // stored style directly — which is exactly the call this component made before
+  // the cycle existed. 32 style x trace combinations, compared as markup.
+  it("OFF is byte-identical: the swatch equals LegendSample on the RAW style", () => {
+    const traces = ["Line", "Line + markers", "Scatter", "Step"] as const;
+    const styles: (SeriesStyle | undefined)[] = [
+      undefined,
+      {},
+      { line: "dashed" },
+      { line: "dotted", width: 3 },
+      { marker: true },
+      { marker: true, markerShape: "star", markerSize: 11 },
+      // marker:false with a stored shape/size — reachable from SeriesStyleCard
+      // when "Markers" is unticked, and the shape of the pref-OFF regression the
+      // first review found on the canvas.
+      { marker: false, markerShape: "diamond", markerSize: 9 },
+      { width: 0, color: "--series-4" },
+    ];
+    let compared = 0;
+    for (const defaultTrace of traces) {
+      for (const style of styles) {
+        const swatch = render(
+          <PlotLegend
+            series={[{ label: "A", unit: "" }]}
+            plotted={[0]}
+            styleList={[style]}
+            defaultTrace={defaultTrace}
+            seriesCycle={null}
+          />,
+        );
+        const withCycleArg = samples(swatch.container)[0].outerHTML;
+        swatch.unmount();
+        // The pre-feature call: the raw style, and the swatch colour PlotLegend
+        // derives for display position 0 (a token override passes through as
+        // `var(--token)`; no override is the palette slot).
+        const before = render(
+          <LegendSample
+            color={style?.color ? `var(${style.color})` : "var(--series-1)"}
+            style={style}
+            defaultTrace={defaultTrace}
+          />,
+        );
+        const raw = (before.container.querySelector(".qzk-legend-sample") as SVGElement).outerHTML;
+        before.unmount();
+        expect(withCycleArg).toBe(raw);
+        compared += 1;
+      }
+    }
+    expect(compared).toBe(traces.length * styles.length);
   });
 });

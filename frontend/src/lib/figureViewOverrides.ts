@@ -1,7 +1,9 @@
 // The screen-parity OVERRIDE projection (MAIN #18 and its successors): one
 // `PlotView` -> the `FigureOverrides` bag every export request carries. Split
 // out of lib/figureSpec.ts, which sits on the general 500-line .ts ceiling with
-// five lines of headroom — P3.3's auto dash/marker cycle had to be threaded
+// FOUR lines of headroom (the guard counts `src.split("\n").length`, i.e. `wc -l`
+// plus one for the trailing newline — so 495 counts as 496, not 495; the first
+// cut of this header said five) — P3.3's auto dash/marker cycle had to be threaded
 // through both of that file's entry points, so this cohesive block moved out to
 // fund it rather than the ceiling moving up. Nothing about the projection
 // changed — only the module name its three importers reach for

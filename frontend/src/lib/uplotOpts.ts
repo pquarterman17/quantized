@@ -22,7 +22,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import type { Annotation, AxisFormat, AxisScale, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
+import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
@@ -677,11 +677,11 @@ export interface BuildOptsArgs {
    *  builder drew before the cycle existed. Absent is the default on purpose —
    *  a render path cycles only once someone has wired an export that renders
    *  the same dash/glyph for the same series, so a NEW caller is uncycled until
-   *  it does. Today that is the focused Stage overlay (`PlotStage.tsx`, paired
-   *  with `figureSpec.ts`) and the spatial page cells (`useMultiPanelStage.ts`,
-   *  paired with `spatialPageExport.ts`); the waterfall, the reflectometry
-   *  panel, faceted/stacked/break panels and every background/snapshot/panel
-   *  window deliberately pass nothing. */
+   *  it does. Three of this builder's eight call sites pass one: a PLOT WINDOW's
+   *  plain XY overlay (focused or background, via `useStageSeriesCycle`, paired
+   *  with `figureSpec.ts`), its inset, and the spatial cells (paired with
+   *  `spatialPageExport.ts`). The other five, and a snapshot window (whose frozen
+   *  bundle carries RESOLVED styles), pass nothing — table in P3.3. */
   seriesCycle?: SeriesCycle;
   /** Dataset-channel index for each plotted display-series (`usePlotPayload`'s
    *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` and `colorBy`
@@ -723,7 +723,7 @@ export interface BuildOptsArgs {
   /** Default trace shape for series without an explicit per-series style
    *  (Preferences ▸ Plot ▸ Default trace): "Line" | "Line + markers" | "Scatter"
    *  | "Step". Per-series overrides still win. */
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   /** Enable wheel-to-zoom over the plot (Preferences ▸ Interaction ▸ Mouse wheel). */
   wheelZoom?: boolean;
   /** Completed box-zoom/pan/wheel gesture, coalesced to one view-history step. */

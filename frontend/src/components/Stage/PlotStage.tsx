@@ -230,7 +230,7 @@ export default function PlotStage() {
   // useLiveSnapshotPublish's header).
   // P3.3 auto dash/marker cycle — the canvas half of its ONE opt-in pair (the
   // export half is `figureSpec.buildStageFigureSpec`, same gate). See its doc.
-  const seriesCycle = useStageSeriesCycle(groupKey, plotted.length);
+  const seriesCycle = useStageSeriesCycle(plotted.length);
 
   useLiveSnapshotPublish({
     active,
@@ -247,6 +247,7 @@ export default function PlotStage() {
     plotted,
     colorByColumns,
     hidden,
+    seriesCycle,
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).

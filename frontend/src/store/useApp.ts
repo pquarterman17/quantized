@@ -123,7 +123,7 @@ import type {
   BaselineOverlay,
   ChannelRole,
   Dataset,
-  DataStruct,
+  DataStruct, DefaultTrace,
   FitOverlay, FitSpec,
   FolderNode,
   ModelingType,
@@ -335,7 +335,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
   reduceMotion: boolean;
   wheelZoom: boolean;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   defaultLineWidth: number;
   defaultGrid: boolean;
   /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */

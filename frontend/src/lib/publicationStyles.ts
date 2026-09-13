@@ -1,9 +1,18 @@
-/** Publication wire styles plus their persistence sanitizer. Kept separate
- * from exportStyles so FigureDocument persistence never pulls screen colour code
- * into the eager store bundle. */
-// The one exception to that: the marker-shape vocabulary, a plain string Set
-// with no drawing code attached, imported so this sanitizer and the view-style
-// sanitizer cannot drift apart about which glyphs exist.
+/** Publication wire styles plus their persistence sanitizer. Kept separate from
+ * `lib/exportStyles.ts` so FigureDocument persistence never pulls the export's
+ * COLOUR RESOLUTION — `color.resolveToHex` and the palette lookup — into the
+ * store's import graph.
+ *
+ * Stated that precisely on purpose: this file's claim used to be the broader
+ * "never pulls screen colour code in", and the import below makes that false.
+ * `MARKER_SHAPE_VALUES` lives in `lib/seriesStyleCycle.ts`, which also holds
+ * `cssVar`/`SERIES_VARS`/`seriesColor`, so persistence does reach a module with
+ * colour in it. It is imported anyway rather than restated because the set is
+ * DERIVED from the marker cycle and the two sanitizers (this one for the wire
+ * style, `plotspec2.ts` for the view style) must not drift about which glyphs
+ * exist — and splitting that module in two to make the old wording true would
+ * buy a comment with eager bytes. The separation that carries weight is the one
+ * from `exportStyles`, and it holds. */
 import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 
 export interface ExportSeriesStyle {

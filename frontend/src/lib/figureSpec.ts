@@ -47,7 +47,7 @@ import { pruneToLiveDataset } from "./rowstate";
 // re-exported: a barrel here would make every importer of this module pull the
 // projection in whether it uses it or not.
 import { viewOverrides } from "./figureViewOverrides";
-import { overlayExportsSeriesStyles } from "./seriesStyleCycle";
+import { documentPinsSeriesStyles, overlayExportsSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
 import { axisFmtParam } from "./types";
@@ -70,12 +70,15 @@ export interface FigureRenderOpts {
 export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
   transparent?: boolean;
   filename?: string | null;
-  /** P3.3: opt IN to the auto dash/marker cycle. Only `buildStageFigureSpec`
-   *  passes it, and only because the LIVE Stage canvas beside it is cycling the
-   *  same series. A document rendered from anywhere else (a Figure Page panel,
-   *  the Figure Builder preview, `previewExport`) is uncycled — which is what
-   *  keeps a saved document's styles the RAW user styles and stops it
-   *  disagreeing with itself when the preference is later flipped. */
+  /** P3.3: opt IN to the auto dash/marker cycle. Passed by the two producers
+   *  that render a document WHOSE LIVE CANVAS IS ON SCREEN and cycling —
+   *  `buildStageFigureSpec` (the focused window's Copy/Export) and the Figure
+   *  Builder's preview + Export for a `window`-target session
+   *  (`figurebuilder/canonicalSession.selectSessionCyclesSeriesStyles`). A
+   *  document rendered with no canvas beside it (a Figure Page panel, a graph
+   *  template, a saved Library figure) is uncycled — which is what keeps a saved
+   *  document's styles the RAW user styles and stops it disagreeing with itself
+   *  when the preference is later flipped. */
   autoSeriesStyles?: boolean;
 }
 
@@ -147,11 +150,11 @@ function buildFigureSpecForView(
      * `dataset`/`error_spans` (via `wireDataset` above) to its analysisData
      * view -- excluded rows and rows the Data Filter drops. */
     liveDataset?: Dataset | null;
-    /** P3.3: opt IN to the auto dash/marker cycle for THIS request. Only the
-     *  live-stage export entry point (`buildStageFigureSpec`) passes it, and
-     *  only because the focused Stage canvas is cycling the same series at the
-     *  same positions. Absent everywhere else on purpose — see `seriesCycle`
-     *  below. */
+    /** P3.3: opt IN to the auto dash/marker cycle for THIS request. Passed only
+     *  by a producer whose LIVE canvas is on screen cycling the same series at
+     *  the same positions — the focused window's Stage export and the Figure
+     *  Builder's window-target preview/Export. Absent everywhere else on
+     *  purpose — see `seriesCycle` below. */
     autoSeriesStyles?: boolean;
   } = {},
 ): FigureSpec {
@@ -230,8 +233,21 @@ function buildFigureSpecForView(
   // (No separate `facets === undefined` clause: `facets` is non-undefined only
   // when `st.facetKey` is set, which the predicate below already refuses. A
   // clause no sabotage can make fail is dead code, not defence in depth.)
+  //
+  // ONE more refusal, and it is about the list above rather than the view:
+  // `allowExplicitXAsY` (the document path) deliberately keeps an explicitly
+  // selected X channel in `displayChannels` AS a Y series, while the canvas'
+  // own call (`usePlotPayload.fetchChannels`) always passes `st.xKey` and so
+  // drops it. When that happens the two sides are not the same display-position
+  // space at all — the export holds a series the screen never drew, and every
+  // later channel lands one dash and one hue off (measured with `xKey:1`,
+  // `yKeys:[1,2,3]`: canvas solid/dashed, export solid/dashed/dotted). There is
+  // no canvas position to borrow for a series the canvas does not draw, so the
+  // cycle is refused outright rather than guessed at.
+  const xAlsoPlotted = st.xKey !== null && displayChannels.includes(st.xKey);
   const seriesCycle =
     extras.autoSeriesStyles &&
+    !xAlsoPlotted &&
     overlayExportsSeriesStyles({
       // `extras.groupKey` is what actually rides the wire; `st.groupKey` is the
       // view's own binding, which the plain live entry point does NOT forward —
@@ -241,6 +257,8 @@ function buildFigureSpecForView(
       groupKey: extras.groupKey ?? st.groupKey,
       facetKey: st.facetKey,
       stackMode: st.stackMode,
+      polarMode: st.polarMode,
+      statMode: st.statMode,
     })
       ? plotted.map((ch) => displayChannels.indexOf(ch))
       : null;
@@ -423,10 +441,20 @@ export function buildStageFigureSpec(
   // or not at all.
   // Gated against the LIVE view as well as the rendered one: the document this
   // may route through carries its own copy of the view, and only the live
-  // singleton is guaranteed to be what PlotStage is drawing right now.
+  // singleton is guaranteed to be what PlotStage is drawing right now. The
+  // exact-publication-styles refusal is restated here too so the FALLBACK
+  // branch below (a live-view spec, which never sees `document.publication`)
+  // agrees with the canvas, which reads it off the focused window.
   const autoSeriesStyles =
     st.autoSeriesStyles &&
-    overlayExportsSeriesStyles({ groupKey: st.groupKey, facetKey: st.facetKey, stackMode: st.stackMode });
+    !documentPinsSeriesStyles(document) &&
+    overlayExportsSeriesStyles({
+      groupKey: st.groupKey,
+      facetKey: st.facetKey,
+      stackMode: st.stackMode,
+      polarMode: st.polarMode,
+      statMode: st.statMode,
+    });
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,

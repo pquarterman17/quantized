@@ -11,6 +11,13 @@
 // the global Preferences plot defaults (defaultTrace/defaultLineWidth) stay
 // live — they're app-wide display settings, deliberately excluded from
 // PlotView (see lib/plotview's module doc), not part of the frozen data.
+//
+// P3.3 auto dash/marker cycle: this window passes NO `seriesCycle` and that is
+// correct, because the bundle's `styleList` already carries the cycle RESOLVED
+// (`Stage/useLiveSnapshotPublish.ts` applies it before publishing). A frozen
+// plot's dashes are part of what was on screen, so they are frozen with the
+// data — passing raw styles plus a cycle would have let the preference change a
+// snapshot taken months earlier, which is the opposite of what "frozen" means.
 
 import { useMemo, useRef } from "react";
 import type uPlot from "uplot";

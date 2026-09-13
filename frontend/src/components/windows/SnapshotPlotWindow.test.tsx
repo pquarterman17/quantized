@@ -153,6 +153,47 @@ describe("SnapshotPlotWindow (item 11) — static frozen rendering", () => {
     expect(container.textContent).not.toContain("No dataset — drag one onto this window");
   });
 
+  // ── P3.3: a snapshot's dashes are frozen WITH the data ───────────────────
+  // `Stage/useLiveSnapshotPublish.ts` resolves the cycle before publishing, so a
+  // snapshot window carries explicit `line`/`markerShape` and passes NO cycle of
+  // its own. That is what keeps "freezes exactly what's on screen" true: the
+  // frozen plot must look the same after the preference is turned off, and a
+  // snapshot taken months ago must not change when someone flips a checkbox.
+  it("renders the dashes frozen into its bundle even with the preference OFF", async () => {
+    const cycled: FrozenPlotBundle = {
+      ...FROZEN,
+      payload: {
+        data: [
+          [0, 1, 2, 3],
+          [99, 98, 97, 96],
+          [89, 88, 87, 86],
+        ] as FrozenPlotBundle["payload"]["data"],
+        series: [
+          { label: "a", unit: "" },
+          { label: "b", unit: "" },
+        ],
+        xLabel: "x",
+        xUnit: "",
+      },
+      // Exactly what useLiveSnapshotPublish publishes for two unstyled series
+      // while the preference is on.
+      styleList: [
+        { line: "solid", markerShape: "circle" },
+        { line: "dashed", markerShape: "square" },
+      ],
+      plotted: [0, 1],
+    };
+    useApp.setState({
+      autoSeriesStyles: false, // the preference is OFF at render time
+      plotWindows: [snapWin({ snapshot: cycled })],
+      focusedWindowId: null,
+    });
+    render(<WindowCanvas />);
+    await waitFor(() => expect(created.length).toBe(1));
+    const series = (created[0].opts as { series: { dash?: number[] }[] }).series.slice(1);
+    expect(series.map((ser) => ser.dash)).toEqual([undefined, [8, 4]]);
+  });
+
   it("a pointerdown on the snapshot frame raises it without stealing focus from the live window", async () => {
     useApp.setState({
       plotWindows: [win({ z: 5 }), snapWin({ z: 1 })],

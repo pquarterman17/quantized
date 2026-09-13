@@ -10,6 +10,7 @@
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { PanelFit } from "../lib/panelLayout";
+import type { DefaultTrace } from "../lib/types";
 import type {
   Accent,
   AppState,
@@ -41,7 +42,7 @@ export const ACCENT_SWATCHES: { id: string; c: string }[] = [
 ];
 const DENSITIES = ["compact", "regular", "comfy"];
 const NOTATIONS = ["auto", "scientific", "fixed"];
-const TRACES = ["Line", "Line + markers", "Scatter", "Step"];
+const TRACES: readonly DefaultTrace[] = ["Line", "Line + markers", "Scatter", "Step"];
 const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 // The app-wide multi-panel fit DEFAULT is aspect-preserving vs fill only —
 // "page" is a per-window choice (needs a page model), never a global default.
@@ -71,7 +72,7 @@ export interface Prefs {
   autoSeriesStyles: boolean;
   reduceMotion: boolean;
   wheelZoom: boolean;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   defaultLineWidth: number;
   defaultGrid: boolean;
   antialias: boolean;
@@ -133,7 +134,7 @@ export function loadPrefs(): Prefs {
       autoSeriesStyles: bool(p.autoSeriesStyles, fb.autoSeriesStyles),
       reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
       wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
-      defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
+      defaultTrace: TRACES.includes(p.defaultTrace as DefaultTrace) ? (p.defaultTrace as DefaultTrace) : fb.defaultTrace,
       defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),

@@ -17,7 +17,7 @@ import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { RegionStats } from "../../lib/regionStats";
 import type { SeriesCycle } from "../../lib/seriesStyleCycle";
-import type { Dataset, SeriesStyle } from "../../lib/types";
+import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
 import type { IntegralResult } from "../../store/useApp";
@@ -49,7 +49,7 @@ export interface PlotStageOverlaysProps {
   colorByColumns: Map<number, ColorScatterSpec>;
   isDarkBg: boolean;
   inkColor: string;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   actions: PlotStageActions;
   readout: Readout | null;
   measurement: Measurement | null;

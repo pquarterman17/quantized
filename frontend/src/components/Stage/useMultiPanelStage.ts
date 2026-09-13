@@ -58,7 +58,7 @@ import {
 } from "../../lib/panelLayout";
 import type { PageSetup } from "../../lib/pagesetup";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
-import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "../../lib/types";
+import type { AxisFormat, AxisScale, Dataset, DefaultTrace, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
@@ -140,7 +140,7 @@ export interface MultiPanelStageParams {
    * not silently fall back to uPlot's 12px/1.5px/Line defaults. */
   fontSize?: number;
   baseLineWidth?: number;
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */

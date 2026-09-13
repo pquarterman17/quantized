@@ -5,7 +5,7 @@
 
 import type uPlot from "uplot";
 
-import type { MarkerShape, SeriesStyle } from "./types";
+import type { DefaultTrace, MarkerShape, SeriesStyle } from "./types";
 
 export const MARKER_SHAPES: { value: MarkerShape; label: string }[] = [
   { value: "circle", label: "● circle" },
@@ -97,43 +97,54 @@ export function markerPaths(
 }
 
 /**
- * The uPlot `points` config for one series: whether markers draw at all, and
- * with which glyph/size. ONE decision for the explicit `SeriesStyle.marker`
- * and for the `Scatter` / `Line + markers` default-trace preference, which
+ * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
+ * (`seriesPoints` below), the legend swatch (`Stage/LegendSample.tsx`) and the
+ * publication export (`exportStyles.buildExportStyles`) must all agree on.
+ * Shared rather than restated, because the legend restating it is exactly how
+ * it drifted: with P3.3's cycle on and a `Scatter` / `Line + markers` default
+ * trace, the legend drew circle/square/triangle from `style.markerShape` while
+ * the canvas drew three plain circles and the export emitted no marker at all.
+ *
+ * The two branches are SEPARATE on purpose. An explicit `marker` honours
+ * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,
+ * the P3.3 auto glyph cycle, which arrives here already applied. The ambient
+ * default trace draws uPlot's own 5px circle and reads NEITHER field, because
+ * `buildExportStyles` emits a marker only for an EXPLICIT `style.marker`: a
+ * shape or size taken from a default-trace series would be drawn on screen and
+ * silently dropped from the PDF. Merging the two branches did exactly that, and
+ * also made a stored `{marker:false, markerShape:"star", markerSize:11}` — a
+ * combination `Inspector/SeriesStyleCard.tsx` keeps when "Markers" is unticked
+ * — render an 11px star on a Scatter plot with the P3.3 preference OFF.
+ */
+export function markerDecision(
+  style: SeriesStyle | undefined,
+  trace: DefaultTrace,
+): { show: boolean; shape: MarkerShape; size: number } {
+  if (style?.marker) {
+    return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? 5 };
+  }
+  return { show: trace === "Scatter" || trace === "Line + markers", shape: "circle", size: 5 };
+}
+
+/**
+ * The uPlot `points` config for one series, from `markerDecision` above — which
  * `uplotOpts.ts` used to spell out inline (the move funds that file's
  * shrink-only module pin).
  *
- * The two branches stay SEPARATE on purpose. An explicit `marker` honours
- * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,
- * the P3.3 auto glyph cycle, which arrives here already applied. The ambient
- * default trace draws uPlot's own 5px circle and reads NEITHER field.
- *
- * That asymmetry is deliberate, not an oversight to tidy up.
- * `exportStyles.buildExportStyles` emits a marker only for an EXPLICIT
- * `style.marker`, so a shape or size taken from a default-trace series would be
- * drawn on screen and silently dropped from the PDF. Merging the two branches
- * did exactly that, and also made a stored `{marker:false, markerShape:"star",
- * markerSize:11}` — a combination `Inspector/SeriesStyleCard.tsx` keeps when
- * "Markers" is unticked — start rendering an 11px star on a Scatter plot with
- * the P3.3 preference OFF.
- *
  * `stroke` is the series' resolved colour: open glyphs (+ x *) stroke only,
  * closed ones fill with it. A circle returns no paths builder — uPlot's own
- * built-in draws it.
+ * built-in draws it, which is also what makes the default-trace branch above
+ * come back out of here as the plain `{show:true, size:5}` it always was.
  */
 export function seriesPoints(
   style: SeriesStyle | undefined,
-  trace: string,
+  trace: DefaultTrace,
   stroke: string,
 ): uPlot.Series.Points {
-  if (style?.marker) {
-    const size = style.markerSize ?? 5;
-    const shape = style.markerShape ?? "circle";
-    const paths = markerPaths(shape, size);
-    return paths
-      ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
-      : { show: true, size };
-  }
-  if (trace === "Scatter" || trace === "Line + markers") return { show: true, size: 5 };
-  return { show: false };
+  const { show, shape, size } = markerDecision(style, trace);
+  if (!show) return { show: false };
+  const paths = markerPaths(shape, size);
+  return paths
+    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
+    : { show: true, size };
 }

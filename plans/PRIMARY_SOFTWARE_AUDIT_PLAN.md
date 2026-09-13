@@ -2923,26 +2923,65 @@ covers a much smaller subset and guards focus on Analyze.
       uncycled until they do. The backend is still handed an **ordinary explicit
       `line`/`marker_shape`** and never learns a cycle exists.
 
-      **Exactly two pairs are wired, and nothing else cycles on either side:**
+      **THE UNIT THAT CYCLES IS A PLOT WINDOW**, not the focused Stage, and the
+      rule is one sentence: a canvas cycles exactly when an export that
+      reproduces THAT canvas's current appearance cycles the same series at the
+      same positions. Focus is a transient UI state, so it is not an input; and
+      anything that renders a STORED artifact rather than a live canvas stays
+      uncycled, so a document's output never depends on the reader's preference.
+      The complete, verified table (second review round, 2026-09-13):
 
-      | Canvas | Export it produces | Cycles? |
+      | Canvas on screen | The export that reproduces it | Cycles? |
       |---|---|---|
-      | Focused Stage, plain single-panel overlay (`PlotStage` → `PlotViewport`, plus `PlotLegend`'s swatch and `InsetPlot`) | `figureSpec.buildStageFigureSpec` → `buildExportStyles` (Copy figure, Copy figure (vector), Export figure…) | **yes** |
+      | A plot window's plain single-panel XY overlay while FOCUSED (`PlotStage` → `PlotViewport`, plus `PlotLegend`'s swatch and `InsetPlot`), via `useStageSeriesCycle` | `figureSpec.buildStageFigureSpec` → `buildExportStyles` (Copy figure, Copy figure (vector), Export figure…) | **yes** |
+      | The SAME window while UNFOCUSED (`BackgroundPlotWindow` → `PlotViewport` + `InsetPlot`), via `useWindowSeriesCycle` on ITS OWN view | the same `buildStageFigureSpec`, produced the moment it is focused | **yes** — focus is not a styling input |
+      | Publication Preview's preview image AND its Export, for a `window`-target session on the FOCUSED window (`canonicalReadiness` / `previewExport`, gated by `canonicalSession.selectSessionCyclesSeriesStyles`) | itself — the same `buildFigureSpecFromDocument` opt-in | **yes** |
       | Spatial page cells (`useMultiPanelStage` → `multipanel.spatialCellStyling`, incl. `SpatialPanelLegend`'s entries) | `spatialPageExport.spatialPanelFigure` → `buildExportStyles` (Export page…) | **yes** |
       | Grouped (`group_col`) view | `series_styles` **not applied** — `routes/export_figures.py:114-117` | no, both sides |
       | Faceted view | `series_styles` **unused once `facets` is set** — `:125-127` | no, both sides |
       | Stacked / x-break panels (`stackMode`) | one single-panel figure; the screen shows N panels | no, both sides |
+      | POLAR (`PolarStage`) / STATISTICS (`StatStage`) | `buildStageFigureSpec` is not gated on the render mode and still emits a plain XY figure | no, both sides |
+      | Any window whose document carries an EXACT `publication.seriesStyles` array | that array, shipped verbatim — `buildExportStyles` is never called at all | no, both sides |
+      | A document whose export display list differs from the canvas' — `allowExplicitXAsY` keeps an explicitly picked X channel in the list AS a Y series, which the canvas always drops | there is no shared position space to resolve against | no, both sides |
       | Waterfall (`WaterfallView`), reflectometry (`ReflPanel`) | none | no |
-      | Background / snapshot / panel windows (`PlotViewport` without the arg) | none | no |
-      | Figure Builder, Figure Page panels, graph templates, `plotSpecFigure`, `legacyFigure` | server-rendered from a saved document/template | no, both sides |
+      | Composite `kind:"panel"` window cells (`PanelCell`) | none — a panel window is not a Figure Page source (`panelResolve` requires `win.kind === "plot"`) and is excluded from the window export paths | no |
+      | Snapshot window (`SnapshotPlotWindow`) | none | no cycle is re-derived; the styles were frozen ALREADY RESOLVED (below) |
+      | Figure Page panels, graph templates, saved Library figures, `plotSpecFigure`, `legacyFigure` | server-rendered from a STORED document/template | no, both sides |
 
-      The three "no, both sides" view rows are decided by **one predicate**,
+      The view rows are decided by **one predicate**,
       `seriesStyleCycle.overlayExportsSeriesStyles({groupKey, facetKey,
-      stackMode})`, which the canvas (`useStageSeriesCycle`) and the export
-      (`buildFigureSpecForView`) both call — so they cannot drift into
-      disagreeing about which views cycle. `buildStageFigureSpec` applies it a
-      second time against the LIVE view, because the document it may route
-      through carries its own copy of that view.
+      stackMode, polarMode, statMode})`, and the exact-styles row by one more,
+      `documentPinsSeriesStyles(document)`. Every canvas
+      (`useStageSeriesCycle` / `useWindowSeriesCycle`) and every export
+      (`buildFigureSpecForView`, `buildStageFigureSpec`) calls the same two, so
+      they cannot drift into disagreeing about which views cycle.
+      `buildStageFigureSpec` applies both a second time against the LIVE view and
+      the focused document, because the document it may route through carries its
+      own copy of that view — and because its FALLBACK branch
+      (`buildFigureSpec`, taken when the focused document's dataset disagrees
+      with the one being exported) never sees `document.publication` at all.
+
+      **A snapshot freezes the RESOLVED styles, not the cycle.** `plotsnapshot`
+      and `useLiveSnapshotPublish` both promise the snapshot command "freezes
+      exactly what's on screen". Carrying the raw styles plus a cycle broke that
+      twice over: a snapshot of a dashed plot rendered solid, and — worse — a
+      snapshot taken months earlier would have changed retroactively the moment
+      somebody toggled the preference. `useLiveSnapshotPublish` therefore applies
+      `resolveSeriesStyle` before publishing the bundle, and
+      `SnapshotPlotWindow` passes no cycle. With the preference off the resolver
+      is the identity and returns the caller's own array, so the frozen bundle is
+      byte-identical to before the feature.
+
+      **ONE RESIDUAL, stated rather than hidden.** A Figure Page panel sourced
+      from a live plot WINDOW (`panelResolve`'s `"window"` branch) renders that
+      window's document uncycled, while the same window's own Stage export
+      cycles. That is deliberate: a page is a composed artifact, not a screenshot
+      of a window, and the alternative — cycling it — would make a page's
+      appearance depend on the preference of whoever last rendered it, which is
+      exactly the "saved documents never bake the cycle in" property below. It is
+      recorded here because it IS a screen-vs-export difference, just one whose
+      two sides are different products rather than two renderings of the same
+      one.
 
       **Hidden series resolve at the same position on both sides.** The canvas
       leaves a hidden series in `payload.series` with `show:false`, so a
@@ -2974,9 +3013,22 @@ covers a much smaller subset and guards focus on Analyze.
       position are the same function and the guard proves nothing.
       `figureSpec.test.ts` pins the same thing end to end through the real
       request builders, plus every "no, both sides" row above.
-      `useStageSeriesCycle.test.ts` pins the canvas half of those refusals.
-      `PlotLegend.test.ts` and `multipanel.test.ts` pin that the two legends
-      resolve through the same function as their own canvases.
+      `useStageSeriesCycle.test.ts` pins the canvas half of those refusals, for
+      the focused Stage AND for a background window, including that the two agree.
+      `PlotLegend.test.tsx` and `multipanel.test.ts` pin that the two legends
+      resolve through the same function as their own canvases —
+      `PlotLegend.test.tsx` also carries the legend's differential OFF proof (32
+      style x trace combinations, each asserted to render the SAME markup as
+      handing `LegendSample` the raw stored style, which is the call the component
+      made before the cycle existed) and the ambient-default-trace glyph cases the
+      first cut's legend test never set. `markers.test.ts` pins the shared
+      `markerDecision` rule directly. `BackgroundPlotWindow.test.tsx` and
+      `SnapshotPlotWindow.test.tsx` pin the two window paths at their uPlot
+      options, `useLiveSnapshotPublish.test.ts` pins that a snapshot freezes the
+      RESOLVED styles (and that with no cycle it publishes the caller's own
+      array), and `useFigureBuilder.test.ts` pins that the Publication Preview
+      image and its Export both cycle for a focused `window`-target session and
+      for nothing else.
       Backend half in `tests/test_calc_figure.py`: three cycle positions map to
       three distinct matplotlib linestyles/markers, and both reach the rendered
       output.
@@ -2985,12 +3037,29 @@ covers a much smaller subset and guards focus on Analyze.
       one would keep exporting dashed on a machine whose preference is off. The
       producers that PERSIST styles — `legacyFigure`'s `saveAsFigure`,
       `useGraphTemplates` — pass no cycle at all, so what they store is the raw
-      user style; and `buildFigureSpecFromDocument` cycles only when
-      `buildStageFigureSpec` explicitly asks it to, which is the live Stage
-      export and nothing else. A document authored with the preference ON and
-      reopened with it OFF therefore renders identically, and vice versa — both
-      directions tested, along with "an exact publication style array stays
-      exact".
+      user style; and `buildFigureSpecFromDocument` cycles only when a caller
+      whose LIVE CANVAS is on screen explicitly asks it to — the focused window's
+      Stage export, and the Publication Preview of a `window`-target session on
+      that same window. Nothing that renders a stored artifact asks. A document
+      authored with the preference ON and reopened with it OFF therefore renders
+      identically, and vice versa — both directions tested, along with "an exact
+      publication style array stays exact". And an exact array does not merely
+      survive: it now switches the CANVAS off too (`documentPinsSeriesStyles`),
+      because a document that pins every style is one `buildExportStyles` never
+      sees at all.
+    - **The marker rule is shared, not restated.** `markers.markerDecision` is the
+      ONE function that decides whether a series draws markers and with which
+      glyph; `markers.seriesPoints` (canvas) and `Stage/LegendSample.tsx` (legend
+      swatch) both call it, and `buildExportStyles`'s explicit-`marker` gate is
+      the third side of the same rule. The legend restating it is exactly how it
+      drifted: it took the glyph from `style.markerShape` whenever markers showed
+      at all, so with the preference on and a `Scatter` / `Line + markers` default
+      trace it drew circle / square / triangle (measured) while the canvas drew
+      three plain 5px circles and the export emitted no marker whatsoever. Sharing
+      the rule also stops the legend showing a stored
+      `{marker:false, markerShape:"star", markerSize:11}` as an 11px star on a
+      default-trace series the canvas has always drawn as a plain circle — a
+      legend-only divergence that predates the cycle.
     - **Two things the work turned up.** (1) `sanitizeExportSeriesStyles` never
       restored `marker_shape`, so a saved FigureDocument's exact publication
       styles came back shape-less and every marker reverted to a circle on
@@ -3008,11 +3077,16 @@ covers a much smaller subset and guards focus on Analyze.
       `seriesColor`) to `lib/seriesStyleCycle.ts` — which also stops
       `lib/exportStyles.ts` importing the whole plot builder to resolve one
       colour — and the marker `points` decision to `lib/markers.seriesPoints`.
-      Pin → **1428**. `lib/figureSpec.ts` had five lines under the general
-      500-line ceiling, so the screen-parity override projection moved to
+      Pin → **1428**. `lib/figureSpec.ts` had FOUR lines of headroom under the
+      general 500-line ceiling, so the screen-parity override projection moved to
       `lib/figureViewOverrides.ts` (unchanged, three importers repointed).
-      `components/Stage/PlotStage.tsx` had one line under the 400-line component
-      ceiling, so its opt-in is a named hook, `useStageSeriesCycle`.
+      `components/Stage/PlotStage.tsx` had ZERO — it sat exactly ON the 400-line
+      component ceiling — so its opt-in is a named hook, `useStageSeriesCycle`.
+      (Both numbers were one too high in the first rework's own text. The guard
+      counts `src.split("\n").length`, which is `wc -l` PLUS ONE for the trailing
+      newline, so a file at `wc -l` 495 counts as 496 against a ceiling of 500,
+      and one at 399 counts as 400. Worth recording because every ceiling claim
+      in this repo is off by one if read as `wc -l`.)
       `useMultiPanelStage.ts` (pinned 791) paid for the spatial opt-in by moving
       its per-cell styles/labels/legend derivation to
       `multipanel.spatialCellStyling` — where the spatial EXPORT's own channel
@@ -3020,9 +3094,30 @@ covers a much smaller subset and guards focus on Analyze.
       `lib/plotspec2.ts` → **636** (its private `MARKER_SHAPE_VALUES` moved to
       the shared module). `store/useApp.ts` → **2328**, funded by replacing 17
       hand-maintained `x: _initialPrefs.x` lines with one `..._initialPrefs`
-      spread. Eager bundle: measured **919,393 B** after `npm ci` against a
-      918,658 B base; budget moved 918,800 → 920,400 with the full measured
-      justification in `scripts/check-bundle-size.mjs`.
+      spread.
+
+      SECOND ROUND (2026-09-13), same discipline, no pin raised anywhere:
+      `lib/types.ts` gained the `DefaultTrace` union (the `defaultTrace`
+      preference's four values, previously a bare `string` through ten
+      declarations) inside its existing headroom, pin **1053** unchanged;
+      `store/useApp.ts` and `useMultiPanelStage.ts` each took the new type on an
+      EXISTING `lib/types` import line rather than a new one, so both stayed
+      exactly at their pins; `useFigureBuilder.ts`, at zero headroom, funded its
+      one new store subscription by collapsing the three-line `canonicalData`
+      ternary, and now sits AT the general ceiling (counted 499 of 500 — one line
+      left) — the next slice there must extract first.
+
+      **Eager bundle, every number measured on this tree after `npm ci`
+      (2026-09-13):** base `d28fcd6e`, before any of this work, **918,459 B**.
+      The branch this round builds on (`2b60d4e6` — the first rework plus Group
+      AB and two Origin/figure fixes) **919,746 B**. With this round's fixes
+      **919,590 B**: 156 B SMALLER than the tree it builds on, and 810 B under
+      the 920,400 budget, which therefore does NOT move. The first rework's own
+      block quoted a base of 918,658 B measured against `3145fe33` — a commit
+      that never existed on this branch — and is corrected in
+      `scripts/check-bundle-size.mjs`, along with its "residual 593 B" (593 was
+      the amount over the OLD budget, not the feature's cost) and its 74 B
+      checkbox figure (111 B when re-measured here, both ways, on this graph).
     - **Deliberately NOT done.** The glyph cycle does **not** reach the ambient
       `Scatter` / `Line + markers` default trace, and `markers.seriesPoints`
       keeps those two branches apart on purpose: the export emits a marker only
@@ -3059,6 +3154,31 @@ covers a much smaller subset and guards focus on Analyze.
       assertion above it so the comparison means something); cycled styles
       frozen into saved documents; `marker_shape` restored without value
       validation; and a bundle number measured off a warm vite cache.
+
+      **The SECOND review round** (2026-09-13) confirmed all twelve were closed
+      and found eight more, every one of them a place the "cycles on screen IFF
+      the export renders the same dash at the same position" rule had a hole.
+      Fixed, in the order the table above now states them: the legend drew a
+      cycled GLYPH for the ambient default trace that neither the canvas nor the
+      export drew (finding 1, now `markerDecision`); background, snapshot and
+      composite-panel windows drew SOLID beside a dashed focused window, so a
+      window changed appearance on focus move and a "frozen" snapshot rendered
+      solid (2 — background windows cycle from their own view, snapshots freeze
+      the resolved styles, panel cells have no export and are recorded as such);
+      `allowExplicitXAsY` gave the export a display list the canvas never drew
+      from, shifting every later channel (3); a document with an EXACT
+      publication style array bypassed `buildExportStyles` while the canvas
+      cycled anyway (4); the Figure Builder preview and Export — the "what will I
+      get" widget for the focused window — were a third and fourth drifting
+      render path (5); `polarMode`/`statMode` were missing from the shared
+      predicate, so "Export figure…" dashed a figure the screen never dashed
+      (6); the bundle justification block measured against a commit that was
+      never an ancestor of this branch (7); and a batch of stale or contradictory
+      comments the rework itself introduced (8). Two of the eight were purely
+      about honesty rather than behaviour, and both are recorded above rather
+      than quietly corrected: the ceiling-headroom off-by-one, and the
+      publication-styles module header whose "never pulls screen colour code in"
+      claim its own import had made false.
   - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
     there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls

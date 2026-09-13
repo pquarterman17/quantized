@@ -102,6 +102,7 @@ afterEach(() =>
     statMode: false,
     stackMode: false,
     insetMode: false,
+    autoSeriesStyles: false,
   }),
 );
 
@@ -379,5 +380,60 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
     expect(opts.plugins).toHaveLength(1); // errorBarsPlugin (legacy path, untouched)
+  });
+
+  // ── P3.3 auto dash/marker cycle: focus is not a styling input ─────────────
+  // A background window is a live preview tiled BESIDE the focused one so the
+  // two can be compared curve by curve. Before this it passed no cycle, so with
+  // the preference on series 2 and 3 were dashed in the focused window and solid
+  // in the neighbour, and clicking either window swapped which was which — the
+  // "window silently changing appearance on focus move" class this component's
+  // own header names. `useStageSeriesCycle.test.ts` pins that the focused and
+  // background DECISIONS are the same function of the same view; this pins that
+  // the decision actually reaches this window's uPlot options.
+  describe("auto dash/marker cycle (P3.3)", () => {
+    const dashes = (i = 0) =>
+      ((created[i].opts as { series: { dash?: number[] }[] }).series ?? [])
+        .slice(1)
+        .map((ser) => ser.dash);
+
+    it("OFF: no series carries a dash — unchanged from before the feature", async () => {
+      useApp.setState({ autoSeriesStyles: false });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined, undefined]);
+    });
+
+    it("ON: the background window cycles by display position, like the focused one", async () => {
+      useApp.setState({ autoSeriesStyles: true });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      // seriesStyleCycle's DASH table: solid = no dash, dashed = [8,4].
+      expect(dashes()).toEqual([undefined, [8, 4]]);
+    });
+
+    it("ON: refused for a view whose export cannot follow (stackMode), from the window's OWN view", async () => {
+      // The live singletons stay plain — a background window is judged by the
+      // view it draws from. stackMode with <2 plotted channels still renders the
+      // plain XY path here, so the gate (not the dispatcher) is what refuses.
+      useApp.setState({ autoSeriesStyles: true });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={{ ...noBoxView(), stackMode: true, yKeys: [0] }} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined]);
+    });
+
+    it("ON: refused when THIS window's document pins exact publication series styles", async () => {
+      useApp.setState({ autoSeriesStyles: true });
+      const pinned = createFigureDocument({
+        id: "pinned",
+        name: "Pinned",
+        datasetId: DATASET2.id,
+        view: noBoxView(),
+        publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null] },
+      });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} document={pinned} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined, undefined]);
+    });
   });
 });

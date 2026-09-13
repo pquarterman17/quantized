@@ -498,10 +498,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // assigns it, and the export-parity test compares against it without pulling
   // in the plot builder), the marker `points` decision to
   // lib/markers.seriesPoints (which already owned every other marker concern),
-  // and the palette (cssVar / SERIES_VARS / seriesColor) to lib/seriesColor.ts —
-  // which also stops lib/exportStyles.ts importing the whole uPlot options
-  // builder just to resolve a colour. All three re-exported from here, so no
-  // importer changed. Ratcheted to what the file actually is.
+  // and the palette (cssVar / SERIES_VARS / seriesColor) to
+  // lib/seriesStyleCycle.ts as well (hue by display position beside dash and
+  // glyph by display position) — which also stops lib/exportStyles.ts importing
+  // the whole uPlot options builder just to resolve a colour. The palette is
+  // re-exported from here, so no importer changed. Ratcheted to what the file
+  // actually is.
   "/lib/uplotOpts.ts": 1428,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
@@ -554,9 +556,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   "/components/Stage/worksheet/useWorksheetView.ts": 648,
   "/lib/roi.ts": 638,
   // 637 -> 636 (2026-09-12, P3.3): its private `MARKER_SHAPE_VALUES` set moved
-  // to lib/markers.ts beside `MARKER_SHAPES`, so `publicationStyles.ts`'s wire
-  // sanitizer validates `marker_shape` against the SAME list this view-style
-  // sanitizer uses instead of accepting any string.
+  // to lib/seriesStyleCycle.ts, where it is DERIVED from the marker cycle, so
+  // `publicationStyles.ts`'s wire sanitizer validates `marker_shape` against
+  // the SAME list this view-style sanitizer uses instead of accepting any
+  // string. (Not lib/markers.ts: that module carries the canvas path builders,
+  // and the persistence layer is kept clear of them.)
   "/lib/plotspec2.ts": 636,
   // 600 -> 598 (2026-08-12): the item-1 drift check's rationale moved to
   // canonicalSession.ts's selectSessionLiveDrifted, where the subscription

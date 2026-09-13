@@ -1331,58 +1331,95 @@ import { fileURLToPath } from "node:url";
  *  y-extent" case would go red for real, not as a sabotage.
  */
 /*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
- *  cycle, reworked after adversarial review). Measured 919,393 after `npm ci`
- *  — 593 over the old budget — leaving ~1 kB of headroom, the same margin the
- *  three moves below this one left. Every number here is post-`npm ci` on the
- *  same tree; the base it is measured against (3145fe33, no feature) is 918,658.
+ *  cycle). REWRITTEN 2026-09-13, second review round: every number in the
+ *  original was measured against `3145fe33`, a commit that lived only on the
+ *  rework worktree and is NOT an ancestor of this branch, so none of them could
+ *  be reproduced. The budget itself is unchanged and is NOT moved again.
  *
- *  WHAT THE WEIGHT IS. The cycle itself is small: one resolver, two vocabulary
- *  arrays and a view predicate in lib/seriesStyleCycle.ts. The eager cost is the
- *  PARITY WIRING around it, which is the whole point of the rework. The first
- *  cut of this feature kept the on/off flag in a module-level singleton that
- *  every `buildOpts`/`buildExportStyles` caller inherited silently, and review
- *  found five render paths cycling on screen with no export that could reproduce
- *  them. The fix makes the cycle an explicit argument — display POSITIONS — that
- *  a call site must pass, so the canvas (`PlotStage` -> `PlotViewport`, plus the
- *  legend swatch and the magnifier inset) and the export it produces
- *  (`buildStageFigureSpec` -> `buildExportStyles`) are wired as one pair, and a
- *  render path that has not wired its export stays uncycled by default. That
- *  threading — a hook, two props, one extras field on each of two entry points —
- *  is the byte cost, and it cannot be lazy: it runs during the first paint of
- *  the default plot.
+ *  MEASURED HERE, each one a clean `npm ci` followed by `npm run build` (the
+ *  workflow's own two steps), eager total summed exactly as this script sums it:
  *
- *  THREE REDUCTIONS WERE TAKEN FIRST, worth 448 bytes together, all measured on
- *  this tree rather than argued:
- *    1. The palette (`cssVar` / `SERIES_VARS` / `seriesColor`) and the
- *       marker-shape vocabulary were first given their own modules; folding both
- *       into lib/seriesStyleCycle.ts instead — where the dash/glyph cycle they
- *       are indexed alongside already lives — and dropping the
- *       `viewOverrides` re-export barrel that lib/figureSpec.ts had grown, took
- *       919,772 -> 919,393. Worth 379 B, and it also stops lib/exportStyles.ts
- *       importing the entire uPlot options builder to resolve one colour.
- *    2. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
- *       rather than `primitives/Checkbox`, which is deliberately NOT in the
- *       eager bundle (its header records that every other consumer is a lazy
- *       panel). Measured both ways here: 919,467 with the import, 919,393
- *       without. Worth 74 B — the review predicted ~590 B from the original
- *       commit's module graph, and on the reworked graph it is not; the number
- *       is what counts.
- *    3. `resolveSeriesStyle` carries no "nothing left to assign" fast path and
- *       no `Number.isFinite` index guard. The positions array is the gate now,
- *       so an out-of-range index simply has no entry and the function returns
- *       the caller's own reference.
+ *    d28fcd6e  918,459   the base: the commit before the feature landed
+ *    2b60d4e6  919,746   the branch this round builds on (Group U's first
+ *                        rework, plus Group AB and two Origin/figure fixes)
+ *    this work  919,590   the second rework round
  *
- *  A FOURTH REDUCTION WAS REJECTED: collapsing the two `buildOpts` marker
- *  branches back into one (an explicit `style.marker` and the ambient Scatter /
- *  Line + markers default trace) is shorter code and is exactly what the first
- *  cut did. It is also the bug in finding 5 — the export emits a marker only for
- *  an explicit `style.marker`, so a glyph taken from the default trace is drawn
- *  on screen and dropped from the PDF. Bytes do not buy that back.
+ *  So this round is 156 B SMALLER than the tree it builds on, and 810 B under
+ *  the 920,400 budget. The saving is not a diet — it is what closing the eight
+ *  findings happened to cost, net: the `defaultTrace` preference's four values
+ *  became one `DefaultTrace` union in lib/types.ts and ten `string`
+ *  declarations stopped needing their own import lines; the legend's marker
+ *  branch collapsed into the shared `markers.markerDecision` the canvas already
+ *  had; and the new wiring (a second hook export, a background window's cycle, a
+ *  Publication Preview flag, two more fields on one predicate) came to slightly
+ *  less than that.
  *
- *  FOR THE RECORD, since the first cut's own budget note was wrong: the feature
- *  commit as written measures 919,249 here (449 over the old budget, i.e. CI
- *  red), not the "896.9 kB, 0.4 kB under" it claimed. That number came off a
- *  warm vite transform cache. Everything above was measured after `npm ci`.
+ *  WHY THE BUDGET STAYS AT 920,400 rather than dropping to match. It was moved
+ *  for the COMBINED Group U + Group AB tree (see the Group AB block above, which
+ *  records the same tree at 919,699 before the last two commits landed), and
+ *  those groups are still landing in parallel; a pin lowered to this branch's
+ *  number would fail the next group's merge for a reason that has nothing to do
+ *  with its own weight. The `EAGER_JS_BUDGET - SLACK` floor is 880,400, so this
+ *  measurement is nowhere near forcing a reduction.
+ *
+ *  WHAT THE WEIGHT IS, for the feature as a whole (918,459 -> 919,590 = 1,131 B
+ *  across both rework rounds). The cycle itself is small: one resolver, two
+ *  vocabulary arrays and two predicates in lib/seriesStyleCycle.ts. The cost is
+ *  the PARITY WIRING, which is the whole point. The first cut kept the on/off
+ *  flag in a module-level singleton that every `buildOpts`/`buildExportStyles`
+ *  caller inherited silently, and review found five render paths cycling on
+ *  screen with no export that could reproduce them. The fix makes the cycle an
+ *  explicit argument — display POSITIONS — that a call site must pass, so each
+ *  canvas and the export that reproduces it are wired as one pair and a path
+ *  that has not wired its export stays uncycled by default. That threading — two
+ *  hooks, three props, one extras field on each of two entry points, and one
+ *  resolve-before-publish in the snapshot seam — is the byte cost, and it cannot
+ *  be lazy: it runs during the first paint of the default plot.
+ *
+ *  REDUCTIONS TAKEN, all measured on this tree rather than argued:
+ *    1. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
+ *       rather than `primitives/Checkbox`, which is deliberately NOT in the eager
+ *       bundle (its header records that every other consumer is a lazy panel).
+ *       Measured both ways here: 919,701 with the import, 919,590 without —
+ *       111 B. Worth recording that this number MOVES with the module graph: the
+ *       first review predicted ~590 B off the original commit's graph, the first
+ *       rework measured 74 B off its own, and it is 111 B on this one. Re-measure
+ *       it; do not quote it.
+ *    2. `DefaultTrace` went to lib/types.ts beside `LineStyle`/`MarkerShape`
+ *       rather than to lib/markers.ts, because eight of the ten files that need
+ *       it already import from lib/types and could take it on an EXISTING import
+ *       line. That was a line-ceiling decision first (two of those files sit
+ *       exactly on shrink-only pins) and it costs nothing here.
+ *    3. `resolveSeriesStyle` still carries no "nothing left to assign" fast path
+ *       and no `Number.isFinite` index guard (kept from the first rework). The
+ *       positions array is the gate, so an out-of-range index simply has no entry
+ *       and the function returns the caller's own reference.
+ *
+ *  A REDUCTION REJECTED, for the second time: collapsing the two marker branches
+ *  into one (an explicit `style.marker` and the ambient Scatter / Line + markers
+ *  default trace) is shorter code and is exactly what the first cut did. It is
+ *  also findings 5 (round one) and 1 (round two) — the export emits a marker only
+ *  for an explicit `style.marker`, so a glyph taken from the default trace is
+ *  drawn on screen and dropped from the PDF. `markers.markerDecision` keeps the
+ *  two branches in ONE function precisely so they can be shared without being
+ *  merged. Bytes do not buy that back.
+ *
+ *  A SECOND ONE REJECTED: splitting the palette (`cssVar`/`SERIES_VARS`/
+ *  `seriesColor`) back out of lib/seriesStyleCycle.ts into its own module would
+ *  make lib/publicationStyles.ts's "persistence never pulls screen colour code
+ *  in" header literally true again — the first rework folded the palette in, and
+ *  that header's own `MARKER_SHAPE_VALUES` import then crossed it. Folding those
+ *  modules together is what the first rework measured at -379 B, so unfolding
+ *  them to satisfy a comment would spend real bytes on prose. The header was
+ *  rewritten to state what actually holds (the separation from lib/exportStyles,
+ *  which is the one that carries weight) instead.
+ *
+ *  FOR THE RECORD, three numbers in the original block that could not be
+ *  reproduced and are superseded above: the base was quoted as 918,658 (it is
+ *  918,459, against d28fcd6e); the "residual 593 B is parity wiring" conflated
+ *  the amount OVER the old budget with the feature's cost (the block's own
+ *  figures make the cost 735 B at that point); and the checkbox reduction was
+ *  quoted at 74 B.
  */
 const EAGER_JS_BUDGET = 920_400;
 

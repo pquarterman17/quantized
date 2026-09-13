@@ -12,8 +12,10 @@ import {
   AUTO_MARKER_CYCLE,
   DASH,
   displayPositions,
+  documentPinsSeriesStyles,
   overlayExportsSeriesStyles,
   resolveSeriesStyle,
+  type CycleView,
 } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 
@@ -32,11 +34,16 @@ describe("displayPositions", () => {
 });
 
 describe("overlayExportsSeriesStyles — the ONE view test both sides gate on", () => {
-  const overlay = { groupKey: null, facetKey: null, stackMode: false };
+  const overlay: CycleView = {
+    groupKey: null,
+    facetKey: null,
+    stackMode: false,
+    polarMode: false,
+    statMode: false,
+  };
 
   it("accepts the plain single-panel overlay", () => {
     expect(overlayExportsSeriesStyles(overlay)).toBe(true);
-    expect(overlayExportsSeriesStyles({ ...overlay, groupKey: undefined })).toBe(true);
   });
 
   it("refuses every view whose export cannot apply per-series styles", () => {
@@ -49,6 +56,31 @@ describe("overlayExportsSeriesStyles — the ONE view test both sides gate on", 
     // stackMode: the screen-only panel split (and the gate PlotStage puts every
     // other multi-panel arrangement behind) that a single figure cannot show.
     expect(overlayExportsSeriesStyles({ ...overlay, stackMode: true })).toBe(false);
+    // polar/stat: the XY canvas is replaced entirely (PlotStage early-returns to
+    // PolarStage/StatStage), but a plain buildFigureSpec request still emits an
+    // ordinary XY figure — so "Export figure…" used to dash a figure the screen
+    // never dashed.
+    expect(overlayExportsSeriesStyles({ ...overlay, polarMode: true })).toBe(false);
+    expect(overlayExportsSeriesStyles({ ...overlay, statMode: true })).toBe(false);
+  });
+});
+
+describe("documentPinsSeriesStyles — an exact array is the document's final word", () => {
+  it("is true only for an ARRAY of publication series styles", () => {
+    // `figureSpec` ships an exact array verbatim and never calls
+    // `buildExportStyles`, so the canvas beside such a document must not cycle.
+    expect(documentPinsSeriesStyles({ publication: { seriesStyles: [{}, null] } })).toBe(true);
+    expect(documentPinsSeriesStyles({ publication: { seriesStyles: [] } })).toBe(true);
+  });
+
+  it("is false for absent, null, and no publication block at all", () => {
+    // absent = "derive from the PlotView" (so the cycle may apply);
+    // null = "omit styles"; neither pins anything.
+    expect(documentPinsSeriesStyles({ publication: { seriesStyles: undefined } })).toBe(false);
+    expect(documentPinsSeriesStyles({ publication: { seriesStyles: null } })).toBe(false);
+    expect(documentPinsSeriesStyles({})).toBe(false);
+    expect(documentPinsSeriesStyles(undefined)).toBe(false);
+    expect(documentPinsSeriesStyles(null)).toBe(false);
   });
 });
 
