@@ -3653,12 +3653,31 @@ covers a much smaller subset and guards focus on Analyze.
       never having sent it) — every `kind` there colours by a continuous
       z-value (`cmap`), the same "colour IS the plotted quantity" case this
       flag already leaves untouched for a `color_by` scatter, so there is no
-      categorical palette for a print-safe ramp to replace. **RESIDUAL —
-      page-route greyscale is API-only today.** `PagePanel.greyscale` is
-      honoured by the backend (pinned above), but the composer's own
-      "Export page…" dialog (`lib/exportPageCommand.ts`) offers only
-      fmt/dpi — no per-panel greyscale checkbox — so a user cannot reach
-      this from the UI yet; only a direct API caller can. The review also
+      categorical palette for a print-safe ramp to replace. ~~**RESIDUAL —
+      page-route greyscale is API-only today.**~~ **CLOSED.** The spatial
+      page composer's "Export page…" dialog (`lib/exportPageCommand.ts`)
+      now reuses `lib/exportFigureCommand.ts`'s own `GREYSCALE_FIELD`
+      (never a duplicate definition) and threads the answer as ONE
+      page-level choice onto EVERY panel's own `FigureSpec.greyscale`
+      (`lib/spatialPageExport.ts`'s `SpatialPageAppearance.greyscale` ->
+      `spatialPanelFigure`) — `PagePanel.greyscale` stays genuinely
+      per-panel on the backend, but this dialog has no per-panel UI, so
+      "on" means "on for the whole page". Omitted/false is byte-identical
+      to before, mirroring the single-figure dialog's own wire convention.
+      A facet panel would be a documented no-op (`FigureSpec.greyscale`
+      never applies once `.facets` is set) — moot today since
+      `spatialPanelFigure` never emits `.facets`. Tests:
+      `exportPageCommand.test.ts` pins the field's presence (identical to
+      `GREYSCALE_FIELD`) and the threaded/omitted wire value across every
+      panel; `spatialPageExport.test.ts` pins the same at the request-
+      builder layer. **A SEPARATE residual remains, not closed here:** the
+      Figure Page composer (`components/workshops/figurepage/`,
+      `usePagePreviewExport.ts`) has its OWN export path with no modal
+      dialog at all — fmt/style/DPI are plain always-visible controls in
+      `FigurePageView.tsx` — so adding greyscale there is a page-wide-vs-
+      per-panel product decision plus new `useFigurePage.ts` state, not a
+      dialog-field reuse; left for a follow-up rather than folded into this
+      close. The review also
       found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
       a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to

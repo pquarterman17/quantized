@@ -366,3 +366,49 @@ describe("auto dash/marker cycle — spatial page export (P3.3)", () => {
     ]);
   });
 });
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: `appearance.greyscale` is
+// ONE page-level choice, threaded onto EVERY panel's own `FigureSpec`
+// (lib/exportPageCommand.ts applies it uniformly — this composer has no
+// per-panel UI), byte-identical to before when off/omitted (mirrors the
+// single-figure dialog's own wire convention).
+describe("greyscale (print-safe) page export — P3.3 residual", () => {
+  const baseAppearance = {
+    xFmt: { mode: "auto" as const, digits: 2 },
+    yFmt: { mode: "auto" as const, digits: 2 },
+    showGrid: true,
+    showAxisBox: false,
+  };
+
+  it("threads greyscale: true onto EVERY panel's figure spec when opted in", () => {
+    const spec = buildSpatialPageRequest(
+      [panel(), panel({ col: 1, pageRect: { left: 0.55, top: 0.2, width: 0.3, height: 0.4 } })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      { ...baseAppearance, greyscale: true },
+    );
+    expect(spec!.panels).toHaveLength(2);
+    expect(spec!.panels[0].figure.greyscale).toBe(true);
+    expect(spec!.panels[1].figure.greyscale).toBe(true);
+  });
+
+  it("omits greyscale from every panel when off, matching the single-figure wire convention", () => {
+    const spec = buildSpatialPageRequest(
+      [panel()],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      { ...baseAppearance, greyscale: false },
+    );
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
+  });
+
+  it("omits greyscale when the appearance bag omits it entirely (today's default)", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup(), baseAppearance);
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
+  });
+
+  it("omits greyscale with no appearance bag at all", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
+  });
+});

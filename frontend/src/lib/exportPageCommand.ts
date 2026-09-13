@@ -27,6 +27,7 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialPanelsOf } from "./composition";
 import { cancelled, type StoreGet } from "./exportActive";
+import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { analysisData } from "./rowstate";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
 import { beginOp, endOp } from "../store/pendingOps";
@@ -72,6 +73,16 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       default: 300,
       hint: "Resolution for PNG / TIFF (50-1200); ignored by vector",
     },
+    // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual: reuse the single-figure
+    // dialog's own field (lib/exportFigureCommand.ts) rather than
+    // duplicating it — the label/hint must never drift between the two
+    // export dialogs. Threaded below as ONE page-level choice applied to
+    // EVERY panel's own figure spec (PagePanel.greyscale is per-panel on
+    // the backend, but this dialog offers no per-panel UI, so "on" means
+    // "on for the whole page"). A facet panel would be a documented no-op
+    // (FigureSpec.greyscale never applies once `.facets` is set) — moot
+    // today since `spatialPanelFigure` never emits `.facets`.
+    GREYSCALE_FIELD,
   ]);
   if (!params) return;
   const controller = new AbortController();
@@ -100,6 +111,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
           showGrid: live.showGrid,
           showAxisBox: live.showAxisBox,
           autoSeriesStyles: live.autoSeriesStyles,
+          greyscale: params.greyscale as boolean,
         });
     if (!spec) {
       const msg = "export page failed: a panel's dataset or page geometry is no longer available";

@@ -73,6 +73,17 @@ export interface SpatialPageAppearance {
    *  its page panel get the same dash. Absent/false = no cycle, byte-identical
    *  to before the cycle existed. */
   autoSeriesStyles?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: one page-level "print
+   *  safe" choice, applied to EVERY panel's own `FigureSpec.greyscale` (the
+   *  backend's `PagePanel.greyscale` is genuinely per-panel, but this
+   *  composer offers no per-panel UI — see `lib/exportPageCommand.ts`'s own
+   *  doc). Omitted/false = today's coloured export, byte-identical, mirroring
+   *  the single-figure dialog's own wire convention (`lib/figureSpec.ts`'s
+   *  `...(o.greyscale ? { greyscale: true } : {})`). A facet panel would be a
+   *  documented no-op (`FigureSpec.greyscale`'s own doc: never applies once
+   *  `.facets` is set) — moot today since `spatialPanelFigure` below never
+   *  emits `.facets`. */
+  greyscale?: boolean;
 }
 
 function panelOverrides(
@@ -202,6 +213,8 @@ function spatialPanelFigure(
     // backend auto-derives it the same way it does for the single-figure
     // route (calc's _figure_series: a lone y2 series -> "label (unit)").
     ...secondaryAxisWire(y2Axis),
+    // P3.3 residual close: SpatialPageAppearance.greyscale's own doc.
+    ...(appearance?.greyscale ? { greyscale: true } : {}),
   };
 }
 
