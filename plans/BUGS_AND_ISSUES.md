@@ -2158,12 +2158,13 @@ end of this entry.)
   helper (`notifyMigrationWarnings` in `store/toasts.ts`, mirroring the
   existing "recovered … — check your latest edits" toast pattern in
   `useWorkspaceAutosave.ts`) called explicitly at every loader, rather than a
-  toast fired automatically from inside `loadWorkspace` itself — a shared
-  `loadWorkspace`-internal toast would fire even for File ▸ Open's own
-  browser-picker/native-open plumbing paths that don't want one, and would
-  still miss Append Project and workbook-package import, which never call
-  `loadWorkspace` at all — and rather than a `status` string every caller
-  must remember to fold into its own message.
+  toast fired automatically from inside `loadWorkspace` itself — a
+  `loadWorkspace`-internal toast would still miss Append Project and
+  workbook-package import, which never call `loadWorkspace` at all, so the
+  helper is called at every loader explicitly (File ▸ Open's own
+  `replaceWorkspace`/`replaceWorkspaceSafely` included, after the review
+  round) — and rather than a `status` string every caller must remember to
+  fold into its own message.
 - [x] Pin it at `applyRecoverAutosave` first — it is the site the Group AF
   attempt actually needed and the one whose overwrite is a single, easy-to-see
   statement (line 36).
@@ -2191,8 +2192,9 @@ A delivery channel no caller's later `setStatus` can clobber: a toast
 `migrationNotice` local) and the "one toast for N warnings, never one per
 warning" rule live in exactly one place. `useApp.ts`'s existing status-line
 fold for File ▸ Open is UNCHANGED — this is additive, not a reroute — and,
-after the review round below, File ▸ Open shows BOTH the status line and the
-toast, exactly like every other load path.
+after the review round below, File ▸ Open is the ONE path that shows BOTH
+the status line and the toast; every other load path shows the toast only
+(their own `setStatus` overwrites whatever `loadWorkspace` folded).
 
 Call sites, each now calling `notifyMigrationWarnings`:
 
@@ -2253,8 +2255,10 @@ carries a migration warning (structural, not a live path)".
 - [x] Expected result recorded — see "Fix implemented" above.
 - [x] Reproduced by an agent — one regression test per site (see below),
   each sabotage-verified: removing that site's `notifyMigrationWarnings`
-  call (or, for site 4, reverting the dropped-field propagation) makes
-  exactly that site's new test fail and no others.
+  call (or, for site 4, reverting the dropped-field propagation) makes that
+  site's new test fail — sites 1-3 fail exactly their own test; the site-4
+  field sabotage fails two tests in two files (the `lib/` parse test and the
+  `store/` paste test), as the first review round noted.
 
 #### Investigation
 
@@ -2457,8 +2461,8 @@ edit it, so this stays a known wrinkle in `git log` rather than something
 | `npx tsc -b --force` | exit 0 |
 | `npx eslint src --max-warnings=0` | exit 0 |
 | targeted vitest (`toasts.test.ts`, `openWorkspaceReplace.test.ts`, `workbookTransfer.test.ts` x2) | 74 passed, exit 0 |
-| full `npx vitest run` | 636 files / 10424 tests (10422 passed, 2 expected-fail), 0 `FAIL` lines, exit 0 (720.6 s) |
-| `npm run build` (eager JS) | 916,453 B vs 916,384 B at `HEAD~1` (`384f2bc9`) — +69 B, 3,947 B under the unmoved 920,400 B budget |
+| full `npx vitest run` | 636 files / 10424 tests (10422 passed, 2 expected-fail), 0 `FAIL` lines, exit 0 (720.6 s) — measured on the agent's pre-rebase tree (parent `384f2bc9`, lacking `48556a04`/`a99ebb6d`); the batch's final full run is recorded in the PR body |
+| `npm run build` (eager JS) | 916,453 B vs 916,384 B at `HEAD~1` (`a99ebb6d`, this commit's real parent; the agent's report named `384f2bc9`, three commits back, which happens to measure the same 916,384 B) — +69 B, 3,947 B under the unmoved 920,400 B budget |
 | `uv run pytest -q tests/test_repo_integrity.py` | 12 passed |
 
 ---
@@ -2980,4 +2984,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | BUG-011 fixed: both Pack Project serialization entry points (the preview and "Start pack") now `await resolvePendingDatasets()` before `serializeWorkspace` and abort with a named `pending_unresolved` error + status + danger toast when a book can't be fetched, mirroring `workspaceIO.ts`'s Save path. The workspace-content slice moved to the new `store/packProjectContent.ts` so the 500-line `.ts` ceiling was met by extraction, not a pin raise; `lib/workspaceSerialize.ts`'s `pending` comment corrected to name all three explicit export paths | All four Fix-checklist boxes ticked with file:line evidence; 5 new specs, each sabotage-verified (4 sabotage rounds, source restored byte-identical); full frontend suite 634 files / 10,381 tests green; eager bundle unchanged at 916,182 B (budget 920,400). Owner call on abort-vs-partial-pack left open in the entry |
 | 2026-09-13 | Claude | Added and fixed BUG-010 (`migrationWarnings` reached the user on a plain File ▸ Open only — autosave recovery, silent autosave restore, Append workspace, and workbook Paste all folded or dropped the notice): one shared `notifyMigrationWarnings` toast helper (`store/toasts.ts`) called from all four sites; `duplicateWorkbook` deliberately excluded (structural non-goal, pinned by test) | BUG-010 fixed + sabotage-verified (one regression test per site); `uv run pytest -q tests/test_repo_integrity.py` passed |
 | 2026-09-13 | Claude | Adversarial review round on the BUG-011 fix (commit `1b7ec2cf`): closed both CONFIRMED code findings — "Start pack"'s own book-resolve await had no generation guard (a cancel/reset during it was silently overwritten, and a second click ran a second concurrent attempt), and a book that turned pending DURING the resolve await was still serialized from its preview rows. Also named the failing book in the refusal (finding #5), corrected two stale cross-references and an understated sabotage count, added a status on the resolve step's success path, and renamed a shadowing `type Set` alias. Recorded the identical `workspaceIO.ts`/`workbookTransfer.ts` narrower window as a residual rather than fixing it (those files are being edited concurrently for BUG-010) | 4 new specs + 2 existing specs strengthened (65 passing, was 61), every new/strengthened assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0`/scoped vitest/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +15 B (916,182 B at the `2d779065` parent -> 916,197 B here, from nit 3's in-flight flag in the eager `store/packProject.ts`), 4,203 B under the unmoved 920,400 budget |
-| 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `384f2bc9` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
+| 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `a99ebb6d` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
