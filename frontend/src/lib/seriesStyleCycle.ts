@@ -34,7 +34,7 @@
 // not depend on the reader's preference. (A snapshot instead freezes the
 // RESOLVED styles at freeze time, which is what keeps "freezes exactly what's on
 // screen" true; see `Stage/useLiveSnapshotPublish.ts`.) The full table, with the
-// one residual this leaves, is in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3.
+// two residuals this leaves, is in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3.
 //
 // THE POSITIONS ARE ALSO THE FIX FOR THE HIDDEN-SERIES SKEW. The canvas keeps a
 // hidden series in `payload.series` and merely sets `show: false`

@@ -256,6 +256,12 @@ describe("FigureDocument FigureSpec adapter", () => {
     const nullStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: null } });
     expect(buildFigureSpecFromDocument(nullStyles, dataset, "null")).not.toHaveProperty("series_styles");
 
+    // Nit 4 (round-4 review): the `[]` half of the exact-array branch ships
+    // `series_styles: []` on the wire — pinned here, not just at
+    // `documentPinsSeriesStyles([])` in seriesStyleCycle.test.ts.
+    const emptyStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([]);
+
     const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
     const publication = createFigureDocument({
       ...base,

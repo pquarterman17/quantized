@@ -13,6 +13,7 @@ import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
 import type { DataStruct, Shape } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { plotWindowView } from "../../../store/windowDocuments";
 // P3.3: the canvas half of the parity assertions below — the preview must match
 // the TARGET window's own canvas, so both are rendered in the same test.
 import {
@@ -734,8 +735,20 @@ describe("useFigureBuilder", () => {
     // The target window's OWN view decides, not the live singletons and not the
     // draft. An unfocused window in a mode whose export cannot reproduce it
     // (here polar) refuses on both sides even though the live view is plain.
+    // The window carries a DOCUMENT (as every real plot window does) whose
+    // derived view is polar — a bare `view.polarMode` with no document is a
+    // shape no real window is ever in, since `plotWindowView` reads the
+    // document over the view once one exists.
     it("does NOT cycle when the UNFOCUSED target window's own view refuses", async () => {
-      const target: PlotWindow = { ...win("w1"), view: { ...defaultPlotView(), polarMode: true } };
+      const polarDoc = createFigureDocument({
+        id: "figure-cyc", name: "Live plot", datasetId: "d1",
+        view: { ...defaultPlotView(), polarMode: true },
+      });
+      const target: PlotWindow = {
+        ...win("w1"),
+        document: polarDoc,
+        view: figureDocumentToPlotView(polarDoc),
+      };
       useApp.setState({
         autoSeriesStyles: true,
         figurePublicationSession: windowSession("w1"),
@@ -743,8 +756,35 @@ describe("useFigureBuilder", () => {
         focusedWindowId: "w2",
       });
       expect(
-        renderHook(() => useWindowSeriesCycle(target.view, target.document, 2)).result.current,
+        renderHook(() => useWindowSeriesCycle(plotWindowView(target), target.document, 2)).result
+          .current,
       ).toBeNull();
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    // F4 (round 4): the DOCUMENT decides, not a stale `view` mirror. A real
+    // window keeps them in sync, but the selector must not depend on that —
+    // it reads `plotWindowView(target)`, the SAME projection the unfocused
+    // canvas (`WindowCanvas.tsx`) uses, which derives from the document
+    // whenever one exists. Sabotage: reading `target.view` directly here
+    // (its stale, non-polar copy) would wrongly cycle.
+    it("does NOT cycle when the UNFOCUSED target's DOCUMENT refuses even though its stale view field does not", async () => {
+      const polarDoc = createFigureDocument({
+        id: "figure-cyc", name: "Live plot", datasetId: "d1",
+        view: { ...defaultPlotView(), polarMode: true },
+      });
+      // The record's own `view` field is deliberately left at the plain
+      // default — stale relative to the polar document — to prove the
+      // document wins regardless of what that mirror says.
+      const target: PlotWindow = { ...win("w1"), document: polarDoc, view: defaultPlotView() };
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
       const { result } = renderHook(() => useFigureBuilder());
       await waitFor(() => expect(result.current.preview).not.toBeNull());
       expect(previewLines()).toEqual([undefined, undefined]);

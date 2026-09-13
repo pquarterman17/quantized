@@ -3006,7 +3006,7 @@ covers a much smaller subset and guards focus on Analyze.
       | Snapshot window (`SnapshotPlotWindow`) | none | no cycle is re-derived; the styles were frozen ALREADY RESOLVED (below) |
       | Figure Page panels, graph templates, saved Library figures, `plotSpecFigure`, `legacyFigure` | server-rendered from a STORED document/template | no, both sides |
 
-      Every row above is decided by **ONE function**,
+      Every **plot-window** row above is decided by **ONE function**,
       `seriesStyleCycle.windowCyclesSeriesStyles(on, view, document)`, which is
       the preference AND the two predicates under it: the view test
       `overlayExportsSeriesStyles({groupKey, facetKey, stackMode, polarMode,
@@ -3023,7 +3023,13 @@ covers a much smaller subset and guards focus on Analyze.
       view — and its document refusal is load bearing for the FALLBACK branch
       (`buildFigureSpec`, taken when the focused document's dataset disagrees
       with the one being exported), which never sees `document.publication` at
-      all.
+      all. Two row families above are NOT decided by it: spatial page cells (a
+      "yes" row) go through a bare `displayPositions(autoSeriesStyles, n)`,
+      identically on both sides (`lib/multipanel.ts:240` canvas,
+      `lib/spatialPageExport.ts:195` export) — neither predicate is consulted,
+      so there is no parity bug, only a narrower claim than "every row"; and
+      every "no" row is a render path that simply passes no cycle at all, which
+      is those modules' own design, not this function's.
 
       THE THIRD ROUND'S TWO HOLES IN THAT SENTENCE, both now closed. (a) The
       Publication Preview gate asked `session.windowId === focusedWindowId`
@@ -3227,34 +3233,51 @@ covers a much smaller subset and guards focus on Analyze.
       left) — the next slice there must extract first.
 
       THIRD ROUND (2026-09-13): no pin raised and none approached. The shared
-      `windowCyclesSeriesStyles` collapsed a three-clause gate that three call
-      sites each spelled out (and a fourth, the Publication Preview, spelled
-      WRONG), so `lib/figureSpec.ts` came DOWN — counted 483 of 500, from 493 —
+      `windowCyclesSeriesStyles` collapsed a three-clause gate that FOUR call
+      sites each spelled out (both `useStageSeriesCycle` hooks,
+      `buildStageFigureSpec` and `buildFigureSpecForView`), plus ONE more, the
+      Publication Preview, that spelled it WRONG, so `lib/figureSpec.ts` came
+      DOWN — counted 483 of 500, from 493 —
       and `components/Stage/useStageSeriesCycle.ts` went from seven store
       subscriptions to one.
 
       **Eager bundle, measured on THIS tree after `npm ci` and a
-      `node_modules/.vite` wipe (2026-09-13, third round):** parent `dc0dbae9`
-      **920,089 B**; with this round's fixes **920,031 B** — 58 B smaller, and
-      369 B under the 920,400 budget, which therefore does NOT move.
+      `node_modules/.vite` wipe (2026-09-13, FOURTH round, re-measured against
+      the real parent):** parent `6797e77c` **915,638 B**; this commit
+      **915,587 B** — 51 B smaller, and 4,813 B under the 920,400 budget, which
+      therefore does NOT move.
 
-      Both earlier blocks' numbers are superseded and must not be quoted forward,
-      for two versions of the same mistake. The original measured against
-      `3145fe33`, which is not in this branch's history at all. The second
-      measured against `2b60d4e6`, which IS an ancestor but sits three commits
-      behind the actual parent of that work, `5f65ec8a` — and the region 2-D
-      y-box fixes in between moved the bundle, so its "810 B under budget" was
-      really 311 B (`1b60872a` measures 920,089 here). An ancestor is not a
-      parent. Corrected in full in `scripts/check-bundle-size.mjs`, which also
-      records the one measurement worth keeping from this round: having
+      All three earlier blocks' numbers are superseded and must not be quoted
+      forward, for three rounds of the same mistake. The original measured
+      against `3145fe33`, which is not in this branch's history at all. The
+      second measured against `2b60d4e6`, which IS an ancestor but sits FIVE
+      commits behind the actual parent of that work, `5f65ec8a` — `78cbc808`
+      (a twelve-finding Library fix, the most likely mover), `d8c6f0f3` (a
+      test-only pin) and `55870ed8` (a plans-only docs commit) came first, and
+      only the last two, `ed596ec3` and `5f65ec8a` themselves, are the region
+      2-D y-box work — so its "810 B under budget" was really 311 B
+      (`1b60872a` measures 920,089 here). That is not the whole story: the
+      second round ALSO
+      mis-measured its OWN tree — it claimed 919,590 B, and that same tree
+      checks out at 920,089 here, 499 B off — which a stale baseline cannot
+      explain, because a stale baseline moves the DELTA, not a measurement of
+      one's own build. The third round then repeated the identical mistake in
+      a new shape: it measured against `dc0dbae9`, an ancestor of this
+      commit's real parent `6797e77c` — two commits back, across `d6e67fb7`
+      (P3.4's export-cancel work), which moved substantial frontend code onto
+      lazy import paths and shifted the bundle by roughly 4.4 kB. Naming an
+      ancestor "this round's PARENT" is exactly the error the paragraph above
+      exists to warn against. Corrected in full in `scripts/check-bundle-size.mjs`.
+      It also records the one measurement worth keeping from the third round,
+      measured on that (superseded) tree rather than this one: having
       `figurebuilder/canonicalSession.ts` import the focused-window selector from
       `components/Stage/useStageSeriesCycle.ts` cost **626 B** (920,715 — over
-      budget), because that single cross-directory import moved a chunk boundary.
-      Putting the shared decision in `lib/seriesStyleCycle.ts`, which both files
-      already imported, gave the 920,031 above with identical behaviour. The
-      checkbox reduction re-measures at 102 B here (74 B, then 111 B, in the two
-      earlier rounds — it moves with the module graph, so it is re-measured every
-      round).
+      that tree's budget), because that single cross-directory import moved a
+      chunk boundary. Putting the shared decision in `lib/seriesStyleCycle.ts`,
+      which both files already imported, avoided it with identical behaviour.
+      The checkbox reduction re-measured at 102 B on that same superseded tree
+      (74 B, then 111 B, in the two earlier rounds — it moves with the module
+      graph, so it is re-measured every round).
     - **Deliberately NOT done.** The glyph cycle does **not** reach the ambient
       `Scatter` / `Line + markers` default trace, and `markers.seriesPoints`
       keeps those two branches apart on purpose: the export emits a marker only
@@ -3361,6 +3384,65 @@ covers a much smaller subset and guards focus on Analyze.
       files are one line UNDER it, and `markers.ts`'s "third side of the same
       rule", which overstated how much of the marker decision
       `buildExportStyles` shares.
+
+      **THE FOURTH REVIEW ROUND** (2026-09-13) confirmed six more findings, all
+      fixed:
+
+      1. Two consumer comments still asserted fix 1's own premise — that the
+         preview cycles only for a session previewing the FOCUSED window's own
+         figure — after fix 1 had made that false: `canonicalReadiness.ts` and
+         `previewExport.ts` reworded to "a session whose TARGET window cycles
+         per `windowCyclesSeriesStyles`, focused or not".
+      2. `canonicalSession.ts` judged an unfocused target by `target.view`, a
+         DIFFERENT projection than the one the canvas it is meant to agree with
+         actually uses — `WindowCanvas.tsx` passes `plotWindowView(win)`, which
+         derives the view from the DOCUMENT when one exists
+         (`store/windowDocuments.ts`). The two agreed only because every writer
+         of a document-backed window already re-derives `view` from the
+         document; nothing enforced it, and no real window is document-less.
+         Now calls `plotWindowView(target)` directly, so the preview gate reads
+         the same projection the canvas draws from by construction rather than
+         by every writer's discipline. Measured against the commit's REAL
+         parent `cd402c1b` (the export-cancel fix round, which sits between
+         `95a211fc` and this work): 916,102 -> 916,102, 0 B. The fix agent
+         first charged +515 B to this change by measuring against `95a211fc`
+         — the ancestor-is-not-a-parent mistake a fourth time; the 515 B is
+         `cd402c1b`'s own, recorded in its own bundle entry. Inlining
+         `figureDocumentToPlotView(target.document)` instead of importing
+         `plotWindowView` measured the same bytes; the import is kept rather
+         than a duplicate, drift-prone reimplementation. Still 4,298 B under
+         the unmoved 920,400 budget.
+      3. The table's summary sentence overstated "every row above is decided by
+         ONE function" — narrowed to every plot-WINDOW row, above.
+      4. `windowCyclesSeriesStyles` — the one function this round's whole
+         subject is about — had no direct unit test of its own; it was
+         exercised only through its five callers. Added a dedicated block to
+         `seriesStyleCycle.test.ts`: off; on with a pinning document (`null` and
+         `[]`); on with each of the view-disagreement clauses in turn
+         (`groupKey`, `facetKey`, `stackMode`, `polarMode`, `statMode`, and the
+         X-also-in-`yKeys` case); and on with a clean view and no document.
+      5. The bundle justification block measured against `dc0dbae9`, an
+         ancestor two commits behind this commit's real parent `6797e77c` —
+         repeating, in a new shape, the exact "ancestor is not a parent"
+         mistake the block exists to police, and miscounting the second
+         round's own history error as three commits rather than five. Rewritten
+         against the real parent, measured here (see "Eager bundle" above).
+      6. `useFigureBuilder.test.ts`'s unfocused-target pin built a window with
+         `view: {…, polarMode:true}` and no `document` — a shape no real window
+         can be in. Rebuilt with a document whose derived view is polar and a
+         stale, non-polar `view` left on the record, so the pin actually
+         exercises fix 2: a sibling case (stale `view` polar, document not) now
+         proves the DOCUMENT wins, not whichever field happens to be read.
+
+      Plus four nits: `lib/seriesStyleCycle.ts`'s header still said "the one
+      residual" after the plan came to list two; `useStageSeriesCycle.test.ts`
+      built a window record with `x/y/w/h` instead of `geometry`, through
+      `as unknown as` — a shape `PlotWindow` does not have; the "three call
+      sites... and a fourth spelled WRONG" text undercounted by one
+      (`buildFigureSpecForView` was a fourth site that spelled it out, so it
+      was four plus one wrong — fixed above); and the `[]` half of fix 3 — an
+      empty `seriesStyles` array ships as `series_styles: []` on the wire — had
+      no test, now pinned in `figureSpec.test.ts`.
   - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
     there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls

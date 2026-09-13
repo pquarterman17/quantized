@@ -25,9 +25,10 @@ export interface PreviewExportDeps {
   active: Dataset | null;
   fmt: string;
   dpi: number;
-  /** P3.3: opt IN to the auto dash/marker cycle — true only when this session
-   *  previews the FOCUSED window's own figure, so this Export emits the same
-   *  dashes that window's Stage export (and its canvas) shows. Sourced from
+  /** P3.3: opt IN to the auto dash/marker cycle — true for a session whose
+   *  TARGET window cycles per `windowCyclesSeriesStyles`, focused or not, so
+   *  this Export emits the same dashes that window's Stage export (and its
+   *  canvas) shows. Sourced from
    *  `canonicalSession.selectSessionCyclesSeriesStyles`. */
   autoSeriesStyles: boolean;
   setStatus: (status: string) => void;

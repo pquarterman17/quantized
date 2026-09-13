@@ -52,10 +52,11 @@ export function computeCanonicalReadiness(
     return {
       state: "ready",
       data,
-      // P3.3: `autoSeriesStyles` is true only for a session previewing the
-      // FOCUSED window's own figure — see `canonicalSession`'s
-      // `selectSessionCyclesSeriesStyles`, which is the caller's source for it.
-      // The preview must show the dashes that window's Stage export will emit.
+      // P3.3: `autoSeriesStyles` is true for a session whose TARGET window
+      // cycles per `windowCyclesSeriesStyles` — focused or not — see
+      // `canonicalSession`'s `selectSessionCyclesSeriesStyles`, which is the
+      // caller's source for it. The preview must show the dashes that
+      // window's Stage export will emit.
       spec: buildFigureSpecFromDocument(document, dataset, "preview", { autoSeriesStyles }),
     };
   } catch (error) {

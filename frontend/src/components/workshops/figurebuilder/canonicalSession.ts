@@ -11,6 +11,7 @@ import type { PlotWindow } from "../../../lib/plotview";
 import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
 import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
+import { plotWindowView } from "../../../store/windowDocuments";
 import type { AppState } from "../../../store/useApp";
 
 /** True once a session's live document -- the SAME comparison
@@ -66,7 +67,18 @@ export function sessionLiveDrifted(
  *  OWN document and view. The view is the LIVE singletons when that window holds
  *  focus, because that is what its canvas draws from and a window record's
  *  `view` copy lags them (the same focused/unfocused split
- *  `store/liveWindowDocument.ts` makes), and its own record otherwise.
+ *  `store/liveWindowDocument.ts` makes), and otherwise `plotWindowView(target)`
+ *  (`store/windowDocuments.ts`) — the SAME projection `WindowCanvas.tsx` passes
+ *  to the unfocused canvas, which derives the view from the window's DOCUMENT
+ *  when it has one rather than trusting the record's `view` mirror. Reading
+ *  `target.view` directly here would agree with the canvas only as long as
+ *  every writer of a document-backed window keeps that mirror in sync — true
+ *  today, enforced nowhere, and not a bet this selector needs to make when the
+ *  canvas's own projection is one import away. (Measured both this shape and a
+ *  hand-inlined `figureDocumentToPlotView(target.document)` call: identical
+ *  eager bytes either way — see the bundle-size header's F4 note — so the
+ *  import is kept, rather than a duplicate, drift-prone reimplementation of
+ *  the same projection traded for no byte saving at all.)
  *
  *  Reading the LIVE view for a focused target also closes the drift the preview
  *  had against the window behind it: toggling polar/stat/stack/facet on that
@@ -92,7 +104,7 @@ export function selectSessionCyclesSeriesStyles(state: AppState): boolean {
   if (target === undefined || target.kind !== "plot") return false;
   return windowCyclesSeriesStyles(
     state.autoSeriesStyles,
-    target.id === state.focusedWindowId ? state : target.view,
+    target.id === state.focusedWindowId ? state : plotWindowView(target),
     target.document,
   );
 }

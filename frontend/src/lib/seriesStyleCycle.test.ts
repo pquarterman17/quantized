@@ -16,6 +16,7 @@ import {
   documentPinsSeriesStyles,
   overlayExportsSeriesStyles,
   resolveSeriesStyle,
+  windowCyclesSeriesStyles,
   type CycleView,
 } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
@@ -120,6 +121,63 @@ describe("documentPinsSeriesStyles — only an ABSENT field leaves styles deriva
     expect(documentPinsSeriesStyles({})).toBe(false);
     expect(documentPinsSeriesStyles(undefined)).toBe(false);
     expect(documentPinsSeriesStyles(null)).toBe(false);
+  });
+});
+
+// F6 (round-4 review): `windowCyclesSeriesStyles` is the one function this
+// module's whole P3.3 story is named for, and it had no test that called it
+// directly — only through its five callers (both `useStageSeriesCycle` hooks,
+// `canonicalSession`, and `figureSpec`'s two builders). Sabotage
+// (`return on && overlayExportsSeriesStyles(view);`, dropping the document
+// clause) turns every case below that pins a document into a false pass.
+describe("windowCyclesSeriesStyles — the ONE decision every canvas and export asks", () => {
+  const view: CycleView = {
+    groupKey: null,
+    facetKey: null,
+    stackMode: false,
+    polarMode: false,
+    statMode: false,
+    xKey: null,
+    yKeys: null,
+  };
+
+  it("is false with the preference off, even for a clean view and no document", () => {
+    expect(windowCyclesSeriesStyles(false, view, undefined)).toBe(false);
+  });
+
+  it("is false when the document pins an exact array, including an empty one", () => {
+    expect(windowCyclesSeriesStyles(true, view, { publication: { seriesStyles: [] } })).toBe(
+      false,
+    );
+    expect(
+      windowCyclesSeriesStyles(true, view, { publication: { seriesStyles: [{}, null] } }),
+    ).toBe(false);
+  });
+
+  it("is false when the document pins an explicit null", () => {
+    expect(windowCyclesSeriesStyles(true, view, { publication: { seriesStyles: null } })).toBe(
+      false,
+    );
+  });
+
+  it("is false for each view clause the export cannot reproduce", () => {
+    expect(windowCyclesSeriesStyles(true, { ...view, groupKey: 3 }, undefined)).toBe(false);
+    expect(windowCyclesSeriesStyles(true, { ...view, facetKey: 2 }, undefined)).toBe(false);
+    expect(windowCyclesSeriesStyles(true, { ...view, stackMode: true }, undefined)).toBe(false);
+    expect(windowCyclesSeriesStyles(true, { ...view, polarMode: true }, undefined)).toBe(false);
+    expect(windowCyclesSeriesStyles(true, { ...view, statMode: true }, undefined)).toBe(false);
+    // The display-list clause: an explicitly picked X channel also in yKeys.
+    expect(
+      windowCyclesSeriesStyles(true, { ...view, xKey: 1, yKeys: [1, 2, 3] }, undefined),
+    ).toBe(false);
+  });
+
+  it("is true with the preference on, a clean view, and no pinning document", () => {
+    expect(windowCyclesSeriesStyles(true, view, undefined)).toBe(true);
+    // An ABSENT seriesStyles field is the one case that still derives styles.
+    expect(
+      windowCyclesSeriesStyles(true, view, { publication: { seriesStyles: undefined } }),
+    ).toBe(true);
   });
 });
 

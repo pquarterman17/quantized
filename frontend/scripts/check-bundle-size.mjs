@@ -1331,42 +1331,94 @@ import { fileURLToPath } from "node:url";
  *  y-extent" case would go red for real, not as a sabotage.
  */
 /*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
- *  cycle). REWRITTEN 2026-09-13, THIRD review round. The budget itself is
- *  unchanged and is NOT moved again.
+ *  cycle). REWRITTEN 2026-09-13, FOURTH review round — AGAIN measured against
+ *  an ancestor rather than the real parent, the same mistake this block exists
+ *  to police. The budget itself is unchanged and is NOT moved again.
  *
- *  Why rewritten twice, for two versions of the same mistake. The original block
- *  measured against `3145fe33`, which is not in this branch's history at all (it
- *  lived only on the first rework's worktree). The second rework replaced it with
- *  a baseline of `2b60d4e6`, which IS an ancestor — but three commits behind the
- *  actual parent of that work, `5f65ec8a`, and the region 2-D y-box fixes in
- *  between moved the bundle. So its "156 B smaller than the tree it builds on,
- *  810 B under budget" came off a stale baseline: `1b60872a` measures 920,089
- *  here, which is 311 B under budget, not 810. AN ANCESTOR IS NOT A PARENT —
- *  measure against the tree you are actually building.
+ *  Why rewritten three times, for three shapes of the same mistake.
+ *
+ *  The ORIGINAL block measured against `3145fe33`, which is not in this
+ *  branch's history at all (it lived only on the first rework's worktree).
+ *
+ *  The SECOND rework measured against `2b60d4e6`, which IS an ancestor — but
+ *  FIVE commits behind the actual parent of that work, `5f65ec8a`: `78cbc808`
+ *  (a twelve-finding Library fix, the most likely mover), `d8c6f0f3` (a
+ *  test-only pin) and `55870ed8` (a plans-only docs commit) came first, and
+ *  only the last two, `ed596ec3` and `5f65ec8a` itself, are the region 2-D
+ *  y-box work that block blamed alone. So its "156 B smaller than the tree it
+ *  builds on, 810 B under budget" came off a stale baseline: `1b60872a`
+ *  measures 920,089 here, which is 311 B under budget, not 810. That is not
+ *  the whole story either — the second round ALSO mis-measured its OWN tree:
+ *  it claimed 919,590 B for `1b60872a`/`dc0dbae9`, and that same tree checks
+ *  out at 920,089 here, 499 B off. A stale baseline explains a wrong DELTA; it
+ *  cannot explain a wrong measurement of one's own build — that was a second,
+ *  separate mistake the second block never named.
+ *
+ *  The THIRD rework then repeated the identical mistake in a new shape: it
+ *  measured against `dc0dbae9`, an ancestor of THIS commit's real parent
+ *  `6797e77c` — two commits back, across `d6e67fb7` (P3.4's export-cancel
+ *  work), which moved substantial frontend code onto lazy import paths and
+ *  shifted the bundle by roughly 4.4 kB. Every headline figure in that block
+ *  ("parent 920,089", "this work 920,031", "58 B smaller", "369 B under
+ *  budget") reproduces exactly on `dc0dbae9` and is off by ~4.45 kB here.
+ *  AN ANCESTOR IS NOT A PARENT — measure against the tree you are actually
+ *  building, not a tree that happens to still be in the branch's history.
  *
  *  MEASURED HERE, each one a clean `npm ci` and a `node_modules/.vite` wipe
  *  followed by `npm run build` (the workflow's own two steps), eager total
  *  summed exactly as this script sums it:
  *
- *    dc0dbae9   920,089   this round's PARENT (`git log -1` before the work)
- *    this work  920,031   the third rework round
+ *    6797e77c   915,638   THIS commit's real parent on this branch
+ *    95a211fc   915,587   this commit
  *
- *  So this round is 58 B SMALLER than the tree it builds on, and 369 B under the
- *  920,400 budget. The saving is a wash rather than a diet: the display-list
- *  refusal moved OUT of `figureSpec.ts` and the three-clause cycle gate the four
- *  call sites each spelled out became one shared
+ *  So this commit is 51 B SMALLER than the tree it actually builds on, and
+ *  4,813 B under the 920,400 budget. The saving is a wash rather than a diet:
+ *  the display-list refusal moved OUT of `figureSpec.ts` and the three-clause
+ *  cycle gate the four call sites each spelled out became one shared
  *  `seriesStyleCycle.windowCyclesSeriesStyles`, which paid for the two new
  *  `CycleView` fields and the Publication Preview's window lookup.
  *
- *  ONE MEASUREMENT WORTH KEEPING, because it cost 626 B before it was caught.
- *  The first shape of this round had `figurebuilder/canonicalSession.ts` import
- *  the focused-window selector from `components/Stage/useStageSeriesCycle.ts`.
- *  That is one import of one already-eager function, and it measured 920,715 —
- *  315 B OVER budget, +626 B against the parent. Moving the shared decision down
- *  into `lib/seriesStyleCycle.ts` (which both files already imported) gave the
- *  920,031 above with identical behaviour. A cross-directory import can move a
+ *  THIS ROUND'S OWN FIX COST, measured against ITS real parent. That parent is
+ *  NOT `95a211fc`: the P3.4 export-cancel fix round (`cd402c1b`) landed on the
+ *  branch in between, and it is the commit that took the bundle from 915,587
+ *  to 916,102 (+515 B, recorded in its own dated entry below). The fourth
+ *  round's fix agent measured its work against `95a211fc` and charged that
+ *  515 B to F4 — the ancestor-is-not-a-parent mistake, a fourth time, caught
+ *  by the orchestrator re-measuring both trees before the push. Measured
+ *  after `npm ci` and a `node_modules/.vite` wipe, summed exactly as this
+ *  script sums (module script + modulepreload):
+ *
+ *    cd402c1b   916,102   this commit's real parent on this branch
+ *    this work  916,102   F4 applied (round four)
+ *
+ *  F4 (`canonicalSession.ts` now calls `store/windowDocuments.ts`'s
+ *  `plotWindowView(target)` instead of reading `target.view` directly, so an
+ *  unfocused target is judged from its DOCUMENT, the same projection the
+ *  canvas uses) costs 0 B: `figureDocumentToPlotView`'s dependency graph was
+ *  already reachable from this chunk, so the import moved no boundary. The
+ *  agent also tried inlining `figureDocumentToPlotView(target.document)` and
+ *  measured the same 916,102 either way, which is consistent with a zero-cost
+ *  import rather than the "no free shape exists" it concluded. Kept the
+ *  import: calling the actual shared function `WindowCanvas.tsx` also calls is
+ *  the point of the fix, and a hand-inlined reimplementation would create
+ *  exactly the drift risk this file's own header warns against. 4,298 B under
+ *  the unmoved 920,400 budget.
+ *
+ *  ONE MEASUREMENT WORTH KEEPING FROM THE THIRD ROUND, because it cost 626 B
+ *  before it was caught — measured on that round's own (superseded) tree, not
+ *  reproduced here. The first shape of that round had
+ *  `figurebuilder/canonicalSession.ts` import the focused-window selector from
+ *  `components/Stage/useStageSeriesCycle.ts`. That is one import of one
+ *  already-eager function, and it measured 920,715 on that tree — 315 B OVER
+ *  that tree's budget, +626 B against `dc0dbae9`. Moving the shared decision
+ *  down into `lib/seriesStyleCycle.ts` (which both files already imported)
+ *  avoided it with identical behaviour. A cross-directory import can move a
  *  chunk boundary; an import into a module both sides already pull does not.
- *  Build before assuming a one-line import is free.
+ *  Build before assuming a one-line import is free. (The FOURTH round's own
+ *  F4 fix added a different cross-directory import —
+ *  `canonicalSession.ts` -> `store/windowDocuments.ts`'s `plotWindowView` —
+ *  and re-measured it directly on the real tree rather than trusting this
+ *  lesson to generalize; see the F4 entry in PRIMARY_SOFTWARE_AUDIT_PLAN.md.)
  *
  *  WHY THE BUDGET STAYS AT 920,400 rather than dropping to match. It was moved
  *  for the COMBINED Group U + Group AB tree (see the Group AB block above, which
@@ -1389,15 +1441,18 @@ import { fileURLToPath } from "node:url";
  *  resolve-before-publish in the snapshot seam — is the byte cost, and it cannot
  *  be lazy: it runs during the first paint of the default plot.
  *
- *  REDUCTIONS TAKEN, all measured on this tree rather than argued:
+ *  REDUCTIONS TAKEN, measured on the THIRD round's (superseded) tree rather
+ *  than argued, and not re-measured here — see the note above about
+ *  quoting off-tree deltas forward:
  *    1. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
  *       rather than `primitives/Checkbox`, which is deliberately NOT in the eager
  *       bundle (its header records that every other consumer is a lazy panel).
- *       Measured both ways here: 920,133 with the import, 920,031 without —
- *       102 B. Worth recording that this number MOVES with the module graph: the
- *       first review predicted ~590 B off the original commit's graph, the first
- *       rework measured 74 B off its own, the second 111 B, and it is 102 B on
- *       this one. Re-measure it; do not quote it.
+ *       Measured both ways on that tree: 920,133 with the import, 920,031
+ *       without — 102 B. Worth recording that this number MOVES with the
+ *       module graph: the first review predicted ~590 B off the original
+ *       commit's graph, the first rework measured 74 B off its own, the
+ *       second 111 B, and it was 102 B on the third. Re-measure it; do not
+ *       quote it forward.
  *    2. `DefaultTrace` went to lib/types.ts beside `LineStyle`/`MarkerShape`
  *       rather than to lib/markers.ts, because eight of the ten files that need
  *       it already import from lib/types and could take it on an EXISTING import
@@ -1427,16 +1482,21 @@ import { fileURLToPath } from "node:url";
  *  rewritten to state what actually holds (the separation from lib/exportStyles,
  *  which is the one that carries weight) instead.
  *
- *  FOR THE RECORD, the numbers from the two superseded blocks, none of which
+ *  FOR THE RECORD, the numbers from the three superseded blocks, none of which
  *  should be quoted forward: the ORIGINAL block's base of 918,658 (against
  *  `3145fe33`, not in this history) and its "residual 593 B is parity wiring",
- *  which conflated the amount OVER the old budget with the feature's cost; and
- *  the SECOND block's 918,459 / 919,746 / 919,590 triple with its "156 B
- *  smaller, 810 B under budget", whose 919,746 baseline is `2b60d4e6` rather than
- *  the parent `5f65ec8a`. The feature's whole-history cost is deliberately not
- *  restated: `d28fcd6e` IS an ancestor, but its 918,459 was measured in the
- *  second round and not here, and the only numbers this block stands behind are
- *  the two it measured itself.
+ *  which conflated the amount OVER the old budget with the feature's cost; the
+ *  SECOND block's 918,459 / 919,746 / 919,590 triple with its "156 B smaller,
+ *  810 B under budget", whose 919,746 baseline is `2b60d4e6` rather than the
+ *  parent `5f65ec8a` (and whose own 919,590 was itself 499 B off, above); and
+ *  the THIRD block's `dc0dbae9` 920,089 / this-work 920,031 pair, whose
+ *  baseline is two commits short of the real parent `6797e77c` (915,638) — the
+ *  intervening `d6e67fb7` moved ~4.4 kB, so every headline number in that block
+ *  reproduces cleanly on its own (wrong) tree and is off by the same ~4.45 kB
+ *  here. The feature's whole-history cost is deliberately not restated:
+ *  `d28fcd6e` IS an ancestor, but its 918,459 was measured in the second round
+ *  and not here, and the only numbers this block stands behind are the two it
+ *  measured itself.
  *
  *  2026-09-13 — P3.4 export-cancel (d6e67fb7): export-csv/export-hdf5/
  *  export-page's command bodies moved off the eager path to the SAME
