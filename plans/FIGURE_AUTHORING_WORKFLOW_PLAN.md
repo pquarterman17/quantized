@@ -1512,7 +1512,52 @@ Check these only with automated coverage plus an owner-visible desktop run.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
       seconds and visually compare it with the internal figure.
 - [ ] **A8 Vector export:** Export SVG/PDF and compare limits, ticks, text,
-      legend, errors, annotations, and panel placement.
+      legend, errors, annotations, and panel placement. **Automated half DONE
+      2026-09-13** — `tests/test_export_vector_structure.py`, against the real
+      FastAPI routes (`/api/export/figure`, `/api/export/figure-hitmap`,
+      `/api/export/figure-page`), plus `frontend/src/lib/figureSpec.a8.test.ts`
+      for the wire-contract half. What is compared, structurally:
+      LIMITS — `/api/export/figure-hitmap`'s `axes.xlim`/`ylim` (the exact
+      `ax.get_xlim()`/`get_ylim()` the renderer set) against the requested
+      `overrides.x_lim`/`y_lim`; TICKS — the literal tick-label strings a
+      requested `x_step` + `x_fmt` produce, read out of the exported SVG's
+      `matplotlib.axis_1` group; TEXT — a rich-text title (`$\mu_0 H$
+      ($\AA^{-1}$)`) renders as real glyphs (μ, Å), not the raw markup, which
+      only ever survives inside an unrendered XML comment; LEGEND — `<g
+      id="legend_1">`'s child `<text>` entries, exact strings and order;
+      ERRORS — an error-span series draws a real `<g id="LineCollection_1">`;
+      ANNOTATIONS — each annotation's text appears exactly once, standalone
+      (not swallowed into the legend); PANEL PLACEMENT — a 2×2
+      `/api/export/figure-page` export's four `axes_N` groups' own
+      background-patch pixel rects tile a 2×2 grid in row-major order, and
+      each panel's own title lands inside the geometrically-correct `axes_N`
+      block. NOT compared: SVG byte-identity (a build timestamp/UUID varies);
+      sub-pixel text placement/font metrics ("the text is present, in the
+      right group, in the right order" is checked, not glyph-outline
+      identity); PDF text extraction (`pypdf`/`pdfminer` are not project
+      dependencies — checked against `pyproject.toml` — so PDF assertions are
+      limited to the file magic, media type, and page count via a
+      `/Type /Page` object-count regex, no library needed for that one fact).
+      The frontend half (`figureSpec.a8.test.ts`) pins that
+      `buildFigureSpecFromDocument`, given a document with the same limits/
+      step+format/title/legend/error-binding/annotations/arrow-shape shape,
+      carries every one of those fields onto the `FigureSpec` wire object —
+      the contract half of the comparison, so a dropped field is caught
+      before the exported SVG ever changes. Verified load-bearing: backend,
+      six sabotages, six reddened tests — dropping `y_lim` application
+      (`figure_overrides.apply_axis_shape_overrides`) reddens the limits
+      test; no-op'ing `apply_tick_formats` reddens both tick tests; reversing
+      the legend's handles/labels in `_apply_overrides` reddens the legend
+      test; skipping the annotations loop reddens the annotations test;
+      skipping `apply_error_bars` reddens the error-collection test;
+      transposing a grid panel's `(row, col)` indices in
+      `figure_page._build_page_figure` reddens the panel-placement test.
+      Frontend, two sabotages, two reddened tests — dropping `x_lim` from
+      `figureViewOverrides.viewOverrides` (which also reddens the existing
+      `figureSpec.test.ts` byte-equality test) and emptying its `annotations`
+      mapping. All eight reverted byte-identical. Runs in CI's `ci.yml`
+      (`backend` job's `pytest -n auto`; `frontend` job's vitest). Owner
+      desktop run still gates the checkbox.
 - [ ] **A9 Time targets:** First unfamiliar dataset to acceptable figure in at
       most 20 minutes; routine figure in at most 2 minutes; copy/paste in
       seconds.
