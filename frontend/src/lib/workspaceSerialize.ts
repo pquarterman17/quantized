@@ -221,16 +221,32 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // resolve at line 73, abort block 69-80), workbook Copy/Duplicate
       // (store/workbookTransfer.ts:189 and :254 — its own package
       // serializer, same rule), and Pack Project
-      // (store/packProjectRun.ts's `serializeCurrentWorkspaceForPack`,
+      // (store/packProjectContent.ts's `serializeCurrentWorkspaceForPack`,
       // both its preview and Start-pack callers — added by BUG-011's fix,
       // which is why this comment previously named only the first of the
       // three and claimed autosave was the sole route).
-      // So `d.pending` is never set in a real exported .dwk or packed
-      // bundle — only autosave (lib/autosave.ts, which reuses this same
-      // serializer for its localStorage snapshot) can legitimately still
-      // have one, and it's fine for that round-trip to carry it: the
-      // render-side ensureBookData hooks re-fetch it the next time that
-      // dataset is shown after a reload.
+      //
+      // BUG-011 REVIEW (2026-09-13): "resolve first" alone does not
+      // guarantee `pending` is unset by the time the payload is built — a
+      // NEW lazy book can start pending DURING that resolve await (an
+      // import finishing mid-fetch), after the snapshot the resolve step
+      // awaited was already taken. Pack Project's serializer re-reads the
+      // store after its await and REFUSES if anything is still `pending`
+      // rather than trusting the resolve alone (packProjectContent.ts,
+      // same file/function as above), so that path is closed there. Save/
+      // Save As (store/workspaceIO.ts:73-82) and the two workbook-transfer
+      // paths re-read the store after their own resolve await the same way
+      // but do NOT re-check `pending` on it — the identical narrower
+      // window is open on all three, recorded as a residual on BUG-011
+      // rather than fixed here.
+      //
+      // So `d.pending` should never reach a packed Pack Project bundle; the
+      // other three export paths carry the same (narrow, unresolved) risk
+      // Pack Project itself had before this fix. Only autosave
+      // (lib/autosave.ts, which reuses this same serializer for its
+      // localStorage snapshot) can LEGITIMATELY still have one — that
+      // round-trip is fine, since the render-side ensureBookData hooks
+      // re-fetch it the next time that dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —

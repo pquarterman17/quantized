@@ -78,7 +78,7 @@ export interface PackProjectPreview {
    *  verbatim (never re-derived) so `startPackProject` can resend this
    *  SAME string to `pack_start`, byte-for-byte, satisfying the backend's
    *  own `sha256(content)` staleness check trivially whenever the content
-   *  is otherwise unchanged. `packProjectRun.ts`'s `contentFingerprint`
+   *  is otherwise unchanged. `packProjectContent.ts`'s `contentFingerprint`
    *  is the "did the project meaningfully change since preview" check —
    *  never a raw string compare against this field directly, because
    *  `serializeWorkspace` stamps a fresh `savedAt` on every call and a
@@ -165,6 +165,18 @@ function reject(
   set({ lastRejected: { from, action } });
 }
 
+// BUG-011 review nit 3: `startPackProject`'s phase check alone cannot block
+// a second "Pack Project" click DURING `runStartPackProject`'s book-resolve
+// await -- `phase` stays `awaiting_confirmation` for that entire window (it
+// only becomes `packing` once the resolve step and the fingerprint check
+// both pass, see that action's own doc). This flag closes the window
+// without moving `phase` itself early: `phase` staying put is what keeps
+// Cancel routing through its existing `awaiting_confirmation` branch
+// (straight to `cancelled`, no backend call) instead of the `packing`
+// branch, which would ask the backend to cancel a copy that was never
+// actually started and has no poll loop yet running to resolve it.
+let startInFlight = false;
+
 export const usePackProject = create<PackProjectState>((set, get) => ({
   phase: "idle",
   progress: EMPTY_PACK_PROGRESS,
@@ -187,12 +199,17 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
 
   startPackProject: async (approvedManifest) => {
     const phase = get().phase;
-    if (phase !== "awaiting_confirmation") {
+    if (phase !== "awaiting_confirmation" || startInFlight) {
       reject(set, phase, "startPackProject");
       return;
     }
-    const { runStartPackProject } = await import("./packProjectRun");
-    await runStartPackProject(get, set, approvedManifest);
+    startInFlight = true;
+    try {
+      const { runStartPackProject } = await import("./packProjectRun");
+      await runStartPackProject(get, set, approvedManifest);
+    } finally {
+      startInFlight = false;
+    }
   },
 
   cancelPackProject: async () => {

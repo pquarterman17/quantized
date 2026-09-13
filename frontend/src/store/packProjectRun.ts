@@ -63,6 +63,14 @@ const THROTTLE_MS = 200;
 // continuation that resumes after an `await` with a stale generation bails
 // out immediately, touching neither the store nor (for `packPreview`) ever
 // having called the bridge with data nobody asked for any more.
+//
+// BUG-011 REVIEW (2026-09-13): `runStartPackProject`'s own book-resolve
+// await needed the identical protection — added there as a bare READ of
+// this counter (captured before the await, compared after), never a bump:
+// Start doesn't start or end an attempt from this state machine's point of
+// view, it only needs to know whether one of the THREE functions above
+// (`runPreviewPackProject`/`runCancelPackProject`/`runResetPackProject`)
+// bumped the counter while it was waiting.
 let generation = 0;
 
 export function bumpGeneration(): number {
@@ -350,7 +358,23 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
     });
     return;
   }
+  // Review finding #1: `serializeCurrentWorkspaceForPack` below awaits a
+  // book fetch just like `runPreviewPackProject`'s own resolve step does,
+  // and this continuation needs the same protection against a cancel/reset
+  // that races it -- captured BEFORE the await, alongside `preview` above
+  // (also captured before it). Unlike `runCancelPackProject`/
+  // `runResetPackProject`/`runPreviewPackProject`, Start does NOT bump the
+  // counter itself: it isn't starting or ending an attempt from the state
+  // machine's point of view, it only needs to know whether ONE OF THOSE did
+  // while it was waiting.
+  const myGeneration = generation;
   const serialized = await serializeCurrentWorkspaceForPack();
+  // A cancel/reset while the book fetch was in flight bumps `generation`
+  // (and a reset also clears `preview`) -- either means this continuation
+  // is answering a question nobody is asking any more: it must touch
+  // neither the store nor the bridge, exactly like the two checks in
+  // `runPreviewPackProject` above guard ITS awaits.
+  if (generation !== myGeneration || get().preview !== preview) return;
   if (!serialized.ok) {
     refusePack(set, serialized.message);
     return;

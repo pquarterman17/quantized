@@ -34,7 +34,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal |
-| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Unassigned | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Owner call on abort-vs-partial-pack still open |
+| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup — see the entry. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -2396,17 +2396,22 @@ not resolve first.
   helper to reuse, each spells it out inline). Both the preview
   (`packProjectRun.ts:135-138`) and Start-pack (`:354-357`) paths abort
   BEFORE any bridge call, so `NOTHING_MODIFIED_NOTE` holds literally.
-  The message names the operation and the underlying fetch error rather than
-  the book — the siblings name the operation too, and the per-book reason is
-  what `lib/bookData.ts`'s `lastBookError` already carries.
+  The message originally named only the operation and the underlying fetch
+  error, not the book — review finding #5 pointed out that claim ("the
+  siblings name the operation too") was only two-thirds true: two of the
+  three sibling sites (`workbookTransfer.ts:191`/`:256`) DO name the
+  workbook, only `workspaceIO.ts:75` doesn't. The review round below closes
+  this for Pack Project by naming the book, using `lib/bookData.ts`'s
+  `lastBookError` exactly as `workbookTransfer.ts:195-196` already does.
 - [x] `lib/workspaceSerialize.ts`'s `pending` comment corrected
   (`:217-232`): it now states that EVERY explicit export path resolves first
   and aborts on failure — Save/Save As, workbook Copy/Duplicate, and Pack
   Project — naming all three with file:line, and says outright that it
   previously named only the first and wrongly claimed autosave was the sole
   route. Autosave remains the one legitimate `pending` carrier.
-- [x] Regression tests, `frontend/src/store/packProject.test.ts:731-880`
-  (5 specs, all sabotage-verified — see the Completion record): the pack
+- [x] Regression tests, `frontend/src/store/packProject.test.ts:731-894`
+  (5 specs, all sabotage-verified — see the Completion record; nit 4:
+  originally cited as `:731-880`, short by 14 lines): the pack
   PREVIEW sends the FULL book with no `pending` field in the payload; a book
   that cannot be fetched refuses the preview by name with nothing sent to the
   bridge (`packPreview` mock asserted un-called) plus status + danger toast;
@@ -2440,11 +2445,15 @@ not resolve first.
 - Automated tests: the 5 new specs in `frontend/src/store/packProject.test.ts`
   (file: 61 passing). Full frontend suite green: 634 files / 10,381 tests.
 - Agent verification: every new spec sabotage-verified — removing the resolve
-  call fails all four data/refusal specs; removing the preview abort fails
-  only the preview-refusal spec; removing the Start-pack abort fails only the
-  Start-pack refusal spec; removing the generation check added after the new
-  `await` fails only the late-cancel spec. Source restored byte-identical
-  after each round (`diff` clean).
+  call fails **5** specs, not the 4 originally reported here (correction,
+  review round below): the four data/refusal specs PLUS "cancelling while
+  the book fetch is in flight is not overwritten when that fetch fails
+  late", which times out in `vi.waitFor` waiting for `phase === "scanning"`
+  because no fetch is ever started once the resolve call itself is gone.
+  Removing the preview abort fails only the preview-refusal spec; removing
+  the Start-pack abort fails only the Start-pack refusal spec; removing the
+  generation check added after the new `await` fails only the late-cancel
+  spec. Source restored byte-identical after each round (`diff` clean).
 - Structural note: the resolve step pushed `store/packProjectRun.ts` to 498
   lines against the 500-line `.ts` ceiling, so the cohesive workspace-CONTENT
   slice (`serializeCurrentWorkspaceForPack`, `refusePack`,
@@ -2460,6 +2469,88 @@ not resolve first.
   rather than inventing a third behaviour.
 - Not reproduced against a live backend pack run (the bridge is mocked, as it
   is for every spec in this file) — unchanged from the report.
+
+#### Adversarial review round (2026-09-13)
+
+An adversarial review of the fix commit above found 2 CONFIRMED code
+findings (each with a failing probe), 3 doc findings, and 5 nits. This
+follow-up commit closes:
+
+- **Finding #1 (CONFIRMED):** `runStartPackProject`'s own book-resolve await
+  had NO generation guard at all — the exact bug the pack PREVIEW path was
+  already guarded against. A cancel/reset DURING "Start pack"'s resolve step
+  was silently overwritten once the (now-stale) fetch settled: cancelling
+  during a FAILING fetch flipped back to `failed` with a bogus danger toast
+  after the user had already cancelled; during a SUCCEEDING fetch it could
+  resurface as `stale_preview`. Closed by capturing `generation` (read only,
+  never bumped — Start doesn't itself start or end an attempt) and
+  `preview` before the await, then bailing if either changed
+  (`store/packProjectRun.ts`'s `runStartPackProject`).
+- **Nit 3 (folded into #1):** the phase guard alone could not stop a second
+  "Pack Project" click during that same window (`phase` stays
+  `awaiting_confirmation` until the resolve AND fingerprint checks both
+  pass) — a pre-fix double click ran two concurrent attempts. Closed with an
+  in-flight flag in `store/packProject.ts`, set before the lazy `import()`
+  — deliberately NOT by moving `phase` to `packing` early, which would have
+  rerouted Cancel through the backend `packCancel` call for a copy that was
+  never actually started, with no poll loop yet running to resolve it.
+- **Finding #2 (CONFIRMED):** `serializeCurrentWorkspaceForPack` re-read the
+  store after `resolvePendingDatasets()` but never re-checked `pending` on
+  it. `resolvePendingDatasets()` only awaits the books that were pending
+  when IT was called, so a lazy import landing WHILE that `Promise.all` was
+  still in flight was still serialized straight from its decimated preview
+  rows plus a stray `pending` field — this bug's own payload, through a
+  narrower window. Closed with a post-await re-check in
+  `store/packProjectContent.ts` that refuses ("…a book was still loading")
+  instead of serializing.
+- **Finding #5 (naming the book):** the refusal named only the operation and
+  the raw fetch error, never the book — the original Fix checklist's claim
+  ("the siblings name the operation too") was only two-thirds true (two of
+  the three sibling sites DO name the book). Closed: the `catch` in
+  `serializeCurrentWorkspaceForPack` now looks up the failing book via
+  `lib/bookData.ts`'s `lastBookError` (the same lookup
+  `workbookTransfer.ts:195-196` already uses) and includes its `.name` when
+  a reason was actually recorded for it.
+- **Doc findings #3/#4:** the original sabotage table understated round 1
+  (fails **5** specs, not 4 — corrected in the Completion record above,
+  naming the fifth); two stale cross-references to `packProjectRun.ts` that
+  should say `store/packProjectContent.ts` (`lib/workspaceSerialize.ts` and
+  `store/packProject.ts`, the latter pre-dating this bug) are fixed.
+- **Nit 1 (status):** the transient "fetching N books before packing…"
+  status was never replaced on success; `serializeCurrentWorkspaceForPack`
+  now sets a status once every requested book has actually arrived,
+  mirroring the Save sibling's habit of always ending on a terminal status.
+- **Nits 4/5:** the test line-range citation above corrected to `:731-894`;
+  the Active-queue Owner column set to "Claude (agent)"; the shadowing
+  `type Set` alias in `packProjectContent.ts` renamed to `SetPack`.
+- **Tests:** 4 new specs in `frontend/src/store/packProject.test.ts`, plus 2
+  existing specs strengthened to actually assert the book name finding #5
+  adds (their titles already claimed "by name" without checking it) — file
+  now 65 passing (was 61). All new/strengthened assertions sabotage-verified
+  (source restored byte-identical after each round — see the commit body's
+  table).
+- **Residual — NOT fixed here** (out of scope: `store/workspaceIO.ts`,
+  `lib/workbookTransfer.ts`, and the other BUG-010 files are being edited
+  concurrently for BUG-010): the identical "re-read after resolve without
+  re-checking `pending`" window that finding #2 closed for Pack Project
+  still exists in `store/workspaceIO.ts`'s Save path (`:73-82`) and in both
+  `store/workbookTransfer.ts` export paths. `lib/workspaceSerialize.ts`'s
+  comment now says so explicitly rather than implying all four export paths
+  are equally closed.
+- **Not attempted:** nit 2 ("Start pack's resolve can essentially never
+  rescue a pack, only buy a better error code") and nit 6 (an unverifiable
+  "pushed to 498 lines" claim in the Structural note above) needed no code
+  change and are left as the review recorded them.
+- **Bundle:** the nit-3 in-flight flag lives in `store/packProject.ts`,
+  which is EAGER (unlike `packProjectRun.ts`/`packProjectContent.ts`, both
+  reached only through the store's lazy `import()`), so it is the one part
+  of this round's fix that could move the pin. Measured after `npm ci` and
+  clearing `node_modules/.vite`: 916,182 B at this commit's parent
+  (`2d779065`, as measured by the orchestrator) -> 916,197 B here, +15 B,
+  4,203 B under the unmoved 920,400 budget — nowhere near forcing a pin
+  move either direction.
+- Owner verification: unchanged from the original fix — still open (the
+  severity call and abort-vs-partial-pack choice).
 
 ---
 
@@ -2737,3 +2828,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Recorded the Group AF outcome on BUG-009's load-path item (`.dwk` load refusing `excludedRows`/`filter` on a pending dataset): built, adversarially reviewed, reverted before reaching `main`; wrote the net-regression finding and the unbuilt plan of record into the item honestly. Added BUG-010 (`migrationWarnings` unreachable on recovery/append/workbook-import loaders) and BUG-011 (Pack Project serializes a pending dataset's preview rows, unlike Save/Save As and workbook transfer) from the same review | Both new entries are design-time findings, code-read and cited by file:line, not yet fixed; BUG-009's item stays `[ ]` open, code unchanged from pre-attempt |
 | 2026-09-13 | Claude | BUG-011 fixed: both Pack Project serialization entry points (the preview and "Start pack") now `await resolvePendingDatasets()` before `serializeWorkspace` and abort with a named `pending_unresolved` error + status + danger toast when a book can't be fetched, mirroring `workspaceIO.ts`'s Save path. The workspace-content slice moved to the new `store/packProjectContent.ts` so the 500-line `.ts` ceiling was met by extraction, not a pin raise; `lib/workspaceSerialize.ts`'s `pending` comment corrected to name all three explicit export paths | All four Fix-checklist boxes ticked with file:line evidence; 5 new specs, each sabotage-verified (4 sabotage rounds, source restored byte-identical); full frontend suite 634 files / 10,381 tests green; eager bundle unchanged at 916,182 B (budget 920,400). Owner call on abort-vs-partial-pack left open in the entry |
 | 2026-09-13 | Claude | Added and fixed BUG-010 (`migrationWarnings` reached the user on a plain File ▸ Open only — autosave recovery, silent autosave restore, Append workspace, and workbook Paste all folded or dropped the notice): one shared `notifyMigrationWarnings` toast helper (`store/toasts.ts`) called from all four sites; `duplicateWorkbook` deliberately excluded (structural non-goal, pinned by test) | BUG-010 fixed + sabotage-verified (one regression test per site); `uv run pytest -q tests/test_repo_integrity.py` passed |
+| 2026-09-13 | Claude | Adversarial review round on the BUG-011 fix (commit `1b7ec2cf`): closed both CONFIRMED code findings — "Start pack"'s own book-resolve await had no generation guard (a cancel/reset during it was silently overwritten, and a second click ran a second concurrent attempt), and a book that turned pending DURING the resolve await was still serialized from its preview rows. Also named the failing book in the refusal (finding #5), corrected two stale cross-references and an understated sabotage count, added a status on the resolve step's success path, and renamed a shadowing `type Set` alias. Recorded the identical `workspaceIO.ts`/`workbookTransfer.ts` narrower window as a residual rather than fixing it (those files are being edited concurrently for BUG-010) | 4 new specs + 2 existing specs strengthened (65 passing, was 61), every new/strengthened assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0`/scoped vitest/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +15 B (916,182 B at the `2d779065` parent -> 916,197 B here, from nit 3's in-flight flag in the eager `store/packProject.ts`), 4,203 B under the unmoved 920,400 budget |
