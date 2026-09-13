@@ -127,6 +127,23 @@ function rgbToXyz(rgb: Rgb): [number, number, number] {
 
 // CIE standard D65 white point (2 degree observer), matching the sRGB
 // primaries' own reference white (Bruce Lindbloom's reference values).
+//
+// KNOWN, DECLINED INCONSISTENCY (cvd_review.md nit 4 / cvd_review2.md N6):
+// this literal white point isn't the exact white implied by `rgbToXyz`'s own
+// rounded IEC 61966-2-1 matrix — feeding that matrix white ([255,255,255])
+// yields X=0.95047, Z=1.08883 (matches to 5 decimals) but Y=1.0000001, so
+// pure white lands at L*=100.000004, a*=0.00245, b*=0.01395 instead of
+// exactly (100, 0, 0) — a self-ΔE of ~0.014. Declined rather than fixed:
+// 0.014 is below any threshold this module or its tests act on (the
+// distinguishability floor is 10, the JND commonly cited is ~2.3), and every
+// headline ΔE this module reports is a DIFFERENCE between two colours, where
+// a shared, tiny, colour-independent white-point offset cancels almost
+// entirely rather than compounding. Re-measured for this decision by
+// substituting the matrix-derived white point (rgbToXyz([255,255,255])) and
+// recomputing: dark theme's worst pair 3.227488 -> 3.227737, light theme's
+// worst pair 1.978157 -> 1.978123, tol-bright's worst pair 13.202523 ->
+// 13.203165, red-vs-green normal 170.565611 -> 170.565237 — every recheck
+// moves by <0.001, two orders of magnitude under the 0.014 self-ΔE itself.
 const D65_XN = 0.9504559270516716;
 const D65_YN = 1.0;
 const D65_ZN = 1.0890577507598784;

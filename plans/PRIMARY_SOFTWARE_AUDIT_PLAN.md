@@ -3515,12 +3515,44 @@ covers a much smaller subset and guards focus on Analyze.
     just a CVD failure); fixed by giving slot 8 `#332288` (indigo, borrowed
     from Tol's companion "muted" scheme — "bright" itself defines only 7
     colours and has no official 8th), which also newly PASSES threshold 10
-    (worst ΔE ~13.2, tritan). `tableau10` and `viridis` failing at 10 is
-    recorded, not fixed — neither claims to be CB-safe. The "color-blind-
-    aware" provenance claim about the default palette ("several derive from
-    Okabe-Ito") is dropped from this entry: nothing in the repo supports it,
-    and the default's own measured numbers (ΔE 3.23/1.98 worst-case) are far
-    below Okabe-Ito's (~14.9), so the two are evidently not the same design.
+    (worst ΔE ~13.2, tritan) — **superseded in round 3 below: `#332288` fails
+    this app's own dark-canvas legibility floor.** `tableau10` and `viridis`
+    failing at 10 is recorded, not fixed — neither claims to be CB-safe. The
+    "color-blind-aware" provenance claim about the default palette ("several
+    derive from Okabe-Ito") is dropped from this entry: nothing in the repo
+    supports it, and the default's own measured numbers (ΔE 3.23/1.98
+    worst-case) are far below Okabe-Ito's (~14.9), so the two are evidently
+    not the same design.
+
+    **Round 3 (2026-09-13, adversarial review of `48556a04`, round 2's fix
+    commit):** the review found round 2's `#332288` choice fails
+    `lib/contrastColor.ts`'s own dark-canvas legibility floor (MIN_CONTRAST
+    2.2; measured contrast 1.54), so `resolveDrawColor` would silently
+    substitute the ink token at render time and the legend would disagree
+    with the canvas — the preset labelled CB-safe would never actually show
+    the audited indigo. Fixed by re-picking slot 8 as `#999933` (Tol-muted
+    olive): contrast 6.21 on dark / 2.85 on light (both clear 2.2), and the
+    distinguishability verdict is unchanged (still worst ΔE ~13.2, tritan,
+    series-1 vs series-3 — that pair never involves slot 8). The existing
+    dark-canvas legibility guard (`seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe) is now extended to cover
+    every `PALETTES` preset, not just the default theme tokens, as an
+    explicit per-preset ratchet: a NEW substitution fails the suite; today's
+    one pre-existing substitution (`viridis` slot 1, `#482878`, contrast
+    1.65) is recorded, not fixed. Also fixed: the gamut-diagnostic header's
+    claim that the naive clamp diverges from CSS Color 4 §13.2 was backwards
+    — measured `deltaEOK(clip(origin), origin)` = 0.0179/0.0111/0.0111 for
+    the three out-of-gamut light tokens, all under §13.2's own 0.02 JND, so
+    §13.2 returns the clip unchanged and the naive clamp is spec-equivalent;
+    the two `[approximate]` annotations and the "would move under spec-
+    correct mapping" claim are removed, and the check is now a real
+    assertion (`deltaEOK(...) < 0.02`) rather than prose. The
+    `LIGHT_OKLCH`/`DARK_OKLCH` literals are now cross-checked against the
+    tokens parsed from `colors.css` (previously independent, so an edit to
+    one and not the other could silently audit a stale palette). The
+    "this test does NOT change the palette" claim is narrowed to the
+    default theme tokens — the tol-bright preset hex IS changed by this
+    round, on the design owner's behalf (see below).
 
     **OPEN OWNER DECISION** (unchanged in substance, reframed by the above):
     the default 8-slot series cycle still fails its own distinguishability
@@ -3534,7 +3566,18 @@ covers a much smaller subset and guards focus on Analyze.
     default 8-slot cycle, narrow the "safe" simultaneous series count, make
     a CB-safe preset the default, or accept the default's gap as-is for a
     niche 8-series plot.
+
+    **Also needs owner ratification (round 3):** `tol-bright`'s 8th slot is
+    now `#999933` (Tol-muted olive) — chosen by this audit to fix a
+    legibility bug (round 2's `#332288` failed the dark-canvas contrast
+    floor), not by design-owner sign-off. Owner should ratify `#999933` or
+    substitute a preferred distinct 8th hue that clears both
+    `lib/contrastColor.ts`'s MIN_CONTRAST (2.2, both themes) and the ΔE-10
+    distinguishability verdict — `seriesPalette.cvd.test.ts`'s "shipped
+    palette presets" and extended "series-vs-background legibility" describe
+    blocks will catch a regression on either axis if one is picked.
     - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
+    - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
   - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
     export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
 
