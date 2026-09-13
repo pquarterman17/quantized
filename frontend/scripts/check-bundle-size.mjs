@@ -1331,40 +1331,53 @@ import { fileURLToPath } from "node:url";
  *  y-extent" case would go red for real, not as a sabotage.
  */
 /*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
- *  cycle). REWRITTEN 2026-09-13, second review round: every number in the
- *  original was measured against `3145fe33`, a commit that lived only on the
- *  rework worktree and is NOT an ancestor of this branch, so none of them could
- *  be reproduced. The budget itself is unchanged and is NOT moved again.
+ *  cycle). REWRITTEN 2026-09-13, THIRD review round. The budget itself is
+ *  unchanged and is NOT moved again.
  *
- *  MEASURED HERE, each one a clean `npm ci` followed by `npm run build` (the
- *  workflow's own two steps), eager total summed exactly as this script sums it:
+ *  Why rewritten twice, for two versions of the same mistake. The original block
+ *  measured against `3145fe33`, which is not in this branch's history at all (it
+ *  lived only on the first rework's worktree). The second rework replaced it with
+ *  a baseline of `2b60d4e6`, which IS an ancestor — but three commits behind the
+ *  actual parent of that work, `5f65ec8a`, and the region 2-D y-box fixes in
+ *  between moved the bundle. So its "156 B smaller than the tree it builds on,
+ *  810 B under budget" came off a stale baseline: `1b60872a` measures 920,089
+ *  here, which is 311 B under budget, not 810. AN ANCESTOR IS NOT A PARENT —
+ *  measure against the tree you are actually building.
  *
- *    d28fcd6e  918,459   the base: the commit before the feature landed
- *    2b60d4e6  919,746   the branch this round builds on (Group U's first
- *                        rework, plus Group AB and two Origin/figure fixes)
- *    this work  919,590   the second rework round
+ *  MEASURED HERE, each one a clean `npm ci` and a `node_modules/.vite` wipe
+ *  followed by `npm run build` (the workflow's own two steps), eager total
+ *  summed exactly as this script sums it:
  *
- *  So this round is 156 B SMALLER than the tree it builds on, and 810 B under
- *  the 920,400 budget. The saving is not a diet — it is what closing the eight
- *  findings happened to cost, net: the `defaultTrace` preference's four values
- *  became one `DefaultTrace` union in lib/types.ts and ten `string`
- *  declarations stopped needing their own import lines; the legend's marker
- *  branch collapsed into the shared `markers.markerDecision` the canvas already
- *  had; and the new wiring (a second hook export, a background window's cycle, a
- *  Publication Preview flag, two more fields on one predicate) came to slightly
- *  less than that.
+ *    dc0dbae9   920,089   this round's PARENT (`git log -1` before the work)
+ *    this work  920,031   the third rework round
+ *
+ *  So this round is 58 B SMALLER than the tree it builds on, and 369 B under the
+ *  920,400 budget. The saving is a wash rather than a diet: the display-list
+ *  refusal moved OUT of `figureSpec.ts` and the three-clause cycle gate the four
+ *  call sites each spelled out became one shared
+ *  `seriesStyleCycle.windowCyclesSeriesStyles`, which paid for the two new
+ *  `CycleView` fields and the Publication Preview's window lookup.
+ *
+ *  ONE MEASUREMENT WORTH KEEPING, because it cost 626 B before it was caught.
+ *  The first shape of this round had `figurebuilder/canonicalSession.ts` import
+ *  the focused-window selector from `components/Stage/useStageSeriesCycle.ts`.
+ *  That is one import of one already-eager function, and it measured 920,715 —
+ *  315 B OVER budget, +626 B against the parent. Moving the shared decision down
+ *  into `lib/seriesStyleCycle.ts` (which both files already imported) gave the
+ *  920,031 above with identical behaviour. A cross-directory import can move a
+ *  chunk boundary; an import into a module both sides already pull does not.
+ *  Build before assuming a one-line import is free.
  *
  *  WHY THE BUDGET STAYS AT 920,400 rather than dropping to match. It was moved
  *  for the COMBINED Group U + Group AB tree (see the Group AB block above, which
- *  records the same tree at 919,699 before the last two commits landed), and
- *  those groups are still landing in parallel; a pin lowered to this branch's
- *  number would fail the next group's merge for a reason that has nothing to do
- *  with its own weight. The `EAGER_JS_BUDGET - SLACK` floor is 880,400, so this
+ *  records the same tree at 919,699 before later commits landed), and those
+ *  groups are still landing in parallel; a pin lowered to this branch's number
+ *  would fail the next group's merge for a reason that has nothing to do with
+ *  its own weight. The `EAGER_JS_BUDGET - SLACK` floor is 880,400, so this
  *  measurement is nowhere near forcing a reduction.
  *
- *  WHAT THE WEIGHT IS, for the feature as a whole (918,459 -> 919,590 = 1,131 B
- *  across both rework rounds). The cycle itself is small: one resolver, two
- *  vocabulary arrays and two predicates in lib/seriesStyleCycle.ts. The cost is
+ *  WHAT THE WEIGHT IS. The cycle itself is small: one resolver, two
+ *  vocabulary arrays and four predicates in lib/seriesStyleCycle.ts. The cost is
  *  the PARITY WIRING, which is the whole point. The first cut kept the on/off
  *  flag in a module-level singleton that every `buildOpts`/`buildExportStyles`
  *  caller inherited silently, and review found five render paths cycling on
@@ -1380,11 +1393,11 @@ import { fileURLToPath } from "node:url";
  *    1. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
  *       rather than `primitives/Checkbox`, which is deliberately NOT in the eager
  *       bundle (its header records that every other consumer is a lazy panel).
- *       Measured both ways here: 919,701 with the import, 919,590 without —
- *       111 B. Worth recording that this number MOVES with the module graph: the
+ *       Measured both ways here: 920,133 with the import, 920,031 without —
+ *       102 B. Worth recording that this number MOVES with the module graph: the
  *       first review predicted ~590 B off the original commit's graph, the first
- *       rework measured 74 B off its own, and it is 111 B on this one. Re-measure
- *       it; do not quote it.
+ *       rework measured 74 B off its own, the second 111 B, and it is 102 B on
+ *       this one. Re-measure it; do not quote it.
  *    2. `DefaultTrace` went to lib/types.ts beside `LineStyle`/`MarkerShape`
  *       rather than to lib/markers.ts, because eight of the ten files that need
  *       it already import from lib/types and could take it on an EXISTING import
@@ -1414,12 +1427,16 @@ import { fileURLToPath } from "node:url";
  *  rewritten to state what actually holds (the separation from lib/exportStyles,
  *  which is the one that carries weight) instead.
  *
- *  FOR THE RECORD, three numbers in the original block that could not be
- *  reproduced and are superseded above: the base was quoted as 918,658 (it is
- *  918,459, against d28fcd6e); the "residual 593 B is parity wiring" conflated
- *  the amount OVER the old budget with the feature's cost (the block's own
- *  figures make the cost 735 B at that point); and the checkbox reduction was
- *  quoted at 74 B.
+ *  FOR THE RECORD, the numbers from the two superseded blocks, none of which
+ *  should be quoted forward: the ORIGINAL block's base of 918,658 (against
+ *  `3145fe33`, not in this history) and its "residual 593 B is parity wiring",
+ *  which conflated the amount OVER the old budget with the feature's cost; and
+ *  the SECOND block's 918,459 / 919,746 / 919,590 triple with its "156 B
+ *  smaller, 810 B under budget", whose 919,746 baseline is `2b60d4e6` rather than
+ *  the parent `5f65ec8a`. The feature's whole-history cost is deliberately not
+ *  restated: `d28fcd6e` IS an ancestor, but its 918,459 was measured in the
+ *  second round and not here, and the only numbers this block stands behind are
+ *  the two it measured itself.
  */
 const EAGER_JS_BUDGET = 920_400;
 

@@ -9,7 +9,9 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { useStageSeriesCycle, useWindowSeriesCycle } from "./useStageSeriesCycle";
 import { createFigureDocument } from "../../lib/figureDocument";
+import { buildFigureSpecFromDocument } from "../../lib/figureSpec";
 import { defaultPlotView, type PlotView } from "../../lib/plotview";
+import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
 const reset = () =>
@@ -20,6 +22,8 @@ const reset = () =>
     stackMode: false,
     polarMode: false,
     statMode: false,
+    xKey: null,
+    yKeys: null,
     plotWindows: [],
     focusedWindowId: null,
   });
@@ -51,7 +55,7 @@ function focusWindow(document: ReturnType<typeof createFigureDocument>): void {
   });
 }
 
-const doc = (seriesStyles?: (Record<string, unknown> | null)[]) =>
+const doc = (seriesStyles?: (Record<string, unknown> | null)[] | null) =>
   createFigureDocument({
     id: "f1",
     name: "f",
@@ -94,6 +98,30 @@ describe("useStageSeriesCycle", () => {
     useApp.setState({ autoSeriesStyles: true });
     focusWindow(doc([{ color: "#ff0000" }, null]));
     expect(renderHook(() => useStageSeriesCycle(3)).result.current).toBeNull();
+  });
+
+  it("refuses when the focused document OMITS publication series styles (null)", () => {
+    // `null` is the other non-derived value: figureSpec drops `series_styles`
+    // from the request entirely, so the PDF has no per-series styling at all
+    // while the canvas dashed. Reachable through useGraphTemplates
+    // (`setDocSeriesStyles(template.seriesStyles ?? null)`).
+    useApp.setState({ autoSeriesStyles: true });
+    focusWindow(doc(null));
+    expect(renderHook(() => useStageSeriesCycle(3)).result.current).toBeNull();
+  });
+
+  it("refuses when the X channel is also in yKeys — the export's list differs", () => {
+    // `setXKey` does not remove the channel from the y selection, so this is two
+    // clicks away. The canvas drops channel 1; the DOCUMENT export path keeps it
+    // (`allowExplicitXAsY`). The refusal used to live only in `figureSpec.ts`,
+    // so the canvas dashed channels 2/3 while the PDF drew all three solid.
+    useApp.setState({ autoSeriesStyles: true, xKey: 1, yKeys: [1, 2, 3] });
+    expect(renderHook(() => useStageSeriesCycle(2)).result.current).toBeNull();
+  });
+
+  it("still cycles when the X channel is NOT in yKeys", () => {
+    useApp.setState({ autoSeriesStyles: true, xKey: 0, yKeys: [1, 2, 3] });
+    expect(renderHook(() => useStageSeriesCycle(3)).result.current).toEqual([0, 1, 2]);
   });
 
   it("still cycles when the focused document has no exact publication styles", () => {
@@ -157,11 +185,81 @@ describe("useWindowSeriesCycle — a background window resolves the SAME positio
     ).toBeNull();
   });
 
+  it("refuses when THIS window's document OMITS publication series styles (null)", () => {
+    useApp.setState({ autoSeriesStyles: true });
+    expect(
+      renderHook(() => useWindowSeriesCycle(view(), doc(null), 3)).result.current,
+    ).toBeNull();
+  });
+
+  it("refuses when THIS window's X channel is also in its yKeys", () => {
+    useApp.setState({ autoSeriesStyles: true });
+    expect(
+      renderHook(() => useWindowSeriesCycle(view({ xKey: 1, yKeys: [1, 2, 3] }), undefined, 2))
+        .result.current,
+    ).toBeNull();
+  });
+
   it("keeps a STABLE reference across re-renders", () => {
     useApp.setState({ autoSeriesStyles: true });
     const { result, rerender } = renderHook(() => useWindowSeriesCycle(view(), undefined, 3));
     const first = result.current;
     rerender();
     expect(result.current).toBe(first);
+  });
+});
+
+// The finding this closes was a two-SIDED divergence, so it is pinned with both
+// sides in ONE test: the canvas hook and the real export builder, over the same
+// view, must make the same call. The refusal used to live only in
+// `figureSpec.ts` (a local `xAlsoPlotted` test the hooks could not see), so with
+// `xKey:1, yKeys:[1,2,3]` the canvas drew channels 2 and 3 solid/dashed while
+// the PDF drew channels 1, 2 and 3 all solid.
+describe("canvas and export agree about the X-also-plotted-as-Y display list", () => {
+  const data = {
+    time: [0, 1, 2],
+    values: [
+      [10, 1, 2, 3],
+      [11, 2, 3, 4],
+      [12, 3, 4, 5],
+    ],
+    labels: ["c0", "c1", "c2", "c3"],
+    units: ["", "", "", ""],
+    metadata: {},
+  };
+  const dataset = { id: "d1", name: "d1", data } as unknown as Dataset;
+  const figure = (patch: Partial<PlotView>) =>
+    createFigureDocument({ id: "f", name: "f", datasetId: "d1", view: view(patch) });
+  const lines = (v: Partial<PlotView>) =>
+    (
+      buildFigureSpecFromDocument(figure(v), dataset, "s", { autoSeriesStyles: true })
+        .series_styles ?? []
+    ).map((st) => st?.line);
+
+  it("BOTH refuse when the X channel is also in yKeys", () => {
+    useApp.setState({ autoSeriesStyles: true });
+    const patch = { xKey: 1, yKeys: [1, 2, 3] };
+    // The export really does keep channel 1 — that is the divergence, not a typo.
+    const spec = buildFigureSpecFromDocument(figure(patch), dataset, "s", {
+      autoSeriesStyles: true,
+    });
+    expect(spec.y_keys).toEqual([1, 2, 3]);
+    expect(lines(patch)).toEqual([undefined, undefined, undefined]);
+    expect(
+      renderHook(() => useWindowSeriesCycle(view(patch), undefined, 2)).result.current,
+    ).toBeNull();
+    useApp.setState({ xKey: 1, yKeys: [1, 2, 3] });
+    expect(renderHook(() => useStageSeriesCycle(2)).result.current).toBeNull();
+  });
+
+  it("BOTH cycle when the X channel is not in yKeys", () => {
+    useApp.setState({ autoSeriesStyles: true });
+    const patch = { xKey: 0, yKeys: [1, 2, 3] };
+    expect(lines(patch)).toEqual(["solid", "dashed", "dotted"]);
+    expect(
+      renderHook(() => useWindowSeriesCycle(view(patch), undefined, 3)).result.current,
+    ).toEqual([0, 1, 2]);
+    useApp.setState({ xKey: 0, yKeys: [1, 2, 3] });
+    expect(renderHook(() => useStageSeriesCycle(3)).result.current).toEqual([0, 1, 2]);
   });
 });

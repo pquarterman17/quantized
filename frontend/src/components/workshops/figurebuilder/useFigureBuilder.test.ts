@@ -13,6 +13,12 @@ import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
 import type { DataStruct, Shape } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+// P3.3: the canvas half of the parity assertions below — the preview must match
+// the TARGET window's own canvas, so both are rendered in the same test.
+import {
+  useStageSeriesCycle,
+  useWindowSeriesCycle,
+} from "../../Stage/useStageSeriesCycle";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
 
 vi.mock("../../../lib/api", () => ({
@@ -57,6 +63,7 @@ beforeEach(() => {
     figurePublicationSession: null,
     figureBuilderOpen: false,
     autoSeriesStyles: false, // P3.3 default; the cycle block below opts in per test
+    polarMode: false, // ditto: one cycle case drives the live view into polar
     status: "",
   });
 });
@@ -690,11 +697,82 @@ describe("useFigureBuilder", () => {
       expect(previewLines()).toEqual([undefined, undefined]);
     });
 
-    it("does NOT cycle once the target window loses focus — it is no longer previewing that canvas", async () => {
+    // FOCUS IS NOT A STYLING INPUT, and this is where that leaked. The selector
+    // used to require `session.windowId === state.focusedWindowId`, while the
+    // canvas half (`useWindowSeriesCycle`) has never gated on focus: with the
+    // preview open on w1 and w2 focused, w1's background canvas dashed while
+    // w1's preview and its Export rendered solid — the same screen-vs-export
+    // divergence, one layer over. Both sides asserted here, in one test.
+    it("still cycles when the target window is UNFOCUSED — its canvas does, so its preview must", async () => {
+      const target = win("w1");
       useApp.setState({
         autoSeriesStyles: true,
         figurePublicationSession: windowSession("w1"),
-        plotWindows: [win("w1"), win("w2")],
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
+      // The target window's own canvas, judged from its own view + document.
+      const canvas = renderHook(() =>
+        useWindowSeriesCycle(target.view, target.document, 2),
+      ).result.current;
+      expect(canvas).toEqual([0, 1]);
+
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual(["solid", "dashed"]);
+
+      // ...and its Export emits what the preview showed.
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      const spec = vi.mocked(exportFigure).mock.calls[0][0] as {
+        series_styles?: ({ line?: string } | null)[];
+      };
+      expect((spec.series_styles ?? []).map((st) => st?.line)).toEqual(["solid", "dashed"]);
+    });
+
+    // The target window's OWN view decides, not the live singletons and not the
+    // draft. An unfocused window in a mode whose export cannot reproduce it
+    // (here polar) refuses on both sides even though the live view is plain.
+    it("does NOT cycle when the UNFOCUSED target window's own view refuses", async () => {
+      const target: PlotWindow = { ...win("w1"), view: { ...defaultPlotView(), polarMode: true } };
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
+      expect(
+        renderHook(() => useWindowSeriesCycle(target.view, target.document, 2)).result.current,
+      ).toBeNull();
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    // Item 7: a FOCUSED target reads the LIVE singletons, because that is what
+    // its canvas draws from and a window record's `view` copy lags them.
+    // Toggling polar on the window behind the non-modal dialog therefore stops
+    // the preview dashing in the same store notification it stops the canvas.
+    it("does NOT cycle when the FOCUSED target window's LIVE view is switched to polar", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+        polarMode: true,
+      });
+      expect(renderHook(() => useStageSeriesCycle(2)).result.current).toBeNull();
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    it("does NOT cycle when the target window is gone — there is no canvas to match", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w2")],
         focusedWindowId: "w2",
       });
       const { result } = renderHook(() => useFigureBuilder());

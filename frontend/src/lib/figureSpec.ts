@@ -47,7 +47,7 @@ import { pruneToLiveDataset } from "./rowstate";
 // re-exported: a barrel here would make every importer of this module pull the
 // projection in whether it uses it or not.
 import { viewOverrides } from "./figureViewOverrides";
-import { documentPinsSeriesStyles, overlayExportsSeriesStyles } from "./seriesStyleCycle";
+import { overlayExportsSeriesStyles, windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
 import { axisFmtParam } from "./types";
@@ -234,20 +234,17 @@ function buildFigureSpecForView(
   // when `st.facetKey` is set, which the predicate below already refuses. A
   // clause no sabotage can make fail is dead code, not defence in depth.)
   //
-  // ONE more refusal, and it is about the list above rather than the view:
-  // `allowExplicitXAsY` (the document path) deliberately keeps an explicitly
-  // selected X channel in `displayChannels` AS a Y series, while the canvas'
-  // own call (`usePlotPayload.fetchChannels`) always passes `st.xKey` and so
-  // drops it. When that happens the two sides are not the same display-position
-  // space at all — the export holds a series the screen never drew, and every
-  // later channel lands one dash and one hue off (measured with `xKey:1`,
-  // `yKeys:[1,2,3]`: canvas solid/dashed, export solid/dashed/dotted). There is
-  // no canvas position to borrow for a series the canvas does not draw, so the
-  // cycle is refused outright rather than guessed at.
-  const xAlsoPlotted = st.xKey !== null && displayChannels.includes(st.xKey);
+  // ONE more refusal rides the SAME predicate, and it is about the display list
+  // rather than the view: `seriesStyleCycle.displayListsAgree` (folded into
+  // `overlayExportsSeriesStyles`) refuses an X channel that is also in `yKeys`,
+  // because `allowExplicitXAsY` keeps it in `displayChannels` AS a Y series
+  // while the canvas' own call (`usePlotPayload.fetchChannels`) always drops it.
+  // It lived HERE as a local `xAlsoPlotted` test, which is why it was a
+  // divergence rather than a refusal: the canvases could not see it, so with
+  // `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and
+  // the PDF drew all three solid.
   const seriesCycle =
     extras.autoSeriesStyles &&
-    !xAlsoPlotted &&
     overlayExportsSeriesStyles({
       // `extras.groupKey` is what actually rides the wire; `st.groupKey` is the
       // view's own binding, which the plain live entry point does NOT forward —
@@ -259,6 +256,8 @@ function buildFigureSpecForView(
       stackMode: st.stackMode,
       polarMode: st.polarMode,
       statMode: st.statMode,
+      xKey: st.xKey,
+      yKeys: st.yKeys,
     })
       ? plotted.map((ch) => displayChannels.indexOf(ch))
       : null;
@@ -435,26 +434,17 @@ export function buildStageFigureSpec(
     (document.data.mode === "frozen" || document.bindings.datasetId === ds.id);
   // P3.3: this is THE export the focused Stage canvas produces — Copy figure,
   // Copy figure (vector), Export figure… — so it is the one entry point that
-  // opts into the auto dash/marker cycle. `PlotStage.tsx` gates its canvas on
-  // the same preference and the same `overlayExportsSeriesStyles` view test
-  // that `buildFigureSpecForView` re-applies, so screen and PDF cycle together
-  // or not at all.
-  // Gated against the LIVE view as well as the rendered one: the document this
-  // may route through carries its own copy of the view, and only the live
-  // singleton is guaranteed to be what PlotStage is drawing right now. The
-  // exact-publication-styles refusal is restated here too so the FALLBACK
-  // branch below (a live-view spec, which never sees `document.publication`)
-  // agrees with the canvas, which reads it off the focused window.
-  const autoSeriesStyles =
-    st.autoSeriesStyles &&
-    !documentPinsSeriesStyles(document) &&
-    overlayExportsSeriesStyles({
-      groupKey: st.groupKey,
-      facetKey: st.facetKey,
-      stackMode: st.stackMode,
-      polarMode: st.polarMode,
-      statMode: st.statMode,
-    });
+  // opts into the auto dash/marker cycle. It asks `windowCyclesSeriesStyles`,
+  // literally the call `Stage/useStageSeriesCycle` makes for that same canvas,
+  // so screen and PDF cycle together or not at all.
+  // Asked against the LIVE view (`st` satisfies `CycleView`) as well as the
+  // rendered one: the document this may route through carries its own copy of
+  // the view, and only the live singleton is guaranteed to be what PlotStage is
+  // drawing right now. The document refusal matters here too, because the
+  // FALLBACK branch below (a live-view spec, which never sees
+  // `document.publication`) would otherwise cycle while the canvas — which reads
+  // the pin straight off the focused window — refuses.
+  const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document);
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,

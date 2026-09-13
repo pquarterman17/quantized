@@ -11,6 +11,7 @@ import {
   AUTO_DASH_CYCLE,
   AUTO_MARKER_CYCLE,
   DASH,
+  displayListsAgree,
   displayPositions,
   documentPinsSeriesStyles,
   overlayExportsSeriesStyles,
@@ -40,6 +41,8 @@ describe("overlayExportsSeriesStyles — the ONE view test both sides gate on", 
     stackMode: false,
     polarMode: false,
     statMode: false,
+    xKey: null,
+    yKeys: null,
   };
 
   it("accepts the plain single-panel overlay", () => {
@@ -62,22 +65,58 @@ describe("overlayExportsSeriesStyles — the ONE view test both sides gate on", 
     // never dashed.
     expect(overlayExportsSeriesStyles({ ...overlay, polarMode: true })).toBe(false);
     expect(overlayExportsSeriesStyles({ ...overlay, statMode: true })).toBe(false);
+    // The display-list clause: an explicitly picked X channel that is ALSO in
+    // yKeys. The canvas drops it, the document export keeps it as a Y series.
+    expect(overlayExportsSeriesStyles({ ...overlay, xKey: 1, yKeys: [1, 2, 3] })).toBe(false);
   });
 });
 
-describe("documentPinsSeriesStyles — an exact array is the document's final word", () => {
-  it("is true only for an ARRAY of publication series styles", () => {
+describe("displayListsAgree — the canvas and its export draw the same series", () => {
+  const overlay: CycleView = {
+    groupKey: null,
+    facetKey: null,
+    stackMode: false,
+    polarMode: false,
+    statMode: false,
+    xKey: null,
+    yKeys: null,
+  };
+
+  it("agrees whenever the X channel is not in the y selection", () => {
+    expect(displayListsAgree(overlay)).toBe(true);
+    expect(displayListsAgree({ ...overlay, xKey: null, yKeys: [1, 2, 3] })).toBe(true);
+    expect(displayListsAgree({ ...overlay, xKey: 0, yKeys: [1, 2, 3] })).toBe(true);
+    // yKeys null = the dense default, which `effectiveChannels` computes with
+    // the xKey in hand on both sides.
+    expect(displayListsAgree({ ...overlay, xKey: 4, yKeys: null })).toBe(true);
+  });
+
+  it("disagrees when an explicitly picked X channel is also a y channel", () => {
+    // Two clicks away: `setXKey` does not prune the channel out of `yKeys`.
+    expect(displayListsAgree({ ...overlay, xKey: 1, yKeys: [1, 2, 3] })).toBe(false);
+    expect(displayListsAgree({ ...overlay, xKey: 3, yKeys: [1, 2, 3] })).toBe(false);
+  });
+});
+
+describe("documentPinsSeriesStyles — only an ABSENT field leaves styles derivable", () => {
+  it("is true for an ARRAY of publication series styles", () => {
     // `figureSpec` ships an exact array verbatim and never calls
     // `buildExportStyles`, so the canvas beside such a document must not cycle.
     expect(documentPinsSeriesStyles({ publication: { seriesStyles: [{}, null] } })).toBe(true);
+    // `[]` too: it still takes the exact branch, shipping `series_styles: []`.
     expect(documentPinsSeriesStyles({ publication: { seriesStyles: [] } })).toBe(true);
   });
 
-  it("is false for absent, null, and no publication block at all", () => {
-    // absent = "derive from the PlotView" (so the cycle may apply);
-    // null = "omit styles"; neither pins anything.
+  it("is true for NULL — the export then carries no series_styles key at all", () => {
+    // The divergence this replaced: `null` returned false, so the canvas dashed
+    // while `figureSpec` omitted `series_styles` from the request entirely.
+    // Reachable through `useGraphTemplates`, which maps a template with no
+    // styles to exactly this value.
+    expect(documentPinsSeriesStyles({ publication: { seriesStyles: null } })).toBe(true);
+  });
+
+  it("is false only when the field is ABSENT — the one derive-from-PlotView case", () => {
     expect(documentPinsSeriesStyles({ publication: { seriesStyles: undefined } })).toBe(false);
-    expect(documentPinsSeriesStyles({ publication: { seriesStyles: null } })).toBe(false);
     expect(documentPinsSeriesStyles({})).toBe(false);
     expect(documentPinsSeriesStyles(undefined)).toBe(false);
     expect(documentPinsSeriesStyles(null)).toBe(false);

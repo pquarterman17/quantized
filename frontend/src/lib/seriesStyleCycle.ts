@@ -109,13 +109,40 @@ export const AUTO_MARKER_CYCLE: readonly MarkerShape[] = [
 
 /** The fields of a `PlotView` that decide whether its export can reproduce the
  *  canvas series-for-series. A plain structural type, not `PlotView` itself, so
- *  a caller holding the live store singletons can ask without assembling one. */
+ *  a caller holding the live store singletons can ask without assembling one
+ *  (`AppState` satisfies it directly). */
 export interface CycleView {
   groupKey: number | null;
   facetKey: number | null;
   stackMode: boolean;
   polarMode: boolean;
   statMode: boolean;
+  xKey: number | null;
+  yKeys: readonly number[] | null;
+}
+
+/** Do the canvas and its publication export draw the SAME display list?
+ *
+ *  They do not when an explicitly selected X channel is ALSO in `yKeys`.
+ *  `setXKey` does not remove the channel from the y selection (`store/useApp.ts`
+ *  — picking column 1 as X with `yKeys:[1,2,3]` already chosen is two clicks),
+ *  and the two sides then disagree about what to do with it: the canvas' own
+ *  `effectiveChannels` call always drops the X channel
+ *  (`Stage/usePlotPayload.fetchChannels` passes `st.xKey`), while the DOCUMENT
+ *  export path passes `allowExplicitXAsY` and deliberately keeps it as a Y
+ *  series. Measured with `xKey:1, yKeys:[1,2,3]`: the canvas draws two curves,
+ *  the export renders three, and every later channel lands one dash and one hue
+ *  off. There is no shared position space to borrow, so BOTH sides refuse.
+ *
+ *  Refused for the live/fallback export route too, where the export happens to
+ *  drop the channel like the canvas does. That route has no way to know which
+ *  entry point a given window's Copy/Export will take next, and one predicate
+ *  that both canvases and both export entry points evaluate is the only shape
+ *  that cannot drift — which is the finding this replaced: the agreement test
+ *  lived in `figureSpec.ts` alone, so the canvas dashed what the PDF drew
+ *  solid. */
+export function displayListsAgree(v: CycleView): boolean {
+  return v.xKey === null || v.yKeys === null || !v.yKeys.includes(v.xKey);
 }
 
 /** The plain single-panel XY overlay is the ONLY live view whose publication
@@ -131,27 +158,74 @@ export interface CycleView {
  *  `StatStage`, and both own their own export paths) while a plain
  *  `buildFigureSpec`/`buildStageFigureSpec` request still emits an ordinary XY
  *  figure — so with the preference on, "Export figure…" in polar or stat mode
- *  used to emit dashes for a figure the screen had never dashed. Both the
- *  canvases (`useStageSeriesCycle`) and the export (`buildFigureSpecForView`,
- *  `buildStageFigureSpec`) ask THIS function, so the two cannot drift into
+ *  used to emit dashes for a figure the screen had never dashed. The last clause
+ *  is `displayListsAgree` above — not a view MODE but the same kind of question,
+ *  and folded in here rather than left as a sixth thing to remember, since being
+ *  a separate thing to remember is precisely why it was missed on the canvas
+ *  side. Both the canvases (`useStageSeriesCycle`) and the export
+ *  (`buildFigureSpecForView`, `buildStageFigureSpec`) ask THIS function — most of
+ *  them through `windowCyclesSeriesStyles` below — so they cannot drift into
  *  disagreement about which views cycle. */
 export function overlayExportsSeriesStyles(v: CycleView): boolean {
   return (
-    v.groupKey === null && v.facetKey === null && !v.stackMode && !v.polarMode && !v.statMode
+    v.groupKey === null &&
+    v.facetKey === null &&
+    !v.stackMode &&
+    !v.polarMode &&
+    !v.statMode &&
+    displayListsAgree(v)
   );
 }
 
-/** An EXACT `publication.seriesStyles` array is the document's final word on
- *  every series' style (the F2.1a contract): `figureSpec` ships it verbatim and
- *  never calls `buildExportStyles` at all, so the cycle cannot reach that
- *  export — and the canvas beside it must therefore not cycle either. Reachable
- *  through `useGraphBuilder` -> `figureLifecycle.promoteLegacyFigureDoc` ->
+/** Has the document taken the per-series styling decision away from the cycle?
+ *  True for BOTH values `publication.seriesStyles` can hold, because
+ *  `figureSpec.buildFigureSpecForView` routes both of them around
+ *  `buildExportStyles` — only an ABSENT (`undefined`) field derives styles and
+ *  can therefore carry a cycled dash:
+ *
+ *    - an ARRAY is the document's final word on every series (the F2.1a
+ *      "exact" contract) and ships verbatim. An EMPTY array counts, and that is
+ *      deliberate: `[]` still takes the exact branch, so the export ships
+ *      `series_styles: []` and styles nothing.
+ *    - `null` means "omit styles entirely" — the spec gets no `series_styles`
+ *      key at all, so the PDF has no per-series styling to match a dash with.
+ *      Reachable through `useGraphTemplates` (`setDocSeriesStyles(template.
+ *      seriesStyles ?? null)`), and it was the finding this replaced: `null`
+ *      returned false here, so the canvas dashed a figure the PDF drew with no
+ *      per-series styling at all.
+ *
+ *  The array case is reachable through `useGraphBuilder` ->
+ *  `figureLifecycle.promoteLegacyFigureDoc` ->
  *  `figureDocumentFromLegacyFigureDoc` -> `openEditableFigure`, which lands such
  *  a document in a focused plot window. */
 export function documentPinsSeriesStyles(
   doc: { publication?: { seriesStyles?: readonly unknown[] | null } } | null | undefined,
 ): boolean {
-  return Array.isArray(doc?.publication?.seriesStyles);
+  return doc?.publication?.seriesStyles !== undefined;
+}
+
+/** THE decision, in one place: does the plot window that draws `view` with
+ *  `doc` behind it cycle? Every canvas and every export answers through this,
+ *  so none of them can hold a different opinion:
+ *
+ *    - `Stage/useStageSeriesCycle`'s two hooks — the focused Stage (`view` = the
+ *      live singletons, which is what `PlotStage` draws from) and a background
+ *      window (`view` = its own record, since focus is not a styling input);
+ *    - `figurebuilder/canonicalSession.selectSessionCyclesSeriesStyles`, for the
+ *      Publication Preview's TARGET window, on that window's own view+document —
+ *      it used to ask whether that window held FOCUS instead, which is how the
+ *      preview came to render solid beside a dashed background canvas;
+ *    - `figureSpec.buildStageFigureSpec`, for the export the focused window
+ *      produces.
+ *
+ *  `on` is the `autoSeriesStyles` preference; it is a parameter rather than a
+ *  store read because this module is pure and every caller already holds it. */
+export function windowCyclesSeriesStyles(
+  on: boolean,
+  view: CycleView,
+  doc: { publication?: { seriesStyles?: readonly unknown[] | null } } | null | undefined,
+): boolean {
+  return on && !documentPinsSeriesStyles(doc) && overlayExportsSeriesStyles(view);
 }
 
 /** The display positions of `count` series in their own natural order — the

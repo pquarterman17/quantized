@@ -472,12 +472,57 @@ describe("PlotLegend — auto dash/marker cycle (P3.3)", () => {
     ]);
   });
 
+  // The ONE render path this feature changed with the preference OFF, frozen as
+  // a literal so it is a decision on the record rather than a silent drift.
+  //
+  // At d28fcd6e (before the feature) `LegendSample` decided markers locally:
+  // `showMarker = marker || scatter || line+markers`, then `shape =
+  // style.markerShape ?? "circle"` and `radius` from `style.markerSize`. So a
+  // stored `{marker:false, markerShape:"diamond", markerSize:9}` on a Scatter
+  // series — the combination `Inspector/SeriesStyleCard.tsx` leaves behind when
+  // "Markers" is unticked — rendered data-marker="diamond" with a 4.5px polygon.
+  // The canvas has never drawn that: with `marker` off, `buildOpts` hands uPlot
+  // its plain 5px circle, and `buildExportStyles` emits no marker at all. The
+  // legend was lying about a glyph nothing else drew, so `markerDecision` (which
+  // both sides now share) corrects it to a 2.5px circle.
+  //
+  // The 32-combination differential proof below CANNOT see this: it compares
+  // PlotLegend against the post-change `LegendSample`, i.e. the component
+  // against itself.
+  it("the deliberate OFF-state change: marker:false on a Scatter trace draws the CIRCLE the canvas draws", () => {
+    const { container } = render(
+      <PlotLegend
+        series={[{ label: "A", unit: "" }]}
+        plotted={[0]}
+        styleList={[{ marker: false, markerShape: "diamond", markerSize: 9 }]}
+        defaultTrace="Scatter"
+        seriesCycle={null}
+      />,
+    );
+    const swatch = samples(container)[0];
+    // Frozen literal, not a re-derivation: `d28fcd6e` produced
+    // data-marker="diamond" with a `<polygon>` at radius 4.5.
+    expect(swatch.getAttribute("data-marker")).toBe("circle");
+    expect(swatch.getAttribute("data-line")).toBe("false"); // Scatter => width 0
+    expect(swatch.querySelector("polygon")).toBeNull();
+    const glyph = swatch.querySelector("circle");
+    expect(glyph).not.toBeNull();
+    expect(glyph?.getAttribute("r")).toBe("2.5");
+    expect(glyph?.getAttribute("fill")).toBe("#fff");
+    expect(glyph?.getAttribute("stroke")).toBe("var(--series-1)");
+  });
+
   // The legend's half of the differential OFF proof the review made for
   // `buildOpts` (288 combinations) and `buildFigureSpecFromDocument` (16): with no
   // cycle, PlotLegend's `resolveSeriesStyle` call must be the identity, so the
   // swatch it renders has to be the SAME DOM as handing `LegendSample` the raw
   // stored style directly — which is exactly the call this component made before
   // the cycle existed. 32 style x trace combinations, compared as markup.
+  //
+  // It proves the CYCLE ARGUMENT is inert with no positions. It does NOT prove
+  // the swatch is unchanged from before the feature: both sides of the
+  // comparison are the post-`markerDecision` `LegendSample`. The one case where
+  // those two claims come apart is frozen in the test above.
   it("OFF is byte-identical: the swatch equals LegendSample on the RAW style", () => {
     const traces = ["Line", "Line + markers", "Scatter", "Step"] as const;
     const styles: (SeriesStyle | undefined)[] = [

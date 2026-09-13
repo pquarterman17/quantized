@@ -1,7 +1,12 @@
 // A plot window's opt-in to the P3.3 auto dash/marker cycle
-// (`lib/seriesStyleCycle.ts`) — one store-reading hook rather than the same six
-// reads and a `useMemo` inline in `PlotStage.tsx`, which sits on the 400-line
+// (`lib/seriesStyleCycle.ts`) — a named hook rather than a store read and a
+// `useMemo` written inline in `PlotStage.tsx`, which sits on the 400-line
 // component ceiling, and again in `BackgroundPlotWindow.tsx`.
+//
+// Neither hook decides anything itself: both call
+// `seriesStyleCycle.windowCyclesSeriesStyles`, the one function the Stage export
+// and the Publication Preview gate also call, and turn its boolean into memoised
+// display positions. What differs between them is only WHICH view they hand it.
 //
 // It exists as a NAMED opt-in on purpose. `buildOpts` cycles only for a caller
 // that hands it display positions, so every other canvas — the waterfall, the
@@ -23,19 +28,27 @@ import { useMemo } from "react";
 import type { FigureDocument } from "../../lib/figureDocument";
 import {
   displayPositions,
-  documentPinsSeriesStyles,
-  overlayExportsSeriesStyles,
+  windowCyclesSeriesStyles,
   type CycleView,
   type SeriesCycle,
 } from "../../lib/seriesStyleCycle";
 import { useApp, type AppState } from "../../store/useApp";
 
-/** Does the FOCUSED window's document pin every series style exactly? A
- *  boolean-returning selector, so it re-renders nothing unless the answer
- *  changes. See `documentPinsSeriesStyles` for why the canvas must refuse. */
-function selectFocusedDocumentPinsStyles(s: AppState): boolean {
+/** Does the FOCUSED window cycle right now? ONE boolean-returning selector, so
+ *  it re-renders nothing unless the answer changes, over the live view
+ *  singletons `PlotStage` actually draws from (a window record's own `view` copy
+ *  can lag them) plus that window's document.
+ *
+ *  `AppState` satisfies `CycleView` structurally (`groupKey`, `facetKey`,
+ *  `stackMode`, `polarMode`, `statMode`, `xKey`, `yKeys` are all live
+ *  singletons), so nothing is assembled to ask. */
+function selectFocusedWindowCycles(s: AppState): boolean {
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
-  return documentPinsSeriesStyles(win?.kind === "plot" ? win.document : undefined);
+  return windowCyclesSeriesStyles(
+    s.autoSeriesStyles,
+    s,
+    win?.kind === "plot" ? win.document : undefined,
+  );
 }
 
 /**
@@ -44,10 +57,10 @@ function selectFocusedDocumentPinsStyles(s: AppState): boolean {
  *
  * `lib/figureSpec.buildStageFigureSpec` — the export the FOCUSED window
  * produces (Copy figure, Copy figure (vector), Export figure…), and the one a
- * background window produces the moment it is focused — applies the SAME
- * preference behind the SAME `overlayExportsSeriesStyles` view test and the
- * SAME exact-publication-styles refusal, so a grouped, faceted, stacked, polar
- * or stat view cycles on neither side rather than dashing a curve the PDF
+ * background window produces the moment it is focused — makes the SAME
+ * `windowCyclesSeriesStyles` call, so a grouped, faceted, stacked, polar or stat
+ * view, a document that sets `publication.seriesStyles`, or an X channel that is
+ * also in `yKeys` all cycle on neither side rather than dashing a curve the PDF
  * renders solid.
  *
  * `count` is `plotted.length`, NOT `payload.series.length`: the fit / baseline /
@@ -63,24 +76,14 @@ export function useWindowSeriesCycle(
   count: number,
 ): SeriesCycle {
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
-  const on = autoSeriesStyles && !documentPinsSeriesStyles(doc) && overlayExportsSeriesStyles(view);
+  const on = windowCyclesSeriesStyles(autoSeriesStyles, view, doc);
   return useMemo(() => displayPositions(on, count), [on, count]);
 }
 
-/** The FOCUSED Stage's opt-in: the same decision, over the live view singletons
- *  `PlotStage` actually draws from (a window record's own `view` copy can lag
- *  them) and the focused window's document. */
+/** The FOCUSED Stage's opt-in: `seriesStyleCycle.windowCyclesSeriesStyles` over
+ *  the live view, which is the same call `useWindowSeriesCycle` makes for a
+ *  background window, read as ONE boolean subscription rather than seven. */
 export function useStageSeriesCycle(count: number): SeriesCycle {
-  const groupKey = useApp((s) => s.groupKey);
-  const facetKey = useApp((s) => s.facetKey);
-  const stackMode = useApp((s) => s.stackMode);
-  const polarMode = useApp((s) => s.polarMode);
-  const statMode = useApp((s) => s.statMode);
-  const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
-  const pinned = useApp(selectFocusedDocumentPinsStyles);
-  const on =
-    autoSeriesStyles &&
-    !pinned &&
-    overlayExportsSeriesStyles({ groupKey, facetKey, stackMode, polarMode, statMode });
+  const on = useApp(selectFocusedWindowCycles);
   return useMemo(() => displayPositions(on, count), [on, count]);
 }

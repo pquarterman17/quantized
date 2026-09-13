@@ -47,10 +47,24 @@ function marker(shape: MarkerShape, color: string, radius: number) {
  *  `style.markerShape` whenever markers showed at all, so with P3.3's cycle on
  *  and a `Scatter` / `Line + markers` default trace the legend drew
  *  circle/square/triangle while the canvas drew three plain 5px circles and the
- *  export emitted no marker at all. Sharing the rule also means a stored
- *  `{marker:false, markerShape:"star", markerSize:11}` on a default-trace series
- *  — which the canvas has always drawn as a plain circle — no longer shows as an
- *  11px star here. */
+ *  export emitted no marker at all.
+ *
+ *  THIS SWATCH CHANGED WITH THE PREFERENCE OFF TOO, deliberately — the one
+ *  render path the third review found where "off is byte-identical to before the
+ *  feature" does not hold, which is why that claim is now narrowed rather than
+ *  repeated (plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md P3.3, "Off is the identity,
+ *  with ONE stated exception"). A
+ *  stored `{marker:false, markerShape, markerSize}` on a `Scatter` /
+ *  `Line + markers` series used to render that stored glyph at that stored size
+ *  (the old local rule was `marker || scatter || line+markers` for WHETHER, then
+ *  `style.markerShape ?? "circle"` for WHICH — so `marker:false` still drew a
+ *  diamond). `SeriesStyleCard` keeps both fields when "Markers" is unticked, so
+ *  the combination is ordinary. The canvas has never drawn that glyph: with
+ *  `marker` off, `buildOpts` gives uPlot's plain 5px circle. The legend was
+ *  simply wrong, and the swatch now says circle. Frozen as a literal
+ *  expectation in `PlotLegend.test.tsx` ("the deliberate OFF-state change"), not
+ *  filed under byte-identical — the 32-combination differential OFF proof beside
+ *  it compares this component against ITSELF and structurally cannot see it. */
 export default function LegendSample({ color, style, defaultTrace = "Line" }: LegendSampleProps) {
   const width = style?.width ?? (defaultTrace === "Scatter" ? 0 : 1.5);
   const showLine = width > 0;

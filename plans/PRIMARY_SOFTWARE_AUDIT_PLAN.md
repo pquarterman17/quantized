@@ -2943,13 +2943,33 @@ covers a much smaller subset and guards focus on Analyze.
       Assignment is by SERIES DISPLAY POSITION and deterministic.
     - **Explicit always wins**, including an explicit `"solid"`/`"circle"` —
       that is a deliberate "no encoding here", not an absence.
-    - **Off is the identity.** `resolveSeriesStyle` returns the CALLER'S OWN
-      reference with no cycle (asserted with `toBe`, not `toEqual` — a copy
-      would compare equal and still break prop identity downstream), and
-      `buildOpts` output for an unstyled plot is pinned dash-free/marker-free.
-      "Off" now means two things that are both pinned: the preference is off,
-      OR the call site passed no positions — an explicit `null` cycle is
-      asserted deep-equal to omitting the argument entirely.
+    - **Off is the identity, with ONE stated exception.** `resolveSeriesStyle`
+      returns the CALLER'S OWN reference with no cycle (asserted with `toBe`, not
+      `toEqual` — a copy would compare equal and still break prop identity
+      downstream), and `buildOpts` output for an unstyled plot is pinned
+      dash-free/marker-free. "Off" means two things that are both pinned: the
+      preference is off, OR the call site passed no positions — an explicit
+      `null` cycle is asserted deep-equal to omitting the argument entirely.
+
+      THE EXCEPTION, stated because "with it off every render path is
+      byte-identical to before the feature" was claimed twice and is false for
+      one of them. The LEGEND SWATCH changed with the preference off, and the
+      change is correct rather than accidental. `Stage/LegendSample.tsx` used to
+      decide markers locally — `showMarker = marker || scatter || line+markers`,
+      then `shape = style.markerShape ?? "circle"` — so a stored
+      `{marker:false, markerShape:"diamond", markerSize:9}` on a `Scatter` series
+      (the combination `Inspector/SeriesStyleCard.tsx` leaves behind when
+      "Markers" is unticked) rendered `data-marker="diamond"` at a 4.5px polygon
+      while `buildOpts` drew uPlot's plain 5px circle and `buildExportStyles`
+      emitted no marker at all. Sharing `markers.markerDecision` corrects the
+      swatch to a 2.5px circle: the legend was describing a glyph nothing else
+      drew. Frozen as a literal expectation in `PlotLegend.test.tsx` ("the
+      deliberate OFF-state change"). The 32-combination differential OFF proof
+      beside it CANNOT see this — it compares `PlotLegend` against the
+      post-change `LegendSample`, i.e. the component against itself — so it
+      proves the cycle argument is inert, not that the swatch is unchanged from
+      before the feature. Those are two different claims and only the first one
+      holds everywhere.
     - **How parity is guaranteed** (this is the FEATURE-001 lesson applied, and
       the first cut of it got this WRONG — see "what the review found" below).
       The cycle is an **explicit argument**, not an ambient flag: a
@@ -2973,31 +2993,51 @@ covers a much smaller subset and guards focus on Analyze.
       |---|---|---|
       | A plot window's plain single-panel XY overlay while FOCUSED (`PlotStage` → `PlotViewport`, plus `PlotLegend`'s swatch and `InsetPlot`), via `useStageSeriesCycle` | `figureSpec.buildStageFigureSpec` → `buildExportStyles` (Copy figure, Copy figure (vector), Export figure…) | **yes** |
       | The SAME window while UNFOCUSED (`BackgroundPlotWindow` → `PlotViewport` + `InsetPlot`), via `useWindowSeriesCycle` on ITS OWN view | the same `buildStageFigureSpec`, produced the moment it is focused | **yes** — focus is not a styling input |
-      | Publication Preview's preview image AND its Export, for a `window`-target session on the FOCUSED window (`canonicalReadiness` / `previewExport`, gated by `canonicalSession.selectSessionCyclesSeriesStyles`) | itself — the same `buildFigureSpecFromDocument` opt-in | **yes** |
+      | Publication Preview's preview image AND its Export, for a `window`-target session whose TARGET WINDOW cycles — focused or not (`canonicalReadiness` / `previewExport`, gated by `canonicalSession.selectSessionCyclesSeriesStyles`) | itself — the same `buildFigureSpecFromDocument` opt-in | **yes** — focus is not a styling input here either |
       | Spatial page cells (`useMultiPanelStage` → `multipanel.spatialCellStyling`, incl. `SpatialPanelLegend`'s entries) | `spatialPageExport.spatialPanelFigure` → `buildExportStyles` (Export page…) | **yes** |
       | Grouped (`group_col`) view | `series_styles` **not applied** — `routes/export_figures.py:114-117` | no, both sides |
       | Faceted view | `series_styles` **unused once `facets` is set** — `:125-127` | no, both sides |
       | Stacked / x-break panels (`stackMode`) | one single-panel figure; the screen shows N panels | no, both sides |
       | POLAR (`PolarStage`) / STATISTICS (`StatStage`) | `buildStageFigureSpec` is not gated on the render mode and still emits a plain XY figure | no, both sides |
-      | Any window whose document carries an EXACT `publication.seriesStyles` array | that array, shipped verbatim — `buildExportStyles` is never called at all | no, both sides |
-      | A document whose export display list differs from the canvas' — `allowExplicitXAsY` keeps an explicitly picked X channel in the list AS a Y series, which the canvas always drops | there is no shared position space to resolve against | no, both sides |
+      | Any window whose document SETS `publication.seriesStyles` at all — an exact array, an empty array, or `null` | the array shipped verbatim, or (for `null`) no `series_styles` key at all; `buildExportStyles` is never called either way | no, both sides |
+      | A view whose X channel is ALSO in `yKeys` (two clicks: `setXKey` does not prune it) — `allowExplicitXAsY` keeps it in the document export's list AS a Y series, which the canvas always drops | there is no shared position space to resolve against | no, both sides |
       | Waterfall (`WaterfallView`), reflectometry (`ReflPanel`) | none | no |
-      | Composite `kind:"panel"` window cells (`PanelCell`) | none — a panel window is not a Figure Page source (`panelResolve` requires `win.kind === "plot"`) and is excluded from the window export paths | no |
+      | Composite `kind:"panel"` window cells (`PanelCell`) | none — a panel window is not a Figure Page source (`panelResolve` requires `win.kind === "plot"`), and `focusWindow` never moves `focusedWindowId` to a non-`plot` kind, so the focused-window export commands can never serve one | no |
       | Snapshot window (`SnapshotPlotWindow`) | none | no cycle is re-derived; the styles were frozen ALREADY RESOLVED (below) |
       | Figure Page panels, graph templates, saved Library figures, `plotSpecFigure`, `legacyFigure` | server-rendered from a STORED document/template | no, both sides |
 
-      The view rows are decided by **one predicate**,
-      `seriesStyleCycle.overlayExportsSeriesStyles({groupKey, facetKey,
-      stackMode, polarMode, statMode})`, and the exact-styles row by one more,
-      `documentPinsSeriesStyles(document)`. Every canvas
-      (`useStageSeriesCycle` / `useWindowSeriesCycle`) and every export
-      (`buildFigureSpecForView`, `buildStageFigureSpec`) calls the same two, so
-      they cannot drift into disagreeing about which views cycle.
-      `buildStageFigureSpec` applies both a second time against the LIVE view and
-      the focused document, because the document it may route through carries its
-      own copy of that view — and because its FALLBACK branch
+      Every row above is decided by **ONE function**,
+      `seriesStyleCycle.windowCyclesSeriesStyles(on, view, document)`, which is
+      the preference AND the two predicates under it: the view test
+      `overlayExportsSeriesStyles({groupKey, facetKey, stackMode, polarMode,
+      statMode, xKey, yKeys})` — whose last clause is `displayListsAgree`, the
+      X-also-in-`yKeys` refusal — and the document test
+      `documentPinsSeriesStyles(document)`. Both canvases
+      (`useStageSeriesCycle` / `useWindowSeriesCycle`), the Publication Preview
+      gate (`canonicalSession.selectSessionCyclesSeriesStyles`) and the Stage
+      export (`buildStageFigureSpec`) all call that one function, and
+      `buildFigureSpecForView` calls the view half again on the spec it is
+      actually building, so none of them can drift into a different opinion about
+      which views cycle. `buildStageFigureSpec` asks against the LIVE view
+      because the document it may route through carries its own copy of that
+      view — and its document refusal is load bearing for the FALLBACK branch
       (`buildFigureSpec`, taken when the focused document's dataset disagrees
-      with the one being exported) never sees `document.publication` at all.
+      with the one being exported), which never sees `document.publication` at
+      all.
+
+      THE THIRD ROUND'S TWO HOLES IN THAT SENTENCE, both now closed. (a) The
+      Publication Preview gate asked `session.windowId === focusedWindowId`
+      while `useWindowSeriesCycle` has never gated on focus, so with the preview
+      open on w1 and w2 focused, w1's background canvas dashed while w1's preview
+      and its Export rendered solid. It now asks the same function over the
+      target window's own document and view — the live singletons when that
+      window holds focus (what its canvas draws from), its own record otherwise.
+      (b) The display-list agreement test lived as a local `xAlsoPlotted`
+      expression inside `figureSpec.ts`, invisible to both canvases: with
+      `xKey:1, yKeys:[1,2,3]` the canvas drew channels 2 and 3 solid/dashed and
+      the PDF drew all three solid. It is `displayListsAgree` inside the shared
+      predicate now, so both sides refuse together (pinned by a test that
+      asserts the canvas hook and the real export builder in the same case).
 
       **A snapshot freezes the RESOLVED styles, not the cycle.** `plotsnapshot`
       and `useLiveSnapshotPublish` both promise the snapshot command "freezes
@@ -3010,16 +3050,35 @@ covers a much smaller subset and guards focus on Analyze.
       is the identity and returns the caller's own array, so the frozen bundle is
       byte-identical to before the feature.
 
-      **ONE RESIDUAL, stated rather than hidden.** A Figure Page panel sourced
-      from a live plot WINDOW (`panelResolve`'s `"window"` branch) renders that
-      window's document uncycled, while the same window's own Stage export
-      cycles. That is deliberate: a page is a composed artifact, not a screenshot
-      of a window, and the alternative — cycling it — would make a page's
-      appearance depend on the preference of whoever last rendered it, which is
-      exactly the "saved documents never bake the cycle in" property below. It is
-      recorded here because it IS a screen-vs-export difference, just one whose
-      two sides are different products rather than two renderings of the same
-      one.
+      **RESIDUALS, stated rather than hidden.** Two, and neither is a
+      screen-vs-export STYLING divergence:
+
+      1. A Figure Page panel sourced from a live plot WINDOW (`panelResolve`'s
+         `"window"` branch) renders that window's document uncycled, while the
+         same window's own Stage export cycles. Deliberate: a page is a composed
+         artifact, not a screenshot of a window, and cycling it would make a
+         page's appearance depend on the preference of whoever last rendered it —
+         exactly the "saved documents never bake the cycle in" property below. It
+         is recorded because it IS a screen-vs-export difference, just one whose
+         two sides are different products rather than two renderings of the same
+         one.
+      2. The Publication Preview IMAGE is built from the session's DRAFT
+         document, so an edit made to the live window behind the non-modal dialog
+         is not reflected in the picture until the session is reopened. The
+         mechanism, exactly: `useFigureBuilder` -> `computeCanonicalReadiness` ->
+         `buildFigureSpecFromDocument(publicationSession.draft, …)`, and the
+         draft is only ever patched by the dialog's own controls
+         (`patchFigurePublicationDraft`). `selectSessionLiveDrifted` detects the
+         divergence and blocks Apply with "the plot changed while previewing —
+         Cancel and reopen Publication Preview to pick up the changes", so it is
+         reported rather than silent, but the stale image stays on screen until
+         then. The third round checked whether the CYCLE rode that staleness —
+         toggling polar on the live window leaving the preview dashed — and it no
+         longer can: `selectSessionCyclesSeriesStyles` reads the LIVE singletons
+         for a focused target, so the dashes stop in the same store notification
+         the canvas's do (pinned). What remains is the general draft-vs-live
+         staleness of the picture, which is item 1's territory and not this
+         feature's.
 
       **Hidden series resolve at the same position on both sides.** The canvas
       leaves a hidden series in `payload.series` with `show:false`, so a
@@ -3065,8 +3124,15 @@ covers a much smaller subset and guards focus on Analyze.
       options, `useLiveSnapshotPublish.test.ts` pins that a snapshot freezes the
       RESOLVED styles (and that with no cycle it publishes the caller's own
       array), and `useFigureBuilder.test.ts` pins that the Publication Preview
-      image and its Export both cycle for a focused `window`-target session and
-      for nothing else.
+      image and its Export cycle exactly when the TARGET window's own canvas
+      does — including UNFOCUSED, where it renders that window's canvas cycle in
+      the same test, and NOT when the target's own view (unfocused) or the live
+      view (focused) refuses, nor when the target window is gone.
+      `useStageSeriesCycle.test.ts` carries the two-sided display-list pin: the
+      canvas hook and the real `buildFigureSpecFromDocument` asserted in ONE test
+      to refuse together on `xKey:1, yKeys:[1,2,3]` and to cycle together on
+      `xKey:0`. `PlotLegend.test.tsx` carries the frozen literal for the
+      deliberate OFF-state legend change.
       Backend half in `tests/test_calc_figure.py`: three cycle positions map to
       three distinct matplotlib linestyles/markers, and both reach the rendered
       output.
@@ -3084,13 +3150,23 @@ covers a much smaller subset and guards focus on Analyze.
       publication style array stays exact". And an exact array does not merely
       survive: it now switches the CANVAS off too (`documentPinsSeriesStyles`),
       because a document that pins every style is one `buildExportStyles` never
-      sees at all.
+      sees at all — and so does an explicit `null`, which drops `series_styles`
+      from the request entirely and reaches `buildExportStyles` just as little.
     - **The marker rule is shared, not restated.** `markers.markerDecision` is the
       ONE function that decides whether a series draws markers and with which
       glyph; `markers.seriesPoints` (canvas) and `Stage/LegendSample.tsx` (legend
-      swatch) both call it, and `buildExportStyles`'s explicit-`marker` gate is
-      the third side of the same rule. The legend restating it is exactly how it
-      drifted: it took the glyph from `style.markerShape` whenever markers showed
+      swatch) both call it. `buildExportStyles` is NOT a third caller and calling
+      its explicit-`marker` gate "the third side of the same rule" overstated the
+      agreement: it shares only the EXPLICIT half, because it has no
+      `defaultTrace` to consult — that preference never rides the wire. So an
+      ambient `Scatter` / `Line + markers` series shows markers on screen and
+      none in the export. That gap PREDATES the cycle and is not narrowed by it;
+      it is precisely why the default-trace branch must not cycle a glyph, since
+      doing so would widen a divergence the export cannot follow. (It is filed as
+      a known gap, not fixed here: sending the resolved default-trace marker
+      would change every existing ambient-Scatter export.) The legend restating
+      the rule is exactly how it drifted: it took the glyph from
+      `style.markerShape` whenever markers showed
       at all, so with the preference on and a `Scatter` / `Line + markers` default
       trace it drew circle / square / triangle (measured) while the canvas drew
       three plain 5px circles and the export emitted no marker whatsoever. Sharing
@@ -3137,7 +3213,12 @@ covers a much smaller subset and guards focus on Analyze.
       SECOND ROUND (2026-09-13), same discipline, no pin raised anywhere:
       `lib/types.ts` gained the `DefaultTrace` union (the `defaultTrace`
       preference's four values, previously a bare `string` through ten
-      declarations) inside its existing headroom, pin **1053** unchanged;
+      declarations) inside its existing headroom, pin **1053** and a counted 1052
+      — ONE UNDER, not "held at": the second round's own text said "unchanged",
+      which is true of the pin but reads as "at it". `lib/uplotOpts.ts` is the
+      same shape: counted **1427** against a pin of 1428, one under, where that
+      round said "held at 1428". Both are shrink-only pins, so one line of
+      headroom is the whole difference between the next edit fitting and not.
       `store/useApp.ts` and `useMultiPanelStage.ts` each took the new type on an
       EXISTING `lib/types` import line rather than a new one, so both stayed
       exactly at their pins; `useFigureBuilder.ts`, at zero headroom, funded its
@@ -3145,17 +3226,35 @@ covers a much smaller subset and guards focus on Analyze.
       ternary, and now sits AT the general ceiling (counted 499 of 500 — one line
       left) — the next slice there must extract first.
 
-      **Eager bundle, every number measured on this tree after `npm ci`
-      (2026-09-13):** base `d28fcd6e`, before any of this work, **918,459 B**.
-      The branch this round builds on (`2b60d4e6` — the first rework plus Group
-      AB and two Origin/figure fixes) **919,746 B**. With this round's fixes
-      **919,590 B**: 156 B SMALLER than the tree it builds on, and 810 B under
-      the 920,400 budget, which therefore does NOT move. The first rework's own
-      block quoted a base of 918,658 B measured against `3145fe33` — a commit
-      that never existed on this branch — and is corrected in
-      `scripts/check-bundle-size.mjs`, along with its "residual 593 B" (593 was
-      the amount over the OLD budget, not the feature's cost) and its 74 B
-      checkbox figure (111 B when re-measured here, both ways, on this graph).
+      THIRD ROUND (2026-09-13): no pin raised and none approached. The shared
+      `windowCyclesSeriesStyles` collapsed a three-clause gate that three call
+      sites each spelled out (and a fourth, the Publication Preview, spelled
+      WRONG), so `lib/figureSpec.ts` came DOWN — counted 483 of 500, from 493 —
+      and `components/Stage/useStageSeriesCycle.ts` went from seven store
+      subscriptions to one.
+
+      **Eager bundle, measured on THIS tree after `npm ci` and a
+      `node_modules/.vite` wipe (2026-09-13, third round):** parent `dc0dbae9`
+      **920,089 B**; with this round's fixes **920,031 B** — 58 B smaller, and
+      369 B under the 920,400 budget, which therefore does NOT move.
+
+      Both earlier blocks' numbers are superseded and must not be quoted forward,
+      for two versions of the same mistake. The original measured against
+      `3145fe33`, which is not in this branch's history at all. The second
+      measured against `2b60d4e6`, which IS an ancestor but sits three commits
+      behind the actual parent of that work, `5f65ec8a` — and the region 2-D
+      y-box fixes in between moved the bundle, so its "810 B under budget" was
+      really 311 B (`1b60872a` measures 920,089 here). An ancestor is not a
+      parent. Corrected in full in `scripts/check-bundle-size.mjs`, which also
+      records the one measurement worth keeping from this round: having
+      `figurebuilder/canonicalSession.ts` import the focused-window selector from
+      `components/Stage/useStageSeriesCycle.ts` cost **626 B** (920,715 — over
+      budget), because that single cross-directory import moved a chunk boundary.
+      Putting the shared decision in `lib/seriesStyleCycle.ts`, which both files
+      already imported, gave the 920,031 above with identical behaviour. The
+      checkbox reduction re-measures at 102 B here (74 B, then 111 B, in the two
+      earlier rounds — it moves with the module graph, so it is re-measured every
+      round).
     - **Deliberately NOT done.** The glyph cycle does **not** reach the ambient
       `Scatter` / `Line + markers` default trace, and `markers.seriesPoints`
       keeps those two branches apart on purpose: the export emits a marker only
@@ -3217,6 +3316,51 @@ covers a much smaller subset and guards focus on Analyze.
       than quietly corrected: the ceiling-headroom off-by-one, and the
       publication-styles module header whose "never pulls screen colour code in"
       claim its own import had made false.
+
+      **THE THIRD REVIEW ROUND** (2026-09-13) confirmed seven more, every one
+      again a place the "cycles on screen IFF the export renders the same dash at
+      the same position" rule leaked, and all seven are fixed above with a test
+      that fails when the fix is reverted:
+
+      1. The Publication Preview gate kept FOCUS as a styling input
+         (`session.windowId === focusedWindowId`) after the canvas half had
+         stopped doing so — a dashed background canvas beside a solid preview and
+         Export. It asks the target window's own view+document now.
+      2. The display-list agreement test (`allowExplicitXAsY`) lived only in
+         `figureSpec.ts`, so the canvases could not see it and `xKey:1,
+         yKeys:[1,2,3]` — two clicks, since `setXKey` does not prune the channel
+         out of `yKeys` — dashed on screen and drew solid in the PDF. It is
+         `displayListsAgree`, inside the shared predicate, asserted on both sides
+         in one test.
+      3. `documentPinsSeriesStyles` returned false for `publication.seriesStyles
+         === null`, but `figureSpec` maps `null` to "drop `series_styles`
+         entirely" — the canvas dashed a figure the PDF had no per-series styling
+         for at all. Reachable through `useGraphTemplates`. `null` pins now (the
+         predicate is `!== undefined`, so ONLY an absent field derives styles),
+         and `[]` counting as pinned is stated at the code.
+      4. The bundle justification block measured against `2b60d4e6`, an ancestor
+         three commits behind that round's actual parent `5f65ec8a` — the second
+         round repeating the first round's mistake in a subtler form, and the
+         810 B of headroom it claimed was really 311 B. Rewritten against
+         `dc0dbae9`, measured here.
+      5. "With it OFF every render path is byte-identical to before the feature"
+         is false for the legend swatch, and the change is CORRECT rather than
+         accidental. Narrowed to what holds, with the exact case frozen as a
+         literal expectation; the 32-combination differential proof structurally
+         cannot see it.
+      6. `PanelCell.tsx` cited `store/windows.ts` for an export-path exclusion of
+         `kind:"panel"` that does not exist there. The real reason is that
+         `focusWindow` never moves `focusedWindowId` to a non-`plot` kind, so the
+         focused-window export commands can never serve a panel. Citation fixed.
+      7. The Publication Preview cycling off the DRAFT view while the live window
+         behind the dialog changed mode. Closed by fix 1 (a focused target reads
+         the live singletons); the remaining draft-vs-live staleness of the
+         preview IMAGE is recorded as residual 2 above with its mechanism.
+
+      Plus two nits: the two ceiling claims that read as "at the pin" when both
+      files are one line UNDER it, and `markers.ts`'s "third side of the same
+      rule", which overstated how much of the marker decision
+      `buildExportStyles` shares.
   - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
     there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls

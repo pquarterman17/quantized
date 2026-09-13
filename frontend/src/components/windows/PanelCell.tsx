@@ -14,13 +14,15 @@
 // P3.3 auto dash/marker cycle: a cell passes NO `seriesCycle`, deliberately. A
 // composite `kind:"panel"` window has no publication export at all — it is not a
 // Figure Page panel source (`figurepage/panelResolve.panelFigure`'s "window"
-// branch requires `win.kind === "plot"`) and `store/windows.ts` excludes it from
-// the window export paths — so there is nothing for a cycled dash to match, and
-// the rule this feature is built on is that a canvas cycles only when its own
-// export renders the same dash at the same position. (It is also moot in
-// practice: `CELL_VIEW` is `defaultPlotView()`, so a cell has no per-series
-// styles to resolve either.) Recorded in the P3.3 table in
-// plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md.
+// branch requires `win.kind === "plot"`), and the Stage export commands all
+// render the FOCUSED window (`figureSpec.buildStageFigureSpec`), which a panel
+// window can never be: `store/windows.ts`'s `focusWindow` leaves
+// `focusedWindowId` alone for any `kind !== "plot"` target and merely raises its
+// z. So there is nothing for a cycled dash to match, and the rule this feature
+// is built on is that a canvas cycles only when its own export renders the same
+// dash at the same position. (It is also moot in practice: `CELL_VIEW` is
+// `defaultPlotView()`, so a cell has no per-series styles to resolve either.)
+// Recorded in the P3.3 table in plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md.
 //
 // Drag-to-rearrange follow-up: the dataset name used to ride uPlot's own
 // `.u-title` (INSIDE the canvas host, re-rendered by uPlot itself) — that

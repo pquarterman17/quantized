@@ -98,12 +98,21 @@ export function markerPaths(
 
 /**
  * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
- * (`seriesPoints` below), the legend swatch (`Stage/LegendSample.tsx`) and the
- * publication export (`exportStyles.buildExportStyles`) must all agree on.
- * Shared rather than restated, because the legend restating it is exactly how
- * it drifted: with P3.3's cycle on and a `Scatter` / `Line + markers` default
- * trace, the legend drew circle/square/triangle from `style.markerShape` while
- * the canvas drew three plain circles and the export emitted no marker at all.
+ * (`seriesPoints` below) and the legend swatch (`Stage/LegendSample.tsx`) both
+ * call, shared rather than restated, because the legend restating it is exactly
+ * how it drifted: with P3.3's cycle on and a `Scatter` / `Line + markers`
+ * default trace, the legend drew circle/square/triangle from
+ * `style.markerShape` while the canvas drew three plain circles and the export
+ * emitted no marker at all.
+ *
+ * The publication export is NOT a third caller, and stating it as one would
+ * overstate the agreement. `exportStyles.buildExportStyles` shares only the
+ * EXPLICIT half of this rule (`if (st?.marker)`); it has no `defaultTrace` to
+ * consult, because that preference never rides the wire. So an ambient
+ * `Scatter` / `Line + markers` series draws markers on screen and exports with
+ * none — a pre-existing gap, unrelated to the cycle and not narrowed by it,
+ * which is precisely WHY the default-trace branch below must not cycle a glyph:
+ * doing so would widen a gap the export cannot follow.
  *
  * The two branches are SEPARATE on purpose. An explicit `marker` honours
  * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,

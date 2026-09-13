@@ -108,12 +108,13 @@ export default function AppearanceMenu() {
               records that every other consumer is a lazy panel), so importing
               it pulls component + clsx wiring into the startup chunk for one
               static, never-disabled checkbox. Measured both ways on this tree
-              after `npm ci` (2026-09-13): 919,701 B with the import, 919,590 B
-              with this markup — 111 B. (The first review predicted ~590 B off
-              the original commit's module graph and the first rework measured
-              74 B off its own; the number moves with the graph, so it is
-              re-measured rather than quoted.) Same `qz-check` markup the
-              primitive emits. */}
+              after `npm ci` (2026-09-13, third review round): 920,133 B with the
+              import, 920,031 B with this markup — 102 B. (Predicted at ~590 B by
+              the first review off the original commit's module graph, measured
+              at 74 B by the first rework and 111 B by the second, each off its
+              own; the number moves with the graph, so it is re-measured every
+              round rather than quoted.) Same `qz-check` markup the primitive
+              emits. */}
           <label className="qz-check">
             <input
               type="checkbox"
