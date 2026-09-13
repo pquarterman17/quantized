@@ -83,7 +83,7 @@ def apply_error_bars(
             color = artist.get_color() if artist is not None else None
         except AttributeError:
             color = None  # a colour-mapped scatter has no single colour
-        _, caplines, _ = ax.errorbar(
+        container = ax.errorbar(
             xv,
             yv,
             yerr=yerr,
@@ -94,6 +94,11 @@ def apply_error_bars(
             capsize=2,
             zorder=1,  # behind the series line, so data stays legible
         )
+        # matplotlib returns an ErrorbarContainer -- a tuple subclass of
+        # (data_line, caplines, barlinecols). A minimal axes stand-in (the
+        # unit tests' recording fake) may return None; treat anything that is
+        # not a 3-tuple as "no caps to restyle" rather than unpacking blindly.
+        caplines = container[1] if isinstance(container, tuple) and len(container) > 1 else ()
         if color is not None:
             # `ecolor=` above colours the bar lines and each cap's EDGE, but
             # matplotlib's cap markers ('|'/'_') keep their default FACE
