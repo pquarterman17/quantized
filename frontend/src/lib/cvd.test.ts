@@ -73,7 +73,7 @@ describe("seriesDistinguishability", () => {
 
     // Measured: deltaE(simulateCvd(A,"deutan"), simulateCvd(B,"deutan")) ~ 0.50.
     expect(result.deutan.deltaE).toBeLessThan(1);
-    expect([result.deutan.i, result.deutan.j].sort()).toEqual([0, 1]);
+    expect([result.deutan.i, result.deutan.j].sort((a, b) => a - b)).toEqual([0, 1]);
 
     // The other three conditions are not fooled by (A, B): each finds a
     // materially larger minimum ΔE, on some OTHER pair (measured minimums:
@@ -81,7 +81,7 @@ describe("seriesDistinguishability", () => {
     // never (A, B), whose own normal/protan/tritan ΔE is ~101/~31/~103).
     for (const condition of ["normal", "protan", "tritan"] as const) {
       expect(result[condition].deltaE).toBeGreaterThan(10);
-      expect([result[condition].i, result[condition].j].sort()).not.toEqual([0, 1]);
+      expect([result[condition].i, result[condition].j].sort((a, b) => a - b)).not.toEqual([0, 1]);
     }
   });
 
@@ -101,8 +101,19 @@ describe("distinguishabilityVerdict", () => {
     const verdict = distinguishabilityVerdict([A, B, C, D], 10);
     expect(verdict.ok).toBe(false);
     expect(verdict.worst.kind).toBe("deutan");
-    expect([verdict.worst.i, verdict.worst.j].sort()).toEqual([0, 1]);
+    expect([verdict.worst.i, verdict.worst.j].sort((a, b) => a - b)).toEqual([0, 1]);
     expect(verdict.worst.deltaE).toBeLessThan(10);
+  });
+
+  it("reports fewer than 2 colours as a non-vacuous fail, not a silent pass", () => {
+    const empty = distinguishabilityVerdict([]);
+    expect(empty.ok).toBe(false);
+    expect(empty.vacuous).toBe(true);
+    expect(empty.worst.deltaE).toBe(Infinity);
+
+    const single = distinguishabilityVerdict([A]);
+    expect(single.ok).toBe(false);
+    expect(single.vacuous).toBe(true);
   });
 
   it("passes for a list whose closest pair clears the threshold under every simulation", () => {

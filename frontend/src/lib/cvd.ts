@@ -52,8 +52,11 @@ function srgbToLinear(channel255: number): number {
 
 /** sRGB transfer function, encode: linear-light channel -> gamma-encoded
  *  byte in [0,255], clamped (a CVD matrix can produce slightly out-of-gamut
- *  linear values for saturated inputs). */
-function linearToSrgb255(linear: number): number {
+ *  linear values for saturated inputs). Exported so callers decoding into
+ *  linear RGB from another colour space (e.g. `seriesPalette.cvd.test.ts`'s
+ *  OKLCH decoder) can re-encode through the same, single implementation
+ *  rather than duplicating it. */
+export function linearToSrgb255(linear: number): number {
   const sign = linear < 0 ? -1 : 1;
   const abs = Math.abs(linear);
   const encoded = abs > 0.0031308 ? sign * (1.055 * Math.pow(abs, 1 / 2.4) - 0.055) : 12.92 * linear;
@@ -209,17 +212,27 @@ export const DEFAULT_DISTINGUISHABILITY_THRESHOLD = 10;
 
 export interface DistinguishabilityVerdict {
   ok: boolean;
+  /** Set when the input has fewer than 2 colours, so there is no pair to
+   *  compare at all. `ok` is `false` in this case rather than vacuously
+   *  passing (an empty or single-colour "palette" has not been shown to be
+   *  distinguishable — it just has nothing to confuse). Absent (not `false`)
+   *  for a real verdict. */
+  vacuous?: true;
   worst: { kind: "normal" | CvdKind; i: number; j: number; deltaE: number };
 }
 
 /** Pass/fail verdict: is every viewing condition's worst pair at least
  *  `threshold` ΔE apart? `worst` names whichever of the four conditions
  *  (normal vision, or one CVD simulation) has the smallest such ΔE — the
- *  binding constraint for the whole palette. */
+ *  binding constraint for the whole palette. Fewer than 2 colours is
+ *  reported as a non-vacuous FAIL (see `vacuous`), not a silent pass. */
 export function distinguishabilityVerdict(
   colors: readonly Rgb[],
   threshold: number = DEFAULT_DISTINGUISHABILITY_THRESHOLD,
 ): DistinguishabilityVerdict {
+  if (colors.length < 2) {
+    return { ok: false, vacuous: true, worst: { kind: "normal", i: -1, j: -1, deltaE: Infinity } };
+  }
   const d = seriesDistinguishability(colors);
   const conditions: Array<["normal" | CvdKind, WorstPair]> = [
     ["normal", d.normal],

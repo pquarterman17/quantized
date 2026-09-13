@@ -24,8 +24,14 @@ export const PALETTES: Palette[] = [
   {
     value: "tol-bright",
     label: "Tol bright (CB-safe)",
-    // Paul Tol's 7-colour "bright" set; the 8th cycles back to the first.
-    colors: ["#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB", "#4477AA"],
+    // Paul Tol's 7-colour "bright" set has no official 8th colour. The 8th
+    // slot used to cycle back to the 1st (#4477AA) — an exact duplicate,
+    // indistinguishable even under normal vision (0 series-vs-series ΔE),
+    // not just a CVD failure. #332288 (indigo) is borrowed from Tol's
+    // companion "muted" scheme for a distinct 8th hue; #BBBBBB isn't reused
+    // since it's already the 7th colour. See seriesPalette.cvd.test.ts's
+    // "shipped palette presets" audit for the measured verdict.
+    colors: ["#4477AA", "#EE6677", "#228833", "#CCBB44", "#66CCEE", "#AA3377", "#BBBBBB", "#332288"],
   },
   {
     value: "tableau10",

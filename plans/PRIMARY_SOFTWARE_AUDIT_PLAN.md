@@ -3468,9 +3468,11 @@ covers a much smaller subset and guards focus on Analyze.
     documented default threshold of 10 — well above the ~2.3 ΔE "just
     noticeable difference" floor, sized for confident at-a-glance reading of
     thin plotted lines, not a side-by-side swatch comparison). Known-answer
-    tests in `lib/cvd.test.ts` (10 cases: red-vs-green contrast collapses
-    under protan/deutan and mostly survives tritan; grey is invariant; a
-    hand-built quartet's deutan-only-confusable pair is found correctly).
+    tests in `lib/cvd.test.ts` (11 cases as of round 2: red-vs-green contrast
+    collapses under protan/deutan and mostly survives tritan; grey is
+    invariant; a hand-built quartet's deutan-only-confusable pair is found
+    correctly; fewer-than-2-colours is a non-vacuous fail, not a silent
+    pass).
     `styles/seriesPalette.cvd.test.ts` is THE CHECK THAT MATTERS: it decodes
     the actual `--series-1..8` OKLCH tokens out of `styles/colors.css` (both
     themes' base blocks; a pure OKLCH decoder transcribed from the CSS Color
@@ -3482,24 +3484,57 @@ covers a much smaller subset and guards focus on Analyze.
     `resolveDrawColor` and is unregressed. **Measured result: the shipped
     8-series cycle FAILS `distinguishabilityVerdict` (threshold 10) in BOTH
     themes** — dark theme's global worst is series-1 vs series-6 under
-    deutan simulation (ΔE ~3.23; normal vision alone is fine at ΔE ~19.18),
-    light theme's global worst is series-5 vs series-7 under deutan (ΔE
-    ~1.98, i.e. below even the raw ~2.3 JND floor; light theme's own normal-
-    vision worst pair, series-4 vs series-7, is already only ΔE ~6.62 before
-    any CVD simulation is applied). Full per-simulation breakdown for both
-    themes is in the test file's header comment and the closing commit body.
-    Per this plan's stated policy, the failure is NOT hidden by loosening the
-    threshold or silently reshuffling the palette: both audit assertions are
-    kept as documented `it.fails` (a real palette fix must flip them back to
-    `it`, or the ratchet catches the silent case where they start passing
-    without anyone noticing). **OPEN OWNER DECISION:** `plans/design/
-    DESIGN_GUIDE.md`'s "color-blind-aware" line is left as written — it is a
-    claim about the 8 hues being CB-conscious choices (true: several derive
-    from Okabe-Ito), not a claim this test ever validated — but the owner now
-    has the numbers to decide whether the default 8-slot series cycle should
-    be redesigned, whether fewer series should be treated as the "safe"
-    simultaneous count, or whether the gap is accepted as-is for a niche
-    8-series plot.
+    deutan simulation (ΔE 3.23, versus ΔE 38.50 for that same pair under
+    normal vision), light theme's global worst is series-5 vs series-7
+    under deutan (ΔE ~1.98, i.e. below even the raw ~2.3 JND floor; light
+    theme's own normal-vision worst pair, series-4 vs series-7, is already
+    only ΔE ~6.62 before any CVD simulation is applied). Full per-simulation
+    breakdown for both themes is in the test file's header comment and the
+    closing commit body. Per this plan's stated policy, the failure is NOT
+    hidden by loosening the threshold or silently reshuffling the palette:
+    both audit assertions are kept as documented `it.fails` (a real palette
+    fix must flip them back to `it`, or the ratchet catches the silent case
+    where they start passing without anyone noticing).
+
+    **Round 2 (2026-09-13, adversarial review of 07a05241):** the review found
+    the decoder had no known-answer assertions (a broken decoder made the
+    audit "fail as expected" for the wrong reason — fixed with pinned OKLCH
+    known-answers plus the full dark/light hex lists in
+    `seriesPalette.cvd.test.ts`), the `it.fails` audits had no floor (a
+    palette regression that stayed failing would go unnoticed — fixed with
+    non-`it.fails` companion floor tests at today's measured worst ΔE), and —
+    the material finding — **the audit never covered `lib/palettes.ts`'s
+    runtime presets, the actual remedy a user reaches for.** Table-driven
+    coverage added there (`seriesPalette.cvd.test.ts`'s "shipped palette
+    presets" describe block) measures all four: `okabe-ito` PASSES threshold
+    10 (worst ΔE ~14.9, deutan) and serves as this suite's positive control
+    for the threshold — independent, externally-documented CB-safe design
+    clearing it comfortably is the strongest evidence 10 isn't arbitrary.
+    `tol-bright` shipped `#4477AA` as BOTH series-1 and series-8 (an exact
+    duplicate — 0 ΔE under every condition, including normal vision, not
+    just a CVD failure); fixed by giving slot 8 `#332288` (indigo, borrowed
+    from Tol's companion "muted" scheme — "bright" itself defines only 7
+    colours and has no official 8th), which also newly PASSES threshold 10
+    (worst ΔE ~13.2, tritan). `tableau10` and `viridis` failing at 10 is
+    recorded, not fixed — neither claims to be CB-safe. The "color-blind-
+    aware" provenance claim about the default palette ("several derive from
+    Okabe-Ito") is dropped from this entry: nothing in the repo supports it,
+    and the default's own measured numbers (ΔE 3.23/1.98 worst-case) are far
+    below Okabe-Ito's (~14.9), so the two are evidently not the same design.
+
+    **OPEN OWNER DECISION** (unchanged in substance, reframed by the above):
+    the default 8-slot series cycle still fails its own distinguishability
+    bar in both themes. What round 2 changes is that this is no longer a
+    choice between "redesign the default" and "accept the gap" in a vacuum —
+    **two PASSING CB-safe presets (`okabe-ito`, and now `tol-bright`) already
+    ship one dropdown away** (`lib/palettes.ts`), so an immediate low-cost
+    mitigation (default new users to one of them, or surface the CVD-safe
+    presets more prominently) exists independent of any future default-
+    palette redesign. Owner still needs to decide whether to redesign the
+    default 8-slot cycle, narrow the "safe" simultaneous series count, make
+    a CB-safe preset the default, or accept the default's gap as-is for a
+    niche 8-series plot.
+    - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
   - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
     export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
 
