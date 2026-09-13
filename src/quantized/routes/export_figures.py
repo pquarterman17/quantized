@@ -17,7 +17,7 @@ it. Filenames are sanitized before reaching the Content-Disposition header.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
@@ -31,42 +31,9 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes.export_figures_schema import FigureFacet, TickFormatSpec
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-
-class FigureFacetSeries(BaseModel):
-    label: str
-    y: list[float | None]
-
-
-class FigureFacet(BaseModel):
-    """One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 —
-    the export half of Stage's facet-by-column grid, `store.facetKey` /
-    `lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend
-    already computed each panel's row slice (level ordering + binning,
-    `lib/figureSpec.ts`'s `buildFacetSpecs`) and ships it here verbatim, so
-    this route never re-slices `dataset` itself and can never disagree with
-    what Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s
-    established "resolved facet panel" shape (`routes/export_statplots.py`).
-    `x`/each series' `y` may carry `null` for a non-finite cell (the
-    frontend's null-gap wire convention, same as every DataStruct value);
-    `calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,
-    matplotlib's own gap convention."""
-
-    label: str
-    x: list[float | None]
-    series: list[FigureFacetSeries]
-
-
-class TickFormatSpec(BaseModel):
-    """Wire model for the screen's `AxisFormat` (MAIN #24,
-    `frontend/src/lib/types.ts`): the tick-label number format for one axis.
-    `"auto"` (the default) leaves matplotlib's own formatter untouched --
-    see `calc.figure_ticks.axis_tick_formatter`."""
-
-    mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
-    digits: float = 2
 
 
 class FigureRequest(BaseModel):
@@ -156,6 +123,17 @@ class FigureRequest(BaseModel):
     # `facets` is set (see this class's `facets` field doc) -- a faceted
     # panel never resolves per-series colour at all today (FEATURE-001,
     # `plans/BUGS_AND_ISSUES.md`), so there is nothing for this flag to grey.
+    # Also reachable embedded in a page panel (`routes.export_page.
+    # PagePanelSpec.figure` is this SAME `FigureRequest`): review fix P3.3-F1
+    # threaded this field into `calc.figure_page.PagePanel.greyscale`, honored
+    # PER PANEL there too -- it used to 200 and silently render as if it were
+    # `False` on that route (a real bug, not a documented no-op like facets).
+    # `/api/export/map-figure` (contour/heatmap/surface/waterfall) has NO
+    # `greyscale` field at all, deliberately: every one of its `kind`s colours
+    # by a continuous z-value through `cmap`, the same "colour IS the plotted
+    # quantity" case this flag already leaves untouched for a `color_by`
+    # scatter above -- there is no categorical per-series palette there for a
+    # print-safe ramp to replace.
     greyscale: bool = False
     # MAIN_PLAN #36: per-series error spans, mirroring the frontend's
     # ErrorSpan — {x?: {plus, minus}, y?: {plus, minus}} with independent

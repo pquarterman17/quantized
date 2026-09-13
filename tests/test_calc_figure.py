@@ -833,7 +833,24 @@ def test_render_transparent_does_not_change_the_image_size() -> None:
 # --- PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: greyscale (print-safe) export -------
 
 _STROKE_HEX = re.compile(r"stroke:\s*#([0-9a-fA-F]{6})")
+# P3.3 review fix (F6): the achromatic guard used to check `stroke:` only, so
+# a chromatic `fill:` (found on an error-bar cap -- see
+# test_greyscale_error_spans_caps_are_achromatic below) went completely
+# unseen. `_ffffff`/`_000000` are excluded: matplotlib's own white background
+# and black axis/text/tick colour are not a SERIES colour at all (greyscale
+# mode never touches either), so including them would only add noise, not
+# signal, to "every colour a series drew is achromatic".
+_FILL_HEX = re.compile(r"fill:\s*#([0-9a-fA-F]{6})")
 _DASHARRAY = re.compile(r"stroke-dasharray:\s*[^;\"]+")
+
+
+def _achromatic_hexes(svg: str) -> list[str]:
+    """Every non-background/text stroke OR fill hex colour in ``svg`` --
+    what should be left, in greyscale mode, is only ever a rendered series
+    artist (line, fill, colour-mapped scatter excepted, or an error-bar
+    cap), which must all be achromatic."""
+    hexes = _STROKE_HEX.findall(svg) + _FILL_HEX.findall(svg)
+    return [h for h in hexes if h.lower() not in ("ffffff", "000000")]
 
 
 def _three_series_svg(**kw: object) -> str:
@@ -897,12 +914,28 @@ def test_colour_render_has_no_forced_dash_cycle_by_default() -> None:
 
 
 def test_greyscale_explicit_line_style_is_kept() -> None:
-    # An explicit per-series `line` still wins over the forced cycle.
-    svg = _three_series_svg(
-        greyscale=True,
-        series_styles=[{"line": "dashed"}, None, None],
-    )
-    assert _DASHARRAY.findall(svg)
+    # An explicit per-series `line` still wins over the forced cycle -- and
+    # this must check MORE than "some dasharray exists in the SVG somewhere":
+    # with 3 series and no explicit line at all, positions 1/2 of LINE_CYCLE
+    # ("dashed"/"dotted") already guarantee a non-empty dasharray regardless
+    # of what happens at position 0, so a bare "found" assertion cannot tell
+    # the explicit-wins rule apart from deleting it (sabotage-confirmed).
+    # A SINGLE series isolates the claim instead: LINE_CYCLE[0] is "solid"
+    # (no dasharray at all), so if the explicit-wins check were deleted, an
+    # explicit "dashed" series at position 0 would silently revert to solid.
+    x = np.linspace(0.0, 10.0, 30)
+    explicit_dashed = render_figure(
+        x, [("a", np.sin(x))], fmt="svg", greyscale=True,
+        series_styles=[{"line": "dashed"}],
+    ).decode("utf-8", "ignore")
+    cycle_default = render_figure(
+        x, [("a", np.sin(x))], fmt="svg", greyscale=True,
+    ).decode("utf-8", "ignore")
+    assert _DASHARRAY.findall(explicit_dashed)  # explicit "dashed" wins
+    # Sanity check for the assertion above: LINE_CYCLE[0] really is "solid"
+    # (no dasharray), so the first assertion is meaningful, not trivially
+    # true of every single-series greyscale render.
+    assert not _DASHARRAY.findall(cycle_default)
 
 
 def test_facets_renderer_has_no_greyscale_hook() -> None:
@@ -921,10 +954,18 @@ def test_facets_renderer_has_no_greyscale_hook() -> None:
     assert "greyscale" not in inspect.signature(render_facets_figure).parameters
 
 
-def test_greyscale_applies_to_group_col_resolved_series() -> None:
-    # A group_col request has `series_styles=None` (calc.plotting never
-    # resolves per-level styles), but it still renders through THIS module's
-    # ordinary draw_series_axes -- so greyscale must still grey it out.
+def test_greyscale_applies_when_series_styles_is_none() -> None:
+    # P3.3 review (F5): renamed from "...group_col_resolved_series" -- this
+    # calls `render_figure` DIRECTLY with `series_styles=None`, which is the
+    # SAME code path as `test_greyscale_svg_every_stroke_is_achromatic`
+    # (also flat, also `draw_series_axes`); it proves nothing about the
+    # route's `group_col` BRANCH specifically (`_figure_series`'s grouped
+    # resolve, which never even calls this function with anything but
+    # `series_styles=None`). A REAL `group_col` route-level greyscale test
+    # lives in test_api_export.py, next to the rest of the group_col tests
+    # (`test_figure_group_col_greyscale_renders_achromatic_strokes`) -- this
+    # one still earns its keep as the plain "`None` styles greys out fine"
+    # unit case, which the route-level test doesn't need to re-prove.
     x = np.linspace(0.0, 5.0, 15)
     series = [("l0", np.sin(x)), ("l1", np.cos(x)), ("l2", x / 5.0)]
     out = render_figure(x, series, fmt="svg", greyscale=True, series_styles=None)
@@ -932,3 +973,38 @@ def test_greyscale_applies_to_group_col_resolved_series() -> None:
     assert strokes
     for h in strokes:
         assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower()
+
+
+def test_greyscale_error_spans_caps_are_achromatic() -> None:
+    # P3.3 review (F6): error-bar CAPS kept a chromatic `fill: #1f77b4` in
+    # vector output even in greyscale mode -- ecolor= colours the bar lines
+    # and each cap's EDGE, but not matplotlib's cap marker FACE, which stays
+    # rcParams' default C0 unless set explicitly (calc/figure_errorbars.py).
+    # Invisible in a raster PNG only because the cap glyph's fill path
+    # happens to be degenerate there -- a fully faithful check needs the
+    # widened stroke-OR-fill guard, `_achromatic_hexes`, not `_STROKE_HEX`
+    # alone (which would never have caught this).
+    x = np.linspace(0.0, 10.0, 5)
+    series = [("a", np.array([1.0, 2.0, 3.0, 4.0, 5.0]))]
+    spans = [{"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}}]
+    out = render_figure(x, series, fmt="svg", greyscale=True, error_spans=spans)
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes  # the probe actually found series/cap colour, not nothing
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
+
+
+def test_greyscale_fill_under_is_achromatic() -> None:
+    # P3.3 review (F6): the doc claims fills "inherit their series' drawn
+    # colour automatically ... so they follow the grey ramp with no extra
+    # code" -- true, but untested before this. `_achromatic_hexes` checks
+    # `fill:` (the fill polygon) as well as `stroke:` (the line).
+    x = np.linspace(0.0, 10.0, 30)
+    series = [("a", np.sin(x))]
+    out = render_figure(
+        x, series, fmt="svg", greyscale=True, series_styles=[{"fill": "under"}]
+    )
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"

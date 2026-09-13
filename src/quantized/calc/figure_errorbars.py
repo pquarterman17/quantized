@@ -83,7 +83,7 @@ def apply_error_bars(
             color = artist.get_color() if artist is not None else None
         except AttributeError:
             color = None  # a colour-mapped scatter has no single colour
-        ax.errorbar(
+        _, caplines, _ = ax.errorbar(
             xv,
             yv,
             yerr=yerr,
@@ -94,3 +94,16 @@ def apply_error_bars(
             capsize=2,
             zorder=1,  # behind the series line, so data stays legible
         )
+        if color is not None:
+            # `ecolor=` above colours the bar lines and each cap's EDGE, but
+            # matplotlib's cap markers ('|'/'_') keep their default FACE
+            # colour (rcParams' C0) regardless -- passing markerfacecolor=
+            # to errorbar() itself is silently dropped for these marker
+            # styles, so the face has to be set on the returned cap Line2Ds
+            # directly. Otherwise a "print-safe" greyscale export still
+            # emits a chromatic `fill: #1f77b4` for every cap in vector
+            # output (PDF/SVG) -- invisible in a raster PNG only because the
+            # cap's degenerate fill path paints zero visible pixels there.
+            for cap in caplines:
+                cap.set_markerfacecolor(color)
+                cap.set_markeredgecolor(color)

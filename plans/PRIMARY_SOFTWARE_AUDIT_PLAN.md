@@ -3590,14 +3590,50 @@ covers a much smaller subset and guards focus on Analyze.
       `test_figure_facets_greyscale_is_a_no_op` (`tests/test_api_export.py`).
       Fixing this for real is FEATURE-001's job (screen AND export
       together), not this item's.
+    - **REVIEW FIX (2026-09-13) — `/api/export/figure-page` was a silent
+      no-op; `/api/export/map-figure` documented.** An adversarial review of
+      this item (commit `bc8f14fa`) found `PagePanelSpec.figure` is this SAME
+      `FigureRequest`, so `greyscale` was already part of the figure-page
+      OpenAPI schema and 200'd, but `export_figure_page`
+      (`routes/export_page.py`) never read `f.greyscale` and
+      `calc.figure_page.PagePanel` had no such field — exactly the "silently
+      doing nothing while looking wired" failure mode this item's own doc
+      says it avoided, just on the sibling route. Fixed: `PagePanel.greyscale`
+      (per panel, not page-wide — a page can mix a greyscale panel next to a
+      coloured one), applied in `_draw_panel` via the same one-line
+      `apply_greyscale` call `_render_impl` uses, before either the flat or
+      the y2-twinx draw path. `/api/export/map-figure` (contour/heatmap/
+      surface/**waterfall**) has no `greyscale` field at all and stays that
+      way, now documented in its own field doc, `figures.ts`'s JSDoc, and
+      pinned by a byte-identity test (an unrecognized `greyscale` key on that
+      route's JSON body is silently ignored by pydantic, same result as
+      never having sent it) — every `kind` there colours by a continuous
+      z-value (`cmap`), the same "colour IS the plotted quantity" case this
+      flag already leaves untouched for a `color_by` scatter, so there is no
+      categorical palette for a print-safe ramp to replace. The review also
+      found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
+      a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
+      (invisible in raster only because the cap glyph's fill path happens to
+      be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
+      face/edge colour explicitly from the series' own (now grey) colour.
     - **Frontend.** A "Greyscale (print-safe)" checkbox in the "Export
       figure…" dialog (`lib/exportFigureCommand.ts`, a `ParamField` of
-      `type: "boolean"` — the first boolean field this dialog has ever had),
-      titled with the export-only-divergence warning verbatim. Threaded
-      through `FigureRenderOpts.greyscale` (`lib/figureSpec.ts`) onto the
-      wire only when true (`{ greyscale: true }` spread, matching every
-      other optional-boolean field's own convention here) — omitted/false
-      is byte-identical to before this option existed. NOT persisted: the
+      `type: "boolean"` — the Export-figure dialog's own first boolean
+      field; `ParamDialog`/`ParamFields` already rendered `type: "boolean"`
+      for three other production call sites (`LibraryDetails.tsx`,
+      `BookFamiliesSection.tsx`, `worksheetTransformCommands.ts`) before this
+      one, so review finding F7 narrowed the claim to the dialog it is
+      actually true of), titled with the export-only-divergence warning
+      verbatim. Threaded through `FigureRenderOpts.greyscale`
+      (`lib/figureSpec.ts`) onto the wire only when true (`{ greyscale: true
+      }` spread) — omitted/false is byte-identical to before this option
+      existed. Review finding F8: this truthiness-gating convention is NOT
+      "matching every other optional boolean field's own convention" as
+      originally claimed here — the nearest analogue, `transparent`
+      (`figureSpec.ts`), gates on `undefined` instead and DOES send
+      `transparent: false` on the wire. greyscale's own convention (omit
+      when false) is deliberate and correctly pinned by `figureSpec.test.ts`;
+      the two fields are simply not aligned, and that is fine. NOT persisted: the
       dialog does not persist `fmt`/`style`/`dpi`/labels across opens
       either (every field re-defaults each time it opens), so `greyscale`
       mirrors that — no new store, per the design brief's own instruction.
@@ -3622,6 +3658,22 @@ covers a much smaller subset and guards focus on Analyze.
       first-ever boolean-field coverage (unchecked default, click-to-toggle,
       the hint surfacing as the label's title); `exportFigureCommand.test.ts`
       pins the command threading the dialog's answer onto the wire.
+      **Review-fix pass (2026-09-13) added:** figure-page route-level tests
+      (a panel's bytes/SVG differ with `greyscale: true`, mixed
+      grey+coloured panels on one page both render correctly); a
+      `map-figure` no-op byte-identity test (mirrors the facets one); a
+      real `group_col`/y2/x_breaks route-level greyscale test each (the prior
+      `group_col` "coverage" called `render_figure` directly, the SAME path
+      the flat-series test already covered — it never actually went through
+      the route's `group_col` branch, so it proved nothing extra); a
+      greyscale + `error_spans` and a greyscale + `fill` route test; and
+      `test_greyscale_explicit_line_style_is_kept` now asserts the actual
+      dashed pattern is present for an explicit-line series AND that a
+      same-position series with NO explicit line renders solid (LINE_CYCLE's
+      position 0) — deleting the explicit-wins check silently reverts the
+      explicit series to solid too, which the old "some dasharray exists
+      somewhere" assertion could not detect (LINE_CYCLE's other positions
+      already guarantee a non-empty dasharray regardless).
 
   Two things the audit turned up on the way. One was a real bug and is FIXED;
   the other looked like a bug, was investigated properly, and turned out to be a

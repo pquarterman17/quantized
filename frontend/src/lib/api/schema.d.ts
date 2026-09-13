@@ -7497,7 +7497,12 @@ export interface components {
          * PagePanelSpec
          * @description One panel: a single-figure export payload plus its grid placement.
          *     The nested figure's own ``fmt`` / ``style`` / ``dpi`` / ``filename`` are
-         *     ignored -- those are page-level decisions.
+         *     ignored -- those are page-level decisions. ``greyscale`` is the one
+         *     exception (P3.3 review F1): honored PER PANEL, not ignored -- a page can
+         *     mix a greyscale panel next to a coloured one, so it stays a per-figure
+         *     choice even embedded in a page (see calc.figure_page.PagePanel.greyscale's
+         *     own doc). No-op on a faceted panel, same as the standalone ``/figure``
+         *     route (FigureRequest.greyscale's own doc).
          */
         PagePanelSpec: {
             /** Col */

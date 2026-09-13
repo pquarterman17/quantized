@@ -107,6 +107,25 @@ def test_apply_greyscale_keeps_an_explicit_line() -> None:
     assert out[2]["line"] == LINE_CYCLE[2]
 
 
+def test_apply_greyscale_keeps_explicit_lines_in_original_order_not_recycled() -> None:
+    # Pins the "display position SKEW" interaction the P3.3 adversarial
+    # review flagged (bc8f14fa): when the on-screen auto dash/marker cycle
+    # preference is ON, the frontend (`lib/exportStyles.ts`'s
+    # `buildExportStyles`) always emits an EXPLICIT `line` for every plotted
+    # series, resolved against its ON-SCREEN display position -- which can
+    # differ from that series' position in the export's hidden-FILTERED
+    # `y_keys` list (the backend's own position, which `apply_greyscale`
+    # indexes by). Because every entry here already carries an explicit
+    # `line`, the explicit-wins rule must defer to ALL of them and never
+    # re-cycle by the (different) backend-side position. This order is
+    # chosen so a re-cycle WOULD produce a different, wrong answer: cycling
+    # LINE_CYCLE at positions 0,1,2 gives solid/dashed/dotted, but every
+    # position here already has an explicit line in a DIFFERENT order
+    # (dashed/dotted/solid) that must survive untouched.
+    out = apply_greyscale([{"line": "dashed"}, {"line": "dotted"}, {"line": "solid"}], 3)
+    assert [s["line"] for s in out] == ["dashed", "dotted", "solid"]
+
+
 def test_apply_greyscale_cycles_marker_shape_only_when_marker_is_on() -> None:
     out = apply_greyscale([{"marker": True}, None, {"marker": True}], 3)
     assert out[0]["marker_shape"] == MARKER_SHAPES[0]

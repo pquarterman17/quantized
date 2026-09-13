@@ -188,7 +188,7 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
   greyscale: unsupported(
-    "Export-only print-safe transform (P3.3): a per-export dialog choice, not canonical document state -- a saved document's series_styles/overrides stay the RAW coloured authoring choices regardless of whether a given export was greyscaled.",
+    "P3.3 review (F9): unlike its closest analogue transparent (also export-only, but classified output/output.transparent below), greyscale is deliberately kept OUT of FigureDocument.output -- re-chosen every export rather than saved with the document, so a print-safe PDF and the coloured screen view it came from never disagree about which one 'the' figure is. This is a deliberate CHOICE not to add an output.greyscale field, not an inherent property of export-only fields in general -- reclassify as output('output.greyscale') if that choice is ever revisited.",
   ),
 } satisfies FieldContractMap<FigureSpec>;
 

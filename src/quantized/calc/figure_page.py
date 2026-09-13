@@ -60,6 +60,7 @@ from numpy.typing import ArrayLike  # noqa: E402
 
 from quantized.calc import figure_page_layout as fpl  # noqa: E402
 from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
+from quantized.calc.figure_greyscale import apply_greyscale  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_page_facets import (  # noqa: E402
     begin_grid_cell_fallback,
@@ -153,6 +154,18 @@ class PagePanel:
     # cell-frame axes -- same mechanism every other panel's letter uses.
     # Replaces the pre-round PNG/`imshow` raster embed (R2, fix round 3).
     facets: list[dict[str, Any]] | None = None
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 review fix (F1): print-safe export,
+    # PER PANEL -- a page can freely mix a greyscale panel next to a
+    # coloured one, so this is not a page-wide switch like `style`. Mirrors
+    # `calc.figure._render_impl`'s own `greyscale` verbatim: rewrites
+    # `series_styles` via `apply_greyscale` before `_draw_panel` draws,
+    # covering the flat/y2 paths the same way the single-figure route does.
+    # No-op for a faceted panel (`facets` set) -- same reason `_render_impl`
+    # documents: a facet panel never resolves per-series colour at all
+    # today (FEATURE-001), so `_draw_panel` (which owns this flag) is never
+    # even reached for one -- `_build_page_figure` draws facets through a
+    # completely separate code path that never touches `series_styles`.
+    greyscale: bool = False
 
 
 def _rect_sort_key(p: PagePanel) -> tuple[float, float]:
@@ -412,6 +425,11 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
     title = safe_mathtext_label(p.title)
     x_label = safe_mathtext_label(p.x_label)
     y_label = safe_mathtext_label(p.y_label)
+    # P3.3 review fix (F1): same one-line transform calc.figure._render_impl
+    # applies for the single-figure route -- see PagePanel.greyscale's doc.
+    styles = p.series_styles
+    if p.greyscale:
+        styles = apply_greyscale(styles, len(series))
     y2_mask = list(p.y2_mask) if p.y2_mask is not None else [False] * len(series)
     if any(y2_mask):
         # Lazy import: mirrors calc.figure._render_impl's own lazy import of
@@ -420,7 +438,7 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
         from quantized.calc.figure_y2 import render_with_secondary_axis
 
         render_with_secondary_axis(
-            fig, ax, xv, series, p.series_styles, y2_mask,
+            fig, ax, xv, series, styles, y2_mask,
             st=st, ov=ov, x_log=p.x_log, y_log=p.y_log,
             x_scale=p.x_scale, y_scale=p.y_scale,
             title=title, x_label=x_label, y_label=y_label,
@@ -443,7 +461,7 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
         title=title,
         x_label=x_label,
         y_label=y_label,
-        series_styles=p.series_styles,
+        series_styles=styles,
         x_fmt=p.x_fmt,
         y_fmt=p.y_fmt,
         x_step=p.x_step,

@@ -46,6 +46,18 @@ class MapFigureRequest(BaseModel):
     # never regridded).
     z_values: list[float] | None = None
     contour_source: str = "grid"  # grid (z_grid) | points (x_axis/y_axis/z_values cloud)
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 review (F1): deliberately NO
+    # `greyscale` field on this request, for every `kind` including
+    # `waterfall` -- unlike FigureRequest's categorical per-series palette,
+    # every kind here (contourf/contour/heatmap/surface/scatter3d/waterfall)
+    # colours by a CONTINUOUS z-value through `cmap` below, the same
+    # "colour IS the plotted quantity" case `calc.figure_greyscale.
+    # apply_greyscale` already leaves untouched for a `color_by` scatter --
+    # there is no categorical palette here for a print-safe grey ramp to
+    # replace. An unrecognized `greyscale` key sent to this route is simply
+    # ignored (pydantic's default `extra="ignore"`), not silently "wired but
+    # inert" the way FigureRequest.greyscale was on the page route before
+    # that fix -- there was never a field here to wire in the first place.
     kind: str = "contourf"  # contourf|contour|heatmap|surface|scatter3d|waterfall
     fmt: str = "pdf"
     style: str = "default"
