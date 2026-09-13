@@ -186,11 +186,25 @@ let startInFlight = false;
 // rest of the session. Both `resetPackProject` and `cancelPackProject` below
 // now clear it directly and SYNCHRONOUSLY -- independent of whether the
 // stuck fetch ever settles -- rather than relying on that `finally`.
+//
+// BUG-011 round 3 finding #1: that fix's own `finally` was still
+// UNCONDITIONAL, so it traded "stuck forever" for "clears a flag it may no
+// longer own" -- a LATE-settling (not eternally hung) abandoned attempt's
+// `finally` fires after `resetPackProject`/`cancelPackProject` already ended
+// it, and a NEWER attempt can by then be holding the guard through its OWN
+// resolve window. `startEpoch` makes the flag attempt-scoped: every attempt
+// captures the epoch as it stands when it sets the flag, and every path that
+// INTENTIONALLY clears the flag (a new `startPackProject`, or a `reset`/
+// `cancel` ending the current attempt) bumps it first, so a stale `finally`
+// recognizes it is no longer the current attempt and leaves the flag alone.
+let startEpoch = 0;
+
 /** Exported for test use only: mirrors `packProjectRun.ts`'s own
  *  `resetGeneration`/`resetThrottle`/`resetPollSequencing` test-reset role
  *  for THIS module's one piece of state outside the Zustand store proper. */
 export function resetStartInFlightForTests(): void {
   startInFlight = false;
+  startEpoch += 1;
 }
 
 export const usePackProject = create<PackProjectState>((set, get) => ({
@@ -220,11 +234,16 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
       return;
     }
     startInFlight = true;
+    const myEpoch = ++startEpoch; // this attempt's own token -- see the flag's doc above
     try {
       const { runStartPackProject } = await import("./packProjectRun");
       await runStartPackProject(get, set, approvedManifest);
     } finally {
-      startInFlight = false;
+      // Round 3 finding #1: only clear the flag if THIS attempt still owns
+      // it -- a reset/cancel (or a newer start) that ran while this one was
+      // awaiting has already bumped `startEpoch` past `myEpoch`, and clearing
+      // the flag here would stomp whatever newer attempt now holds it.
+      if (startEpoch === myEpoch) startInFlight = false;
     }
   },
 
@@ -239,8 +258,11 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
     // then a real click cannot race the guard past the phase check anyway
     // (`phase !== "awaiting_confirmation"` alone already rejects it), and
     // `startPackProject`'s own `finally` clears the same flag again, moot,
-    // once its awaited call does eventually return.
+    // once its awaited call does eventually return -- and round 3's epoch
+    // bump here means that stale `finally` recognizes the moot-ness itself
+    // instead of relying on this line having already cleared it first.
     startInFlight = false;
+    startEpoch += 1;
     const { runCancelPackProject } = await import("./packProjectRun");
     await runCancelPackProject(set, phase);
   },
@@ -258,6 +280,7 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
       return;
     }
     startInFlight = false; // round 2 finding #1: a reset ends the attempt, settled or not
+    startEpoch += 1; // round 3 finding #1: and disowns it, so a late finally can't stomp a newer one
     const { runResetPackProject } = await import("./packProjectRun");
     await runResetPackProject(set);
   },

@@ -914,7 +914,7 @@ describe("BUG-011 — pending datasets are resolved before serializing for a pac
 // Finding #2 (a book that goes pending DURING the resolve await) has no
 // separate test file of its own -- `packProjectContent.ts` is exercised only
 // through this file, same as `packProjectRun.ts` above it -- and is covered
-// directly in the next describe block below.
+// directly in the finding #2 describe block below.
 
 describe("BUG-011 review — Start pack's own resolve window (finding #1, nit 3)", () => {
   const fullRows: DataStruct = {
@@ -1198,6 +1198,137 @@ describe("BUG-011 round 2 — startInFlight survives a fetch that never settles 
   });
 });
 
+// -- BUG-011 round 3 (2026-09-13): `startInFlight` is attempt-scoped, not ---
+// global (finding #1) --------------------------------------------------------
+//
+// Round 2's fix cleared the guard synchronously from `resetPackProject`/
+// `cancelPackProject`, closing "stuck forever" -- but `startPackProject`'s
+// own `finally` was left UNCONDITIONAL, so a LATE-settling (not eternally
+// hung) abandoned attempt's `finally` can clear a flag a NEWER attempt is
+// currently holding through its OWN resolve window. `startEpoch`
+// (`store/packProject.ts`) closes that: every attempt captures the epoch
+// when it takes the flag, and only clears it in `finally` if no reset/
+// cancel/newer-start has bumped the epoch since.
+
+describe("BUG-011 round 3 — startInFlight is attempt-scoped (finding #1)", () => {
+  const fullRows: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [[1], [2], [3], [4], [5], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: {},
+  };
+
+  function lateBook(id: string): Dataset {
+    return {
+      id,
+      name: `${id}.opj`,
+      data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+      pending: { kind: "path", path: `/${id}.opj`, bookId: "Book2", rows: 6, cols: 1 },
+    };
+  }
+
+  beforeEach(() => {
+    resetBookTransportForTests();
+    useToasts.setState({ toasts: [] });
+    vi.mocked(fetchBookData).mockReset();
+  });
+
+  afterEach(() => {
+    stopPolling();
+  });
+
+  it("probe: a LATE-settling abandoned attempt's finally does not clear a NEWER attempt's guard — exactly one packStart call, the extra click rejected", async () => {
+    // Attempt 1: dataset "a" plus a book that goes pending, whose fetch we
+    // control (never resolves until we say so) so Start's own resolve step
+    // is stuck in its window for as long as we need.
+    useApp.setState({
+      datasets: [{ id: "a", name: "a.csv", data: fullRows }],
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+    const manifest1 = await runToAwaitingConfirmation();
+    useApp.setState({ datasets: [...useApp.getState().datasets, lateBook("slow1")] });
+
+    let releaseSlow1: () => void = () => {};
+    const acsvResolvers: Array<(d: DataStruct) => void> = [];
+    vi.mocked(fetchBookData).mockImplementation((source) => {
+      if (source.path === "/slow1.opj") {
+        return new Promise<DataStruct>((resolve) => {
+          releaseSlow1 = () => resolve(fullRows);
+        });
+      }
+      if (source.path === "/a.csv") {
+        // A queue, not a single resolver: under the SABOTAGE (unconditional
+        // `finally`), a second concurrent attempt fetches this same path a
+        // second time, and overwriting a single resolver variable would
+        // strand whichever call it belonged to forever. Draining the whole
+        // queue below resolves every call actually made, so the test
+        // reaches its assertions under EITHER outcome rather than hanging
+        // only under the buggy one.
+        return new Promise<DataStruct>((resolve) => {
+          acsvResolvers.push(resolve);
+        });
+      }
+      return Promise.resolve(fullRows);
+    });
+
+    const attempt1 = usePackProject.getState().startPackProject(manifest1); // enters its resolve window
+    await vi.waitFor(() =>
+      expect(vi.mocked(fetchBookData).mock.calls.some((c) => c[0].path === "/slow1.opj")).toBe(true),
+    );
+
+    await usePackProject.getState().resetPackProject(); // round 2's fix: ends attempt 1 right away
+    expect(usePackProject.getState().phase).toBe("idle");
+
+    // Attempt 2: a FRESH preview of dataset "a" alone (no pending book of
+    // its own), then "a" goes pending again -- a relink that will resolve
+    // back to the SAME content, so Start's own resolve step and fingerprint
+    // check both pass and this attempt reaches `packing`.
+    useApp.setState({ datasets: [{ id: "a", name: "a.csv", data: fullRows }] });
+    const manifest2 = await runToAwaitingConfirmation();
+    useApp.setState({
+      datasets: [
+        {
+          id: "a",
+          name: "a.csv",
+          data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+          pending: { kind: "path", path: "/a.csv", bookId: "Book2", rows: 6, cols: 1 },
+        },
+      ],
+    });
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+
+    const attempt2 = usePackProject.getState().startPackProject(manifest2); // enters ITS OWN resolve window
+    await vi.waitFor(() =>
+      expect(vi.mocked(fetchBookData).mock.calls.some((c) => c[0].path === "/a.csv")).toBe(true),
+    );
+
+    // Attempt 1's abandoned fetch settles LATE -- well after the reset
+    // above already ended it -- and its own `finally` runs to completion
+    // before we go on, exactly the "release slow1" step of the repro.
+    releaseSlow1();
+    await attempt1;
+
+    // A third click while attempt 2 is STILL inside its own resolve window:
+    // captured (not awaited) before releasing anything below, so a
+    // sabotage run (which does NOT reject here, and instead starts a
+    // second real attempt that also awaits the a.csv fetch) cannot make
+    // this hang -- and `lastRejected` is read immediately after the call,
+    // synchronously, before any release, so it can only reflect this
+    // click's own outcome, never a later one.
+    const thirdClick = usePackProject.getState().startPackProject(manifest2);
+    const rejectedImmediately = usePackProject.getState().lastRejected;
+
+    while (acsvResolvers.length > 0) acsvResolvers.shift()!(fullRows);
+    await Promise.all([attempt2, thirdClick]);
+    stopPolling();
+
+    expect(rejectedImmediately).toEqual({ from: "awaiting_confirmation", action: "startPackProject" });
+    expect(bridge.packStart).toHaveBeenCalledTimes(1);
+  });
+});
+
 // -- BUG-011 round 2 (2026-09-13): the app status ends on a real outcome ---
 // (finding N1/F3) ----------------------------------------------------------
 //
@@ -1234,10 +1365,15 @@ describe("BUG-011 round 2 — the app status ends on a real outcome, never mid-f
   it("the pack preview never leaves the app status reading '…packing…' once it is ready to review", async () => {
     useApp.setState({ datasets: [lazyBook("statusbook1")], plotWindows: [], focusedWindowId: null });
     vi.mocked(fetchBookData).mockResolvedValue(fullRows);
+    // Round 3 nit 4: `okManifest()`'s own `summary.datasets` is 0, which
+    // never actually exercises the "N dataset(s)" text -- `toContain("review
+    // the pack preview")` alone would pass even if the count were dropped
+    // entirely. A non-zero, non-one count also pins the PLURAL branch.
+    const manifest = { ...okManifest(), summary: { ...okManifest().summary, datasets: 2 } };
     vi.mocked(bridge.packPreview).mockResolvedValue({
       ok: true,
       token: "tok-1",
-      manifest: okManifest(),
+      manifest,
       destination: { bundle_dir: "/dest/proj", exists: false },
       warnings: [],
       blockers: [],
@@ -1247,14 +1383,17 @@ describe("BUG-011 round 2 — the app status ends on a real outcome, never mid-f
 
     expect(usePackProject.getState().phase).toBe("awaiting_confirmation");
     expect(useApp.getState().status).not.toContain("packing");
-    expect(useApp.getState().status).toContain("review the pack preview");
+    expect(useApp.getState().status).toContain("2 datasets ready — review the pack preview");
   });
 
   it("a completed Start pack ends the app status on the actual outcome, not the fetch transient", async () => {
     vi.useFakeTimers();
     useApp.setState({ datasets: [lazyBook("statusbook2")], plotWindows: [], focusedWindowId: null });
     vi.mocked(fetchBookData).mockResolvedValue(fullRows);
-    const manifest = okManifest();
+    // Round 3 nit 4: a non-zero count (the SINGULAR branch this time, the
+    // sibling above already pins plural) so the assertion below actually
+    // pins "1 dataset", not merely the destination path.
+    const manifest = { ...okManifest(), summary: { ...okManifest().summary, datasets: 1 } };
     vi.mocked(bridge.packPreview).mockResolvedValue({
       ok: true,
       token: "tok-1",
@@ -1277,7 +1416,69 @@ describe("BUG-011 round 2 — the app status ends on a real outcome, never mid-f
 
     expect(usePackProject.getState().phase).toBe("completed");
     expect(useApp.getState().status).not.toContain("packing");
-    expect(useApp.getState().status).toContain("/dest/proj");
+    expect(useApp.getState().status).toContain("packed 1 dataset to /dest/proj");
+  });
+});
+
+// -- BUG-011 round 3 (2026-09-13): `failed`/`cancelled` also end on a real ---
+// outcome, not only `completed` (finding #2) --------------------------------
+//
+// Round 2's `notePackOutcome` closed the stale "…packing…" transient for
+// `awaiting_confirmation` and `completed` only -- a backend failure reported
+// through polling, or a cancel actioned before packing ever starts, left
+// whichever status line was already standing (the "…N books loaded —
+// packing…" transient, or an EARLIER preview's own "review the pack
+// preview" note) uncorrected. `packProjectRun.ts`'s `noteFailed`/
+// `noteCancelled` are the fix; these specs drive `pollOnce` directly, same
+// as the sibling "backend failure surfaces" describe block above.
+
+describe("BUG-011 round 3 — failed and cancelled packs also end on a real outcome (finding #2)", () => {
+  it("a pack that fails mid-copy replaces the '…packing…' transient with the actual error, not silence", async () => {
+    const get = () => usePackProject.getState();
+    const set = (partial: Partial<PackProjectState>) => usePackProject.setState(partial);
+    resetStore("packing");
+    resetPollSequencing();
+    resetThrottle();
+    useApp.setState({ status: "1 book loaded — packing…" });
+
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(
+      statusOf({
+        phase: "failed",
+        errors: [{ code: "publish_failed", message: "disk full", originals_modified: false, note: "note" }],
+      }),
+    );
+    await pollOnce(get, set);
+
+    expect(get().phase).toBe("failed");
+    expect(useApp.getState().status).not.toContain("packing");
+    expect(useApp.getState().status).toBe("disk full");
+  });
+
+  it("a pack cancelled mid-copy (resolved through polling) replaces the transient with a cancellation note", async () => {
+    const get = () => usePackProject.getState();
+    const set = (partial: Partial<PackProjectState>) => usePackProject.setState(partial);
+    resetStore("cancelling");
+    resetPollSequencing();
+    resetThrottle();
+    useApp.setState({ status: "1 book loaded — packing…" });
+
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(statusOf({ phase: "cancelled" }));
+    await pollOnce(get, set);
+
+    expect(get().phase).toBe("cancelled");
+    expect(useApp.getState().status).not.toContain("packing");
+    expect(useApp.getState().status).toBe("pack cancelled — nothing was modified");
+  });
+
+  it("cancelling BEFORE packing starts (cancelled's own direct branch, no poll involved) also ends on a real outcome", async () => {
+    await runToAwaitingConfirmation();
+    useApp.setState({ status: "0 datasets ready — review the pack preview" });
+
+    await usePackProject.getState().cancelPackProject();
+
+    expect(usePackProject.getState().phase).toBe("cancelled");
+    expect(bridge.packCancel).not.toHaveBeenCalled(); // pre-packing: no backend round trip
+    expect(useApp.getState().status).toBe("pack cancelled — nothing was modified");
   });
 });
 

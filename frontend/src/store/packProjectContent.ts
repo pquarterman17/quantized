@@ -72,7 +72,14 @@ export async function serializeCurrentWorkspaceForPack(): Promise<PackContent> {
       // one-line refusal). With two or more failing books, only the FIRST
       // one in `datasets` order is named — same rule as
       // `lib/workbookTransfer.ts:184`'s own "naming the first such book in
-      // `datasets` order" — never every book that failed.
+      // `datasets` order" — never every book that failed. Round 3 nit 5: this
+      // still names the first PENDING book with ANY recorded reason, which
+      // need not be the book whose fetch caused THIS `Promise.all` rejection
+      // — a merely-slow book with a stale reason from an earlier attempt can
+      // still sort first. Self-consistent (the quoted reason is always that
+      // book's own), but the named cause can be a red herring; narrowing to
+      // "the book that failed on THIS attempt" is a separate, judgment-call
+      // fix left open rather than folded in here.
       const failed = useApp
         .getState()
         .datasets.find((d) => d.pending !== undefined && lastBookError(d.id, d.pending) !== null);

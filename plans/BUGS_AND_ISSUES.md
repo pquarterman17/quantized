@@ -2570,7 +2570,7 @@ not resolve first.
   file:line, and says outright that it previously named only the first and
   wrongly claimed autosave was the sole route. Autosave remains the one
   legitimate `pending` carrier.
-- [x] Regression tests, `frontend/src/store/packProject.test.ts:734-902`
+- [x] Regression tests, `frontend/src/store/packProject.test.ts:734-903`
   (the original fix's 5 specs, all sabotage-verified — see the Completion
   record; round 2 recount below: this range moved from the round-1 review's
   own `:731-900` purely because a handful of lines were added ABOVE this
@@ -2690,7 +2690,8 @@ follow-up commit closes:
   imperfectly: the review round below (finding 6) found the TRUE range at
   this commit was already `:731-900` (this commit's own 6-line addition to
   that block, missed) and, after round 2's own further additions, the
-  Fix-checklist bullet above now cites the current `:734-902`; the
+  Fix-checklist bullet above now cites the current `:734-903` (round 3 found
+  this was still short by one — see that section below); the
   Active-queue Owner column set to "Claude (agent)"; the shadowing
   `type Set` alias in `packProjectContent.ts` renamed to `SetPack`.
 - **Tests:** 4 new specs in `frontend/src/store/packProject.test.ts`, plus 2
@@ -2817,7 +2818,17 @@ newly created by round 1's own edits. This follow-up commit closes:
   fail (10,435), 0 `FAIL`; eager bundle 916,384 B (parent) -> 916,408 B (this
   commit), +24 B, 3,992 B under the unmoved 920,400 budget — nowhere near a
   pin move; `uv run pytest -q tests/test_repo_integrity.py` 12 passed
-  (plans/ touched).
+  (plans/ touched). **Round 3 correction:** rebase drift struck again after
+  this — the work actually landed on top of `cccf70d1`
+  (`git rev-parse 1aa8d4bd^` = `cccf70d1`, not `a99ebb6d`, which is merely an
+  ancestor four commits back), so `916,384 B`/`916,408 B` above were real
+  measurements of the WRONG tree. `cccf70d1` itself measures `916,453 B`
+  (matching BUG-010's own entry/change-log row for that commit), so the
+  correct pair is `916,453 B` (parent) -> `≈916,477 B` (this commit, the same
+  `+24 B` delta) -> `≈3,923 B` headroom, not `3,992 B`. The `+24 B` delta and
+  "nowhere near a pin move" conclusion are unaffected — see the round 3
+  section below for the full account and this round's own (unrelated)
+  numbers.
 - **Not attempted:** round 1's own nit 2 ("Start pack's resolve can
   essentially never rescue a pack, only buy a better error code") and nit 6
   (the unverifiable "pushed to 498 lines" Structural-note claim) needed no
@@ -2825,6 +2836,102 @@ newly created by round 1's own edits. This follow-up commit closes:
   recorded them.
 - Owner verification: unchanged — still open (the severity call and
   abort-vs-partial-pack choice).
+
+#### Adversarial review round 3 (2026-09-13)
+
+A third adversarial review of the round-2 fix commit (`1aa8d4bd`) found two
+CONFIRMED code findings — one a genuinely NEW hole the round-2 fix itself
+introduced, one a gap round 2's own doc-promise overclaimed — plus two doc
+findings (a fifth recurrence of the wrong-parent-SHA mistake, and an
+off-by-one spec-range citation) and six nits. This follow-up commit closes:
+
+- **`startInFlight` is now attempt-scoped, not global (finding #1):** round
+  2's fix cleared the guard synchronously from `resetPackProject`/
+  `cancelPackProject`, closing "stuck forever" — but `startPackProject`'s own
+  `finally` stayed UNCONDITIONAL, so a LATE-settling (not eternally hung)
+  abandoned attempt's `finally` could clear a flag a NEWER attempt was
+  currently holding through its own resolve window, reachable whenever a
+  re-pending book resolves back to byte-identical content (a relink/re-fetch
+  of an unchanged book — a real shape, not a contrived one). The reviewer
+  drove this to two concurrent `packStart` calls. Closed with a `startEpoch`
+  token in `store/packProject.ts`: every attempt captures the epoch when it
+  takes the flag, `finally` only clears it if no reset/cancel/newer-start has
+  bumped the epoch since, and `resetPackProject`/`cancelPackProject` (and the
+  test-only `resetStartInFlightForTests`) bump it whenever they clear the
+  flag. One probe reproduces the reviewer's exact repro (an abandoned attempt
+  settling late while a newer one is mid-resolve): exactly one `packStart`
+  call, the extra click rejected.
+- **`failed`/`cancelled` terminals also end on a real outcome, universally,
+  not only for the two paths round 2 happened to catch (finding #2):**
+  round 2's `notePackOutcome` closed the stale "…packing…"/"…review the pack
+  preview" transient only for `awaiting_confirmation` and `completed` — every
+  OTHER way this store reaches `failed` or `cancelled` (a backend failure
+  reported through polling, a cancel actioned before packing ever starts, a
+  stale-preview or bridge-unavailable failure inside "Start pack" itself)
+  left whichever status line was already standing uncorrected. Closed in
+  full, not narrowed: two small choke-point helpers in
+  `store/packProjectRun.ts` (`noteFailed`/`noteCancelled`) now sit behind
+  EVERY `failed`/`cancelled` transition in that file, including `pollOnce`'s
+  own poll-driven ones and `cancelPackProject`'s pre-packing direct branch
+  (which never goes through polling at all). Three new specs: a poll-driven
+  `failed` (asserts the actual error text, not a stale transient), a
+  poll-driven `cancelled`, and cancelling before packing starts (the direct
+  branch, no poll involved).
+- **The recorded parent SHA, fifth recurrence — this time genuine rebase
+  drift, not mis-naming:** round 2's own "measured against the real parent"
+  correction was itself measured against `a99ebb6d`, an ancestor four commits
+  back, not `1aa8d4bd`'s actual `HEAD~1` (`cccf70d1`) — the work was rebased
+  onto more commits after being measured. Corrected in place above: the
+  round-2 bundle bullet, and the change-log row below. This round's own
+  numbers are measured the way `agent_rules.md`'s standing rule requires —
+  `git rev-parse HEAD~1` printed AFTER committing, not before.
+- **Spec-range off-by-one, same class round 2 was itself correcting:** the
+  Fix-checklist bullet's `:734-902` was one line short of the block's actual
+  close (`:903`) — recounted and corrected to `:734-903` in both places it
+  appeared in this entry.
+- **Nits:** `lib/bookData.ts`'s `truncateReason` docstring updated to name
+  its new third consumer (`store/packProjectContent.ts`, added when BUG-011
+  first landed but never folded into that comment); the stale "next describe
+  block below" cross-reference in `packProject.test.ts` renamed to say which
+  block; the two round-2 status specs (preview-ready, completed) now use a
+  non-zero, non-one `summary.datasets` count each (2 and 1) so the assertions
+  actually pin the "N dataset(s)" text and both the singular and plural
+  branches, rather than passing on `toContain("review the pack preview")`
+  alone against a manifest whose count was 0; one clarifying clause added to
+  `packProjectContent.ts`'s refusal comment about the named book potentially
+  being merely slow rather than the actual cause (nit 5) — narrowing that
+  fully is left as an explicit owner call, not folded in here. **Not
+  attempted:** the previous round's own ceiling-number nit (`wc -l` vs
+  `split("\n").length` in a commit body, a historical citation with nothing
+  live to fix) and the `pollOnce` ordering nit (`notePackOutcome` firing
+  synchronously while the matching `phase`/`resultPath` `set` goes through
+  the 200ms throttle) — cosmetic, unexercised by any spec, and out of scope
+  for this round's four findings.
+- **Numbers, measured against this commit's REAL parent** (`git rev-parse
+  HEAD~1`, printed after committing) **= `26869ddb`** (an unrelated
+  `fix(export)` commit — this round's own worktree branched directly from
+  it, so no rebase drift is possible here): `packProject.test.ts` scoped run
+  clean; full `npx vitest run` not re-run this round (the machine was
+  contended) — the last verified full-suite count remains the reviewer's own
+  measurement at `1aa8d4bd`, **636 files / 10,444 passed + 2 expected fail
+  (10,446)**, 0 `FAIL`; `tsc -b --force`/`eslint --max-warnings=0` clean;
+  `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle
+  **916,466 B at `26869ddb` (parent) -> 916,466 B here, +0 B** — neither file
+  this round's fix actually changes is eager: `store/packProject.ts` (the
+  F1 fix) turned out to already be reached only through the lazy
+  `PackProjectPanel` chunk, not the entry script or modulepreload list (grep
+  of `index.html` confirms `packProject-*.js` is absent from both), and
+  `store/packProjectRun.ts`/`store/packProjectContent.ts` (the F2 fix) are
+  the already-lazy chunk documented at the top of this file; the
+  `lib/bookData.ts` docstring edit is comment-only and is stripped by
+  minification regardless. Verified by rebuilding `26869ddb` itself in a
+  throwaway `git worktree add` (never `cp -r` a worktree) and diffing the
+  entry chunk byte-for-byte against this commit's build: `514,175 B` in both,
+  same value. `uv run pytest -q tests/test_repo_integrity.py` — 12 passed
+  (plans/ touched).
+- Owner verification: unchanged — still open (the severity call and
+  abort-vs-partial-pack choice); nit 5's "named book may be merely slow"
+  narrowing is a new, separate open judgment call from this round.
 
 ---
 
@@ -3104,3 +3211,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Adversarial review round on the BUG-011 fix (commit `1b7ec2cf`): closed both CONFIRMED code findings — "Start pack"'s own book-resolve await had no generation guard (a cancel/reset during it was silently overwritten, and a second click ran a second concurrent attempt), and a book that turned pending DURING the resolve await was still serialized from its preview rows. Also named the failing book in the refusal (finding #5), corrected two stale cross-references and an understated sabotage count, added a status on the resolve step's success path, and renamed a shadowing `type Set` alias. Recorded `workspaceIO.ts`'s narrower window as a residual rather than fixing it (those files are being edited concurrently for BUG-010) — but WRONGLY recorded the same residual against `workbookTransfer.ts` too, which the round 2 review below found already closed | 4 new specs + 2 existing specs strengthened (65 passing, was 61), every new/strengthened assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0`/scoped vitest/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle reported as +15 B against an orphaned parent SHA — round 2 re-measured against the real parent (`762e00c1`) and found +4 B |
 | 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `a99ebb6d` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
 | 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |

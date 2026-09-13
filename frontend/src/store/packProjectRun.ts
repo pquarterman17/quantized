@@ -29,6 +29,7 @@ import {
 import {
   packError,
   EMPTY_PACK_PROGRESS,
+  type PackProjectError,
   type PackProjectPhase,
   type PackProjectPreview,
   type PackProjectProgress,
@@ -49,6 +50,25 @@ type Set = (partial: Partial<PackProjectState>) => void;
 
 const POLL_INTERVAL_MS = 250;
 const THROTTLE_MS = 200;
+
+// BUG-011 round 3 finding #2: round 2's `notePackOutcome` closed the stale
+// "…packing…"/"…review the pack preview" transient only for the two
+// terminals it was actually caught on (`awaiting_confirmation`, `completed`)
+// -- every OTHER way this store reaches `failed` or `cancelled` left
+// whichever status line was already standing uncorrected. These two helpers
+// are the single choke point for every `failed`/`cancelled` transition in
+// this file (both the ones reached directly, and `pollOnce`'s own poll-
+// driven ones below), so the closure is now actually universal rather than
+// two named exceptions.
+function noteFailed(set: Set, errors: PackProjectError[]): void {
+  set({ phase: "failed", errors });
+  notePackOutcome(errors[0]?.message ?? "pack failed");
+}
+
+function noteCancelled(set: Set): void {
+  set({ phase: "cancelled" });
+  notePackOutcome("pack cancelled — nothing was modified");
+}
 
 // -- generation counter (review finding #3) --------------------------------
 //
@@ -124,11 +144,11 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
       return;
     }
     if (picked === null) {
-      set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+      noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
       return;
     }
     if (typeof picked !== "string") {
-      set({ phase: "failed", errors: [packError("destination_pick_failed", picked.error)] });
+      noteFailed(set, [packError("destination_pick_failed", picked.error)]);
       return;
     }
     destinationParent = picked;
@@ -151,11 +171,11 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
   if (generation !== myGeneration) return; // cancelled/reset while packPreview was in flight
 
   if (result === null) {
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (!result.ok) {
-    set({ phase: "failed", errors: [packError(result.error.code, result.error.message ?? result.error.code)] });
+    noteFailed(set, [packError(result.error.code, result.error.message ?? result.error.code)]);
     return;
   }
 
@@ -309,7 +329,7 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
   if (status === null) {
     stopPolling();
     terminalReached = true;
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (seq < lastAppliedSeq) return; // an older in-flight response landed late
@@ -318,11 +338,14 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
   if (isTerminal(status.phase)) {
     terminalReached = true;
     stopPolling();
-    // Round 2 finding N1/F3: `completed` is where "…packing…" was found
-    // still standing — the panel's own completed view already knows the
-    // dataset count (`preview.manifest.summary.datasets`) and destination
-    // (`status.result.bundle_dir`); this is that same information, just
-    // also on the app-wide status line rather than only inside the panel.
+    // Round 2 finding N1/F3 (widened round 3 finding #2 to cover every
+    // terminal, not only `completed`): the panel's own completed view
+    // already knows the dataset count (`preview.manifest.summary.datasets`)
+    // and destination (`status.result.bundle_dir`); this is that same
+    // information, just also on the app-wide status line rather than only
+    // inside the panel. `failed`/`cancelled` get the same treatment now --
+    // `scheduleStatusApply` just wrote `status.errors` into the store above,
+    // so a real reason is always available for `failed`.
     if (status.phase === "completed") {
       const n = get().preview?.manifest.summary.datasets;
       const where = status.result?.bundle_dir;
@@ -331,6 +354,10 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
           ? `packed ${n !== undefined ? `${n} dataset${n === 1 ? "" : "s"}` : "project"} to ${where}`
           : "pack completed",
       );
+    } else if (status.phase === "failed") {
+      notePackOutcome(status.errors[0]?.message ?? "pack failed");
+    } else {
+      notePackOutcome("pack cancelled — nothing was modified");
     }
   }
 }
@@ -373,10 +400,7 @@ function startPolling(get: Get, set: Set): void {
 export async function runStartPackProject(get: Get, set: Set, approvedManifest: PortableManifest): Promise<void> {
   const preview = get().preview;
   if (preview === null || approvedManifest !== preview.manifest) {
-    set({
-      phase: "failed",
-      errors: [packError("stale_preview", "the reviewed plan is no longer current — preview again")],
-    });
+    noteFailed(set, [packError("stale_preview", "the reviewed plan is no longer current — preview again")]);
     return;
   }
   // Review finding #1: `serializeCurrentWorkspaceForPack` below awaits a
@@ -402,22 +426,19 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
   }
   const fresh = serialized.content;
   if (contentFingerprint(fresh) !== contentFingerprint(preview.content)) {
-    set({
-      phase: "failed",
-      errors: [packError("stale_preview", "the project changed since preview — preview again")],
-    });
+    noteFailed(set, [packError("stale_preview", "the project changed since preview — preview again")]);
     return;
   }
 
   set({ phase: "packing" });
   const result = await packStart(preview.token, preview.content);
   if (result === null) {
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (!result.ok) {
     const code = result.error?.code ?? "pack_failed";
-    set({ phase: "failed", errors: [packError(code, result.error?.message ?? code)] });
+    noteFailed(set, [packError(code, result.error?.message ?? code)]);
     return;
   }
   startPolling(get, set);
@@ -431,7 +452,10 @@ export async function runCancelPackProject(set: Set, phase: PackProjectPhase): P
   // counter's own doc above.
   bumpGeneration();
   if (phase === "selecting_destination" || phase === "scanning" || phase === "awaiting_confirmation") {
-    set({ phase: "cancelled" });
+    // Round 3 finding #2: this is `cancelled`'s OWN branch -- it never goes
+    // through `pollOnce`'s poll-driven terminal handling below, so it needs
+    // its own `notePackOutcome` call to close the same stale-status hole.
+    noteCancelled(set);
     return;
   }
   // "packing" or already "cancelling" -- `pack_cancel` is idempotent
@@ -440,7 +464,7 @@ export async function runCancelPackProject(set: Set, phase: PackProjectPhase): P
   const result = await packCancel();
   if (result === null) {
     stopPolling();
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   // The final phase (cancelled, or a completion that raced the cancel)
