@@ -3741,9 +3741,12 @@ Original acceptance criteria (unchanged):
   different File menu), `components/Library/MultiSelectBar.tsx:83`,
   `components/Library/PagesSection.tsx:82`,
   `components/Library/EditableFiguresSection.tsx:67`,
-  `components/windows/useWindowCommands.ts:190`, and
-  `store/recordRecipeUse.ts:26` — a failed chunk load at any of these is
-  still a silent no-op plus an unhandled-rejection console warning.
+  `components/windows/useWindowCommands.ts:190`, and the three startup
+  loads in `App.tsx:82,101,146` (recipe hydration and the two lock
+  providers) — a failed chunk load at any of these is still a silent no-op
+  plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
+  is NOT on this list: it carries its own explicit `.catch` with a
+  fire-and-forget rationale, so its failure is a deliberate silent no-op.)
 - [ ] Errors say what failed, whether data changed, and next action.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**

@@ -15,24 +15,33 @@ vi.mock("../components/overlays/ParamDialog", () => ({
 const toastSpy = vi.fn();
 vi.mock("../store/toasts", () => ({ toast: (...args: unknown[]) => toastSpy(...args) }));
 
-/** F7 (2026-09-13 round-2 review): the F4 test below (~line 230ish)
- *  permanently overrides `askParams`'s resolved value with a Promise that
- *  never settles — `vi.clearAllMocks()` clears CALL history, not this
- *  implementation override, and there is no `restoreMocks`/`mockReset` in
- *  `vitest.config.ts`, so without this the next test added to either
- *  describe below that awaits a real `askParams()` call would hang for the
- *  full 20s timeout. Restored explicitly every test, same as the `status`
- *  reset the second describe already added for the identical leaked-state
- *  reason. Sabotage: delete this line and add any test after the F4 one
- *  that calls `runExportSpatialPageCommand` again — it times out. */
-function resetAskParamsMock(): void {
+/** F7 (2026-09-13 round-2 review; completed in round 3): tests below
+ *  permanently override THREE things `vi.clearAllMocks()` does not restore
+ *  (it clears CALL history, not implementations, and there is no
+ *  `restoreMocks`/`mockReset` in `vitest.config.ts`): the F4 test resolves
+ *  `askParams` with a Promise that never settles; two cancel tests give
+ *  `exportFigurePage` a never-settling implementation; and the
+ *  resolve-race test writes a never-settling `resolveDataset` into the app
+ *  store, which Zustand's merging `setState` then LEAKS into every later
+ *  test. Any test appended after them that awaits a real
+ *  `runExportSpatialPageCommand` would hang for the full 20 s timeout; the
+ *  round-3 reviewer showed that restoring `askParams` alone (round 2's fix)
+ *  still hangs — either of the other two leaks alone is enough. All three
+ *  are restored every test, the same pattern `exportActive.test.ts` uses
+ *  for `defaultResolveDataset`. Sabotage: drop any ONE of the three
+ *  restores and append a test after the F4 one that calls
+ *  `runExportSpatialPageCommand` — it times out. */
+const defaultResolveDataset = useApp.getState().resolveDataset;
+function resetLeakedMocks(): void {
   vi.mocked(askParams).mockResolvedValue({ fmt: "pdf", dpi: 300 });
+  vi.mocked(exportFigurePage).mockResolvedValue(undefined);
+  useApp.setState({ resolveDataset: defaultResolveDataset });
 }
 
 describe("runExportSpatialPageCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetAskParamsMock(); // F7 — see this function's own doc
+    resetLeakedMocks(); // F7 — see this function's own doc
     useApp.setState({
       datasets: [
         {
@@ -121,7 +130,7 @@ describe("runExportSpatialPageCommand", () => {
 describe("runExportSpatialPageCommand — safe cancel (P3.4)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    resetAskParamsMock(); // F7 — see this function's own doc
+    resetLeakedMocks(); // F7 — see this function's own doc
     // N8 (2026-09-13 round-2 review): explicit, not just incidental — this
     // file has no real `useToasts` store to reset (`toast` is replaced
     // wholesale by the `toastSpy` shim above), so the "no toast" assertions
