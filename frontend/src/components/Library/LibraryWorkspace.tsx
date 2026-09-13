@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { plural } from "../../lib/plural";
 
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
+import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
@@ -238,13 +239,13 @@ export default function LibraryWorkspace({ onClose }: Props) {
   // window and unmounts, the browser drops focus to <body> and keyboard
   // interaction would dead-end. Hand focus to the grid container instead —
   // it never fights the user's scroll, and its own keydown (below) resumes
-  // navigation from the roving tile's model position.
+  // navigation from the roving tile's model position. The predicate (every
+  // guard that used to be spelled out here) is now lib/scrollOutFocus's,
+  // shared verbatim with Tree and Details.
   useEffect(() => {
-    if (!virt.virtualized || rovingKey == null) return;
-    if (document.activeElement !== document.body) return;
-    if (!items.some((node) => node.key === rovingKey)) return; // removal — the survivor effect owns it
-    if (document.querySelector(`[data-library-tile="${CSS.escape(rovingKey)}"]`)) return; // still rendered
-    gridRef.current?.focus();
+    const selector = rovingKey != null ? `[data-library-tile="${CSS.escape(rovingKey)}"]` : null;
+    const stillInModel = items.some((node) => node.key === rovingKey);
+    if (needsScrollOutFocusFallback(virt.virtualized, selector, stillInModel)) gridRef.current?.focus();
   }, [virt.virtualized, virt.start, virt.end, items, rovingKey]);
 
   // Arrow/Enter while the GRID itself holds focus (the scroll-out fallback
@@ -320,8 +321,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
           role="list"
           aria-label={`${container?.name ?? "Project"} items`}
           ref={gridRef}
-          tabIndex={-1}
-          data-tile-grid-focus
+          {...scrollOutFocusProps}
           onKeyDown={onGridKeyDown}
           style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
         >

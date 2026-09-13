@@ -566,17 +566,48 @@ as a CSS-only tree redesign.
   LibraryWorkspace's `effectiveTabStop`) since its roving-tabindex model
   (exactly one row in the Tab order) would otherwise lose ALL Tab-key entry
   once the model-level roving row scrolled out of the window — proven by
-  "every rendered window carries exactly ONE tabbable row". **Known gap,
-  not required by the above but adjacent:** neither renderer reproduces
-  Tile's `data-tile-grid-focus` fallback for a literal DOM focus loss from an
-  ORGANIC (non-keyboard) scroll — e.g. a mouse-wheel scroll that unmounts the
-  currently-focused row with no keyboard interaction at all. Tab/click/arrow
-  keys all recover normally; this narrower case is undemonstrated either way
-  and left as a documented limitation rather than silently claimed.
+  "every rendered window carries exactly ONE tabbable row".
+  **Organic-scroll focus loss — CLOSED 2026-09-13; this was booked here as an
+  undemonstrated gap and turned out to be real.** MEASURED FIRST: a test per
+  renderer that focuses a row, fires a bare `scroll` on the container with no
+  keyboard interaction anywhere, and asserts focus stayed in the list FAILED on
+  both — the focused row does unmount, and jsdom orphans
+  `document.activeElement` to `<body>` exactly as a browser does (the
+  row-is-gone half of each assertion passed, so the failure is the focus loss,
+  not a stale window). FIXED the way Tiles does it, with Tiles' mechanism
+  EXTRACTED to `lib/scrollOutFocus.ts` and shared by all three renderers —
+  `data-tile-grid-focus` became the shared `data-scroll-out-focus`; Tiles' own
+  "keyboard survives the focused tile scrolling out of the window" test is
+  untouched and still passes. `scrollOutFocusProps` makes each list container
+  focusable BY SCRIPT ONLY (`tabIndex={-1}`, so the one sequential Tab stop
+  stays the roving row and the "exactly ONE tabbable row" invariant above is
+  unaffected), and `needsScrollOutFocusFallback` decides when it takes the
+  orphaned focus: only when the roving item is STILL in the model, its element
+  is gone from the DOM, and `activeElement` really is `<body>` — removal stays
+  the recovery effects' case, and focus the user moved deliberately is never
+  stolen. The container is not a dead end: the next nav key resumes from the
+  roving row's MODEL position (`LibraryTree`'s `fromContainer` branch,
+  `LibraryDetails`' wrapper branch in `onNavKeyDown`), and it CONSUMES
+  Delete/Backspace so a focused plain container cannot feed the global dataset
+  removal (`lib/focusGuard.ts`'s data-loss path — asserted, not assumed).
+  `focusRowWhenRendered` now always treats the holder as an owned place for
+  focus to sit mid-retry, as `focusTileWhenRendered` already did. Guarded by
+  "an organic scroll that unmounts the focused row keeps focus inside the
+  tree/table, and a later arrow key resumes" in `LibraryTree.scale.test.tsx`
+  and `LibraryDetails.scale.test.tsx`; sabotage-verified three ways (neuter the
+  shared predicate -> both new tests AND Tiles' own fail; remove the resume
+  branch -> both new fail; drop `scrollOutFocusProps` from a container -> both
+  new fail). **Residual, not claimed:** the fallback restores keyboard REACH,
+  not the scroll position — the viewport stays where the wheel left it until
+  the next nav key scrolls the roving row's neighbour back in; and while the
+  container holds focus, assistive tech announces the list container rather
+  than a row (identical to Tiles' long-standing behaviour, since it is now
+  literally the same mechanism).
 - [x] Add scale fixtures covering deep folders, wide folders, large search
   result sets, stale thumbnails, and rapid view switching. **Verification
-  pass (2026-09-09).** `LibraryTree.scale.test.tsx` (9 tests) and
-  `LibraryDetails.scale.test.tsx` (8 tests): wide (5,000-item single
+  pass (2026-09-09; counts refreshed 2026-09-13 when the organic-scroll focus
+  test above was added to each).** `LibraryTree.scale.test.tsx` (12 tests) and
+  `LibraryDetails.scale.test.tsx` (9 tests): wide (5,000-item single
   workbook) and deep (500-folder chain) fixtures, a 3,000-row search-result
   set through `LibraryDetails`'s `searchQuery` prop, rapid mount/scroll/
   unmount/remount cycles, and a clamped-window-under-shrink fixture (deep

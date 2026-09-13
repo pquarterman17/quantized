@@ -360,7 +360,11 @@ describe("LibraryDetails — roving keyboard traversal (plan follow-up 4a)", () 
     expect(sequentialStops).toHaveLength(2);
     expect(sequentialStops[0]?.closest("th")?.getAttribute("data-col")).toBe("name");
     expect(sequentialStops[1]?.getAttribute("data-lib-row")).toBe("worksheet:solo");
-    expect(container.querySelector(".qzk-details-scroll")?.hasAttribute("tabindex")).toBe(false);
+    // The wrapper carries tabIndex=-1 (lib/scrollOutFocus) so the scroll-out
+    // fallback can hand it focus by SCRIPT. -1 is not a sequential stop, so
+    // the invariant this test is named for — two Tab stops, neither of them
+    // the wrapper — is unchanged; the length assertion above is its guard.
+    expect(container.querySelector(".qzk-details-scroll")?.getAttribute("tabindex")).toBe("-1");
     act(() => row("worksheet:d2").focus());
     expect(tabStops()).toEqual(["worksheet:d2"]); // the rove moved
   });

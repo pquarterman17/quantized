@@ -30,7 +30,7 @@
 //   * It is not a tab stop and not an AT target (`aria-hidden`, no tabindex),
 //     exactly like the Details grip. The grid's keyboard model is a ROVING
 //     tabindex over tiles (LibraryWorkspace's `effectiveTabStop`, plus the
-//     `data-tile-grid-focus` container fallback when the roving tile scrolls
+//     `lib/scrollOutFocus` container fallback when the roving tile scrolls
 //     out of the window); a focusable per-tile grip would insert a second,
 //     permanent stop inside every tile and break that model. An HTML5 drag
 //     cannot be started from the keyboard anyway, so the keyboard/AT route to
