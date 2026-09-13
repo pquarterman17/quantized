@@ -219,7 +219,7 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // if a book can't be fetched rather than exporting the preview —
       // Save and Save As (store/workspaceIO.ts's `prepareWorkspaceState`,
       // resolve at line 73, abort block 69-80), workbook Copy/Duplicate
-      // (store/workbookTransfer.ts:189 and :254 — its own package
+      // (store/workbookTransfer.ts:189 and :260 — its own package
       // serializer, same rule), and Pack Project
       // (store/packProjectContent.ts's `serializeCurrentWorkspaceForPack`,
       // both its preview and Start-pack callers — added by BUG-011's fix,
@@ -234,11 +234,19 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // store after its await and REFUSES if anything is still `pending`
       // rather than trusting the resolve alone (packProjectContent.ts,
       // same file/function as above), so that path is closed there. Save/
-      // Save As (store/workspaceIO.ts:73-82) and the two workbook-transfer
-      // paths re-read the store after their own resolve await the same way
-      // but do NOT re-check `pending` on it — the identical narrower
-      // window is open on all three, recorded as a residual on BUG-011
-      // rather than fixed here.
+      // Save As (store/workspaceIO.ts:73-82) re-reads the store after its
+      // own resolve await the same way but does NOT re-check `pending` on
+      // it — that identical narrower window is open there, recorded as a
+      // residual on BUG-011 rather than fixed here.
+      //
+      // ROUND 2 CORRECTION: the paragraph above used to say this SAME
+      // window was open on "the two workbook-transfer paths" too. That was
+      // FALSE — both call `buildTransferPackage` (lib/workbookTransfer.ts)
+      // AFTER their own resolve await, and that function re-reads `pending`
+      // on the fresh state it is handed and refuses if anything still is
+      // (lib/workbookTransfer.ts:182-183) — a re-check of its own, closing
+      // this for workbook Copy/Duplicate already. Only Save/Save As above
+      // is still an open residual.
       //
       // So `d.pending` should never reach a packed Pack Project bundle; the
       // other three export paths carry the same (narrow, unresolved) risk

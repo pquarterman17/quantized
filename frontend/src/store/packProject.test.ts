@@ -12,6 +12,7 @@ import type { PackStatus, PortableManifest } from "../lib/desktopPackBridge";
 import type { Dataset, DataStruct } from "../lib/types";
 import {
   EMPTY_PACK_PROGRESS,
+  resetStartInFlightForTests,
   usePackProject,
   type PackProjectPhase,
   type PackProjectState,
@@ -122,6 +123,7 @@ beforeEach(() => {
   resetThrottle();
   resetPollSequencing();
   resetGeneration();
+  resetStartInFlightForTests();
 });
 
 afterEach(() => {
@@ -129,6 +131,7 @@ afterEach(() => {
   resetThrottle();
   resetPollSequencing();
   resetGeneration();
+  resetStartInFlightForTests();
   vi.useRealTimers();
 });
 
@@ -908,10 +911,10 @@ describe("BUG-011 — pending datasets are resolved before serializing for a pac
 // second "Pack Project" click during the same window must not run a second
 // concurrent attempt.
 //
-// Finding #2 (packProjectContent.test coverage is in the doc above; this
-// file only re-verifies through the Start path here since it is the one
-// with an observable generation-guard interaction) -- covered directly in
-// the next describe block below.
+// Finding #2 (a book that goes pending DURING the resolve await) has no
+// separate test file of its own -- `packProjectContent.ts` is exercised only
+// through this file, same as `packProjectRun.ts` above it -- and is covered
+// directly in the next describe block below.
 
 describe("BUG-011 review — Start pack's own resolve window (finding #1, nit 3)", () => {
   const fullRows: DataStruct = {
@@ -1003,7 +1006,7 @@ describe("BUG-011 review — Start pack's own resolve window (finding #1, nit 3)
     expect(bridge.packStart).not.toHaveBeenCalled();
   });
 
-  it("a second 'Pack Project' click during the resolve is rejected by the phase guard, not run as a second concurrent attempt", async () => {
+  it("a second 'Pack Project' click during the resolve is rejected by the startInFlight guard (phase itself hasn't moved yet), not run as a second concurrent attempt", async () => {
     const manifest = await readyWithLateBook("late3");
     let resolveFetch: (d: DataStruct) => void = () => {};
     vi.mocked(fetchBookData).mockReturnValue(
@@ -1086,10 +1089,253 @@ describe("BUG-011 review — a book that goes pending DURING the resolve await (
     const s = usePackProject.getState();
     expect(s.phase).toBe("failed");
     expect(s.errors[0].code).toBe("pending_unresolved");
-    expect(s.errors[0].message).toContain("a book was still loading");
+    // Round 2 nit 5: the refusal now names the book, not just "a book".
+    expect(s.errors[0].message).toContain('"book2.opj" was still loading');
     // Nothing was ever sent to the bridge -- the payload string containing
     // book2's still-pending, still-decimated preview rows must never even
     // be BUILT, let alone reach `pack_preview`.
     expect(bridge.packPreview).not.toHaveBeenCalled();
+  });
+});
+
+// -- BUG-011 round 2 (2026-09-13): `startInFlight` survives a fetch that ---
+// never settles at all (finding #1) --------------------------------------
+//
+// `startPackProject`'s `finally` was the ONLY place the in-flight guard was
+// ever cleared, and it never runs while the awaited `runStartPackProject`
+// call is still pending -- a `fetchBookData` that never settles pinned the
+// guard true forever, and neither Cancel nor Reset (a fresh preview
+// included) could recover Start pack afterward. `resetStartInFlightForTests`
+// exists ONLY so this file's own hooks can't leak a stuck guard between
+// specs; it plays no part in the fix itself, which is the synchronous clear
+// now in `resetPackProject`/`cancelPackProject` (store/packProject.ts).
+
+describe("BUG-011 round 2 — startInFlight survives a fetch that never settles (finding #1)", () => {
+  const fullRows: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [[1], [2], [3], [4], [5], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: {},
+  };
+
+  function lateBook(id: string): Dataset {
+    return {
+      id,
+      name: `${id}.opj`,
+      data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+      pending: { kind: "path", path: `/${id}.opj`, bookId: "Book2", rows: 6, cols: 1 },
+    };
+  }
+
+  function plainDataset(): Dataset {
+    return { id: "a", name: "a.csv", data: fullRows };
+  }
+
+  beforeEach(() => {
+    resetBookTransportForTests();
+    useToasts.setState({ toasts: [] });
+    vi.mocked(fetchBookData).mockReset();
+  });
+
+  afterEach(() => {
+    stopPolling();
+  });
+
+  it("probe P3: reset while the fetch is stuck forever, then a fresh preview + Start still reaches packStart", async () => {
+    useApp.setState({ datasets: [plainDataset()], plotWindows: [], focusedWindowId: null });
+    const manifest1 = await runToAwaitingConfirmation();
+    useApp.setState({ datasets: [...useApp.getState().datasets, lateBook("stuck1")] });
+    vi.mocked(fetchBookData).mockReturnValue(new Promise(() => {})); // never settles, ever
+
+    // Fire-and-forget: this call's own promise is NEVER awaited, deliberately
+    // -- the whole point of the probe is that recovery must not depend on it
+    // ever resolving.
+    const stuckStart = usePackProject.getState().startPackProject(manifest1);
+    await vi.waitFor(() => expect(useApp.getState().status).toContain("fetching"));
+
+    await usePackProject.getState().resetPackProject();
+    expect(usePackProject.getState().phase).toBe("idle");
+
+    // A brand-new preview with no pending book of its own, so IT never has
+    // to await a fetch either -- isolates the assertion to the guard alone.
+    useApp.setState({ datasets: [plainDataset()] });
+    const manifest2 = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+
+    await usePackProject.getState().startPackProject(manifest2);
+    stopPolling(); // the real 250ms interval has no business outliving this spec
+
+    expect(usePackProject.getState().lastRejected).toBeNull();
+    expect(bridge.packStart).toHaveBeenCalledTimes(1);
+    void stuckStart; // never settles in this spec; referenced only to avoid an unused-var lint error
+  });
+
+  it("cancelling a stuck Start also releases the guard, not only a reset", async () => {
+    useApp.setState({ datasets: [plainDataset()], plotWindows: [], focusedWindowId: null });
+    const manifest1 = await runToAwaitingConfirmation();
+    useApp.setState({ datasets: [...useApp.getState().datasets, lateBook("stuck2")] });
+    vi.mocked(fetchBookData).mockReturnValue(new Promise(() => {})); // never settles, ever
+
+    const stuckStart = usePackProject.getState().startPackProject(manifest1);
+    await vi.waitFor(() => expect(useApp.getState().status).toContain("fetching"));
+
+    await usePackProject.getState().cancelPackProject();
+    expect(usePackProject.getState().phase).toBe("cancelled");
+
+    // A fresh preview straight from the terminal `cancelled` phase -- no
+    // reset in between, and no pending book of its own.
+    useApp.setState({ datasets: [plainDataset()] });
+    const manifest2 = await runToAwaitingConfirmation();
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+
+    await usePackProject.getState().startPackProject(manifest2);
+    stopPolling();
+
+    expect(usePackProject.getState().lastRejected).toBeNull();
+    expect(bridge.packStart).toHaveBeenCalledTimes(1);
+    void stuckStart;
+  });
+});
+
+// -- BUG-011 round 2 (2026-09-13): the app status ends on a real outcome ---
+// (finding N1/F3) ----------------------------------------------------------
+//
+// The transient "…packing…" `serializeCurrentWorkspaceForPack` sets while it
+// fetches was never replaced once the real outcome was known -- lingering
+// into `awaiting_confirmation` (the preview path, where nothing has been
+// copied yet) or `completed` (the Start path, where the pack actually
+// finished). Both callers now call `notePackOutcome` once they know better.
+
+describe("BUG-011 round 2 — the app status ends on a real outcome, never mid-flight (finding N1/F3)", () => {
+  const fullRows: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [[1], [2], [3], [4], [5], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: {},
+  };
+
+  function lazyBook(id: string): Dataset {
+    return {
+      id,
+      name: `${id}.opj`,
+      data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+      pending: { kind: "path", path: `/${id}.opj`, bookId: "Book2", rows: 6, cols: 1 },
+    };
+  }
+
+  beforeEach(() => {
+    resetBookTransportForTests();
+    useToasts.setState({ toasts: [] });
+    vi.mocked(fetchBookData).mockReset();
+  });
+
+  it("the pack preview never leaves the app status reading '…packing…' once it is ready to review", async () => {
+    useApp.setState({ datasets: [lazyBook("statusbook1")], plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockResolvedValue(fullRows);
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-1",
+      manifest: okManifest(),
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+
+    await usePackProject.getState().previewPackProject("/dest");
+
+    expect(usePackProject.getState().phase).toBe("awaiting_confirmation");
+    expect(useApp.getState().status).not.toContain("packing");
+    expect(useApp.getState().status).toContain("review the pack preview");
+  });
+
+  it("a completed Start pack ends the app status on the actual outcome, not the fetch transient", async () => {
+    vi.useFakeTimers();
+    useApp.setState({ datasets: [lazyBook("statusbook2")], plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockResolvedValue(fullRows);
+    const manifest = okManifest();
+    vi.mocked(bridge.packPreview).mockResolvedValue({
+      ok: true,
+      token: "tok-1",
+      manifest,
+      destination: { bundle_dir: "/dest/proj", exists: false },
+      warnings: [],
+      blockers: [],
+    });
+    await usePackProject.getState().previewPackProject("/dest");
+    // After the preview's own resolve, the book is no longer pending, so
+    // Start's own resolve step below finds nothing left to fetch.
+    vi.mocked(bridge.packStart).mockResolvedValue({ ok: true });
+    await usePackProject.getState().startPackProject(manifest);
+    expect(usePackProject.getState().phase).toBe("packing");
+
+    vi.mocked(bridge.packStatus).mockResolvedValueOnce(
+      statusOf({ phase: "completed", result: { bundle_dir: "/dest/proj" }, cleanup_ok: null }),
+    );
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(usePackProject.getState().phase).toBe("completed");
+    expect(useApp.getState().status).not.toContain("packing");
+    expect(useApp.getState().status).toContain("/dest/proj");
+  });
+});
+
+// -- BUG-011 round 2 (2026-09-13): the refusal's reason stays paired with ---
+// its OWN book (finding #5) -------------------------------------------------
+//
+// Round 1's fix used `lastBookError` only to pick WHICH book to name, but
+// still quoted the raw thrown `e` as the reason -- so a still-pending
+// dataset with a STALE recorded error (from an earlier attempt; a fetch
+// failure never clears `pending`, and `_bookErrors` is cleared only on
+// success) could be named alongside a completely different book's reason,
+// whenever it sorted earlier in `datasets` order than whichever book
+// actually caused THIS rejection.
+
+describe("BUG-011 round 2 — the refusal's reason stays paired with its own book (finding #5)", () => {
+  function lazyBook(id: string, name: string): Dataset {
+    return {
+      id,
+      name,
+      data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+      pending: { kind: "path", path: `/${id}.opj`, bookId: id, rows: 6, cols: 1 },
+    };
+  }
+
+  beforeEach(() => {
+    resetBookTransportForTests();
+    useToasts.setState({ toasts: [] });
+    vi.mocked(fetchBookData).mockReset();
+  });
+
+  it("P4c: a second attempt names the book its OWN recorded reason belongs to, never a different book's error text", async () => {
+    const bookA = lazyBook("bookA", "bookA.opj");
+    useApp.setState({ datasets: [bookA], plotWindows: [], focusedWindowId: null });
+
+    // Attempt 1: bookA fails outright, recording its own reason.
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("A is gone"));
+    await usePackProject.getState().previewPackProject("/dest");
+    expect(usePackProject.getState().errors[0].message).toContain('"bookA.opj" — A is gone');
+
+    // Attempt 2, from the terminal `failed` phase (a fresh preview is legal
+    // there, no explicit reset needed): bookA is STILL pending (a fetch
+    // failure never clears it) and is re-fetched, but this time never
+    // settles; a NEW book, bookB, is also pending and fails FAST, so
+    // `Promise.all` rejects with B's rejection while bookA's OWN recorded
+    // reason is still the stale "A is gone" from attempt 1.
+    const bookB = lazyBook("bookB", "bookB.opj");
+    useApp.setState({ datasets: [bookA, bookB] });
+    vi.mocked(fetchBookData).mockImplementation((source) =>
+      source.path === "/bookA.opj" ? new Promise(() => {}) : Promise.reject(new Error("B expired")),
+    );
+
+    await usePackProject.getState().previewPackProject("/dest");
+
+    const s = usePackProject.getState();
+    expect(s.phase).toBe("failed");
+    // Named book and quoted reason are BOTH about bookA -- never bookA's
+    // name paired with bookB's "B expired" text (the pre-fix bug).
+    expect(s.errors[0].message).toContain('"bookA.opj" — A is gone');
+    expect(s.errors[0].message).not.toContain("B expired");
   });
 });

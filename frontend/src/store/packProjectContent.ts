@@ -9,7 +9,7 @@
 // Not in the eager bundle for the same reason its parent isn't: the store
 // `import()`s packProjectRun.ts on the click, and this comes with it.
 
-import { lastBookError } from "../lib/bookData";
+import { lastBookError, truncateReason } from "../lib/bookData";
 import { serializeWorkspace } from "../lib/workspaceSerialize";
 import { packError, type PackProjectState } from "./packProject";
 import { toast } from "./toasts";
@@ -54,44 +54,64 @@ export async function serializeCurrentWorkspaceForPack(): Promise<PackContent> {
       await useApp.getState().resolvePendingDatasets();
     } catch (e) {
       // Same sentence shape as the two siblings (`workspaceIO.ts:75`,
-      // `workbookTransfer.ts:191`/`:256`), which each spell it out inline —
-      // there is no shared helper to reuse. Names the book when a reason was
-      // actually recorded for it (review finding #5) — `lib/bookData.ts`'s
-      // `lastBookError`, the same lookup `workbookTransfer.ts:195-196`
-      // already uses for its own refusal. `e` is only the FIRST rejection
-      // `Promise.all` surfaces and carries no id/name of its own; a still-
-      // `pending` dataset with a recorded error is what does.
+      // `store/workbookTransfer.ts:191`/`:262`), which each spell it out
+      // inline — there is no shared helper to reuse. Names the book when a
+      // reason was actually recorded for it (review finding #5) — but round
+      // 2 finding #5 caught that this only adopted HALF of the sibling's
+      // pattern: the NAME came from the lookup below, while the REASON still
+      // came from `e`, and `e` is only the FIRST rejection `Promise.all`
+      // surfaces — a DIFFERENT book's error than the one named, whenever a
+      // still-pending dataset with a stale recorded error (from an EARLIER
+      // attempt; `lib/bookData.ts`'s `_bookErrors` is cleared only on
+      // success) sorts earlier in `datasets` order than whichever book
+      // actually caused THIS rejection. Both name and reason now come from
+      // the SAME lookup, `lib/bookData.ts`'s `lastBookError`, exactly as
+      // `lib/workbookTransfer.ts:195-196` already does for its own refusal
+      // — including that function's own `truncateReason` (an unbounded, or
+      // FastAPI-422-array-shaped, backend `detail` has no business in a
+      // one-line refusal). With two or more failing books, only the FIRST
+      // one in `datasets` order is named — same rule as
+      // `lib/workbookTransfer.ts:184`'s own "naming the first such book in
+      // `datasets` order" — never every book that failed.
       const failed = useApp
         .getState()
         .datasets.find((d) => d.pending !== undefined && lastBookError(d.id, d.pending) !== null);
+      const reason = failed?.pending ? lastBookError(failed.id, failed.pending) : null;
       const detail = e instanceof Error ? e.message : "error";
       return {
         ok: false,
-        message: failed
-          ? `pack failed — couldn't load full data for every book: "${failed.name}" — ${detail}`
-          : `pack failed — couldn't load full data for every book: ${detail}`,
+        message:
+          failed && reason
+            ? `pack failed — couldn't load full data for every book: "${failed.name}" — ${truncateReason(reason)}`
+            : `pack failed — couldn't load full data for every book: ${detail}`,
       };
     }
-    // Nit 1: the transient "fetching…" status must not linger once every
-    // book requested above has actually arrived — mirrors the Save
-    // sibling's own habit of always ending on a terminal status
-    // (workspaceIO.ts's `msg`/`setStatus(msg)` pairs on each success path),
-    // even though this function's own "success" is only "the payload is
-    // ready", not "the pack finished" (that lives in the pack panel's own
-    // `phase`, not the app status line). Overwritten immediately below by
+    // Nit 1 / round 2 nit 3: matches its own "fetching N book(s)…"
+    // counterpart above — always naming the count, never dropping it to a
+    // bare "book loaded" in the singular case. The status is superseded
+    // again, honestly, before either caller's own real terminal point is
+    // reached: `runPreviewPackProject` and `pollOnce`'s `completed` branch
+    // (`packProjectRun.ts`) both call `notePackOutcome` below once they
+    // actually know the outcome, rather than leaving this "packing…"
+    // in-flight claim standing into `awaiting_confirmation` or `completed`
+    // (round 2 finding N1/F3) — and it is overwritten immediately below by
     // `refusePack`'s own status if the re-check just past this still
     // refuses.
-    useApp.getState().setStatus(pendingCount === 1 ? "book loaded — packing…" : `${pendingCount} books loaded — packing…`);
+    useApp.getState().setStatus(`${pendingCount} book${pendingCount === 1 ? "" : "s"} loaded — packing…`);
   }
   const s = useApp.getState();
-  if (s.datasets.some((d) => d.pending)) {
+  const stillPending = s.datasets.find((d) => d.pending);
+  if (stillPending) {
     // Review finding #2: caught here, not in the `catch` above, because
     // nothing threw — every book pending BEFORE this call resolved fine;
     // this one started pending only DURING the await this function itself
     // awaited, so `resolvePendingDatasets` never had a reason to touch it.
+    // Round 2 nit 5: names the book — the datum was already sitting right
+    // there in the predicate above, immediately below the F5 change whose
+    // whole point was naming the OTHER refusal's book.
     return {
       ok: false,
-      message: "pack failed — couldn't load full data for every book: a book was still loading",
+      message: `pack failed — couldn't load full data for every book: "${stillPending.name}" was still loading`,
     };
   }
   // No `projectDir` here on purpose: the content sent to the backend
@@ -112,6 +132,18 @@ export function refusePack(set: SetPack, message: string): void {
   useApp.getState().setStatus(message);
   toast(message, "danger");
   set({ phase: "failed", errors: [packError("pending_unresolved", message)] });
+}
+
+/** Round 2 finding N1/F3: a real OUTCOME for the app status line, never the
+ *  in-flight "…packing…" claim `serializeCurrentWorkspaceForPack` sets while
+ *  it is still fetching. `packProjectRun.ts` calls this at the two points
+ *  that claim was found lingering past — the preview reaching
+ *  `awaiting_confirmation` (nothing has been copied yet) and `pollOnce`'s
+ *  `completed` branch (the pack actually finished) — kept HERE rather than
+ *  in that module so its own documented boundary holds: `packProjectRun.ts`
+ *  never touches `useApp` directly, only through this sibling. */
+export function notePackOutcome(message: string): void {
+  useApp.getState().setStatus(message);
 }
 
 export function deriveProjectName(): string {

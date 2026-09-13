@@ -177,6 +177,22 @@ function reject(
 // actually started and has no poll loop yet running to resolve it.
 let startInFlight = false;
 
+// BUG-011 round 2 finding #1: the ONLY place that used to clear this flag was
+// `startPackProject`'s own `finally`, which never runs while the awaited
+// `runStartPackProject(...)` call is still pending -- and `serializeCurrent-
+// WorkspaceForPack`'s book-resolve await has no timeout, so a `fetchBookData`
+// that never settles pinned `startInFlight` true FOREVER: neither `Cancel`
+// nor `Reset` (a fresh preview included) could recover Start pack for the
+// rest of the session. Both `resetPackProject` and `cancelPackProject` below
+// now clear it directly and SYNCHRONOUSLY -- independent of whether the
+// stuck fetch ever settles -- rather than relying on that `finally`.
+/** Exported for test use only: mirrors `packProjectRun.ts`'s own
+ *  `resetGeneration`/`resetThrottle`/`resetPollSequencing` test-reset role
+ *  for THIS module's one piece of state outside the Zustand store proper. */
+export function resetStartInFlightForTests(): void {
+  startInFlight = false;
+}
+
 export const usePackProject = create<PackProjectState>((set, get) => ({
   phase: "idle",
   progress: EMPTY_PACK_PROGRESS,
@@ -215,6 +231,16 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
   cancelPackProject: async () => {
     const phase = get().phase;
     if (!isActive(phase)) return; // idle/terminal: idempotent no-op, not a rejection
+    // Round 2 finding #1: a cancel during `startPackProject`'s own resolve
+    // window (phase still `awaiting_confirmation` -- see that action's doc)
+    // ends the attempt just as definitively as a reset does, and must not
+    // wait for the stuck fetch to eventually settle before releasing the
+    // guard either. Harmless once Start has actually reached `packing`: by
+    // then a real click cannot race the guard past the phase check anyway
+    // (`phase !== "awaiting_confirmation"` alone already rejects it), and
+    // `startPackProject`'s own `finally` clears the same flag again, moot,
+    // once its awaited call does eventually return.
+    startInFlight = false;
     const { runCancelPackProject } = await import("./packProjectRun");
     await runCancelPackProject(set, phase);
   },
@@ -231,6 +257,7 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
       reject(set, phase, "resetPackProject");
       return;
     }
+    startInFlight = false; // round 2 finding #1: a reset ends the attempt, settled or not
     const { runResetPackProject } = await import("./packProjectRun");
     await runResetPackProject(set);
   },

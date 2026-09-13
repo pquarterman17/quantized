@@ -37,6 +37,7 @@ import {
 import {
   contentFingerprint,
   deriveProjectName,
+  notePackOutcome,
   refusePack,
   serializeCurrentWorkspaceForPack,
 } from "./packProjectContent";
@@ -169,6 +170,12 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
     projectName,
   };
   set({ phase: "awaiting_confirmation", preview, warnings: result.warnings, errors: [] });
+  // Round 2 finding N1/F3: replaces whatever `serializeCurrentWorkspace-
+  // ForPack` set above (up to and including its own "…packing…" transient)
+  // with a real outcome — the preview is ready to REVIEW, nothing has been
+  // copied yet, so "packing" must never be the word left standing here.
+  const n = result.manifest.summary.datasets;
+  notePackOutcome(`${n} dataset${n === 1 ? "" : "s"} ready — review the pack preview`);
 }
 
 // -- start + polling ------------------------------------------------------
@@ -311,6 +318,20 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
   if (isTerminal(status.phase)) {
     terminalReached = true;
     stopPolling();
+    // Round 2 finding N1/F3: `completed` is where "…packing…" was found
+    // still standing — the panel's own completed view already knows the
+    // dataset count (`preview.manifest.summary.datasets`) and destination
+    // (`status.result.bundle_dir`); this is that same information, just
+    // also on the app-wide status line rather than only inside the panel.
+    if (status.phase === "completed") {
+      const n = get().preview?.manifest.summary.datasets;
+      const where = status.result?.bundle_dir;
+      notePackOutcome(
+        where
+          ? `packed ${n !== undefined ? `${n} dataset${n === 1 ? "" : "s"}` : "project"} to ${where}`
+          : "pack completed",
+      );
+    }
   }
 }
 
