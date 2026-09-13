@@ -781,17 +781,25 @@ def test_figure_greyscale_defaults_to_off() -> None:
 
 # P3.3 review (F5): route-level greyscale coverage for the non-flat paths
 # `_render_impl` also serves -- group_col/y2/x_breaks -- mirroring
-# test_calc_figure.py's own `_STROKE_HEX`. The prior "group_col" unit test
-# (test_calc_figure.py) called `render_figure` directly and never actually
-# went through the route's grouped-resolve branch (`_figure_series`'s
-# `group_col` path, which builds `series_styles=None` itself); these do.
+# test_calc_figure.py's own `_achromatic_hexes`. The prior "group_col" unit
+# test (test_calc_figure.py) called `render_figure` directly and never
+# actually went through the route's grouped-resolve branch (`_figure_
+# series`'s `group_col` path, which builds `series_styles=None` itself);
+# these do.
+# N1 (round-2 review): widened from stroke-only to stroke-OR-fill, same as
+# test_calc_figure.py's `_achromatic_hexes` -- a chromatic `fill:` (e.g. the
+# error-bar cap defect F6 fixed) was invisible to every route-level test
+# using this helper (group_col/y2/x_breaks/figure-page). `#ffffff` and text
+# are excluded for the same reason as there: not a series colour.
 _STROKE_HEX = re.compile(r"stroke:\s*#([0-9a-fA-F]{6})")
+_FILL_HEX = re.compile(r"fill:\s*#([0-9a-fA-F]{6})")
 
 
 def _assert_only_achromatic_strokes(svg: str) -> None:
-    strokes = _STROKE_HEX.findall(svg)
-    assert strokes  # the probe actually found series strokes, not nothing
-    for h in strokes:
+    hexes = _STROKE_HEX.findall(svg) + _FILL_HEX.findall(svg)
+    hexes = [h for h in hexes if h.lower() not in ("ffffff", "000000")]
+    assert hexes  # the probe actually found series strokes/fills, not nothing
+    for h in hexes:
         assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
 
 
@@ -1887,6 +1895,33 @@ def test_figure_page_can_mix_a_greyscale_panel_with_a_coloured_one() -> None:
     # The coloured panel's explicit magenta survives untouched next to the
     # greyscale panel's own grey -- proof this is per-panel, not page-wide.
     assert "#ff00ff" in svg
+
+
+def test_figure_page_facet_panel_greyscale_is_a_no_op() -> None:
+    # N4 (round-2 review): mirrors test_figure_facets_greyscale_is_a_no_op
+    # (the standalone `/figure` route), at the figure-page route -- a
+    # faceted panel here goes through calc.figure_page_facets.
+    # draw_facet_panel_cell, which never reads `PagePanel.greyscale`
+    # (export_page.py's facet branch above never even sets it), so the
+    # exported page must render BYTE-IDENTICAL whether or not the panel's
+    # `greyscale` key is set. PNG (not SVG): deterministic, no embedded
+    # timestamp to strip.
+    base_panel = {
+        "figure": {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()},
+        "row": 0,
+        "col": 0,
+    }
+    colour = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [base_panel], "fmt": "png"},
+    )
+    grey_panel = {**base_panel, "figure": {**base_panel["figure"], "greyscale": True}}
+    grey = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [grey_panel], "fmt": "png"},
+    )
+    assert colour.status_code == grey.status_code == 200
+    assert colour.content == grey.content
 
 
 # ── F4.4 follow-up (2026-08-24): routes/export_page.py used to render a

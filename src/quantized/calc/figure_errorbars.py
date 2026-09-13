@@ -104,6 +104,11 @@ def apply_error_bars(
             # emits a chromatic `fill: #1f77b4` for every cap in vector
             # output (PDF/SVG) -- invisible in a raster PNG only because the
             # cap's degenerate fill path paints zero visible pixels there.
+            # This also corrects the ordinary COLOURED case: before this fix,
+            # every series' caps were filled with rcParams' C0 regardless of
+            # that series' own colour (e.g. series 2's caps rendered blue,
+            # not orange) in any coloured vector export -- a second, latent
+            # fix beyond the greyscale defect this was written for.
             for cap in caplines:
                 cap.set_markerfacecolor(color)
                 cap.set_markeredgecolor(color)

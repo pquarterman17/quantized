@@ -873,15 +873,19 @@ def test_greyscale_png_differs_from_colour_png() -> None:
 
 
 def test_greyscale_svg_every_stroke_is_achromatic() -> None:
+    # N1 (round-2 review): widened from `_STROKE_HEX` alone to the
+    # stroke-OR-fill `_achromatic_hexes` -- a chromatic `fill:` on this
+    # default 3-series path would otherwise be invisible here too (exactly
+    # the F6 hole, now closed for every guard that uses this helper).
     svg = _three_series_svg(
         greyscale=True,
         series_styles=[{"color": "#ff0000"}, {"color": "#00ff00"}, {"color": "#0000ff"}],
     )
-    strokes = _STROKE_HEX.findall(svg)
-    assert len(strokes) >= 3  # at least the three series lines were found
-    for h in strokes:
+    hexes = _achromatic_hexes(svg)
+    assert len(hexes) >= 3  # at least the three series lines were found
+    for h in hexes:
         r, g, b = h[0:2], h[2:4], h[4:6]
-        assert r.lower() == g.lower() == b.lower(), f"non-achromatic stroke #{h}"
+        assert r.lower() == g.lower() == b.lower(), f"non-achromatic #{h}"
 
 
 def test_colour_svg_has_a_non_achromatic_stroke_for_contrast() -> None:
@@ -966,12 +970,15 @@ def test_greyscale_applies_when_series_styles_is_none() -> None:
     # (`test_figure_group_col_greyscale_renders_achromatic_strokes`) -- this
     # one still earns its keep as the plain "`None` styles greys out fine"
     # unit case, which the route-level test doesn't need to re-prove.
+    # N1 (round-2 review): widened from `_STROKE_HEX` alone to the
+    # stroke-OR-fill `_achromatic_hexes` -- see the same note on
+    # test_greyscale_svg_every_stroke_is_achromatic above.
     x = np.linspace(0.0, 5.0, 15)
     series = [("l0", np.sin(x)), ("l1", np.cos(x)), ("l2", x / 5.0)]
     out = render_figure(x, series, fmt="svg", greyscale=True, series_styles=None)
-    strokes = _STROKE_HEX.findall(out.decode("utf-8", "ignore"))
-    assert strokes
-    for h in strokes:
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes
+    for h in hexes:
         assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower()
 
 
@@ -1008,3 +1015,38 @@ def test_greyscale_fill_under_is_achromatic() -> None:
     assert hexes
     for h in hexes:
         assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
+
+
+def test_greyscale_error_span_caps_use_their_own_series_colour_when_coloured() -> None:
+    # N2 (round-2 review): the F6 cap-colour fix (calc/figure_errorbars.py)
+    # also corrects a pre-existing NON-greyscale defect -- every series' cap
+    # FACE used to stay matplotlib's default C0 regardless of that series'
+    # own colour, so a coloured multi-series export with error bars silently
+    # drew every cap in series 1's colour. Pin the fix at the ordinary
+    # coloured (non-greyscale) path: each series' caps must carry ITS OWN
+    # colour, not a cross-filled single colour shared by both.
+    x = np.linspace(0.0, 10.0, 5)
+    series = [
+        ("a", np.array([1.0, 2.0, 3.0, 4.0, 5.0])),
+        ("b", np.array([2.0, 3.0, 4.0, 5.0, 6.0])),
+    ]
+    spans = [
+        {"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}},
+        {"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}},
+    ]
+    out = render_figure(
+        x,
+        series,
+        fmt="svg",
+        error_spans=spans,
+        series_styles=[{"color": "#1f77b4"}, {"color": "#ff7f0e"}],
+    )
+    fills = {h.lower() for h in _FILL_HEX.findall(out.decode("utf-8", "ignore"))}
+    fills.discard("ffffff")
+    # Both series' own colours must appear as cap fills...
+    assert {"1f77b4", "ff7f0e"} <= fills
+    # ...and the pre-fix cross-filled combination (every cap sharing ONE
+    # colour, e.g. series 2's caps rendered in series 1's blue) must not be
+    # what is left: that bug collapses `fills` to a single hex.
+    assert fills != {"1f77b4"}
+    assert fills != {"ff7f0e"}

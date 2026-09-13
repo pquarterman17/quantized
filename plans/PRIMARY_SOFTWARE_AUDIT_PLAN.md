@@ -3653,12 +3653,26 @@ covers a much smaller subset and guards focus on Analyze.
       never having sent it) — every `kind` there colours by a continuous
       z-value (`cmap`), the same "colour IS the plotted quantity" case this
       flag already leaves untouched for a `color_by` scatter, so there is no
-      categorical palette for a print-safe ramp to replace. The review also
+      categorical palette for a print-safe ramp to replace. **RESIDUAL —
+      page-route greyscale is API-only today.** `PagePanel.greyscale` is
+      honoured by the backend (pinned above), but the composer's own
+      "Export page…" dialog (`lib/exportPageCommand.ts`) offers only
+      fmt/dpi — no per-panel greyscale checkbox — so a user cannot reach
+      this from the UI yet; only a direct API caller can. The review also
       found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
       a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to
       be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
       face/edge colour explicitly from the series' own (now grey) colour.
+      **A second, latent fix riding the same change:** this also corrects the
+      ORDINARY COLOURED case — before it, every series' cap FACE stayed
+      matplotlib's default C0 regardless of that series' own colour, so a
+      coloured multi-series vector export with error bars silently drew every
+      cap in series 1's colour (measured: two series + error bars, coloured
+      SVG, `fill:` hexes went from `{#1f77b4: 20}` to `{#1f77b4: 10, #ff7f0e:
+      10}`). Pinned by
+      `test_greyscale_error_span_caps_use_their_own_series_colour_when_coloured`
+      (`tests/test_calc_figure.py`), a non-greyscale render.
     - **Frontend.** A "Greyscale (print-safe)" checkbox in the "Export
       figure…" dialog (`lib/exportFigureCommand.ts`, a `ParamField` of
       `type: "boolean"` — the Export-figure dialog's own first boolean
@@ -3717,6 +3731,17 @@ covers a much smaller subset and guards focus on Analyze.
       explicit series to solid too, which the old "some dasharray exists
       somewhere" assertion could not detect (LINE_CYCLE's other positions
       already guarantee a non-empty dasharray regardless).
+      **Round-2 review-fix pass (2026-09-13) added:** the stroke-only
+      achromatic guards (`test_greyscale_svg_every_stroke_is_achromatic`,
+      `test_greyscale_applies_when_series_styles_is_none`, and
+      `test_api_export.py`'s shared `_assert_only_achromatic_strokes`) now
+      check `fill:` as well as `stroke:`, closing the same fill-blind-spot
+      F6 fixed for the two error-bar/fill unit tests but had left open on
+      every route-level (group_col/y2/x_breaks/figure-page) and default
+      3-series path; the cap-colour test above pins the non-greyscale
+      latent fix; and a figure-page facet-panel byte-identity test
+      (`test_figure_page_facet_panel_greyscale_is_a_no_op`) closes the one
+      of the three documented facet no-ops that had no guard.
 
   Two things the audit turned up on the way. One was a real bug and is FIXED;
   the other looked like a bug, was investigated properly, and turned out to be a
