@@ -56,7 +56,12 @@ _FACET_OVERRIDE_KEYS = ("x_lim", "grid", "spines")
 class PagePanelSpec(BaseModel):
     """One panel: a single-figure export payload plus its grid placement.
     The nested figure's own ``fmt`` / ``style`` / ``dpi`` / ``filename`` are
-    ignored -- those are page-level decisions."""
+    ignored -- those are page-level decisions. ``greyscale`` is the one
+    exception (P3.3 review F1): honored PER PANEL, not ignored -- a page can
+    mix a greyscale panel next to a coloured one, so it stays a per-figure
+    choice even embedded in a page (see calc.figure_page.PagePanel.greyscale's
+    own doc). No-op on a faceted panel, same as the standalone ``/figure``
+    route (FigureRequest.greyscale's own doc)."""
 
     figure: FigureRequest
     row: int
@@ -194,6 +199,13 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y2_scale=f.y2_scale,
                     y2_fmt=_tick_fmt(f.y2_fmt),
                     y2_step=f.y2_step,
+                    # V6 (P3.3 review F1): PER-PANEL, since a page can mix a
+                    # greyscale panel next to a coloured one -- see
+                    # calc.figure_page.PagePanel.greyscale's own doc. Never
+                    # set on the facet branch above: same no-op reason
+                    # FigureRequest.greyscale's own doc gives for the
+                    # standalone facet route (nothing to grey there).
+                    greyscale=f.greyscale,
                 )
             )
         data = render_figure_page(

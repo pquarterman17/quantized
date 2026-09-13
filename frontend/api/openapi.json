@@ -3679,6 +3679,11 @@
             "title": "Fmt",
             "type": "string"
           },
+          "greyscale": {
+            "default": false,
+            "title": "Greyscale",
+            "type": "boolean"
+          },
           "group_col": {
             "anyOf": [
               {
@@ -6354,7 +6359,7 @@
         "type": "object"
       },
       "PagePanelSpec": {
-        "description": "One panel: a single-figure export payload plus its grid placement.\nThe nested figure's own ``fmt`` / ``style`` / ``dpi`` / ``filename`` are\nignored -- those are page-level decisions.",
+        "description": "One panel: a single-figure export payload plus its grid placement.\nThe nested figure's own ``fmt`` / ``style`` / ``dpi`` / ``filename`` are\nignored -- those are page-level decisions. ``greyscale`` is the one\nexception (P3.3 review F1): honored PER PANEL, not ignored -- a page can\nmix a greyscale panel next to a coloured one, so it stays a per-figure\nchoice even embedded in a page (see calc.figure_page.PagePanel.greyscale's\nown doc). No-op on a faceted panel, same as the standalone ``/figure``\nroute (FigureRequest.greyscale's own doc).",
         "properties": {
           "col": {
             "title": "Col",

@@ -235,7 +235,19 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
 }
 
 export type ParseTransferResult =
-  | { ok: true; pkg: WorkbookTransferPackage }
+  | {
+      ok: true;
+      pkg: WorkbookTransferPackage;
+      /** BUG-010: load-time compatibility notices from the `parseWorkspace`
+       *  reuse below (e.g. a carried FigureDocument whose version this build
+       *  no longer understands, skipped rather than failing the whole
+       *  paste) — mirrors `LoadedWorkspace.migrationWarnings`'s own doc. A
+       *  sibling of `pkg` rather than a field ON it: `buildTransferPackage`
+       *  has no equivalent (a live session cannot itself hold a version-
+       *  skipped figure), so there is no shared shape to keep in sync, only
+       *  a parse-time result to report. */
+      migrationWarnings: string[];
+    }
   | { ok: false; reason: string };
 
 /** Validate + sanitize a package read back from clipboard/file text. Never
@@ -308,6 +320,7 @@ export function parseTransferPackage(text: string): ParseTransferResult {
         (t) => t.scope.kind === "workbook" && t.scope.workbookId === workbookId,
       ),
     },
+    migrationWarnings: loaded.migrationWarnings,
   };
 }
 

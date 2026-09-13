@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { CANCELLED, openProject, pathState, readProject } from "./desktopBridge";
+import { FIGURE_DOCUMENT_SCHEMA } from "./figureDocument";
 import { WORKSPACE_FORMAT, parseWorkspace } from "./workspace";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
@@ -69,6 +70,43 @@ describe("applyRecoverAutosave", () => {
     useRecoveryChoice.setState({ pending: prompt() });
     applyRecoverAutosave(prompt());
     expect(useRecoveryChoice.getState().pending).toBeNull();
+  });
+
+  // BUG-010: loadWorkspace folds the first migrationWarning into the status
+  // line it writes, but the very next line here (`s().setStatus(msg)`)
+  // overwrites that status before the user ever sees it. Only the toast
+  // survives.
+  it("toasts a migrationWarnings notice that survives the later recovery status overwrite (BUG-010)", () => {
+    const wsWithWarning = JSON.stringify({
+      format: WORKSPACE_FORMAT,
+      version: 4,
+      datasets: [
+        {
+          id: "r1",
+          name: "recovered.dat",
+          data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} },
+        },
+      ],
+      editableFigures: [{ schema: FIGURE_DOCUMENT_SCHEMA, version: 99, id: "future-fig" }],
+    });
+    const loaded = parseWorkspace(wsWithWarning);
+    expect(loaded.migrationWarnings).toEqual([
+      'skipped saved FigureDocument "future-fig" with unsupported version 99',
+    ]);
+    const p: RecoveryPrompt = {
+      workspace: loaded,
+      autosaveAt: 200,
+      datasetCount: 1,
+      lastProject: { name: "project.dwk", path: "/p/project.dwk", at: 100 },
+    };
+
+    applyRecoverAutosave(p);
+
+    // The bug, still true after the fix: the status line does NOT carry it —
+    // this asserts the clobber is real, not that it stopped happening.
+    expect(useApp.getState().status).not.toMatch(/unsupported version/);
+    // The fix: the toast carries it regardless.
+    expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
   });
 });
 

@@ -83,7 +83,7 @@ def apply_error_bars(
             color = artist.get_color() if artist is not None else None
         except AttributeError:
             color = None  # a colour-mapped scatter has no single colour
-        ax.errorbar(
+        container = ax.errorbar(
             xv,
             yv,
             yerr=yerr,
@@ -94,3 +94,26 @@ def apply_error_bars(
             capsize=2,
             zorder=1,  # behind the series line, so data stays legible
         )
+        # matplotlib returns an ErrorbarContainer -- a tuple subclass of
+        # (data_line, caplines, barlinecols). A minimal axes stand-in (the
+        # unit tests' recording fake) may return None; treat anything that is
+        # not a 3-tuple as "no caps to restyle" rather than unpacking blindly.
+        caplines = container[1] if isinstance(container, tuple) and len(container) > 1 else ()
+        if color is not None:
+            # `ecolor=` above colours the bar lines and each cap's EDGE, but
+            # matplotlib's cap markers ('|'/'_') keep their default FACE
+            # colour (rcParams' C0) regardless -- passing markerfacecolor=
+            # to errorbar() itself is silently dropped for these marker
+            # styles, so the face has to be set on the returned cap Line2Ds
+            # directly. Otherwise a "print-safe" greyscale export still
+            # emits a chromatic `fill: #1f77b4` for every cap in vector
+            # output (PDF/SVG) -- invisible in a raster PNG only because the
+            # cap's degenerate fill path paints zero visible pixels there.
+            # This also corrects the ordinary COLOURED case: before this fix,
+            # every series' caps were filled with rcParams' C0 regardless of
+            # that series' own colour (e.g. series 2's caps rendered blue,
+            # not orange) in any coloured vector export -- a second, latent
+            # fix beyond the greyscale defect this was written for.
+            for cap in caplines:
+                cap.set_markerfacecolor(color)
+                cap.set_markeredgecolor(color)

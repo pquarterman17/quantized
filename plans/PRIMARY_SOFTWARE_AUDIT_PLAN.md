@@ -3456,13 +3456,292 @@ covers a much smaller subset and guards focus on Analyze.
       was four plus one wrong — fixed above); and the `[]` half of fix 3 — an
       empty `seriesStyles` array ships as `series_styles: []` on the wire — had
       no test, now pinned in `figureSpec.test.ts`.
-  - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
+  - ~~`contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
-    there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls
-    the palette "color-blind-aware", which is a claim about palette CHOICE, not
-    a check.
-  - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
-    (aps/report/web) have no greyscale variant.
+    there is no CVD simulation anywhere.~~ **CLOSED as a CHECK (2026-09-13) —
+    and the check FOUND the palette does not clear its own bar, which is now
+    an OPEN OWNER DECISION.** `lib/cvd.ts` (pure, canvas-free) adds: CVD
+    simulation for protan/deutan/tritan via the Machado, Oliveira & Fernandes
+    (2009) severity-1.0 matrices applied in linear RGB; CIE76 ΔE in CIELAB;
+    `seriesDistinguishability` (worst pairwise ΔE, per simulation, with the
+    losing pair's indices); `distinguishabilityVerdict` (pass/fail against a
+    documented default threshold of 10 — well above the ~2.3 ΔE "just
+    noticeable difference" floor, sized for confident at-a-glance reading of
+    thin plotted lines, not a side-by-side swatch comparison). Known-answer
+    tests in `lib/cvd.test.ts` (11 cases as of round 2: red-vs-green contrast
+    collapses under protan/deutan and mostly survives tritan; grey is
+    invariant; a hand-built quartet's deutan-only-confusable pair is found
+    correctly; fewer-than-2-colours is a non-vacuous fail, not a silent
+    pass).
+    `styles/seriesPalette.cvd.test.ts` is THE CHECK THAT MATTERS: it decodes
+    the actual `--series-1..8` OKLCH tokens out of `styles/colors.css` (both
+    themes' base blocks; a pure OKLCH decoder transcribed from the CSS Color
+    4 spec's reference implementation, because the `canvas` package this
+    repo's tests run on does not parse `oklch()` — verified directly, and
+    documented in the test file so no one "fixes" it back to the silently-
+    wrong canvas path) and runs the real audit. Series-vs-background
+    legibility is reused (not reimplemented) via `contrastColor.ts`'s own
+    `resolveDrawColor` and is unregressed. **Measured result: the shipped
+    8-series cycle FAILS `distinguishabilityVerdict` (threshold 10) in BOTH
+    themes** — dark theme's global worst is series-1 vs series-6 under
+    deutan simulation (ΔE 3.23, versus ΔE 38.50 for that same pair under
+    normal vision), light theme's global worst is series-5 vs series-7
+    under deutan (ΔE ~1.98, i.e. below even the raw ~2.3 JND floor; light
+    theme's own normal-vision worst pair, series-4 vs series-7, is already
+    only ΔE ~6.62 before any CVD simulation is applied). Full per-simulation
+    breakdown for both themes is in the test file's header comment and the
+    closing commit body. Per this plan's stated policy, the failure is NOT
+    hidden by loosening the threshold or silently reshuffling the palette:
+    both audit assertions are kept as documented `it.fails` (a real palette
+    fix must flip them back to `it`, or the ratchet catches the silent case
+    where they start passing without anyone noticing).
+
+    **Round 2 (2026-09-13, adversarial review of 07a05241):** the review found
+    the decoder had no known-answer assertions (a broken decoder made the
+    audit "fail as expected" for the wrong reason — fixed with pinned OKLCH
+    known-answers plus the full dark/light hex lists in
+    `seriesPalette.cvd.test.ts`), the `it.fails` audits had no floor (a
+    palette regression that stayed failing would go unnoticed — fixed with
+    non-`it.fails` companion floor tests at today's measured worst ΔE), and —
+    the material finding — **the audit never covered `lib/palettes.ts`'s
+    runtime presets, the actual remedy a user reaches for.** Table-driven
+    coverage added there (`seriesPalette.cvd.test.ts`'s "shipped palette
+    presets" describe block) measures all four: `okabe-ito` PASSES threshold
+    10 (worst ΔE ~14.9, deutan) and serves as this suite's positive control
+    for the threshold — independent, externally-documented CB-safe design
+    clearing it comfortably is the strongest evidence 10 isn't arbitrary.
+    `tol-bright` shipped `#4477AA` as BOTH series-1 and series-8 (an exact
+    duplicate — 0 ΔE under every condition, including normal vision, not
+    just a CVD failure); fixed by giving slot 8 `#332288` (indigo, borrowed
+    from Tol's companion "muted" scheme — "bright" itself defines only 7
+    colours and has no official 8th), which also newly PASSES threshold 10
+    (worst ΔE ~13.2, tritan) — **superseded in round 3 below: `#332288` fails
+    this app's own dark-canvas legibility floor.** `tableau10` and `viridis`
+    failing at 10 is recorded, not fixed — neither claims to be CB-safe. The
+    "color-blind-aware" provenance claim about the default palette ("several
+    derive from Okabe-Ito") is dropped from this entry: nothing in the repo
+    supports it, and the default's own measured numbers (ΔE 3.23/1.98
+    worst-case) are far below Okabe-Ito's (~14.9), so the two are evidently
+    not the same design.
+
+    **Round 3 (2026-09-13, adversarial review of `48556a04`, round 2's fix
+    commit):** the review found round 2's `#332288` choice fails
+    `lib/contrastColor.ts`'s own dark-canvas legibility floor (MIN_CONTRAST
+    2.2; measured contrast 1.54), so `resolveDrawColor` would silently
+    substitute the ink token at render time and the legend would disagree
+    with the canvas — the preset labelled CB-safe would never actually show
+    the audited indigo. Fixed by re-picking slot 8 as `#999933` (Tol-muted
+    olive): contrast 6.21 on dark / 2.85 on light (both clear 2.2), and the
+    distinguishability verdict is unchanged (still worst ΔE ~13.2, tritan,
+    series-1 vs series-3 — that pair never involves slot 8). The existing
+    dark-canvas legibility guard (`seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe) is now extended to cover
+    every `PALETTES` preset, not just the default theme tokens, as an
+    explicit per-preset ratchet: a NEW substitution fails the suite; today's
+    one pre-existing substitution (`viridis` slot 1, `#482878`, contrast
+    1.65) is recorded, not fixed. Also fixed: the gamut-diagnostic header's
+    claim that the naive clamp diverges from CSS Color 4 §13.2 was backwards
+    — measured `deltaEOK(clip(origin), origin)` = 0.0179/0.0111/0.0111 for
+    the three out-of-gamut light tokens, all under §13.2's own 0.02 JND, so
+    §13.2 returns the clip unchanged and the naive clamp is spec-equivalent;
+    the two `[approximate]` annotations and the "would move under spec-
+    correct mapping" claim are removed, and the check is now a real
+    assertion (`deltaEOK(...) < 0.02`) rather than prose. The
+    `LIGHT_OKLCH`/`DARK_OKLCH` literals are now cross-checked against the
+    tokens parsed from `colors.css` (previously independent, so an edit to
+    one and not the other could silently audit a stale palette). The
+    "this test does NOT change the palette" claim is narrowed to the
+    default theme tokens — the tol-bright preset hex IS changed by this
+    round, on the design owner's behalf (see below).
+
+    **OPEN OWNER DECISION** (unchanged in substance, reframed by the above):
+    the default 8-slot series cycle still fails its own distinguishability
+    bar in both themes. What round 2 changes is that this is no longer a
+    choice between "redesign the default" and "accept the gap" in a vacuum —
+    **two PASSING CB-safe presets (`okabe-ito`, and now `tol-bright`) already
+    ship one dropdown away** (`lib/palettes.ts`), so an immediate low-cost
+    mitigation (default new users to one of them, or surface the CVD-safe
+    presets more prominently) exists independent of any future default-
+    palette redesign. Owner still needs to decide whether to redesign the
+    default 8-slot cycle, narrow the "safe" simultaneous series count, make
+    a CB-safe preset the default, or accept the default's gap as-is for a
+    niche 8-series plot.
+
+    **Also needs owner ratification (round 3):** `tol-bright`'s 8th slot is
+    now `#999933` (Tol-muted olive) — chosen by this audit to fix a
+    legibility bug (round 2's `#332288` failed the dark-canvas contrast
+    floor), not by design-owner sign-off. Owner should ratify `#999933` or
+    substitute a preferred distinct 8th hue that clears both
+    `lib/contrastColor.ts`'s MIN_CONTRAST (2.2, both themes) and the ΔE-10
+    distinguishability verdict — `seriesPalette.cvd.test.ts`'s "shipped
+    palette presets" and extended "series-vs-background legibility" describe
+    blocks will catch a regression on either axis if one is picked.
+    - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
+    - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
+  - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
+    export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
+
+    - **The field.** `FigureRequest.greyscale: bool = False`
+      (`routes/export_figures.py`), forwarded into `render_figure`/
+      `render_figure_map` (`calc/figure.py`). An EXPORT-ONLY divergence from
+      the canvas by design: the on-screen plot stays coloured regardless —
+      this is a user-chosen export transform, not a derived style, so it
+      does not touch the P3.3 dash/marker-cycle parity invariant
+      (`series_styles`/`overlayExportsSeriesStyles`) at all.
+    - **The mapping** (`calc/figure_greyscale.py`, new, pure/no matplotlib
+      import). NOT a naive per-colour luminance conversion — two series
+      that differ only in hue (exactly what a categorical palette is built
+      to keep apart) can sit at nearly the same relative luminance, so that
+      approach can collapse two on-screen-distinct series into
+      indistinguishable greys. Instead every series gets an EVENLY SPACED
+      grey by DISPLAY POSITION alone, spanning CIE L* 15..70
+      (`greyscale_ramp`), independent of its actual colour — a guaranteed
+      minimum step regardless of how close the original hues were.
+    - **The forced dash/marker cycle** (`apply_greyscale`). A grey ramp
+      alone runs out of separable steps well before a realistic series
+      count, so greyscale mode ALSO forces the P3.3 auto dash cycle
+      (`solid → dashed → dotted`) by display position, and the marker-SHAPE
+      cycle for any series that already draws a marker — the same
+      `LINE_CYCLE`/`MARKER_SHAPES` vocabularies
+      `frontend/src/lib/seriesStyleCycle.ts`'s `AUTO_DASH_CYCLE`/
+      `AUTO_MARKER_CYCLE` use, copied verbatim and pinned equal by a test
+      that reads the TS source directly (`test_calc_figure_greyscale.py`),
+      so the two cannot drift apart unnoticed. Explicit per-series choices
+      still win (an explicit `line`/`marker_shape` is kept, exactly like
+      the frontend cycle's own contract); greyscale never turns a marker ON
+      for a series that did not request one.
+    - **Where it applies.** Every path that reaches `_render_impl`'s
+      `series_styles` list: the flat single-panel render, the y2
+      (secondary-axis) split, manual x-axis breaks, AND a `group_col`
+      grouped-series request (whose `series_styles` is `None` today but
+      still draws through the same `draw_series_axes` — greyscale still
+      ramps it). Error bars and fills inherit their series' drawn colour
+      automatically (`artist.get_color()`), so they follow the grey ramp
+      with no extra code. A `color_by` colour-mapped scatter (MAIN #14) is
+      passed through UNCHANGED, colourmap included — its colour IS the
+      plotted quantity, not a categorical distinction, so forcing it grey
+      would delete information rather than make the figure print-safe; this
+      is a deliberate, documented residual, not an oversight.
+    - **RESIDUAL — facets stay a no-op, honestly.** A faceted small-
+      multiples request (`FigureRequest.facets`) renders through
+      `calc.figure_facets`, which never resolves per-series colour at all
+      today (FEATURE-001, `plans/BUGS_AND_ISSUES.md` — the screen's own
+      facet grid draws default matplotlib colours too, so there is nothing
+      for a per-series style to override). `greyscale` is therefore a
+      documented no-op there: the route never threads it into the facet
+      renderer, pinned byte-identical by
+      `test_figure_facets_greyscale_is_a_no_op` (`tests/test_api_export.py`).
+      Fixing this for real is FEATURE-001's job (screen AND export
+      together), not this item's.
+    - **REVIEW FIX (2026-09-13) — `/api/export/figure-page` was a silent
+      no-op; `/api/export/map-figure` documented.** An adversarial review of
+      this item (commit `bc8f14fa`) found `PagePanelSpec.figure` is this SAME
+      `FigureRequest`, so `greyscale` was already part of the figure-page
+      OpenAPI schema and 200'd, but `export_figure_page`
+      (`routes/export_page.py`) never read `f.greyscale` and
+      `calc.figure_page.PagePanel` had no such field — exactly the "silently
+      doing nothing while looking wired" failure mode this item's own doc
+      says it avoided, just on the sibling route. Fixed: `PagePanel.greyscale`
+      (per panel, not page-wide — a page can mix a greyscale panel next to a
+      coloured one), applied in `_draw_panel` via the same one-line
+      `apply_greyscale` call `_render_impl` uses, before either the flat or
+      the y2-twinx draw path. `/api/export/map-figure` (contour/heatmap/
+      surface/**waterfall**) has no `greyscale` field at all and stays that
+      way, now documented in its own field doc, `figures.ts`'s JSDoc, and
+      pinned by a byte-identity test (an unrecognized `greyscale` key on that
+      route's JSON body is silently ignored by pydantic, same result as
+      never having sent it) — every `kind` there colours by a continuous
+      z-value (`cmap`), the same "colour IS the plotted quantity" case this
+      flag already leaves untouched for a `color_by` scatter, so there is no
+      categorical palette for a print-safe ramp to replace. **RESIDUAL —
+      page-route greyscale is API-only today.** `PagePanel.greyscale` is
+      honoured by the backend (pinned above), but the composer's own
+      "Export page…" dialog (`lib/exportPageCommand.ts`) offers only
+      fmt/dpi — no per-panel greyscale checkbox — so a user cannot reach
+      this from the UI yet; only a direct API caller can. The review also
+      found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
+      a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
+      (invisible in raster only because the cap glyph's fill path happens to
+      be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
+      face/edge colour explicitly from the series' own (now grey) colour.
+      **A second, latent fix riding the same change:** this also corrects the
+      ORDINARY COLOURED case — before it, every series' cap FACE stayed
+      matplotlib's default C0 regardless of that series' own colour, so a
+      coloured multi-series vector export with error bars silently drew every
+      cap in series 1's colour (measured: two series + error bars, coloured
+      SVG, `fill:` hexes went from `{#1f77b4: 20}` to `{#1f77b4: 10, #ff7f0e:
+      10}`). Pinned by
+      `test_greyscale_error_span_caps_use_their_own_series_colour_when_coloured`
+      (`tests/test_calc_figure.py`), a non-greyscale render.
+    - **Frontend.** A "Greyscale (print-safe)" checkbox in the "Export
+      figure…" dialog (`lib/exportFigureCommand.ts`, a `ParamField` of
+      `type: "boolean"` — the Export-figure dialog's own first boolean
+      field; `ParamDialog`/`ParamFields` already rendered `type: "boolean"`
+      for three other production call sites (`LibraryDetails.tsx`,
+      `BookFamiliesSection.tsx`, `worksheetTransformCommands.ts`) before this
+      one, so review finding F7 narrowed the claim to the dialog it is
+      actually true of), titled with the export-only-divergence warning
+      verbatim. Threaded through `FigureRenderOpts.greyscale`
+      (`lib/figureSpec.ts`) onto the wire only when true (`{ greyscale: true
+      }` spread) — omitted/false is byte-identical to before this option
+      existed. Review finding F8: this truthiness-gating convention is NOT
+      "matching every other optional boolean field's own convention" as
+      originally claimed here — the nearest analogue, `transparent`
+      (`figureSpec.ts`), gates on `undefined` instead and DOES send
+      `transparent: false` on the wire. greyscale's own convention (omit
+      when false) is deliberate and correctly pinned by `figureSpec.test.ts`;
+      the two fields are simply not aligned, and that is fine. NOT persisted: the
+      dialog does not persist `fmt`/`style`/`dpi`/labels across opens
+      either (every field re-defaults each time it opens), so `greyscale`
+      mirrors that — no new store, per the design brief's own instruction.
+      Classified `unsupported` (not `output`) in `figureContract.ts`'s
+      FigureSpec census: it is a per-export dialog choice, never part of a
+      saved FigureDocument's canonical/output state, so a document's own
+      `series_styles`/`overrides` stay the RAW authored (coloured) choices
+      regardless of whether any one export of it happened to be greyscaled.
+      "Copy figure"/"Copy figure (vector)" — which render with no dialog at
+      all, by design — do not gain a greyscale option; that is consistent
+      with those commands never exposing `style` either.
+    - **Tests.** Backend: `tests/test_calc_figure_greyscale.py` (ramp order/
+      min-step/pinned values, `apply_greyscale`'s explicit-wins/no-op-for-
+      color_by/never-mutates behaviour, the frontend-vocabulary drift
+      guard) plus render-level assertions in `test_calc_figure.py` (a
+      greyscale PNG differs from the coloured one; every SVG stroke is
+      achromatic; three unstyled series produce >=2 distinct
+      `stroke-dasharray` patterns; the facets no-op). Frontend:
+      `figureSpec.test.ts` pins `greyscale: true` on the wire when opted in
+      and its ABSENCE when off or omitted, through both the live-view and
+      document-routed builders; `ParamDialog.test.tsx` gained the dialog's
+      first-ever boolean-field coverage (unchecked default, click-to-toggle,
+      the hint surfacing as the label's title); `exportFigureCommand.test.ts`
+      pins the command threading the dialog's answer onto the wire.
+      **Review-fix pass (2026-09-13) added:** figure-page route-level tests
+      (a panel's bytes/SVG differ with `greyscale: true`, mixed
+      grey+coloured panels on one page both render correctly); a
+      `map-figure` no-op byte-identity test (mirrors the facets one); a
+      real `group_col`/y2/x_breaks route-level greyscale test each (the prior
+      `group_col` "coverage" called `render_figure` directly, the SAME path
+      the flat-series test already covered — it never actually went through
+      the route's `group_col` branch, so it proved nothing extra); a
+      greyscale + `error_spans` and a greyscale + `fill` route test; and
+      `test_greyscale_explicit_line_style_is_kept` now asserts the actual
+      dashed pattern is present for an explicit-line series AND that a
+      same-position series with NO explicit line renders solid (LINE_CYCLE's
+      position 0) — deleting the explicit-wins check silently reverts the
+      explicit series to solid too, which the old "some dasharray exists
+      somewhere" assertion could not detect (LINE_CYCLE's other positions
+      already guarantee a non-empty dasharray regardless).
+      **Round-2 review-fix pass (2026-09-13) added:** the stroke-only
+      achromatic guards (`test_greyscale_svg_every_stroke_is_achromatic`,
+      `test_greyscale_applies_when_series_styles_is_none`, and
+      `test_api_export.py`'s shared `_assert_only_achromatic_strokes`) now
+      check `fill:` as well as `stroke:`, closing the same fill-blind-spot
+      F6 fixed for the two error-bar/fill unit tests but had left open on
+      every route-level (group_col/y2/x_breaks/figure-page) and default
+      3-series path; the cap-colour test above pins the non-greyscale
+      latent fix; and a figure-page facet-panel byte-identity test
+      (`test_figure_page_facet_panel_greyscale_is_a_no_op`) closes the one
+      of the three documented facet no-ops that had no guard.
 
   Two things the audit turned up on the way. One was a real bug and is FIXED;
   the other looked like a bug, was investigated properly, and turned out to be a

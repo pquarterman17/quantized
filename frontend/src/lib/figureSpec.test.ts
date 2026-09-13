@@ -1143,3 +1143,55 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
     });
   });
 });
+
+describe("greyscale (print-safe) export option (P3.3)", () => {
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
+
+  it("rides the wire as `greyscale: true` via the live-view builder when opted in", () => {
+    const view = () => richView();
+    const spec = buildFigureSpec(view as never, dataset, "device", { ...opts, greyscale: true });
+    expect(spec.greyscale).toBe(true);
+  });
+
+  it("is ABSENT from the wire when not opted in", () => {
+    const view = () => richView();
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.greyscale).toBeUndefined();
+    expect("greyscale" in spec).toBe(false);
+  });
+
+  it("is ABSENT from the wire when explicitly false", () => {
+    const view = () => richView();
+    const spec = buildFigureSpec(view as never, dataset, "device", { ...opts, greyscale: false });
+    expect("greyscale" in spec).toBe(false);
+  });
+
+  it("reaches the wire through buildStageFigureSpec's document-routed path too", () => {
+    const document = createFigureDocument({
+      id: "grey-doc",
+      name: "Grey doc",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), yKeys: [1] },
+    });
+    const fakeStage = (() => ({
+      ...richView(),
+      focusedWindowId: "w1",
+      windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+    })) as never;
+    const spec = buildStageFigureSpec(fakeStage, dataset, "device", { ...opts, greyscale: true });
+    expect(spec.greyscale).toBe(true);
+  });
+
+  it("reaches the wire through buildFigureSpecFromDocument directly", () => {
+    const document = createFigureDocument({
+      id: "grey-doc-2",
+      name: "Grey doc 2",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), yKeys: [1] },
+    });
+    const on = buildFigureSpecFromDocument(document, dataset, "device", { greyscale: true });
+    const off = buildFigureSpecFromDocument(document, dataset, "device", {});
+    expect(on.greyscale).toBe(true);
+    expect("greyscale" in off).toBe(false);
+  });
+});

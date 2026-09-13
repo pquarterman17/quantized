@@ -17,7 +17,10 @@ import { postBlob, postDownload } from "./http";
 import type { FigureSpec } from "./figures";
 
 /** One figure-page panel (GOTO #4): a single-figure payload + its grid cell.
- *  The nested figure's own fmt/style/dpi/filename are ignored (page-level). */
+ *  The nested figure's own fmt/style/dpi/filename are ignored (page-level).
+ *  `figure.greyscale` is the one exception (P3.3 review F1): honored PER
+ *  PANEL, since a page can mix a greyscale panel next to a coloured one --
+ *  see `FigureSpec.greyscale`'s own doc. */
 export interface PagePanelSpec {
   figure: FigureSpec;
   row: number;

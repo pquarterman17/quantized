@@ -100,6 +100,26 @@ export interface FigureSpec {
   dpi?: number;
   /** MAIN #35: render on a transparent canvas (Copy figure preference). */
   transparent?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
+   *  colour is overridden to a grey ramp and the dash/marker cycle is
+   *  forced server-side (`calc.figure_greyscale`). Omitted/`false` = today's
+   *  coloured export. An EXPORT-ONLY divergence from the canvas (the on-
+   *  screen plot stays coloured either way) -- a user-chosen export
+   *  transform, not a derived style, so it does not affect the P3.3 style-
+   *  parity invariant `series_styles` exists to satisfy. No-op once
+   *  `facets` is set (see this route's own doc). This SAME `FigureSpec` is
+   *  also embedded per-panel in a `/api/export/figure-page` request
+   *  (`PagePanelSpec.figure`, `lib/api/figurePage.ts`) -- review fix P3.3-F1
+   *  threads it into `calc.figure_page.PagePanel.greyscale` there too,
+   *  honored PER PANEL (a page can mix a greyscale panel next to a
+   *  coloured one); it used to reach that route and silently do nothing.
+   *  `/api/export/map-figure` (`MapFigureRequest` backend-side --
+   *  contour/heatmap/surface/waterfall; no frontend wrapper exists yet) has
+   *  NO equivalent field at all -- every kind there colours by a continuous
+   *  z-value (`cmap`), the same "colour IS the plotted quantity" case this
+   *  flag already leaves untouched for a `color_by` scatter, so there is no
+   *  categorical palette to grey. */
+  greyscale?: boolean;
   /** MAIN #36: per-plotted-series error spans, so an exported figure shows
    *  the same bars the screen does. `null` for a series with none. */
   error_spans?: ({ x?: ErrorPair; y?: ErrorPair } | null)[];

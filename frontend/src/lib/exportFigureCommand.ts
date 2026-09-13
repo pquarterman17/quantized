@@ -3,9 +3,9 @@
 // ratchet (architecture.test.ts's STORE_PINS): a couple of lines were
 // needed for the new "Append workspace (.dwk)…" command, and this was the
 // largest self-contained, no-JSX command body available to offset them.
-// Pure orchestration: prompts for format/style/dpi/labels, then calls the
-// export API against the active dataset — no React/store coupling beyond
-// the `StoreGet` handle every command closure already takes.
+// Pure orchestration: prompts for format/style/dpi/greyscale/labels, then
+// calls the export API against the active dataset — no React/store coupling
+// beyond the `StoreGet` handle every command closure already takes.
 //
 // The spec itself is built by `lib/figureSpec.buildStageFigureSpec` (MAIN_PLAN
 // #35; routed through the canonical-document adapter as of F2.5b), shared
@@ -42,6 +42,13 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       default: 300,
       hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
     },
+    {
+      key: "greyscale",
+      label: "Greyscale (print-safe)",
+      type: "boolean",
+      default: false,
+      hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
+    },
     { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {
       key: "x_label",
@@ -77,6 +84,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
         title: titleStr,
         xLabel: xl,
         yLabel: yl,
+        greyscale: params.greyscale as boolean,
       }),
       signal,
     ),

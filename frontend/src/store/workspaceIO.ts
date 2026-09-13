@@ -32,7 +32,7 @@ import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
-import { toast } from "./toasts";
+import { notifyMigrationWarnings, toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
 import { nextDatasetId, type AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
@@ -467,4 +467,8 @@ export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorks
   const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
   set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
   toast(msg, "ok");
+  // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
+  // parsed) has no status-line fold here at all — this never routes through
+  // loadWorkspace — so the toast is its only surface.
+  notifyMigrationWarnings(ws.migrationWarnings);
 }

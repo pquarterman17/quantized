@@ -84,7 +84,7 @@ import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
-import { toast } from "./store/toasts";
+import { notifyMigrationWarnings, toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
 import { stageWorkspaceRestore } from "./store/windowHydration";
 
@@ -427,8 +427,13 @@ export function useWorkspaceAutosave(): void {
         setStatus(`recovered ${what} after an unexpected close`);
         toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
       } else {
+        // BUG-010: this setStatus overwrites loadWorkspace's own
+        // migrationNotice status-line fold — the toast below is the only
+        // channel that survives it (both branches restore silently, so
+        // neither has any other confirmation surface for it).
         setStatus(`restored ${what} from autosave`);
       }
+      notifyMigrationWarnings(restored.migrationWarnings);
     });
     return () => {
       cancelled = true;

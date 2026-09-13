@@ -33,8 +33,8 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
-| BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Unassigned | Found 2026-09-13 reviewing Group AF; design-time finding, not yet fixed |
-| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolves pending datasets before serializing, so packing a workspace with an unopened lazy Origin book ships that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Unassigned | Found 2026-09-13 reviewing Group AF; design-time finding, not yet fixed |
+| BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
+| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review round 2 (2026-09-13) closed a regression round 1 introduced (`startInFlight` could stick forever on a hung fetch), finished the finding #5 fix (reason now paired with its own book, not a stale one), closed the still-lying status-line nit, and corrected a false "still open" residual claim against `workbookTransfer.ts` — see the entry. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -1911,15 +1911,17 @@ lose an edit:
   - The `migrationWarnings` notice the fix relied on to make the loss loud is
     unreachable on every path that can actually carry `pending` into
     `loadWorkspace`: crash recovery (`lib/applyRecoveryChoice.ts`'s
-    `applyRecoverAutosave`, line 29 calls `loadWorkspace` then line 34
+    `applyRecoverAutosave`, line 29 calls `loadWorkspace` then line 36
     overwrites `status` with its own message), the silent startup autosave
-    restore (`useWorkspaceAutosave.ts` lines 422-431, same shape), Append
-    Project (`store/workspaceIO.ts`'s `runAppendWorkspace`, line 468, which
-    doesn't call `loadWorkspace` at all and writes its own `status`), and
-    workbook-package import (`lib/workbookTransfer.ts`'s
-    `parseWorkbookPackage`, line 288, which reads `loaded.workbooks`/
-    `loaded.datasets` off `parseWorkspace`'s result and never touches
-    `loaded.migrationWarnings`). Only a plain File ▸ Open reaches
+    restore (`useWorkspaceAutosave.ts` line 422 calls `loadWorkspace`, then
+    lines 427/434 overwrite `status` with one of two hand-built messages),
+    Append Project (`store/workspaceIO.ts`'s `runAppendWorkspace`, line 468,
+    which doesn't call `loadWorkspace` at all and writes its own `status`),
+    and workbook-package import (`store/workbookTransfer.ts`'s
+    `pasteWorkbookFromClipboard`, line 233 calls `lib/workbookTransfer.ts`'s
+    `parseTransferPackage`, whose own internal `parseWorkspace` call — that
+    module's line 300 — computes `migrationWarnings` that the store file
+    then never reads off the parse result). Only a plain File ▸ Open reaches
     `store/useApp.ts`'s `loadWorkspace` (migration notice folded into `status`
     at line 1565) without a follow-up overwrite — so the one loud case was the
     one path least likely to be the one that actually happens. Booked as its
@@ -2075,7 +2077,7 @@ diagnostic that only fires on the least common path is worse than it looks: it
 lets a future fix (like the reverted Group AF attempt above) believe it has
 made a loss loud when it has not.
 
-**State:** Open
+**State:** Fixed (commit pending merge), 2026-09-13 — see "Fix implemented" below; the workbook-package decision is recorded there. A same-day review round found one real coverage gap (File ▸ Open) plus several stale/inaccurate prose citations — see "Review round, 2026-09-13" near the end of this entry.
 
 **Reported:** 2026-09-13, by Claude, during adversarial review of the Group AF
 `.dwk` load-path attempt on the BUG-009-adjacent item above — that attempt's
@@ -2117,13 +2119,13 @@ Four call sites, each confirmed by reading the code:
 
 - **`lib/applyRecoveryChoice.ts`'s `applyRecoverAutosave`** (the "Recover
   autosaved work" crash-recovery choice): line 29 calls
-  `s().loadWorkspace(prompt.workspace)`, then line 34 calls
+  `s().loadWorkspace(prompt.workspace)`, then line 36 calls
   `s().setStatus(msg)` with a hand-built `"recovered N datasets from
   autosave…"` string that never reads `prompt.workspace.migrationWarnings`.
   Whatever `loadWorkspace` just wrote to `status` is gone before the user sees
   it.
 - **`frontend/src/useWorkspaceAutosave.ts`'s silent startup restore**: line 422
-  calls `useApp.getState().loadWorkspace(restored)`, then lines 427/430 call
+  calls `useApp.getState().loadWorkspace(restored)`, then lines 427/434 call
   `setStatus` with one of two hand-built strings
   (`"recovered … after an unexpected close"` / `"restored … from autosave"`),
   again never touching `restored.migrationWarnings`. This is the path that
@@ -2134,57 +2136,334 @@ Four call sites, each confirmed by reading the code:
   468, sets `status: msg` to its own `"appended N datasets (M renamed)…"`
   string. `ws.migrationWarnings` from the parsed `.dwk` is never read anywhere
   in this function.
-- **`lib/workbookTransfer.ts`'s `parseWorkbookPackage`**: line 288 calls
-  `parseWorkspace(...)` and stores the result in `loaded`, then reads only
-  `loaded.workbooks` (line 292) and `loaded.datasets`; `loaded.migrationWarnings`
-  is never referenced anywhere in the file — confirmed by a whole-file search.
+- **`store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`**: line 233
+  calls `lib/workbookTransfer.ts`'s `parseTransferPackage(text)` (that
+  function, in turn, calls `parseWorkspace(...)` internally at its own line
+  300) and stores the result in `parsed`, then reads only `parsed.pkg` fields
+  (workbook/datasets/etc.); the sibling `parsed.migrationWarnings` the parse
+  already computed is never read anywhere in the store file — confirmed by a
+  whole-file search.
 
 So of the four loaders that can carry a document's `migrationWarnings` into
 the live store, three actively discard it and the fourth (plain File ▸ Open,
 `store/useApp.ts`'s `loadWorkspace` itself) is the only one where it survives
-to the status bar.
+to the status bar. (A later review round found File ▸ Open's own toast
+coverage was itself incomplete — see the 2026-09-13 review paragraph near the
+end of this entry.)
 
 #### Fix checklist
 
-- [ ] Give `migrationWarnings` a delivery channel a caller cannot silently
-  clobber by writing to `status` afterward — e.g. a toast fired from inside
-  `loadWorkspace` itself (mirroring the existing "recovered … — check your
-  latest edits" toast pattern in `useWorkspaceAutosave.ts`), rather than a
-  string every caller must remember to fold into its own message.
-- [ ] Pin it at `applyRecoverAutosave` first — it is the site the Group AF
+- [x] Give `migrationWarnings` a delivery channel a caller cannot silently
+  clobber by writing to `status` afterward — shipped as a shared toast
+  helper (`notifyMigrationWarnings` in `store/toasts.ts`, mirroring the
+  existing "recovered … — check your latest edits" toast pattern in
+  `useWorkspaceAutosave.ts`) called explicitly at every loader, rather than a
+  toast fired automatically from inside `loadWorkspace` itself — a
+  `loadWorkspace`-internal toast would still miss Append Project and
+  workbook-package import, which never call `loadWorkspace` at all, so the
+  helper is called at every loader explicitly (File ▸ Open's own
+  `replaceWorkspace`/`replaceWorkspaceSafely` included, after the review
+  round) — and rather than a `status` string every caller must remember to
+  fold into its own message.
+- [x] Pin it at `applyRecoverAutosave` first — it is the site the Group AF
   attempt actually needed and the one whose overwrite is a single, easy-to-see
-  statement (line 34).
-- [ ] Decide and implement the same fix shape for the silent autosave restore
+  statement (line 36).
+- [x] Decide and implement the same fix shape for the silent autosave restore
   and `runAppendWorkspace`, or explicitly narrow the promise (e.g. document
   that `migrationWarnings` is File ▸ Open-only) if a store-wide channel is
   judged out of scope.
-- [ ] Decide whether `parseWorkbookPackage` should surface
-  `loaded.migrationWarnings` at all — a workbook package is a narrower object
-  than a full workspace, so this may be a deliberate non-goal rather than a
-  gap; state it either way.
-- [ ] A regression test per fixed site: assert the notice actually reaches the
-  user-visible surface (status/toast) after each of the three currently-silent
-  loaders, not just that `migrationWarnings` was computed.
+- [x] Decide whether `store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`
+  should surface `parseTransferPackage`'s `migrationWarnings` at all — a
+  workbook package is a narrower object than a full workspace, so this may be
+  a deliberate non-goal rather than a gap; state it either way.
+- [x] A regression test per fixed site: assert the notice actually reaches the
+  user-visible surface (status/toast) after each of the four currently-silent
+  loaders, not just that `migrationWarnings` was computed. (A fifth loader —
+  File ▸ Open's own `replaceWorkspace`/`replaceWorkspaceSafely` — was found
+  silent too in a later review round; see the dated paragraph near the end of
+  this entry.)
+
+#### Fix implemented
+
+A delivery channel no caller's later `setStatus` can clobber: a toast
+(`store/toasts.ts`), via one new shared helper —
+`notifyMigrationWarnings(warnings)` in `store/toasts.ts` — so the
+"first warning + (+N more) count" format (mirroring `useApp.ts`'s own
+`migrationNotice` local) and the "one toast for N warnings, never one per
+warning" rule live in exactly one place. `useApp.ts`'s existing status-line
+fold for File ▸ Open is UNCHANGED — this is additive, not a reroute — and,
+after the review round below, File ▸ Open is the ONE path that shows BOTH
+the status line and the toast; every other load path shows the toast only
+(their own `setStatus` overwrites whatever `loadWorkspace` folded).
+
+Call sites, each now calling `notifyMigrationWarnings`:
+
+1. `lib/applyRecoveryChoice.ts:38` (`applyRecoverAutosave`) — called with
+   `prompt.workspace.migrationWarnings`, right after the `setStatus` that
+   would otherwise be the only signal.
+2. `useWorkspaceAutosave.ts:436` (unconditionally, after both the
+   "unclean"/silent status branches) — called with
+   `restored.migrationWarnings`.
+3. `store/workspaceIO.ts:473` (`runAppendWorkspace`, end of function) —
+   called with `ws.migrationWarnings`; this path had no status-line fold to
+   begin with, so the toast is its only surface.
+4. `store/workbookTransfer.ts:250` (`pasteWorkbookFromClipboard`, after a
+   successful parse) — called with `parsed.migrationWarnings`. The field
+   lives on the `ParseTransferResult` success variant (`lib/workbookTransfer
+   .ts`'s `ParseTransferResult`, a sibling of `pkg` rather than a field ON
+   it — a live session's own `buildTransferPackage` has no equivalent, since
+   it can never itself hold a version-skipped figure, so there is no shared
+   persisted shape to keep in sync, only a parse-time result to report).
+   `WorkbookTransferPackage` itself is unchanged; no new field was added to
+   it.
+5. `lib/openWorkspaceReplace.ts` (File ▸ Open / Open without layout, both via
+   `replaceWorkspace`/`replaceWorkspaceSafely`) — called right after each
+   function's own `loadWorkspace(ws)` call, with `ws.migrationWarnings`.
+   Added in a review round (below) after this site's own status-line fold
+   was mistaken for full coverage — it survives untouched (nothing later in
+   either function writes `status`), but a status line alone is easy to
+   miss on a large load, and every OTHER loader here already gets a toast
+   too.
+
+**Workbook-package decision (item 4, explicit):** `migrationWarnings` CAN be
+non-empty for a workbook-transfer package — confirmed structurally, not
+assumed: `parseTransferPackage` wraps the incoming `editableFigures` array
+in a synthetic `.dwk` document and hands it to the SAME `parseWorkspace`
+sanitizer a real project open uses, so an unsupported `FigureDocument`
+version inside a pasted package hits the identical version-skip branch a
+`.dwk` would (pinned by
+`lib/workbookTransfer.test.ts`'s "surfaces migrationWarnings from an
+unsupported FigureDocument version inside the package (BUG-010)"). It is
+surfaced on Paste. It is deliberately NOT surfaced on `duplicateWorkbook`:
+that path's `parseTransferPackage` call always round-trips figures read
+straight from THIS session's own live `state.editableFigures`, which by
+construction cannot hold a version-skipped figure (any such figure was
+already skipped, with its own warning, at the ORIGINAL load that put it
+into live state) — a structural, not a policy, non-goal, pinned by
+`store/workbookTransfer.test.ts`'s "duplicate's own round trip never
+carries a migration warning (structural, not a live path)".
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — a saved `.dwk`/autosave/
+  workbook package containing a `FigureDocument` with `version` greater
+  than `FIGURE_DOCUMENT_VERSION`.
+- [x] Exact actions recorded — the four load/merge paths above.
+- [x] Actual result recorded (pre-fix) — no toast, no dialog; the status
+  line either never carried the notice (sites 3-4) or carried it for a
+  fraction of a `set()` call before being overwritten (sites 1-2).
+- [x] Expected result recorded — see "Fix implemented" above.
+- [x] Reproduced by an agent — one regression test per site (see below),
+  each sabotage-verified: removing that site's `notifyMigrationWarnings`
+  call (or, for site 4, reverting the dropped-field propagation) makes that
+  site's new test fail — sites 1-3 fail exactly their own test; the site-4
+  field sabotage fails two tests in two files (the `lib/` parse test and the
+  `store/` paste test), as the first review round noted.
+
+#### Investigation
+
+- [x] Likely owning components/modules identified — the files named above,
+  plus `lib/openWorkspaceReplace.ts` once the review round below found its
+  gap.
+- [x] Root cause confirmed rather than inferred — read every caller of
+  `loadWorkspace`, `appendWorkspace`, and `parseTransferPackage` before
+  writing the fix; confirmed `useApp.ts`'s status-line fold is the ONLY
+  existing consumer of `migrationWarnings` anywhere in the frontend.
+- [x] Related workflows and persistence paths checked — `LoadedWorkspace
+  .migrationWarnings`'s own doc ("Load-time compatibility notices. Never
+  serialized back into a .dwk.") is respected; nothing here changes what
+  gets saved, only what gets told to the user at load/merge time.
+- [x] Existing plan overlap reconciled — none found; this is a new entry.
+
+#### Implementation
+
+- [x] Minimal safe behavior defined — one shared, side-effect-only helper
+  (`notifyMigrationWarnings`), a no-op on an empty array, called
+  additively at each site; `useApp.ts` itself is untouched (kept under its
+  own store-size ratchet — the helper lives in `store/toasts.ts`, the
+  module every call site already imports `toast` from, not a new sibling
+  module).
+- [x] Failure and ambiguous-data behavior defined — unchanged; this only
+  adds a NOTICE of an already-correct skip/degrade, never new fallback
+  logic of its own.
+- [x] Data integrity and backward compatibility considered — no persisted
+  shape changes; `ParseTransferResult.migrationWarnings` (the field that
+  carries a workbook-package parse's notices — see "Fix implemented" item
+  4 above) is transient, mirroring `LoadedWorkspace.migrationWarnings`'s own
+  "never serialized back" contract; `WorkbookTransferPackage` itself gained
+  no field.
+- [x] UI wording/tooltips/accessibility included where relevant — reuses
+  the existing toast component/store (`store/toasts.ts`) verbatim; the
+  message text is the warning's own text (already user-facing English),
+  plus the same "(+N more)" count `useApp.ts` already used.
+
+#### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward — one test
+  per site, each independently sabotage-verified (see the commit body's
+  sabotage table).
+- [x] Relevant focused tests pass — `lib/applyRecoveryChoice.test.ts`,
+  `useWorkspaceAutosave.test.ts`, `store/appendWorkbooks.test.ts`,
+  `lib/workbookTransfer.test.ts`, `store/workbookTransfer.test.ts`,
+  `architecture.test.ts` — 147 tests, all green. (The review round added
+  `lib/openWorkspaceReplace.test.ts` and `store/toasts.test.ts` cases; see
+  its own gate table below rather than this original count.)
+- [x] Type-check/build/repository gates pass — `npx tsc -b --force`,
+  `npx eslint src --max-warnings=0`, `npm run build` after `npm ci`,
+  `uv run pytest -q tests/test_repo_integrity.py`. The full `npx vitest run`
+  count recorded here at the original fix (10108/10109) and the count the
+  commit body recorded (10116/10116) were BOTH stale — different snapshots
+  of a moving suite, neither reproducible against this entry's own HEAD.
+  Per agent_rules.md's "never estimate a number that will be recorded",
+  this is not corrected in place; the review round below measured its own
+  number fresh instead.
+- [x] Agent verifies acceptance criteria — this entry.
+- [ ] Owner verifies when required.
+
+#### Completion record
+
+- PR/commit: — (lands in the commit that adds this entry.)
+- Automated tests: see "Tests and acceptance" above for the full file list;
+  new tests are individually named in each file under a "(BUG-010)"
+  suffix/comment.
+- Agent verification: fix + sabotage-verified tests, this slice.
+- Owner verification: —
+- Notes: the `duplicateWorkbook` non-surfacing is a deliberate, structural
+  non-goal (see "Workbook-package decision" above), not an oversight —
+  pinned by its own test rather than left undocumented.
+
 
 #### Evidence
 
+Recounted at this entry's HEAD (a review round found the original cites had
+drifted off by one or more lines — the fix's own inserted comments pushed
+several of the statements they name a few lines further down — and one
+symbol name, `parseWorkbookPackage`, was never a real export; the actual
+function is `parseTransferPackage`):
+
 - `frontend/src/store/useApp.ts:1431` (`migrationNotice` built),
   `frontend/src/store/useApp.ts:1565` (folded into `status` — the one path
-  that works).
+  that worked pre-fix).
 - `frontend/src/lib/applyRecoveryChoice.ts:29` (`loadWorkspace` call),
-  `frontend/src/lib/applyRecoveryChoice.ts:34` (`setStatus` overwrite).
+  `frontend/src/lib/applyRecoveryChoice.ts:36` (`setStatus` overwrite; cited
+  line moved from the original finding's :34 once the fix's own
+  `notifyMigrationWarnings` call and its preceding comment landed above it).
 - `frontend/src/useWorkspaceAutosave.ts:422` (`loadWorkspace` call),
-  `frontend/src/useWorkspaceAutosave.ts:427,430` (`setStatus` overwrites).
+  `frontend/src/useWorkspaceAutosave.ts:427,434` (`setStatus` overwrites, one
+  per branch; the second moved from :430 for the same reason as above).
 - `frontend/src/store/workspaceIO.ts:448` (`runAppendWorkspace` definition),
-  `frontend/src/store/workspaceIO.ts:468` (`status: msg`, no `migrationWarnings`
-  read anywhere in the function).
-- `frontend/src/lib/workbookTransfer.ts:288` (`parseWorkspace` call),
-  `frontend/src/lib/workbookTransfer.ts:292` (`loaded.workbooks` read;
-  `loaded.migrationWarnings` never appears in the file).
-- Agent verification: each call site read directly; no test added yet (this is
-  a design-time finding from adversarial review, not a user report).
+  `frontend/src/store/workspaceIO.ts:468` (`status: msg` — unmoved by the
+  fix, since its own `notifyMigrationWarnings` call lands AFTER this line).
+- `frontend/src/lib/workbookTransfer.ts`'s `parseTransferPackage`: at the
+  ORIGINAL finding, its internal `parseWorkspace(...)` call sat at line 288
+  and the function read only `loaded.workbooks`/`loaded.datasets` off the
+  result, never `loaded.migrationWarnings`. Both lines moved once the fix
+  landed (the `parseWorkspace(...)` call is now at `:300`); the fix itself
+  is what ADDED the previously-missing read, now `migrationWarnings: loaded
+  .migrationWarnings` at `:323` — so, unlike the four cites above (which
+  still describe standing gaps this fix closed elsewhere), this one now
+  describes a gap the fix closed IN THIS SAME FILE, before the result ever
+  reached `store/workbookTransfer.ts`'s `pasteWorkbookFromClipboard`
+  (`:250`, see "Fix implemented" above).
+- Agent verification: each call site read directly at the original finding;
+  re-verified line-for-line against this entry's HEAD during the 2026-09-13
+  review round below.
 - Owner verification: — not required to confirm the gap (it is a static
   reachability fact), but the chosen delivery-channel shape is a product call.
+
+#### Review round, 2026-09-13 (adversarial review of commit `762e00c1`)
+
+The code fix was found correct and complete on every one of its four sites —
+all sabotage-verified again, full suite green — but the review found the
+PROSE around it inaccurate in several places, plus one real coverage gap:
+
+1. **File ▸ Open never joined the toast channel.** `replaceWorkspace`/
+   `replaceWorkspaceSafely` (`lib/openWorkspaceReplace.ts`) route every
+   native/browser-picker open into `loadWorkspace`, whose own
+   `migrationNotice` status-line fold survives there (nothing downstream
+   overwrites `status`) — but no call to `notifyMigrationWarnings` existed
+   on that path, so File ▸ Open was the one loader with a status line and
+   no toast, contradicting the "that path now shows both" sentence this
+   entry and the original commit body both made. Fixed: both functions now
+   call `notifyMigrationWarnings(ws.migrationWarnings)` right after their
+   own `loadWorkspace` call, the same "after the status fold" placement
+   every other fixed site uses. Regression test:
+   `lib/openWorkspaceReplace.test.ts`'s new "migrationWarnings join the
+   toast channel (BUG-010 review F1)" describe block, asserting against the
+   real `useToasts` store (not the mock the file already carries for its
+   unrelated lock-registration assertions) — sabotage-verified (removing
+   either call fails exactly its own test).
+2. **Three sentences described a design that was never shipped.** The
+   "Fix implemented"/"Implementation" sections above have been rewritten to
+   say what actually landed: the `migrationWarnings` field for a workbook
+   package lives on `ParseTransferResult`'s success variant (a sibling of
+   `pkg`), the call site reads `parsed.migrationWarnings` (not
+   `parsed.pkg.migrationWarnings`, and `WorkbookTransferPackage` gained no
+   field), and the helper lives in `store/toasts.ts` (not a "sibling `lib/`
+   module" — `useApp.ts`'s own store-size ratchet was never at stake since
+   the helper was never a candidate for living inside `useApp.ts` itself).
+3. **Every "Fix implemented" file:line citation was off by one, and one
+   symbol name didn't exist.** `parseWorkbookPackage` is not a real export —
+   the function is `parseTransferPackage`. The four call-site line numbers
+   and several pre-fix "Evidence" citations have been recounted against
+   this entry's HEAD (see "Fix implemented" and "Evidence" above for the
+   corrected numbers and why each moved).
+4. **The plan and the original commit body quoted two different, both
+   stale, full-suite counts.** Measured fresh in this review round (see the
+   gate table below) rather than repeated from either source.
+5. **The `duplicateWorkbook` "pinned by its own test" claim couldn't
+   actually fail.** The prior version of `store/workbookTransfer.test.ts`'s
+   "duplicate's own round trip never carries a migration warning" test
+   asserted the ABSENCE of a `notifyMigrationWarnings` call — true for every
+   input, since `duplicateWorkbook` never calls that helper at all, so the
+   assertion could not fail even if the structural claim behind it were
+   false (confirmed: adding the call back left the suite green). The test
+   now asserts the STRUCTURAL claim directly — `buildTransferPackage` +
+   `parseTransferPackage` on a live workbook carrying a version-1
+   `FigureDocument` yields `migrationWarnings === []` and a version rewritten
+   to `FIGURE_DOCUMENT_VERSION` — and fails when that claim is sabotaged
+   (verified: forcing the fixture's version to an unsupported value turns
+   the assertion red).
+6. **The toast on sites 1-2 is the ONLY surface, and used to self-dismiss in
+   1.9 s.** On `applyRecoverAutosave` and the silent autosave restore, a
+   later `setStatus` deliberately overwrites `loadWorkspace`'s status-line
+   fold, so the toast is the one place "part of your saved document was
+   dropped" is said at all — worth a longer look than the default `TOAST_TTL`
+   gives. `notifyMigrationWarnings` (`store/toasts.ts`) now passes
+   `{ ttlMs: TOAST_ACTION_TTL }` (6 s, not 1.9 s). `ToastKind` has no
+   dedicated "warning" value (`"info" | "ok" | "danger"`); kept `"info"` —
+   the same kind `useWorkspaceAutosave.ts`'s "Recovered … check your latest
+   edits" toast already uses for an analogous "something was silently
+   changed, go look" notice, since a migration warning is a successful load
+   that dropped one degraded piece, not the outright failure `"danger"` is
+   reserved for. Pinned by a new test in `store/toasts.test.ts`.
+7. **The helper's own "one toast, never one per warning" and "(+N more)"
+   rules had no direct test.** Every existing call-site test passed exactly
+   one warning. `store/toasts.test.ts` now covers zero/one/many warnings
+   directly against `notifyMigrationWarnings`.
+
+Nits also addressed: the checklist's first fix-checklist box (previously
+ticked against "a toast fired from inside `loadWorkspace` itself") reworded
+to describe what shipped — a shared helper called explicitly at every
+loader; a stray doubled blank line before `## New issue template` (merge
+noise) removed.
+
+Not addressed, and why: the ORIGINAL commit body (`762e00c1`) still carries a
+stale bundle paragraph ahead of the orchestrator note that retracts it — a
+past commit's message is frozen history; nothing a later commit does can
+edit it, so this stays a known wrinkle in `git log` rather than something
+"fixed" here.
+
+**Gate (this review round, `frontend/`):**
+
+| gate | result |
+|---|---|
+| `npx tsc -b --force` | exit 0 |
+| `npx eslint src --max-warnings=0` | exit 0 |
+| targeted vitest (`toasts.test.ts`, `openWorkspaceReplace.test.ts`, `workbookTransfer.test.ts` x2) | 74 passed, exit 0 |
+| full `npx vitest run` | 636 files / 10424 tests (10422 passed, 2 expected-fail), 0 `FAIL` lines, exit 0 (720.6 s) — measured on the agent's pre-rebase tree (parent `384f2bc9`, lacking `48556a04`/`a99ebb6d`); the batch's final full run is recorded in the PR body |
+| `npm run build` (eager JS) | 916,453 B vs 916,384 B at `HEAD~1` (`a99ebb6d`, this commit's real parent; the agent's report named `384f2bc9`, three commits back, which happens to measure the same 916,384 B) — +69 B, 3,947 B under the unmoved 920,400 B budget |
+| `uv run pytest -q tests/test_repo_integrity.py` | 12 passed |
 
 ---
 
@@ -2199,7 +2478,7 @@ contained project to someone else; if the payload it writes is a ~200-row
 downsampled preview instead of the real book, the recipient has no way to
 know their analysis is running on decimated data.
 
-**State:** Open
+**State:** Fixed (commit pending merge), 2026-09-13.
 
 **Reported:** 2026-09-13, by Claude, during adversarial review of the Group AF
 `.dwk` load-path attempt above. Found by comparing `packProjectRun.ts`'s
@@ -2255,22 +2534,55 @@ not resolve first.
 
 #### Fix checklist
 
-- [ ] Make `serializeCurrentWorkspaceForPack` (or its caller in
-  `packProjectRun.ts`) `await get().resolvePendingDatasets()` before calling
-  `serializeWorkspace`, mirroring `workspaceIO.ts`'s `prepareWorkspaceState`.
-- [ ] Decide the failure UX to mirror: `workspaceIO.ts` aborts the whole save
-  with a named status/toast when a book can't be resolved (`store/workspaceIO.ts`
-  lines 69-80) — Pack Project's preview and Start-pack actions need the same
-  "can't pack: couldn't load book X" abort rather than silently packing the
-  preview.
-- [ ] Once fixed, correct or narrow `lib/workspaceSerialize.ts`'s lines
-  217-224 comment, which currently claims (falsely, for Pack Project as it
-  stands) that `pending` can only survive into a real export via autosave.
-- [ ] Regression test: build a workspace with a `pending` dataset, call
-  `serializeCurrentWorkspaceForPack`-equivalent packing content, and assert
-  either the packed payload's `data` matches the FULL book (post-fix) or that
-  packing is refused with a named reason — not that it silently ships the
-  preview (pre-fix / today's actual behaviour).
+- [x] `serializeCurrentWorkspaceForPack` now `await`s
+  `useApp.getState().resolvePendingDatasets()` before `serializeWorkspace`,
+  mirroring `workspaceIO.ts`'s `prepareWorkspaceState` (status line while it
+  fetches included): `frontend/src/store/packProjectContent.ts:49-123`, resolve
+  call at `:54`. It became `async` and now returns a `PackContent` result
+  (`:28`) rather than a bare string, and BOTH callers were updated —
+  `frontend/src/store/packProjectRun.ts:138` (the pack PREVIEW) and `:392`
+  ("Start pack"). The store re-read after the `await` is deliberate and
+  documented: `resolvePendingDatasets` replaces the dataset objects, so a
+  snapshot taken before it would still be the preview-carrying one.
+  (Line numbers current as of round 2, below — see that section's own
+  recount; they move every time either function grows.)
+- [x] Failure UX mirrors `workspaceIO.ts` lines 69-80: `refusePack`
+  (`packProjectContent.ts:131-135`) sets the app status line, raises a
+  `danger` toast, and puts the pack state machine into `failed` with a named
+  `pending_unresolved` error — same sentence shape as the siblings
+  (`workspaceIO.ts:75`, `store/workbookTransfer.ts:191`/`:262`; there is no
+  shared helper to reuse, each spells it out inline). Both the preview
+  (`packProjectRun.ts:144-147`) and Start-pack (`:399-402`) paths abort
+  BEFORE any bridge call, so `NOTHING_MODIFIED_NOTE` holds literally.
+  The message originally named only the operation and the underlying fetch
+  error, not the book — review finding #5 pointed out that claim ("the
+  siblings name the operation too") was only two-thirds true: two of the
+  three sibling sites (`store/workbookTransfer.ts:191`/`:262`) DO name the
+  workbook, only `workspaceIO.ts:75` doesn't. The round-2 fix below closes
+  this for Pack Project in full — both the book's NAME and its RECORDED
+  REASON now come from `lib/bookData.ts`'s `lastBookError`, exactly as
+  `lib/workbookTransfer.ts:195-196` already does (round 1 only adopted the
+  name half — see the round 2 section's finding #5).
+- [x] `lib/workspaceSerialize.ts`'s `pending` comment corrected
+  (`:217-257`, widened again in round 2 below): it now states that EVERY
+  explicit export path resolves first and aborts on failure — Save/Save As,
+  workbook Copy/Duplicate, and Pack Project — naming all three with
+  file:line, and says outright that it previously named only the first and
+  wrongly claimed autosave was the sole route. Autosave remains the one
+  legitimate `pending` carrier.
+- [x] Regression tests, `frontend/src/store/packProject.test.ts:734-903`
+  (the original fix's 5 specs, all sabotage-verified — see the Completion
+  record; round 2 recount below: this range moved from the round-1 review's
+  own `:731-900` purely because a handful of lines were added ABOVE this
+  block, in the shared test-hook imports, not inside it): the pack
+  PREVIEW sends the FULL book with no `pending` field in the payload; a book
+  that cannot be fetched refuses the preview by name with nothing sent to the
+  bridge (`packPreview` mock asserted un-called) plus status + danger toast;
+  the content reaching `pack_start` likewise carries the full book and no
+  `pending`; "Start pack" resolves too, refusing with `pending_unresolved`
+  (NOT `stale_preview`) for a book added after the preview whose source is
+  gone, with `packStart` asserted un-called; and a cancel while the book
+  fetch is in flight is not overwritten when that fetch fails late.
 
 #### Evidence
 
@@ -2281,13 +2593,345 @@ not resolve first.
 - `frontend/src/store/workbookTransfer.ts:189` and `:254` (the two sibling
   `await get().resolvePendingDatasets()` calls).
 - `frontend/src/lib/workspaceSerialize.ts:217-224` (the comment this bug
-  falsifies).
+  falsifies; now corrected in place at `:217-232`).
 - Agent verification: read `packProjectRun.ts` in full, confirmed no
   `resolvePendingDatasets`/`pending` reference besides the unrelated poll
   timer names; compared against both sibling export paths that do call it.
   Not yet reproduced against a live backend pack run.
 - Owner verification: — needed to confirm the severity call (P1 vs P2) and the
   chosen abort-vs-resolve UX before implementation.
+
+#### Completion record
+
+- PR/commit: the BUG-011 fix commit, 2026-09-13 (`fix(pack): Pack Project
+  resolves pending datasets before serializing`).
+- Automated tests: the 5 new specs in `frontend/src/store/packProject.test.ts`
+  (file: 61 passing). Full frontend suite green: 634 files / 10,381 tests.
+- Agent verification: every new spec sabotage-verified — removing the resolve
+  call fails **5** specs, not the 4 originally reported here (correction,
+  review round below): the four data/refusal specs PLUS "cancelling while
+  the book fetch is in flight is not overwritten when that fetch fails
+  late", which times out in `vi.waitFor` waiting for `phase === "scanning"`
+  because no fetch is ever started once the resolve call itself is gone.
+  Removing the preview abort fails only the preview-refusal spec; removing
+  the Start-pack abort fails only the Start-pack refusal spec; removing the
+  generation check added after the new `await` fails only the late-cancel
+  spec. Source restored byte-identical after each round (`diff` clean).
+- Structural note: the resolve step pushed `store/packProjectRun.ts` to 498
+  lines against the 500-line `.ts` ceiling, so the cohesive workspace-CONTENT
+  slice (`serializeCurrentWorkspaceForPack`, `refusePack`,
+  `deriveProjectName`, `contentFingerprint`) was extracted to the new
+  `store/packProjectContent.ts` — 424 and 97 lines respectively, no pin
+  raised. It is reached only through the already-lazy `packProjectRun.ts`
+  chunk, so the eager bundle is unchanged (916,182 B before and after,
+  budget 920,400).
+- Owner verification: still open — the severity call (P1 vs P2) and, now that
+  the abort exists, whether "abort the whole pack" is the right product
+  choice versus packing everything that IS resolvable and listing the dead
+  books as blockers. The fix deliberately matches the sibling Save path
+  rather than inventing a third behaviour.
+- Not reproduced against a live backend pack run (the bridge is mocked, as it
+  is for every spec in this file) — unchanged from the report.
+
+#### Adversarial review round (2026-09-13)
+
+An adversarial review of the fix commit above found 2 CONFIRMED code
+findings (each with a failing probe), 3 doc findings, and 5 nits. This
+follow-up commit closes:
+
+- **Finding #1 (CONFIRMED):** `runStartPackProject`'s own book-resolve await
+  had NO generation guard at all — the exact bug the pack PREVIEW path was
+  already guarded against. A cancel/reset DURING "Start pack"'s resolve step
+  was silently overwritten once the (now-stale) fetch settled: cancelling
+  during a FAILING fetch flipped back to `failed` with a bogus danger toast
+  after the user had already cancelled; during a SUCCEEDING fetch it could
+  resurface as `stale_preview`. Closed by capturing `generation` (read only,
+  never bumped — Start doesn't itself start or end an attempt) and
+  `preview` before the await, then bailing if either changed
+  (`store/packProjectRun.ts`'s `runStartPackProject`).
+- **Nit 3 (folded into #1):** the phase guard alone could not stop a second
+  "Pack Project" click during that same window (`phase` stays
+  `awaiting_confirmation` until the resolve AND fingerprint checks both
+  pass) — a pre-fix double click ran two concurrent attempts. Closed with an
+  in-flight flag in `store/packProject.ts`, set before the lazy `import()`
+  — deliberately NOT by moving `phase` to `packing` early, which would have
+  rerouted Cancel through the backend `packCancel` call for a copy that was
+  never actually started, with no poll loop yet running to resolve it.
+- **Finding #2 (CONFIRMED):** `serializeCurrentWorkspaceForPack` re-read the
+  store after `resolvePendingDatasets()` but never re-checked `pending` on
+  it. `resolvePendingDatasets()` only awaits the books that were pending
+  when IT was called, so a lazy import landing WHILE that `Promise.all` was
+  still in flight was still serialized straight from its decimated preview
+  rows plus a stray `pending` field — this bug's own payload, through a
+  narrower window. Closed with a post-await re-check in
+  `store/packProjectContent.ts` that refuses ("…a book was still loading")
+  instead of serializing.
+- **Finding #5 (naming the book):** the refusal named only the operation and
+  the raw fetch error, never the book — the original Fix checklist's claim
+  ("the siblings name the operation too") was only two-thirds true (two of
+  the three sibling sites DO name the book). Closed: the `catch` in
+  `serializeCurrentWorkspaceForPack` now looks up the failing book via
+  `lib/bookData.ts`'s `lastBookError` (the same lookup
+  `lib/workbookTransfer.ts:195-196` already uses) and includes its `.name`
+  when a reason was actually recorded for it. (Round 2 finding #5, below:
+  this only adopted the NAME half of that lookup — the reason quoted
+  alongside it was still the raw thrown error, which could belong to a
+  DIFFERENT book. Fixed in round 2, not here.)
+- **Doc findings #3/#4:** the original sabotage table understated round 1
+  (fails **5** specs, not 4 — corrected in the Completion record above,
+  naming the fifth); two stale cross-references to `packProjectRun.ts` that
+  should say `store/packProjectContent.ts` (`lib/workspaceSerialize.ts` and
+  `store/packProject.ts`, the latter pre-dating this bug) are fixed.
+- **Nit 1 (status):** the transient "fetching N books before packing…"
+  status was never replaced on success; `serializeCurrentWorkspaceForPack`
+  now sets a status once every requested book has actually arrived,
+  mirroring the Save sibling's habit of always ending on a terminal status.
+- **Nits 4/5:** the test line-range citation above corrected to `:731-894` —
+  imperfectly: the review round below (finding 6) found the TRUE range at
+  this commit was already `:731-900` (this commit's own 6-line addition to
+  that block, missed) and, after round 2's own further additions, the
+  Fix-checklist bullet above now cites the current `:734-903` (round 3 found
+  this was still short by one — see that section below); the
+  Active-queue Owner column set to "Claude (agent)"; the shadowing
+  `type Set` alias in `packProjectContent.ts` renamed to `SetPack`.
+- **Tests:** 4 new specs in `frontend/src/store/packProject.test.ts`, plus 2
+  existing specs strengthened to actually assert the book name finding #5
+  adds (their titles already claimed "by name" without checking it) — file
+  now 65 passing (was 61). All new/strengthened assertions sabotage-verified
+  (source restored byte-identical after each round — see the commit body's
+  table).
+- **Residual — NOT fixed here, and this claim was WRONG for two of its three
+  sites** (out of scope: `store/workspaceIO.ts` and the other BUG-010 files
+  are being edited concurrently for BUG-010): recorded here as the identical
+  "re-read after resolve without re-checking `pending`" window that
+  finding #2 closed for Pack Project still existing in `store/workspaceIO.ts`'s
+  Save path (`:73-82`) AND in both `store/workbookTransfer.ts` export paths.
+  **Round 2 correction:** the workbook-transfer half was false —
+  both paths call `buildTransferPackage` (`lib/workbookTransfer.ts`) AFTER
+  their own resolve await, and that function re-checks `pending` on the
+  fresh state it receives and refuses if anything still is
+  (`lib/workbookTransfer.ts:182-183`) — a re-check of its own, already
+  closing this for workbook Copy/Duplicate. Only `store/workspaceIO.ts`'s
+  Save/Save As path is genuinely still open. `lib/workspaceSerialize.ts`'s
+  comment is narrowed accordingly in round 2, below.
+- **Not attempted:** nit 2 ("Start pack's resolve can essentially never
+  rescue a pack, only buy a better error code") and nit 6 (an unverifiable
+  "pushed to 498 lines" claim in the Structural note above) needed no code
+  change and are left as the review recorded them.
+- **Bundle:** the nit-3 in-flight flag lives in `store/packProject.ts`,
+  which is EAGER (unlike `packProjectRun.ts`/`packProjectContent.ts`, both
+  reached only through the store's lazy `import()`), so it is the one part
+  of this round's fix that could move the pin. Measured after `npm ci` and
+  clearing `node_modules/.vite`: 916,182 B at this commit's parent ->
+  916,197 B here, +15 B, 4,203 B under the unmoved 920,400 budget — nowhere
+  near forcing a pin move either direction. **Round 2 correction:** the
+  parent SHA this bullet named was an orphaned commit from a since-rewritten
+  branch — reachable today only as `bc8f14fa`, two commits back — not this
+  commit's real parent (`762e00c1`, per `git rev-parse <this commit>^`). The
+  real parent measured 916,380 B, so the true delta was +4 B, not +15 B —
+  see the round 2 section below for the full re-measurement.
+- Owner verification: unchanged from the original fix — still open (the
+  severity call and abort-vs-partial-pack choice).
+
+#### Adversarial review round 2 (2026-09-13)
+
+A second adversarial review of the round-1 review commit above (`384f2bc9`)
+found one CONFIRMED code regression that round 1's own fix introduced (nit
+3's in-flight flag had no escape hatch), one CONFIRMED code finding half-fixed
+(finding #5 adopted only the book NAME, not its reason), one nit never
+actually closed (N1's status line still lied), one FALSE residual claim
+written into three places, and a set of stale file:line references — several
+newly created by round 1's own edits. This follow-up commit closes:
+
+- **`startInFlight` survives a fetch that never settles:** round 1's in-flight
+  guard (nit 3, above) was cleared ONLY in `startPackProject`'s own `finally`
+  — which never runs while the awaited `runStartPackProject(...)` call is
+  still pending. `serializeCurrentWorkspaceForPack`'s book-resolve await has
+  no timeout, so one hung `fetchBookData` pinned the guard true FOREVER: a
+  reset, or a cancel, followed by a fresh preview could not recover Start
+  pack for the rest of the session. Closed by clearing the flag directly and
+  synchronously in both `resetPackProject` and `cancelPackProject`
+  (`store/packProject.ts`), independent of whether the stuck fetch ever
+  settles. A `resetStartInFlightForTests()` export mirrors
+  `packProjectRun.ts`'s existing `resetGeneration`/`resetThrottle`/
+  `resetPollSequencing` test-reset role, wired into this file's own
+  `beforeEach`/`afterEach`.
+- **The refusal's reason now stays paired with its own book:** round 1's
+  finding #5 fix used `lastBookError` only to pick WHICH book to name, but
+  still quoted the raw thrown `e` as the reason — so a still-pending dataset
+  with a STALE recorded error (from an earlier attempt; a fetch failure never
+  clears `pending`, and `lib/bookData.ts`'s `_bookErrors` is cleared only on
+  success) could be named alongside a completely different book's error text,
+  whenever it sorted earlier in `datasets` order than whichever book actually
+  caused THIS rejection. Closed by taking the REASON from the same
+  `lastBookError` lookup as the name, truncated via `truncateReason`, exactly
+  mirroring `lib/workbookTransfer.ts:195-196` in full now, not half.
+  `packProjectContent.ts` states inline that only the first failing book in
+  `datasets` order is ever named, mirroring `lib/workbookTransfer.ts:184`'s
+  own stated rule. The sibling refusal for "a book was still loading" (round
+  1's finding #2 fix) is named too now (nit 5) — the datum was already
+  sitting in that branch's own predicate.
+- **N1 actually closed:** the status line no longer reads "…packing…" once
+  the pack has actually left the in-flight state — the preview reaching
+  `awaiting_confirmation` now sets a real "N dataset(s) ready — review the
+  pack preview" status (nothing has been copied yet, so "packing" was never
+  true there), and the Start path's poll loop reaching `completed` now sets
+  a real outcome ("packed N dataset(s) to `<bundle_dir>`") via a new
+  `notePackOutcome` export in `packProjectContent.ts` — kept there, not in
+  `packProjectRun.ts`, so that module's own documented "never touches
+  `useApp` directly" boundary holds. One spec per path, both sabotage-checked
+  (deleting either `notePackOutcome` call fails its own spec, 0 others).
+- **The FALSE residual claim, corrected:** round 1 recorded the "re-read
+  after resolve without re-checking `pending`" window as still open on
+  BOTH `store/workspaceIO.ts`'s Save path AND both `store/workbookTransfer.ts`
+  export paths. The workbook half was wrong — both paths call
+  `buildTransferPackage` (`lib/workbookTransfer.ts`) AFTER their own resolve
+  await, and that function re-checks `pending` on the fresh state it
+  receives and refuses if anything still is (`lib/workbookTransfer.ts:182-183`)
+  — already closing this for workbook Copy/Duplicate. Narrowed in
+  `lib/workspaceSerialize.ts`'s comment, this entry's own "Residual" bullet
+  above, and the round-1 change-log row — only `store/workspaceIO.ts`'s
+  Save/Save As path (`:73-82`) remains genuinely open. `store/workspaceIO.ts`,
+  `store/workbookTransfer.ts`, `lib/workbookTransfer.ts`, and the other
+  BUG-010 files were read-only for this fix — they are being edited
+  concurrently for BUG-010.
+- **Stale file:line references recounted:** every citation in this entry's
+  Fix checklist above (`packProjectContent.ts`'s function/type/refusePack
+  ranges, both callers in `packProjectRun.ts`, both abort blocks, the
+  regression-test range) re-measured against this commit and corrected —
+  several had drifted since round 1 added ~50 lines to `packProjectContent.ts`
+  and ~24 to `packProjectRun.ts` without updating any of them. The regression
+  spec range moved again, purely from lines added ABOVE it in this file's
+  shared test hooks, not inside the block itself.
+- **Nits fixed:** the nonexistent `packProjectContent.test` mention in
+  `packProject.test.ts` (there is no such file; `packProjectContent.ts` is
+  exercised only through this test file) rewritten; the spec titled "…is
+  rejected by the phase guard…" renamed to name `startInFlight` as the actual
+  mechanism (`phase` itself never moves during that window); the "N books
+  loaded — packing…" status restored its count in the singular case
+  (`"1 book loaded — packing…"`, not "book loaded — packing…").
+- **Numbers re-measured against the REAL parent, `a99ebb6d`** (this commit's
+  `HEAD~1` — the round-1 commit's own bundle bullet had named an orphaned SHA
+  from a since-rewritten branch, reachable today only as `bc8f14fa`, not any
+  ancestor of this work): scoped `packProject.test.ts` 70 passing (was 65, +5
+  new specs); full `npx vitest run` 636 files / 10,433 passed + 2 expected
+  fail (10,435), 0 `FAIL`; eager bundle 916,384 B (parent) -> 916,408 B (this
+  commit), +24 B, 3,992 B under the unmoved 920,400 budget — nowhere near a
+  pin move; `uv run pytest -q tests/test_repo_integrity.py` 12 passed
+  (plans/ touched). **Round 3 correction:** rebase drift struck again after
+  this — the work actually landed on top of `cccf70d1`
+  (`git rev-parse 1aa8d4bd^` = `cccf70d1`, not `a99ebb6d`, which is merely an
+  ancestor four commits back), so `916,384 B`/`916,408 B` above were real
+  measurements of the WRONG tree. `cccf70d1` itself measures `916,453 B`
+  (matching BUG-010's own entry/change-log row for that commit), so the
+  correct pair is `916,453 B` (parent) -> `≈916,477 B` (this commit, the same
+  `+24 B` delta) -> `≈3,923 B` headroom, not `3,992 B`. The `+24 B` delta and
+  "nowhere near a pin move" conclusion are unaffected — see the round 3
+  section below for the full account and this round's own (unrelated)
+  numbers.
+- **Not attempted:** round 1's own nit 2 ("Start pack's resolve can
+  essentially never rescue a pack, only buy a better error code") and nit 6
+  (the unverifiable "pushed to 498 lines" Structural-note claim) needed no
+  code change in round 1 and still need none here — left as both rounds
+  recorded them.
+- Owner verification: unchanged — still open (the severity call and
+  abort-vs-partial-pack choice).
+
+#### Adversarial review round 3 (2026-09-13)
+
+A third adversarial review of the round-2 fix commit (`1aa8d4bd`) found two
+CONFIRMED code findings — one a genuinely NEW hole the round-2 fix itself
+introduced, one a gap round 2's own doc-promise overclaimed — plus two doc
+findings (a fifth recurrence of the wrong-parent-SHA mistake, and an
+off-by-one spec-range citation) and six nits. This follow-up commit closes:
+
+- **`startInFlight` is now attempt-scoped, not global (finding #1):** round
+  2's fix cleared the guard synchronously from `resetPackProject`/
+  `cancelPackProject`, closing "stuck forever" — but `startPackProject`'s own
+  `finally` stayed UNCONDITIONAL, so a LATE-settling (not eternally hung)
+  abandoned attempt's `finally` could clear a flag a NEWER attempt was
+  currently holding through its own resolve window, reachable whenever a
+  re-pending book resolves back to byte-identical content (a relink/re-fetch
+  of an unchanged book — a real shape, not a contrived one). The reviewer
+  drove this to two concurrent `packStart` calls. Closed with a `startEpoch`
+  token in `store/packProject.ts`: every attempt captures the epoch when it
+  takes the flag, `finally` only clears it if no reset/cancel/newer-start has
+  bumped the epoch since, and `resetPackProject`/`cancelPackProject` (and the
+  test-only `resetStartInFlightForTests`) bump it whenever they clear the
+  flag. One probe reproduces the reviewer's exact repro (an abandoned attempt
+  settling late while a newer one is mid-resolve): exactly one `packStart`
+  call, the extra click rejected.
+- **`failed`/`cancelled` terminals also end on a real outcome, universally,
+  not only for the two paths round 2 happened to catch (finding #2):**
+  round 2's `notePackOutcome` closed the stale "…packing…"/"…review the pack
+  preview" transient only for `awaiting_confirmation` and `completed` — every
+  OTHER way this store reaches `failed` or `cancelled` (a backend failure
+  reported through polling, a cancel actioned before packing ever starts, a
+  stale-preview or bridge-unavailable failure inside "Start pack" itself)
+  left whichever status line was already standing uncorrected. Closed in
+  full, not narrowed: two small choke-point helpers in
+  `store/packProjectRun.ts` (`noteFailed`/`noteCancelled`) now sit behind
+  EVERY `failed`/`cancelled` transition in that file, including `pollOnce`'s
+  own poll-driven ones and `cancelPackProject`'s pre-packing direct branch
+  (which never goes through polling at all). Three new specs: a poll-driven
+  `failed` (asserts the actual error text, not a stale transient), a
+  poll-driven `cancelled`, and cancelling before packing starts (the direct
+  branch, no poll involved).
+- **The recorded parent SHA, fifth recurrence — this time genuine rebase
+  drift, not mis-naming:** round 2's own "measured against the real parent"
+  correction was itself measured against `a99ebb6d`, an ancestor four commits
+  back, not `1aa8d4bd`'s actual `HEAD~1` (`cccf70d1`) — the work was rebased
+  onto more commits after being measured. Corrected in place above: the
+  round-2 bundle bullet, and the change-log row below. This round's own
+  numbers are measured the way `agent_rules.md`'s standing rule requires —
+  `git rev-parse HEAD~1` printed AFTER committing, not before.
+- **Spec-range off-by-one, same class round 2 was itself correcting:** the
+  Fix-checklist bullet's `:734-902` was one line short of the block's actual
+  close (`:903`) — recounted and corrected to `:734-903` in both places it
+  appeared in this entry.
+- **Nits:** `lib/bookData.ts`'s `truncateReason` docstring updated to name
+  its new third consumer (`store/packProjectContent.ts`, added when BUG-011
+  first landed but never folded into that comment); the stale "next describe
+  block below" cross-reference in `packProject.test.ts` renamed to say which
+  block; the two round-2 status specs (preview-ready, completed) now use a
+  non-zero, non-one `summary.datasets` count each (2 and 1) so the assertions
+  actually pin the "N dataset(s)" text and both the singular and plural
+  branches, rather than passing on `toContain("review the pack preview")`
+  alone against a manifest whose count was 0; one clarifying clause added to
+  `packProjectContent.ts`'s refusal comment about the named book potentially
+  being merely slow rather than the actual cause (nit 5) — narrowing that
+  fully is left as an explicit owner call, not folded in here. **Not
+  attempted:** the previous round's own ceiling-number nit (`wc -l` vs
+  `split("\n").length` in a commit body, a historical citation with nothing
+  live to fix) and the `pollOnce` ordering nit (`notePackOutcome` firing
+  synchronously while the matching `phase`/`resultPath` `set` goes through
+  the 200ms throttle) — cosmetic, unexercised by any spec, and out of scope
+  for this round's four findings.
+- **Numbers, measured against this commit's REAL parent** (`git rev-parse
+  HEAD~1`, printed after committing) **= `26869ddb`** (an unrelated
+  `fix(export)` commit — this round's own worktree branched directly from
+  it, so no rebase drift is possible here): `packProject.test.ts` scoped run
+  clean; full `npx vitest run` not re-run this round (the machine was
+  contended) — the last verified full-suite count remains the reviewer's own
+  measurement at `1aa8d4bd`, **636 files / 10,444 passed + 2 expected fail
+  (10,446)**, 0 `FAIL`; `tsc -b --force`/`eslint --max-warnings=0` clean;
+  `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle
+  **916,466 B at `26869ddb` (parent) -> 916,466 B here, +0 B** — neither file
+  this round's fix actually changes is eager: `store/packProject.ts` (the
+  F1 fix) turned out to already be reached only through the lazy
+  `PackProjectPanel` chunk, not the entry script or modulepreload list (grep
+  of `index.html` confirms `packProject-*.js` is absent from both), and
+  `store/packProjectRun.ts`/`store/packProjectContent.ts` (the F2 fix) are
+  the already-lazy chunk documented at the top of this file; the
+  `lib/bookData.ts` docstring edit is comment-only and is stripped by
+  minification regardless. Verified by rebuilding `26869ddb` itself in a
+  throwaway `git worktree add` (never `cp -r` a worktree) and diffing the
+  entry chunk byte-for-byte against this commit's build: `514,175 B` in both,
+  same value. `uv run pytest -q tests/test_repo_integrity.py` — 12 passed
+  (plans/ touched).
+- Owner verification: unchanged — still open (the severity call and
+  abort-vs-partial-pack choice); nit 5's "named book may be merely slow"
+  narrowing is a new, separate open judgment call from this round.
 
 ---
 
@@ -2562,3 +3206,9 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-09 | Claude | Added BUG-003 (Data Filter: a stale kind-mismatched predicate survives a column type change invisibly) from the Data Filter categorical-wiring slice | Display-masking half implemented + sabotage-verified; row-filtering half open pending owner call |
 | 2026-09-09 | Claude | Verified Tabulate/Stat Stage `is_categorical` wiring (PRIMARY_SOFTWARE_AUDIT_PLAN); added BUG-004 (Stat Stage: a stale groupCol/facetCol survives a column type change) and fixed it fully (display + computation, self-contained hook) | BUG-004 fixed + sabotage-verified; Tabulate confirmed self-healing (no analogous bug), also sabotage-verified |
 | 2026-09-13 | Claude | Recorded the Group AF outcome on BUG-009's load-path item (`.dwk` load refusing `excludedRows`/`filter` on a pending dataset): built, adversarially reviewed, reverted before reaching `main`; wrote the net-regression finding and the unbuilt plan of record into the item honestly. Added BUG-010 (`migrationWarnings` unreachable on recovery/append/workbook-import loaders) and BUG-011 (Pack Project serializes a pending dataset's preview rows, unlike Save/Save As and workbook transfer) from the same review | Both new entries are design-time findings, code-read and cited by file:line, not yet fixed; BUG-009's item stays `[ ]` open, code unchanged from pre-attempt |
+| 2026-09-13 | Claude | BUG-011 fixed: both Pack Project serialization entry points (the preview and "Start pack") now `await resolvePendingDatasets()` before `serializeWorkspace` and abort with a named `pending_unresolved` error + status + danger toast when a book can't be fetched, mirroring `workspaceIO.ts`'s Save path. The workspace-content slice moved to the new `store/packProjectContent.ts` so the 500-line `.ts` ceiling was met by extraction, not a pin raise; `lib/workspaceSerialize.ts`'s `pending` comment corrected to name all three explicit export paths | All four Fix-checklist boxes ticked with file:line evidence; 5 new specs, each sabotage-verified (4 sabotage rounds, source restored byte-identical); full frontend suite 634 files / 10,381 tests green; eager bundle unchanged at 916,182 B (budget 920,400). Owner call on abort-vs-partial-pack left open in the entry |
+| 2026-09-13 | Claude | Added and fixed BUG-010 (`migrationWarnings` reached the user on a plain File ▸ Open only — autosave recovery, silent autosave restore, Append workspace, and workbook Paste all folded or dropped the notice): one shared `notifyMigrationWarnings` toast helper (`store/toasts.ts`) called from all four sites; `duplicateWorkbook` deliberately excluded (structural non-goal, pinned by test) | BUG-010 fixed + sabotage-verified (one regression test per site); `uv run pytest -q tests/test_repo_integrity.py` passed |
+| 2026-09-13 | Claude | Adversarial review round on the BUG-011 fix (commit `1b7ec2cf`): closed both CONFIRMED code findings — "Start pack"'s own book-resolve await had no generation guard (a cancel/reset during it was silently overwritten, and a second click ran a second concurrent attempt), and a book that turned pending DURING the resolve await was still serialized from its preview rows. Also named the failing book in the refusal (finding #5), corrected two stale cross-references and an understated sabotage count, added a status on the resolve step's success path, and renamed a shadowing `type Set` alias. Recorded `workspaceIO.ts`'s narrower window as a residual rather than fixing it (those files are being edited concurrently for BUG-010) — but WRONGLY recorded the same residual against `workbookTransfer.ts` too, which the round 2 review below found already closed | 4 new specs + 2 existing specs strengthened (65 passing, was 61), every new/strengthened assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0`/scoped vitest/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle reported as +15 B against an orphaned parent SHA — round 2 re-measured against the real parent (`762e00c1`) and found +4 B |
+| 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `a99ebb6d` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
+| 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |

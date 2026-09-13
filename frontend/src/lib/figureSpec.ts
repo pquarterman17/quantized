@@ -62,6 +62,12 @@ export interface FigureRenderOpts {
   /** Blank/undefined = derive the label from the data column. */
   xLabel?: string;
   yLabel?: string;
+  /** P3.3 print-safe export: forces every series to a grey ramp + a forced
+   *  dash/marker cycle server-side (`lib/exportStyles.ts`'s own per-series
+   *  colour/line/marker still ride the wire underneath -- greyscale is
+   *  applied AFTER them, in `calc.figure_greyscale`). Undefined/false omits
+   *  the wire field entirely, matching the backend's own default. */
+  greyscale?: boolean;
 }
 
 /** Optional publication choices layered over a FigureDocument's saved output
@@ -325,6 +331,7 @@ function buildFigureSpecForView(
       : {}),
     overrides: gatedOverrides,
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
+    ...(o.greyscale ? { greyscale: true } : {}),
     filename: extras.filename ?? stem,
   };
 }
@@ -362,6 +369,7 @@ export function buildFigureSpecFromDocument(
       title: overrides.title ?? view.plotTitle,
       xLabel: overrides.xLabel ?? view.xAxisLabel,
       yLabel: overrides.yLabel ?? view.yAxisLabel,
+      greyscale: overrides.greyscale,
     },
     {
       groupKey: document.bindings.groupKey,
@@ -455,6 +463,7 @@ export function buildStageFigureSpec(
         yLabel: o.yLabel,
         filename: null,
         autoSeriesStyles,
+        greyscale: o.greyscale,
       })
     : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };

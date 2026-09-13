@@ -15,6 +15,7 @@ import type { LoadedWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
 import type { WorkbookNode } from "../lib/workbooks";
 import { useApp } from "./useApp";
+import { useToasts } from "./toasts";
 
 const raw: Dataset["data"] = {
   time: [0, 1, 2],
@@ -153,5 +154,20 @@ describe("useApp appendWorkspace — workbook transfer (LIBRARY_WORKBOOK_UX_PLAN
     useApp.getState().appendWorkspace(asLoaded([d]));
     expect(useApp.getState().status).toBe("appended 1 dataset (0 renamed)");
     expect(useApp.getState().workbooks).toEqual([]);
+  });
+
+  // BUG-010: runAppendWorkspace never routes through loadWorkspace at all, so
+  // the appended workspace's own migrationWarnings had NO status-line fold
+  // to begin with — the toast is the only surface it can reach.
+  it("toasts a migrationWarnings notice from the appended workspace (BUG-010)", () => {
+    useToasts.setState({ toasts: [] });
+    const d = { id: "n1", name: "new", data: raw };
+    const ws = asLoaded([d]);
+    ws.migrationWarnings = ['skipped saved FigureDocument "future-fig" with unsupported version 99'];
+
+    useApp.getState().appendWorkspace(ws);
+
+    expect(useApp.getState().status).toBe("appended 1 dataset (0 renamed)");
+    expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
   });
 });
