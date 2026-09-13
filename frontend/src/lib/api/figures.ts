@@ -100,6 +100,15 @@ export interface FigureSpec {
   dpi?: number;
   /** MAIN #35: render on a transparent canvas (Copy figure preference). */
   transparent?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
+   *  colour is overridden to a grey ramp and the dash/marker cycle is
+   *  forced server-side (`calc.figure_greyscale`). Omitted/`false` = today's
+   *  coloured export. An EXPORT-ONLY divergence from the canvas (the on-
+   *  screen plot stays coloured either way) -- a user-chosen export
+   *  transform, not a derived style, so it does not affect the P3.3 style-
+   *  parity invariant `series_styles` exists to satisfy. No-op once
+   *  `facets` is set (see this route's own doc). */
+  greyscale?: boolean;
   /** MAIN #36: per-plotted-series error spans, so an exported figure shows
    *  the same bars the screen does. `null` for a series with none. */
   error_spans?: ({ x?: ErrorPair; y?: ErrorPair } | null)[];

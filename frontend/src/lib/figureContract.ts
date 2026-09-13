@@ -187,6 +187,9 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   series_styles: derived("series.styles"),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
+  greyscale: unsupported(
+    "Export-only print-safe transform (P3.3): a per-export dialog choice, not canonical document state -- a saved document's series_styles/overrides stay the RAW coloured authoring choices regardless of whether a given export was greyscaled.",
+  ),
 } satisfies FieldContractMap<FigureSpec>;
 
 export const FIGURE_FIELD_CONTRACTS = {

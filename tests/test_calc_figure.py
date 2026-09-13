@@ -828,3 +828,107 @@ def test_render_transparent_does_not_change_the_image_size() -> None:
 
     with Image.open(BytesIO(_png())) as a, Image.open(BytesIO(_png(transparent=True))) as b:
         assert a.size == b.size
+
+
+# --- PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: greyscale (print-safe) export -------
+
+_STROKE_HEX = re.compile(r"stroke:\s*#([0-9a-fA-F]{6})")
+_DASHARRAY = re.compile(r"stroke-dasharray:\s*[^;\"]+")
+
+
+def _three_series_svg(**kw: object) -> str:
+    x = np.linspace(0.0, 10.0, 30)
+    out = render_figure(
+        x,
+        [("a", np.sin(x)), ("b", np.cos(x)), ("c", 0.1 * x)],
+        fmt="svg",
+        **kw,
+    )
+    return out.decode("utf-8", "ignore")
+
+
+def test_greyscale_png_differs_from_colour_png() -> None:
+    x = np.linspace(0.0, 10.0, 30)
+    series = [("a", np.sin(x)), ("b", np.cos(x)), ("c", 0.1 * x)]
+    colour = render_figure(x, series, fmt="png", dpi=72)
+    grey = render_figure(x, series, fmt="png", dpi=72, greyscale=True)
+    assert colour != grey
+
+
+def test_greyscale_svg_every_stroke_is_achromatic() -> None:
+    svg = _three_series_svg(
+        greyscale=True,
+        series_styles=[{"color": "#ff0000"}, {"color": "#00ff00"}, {"color": "#0000ff"}],
+    )
+    strokes = _STROKE_HEX.findall(svg)
+    assert len(strokes) >= 3  # at least the three series lines were found
+    for h in strokes:
+        r, g, b = h[0:2], h[2:4], h[4:6]
+        assert r.lower() == g.lower() == b.lower(), f"non-achromatic stroke #{h}"
+
+
+def test_colour_svg_has_a_non_achromatic_stroke_for_contrast() -> None:
+    # Sanity check for the test above: the SAME request WITHOUT greyscale
+    # really does draw a chromatic stroke, so "every stroke is achromatic"
+    # is a meaningful assertion above and not trivially true of every render.
+    svg = _three_series_svg(
+        series_styles=[{"color": "#ff0000"}, {"color": "#00ff00"}, {"color": "#0000ff"}],
+    )
+    strokes = _STROKE_HEX.findall(svg)
+    assert any(h[0:2].lower() != h[2:4].lower() for h in strokes)
+
+
+def test_greyscale_forces_at_least_two_dash_patterns_for_three_default_series() -> None:
+    # No explicit `line` on any series -- the grey ramp alone cannot separate
+    # more than a handful of series, so greyscale mode must also force the
+    # dash cycle (solid/dashed/dotted by display position).
+    svg = _three_series_svg(greyscale=True)
+    patterns = set(_DASHARRAY.findall(svg))
+    assert len(patterns) >= 2
+
+
+def test_colour_render_has_no_forced_dash_cycle_by_default() -> None:
+    # Sanity check for the assertion above: WITHOUT greyscale, three
+    # unstyled series draw solid lines only (today's unchanged behaviour) --
+    # so the dash cycle above is something greyscale mode adds, not
+    # something already there.
+    svg = _three_series_svg()
+    assert not _DASHARRAY.findall(svg)
+
+
+def test_greyscale_explicit_line_style_is_kept() -> None:
+    # An explicit per-series `line` still wins over the forced cycle.
+    svg = _three_series_svg(
+        greyscale=True,
+        series_styles=[{"line": "dashed"}, None, None],
+    )
+    assert _DASHARRAY.findall(svg)
+
+
+def test_facets_renderer_has_no_greyscale_hook() -> None:
+    # FEATURE-001 (plans/BUGS_AND_ISSUES.md): a facet panel never resolves
+    # per-series colour at all -- `calc.figure_facets.draw_facet_grid` always
+    # passes `spec=None` to `_plot_kwargs` -- so there is nothing for
+    # `greyscale` to act on there, and `render_facets_figure` doesn't even
+    # accept the keyword. The route-level no-op contract (a faceted
+    # `/api/export/figure` request renders byte-identically whether or not
+    # `greyscale` is set) is pinned in test_api_export.py, next to the rest
+    # of the facets route tests.
+    import inspect
+
+    from quantized.calc.figure_facets import render_facets_figure
+
+    assert "greyscale" not in inspect.signature(render_facets_figure).parameters
+
+
+def test_greyscale_applies_to_group_col_resolved_series() -> None:
+    # A group_col request has `series_styles=None` (calc.plotting never
+    # resolves per-level styles), but it still renders through THIS module's
+    # ordinary draw_series_axes -- so greyscale must still grey it out.
+    x = np.linspace(0.0, 5.0, 15)
+    series = [("l0", np.sin(x)), ("l1", np.cos(x)), ("l2", x / 5.0)]
+    out = render_figure(x, series, fmt="svg", greyscale=True, series_styles=None)
+    strokes = _STROKE_HEX.findall(out.decode("utf-8", "ignore"))
+    assert strokes
+    for h in strokes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower()

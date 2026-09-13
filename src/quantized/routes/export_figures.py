@@ -146,6 +146,17 @@ class FigureRequest(BaseModel):
     # MAIN_PLAN #35: transparent canvas instead of the preset background —
     # what "Copy figure" needs to paste cleanly onto a coloured slide.
     transparent: bool = False
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
+    # colour is overridden to a position-based grey ramp and the dash/marker
+    # cycle is forced (see `calc.figure_greyscale`'s module doc). An
+    # EXPORT-ONLY transform: the on-screen canvas stays coloured regardless
+    # of this flag, so it is a user-chosen export option, not a derived
+    # style, and does not touch the P3.3 screen/export style-parity
+    # invariant that `series_styles` above exists to satisfy. No-op when
+    # `facets` is set (see this class's `facets` field doc) -- a faceted
+    # panel never resolves per-series colour at all today (FEATURE-001,
+    # `plans/BUGS_AND_ISSUES.md`), so there is nothing for this flag to grey.
+    greyscale: bool = False
     # MAIN_PLAN #36: per-series error spans, mirroring the frontend's
     # ErrorSpan — {x?: {plus, minus}, y?: {plus, minus}} with independent
     # magnitudes so an asymmetric pair survives to the exported figure.
@@ -384,6 +395,7 @@ def export_figure(req: FigureRequest) -> Response:
                 height_in=req.height_in,
                 dpi=dpi,
                 transparent=req.transparent,
+                greyscale=req.greyscale,
                 overrides=req.overrides,
                 x_fmt=_tick_fmt(req.x_fmt),
                 y_fmt=_tick_fmt(req.y_fmt),
@@ -472,6 +484,7 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             style=req.style,
             series_styles=resolved.styles,
             dpi=dpi,
+            greyscale=req.greyscale,
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),
             y_fmt=_tick_fmt(req.y_fmt),

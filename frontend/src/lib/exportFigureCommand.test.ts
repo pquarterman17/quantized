@@ -223,6 +223,69 @@ describe("liveViewOverrides", () => {
   });
 });
 
+describe("runExportFigureCommand — P3.3 greyscale (print-safe) export option", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10], [2, 20]],
+            labels: ["A", "B"],
+            units: ["u", "v"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("omits greyscale from the wire when the dialog's default (false) goes unchanged", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({
+      fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "", greyscale: false,
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect("greyscale" in body).toBe(false);
+  });
+
+  it("sends greyscale: true when the dialog checkbox was turned on", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({
+      fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "", greyscale: true,
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.greyscale).toBe(true);
+  });
+});
+
 describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();

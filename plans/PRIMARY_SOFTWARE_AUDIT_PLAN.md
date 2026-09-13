@@ -3500,8 +3500,93 @@ covers a much smaller subset and guards focus on Analyze.
     be redesigned, whether fewer series should be treated as the "safe"
     simultaneous count, or whether the gap is accepted as-is for a niche
     8-series plot.
-  - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
-    (aps/report/web) have no greyscale variant.
+  - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
+    export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
+
+    - **The field.** `FigureRequest.greyscale: bool = False`
+      (`routes/export_figures.py`), forwarded into `render_figure`/
+      `render_figure_map` (`calc/figure.py`). An EXPORT-ONLY divergence from
+      the canvas by design: the on-screen plot stays coloured regardless —
+      this is a user-chosen export transform, not a derived style, so it
+      does not touch the P3.3 dash/marker-cycle parity invariant
+      (`series_styles`/`overlayExportsSeriesStyles`) at all.
+    - **The mapping** (`calc/figure_greyscale.py`, new, pure/no matplotlib
+      import). NOT a naive per-colour luminance conversion — two series
+      that differ only in hue (exactly what a categorical palette is built
+      to keep apart) can sit at nearly the same relative luminance, so that
+      approach can collapse two on-screen-distinct series into
+      indistinguishable greys. Instead every series gets an EVENLY SPACED
+      grey by DISPLAY POSITION alone, spanning CIE L* 15..70
+      (`greyscale_ramp`), independent of its actual colour — a guaranteed
+      minimum step regardless of how close the original hues were.
+    - **The forced dash/marker cycle** (`apply_greyscale`). A grey ramp
+      alone runs out of separable steps well before a realistic series
+      count, so greyscale mode ALSO forces the P3.3 auto dash cycle
+      (`solid → dashed → dotted`) by display position, and the marker-SHAPE
+      cycle for any series that already draws a marker — the same
+      `LINE_CYCLE`/`MARKER_SHAPES` vocabularies
+      `frontend/src/lib/seriesStyleCycle.ts`'s `AUTO_DASH_CYCLE`/
+      `AUTO_MARKER_CYCLE` use, copied verbatim and pinned equal by a test
+      that reads the TS source directly (`test_calc_figure_greyscale.py`),
+      so the two cannot drift apart unnoticed. Explicit per-series choices
+      still win (an explicit `line`/`marker_shape` is kept, exactly like
+      the frontend cycle's own contract); greyscale never turns a marker ON
+      for a series that did not request one.
+    - **Where it applies.** Every path that reaches `_render_impl`'s
+      `series_styles` list: the flat single-panel render, the y2
+      (secondary-axis) split, manual x-axis breaks, AND a `group_col`
+      grouped-series request (whose `series_styles` is `None` today but
+      still draws through the same `draw_series_axes` — greyscale still
+      ramps it). Error bars and fills inherit their series' drawn colour
+      automatically (`artist.get_color()`), so they follow the grey ramp
+      with no extra code. A `color_by` colour-mapped scatter (MAIN #14) is
+      passed through UNCHANGED, colourmap included — its colour IS the
+      plotted quantity, not a categorical distinction, so forcing it grey
+      would delete information rather than make the figure print-safe; this
+      is a deliberate, documented residual, not an oversight.
+    - **RESIDUAL — facets stay a no-op, honestly.** A faceted small-
+      multiples request (`FigureRequest.facets`) renders through
+      `calc.figure_facets`, which never resolves per-series colour at all
+      today (FEATURE-001, `plans/BUGS_AND_ISSUES.md` — the screen's own
+      facet grid draws default matplotlib colours too, so there is nothing
+      for a per-series style to override). `greyscale` is therefore a
+      documented no-op there: the route never threads it into the facet
+      renderer, pinned byte-identical by
+      `test_figure_facets_greyscale_is_a_no_op` (`tests/test_api_export.py`).
+      Fixing this for real is FEATURE-001's job (screen AND export
+      together), not this item's.
+    - **Frontend.** A "Greyscale (print-safe)" checkbox in the "Export
+      figure…" dialog (`lib/exportFigureCommand.ts`, a `ParamField` of
+      `type: "boolean"` — the first boolean field this dialog has ever had),
+      titled with the export-only-divergence warning verbatim. Threaded
+      through `FigureRenderOpts.greyscale` (`lib/figureSpec.ts`) onto the
+      wire only when true (`{ greyscale: true }` spread, matching every
+      other optional-boolean field's own convention here) — omitted/false
+      is byte-identical to before this option existed. NOT persisted: the
+      dialog does not persist `fmt`/`style`/`dpi`/labels across opens
+      either (every field re-defaults each time it opens), so `greyscale`
+      mirrors that — no new store, per the design brief's own instruction.
+      Classified `unsupported` (not `output`) in `figureContract.ts`'s
+      FigureSpec census: it is a per-export dialog choice, never part of a
+      saved FigureDocument's canonical/output state, so a document's own
+      `series_styles`/`overrides` stay the RAW authored (coloured) choices
+      regardless of whether any one export of it happened to be greyscaled.
+      "Copy figure"/"Copy figure (vector)" — which render with no dialog at
+      all, by design — do not gain a greyscale option; that is consistent
+      with those commands never exposing `style` either.
+    - **Tests.** Backend: `tests/test_calc_figure_greyscale.py` (ramp order/
+      min-step/pinned values, `apply_greyscale`'s explicit-wins/no-op-for-
+      color_by/never-mutates behaviour, the frontend-vocabulary drift
+      guard) plus render-level assertions in `test_calc_figure.py` (a
+      greyscale PNG differs from the coloured one; every SVG stroke is
+      achromatic; three unstyled series produce >=2 distinct
+      `stroke-dasharray` patterns; the facets no-op). Frontend:
+      `figureSpec.test.ts` pins `greyscale: true` on the wire when opted in
+      and its ABSENCE when off or omitted, through both the live-view and
+      document-routed builders; `ParamDialog.test.tsx` gained the dialog's
+      first-ever boolean-field coverage (unchecked default, click-to-toggle,
+      the hint surfacing as the label's title); `exportFigureCommand.test.ts`
+      pins the command threading the dialog's answer onto the wire.
 
   Two things the audit turned up on the way. One was a real bug and is FIXED;
   the other looked like a bug, was investigated properly, and turned out to be a

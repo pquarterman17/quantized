@@ -307,6 +307,20 @@ def test_figure_facets_pdf_and_png_render() -> None:
         assert resp.content[: len(magic)] == magic
 
 
+def test_figure_facets_greyscale_is_a_no_op() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: a facet panel never resolves
+    # per-series colour (FEATURE-001, plans/BUGS_AND_ISSUES.md), so the route
+    # never threads `greyscale` into the facet renderer at all -- a faceted
+    # export renders BYTE-IDENTICAL whether or not `greyscale` is requested,
+    # rather than silently doing nothing while looking wired. PNG (not
+    # PDF/SVG): deterministic, no embedded timestamp to strip.
+    base = {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()}
+    colour = client.post("/api/export/figure", json=base)
+    grey = client.post("/api/export/figure", json={**base, "greyscale": True})
+    assert colour.status_code == grey.status_code == 200
+    assert colour.content == grey.content
+
+
 def test_figure_facets_title_and_labels_apply_figure_wide() -> None:
     resp = client.post(
         "/api/export/figure",
@@ -710,6 +724,36 @@ def test_figure_series_styles_applied() -> None:
             "dataset": _xrd_dataset(),
             "fmt": "svg",
             "series_styles": [{"color": "#abcdef", "width": 2.5, "line": "dashed"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert "#abcdef" in resp.content.decode("utf-8", "ignore")
+
+
+def test_figure_greyscale_overrides_an_explicit_series_colour() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: `greyscale` wins over an explicit
+    # per-series `color` -- print-safe mode is not an accent, it replaces
+    # colour outright (calc.figure_greyscale.apply_greyscale).
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "greyscale": True,
+            "series_styles": [{"color": "#abcdef"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert "#abcdef" not in resp.content.decode("utf-8", "ignore")
+
+
+def test_figure_greyscale_defaults_to_off() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "series_styles": [{"color": "#abcdef"}],
         },
     )
     assert resp.status_code == 200

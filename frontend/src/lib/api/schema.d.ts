@@ -6395,6 +6395,11 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /**
+             * Greyscale
+             * @default false
+             */
+            greyscale?: boolean;
             /** Group Col */
             group_col?: number | null;
             /** Height In */

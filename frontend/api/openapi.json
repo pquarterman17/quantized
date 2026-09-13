@@ -3679,6 +3679,11 @@
             "title": "Fmt",
             "type": "string"
           },
+          "greyscale": {
+            "default": false,
+            "title": "Greyscale",
+            "type": "boolean"
+          },
           "group_col": {
             "anyOf": [
               {
