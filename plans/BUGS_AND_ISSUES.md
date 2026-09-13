@@ -34,7 +34,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
-| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review round 2 (2026-09-13) closed a regression round 1 introduced (`startInFlight` could stick forever on a hung fetch), finished the finding #5 fix (reason now paired with its own book, not a stale one), closed the still-lying status-line nit, and corrected a false "still open" residual claim against `workbookTransfer.ts` — see the entry. Owner call on abort-vs-partial-pack still open |
+| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -2933,6 +2933,63 @@ off-by-one spec-range citation) and six nits. This follow-up commit closes:
   abort-vs-partial-pack choice); nit 5's "named book may be merely slow"
   narrowing is a new, separate open judgment call from this round.
 
+#### Residual closed (2026-09-13): Save/Save As now closes finding #2's window too
+
+Round 1's Residual bullet and round 2's correction of it left one real gap
+open: `store/workspaceIO.ts`'s `prepareWorkspaceState` — the shared preface
+for Save and Save As — re-read the store after its own
+`await get().resolvePendingDatasets()` but never re-checked `pending` on
+that re-read, the identical window finding #2 closed for Pack Project. It
+was left open at the time because `store/workspaceIO.ts` and the other
+BUG-010 files were being edited concurrently for that bug; BUG-010 has
+since landed and been through its own review round, so this follow-up
+commit closes it:
+
+- **The fix, mirroring `packProjectContent.ts`'s own post-await re-check
+  verbatim:** `prepareWorkspaceState` (`frontend/src/store/workspaceIO.ts`)
+  re-checks `s.datasets` for a still-`pending` entry right after the
+  `const s = get();` re-read (resolve call `:73`, re-check `:81-96`) and
+  refuses the save — `"couldn't load full data for every book: \"<name>\" was
+  still loading"`, same status + danger-toast shape as the sibling
+  fetch-failure `catch` immediately above it — rather than letting a book
+  that turned pending DURING the resolve await reach `serializeWorkspace`
+  with its downsampled preview rows (and a stray `pending` field). Both Save
+  and Save As share this one preface function, so one fix closes it for
+  both entry points, exactly like Pack Project's preview/Start-pack pair
+  shared `serializeCurrentWorkspaceForPack`.
+- **`lib/workspaceSerialize.ts`'s `pending` comment updated to say so:** the
+  comment previously narrowed itself, twice, to name `store/workspaceIO.ts`
+  as the one export path still carrying this window. It now states the
+  guarantee holds on every explicit export path — Save, Save As, workbook
+  Copy/Duplicate, and Pack Project all resolve pending datasets first AND
+  refuse rather than serialize a book that turns pending again during that
+  resolve.
+- **Regression test:** `frontend/src/store/workspaceIO.test.ts`'s new
+  `describe("BUG-011 residual — a book that goes pending DURING the resolve
+  await (Save/Save As)")` — same shape as `packProject.test.ts`'s sibling
+  spec for finding #2: a lazy book's fetch is held open, a second lazy book
+  is added to the store while the first is still in flight, then the first
+  resolves. Asserts the save is refused by name (`"book2.opj" was still
+  loading"`), the danger toast carries the same text, `saveBlob` (the
+  browser-download fallback this path exercises) is never called, and
+  `currentProject` stays `null` — never serialized, never written.
+  Sabotage-verified: removing the re-check fails exactly this one new spec
+  (41 other specs in the file untouched), restored byte-identical after.
+- Scope: `store/workspaceIO.ts` and `lib/workspaceSerialize.ts` were the only
+  files this residual named as open; `store/workbookTransfer.ts` and
+  `lib/workbookTransfer.ts` were already closed (round 2's correction) and
+  are untouched here.
+- **Bundle:** measured against this commit's real parent, `2920e34a`
+  (`git rev-parse HEAD~1`, printed after committing) — `2920e34a` builds to
+  916,466 B eager (rebuilt in a throwaway `git worktree add` with its own
+  `npm ci`, never a `cp -r` of a worktree), this commit to 916,645 B, +179 B,
+  3,755 B under the unmoved 920,400 B budget.
+- Owner verification: unchanged from the original fix and every review round
+  since — still open (the severity call and abort-vs-partial-pack choice,
+  and nit 5's "named book may be merely slow" narrowing from round 3). This
+  residual closure is a code-verifiable fix, not a resolution of either
+  open owner call.
+
 ---
 
 ## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
@@ -3212,3 +3269,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `a99ebb6d` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
 | 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `2920e34a` -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |

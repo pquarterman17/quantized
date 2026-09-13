@@ -79,6 +79,21 @@ async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
     }
   }
   const s = get();
+  // BUG-011 residual (2026-09-13): `resolvePendingDatasets()` only awaits the
+  // books that were PENDING when it was called — a lazy import landing while
+  // that `Promise.all` is still in flight is never in that snapshot, so the
+  // re-read above can still carry a dataset whose `pending` came back true
+  // AFTER the resolve step finished with it. Refuse rather than serialize its
+  // downsampled preview rows, mirroring `store/packProjectContent.ts`'s own
+  // post-await re-check (BUG-011 finding #2) — same refusal shape as the
+  // catch block just above, naming the book the same way.
+  const stillPending = s.datasets.find((d) => d.pending);
+  if (stillPending) {
+    const msg = `save failed — couldn't load full data for every book: "${stillPending.name}" was still loading`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return null;
+  }
   // PLOT_WORKFLOW_PLAN item 5: fold the FOCUSED window's still-live view into
   // its technique's memory slot before saving — mirrors `windowsForSave()`'s
   // "save is a sanctioned snapshot point" so unswitched-away edits aren't lost.

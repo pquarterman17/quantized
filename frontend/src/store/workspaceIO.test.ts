@@ -15,8 +15,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
+import { resetBookTransportForTests } from "../lib/bookData";
 import { saveBlob } from "../lib/download";
-import type { DataStruct } from "../lib/types";
+import type { Dataset, DataStruct } from "../lib/types";
 import { UNVERIFIABLE_DEMOTE_AFTER, type LockRecord } from "../lib/lockState";
 import { useApp } from "./useApp";
 import { useProjectLock, type LockProvider } from "./projectLock";
@@ -25,6 +27,15 @@ import { useToasts } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
 
 vi.mock("../lib/download", () => ({ saveBlob: vi.fn() }));
+// BUG-011 residual (2026-09-13): only the lazy-book fetch is faked here —
+// the mid-resolve-await pending race below (`prepareWorkspaceState`'s own
+// post-await re-check) needs `fetchBookData` controllable, same shape as
+// `packProject.test.ts`'s identical BUG-011 mock. Everything else in
+// lib/api stays real.
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  fetchBookData: vi.fn(),
+}));
 
 interface FakeApi {
   save_file_dialog?: (name?: string, directory?: string) => Promise<Record<string, unknown>>;
@@ -92,6 +103,7 @@ function freshLockProvider(): LockProvider & { store: Map<string, LockRecord> } 
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetBookTransportForTests();
   setShell(null);
   localStorage.clear();
   useWorkingPaths.setState({ paths: [], current: "" });
@@ -847,5 +859,70 @@ describe("Save As destination lock — R4 unverifiable CAS refusal", () => {
 
     expect(write).toHaveBeenCalledTimes(1);
     expect(useApp.getState().currentProject).toEqual({ name: "dest.dwk", path: "/proj/dest.dwk" });
+  });
+});
+
+// -- BUG-011 residual (2026-09-13): a book that goes pending DURING the ---
+// resolve await, on Save/Save As -----------------------------------------
+//
+// `resolvePendingDatasets()` only awaits the books that were PENDING when it
+// was CALLED; a lazy import landing mid-await is never in that snapshot.
+// `store/packProjectContent.ts`'s identical fix (BUG-011 finding #2) is
+// exercised through the pack preview in packProject.test.ts — this is the
+// same race through `prepareWorkspaceState`, the shared preface for both
+// Save and Save As (exercised here via the browser-download path, since
+// `prepareWorkspaceState` runs identically before either destination is
+// even chosen).
+
+describe("BUG-011 residual — a book that goes pending DURING the resolve await (Save/Save As)", () => {
+  const fullRows: DataStruct = {
+    time: [0, 1, 2, 3, 4, 5],
+    values: [[1], [2], [3], [4], [5], [9]],
+    labels: ["m"],
+    units: ["emu"],
+    metadata: {},
+  };
+
+  function lazyBook(id: string): Dataset {
+    return {
+      id,
+      name: `${id}.opj`,
+      data: { time: [0, 5], values: [[1], [9]], labels: ["m"], units: ["emu"], metadata: { lazy_preview: true } },
+      pending: { kind: "path", path: `/${id}.opj`, bookId: "Book2", rows: 6, cols: 1 },
+    };
+  }
+
+  it("refuses the save, never serializes, when a dataset becomes pending mid-resolve", async () => {
+    useApp.setState({ datasets: [lazyBook("book1")], activeId: "book1", plotWindows: [], focusedWindowId: null });
+    let resolveBook1: (d: DataStruct) => void = () => {};
+    vi.mocked(fetchBookData).mockImplementation((source) => {
+      if (source.path === "/book1.opj") {
+        return new Promise((resolve) => {
+          resolveBook1 = resolve;
+        });
+      }
+      return Promise.resolve(fullRows);
+    });
+
+    const saveCall = useApp.getState().saveWorkspaceToFile();
+    await vi.waitFor(() => expect(useApp.getState().status).toContain("fetching"));
+
+    // A second lazy book lands WHILE book1's fetch is still in flight --
+    // `resolvePendingDatasets` (already called, already awaiting book1
+    // alone) has no way to know book2 exists at all.
+    useApp.setState({ datasets: [...useApp.getState().datasets, lazyBook("book2")] });
+
+    resolveBook1(fullRows);
+    await saveCall;
+
+    // Refused by name, exactly like the sibling fetch-failure abort just
+    // above it in `prepareWorkspaceState` -- never a download of book2's
+    // still-decimated preview rows.
+    expect(useApp.getState().status).toContain('"book2.opj" was still loading');
+    expect(useToasts.getState().toasts.at(-1)).toMatchObject({ kind: "danger" });
+    expect(useToasts.getState().toasts.at(-1)?.msg).toContain('"book2.opj" was still loading');
+    expect(saveBlob).not.toHaveBeenCalled();
+    // Never marked as saved -- projectDirty must stay whatever it already was.
+    expect(useApp.getState().currentProject).toBeNull();
   });
 });
