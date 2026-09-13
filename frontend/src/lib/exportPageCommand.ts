@@ -6,6 +6,14 @@
 // decoded layout instead of a user-picked grid. Kept out of appCommands.ts
 // (that module's own store-size ratchet, same discipline as
 // lib/exportFigureCommand.ts / lib/pageSetupCommand.ts).
+//
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations):
+// this command does NOT route through lib/exportActive.ts's shared
+// chokepoint (it resolves N panels' datasets, not one active dataset, and
+// has its own params dialog in between) — see this file's own doc for why —
+// so it registers its OWN pendingOps entry with the exact same
+// AbortController + `controller.signal.aborted` cancel-detection shape that
+// module uses, rather than inventing a different mechanism.
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
@@ -13,6 +21,7 @@ import { spatialPanelsOf } from "./composition";
 import type { StoreGet } from "./exportActive";
 import { analysisData } from "./rowstate";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
+import { beginOp, endOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
 import type { DataStruct } from "./types";
 
@@ -35,6 +44,8 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     toast(msg, "danger");
     return;
   }
+  const controller = new AbortController();
+  const opId = beginOp("Exporting page…", () => controller.abort());
   try {
     const entries = await Promise.all(
       panels!.map(async (p) => {
@@ -42,6 +53,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
         return ds ? ([p.datasetId, analysisData(ds) ?? ds.data] as const) : null;
       }),
     );
+    if (controller.signal.aborted) return; // cancelled while resolving panel datasets
     const missing = entries.some((e) => e === null);
     const datasets = new Map(
       entries.filter((e): e is readonly [string, DataStruct] => e !== null),
@@ -80,12 +92,23 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       },
     ]);
     if (!params) return;
+    if (controller.signal.aborted) return; // cancelled while the dialog was open
     const fmt = params.fmt as string;
-    await exportFigurePage({ ...spec, fmt, dpi: params.dpi as number, filename: "origin_page" });
+    await exportFigurePage(
+      { ...spec, fmt, dpi: params.dpi as number, filename: "origin_page" },
+      controller.signal,
+    );
+    if (controller.signal.aborted) return; // race guard — see exportActive.ts's own doc
     toast(`exported origin_page.${fmt}`, "ok");
   } catch (e: unknown) {
+    if (controller.signal.aborted) {
+      s().setStatus("export cancelled");
+      return;
+    }
     const msg = `export page failed: ${e instanceof Error ? e.message : "error"}`;
     s().setStatus(msg);
     toast(msg, "danger");
+  } finally {
+    endOp(opId);
   }
 }

@@ -3388,6 +3388,49 @@ Prioritized slices (in pain order):
   Re-verified 2026-09-09: `tests/test_calc_decimate.py` +
   `tests/test_api_plot.py` — 54 passed, 1 skipped;
   `usePlotPayload.test.ts` + `lib/plotdata.test.ts` — 116 passed.
+- [x] ~~**Slice 5 — export cancel**~~ SHIPPED 2026-09-13 (the audit's
+  remaining "export" gap from the 2026-07-26 evidence table — import and
+  the DREAM/bumps fit already had cancel). CSV/HDF5 export, figure export,
+  Origin (.ogs) export, and figure copy (PNG + vector SVG) all route
+  through the shared `lib/exportActive.ts` chokepoint, which now registers
+  a cancellable pendingOps entry the same way `runImport` (slice 1) does:
+  one `AbortController` per call, a StatusBar Cancel button via
+  `beginOp`/`endOp`, `controller.signal.aborted` (never the shape of a
+  caught error) deciding "this was a cancel". The spatial "Export page…"
+  composer (`lib/exportPageCommand.ts`) does not route through
+  `exportActive` (N panel datasets + its own params dialog, not one active
+  dataset) so it wires the identical AbortController/pendingOps shape
+  itself rather than a second mechanism. `signal?: AbortSignal` threaded
+  through `postJSON`/`postForm`'s existing pattern into `postBlob`/
+  `postDownload` (`lib/api/http.ts`) and every export wrapper that calls
+  them. HONEST RESIDUAL: `routes/export*.py` (`export.py`,
+  `export_figures.py`, `export_page.py`) are synchronous `def`s with no
+  `Request` parameter or disconnect check, so the backend renders to
+  completion regardless of a client abort — cancel is "stop waiting and
+  discard the result," not "stop the server," for every export kind. That
+  result can never be written late: `postDownload`/`postBlob` re-check the
+  SAME signal synchronously, right before `saveBlob`/returning the blob
+  (no `await` in between), closing the race where the response lands the
+  instant Cancel is clicked — covered by `lib/api/http.test.ts`'s
+  abort-race-guard tests. "Send to Origin (COM)" and "Export consolidated
+  CSV" (`commands/fileCommandsLazy.ts`'s `runSendToOrigin`/
+  `runExportConsolidated`) are bulk, multi-dataset operations with no
+  single active-dataset chokepoint to hang cancel off, and are left
+  uncancelled — a deliberate carve-out, not an oversight, matching slice
+  1's own "import wizard `importParse` left unwired" precedent. Tests:
+  `lib/exportActive.test.ts` (new, the shared mechanism), kind-specific
+  cancel cases added to `lib/exportFigureCommand.test.ts` (figure),
+  `lib/exportPageCommand.test.ts` (page), `lib/copyFigureCommand.test.ts`
+  (copy-to-clipboard), the abort-race guard in `lib/api/http.test.ts`, a
+  double-pendingOps-registration regression guard in
+  `commands/fileCommands.test.ts`, and a DOM-level StatusBar integration
+  test in `components/Shell/StatusBar.test.tsx`. Bundle: moving
+  `export-csv`/`export-hdf5`/`export-page`'s command bodies to the same
+  click-only dynamic-import pattern `export-figure`/`export-origin`
+  already used took `lib/exportActive.ts`/`lib/exportPageCommand.ts`
+  (and this slice's own growth) off the eager path entirely — eager JS
+  measured 920,089 → 915,638 B after `npm ci` (net DOWN despite the new
+  cancel machinery), budget unchanged at 920,400 B.
 
 Original acceptance criteria (unchanged):
 
@@ -3402,7 +3445,12 @@ Original acceptance criteria (unchanged):
   `usePendingOps` and never reads a job-queue id, so a DREAM/fit-scan job's
   progress and identity are invisible to the shared location. Two
   progress systems coexist, not one; box stays open for that specific gap.
-- [ ] Safe cancel for long import/fit/batch/export.
+- [x] Safe cancel for long import/fit/batch/export. Import (slice 1) and
+  the DREAM/bumps fit shipped earlier; export shipped above (slice 5) with
+  one honest caveat — cancel there means "stop waiting, discard the
+  result," since the export routes don't honor a client disconnect
+  server-side — and two named carve-outs (Send to Origin COM, Export
+  consolidated CSV) that stay uncancelled.
 - [ ] Errors say what failed, whether data changed, and next action.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**

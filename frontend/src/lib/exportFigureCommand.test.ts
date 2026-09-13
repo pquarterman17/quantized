@@ -13,6 +13,8 @@ import { createFigureDocument } from "./figureDocument";
 import { liveViewOverrides } from "./figureViewOverrides";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
+import { usePendingOps } from "../store/pendingOps";
+import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
 vi.mock("./api/figures", () => ({
@@ -721,5 +723,93 @@ describe("runExportFigureCommand — F2.5b (routes through the focused window's 
     await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
     expect(exportFigure).not.toHaveBeenCalled();
     expect(useApp.getState().status).toContain("grouped figures cannot use a secondary Y axis");
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations) —
+// the "figure" export kind. exportActive.test.ts covers the shared cancel
+// mechanism generically; this pins that "Export figure…" reaches it wired
+// correctly: the AbortSignal it registers actually lands on the exportFigure
+// call, and a cancel clears the busy op without a download or a toast.
+describe("runExportFigureCommand — safe cancel (P3.4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    usePendingOps.setState({ ops: [] });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10, 100], [2, 20, 200]],
+            labels: ["A", "B", "C"],
+            units: ["u", "v", "w"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("threads a real, abortable AbortSignal into exportFigure", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let reject!: (e: unknown) => void;
+    vi.mocked(exportFigure).mockImplementation((_body, signal) => {
+      capturedSignal = signal;
+      return new Promise((_r, rj) => (reject = rj));
+    });
+
+    const p = runExportFigureCommand(useApp.getState);
+    await vi.waitFor(() => expect(capturedSignal).toBeInstanceOf(AbortSignal));
+    expect(capturedSignal!.aborted).toBe(false);
+
+    usePendingOps.getState().ops[0].cancel!();
+    expect(capturedSignal!.aborted).toBe(true);
+
+    reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await p;
+
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(useToasts.getState().toasts).toEqual([]); // no error toast, no success toast
+  });
+
+  it("registers the op with a Cancel affordance while the render is in flight", async () => {
+    let reject!: (e: unknown) => void;
+    vi.mocked(exportFigure).mockReturnValue(new Promise((_r, rj) => (reject = rj)));
+
+    const p = runExportFigureCommand(useApp.getState);
+    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+    expect(usePendingOps.getState().ops[0].label).toBe("Exporting scan.dat…");
+    expect(typeof usePendingOps.getState().ops[0].cancel).toBe("function");
+
+    usePendingOps.getState().ops[0].cancel!();
+    reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await p;
+    expect(usePendingOps.getState().ops).toHaveLength(0); // busy indicator cleared
   });
 });

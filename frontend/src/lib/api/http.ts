@@ -103,27 +103,54 @@ export async function postForm<T>(path: string, form: FormData, signal?: AbortSi
   return unwrap<T>(await fetch(path, { method: "POST", body: form, signal }));
 }
 
-/** POST JSON -> raw response bytes (the server-rendered preview images). */
-export async function postBlob(path: string, body: unknown): Promise<Blob> {
+/** Throws the same `AbortError` `fetch` itself would throw for `signal` — the
+ *  export-cancel race guard (PRIMARY_SOFTWARE_AUDIT_PLAN P3.4): a click on
+ *  Cancel between the response arriving and the blob being written/saved
+ *  can't be caught by `fetch`'s own abort wiring (the network part is
+ *  already done), so `postBlob`/`postDownload` call this themselves, in the
+ *  same synchronous turn as the write, right after decoding the body and
+ *  before ever touching the clipboard or the disk — no `await` runs between
+ *  this check and that write, so nothing can race it. */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+}
+
+/** POST JSON -> raw response bytes (the server-rendered preview images).
+ *  `signal` — see postJSON; also re-checked right before returning (see
+ *  `throwIfAborted`'s doc) so a caller handing the still-pending Blob to the
+ *  clipboard (copyImageAsync/copySvgAsync) can never resolve it post-cancel. */
+export async function postBlob(path: string, body: unknown, signal?: AbortSignal): Promise<Blob> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
-  return (await ensureOk(res)).blob();
+  const blob = await (await ensureOk(res)).blob();
+  throwIfAborted(signal);
+  return blob;
 }
 
 /** POST JSON, then download the response body as a file (Content-Disposition
  *  attachment) — the export routes. Lives here rather than lib/download so
  *  its error handling rides `ensureOk`; the DOM save helpers stay in
- *  lib/download (which does no fetching). */
-export async function postDownload(path: string, body: unknown, fallbackName: string): Promise<void> {
+ *  lib/download (which does no fetching). `signal` — see postJSON; also
+ *  re-checked right before `saveBlob` (see `throwIfAborted`'s doc) so a
+ *  cancelled export can never still trigger the download. */
+export async function postDownload(
+  path: string,
+  body: unknown,
+  fallbackName: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   const blob = await (await ensureOk(res)).blob();
+  throwIfAborted(signal);
   saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
 }
 

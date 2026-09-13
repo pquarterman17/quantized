@@ -117,8 +117,11 @@ export interface FigureSpec {
   filename?: string;
 }
 
-export function exportFigure(body: FigureSpec): Promise<void> {
-  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);
+/** `signal` — P3.4 safe-cancel-for-export (lib/exportActive.ts): aborts the
+ *  in-flight render/download; postDownload's own race guard means a cancel
+ *  can never still trigger the browser download once the response lands. */
+export function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** Preview render + element hit-map (#13): PNG + per-artist pixel boxes. */
@@ -127,9 +130,11 @@ export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
 }
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG
- *  preview (the figure builder), as opposed to exportFigure which downloads. */
-export function renderFigureBlob(body: FigureSpec): Promise<Blob> {
-  return postBlob("/api/export/figure", body);
+ *  preview (the figure builder), as opposed to exportFigure which downloads.
+ *  `signal` — see exportFigure; also what keeps "Copy figure" from writing a
+ *  cancelled render to the clipboard (postBlob's own race guard). */
+export function renderFigureBlob(body: FigureSpec, signal?: AbortSignal): Promise<Blob> {
+  return postBlob("/api/export/figure", body, signal);
 }
 
 /** Posted joint-parameter samples for a corner (pairs) plot — e.g.

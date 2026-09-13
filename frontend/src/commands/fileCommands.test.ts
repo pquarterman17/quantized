@@ -20,9 +20,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
+import { runAction } from "../store/commands";
+import { usePendingOps } from "../store/pendingOps";
 import { useApp } from "../store/useApp";
 
 /** The exact string quick-figure-lifecycle.spec.ts passes to `getByText(...,
@@ -77,4 +79,52 @@ describe("File menu — Pack Project command", () => {
     const { runPackProject } = await import("./packProjectCommands");
     expect(runPackProject).toHaveBeenCalledOnce();
   });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations):
+// export-csv/export-hdf5/export-origin route through lib/exportActive.ts,
+// which now registers its own cancellable pendingOps entry (label + Cancel
+// callback). Their `run()` bodies MUST be `void`-prefixed (like
+// export-figure's own dynamic import already was) so store/commands.ts's
+// `runAction` chokepoint does not ALSO wrap the returned promise in a SECOND,
+// generic (non-cancellable) op under the action's own label — that bug shape
+// is exactly what going through the real `runAction` entry point here (not
+// calling `cmd.run()` directly) catches.
+describe("File menu — export commands register exactly one pending op (no double-registration)", () => {
+  beforeEach(() => {
+    usePendingOps.setState({ ops: [] });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan.dat", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } },
+      ],
+      activeId: "d1",
+    });
+    // A stalled fetch (never settling on its own) so the op stays registered
+    // long enough to observe -- without this, the real export request
+    // rejects near-instantly (no backend in this test environment) entirely
+    // via microtasks, and vi.waitFor's macrotask-based poll never gets a
+    // chance to run before begin+end have both already happened.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(["export-csv", "export-hdf5", "export-origin"])(
+    "%s via runAction registers exactly one pendingOps entry, with a cancel callback",
+    async (id) => {
+      const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);
+      if (!cmd) throw new Error(`no ${id} command`);
+      runAction(cmd);
+      await vi.waitFor(() => expect(usePendingOps.getState().ops.length).toBeGreaterThan(0));
+      // Exactly one -- a second, generic entry from runAction's own
+      // (non-cancellable) wrap would mean run() was not void-prefixed.
+      expect(usePendingOps.getState().ops).toHaveLength(1);
+      expect(typeof usePendingOps.getState().ops[0].cancel).toBe("function");
+      // Clean up: cancel so the stalled fetch's fallout doesn't leak into
+      // the next test as an unresolved op/promise.
+      usePendingOps.getState().ops[0].cancel!();
+    },
+  );
 });

@@ -157,25 +157,29 @@ export function fitModel(req: FitRequest): Promise<CalcResult> {
 }
 
 // ── Export (file downloads) ─────────────────────────────────────────────────
-/** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
+/** Export XRD data as CSV / Origin ASCII; triggers a browser download.
+ *  `signal` lets a caller abort mid-request (P3.4 safe-cancel-for-export —
+ *  see lib/exportActive.ts) the same way importFile's does; the backend may
+ *  still finish rendering server-side, the client just stops waiting and the
+ *  download never fires (postDownload's own abort-race guard). */
 export function exportXrdCsv(body: {
   dataset: DataStruct;
   fmt?: string;
   intensity?: string;
   include_metadata?: boolean;
   filename?: string;
-}): Promise<void> {
-  return postDownload("/api/export/xrd-csv", body, "export.csv");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/xrd-csv", body, "export.csv", signal);
 }
 
 /** Export a DataStruct (+ optional corrected view) as a self-describing HDF5
- *  file; triggers a browser download. */
+ *  file; triggers a browser download. `signal` — see exportXrdCsv. */
 export function exportHdf5(body: {
   dataset: DataStruct;
   corrected?: DataStruct | null;
   filename?: string;
-}): Promise<void> {
-  return postDownload("/api/export/hdf5", body, "export.h5");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/hdf5", body, "export.h5", signal);
 }
 
 /** Current plot-state snapshot for the .ogs GRAPH block (item 26) — mirrors
@@ -201,8 +205,8 @@ export function exportOrigin(body: {
   log_y?: boolean;
   make_graph?: boolean;
   graph?: OriginGraphSpec;
-}): Promise<void> {
-  return postDownload("/api/export/origin", body, "export.zip");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/origin", body, "export.zip", signal);
 }
 
 /** Whether COM "Send to Origin" is usable right now (Windows + pywin32 +

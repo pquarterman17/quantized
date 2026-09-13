@@ -5,6 +5,17 @@
 // Origin (COM)" note); "Export Origin (.ogs)" and "Export consolidated CSV"
 // are occasional bulk-export actions.
 //
+// "Export XRD CSV…"/"Export HDF5…" joined this module for the SAME bundle
+// reason (PRIMARY_SOFTWARE_AUDIT_PLAN P3.4's safe-cancel-for-export work):
+// wiring their cancel affordance through lib/exportActive.ts grew that
+// shared module past the point fileCommands.ts's own eager import of it
+// could still afford. Moving these two bodies here — the exact "reductions
+// first" move the ratchet's own review process asks for before any pin
+// raise — took `exportActive` itself off fileCommands.ts's eager import
+// list entirely (every remaining eager caller of it was already gone), so
+// the module and its P3.4 growth are lazy-only now, like every other export
+// body in this file.
+//
 // The actual `lib/api.ts` calls stay imported EAGERLY in fileCommands.ts and
 // are passed in as parameters, rather than re-imported here — api.ts is
 // already reachable synchronously elsewhere (store/useApp.ts's
@@ -23,7 +34,27 @@
 
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { toast } from "../store/toasts";
-import type { exportConsolidated, exportOrigin, originComStatus, sendToOrigin } from "../lib/api";
+import type {
+  exportConsolidated,
+  exportHdf5,
+  exportOrigin,
+  exportXrdCsv,
+  originComStatus,
+  sendToOrigin,
+} from "../lib/api";
+
+export async function runExportXrdCsv(s: StoreGet, exportXrdCsvFn: typeof exportXrdCsv): Promise<void> {
+  await exportActive(s, (stem, ds, signal) => exportXrdCsvFn({ dataset: ds.data, filename: stem }, signal));
+}
+
+export async function runExportHdf5(s: StoreGet, exportHdf5Fn: typeof exportHdf5): Promise<void> {
+  await exportActive(s, (stem, ds, signal) =>
+    exportHdf5Fn(
+      ds.raw ? { dataset: ds.raw, corrected: ds.data, filename: stem } : { dataset: ds.data, filename: stem },
+      signal,
+    ),
+  );
+}
 
 export async function runSendToOrigin(
   s: StoreGet,
@@ -69,23 +100,26 @@ export async function runSendToOrigin(
 }
 
 export async function runExportOrigin(s: StoreGet, exportOriginFn: typeof exportOrigin): Promise<void> {
-  await exportActive(s, (stem, ds) =>
-    exportOriginFn({
-      dataset: ds.data,
-      filename: stem,
-      log_x: s().xScale === "log", // Origin's own axis type is boolean-only
-      log_y: s().yScale === "log",
-      // Current plot state -> an Origin GRAPH, not just the workbook (item 26).
-      graph: {
-        y_keys: s().yKeys,
-        x_key: s().xKey,
-        x_log: s().xScale === "log",
-        y_log: s().yScale === "log",
-        x_lim: s().xLim,
-        y_lim: s().yLim,
-        y2_keys: s().y2Keys ?? [],
+  await exportActive(s, (stem, ds, signal) =>
+    exportOriginFn(
+      {
+        dataset: ds.data,
+        filename: stem,
+        log_x: s().xScale === "log", // Origin's own axis type is boolean-only
+        log_y: s().yScale === "log",
+        // Current plot state -> an Origin GRAPH, not just the workbook (item 26).
+        graph: {
+          y_keys: s().yKeys,
+          x_key: s().xKey,
+          x_log: s().xScale === "log",
+          y_log: s().yScale === "log",
+          x_lim: s().xLim,
+          y_lim: s().yLim,
+          y2_keys: s().y2Keys ?? [],
+        },
       },
-    }),
+      signal,
+    ),
   );
 }
 

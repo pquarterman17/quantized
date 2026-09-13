@@ -4,9 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StatusBar from "./StatusBar";
 import { HEALTHY } from "../../lib/autosaveGenerations";
 import { useConnection } from "../../lib/lifecycle";
+import { exportFigure } from "../../lib/api/figures";
+import { runExportFigureCommand } from "../../lib/exportFigureCommand";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
+
+vi.mock("../../lib/api/figures", () => ({ exportFigure: vi.fn() }));
+vi.mock("../overlays/ParamDialog", () => ({
+  askParams: vi.fn().mockResolvedValue({
+    fmt: "pdf",
+    style: "default",
+    dpi: 300,
+    title: "",
+    x_label: "",
+    y_label: "",
+  }),
+}));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -197,5 +211,89 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(cancelA).toHaveBeenCalledOnce();
     expect(cancelB).not.toHaveBeenCalled();
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations):
+// end-to-end DOM coverage — a REAL "Export figure…" invocation (not a
+// synthetic beginOp() call like the generic tests above) renders its Cancel
+// control in StatusBar, and clicking it actually aborts the in-flight
+// request. The mechanism itself (label, cancel-detection, no-download-on-
+// cancel) is unit-tested in lib/exportActive.test.ts and
+// lib/exportFigureCommand.test.ts; this is the "does it actually reach the
+// screen" check.
+describe("StatusBar × export cancel (P3.4 safe-cancel-for-export)", () => {
+  beforeEach(() => {
+    // Real timers for this block: the age-gate poll (PENDING_OP_POLL_MS)
+    // needs to actually elapse, and the op is registered after several real
+    // microtask awaits (askParams, exportActive's resolveDataset) rather
+    // than synchronously — fake timers would need pumping through every one
+    // of those for no real benefit. The file-level afterEach's
+    // vi.useRealTimers() already restores this after every test either way.
+    vi.useRealTimers();
+    vi.mocked(exportFigure).mockReset();
+    usePendingOps.setState({ ops: [] });
+    useApp.setState({
+      status: "",
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: { time: [0, 1], values: [[1, 2]], labels: ["A"], units: [""], metadata: {} },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+    });
+  });
+
+  it("shows the export op with a Cancel control, and clicking it aborts the request", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let rejectExport!: (e: unknown) => void;
+    vi.mocked(exportFigure).mockImplementation((_body, signal) => {
+      capturedSignal = signal;
+      return new Promise((_r, rj) => (rejectExport = rj));
+    });
+
+    render(<StatusBar />);
+    const p = runExportFigureCommand(useApp.getState);
+
+    // Real timers here (unlike the beginOp()-driven tests above): the age
+    // gate is wall-clock, and this op is registered through several real
+    // awaits (askParams, exportActive's resolveDataset) rather than
+    // synchronously, so fake timers would need to be pumped through every
+    // microtask in between for no real benefit.
+    const cancelBtn = await screen.findByRole("button", { name: "Cancel" }, { timeout: 2000 });
+    expect(screen.getByText("Exporting scan.dat…")).toBeInTheDocument();
+    expect(capturedSignal?.aborted).toBe(false);
+
+    fireEvent.click(cancelBtn);
+    expect(capturedSignal?.aborted).toBe(true);
+
+    rejectExport(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await p;
+
+    expect(useApp.getState().status).toBe("export cancelled");
+    await vi.waitFor(() => expect(screen.queryByText("Exporting scan.dat…")).not.toBeInTheDocument());
   });
 });

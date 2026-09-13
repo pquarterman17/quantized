@@ -9,8 +9,7 @@ import { exportConsolidated, exportHdf5, exportOrigin, exportXrdCsv, originComSt
 import { makeDemoDataset } from "../lib/demo";
 import { loadSampleDataset } from "../lib/sampleDataset";
 import { clearAutosave } from "../lib/autosave";
-import { exportActive, type StoreGet } from "../lib/exportActive";
-import { runExportSpatialPageCommand } from "../lib/exportPageCommand";
+import type { StoreGet } from "../lib/exportActive";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
@@ -271,22 +270,22 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Export XRD CSV…",
       description: "Export the active dataset as a diffraction-friendly CSV file.",
-      run: () =>
-        exportActive(s, (stem, ds) => exportXrdCsv({ dataset: ds.data, filename: stem })),
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
+      // size ratchet — P3.4 safe-cancel-for-export pushed lib/exportActive.ts
+      // itself out of the eager path; see that file's own doc comment).
+      // `void`-prefixed: exportActive registers its OWN cancellable pendingOp
+      // now, so letting runAction's generic wrap ALSO register this promise
+      // under the action's label would show two competing busy entries.
+      run: () => void import("./fileCommandsLazy").then((m) => m.runExportXrdCsv(s, exportXrdCsv)),
     },
     {
       id: "export-hdf5",
       group: "File",
       label: "Export HDF5…",
       description: "Export the active dataset and available raw/corrected forms to HDF5.",
-      run: () =>
-        exportActive(s, (stem, ds) =>
-          exportHdf5(
-            ds.raw
-              ? { dataset: ds.raw, corrected: ds.data, filename: stem }
-              : { dataset: ds.data, filename: stem },
-          ),
-        ),
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts — see
+      // "export-csv" above (same `void`-prefix reasoning).
+      run: () => void import("./fileCommandsLazy").then((m) => m.runExportHdf5(s, exportHdf5)),
     },
     {
       id: "figure-builder",
@@ -364,8 +363,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
       // size ratchet — see that file's own doc comment on WHY the api.ts
       // calls stay imported here, eagerly, and are passed in as arguments
-      // rather than re-imported by the lazy module).
-      run: () => import("./fileCommandsLazy").then((m) => m.runExportOrigin(s, exportOrigin)),
+      // rather than re-imported by the lazy module). `void`-prefixed since
+      // P3.4: runExportOrigin routes through exportActive, which now
+      // registers its own cancellable pendingOp — see "export-csv" above.
+      run: () => void import("./fileCommandsLazy").then((m) => m.runExportOrigin(s, exportOrigin)),
     },
     {
       id: "send-to-origin",
@@ -401,12 +402,16 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Export page… (spatial, true page coords)",
       description: "Export an imported multi-panel page using its original spatial page coordinates.",
       keywords: "origin multi-panel page rect true coordinates #54",
-      // P3.4 slice 2: NOT `void`-prefixed (unlike the other command bodies
-      // in this file that intentionally fire-and-forget) — this returns the
-      // promise so the runAction chokepoint (CommandPalette/MenuBar) can
-      // observe it and register the in-flight signal. Behavior is
-      // unchanged: the async export still runs identically either way.
-      run: () => runExportSpatialPageCommand(s),
+      // Body lives in lazily-imported lib/exportPageCommand.ts (bundle-size
+      // ratchet — P3.4 safe-cancel-for-export's own pendingOps/AbortController
+      // wiring pushed this off fileCommands.ts's eager import list; see that
+      // file's own header). `void`-prefixed like every other export body in
+      // this file that registers its OWN pendingOps entry (exportActive.ts's
+      // callers do the same) — the command body now provides its own
+      // cancellable "Exporting page…" op directly, so letting runAction's
+      // generic wrap ALSO register this promise under the action's label
+      // would show two competing busy entries for one export.
+      run: () => void import("../lib/exportPageCommand").then((m) => m.runExportSpatialPageCommand(s)),
     },
   ];
 }

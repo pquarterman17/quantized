@@ -60,13 +60,14 @@ export interface FigurePageSpec {
   resize_mode?: string; // constrained | tight | none
 }
 
-/** Compose N plots onto one publication page server-side and download it. */
-export function exportFigurePage(body: FigurePageSpec): Promise<void> {
-  return postDownload("/api/export/figure-page", body, `figure_page.${body.fmt ?? "pdf"}`);
+/** Compose N plots onto one publication page server-side and download it.
+ *  `signal` — P3.4 safe-cancel-for-export (lib/exportPageCommand.ts). */
+export function exportFigurePage(body: FigurePageSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/figure-page", body, `figure_page.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** Render the page and return the raw image bytes — the composer UI's
  *  low-DPI PNG preview (same pattern as api.ts's renderFigureBlob). */
-export function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
-  return postBlob("/api/export/figure-page", body);
+export function renderFigurePageBlob(body: FigurePageSpec, signal?: AbortSignal): Promise<Blob> {
+  return postBlob("/api/export/figure-page", body, signal);
 }
