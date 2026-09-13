@@ -3677,7 +3677,11 @@ covers a much smaller subset and guards focus on Analyze.
       `FigurePageView.tsx` — so adding greyscale there is a page-wide-vs-
       per-panel product decision plus new `useFigurePage.ts` state, not a
       dialog-field reuse; left for a follow-up rather than folded into this
-      close. The review also
+      close. The review of that close found a SECOND such path rooted in the
+      same `PageDocument.output` settings: `components/Library/PagesSection.tsx`
+      (export a saved page without reopening) sends `fmt`/`dpi` from
+      `PageOutputSettings`, which has no greyscale field either — one field on
+      `PageOutputSettings` would close both. The review also
       found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
       a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to

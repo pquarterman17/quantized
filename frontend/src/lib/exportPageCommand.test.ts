@@ -189,7 +189,7 @@ describe("runExportSpatialPageCommand — P3.3 greyscale residual (page export)"
     await runExportSpatialPageCommand(useApp.getState);
     const fields = vi.mocked(askParams).mock.calls[0][1];
     const field = fields.find((f) => f.key === "greyscale");
-    expect(field).toEqual(GREYSCALE_FIELD);
+    expect(field).toBe(GREYSCALE_FIELD); // the SAME object, not a structural twin
   });
 
   it("threads greyscale: true onto EVERY panel's figure spec when the checkbox is on", async () => {
