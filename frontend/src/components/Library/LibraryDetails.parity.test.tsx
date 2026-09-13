@@ -11,9 +11,6 @@
 // `dataTransfer` and dispatched through RTL's low-level fireEvent — the same
 // workaround FolderRow.test.tsx uses for the Tree's identical gestures.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +18,7 @@ import LibraryDetails from "./LibraryDetails";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { defaultVisibleDetailsColumnKeys } from "../../lib/libraryDetailsColumns";
+import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/cssRules.testkit";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { askParams } from "../overlays/ParamDialog";
 import { useApp } from "../../store/useApp";
@@ -381,56 +379,11 @@ describe("LibraryDetails — L1.4 move / drag-drop parity", () => {
 // These tests therefore assert against the real stylesheet: a cue counts only
 // if some rule keyed on it actually MATCHES the rendered element.
 describe("LibraryDetails — L1.4 cues are painted, not just classed", () => {
-  // Read from disk, the established pattern for a stylesheet assertion here
-  // (styles/reducedMotion.test.ts, workshops/peaks/PeakTable.test.tsx): Vite's
-  // CSS pipeline claims `.css` imports, so `?raw` returns an empty string.
-  const SHELL_CSS = readFileSync(join(__dirname, "../../styles/shell.css"), "utf8");
-
-  /** Every style rule in the sheet, flattened out of its `@media`/`@container`
-   *  blocks. Parsed from the text rather than through jsdom's CSSOM so an
-   *  unsupported modern property can never silently drop a rule these tests
-   *  are looking for. */
-  function flatRules(css: string): { selector: string; body: string }[] {
-    const src = css.replace(/\/\*[\s\S]*?\*\//g, "");
-    const out: { selector: string; body: string }[] = [];
-    let i = 0;
-    while (i < src.length) {
-      const open = src.indexOf("{", i);
-      if (open < 0) break;
-      const prelude = src.slice(i, open).trim();
-      let depth = 1;
-      let j = open + 1;
-      while (j < src.length && depth > 0) {
-        if (src[j] === "{") depth++;
-        else if (src[j] === "}") depth--;
-        j++;
-      }
-      const body = src.slice(open + 1, j - 1);
-      if (prelude.startsWith("@")) out.push(...flatRules(body));
-      else out.push({ selector: prelude, body });
-      i = j;
-    }
-    return out;
-  }
-
-  /** Does this selector reach `el` when a pointer is over its row? `:hover` is
-   *  exactly what the pointer supplies, so it is erased before matching; a
-   *  `:focus`-gated rule is NOT an answer for the Details grip, which is
-   *  `aria-hidden` and has no tabindex, so those selectors are discarded. */
-  function reachesOnHover(selector: string, el: Element): boolean {
-    if (selector.includes(":focus")) return false;
-    return selector.split(",").some((part) => {
-      const stripped = part.trim().replace(/:hover/g, "");
-      try {
-        return stripped !== "" && el.matches(stripped);
-      } catch {
-        return false;
-      }
-    });
-  }
-
-  const declares = (body: string, prop: string, value: string): boolean =>
-    new RegExp(`(^|[;{\\s])${prop}\\s*:\\s*${value}\\s*(;|$)`).test(body.trim());
+  // The three helpers (flatRules / reachesOnHover / declares) and the sheet
+  // reader live in styles/cssRules.testkit.ts — LibraryTiles.parity.test.tsx
+  // runs the identical checks against the identical sheet, and a drifted copy
+  // of "does any rule actually paint this cue?" is not evidence.
+  const SHELL_CSS = readShellCss();
 
   it("the grip is hidden at rest AND revealed by a rule that reaches it on row hover", () => {
     render(<Harness />);

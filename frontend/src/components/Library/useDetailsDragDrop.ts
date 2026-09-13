@@ -1,4 +1,10 @@
-// L1.4 drag/drop parity for the Details renderer (LIBRARY_WORKBOOK_UX_PLAN).
+// L1.4 drag/drop parity for the Details renderer — and, since 2026-09-13, for
+// the TILE workspace too (LIBRARY_WORKBOOK_UX_PLAN). Nothing in this contract
+// is Details-shaped: it decides from the node KIND and the store's published
+// `activeDrag`, never from a <tr>, a column, or a table. `useTileDragDrop.ts`
+// is therefore an import surface over this hook, not a second copy of it — the
+// file name is kept (and the exported names with it) so this module's history
+// stays readable, but read "Details" below as "the two flat renderers".
 //
 // The Tree's drag contract, which this reuses verbatim rather than restating:
 //   * The dataTransfer TYPES are `dnd.ts`'s three (`FOLDER_DND`,
@@ -36,7 +42,7 @@
 // subscriptions, so a 40-row window carried 200). The per-row hook keeps only
 // its own hover flag.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { isSelfOrDescendant } from "../../lib/foldertree";
@@ -118,6 +124,24 @@ export interface DetailsDragDrop {
 export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContext): DetailsDragDrop {
   const { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder } = ctx;
   const [hovered, setHovered] = useState(false);
+
+  // Cancel cleanly when the drag SOURCE unmounts mid-drag. Both flat
+  // renderers window their rows/tiles (useLibraryDetailsVirtualization,
+  // useTileVirtualization), so a drag that scrolls its own source out of the
+  // window destroys the element `dragend` would have fired on — React has
+  // already detached the listener, `setActiveDrag(null)` never runs, and
+  // every folder in the view stays lit at `drop-candidate` after the pointer
+  // is released. The ref (not `activeDrag` in the dep list) keeps this a
+  // mount-once effect whose cleanup clears the drag ONLY if this node still
+  // owned it, so an unmount during someone else's drag clears nothing.
+  const ownsDragRef = useRef(false);
+  ownsDragRef.current = activeDrag != null && activeDrag.id === node.entityId;
+  useEffect(
+    () => () => {
+      if (ownsDragRef.current) setActiveDrag(null);
+    },
+    [setActiveDrag],
+  );
 
   const source = dragSourceOf(node);
   const handleProps = source

@@ -730,7 +730,7 @@ Library presentation without changing organization or duplicating objects.
     mounted Tree as tile navigation, and returns through Escape/**Back to
     plot** with a canonical reveal target and focus retry. Thumbnail/rapid-
     switching cancellation remains E-c.
-- [~] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
+- [x] **L1.4 Interaction parity:** open, Quick Plot, rename, move, reveal,
   context menu, and drag/drop mean the same thing in every view.
   **RESIDUAL (2026-09-12): Tiles has no drag/drop at all** — grepped
   `LibraryWorkspace.tsx`, `TilePreview.tsx` and `useTileVirtualization.ts`:
@@ -740,6 +740,47 @@ Library presentation without changing organization or duplicating objects.
   tile becomes a drag source and a folder tile a drop target, reusing
   `dnd.ts`'s three payload types and `useDetailsDragDrop.ts`'s "into"-only
   contract (a tile grid has no above/below band either).
+  - [x] **Tiles drag/drop (2026-09-13) — the residual above is CLOSED, and
+    with it the parent box.** A `.qzk-drag-handle` grip on every folder,
+    workbook and worksheet tile is the ONLY `draggable` element in the grid,
+    and a folder tile is an "into" drop target. The contract is not a mirror
+    of Details', it IS Details': `useTileDragDrop.ts` contains no drag logic
+    at all, only a view-neutral re-export of `useDetailsDragDrop`, whose body
+    was already decided entirely by node KIND and the store's published
+    `activeDrag` — so the payload types (`dnd.ts`'s three), the legality rules
+    (self/descendant refusal, workbook-into-any-folder, already-in-that-folder
+    refused so no do-nothing undo step is recorded), the two cue classes with
+    the Tree's two meanings, and the two store actions (`moveFolder`,
+    `moveWorkbookToFolder`) are one implementation, not two. A tile is now one
+    `LibraryTile.tsx`, extracted because a per-tile hook cannot be called from
+    `LibraryWorkspace`'s `.map()`; every store read stayed in the orchestrator
+    (`LibraryWorkspace.tsx` 363 -> 350 lines, no pin touched). Selection
+    invariants: right-click on an already-selected tile keeps the live
+    multi-selection (the rule Details adopted from `DatasetRow`; Tiles already
+    had it, and it is now DOM-tested), and a drag of a selected tile moves
+    ONLY the dragged node — exactly what Details does, since a dataTransfer
+    carries one entityId and neither the Tree nor Details has a bulk drag; the
+    bulk route stays the menu's "Move N selected to …". Two fixes fell out,
+    both in the SHARED hook so Details gets them too: a drag whose source row
+    or tile is virtualized out mid-drag now cancels cleanly (the element
+    `dragend` would have fired on is gone, so `activeDrag` used to stay set
+    and leave every folder glowing after the pointer was released), and the
+    three stylesheet-assertion helpers both parity suites use now live once in
+    `styles/cssRules.testkit.ts` instead of drifting in two copies. 24 DOM-
+    and stylesheet-layer tests in `LibraryTiles.parity.test.tsx`, each
+    sabotage-verified against 19 mutations.
+  - What this bullet does NOT claim. Two GESTURE differences remain, both
+    deliberate and neither one of the seven verbs: Tiles collects a rename
+    through the modal `askParams` prompt while Tree and Details use an
+    in-place input (one prompt, one shared `renameLibraryNode` commit —
+    `libraryTileMenu.ts`'s `TileMenuHooks.rename` note), and "reveal" in
+    Tiles is `browse` plus the canonical reveal target Escape/**Back to plot**
+    posts, because search results render Details-style (L1.6) and Tiles has no
+    search-results surface of its own to put a "Show in Library" button on.
+    Thumbnail/rapid-switching cancellation stays an E-c concern, not an L1.4
+    one. Spring-loaded folders (hover a folder tile mid-drag to browse into
+    it) were NOT added: the Tree does not have them either, and adding them to
+    one view would be a new divergence, not parity.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged

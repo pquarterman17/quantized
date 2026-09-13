@@ -1,22 +1,27 @@
 // PR E: wide, main-workspace Tile browser. It consumes the same canonical
 // hierarchy and open/select dispatchers as Tree and Details; it never invents
 // a second Library model or mutates the active plot merely by browsing.
+//
+// L1.4 (2026-09-13): the grid is also a drag SOURCE and a drop TARGET, on the
+// contract `useTileDragDrop.ts` documents (which is `useDetailsDragDrop`'s,
+// unchanged — same payload types, same legality, same two store actions). One
+// tile is one `LibraryTile`, extracted because a per-tile hook cannot be
+// called from this `.map()`; every store read stayed here.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { plural } from "../../lib/plural";
 
-import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
-import { libraryTileSummary } from "../../lib/libraryTileSummary";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import type { LibrarySelection } from "../../store/libraryPanel";
 import { openLibraryNode, opensInStage, selectLibraryNode } from "./libraryOpen";
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
-import TilePreview, { KIND_LABEL } from "./TilePreview";
+import LibraryTile from "./LibraryTile";
 import { focusTileWhenRendered, useTileVirtualization } from "./useTileVirtualization";
+import { useTileDragDropContext } from "./useTileDragDrop";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 
@@ -49,6 +54,10 @@ function parentChain(node: LibraryNode | undefined, byKey: ReadonlyMap<LibraryNo
 
 export default function LibraryWorkspace({ onClose }: Props) {
   const { hierarchy } = useLibraryHierarchyModel();
+  // L1.4: ONE set of drag/drop store subscriptions for the whole grid, shared
+  // by every rendered tile — the Details table's rule (a per-tile hook would
+  // hold six subscriptions, so a 40-tile window would carry 240).
+  const dndContext = useTileDragDropContext();
   const selection = useLibraryStore((s) => s.librarySelection);
   const selectedIds = useApp((s) => s.selectedIds);
   const initialKey = deriveSelectedKey(selection, selectedIds);
@@ -196,6 +205,23 @@ export default function LibraryWorkspace({ onClose }: Props) {
     if (opensInStage(node)) close();
   };
 
+  // Delete/Backspace on a focused tile. Kept here, not in LibraryTile: the
+  // worksheet branch needs the LIVE `selectedIds` (a focused tile inside the
+  // multi-selection deletes the whole selection — roving focus moves without
+  // changing selection, so the target must be named explicitly), and this is
+  // an imperative event handler, the sanctioned place for a getState() read.
+  const deleteFromTile = (node: LibraryNode): void => {
+    if (node.kind === "worksheet") {
+      const ids = useApp.getState().selectedIds;
+      requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
+    } else if (isArtifactNode(node)) {
+      // E-b2: the canonical registry delete (shared confirm + dependency
+      // warning; fail-closed on recovered Origin figures, exactly like the
+      // disabled menu item).
+      deleteArtifactConfirmed(node);
+    }
+  };
+
   // E-c3: navigation is by MODEL index (the linear-list contract, #146),
   // not by querying rendered DOM — under virtualization the neighbor may
   // not exist yet, so ensureVisible brings its row in first and the focus
@@ -299,62 +325,23 @@ export default function LibraryWorkspace({ onClose }: Props) {
           onKeyDown={onGridKeyDown}
           style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
         >
-          {rendered.map((node, renderedIndex) => {
-            const selected = node.key === currentSelectedKey;
-            const summary = libraryTileSummary(node);
-            return (
-              <article
-                key={node.key}
-                role="listitem"
-                data-library-tile={node.key}
-                className={`qzk-library-tile${selected ? " selected" : ""}`}
-                tabIndex={node.key === effectiveTabStop ? 0 : -1}
-                aria-label={`${node.name}, ${KIND_LABEL[node.kind]}`}
-                aria-setsize={items.length}
-                aria-posinset={virt.start + renderedIndex + 1}
-                onClick={() => selectOrBrowse(node)}
-                onDoubleClick={() => openFromTile(node)}
-                onFocus={() => setRovingKey(node.key)}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  openTileMenu(node, event.clientX, event.clientY);
-                }}
-                onKeyDown={(event) => {
-                  if (isContextMenuKeyEvent(event)) {
-                    event.preventDefault();
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    openTileMenu(node, rect.left + 8, rect.bottom);
-                  } else if (event.key === "Enter") {
-                    event.preventDefault();
-                    openFromTile(node);
-                  } else if (event.key === "Delete" || event.key === "Backspace") {
-                    event.preventDefault();
-                    if (node.kind === "worksheet") {
-                      const ids = useApp.getState().selectedIds;
-                      requestDatasetRemoval(ids.length > 0 && ids.includes(node.entityId) ? ids : [node.entityId]);
-                    } else if (isArtifactNode(node)) {
-                      // E-b2: the canonical registry delete (shared confirm +
-                      // dependency warning; fail-closed on recovered Origin
-                      // figures, exactly like the disabled menu item).
-                      deleteArtifactConfirmed(node);
-                    }
-                  } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-                    event.preventDefault(); moveFocus(node.key, 1);
-                  } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-                    event.preventDefault(); moveFocus(node.key, -1);
-                  }
-                }}
-              >
-                <TilePreview node={node} />
-                <div className="qzk-library-tile-copy">
-                  <strong title={node.name}>{node.name}</strong>
-                  <span>{KIND_LABEL[node.kind]} · {summary.primary}</span>
-                  {summary.secondary && <span>{summary.secondary}</span>}
-                  {summary.warning && <em>{summary.warning}</em>}
-                </div>
-              </article>
-            );
-          })}
+          {rendered.map((node, renderedIndex) => (
+            <LibraryTile
+              key={node.key}
+              node={node}
+              selected={node.key === currentSelectedKey}
+              tabStop={node.key === effectiveTabStop}
+              setSize={items.length}
+              posInSet={virt.start + renderedIndex + 1}
+              dndContext={dndContext}
+              onSelect={selectOrBrowse}
+              onOpen={openFromTile}
+              onFocus={setRovingKey}
+              onMenu={openTileMenu}
+              onDelete={deleteFromTile}
+              onMoveFocus={moveFocus}
+            />
+          ))}
         </div>
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
