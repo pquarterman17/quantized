@@ -110,7 +110,16 @@ export async function postForm<T>(path: string, form: FormData, signal?: AbortSi
  *  already done), so `postBlob`/`postDownload` call this themselves, in the
  *  same synchronous turn as the write, right after decoding the body and
  *  before ever touching the clipboard or the disk — no `await` runs between
- *  this check and that write, so nothing can race it. */
+ *  this check and that write, so nothing can race it.
+ *
+ *  That "nothing can race it" claim is exact for `postDownload`: `saveBlob`
+ *  is a synchronous DOM call, so this check is genuinely the last word. It
+ *  is only PARTIAL for `postBlob`'s clipboard callers: this closes the race
+ *  up to the moment `postBlob` returns, but the browser's own read of the
+ *  `ClipboardItem` value promise a caller builds from that blob happens
+ *  later still, on the browser's own schedule — see lib/clipboard.ts's
+ *  copyImageAsync/copySvgAsync, which re-check the same signal a second
+ *  time right there for exactly that reason. */
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new DOMException("aborted", "AbortError");
 }
@@ -118,7 +127,10 @@ function throwIfAborted(signal?: AbortSignal): void {
 /** POST JSON -> raw response bytes (the server-rendered preview images).
  *  `signal` — see postJSON; also re-checked right before returning (see
  *  `throwIfAborted`'s doc) so a caller handing the still-pending Blob to the
- *  clipboard (copyImageAsync/copySvgAsync) can never resolve it post-cancel. */
+ *  clipboard (copyImageAsync/copySvgAsync) can never resolve IT with a
+ *  post-cancel blob — closing the race up to this function's own return;
+ *  the clipboard write itself happens later still and needs its own re-check
+ *  (see clipboard.ts). */
 export async function postBlob(path: string, body: unknown, signal?: AbortSignal): Promise<Blob> {
   const res = await fetch(path, {
     method: "POST",

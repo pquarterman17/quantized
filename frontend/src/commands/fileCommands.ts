@@ -43,6 +43,36 @@ function rejectIfImportRunning(): boolean {
   return true;
 }
 
+/** Wrap a dynamic `import()` in a pendingOp (F5, 2026-09-13 adversarial
+ *  review of d6e67fb7's P3.4 export-cancel commit): every `void`-prefixed
+ *  export command body below is a bare `void import(...).then((m) =>
+ *  m.runX(...))` with no `.catch` — a failed chunk load (offline right
+ *  after a deploy, a stale cached HTML referencing a since-rotated hash) is
+ *  a completely silent no-op PLUS an unhandled-rejection console warning,
+ *  and for export-csv/export-hdf5 specifically a REGRESSION: before this
+ *  file's bodies were moved behind a dynamic import, the export logic ran
+ *  inline, so any failure was always caught by exportActive's own try/catch.
+ *  The import step itself is new, and it sits OUTSIDE that try/catch.
+ *
+ *  This closes both gaps: `withOp` gives the click-to-chunk-loaded window
+ *  (previously invisible) a busy indicator, and the `.catch` below toasts a
+ *  load failure instead of leaving it unhandled. It wraps ONLY the import —
+ *  by the time `load()` resolves, `endOp` has already fired (withOp's own
+ *  `finally`), so the loaded module's own body (exportActive.ts's callers
+ *  register their OWN pendingOp) never overlaps this one. Rethrows on
+ *  failure so the caller's own `.then(...)` is skipped — the caller must
+ *  still end its own chain with `.catch(() => {})` (see any call site below)
+ *  so THAT rejection doesn't itself go unhandled; a success from the
+ *  module's own body never reaches this catch, so it can't double-toast a
+ *  failure exportActive already reported through its own status/toast. */
+export function runLazy<M>(label: string, load: () => Promise<M>): Promise<M> {
+  return withOp(label, load).catch((e: unknown) => {
+    const msg = `${label.replace(/…$/, "")} failed to load: ${e instanceof Error ? e.message : "error"}`;
+    toast(msg, "danger");
+    throw e;
+  });
+}
+
 let demoCounter = 0;
 let sampleCounter = 0;
 
@@ -276,7 +306,15 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // `void`-prefixed: exportActive registers its OWN cancellable pendingOp
       // now, so letting runAction's generic wrap ALSO register this promise
       // under the action's label would show two competing busy entries.
-      run: () => void import("./fileCommandsLazy").then((m) => m.runExportXrdCsv(s, exportXrdCsv)),
+      // runLazy (F5) — see that function's own doc — covers the import step
+      // itself, which sits outside exportActive's own error handling.
+      run: () =>
+        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+          .then((m) => m.runExportXrdCsv(s, exportXrdCsv))
+          .catch(() => {
+            /* runLazy already toasted a load failure; a run() failure
+               already reported its own status/toast (see exportActive.ts) */
+          }),
     },
     {
       id: "export-hdf5",
@@ -284,8 +322,13 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Export HDF5…",
       description: "Export the active dataset and available raw/corrected forms to HDF5.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts — see
-      // "export-csv" above (same `void`-prefix reasoning).
-      run: () => void import("./fileCommandsLazy").then((m) => m.runExportHdf5(s, exportHdf5)),
+      // "export-csv" above (same `void`-prefix + runLazy reasoning).
+      run: () =>
+        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+          .then((m) => m.runExportHdf5(s, exportHdf5))
+          .catch(() => {
+            /* see "export-csv" above */
+          }),
     },
     {
       id: "figure-builder",
@@ -353,7 +396,13 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // MAIN_PLAN #16's Append workspace command — see that file's doc).
       // Bundle: click-only — dynamic import keeps lib/exportFigureCommand
       // (and the figureSpec transport builder behind it) off the eager path.
-      run: () => void import("../lib/exportFigureCommand").then((m) => m.runExportFigureCommand(s)),
+      // runLazy (F5) — see that function's own doc.
+      run: () =>
+        void runLazy("Loading export…", () => import("../lib/exportFigureCommand"))
+          .then((m) => m.runExportFigureCommand(s))
+          .catch(() => {
+            /* see "export-csv" above */
+          }),
     },
     {
       id: "export-origin",
@@ -366,7 +415,13 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // rather than re-imported by the lazy module). `void`-prefixed since
       // P3.4: runExportOrigin routes through exportActive, which now
       // registers its own cancellable pendingOp — see "export-csv" above.
-      run: () => void import("./fileCommandsLazy").then((m) => m.runExportOrigin(s, exportOrigin)),
+      // runLazy (F5) — see that function's own doc.
+      run: () =>
+        void runLazy("Loading export…", () => import("./fileCommandsLazy"))
+          .then((m) => m.runExportOrigin(s, exportOrigin))
+          .catch(() => {
+            /* see "export-csv" above */
+          }),
     },
     {
       id: "send-to-origin",
@@ -410,8 +465,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // callers do the same) — the command body now provides its own
       // cancellable "Exporting page…" op directly, so letting runAction's
       // generic wrap ALSO register this promise under the action's label
-      // would show two competing busy entries for one export.
-      run: () => void import("../lib/exportPageCommand").then((m) => m.runExportSpatialPageCommand(s)),
+      // would show two competing busy entries for one export. runLazy (F5)
+      // — see that function's own doc.
+      run: () =>
+        void runLazy("Loading export…", () => import("../lib/exportPageCommand"))
+          .then((m) => m.runExportSpatialPageCommand(s))
+          .catch(() => {
+            /* see "export-csv" above */
+          }),
     },
   ];
 }

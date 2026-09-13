@@ -131,8 +131,13 @@ export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG
  *  preview (the figure builder), as opposed to exportFigure which downloads.
- *  `signal` — see exportFigure; also what keeps "Copy figure" from writing a
- *  cancelled render to the clipboard (postBlob's own race guard). */
+ *  `signal` — see exportFigure. For "Copy figure", postBlob's own race guard
+ *  only closes half the cancel race: it keeps a cancelled render from ever
+ *  RESOLVING this promise with a post-cancel blob, but the actual clipboard
+ *  write happens later still, when the browser reads the `ClipboardItem`
+ *  value promise on its own schedule — lib/clipboard.ts's copyImageAsync/
+ *  copySvgAsync re-check the SAME signal a second time, right there, closing
+ *  the rest of the JS-observable gap (see that module's own doc). */
 export function renderFigureBlob(body: FigureSpec, signal?: AbortSignal): Promise<Blob> {
   return postBlob("/api/export/figure", body, signal);
 }

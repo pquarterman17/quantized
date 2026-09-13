@@ -77,8 +77,20 @@ export async function copyImage(blob: Blob): Promise<boolean> {
  *
  *  Falls back to awaiting the blob and writing it normally when the browser
  *  rejects a promise value, so a stricter engine degrades to "might lose the
- *  gesture" rather than "never copies". Resolves false if both routes fail. */
-export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boolean> {
+ *  gesture" rather than "never copies". Resolves false if both routes fail.
+ *
+ *  `signal` (P3.4 safe-cancel-for-export residual, optional): the JS-observable
+ *  half of the cancel race is already closed by the time `pending` settles —
+ *  `postBlob`'s own check (lib/api/http.ts) means `pending` never resolves
+ *  with a post-cancel blob. What that check can't reach is the browser's OWN
+ *  read of this function's `ClipboardItem` value promise, which resolves on
+ *  the browser's own schedule, not this module's — so `signal` is re-checked
+ *  a second time, right here, in the instant before that value promise hands
+ *  the blob over, closing the observable JS-side gap completely. The
+ *  genuinely non-interceptable residual is only the browser's own internal
+ *  completion of the write after this promise resolves — there is no JS hook
+ *  for that half, on any engine. */
+export async function copyImageAsync(pending: Promise<Blob | null>, signal?: AbortSignal): Promise<boolean> {
   if (!clipboardImageSupported()) {
     await pending.catch(() => null); // don't leave an unhandled rejection behind
     return false;
@@ -86,6 +98,7 @@ export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boo
   const asBlob = async (): Promise<Blob> => {
     const blob = await pending;
     if (!blob) throw new Error("render produced no image");
+    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
     return blob;
   };
   try {
@@ -145,8 +158,10 @@ export function clipboardSvgSupported(): boolean {
 
 /** Write a PENDING SVG render to the clipboard, keeping the user gesture alive
  *  the same way `copyImageAsync` does. Resolves false when the browser will not
- *  take SVG, so the caller can say why rather than failing silently. */
-export async function copySvgAsync(pending: Promise<Blob | null>): Promise<boolean> {
+ *  take SVG, so the caller can say why rather than failing silently.
+ *  `signal` — see copyImageAsync's own doc on why this re-check exists
+ *  alongside postBlob's. */
+export async function copySvgAsync(pending: Promise<Blob | null>, signal?: AbortSignal): Promise<boolean> {
   if (!clipboardSvgSupported()) {
     await pending.catch(() => null); // no unhandled rejection left behind
     return false;
@@ -155,6 +170,7 @@ export async function copySvgAsync(pending: Promise<Blob | null>): Promise<boole
     const asBlob = (async () => {
       const blob = await pending;
       if (!blob) throw new Error("render produced no image");
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError");
       return blob;
     })();
     await navigator.clipboard.write([new ClipboardItem({ [SVG_MIME]: asBlob })]);

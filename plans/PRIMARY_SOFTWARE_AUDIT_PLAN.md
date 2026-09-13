@@ -3546,8 +3546,18 @@ Prioritized slices (in pain order):
   dataset) so it wires the identical AbortController/pendingOps shape
   itself rather than a second mechanism. `signal?: AbortSignal` threaded
   through `postJSON`/`postForm`'s existing pattern into `postBlob`/
-  `postDownload` (`lib/api/http.ts`) and every export wrapper that calls
-  them. HONEST RESIDUAL: `routes/export*.py` (`export.py`,
+  `postDownload` (`lib/api/http.ts`). **Corrected 2026-09-13** (adversarial
+  review): NOT "every export wrapper that calls them" as originally
+  claimed here — only 5 of the 16 `postDownload` call sites across the
+  frontend actually take a `signal` (the ones this slice's own commands
+  use: `lib/api.ts`'s xrd-csv/hdf5/origin wrappers, `lib/api/figurePage.ts`'s
+  `exportFigurePage`, `lib/api/figures.ts`'s `exportFigure`). The other 11
+  `postDownload` sites — `lib/api/exportMultivar.ts` (4), `lib/api/
+  report.ts` (1), and 5 more in `lib/api/figures.ts` (corner/ternary/field/
+  statplot/categorical) — plus every consuming component that calls one of
+  them without ever building an AbortController to pass, stay uncancelled;
+  see the acceptance-criteria bullet below for the full residual list.
+  HONEST RESIDUAL: `routes/export*.py` (`export.py`,
   `export_figures.py`, `export_page.py`) are synchronous `def`s with no
   `Request` parameter or disconnect check, so the backend renders to
   completion regardless of a client abort — cancel is "stop waiting and
@@ -3589,12 +3599,32 @@ Original acceptance criteria (unchanged):
   `usePendingOps` and never reads a job-queue id, so a DREAM/fit-scan job's
   progress and identity are invisible to the shared location. Two
   progress systems coexist, not one; box stays open for that specific gap.
-- [x] Safe cancel for long import/fit/batch/export. Import (slice 1) and
-  the DREAM/bumps fit shipped earlier; export shipped above (slice 5) with
-  one honest caveat — cancel there means "stop waiting, discard the
-  result," since the export routes don't honor a client disconnect
-  server-side — and two named carve-outs (Send to Origin COM, Export
-  consolidated CSV) that stay uncancelled.
+- [~] Safe cancel for long import/fit/batch/export. **Narrowed 2026-09-13**
+  (adversarial review of the export-cancel commit): import (slice 1) and
+  the DREAM/bumps fit shipped earlier and are unaffected. Export cancel
+  shipped above (slice 5), but only at the File-menu single-dataset export
+  chokepoint (`lib/exportActive.ts`: CSV/HDF5/Origin export + figure copy)
+  and the spatial "Export page…" command (`lib/exportPageCommand.ts`) —
+  with the honest caveat already recorded: cancel means "stop waiting,
+  discard the result," since the export routes don't honor a client
+  disconnect server-side (and — new this round — a sync route occupies one
+  of the backend's ~40 anyio threadpool workers to completion regardless,
+  so repeated cancels of a slow render can saturate it faster than the
+  client-side UI suggests). Two carve-outs were already named (Send to
+  Origin COM, Export consolidated CSV); this round's review found the rest
+  of the surface was neither wired NOR named. The full residual — every
+  `postDownload`/`postBlob` call with no `signal` and no `pendingOps` entry
+  — stays uncancelled and untracked: `components/workshops/figurepage/
+  usePagePreviewExport.ts:188,219` (the Figure Page composer's OWN export +
+  clipboard copy — the longest render in the app, and the most-requested
+  cancel target of anything on this list), `components/workshops/
+  figurebuilder/previewExport.ts:53,77`, `components/Library/
+  PagesSection.tsx:37`, `lib/api/exportMultivar.ts:31,54,80,98`, `lib/api/
+  figures.ts:161,180,202,257,301`, `lib/api/report.ts:37`, `components/
+  Library/MultiSelectBar.tsx:83`, `components/Stage/useStatStage.ts:485`.
+  None of these registers a `pendingOp`, so none shows a Cancel control or
+  even a busy indicator today — this is a partial win on the acceptance
+  criterion, not the full one.
 - [ ] Errors say what failed, whether data changed, and next action.
 - [ ] Copyable diagnostic bundle excludes raw/private data by default.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**

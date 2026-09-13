@@ -90,21 +90,29 @@ export default function StatusBar() {
             <StatusDot tone="accent" />
             {visibleOps[0].label}
             {visibleOps.length > 1 && ` (+${visibleOps.length - 1} more)`}
-          {/* P3.4 slice 1: only the op(s) that opted in (import batches) carry
-              a `cancel` — everything else renders exactly as slice 2 left it.
-              Only the FIRST op gets the control, matching the "+N more"
-              collapse right above it. */}
-          {visibleOps[0].cancel && (
-            <button
-              type="button"
-              className="qzk-pending-cancel"
-              title="Cancel"
-              aria-label="Cancel"
-              onClick={visibleOps[0].cancel}
-            >
-              ✕
-            </button>
-            )}
+          {/* P3.4 slice 1: only the op(s) that opted in carry a `cancel` —
+              everything else renders exactly as slice 2 left it. F6 (2026-
+              09-13 adversarial review): ONE Cancel control per visible op
+              that carries one, not only the oldest — an export (or a
+              second import batch) started while another op is already
+              running used to have NO way to cancel it from the UI at all,
+              since only visibleOps[0] ever rendered a control. The label/
+              "+N more" text above still collapses to the oldest op only
+              (compact layout unchanged); only the controls fan out. */}
+          {visibleOps
+            .filter((o) => o.cancel)
+            .map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                className="qzk-pending-cancel"
+                title="Cancel"
+                aria-label="Cancel"
+                onClick={o.cancel}
+              >
+                ✕
+              </button>
+            ))}
           </>
         )}
       </span>

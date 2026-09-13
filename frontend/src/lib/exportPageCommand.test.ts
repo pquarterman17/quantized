@@ -107,6 +107,13 @@ describe("runExportSpatialPageCommand — safe cancel (P3.4)", () => {
     vi.clearAllMocks();
     usePendingOps.setState({ ops: [] });
     useApp.setState({
+      // Reset explicitly (not just merged datasets/composition below): a
+      // status left over from a PRIOR test in this file would otherwise
+      // make a same-string assertion here a false positive that doesn't
+      // exercise this test's own code path at all — exactly the gap that
+      // let the F3 "resolving panel datasets" cancel-status test below pass
+      // even while sabotaged, until this reset was added.
+      status: "",
       datasets: [
         {
           id: "d1",
@@ -179,5 +186,53 @@ describe("runExportSpatialPageCommand — safe cancel (P3.4)", () => {
 
     expect(usePendingOps.getState().ops).toHaveLength(0);
     expect(toastSpy).not.toHaveBeenCalled(); // no "exported" success toast, no error toast either
+  });
+
+  // F3 (2026-09-13 adversarial review of d6e67fb7): a cancel landing WHILE
+  // resolving a panel's dataset used to hit a bare `if (aborted) return;`
+  // with no status/toast at all (exportActive.ts's own copy of this bug is
+  // covered by its own test file; this is the exportPageCommand.ts copy).
+  it("sets a cancelled status when cancel lands while resolving panel datasets (not silent)", async () => {
+    type Ds = ReturnType<typeof useApp.getState>["datasets"][number];
+    let resolveDs!: (v: Ds | undefined) => void;
+    useApp.setState({
+      resolveDataset: vi.fn(() => new Promise<Ds | undefined>((r) => (resolveDs = r))),
+    });
+
+    const p = runExportSpatialPageCommand(useApp.getState);
+    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+
+    usePendingOps.getState().ops[0].cancel!();
+    resolveDs(useApp.getState().datasets[0]); // resolves AFTER the cancel
+    await p;
+
+    expect(exportFigurePage).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(toastSpy).not.toHaveBeenCalled();
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+  });
+
+  // F4 (2026-09-13 adversarial review of d6e67fb7): `beginOp` used to run
+  // BEFORE `askParams`, so a pendingOp (and its Cancel control) existed for
+  // the whole time the dialog was open — a control that was actually
+  // unreachable in the real DOM, since ParamDialog's backdrop `onMouseDown`
+  // resolves the dialog with `null` on any click behind it, including one
+  // aimed at a Cancel control drawn under that backdrop. Sabotage: move
+  // `beginOp` back above the `askParams` call and this fails (ops.length > 0
+  // while the mocked dialog is still pending).
+  it("registers no pendingOp while the params dialog is open (prompt precedes beginOp)", async () => {
+    const { askParams } = await import("../components/overlays/ParamDialog");
+    let resolveParams!: (v: { fmt: string; dpi: number } | null) => void;
+    vi.mocked(askParams).mockImplementation(
+      () => new Promise((r) => (resolveParams = r)),
+    );
+
+    const p = runExportSpatialPageCommand(useApp.getState);
+    await vi.waitFor(() => expect(vi.mocked(askParams)).toHaveBeenCalled());
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+
+    resolveParams(null); // user cancels the dialog itself
+    await p;
+    expect(usePendingOps.getState().ops).toHaveLength(0);
   });
 });

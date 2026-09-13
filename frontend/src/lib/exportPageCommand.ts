@@ -13,12 +13,20 @@
 // has its own params dialog in between) — see this file's own doc for why —
 // so it registers its OWN pendingOps entry with the exact same
 // AbortController + `controller.signal.aborted` cancel-detection shape that
-// module uses, rather than inventing a different mechanism.
+// module uses, rather than inventing a different mechanism. `beginOp` sits
+// AFTER `askParams` below, matching every actual exportActive CALLER
+// (exportFigureCommand.ts, copyFigureCommand.ts all prompt first, then hand
+// the result to exportActive) — an earlier version of this file registered
+// the op BEFORE the dialog, which not only diverged from that convention but
+// made the resulting Cancel control unreachable in practice: ParamDialog's
+// backdrop `onMouseDown` resolves the dialog with `null` before a click
+// anywhere behind it (including a Cancel control drawn under the backdrop)
+// ever reaches that control.
 
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialPanelsOf } from "./composition";
-import type { StoreGet } from "./exportActive";
+import { cancelled, type StoreGet } from "./exportActive";
 import { analysisData } from "./rowstate";
 import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
 import { beginOp, endOp } from "../store/pendingOps";
@@ -44,6 +52,28 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     toast(msg, "danger");
     return;
   }
+  // Prompt BEFORE registering anything — see this file's header. Neither
+  // dialog field depends on the resolved panel data, so there is no reason
+  // to resolve first and every reason (the ParamDialog backdrop-swallows-
+  // the-Cancel-control bug that reason names) not to.
+  const params = await askParams("Export page", [
+    {
+      key: "fmt",
+      label: "Format",
+      type: "select",
+      default: "pdf",
+      options: ["pdf", "svg", "png", "tiff"],
+      hint: "PDF / SVG are vector; PNG / TIFF are raster",
+    },
+    {
+      key: "dpi",
+      label: "DPI (raster)",
+      type: "number",
+      default: 300,
+      hint: "Resolution for PNG / TIFF (50-1200); ignored by vector",
+    },
+  ]);
+  if (!params) return;
   const controller = new AbortController();
   const opId = beginOp("Exporting page…", () => controller.abort());
   try {
@@ -53,7 +83,10 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
         return ds ? ([p.datasetId, analysisData(ds) ?? ds.data] as const) : null;
       }),
     );
-    if (controller.signal.aborted) return; // cancelled while resolving panel datasets
+    if (controller.signal.aborted) {
+      cancelled(s, "export"); // cancelled while resolving panel datasets
+      return;
+    }
     const missing = entries.some((e) => e === null);
     const datasets = new Map(
       entries.filter((e): e is readonly [string, DataStruct] => e !== null),
@@ -74,35 +107,19 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       toast(msg, "danger");
       return;
     }
-    const params = await askParams("Export page", [
-      {
-        key: "fmt",
-        label: "Format",
-        type: "select",
-        default: "pdf",
-        options: ["pdf", "svg", "png", "tiff"],
-        hint: "PDF / SVG are vector; PNG / TIFF are raster",
-      },
-      {
-        key: "dpi",
-        label: "DPI (raster)",
-        type: "number",
-        default: 300,
-        hint: "Resolution for PNG / TIFF (50-1200); ignored by vector",
-      },
-    ]);
-    if (!params) return;
-    if (controller.signal.aborted) return; // cancelled while the dialog was open
     const fmt = params.fmt as string;
     await exportFigurePage(
       { ...spec, fmt, dpi: params.dpi as number, filename: "origin_page" },
       controller.signal,
     );
-    if (controller.signal.aborted) return; // race guard — see exportActive.ts's own doc
+    if (controller.signal.aborted) {
+      cancelled(s, "export"); // race guard — see exportActive.ts's own doc
+      return;
+    }
     toast(`exported origin_page.${fmt}`, "ok");
   } catch (e: unknown) {
     if (controller.signal.aborted) {
-      s().setStatus("export cancelled");
+      cancelled(s, "export");
       return;
     }
     const msg = `export page failed: ${e instanceof Error ? e.message : "error"}`;

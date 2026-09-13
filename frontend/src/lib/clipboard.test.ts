@@ -3,10 +3,28 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   clipboardImageSupported,
   clipboardSvgSupported,
+  copyImageAsync,
+  copySvgAsync,
   payloadToTSV,
   tableToTSV,
 } from "./clipboard";
 import type { PlotPayload } from "./plotdata";
+
+/** A minimal stand-in for the real `ClipboardItem`, since jsdom ships none:
+ *  stores whatever value (Blob or pending-Blob promise) each MIME key was
+ *  constructed with, so a test's `navigator.clipboard.write` mock can read
+ *  it back the same way a real browser reads the value promise before
+ *  actually performing the write. */
+class FakeClipboardItem {
+  // clipboardSvgSupported() (lib/clipboard.ts) treats a missing `supports`
+  // probe as "no" — a real static method is needed here for copySvgAsync's
+  // tests to actually reach its write path rather than short-circuiting on
+  // capability detection before ever exercising the signal guard.
+  static supports(): boolean {
+    return true;
+  }
+  constructor(public readonly items: Record<string, Blob | Promise<Blob>>) {}
+}
 
 describe("payloadToTSV", () => {
   const base: PlotPayload = {
@@ -163,5 +181,74 @@ describe("clipboardSvgSupported (MAIN #35)", () => {
       }),
     );
     expect(clipboardSvgSupported()).toBe(false);
+  });
+});
+
+// F7 (2026-09-13 adversarial review of d6e67fb7): postBlob's own signal
+// re-check (lib/api/http.ts) closes the race up to the moment it RETURNS
+// the blob — but the browser reads the ClipboardItem value promise these
+// two functions build on its own schedule, later still. Neither function
+// had any test coverage at all before this round (every existing consumer
+// mocks the whole module) — these exercise the real implementation.
+describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
+  const originalClipboard = navigator.clipboard;
+  const originalClipboardItem = (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem;
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: originalClipboard, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = originalClipboardItem;
+  });
+
+  /** Mirrors what a real browser does with a promise-valued `ClipboardItem`:
+   *  reads (awaits) the value before actually writing. A rejected value
+   *  promise means `write()` itself rejects — never a completed write. */
+  function stubClipboardWrite(): ReturnType<typeof vi.fn> {
+    const write = vi.fn(async (items: FakeClipboardItem[]) => {
+      for (const item of items) {
+        for (const value of Object.values(item.items)) await value;
+      }
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+    return write;
+  }
+
+  it("copyImageAsync resolves false — never a completed write — when the render settles AFTER cancel", async () => {
+    const write = stubClipboardWrite();
+    const controller = new AbortController();
+    const pending = Promise.resolve(new Blob(["x"])); // the render "succeeded"...
+    controller.abort(); // ...right as Cancel is clicked
+
+    const ok = await copyImageAsync(pending, controller.signal);
+
+    expect(ok).toBe(false);
+    // write() may be CALLED (a real browser starts the same way), but its
+    // value promise always rejects, so it can never actually complete.
+    await expect(write.mock.results[0]?.value).rejects.toThrow();
+  });
+
+  it("copySvgAsync resolves false under the same race", async () => {
+    const write = stubClipboardWrite();
+    const controller = new AbortController();
+    const pending = Promise.resolve(new Blob(["<svg/>"]));
+    controller.abort();
+
+    const ok = await copySvgAsync(pending, controller.signal);
+
+    expect(ok).toBe(false);
+    await expect(write.mock.results[0]?.value).rejects.toThrow();
+  });
+
+  it("copyImageAsync still writes normally when the signal is untouched (no regression)", async () => {
+    stubClipboardWrite();
+    const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])));
+    expect(ok).toBe(true);
+  });
+
+  it("copyImageAsync still writes normally when signal is passed but never aborted", async () => {
+    stubClipboardWrite();
+    const controller = new AbortController();
+    const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])), controller.signal);
+    expect(ok).toBe(true);
   });
 });

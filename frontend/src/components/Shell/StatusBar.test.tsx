@@ -196,7 +196,12 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
-  it("shows Cancel for only the first (oldest) op when several are pending", () => {
+  // F6 (2026-09-13 adversarial review of d6e67fb7): this used to assert only
+  // the FIRST op's Cancel rendered — an export (or a second import batch)
+  // started while another op was already running had NO way to cancel it
+  // from the UI at all. Sabotage: filter back down to `visibleOps[0]` in
+  // StatusBar.tsx and this fails (length 1, cancelB unreachable).
+  it("shows a Cancel control for EVERY visible op that carries one, not only the oldest", () => {
     const cancelA = vi.fn();
     const cancelB = vi.fn();
     render(<StatusBar />);
@@ -207,10 +212,26 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    const btns = screen.getAllByRole("button", { name: "Cancel" });
+    expect(btns).toHaveLength(2);
+    fireEvent.click(btns[0]);
     expect(cancelA).toHaveBeenCalledOnce();
     expect(cancelB).not.toHaveBeenCalled();
+    fireEvent.click(btns[1]);
+    expect(cancelB).toHaveBeenCalledOnce();
+  });
+
+  it("does not render a Cancel control for a visible op with no cancel callback, even alongside one that has one", () => {
+    const cancel = vi.fn();
+    render(<StatusBar />);
+    act(() => {
+      beginOp("Rendering a preview…"); // no cancel
+      beginOp("Importing b.dat…", cancel);
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
   });
 });
 

@@ -49,6 +49,32 @@ function capitalize(word: string): string {
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
+/** verb -> its pendingOps-label gerund. A plain `${capitalize(verb)}ing`
+ *  concatenation is wrong for a silent-e verb (e.g. "save" -> "Saveing"
+ *  instead of "Saving") — every verb actually passed today ("export",
+ *  "copy") happens to survive that naively, which is exactly how this would
+ *  ship unnoticed the day a "save"/"move"/"remove" caller is added. Fall
+ *  back to the naive form for an unlisted verb rather than throwing — this
+ *  is cosmetic, not a reason to break the export. */
+const GERUND: Record<string, string> = { export: "Exporting", copy: "Copying" };
+function gerund(verb: string): string {
+  return GERUND[verb] ?? `${capitalize(verb)}ing`;
+}
+
+/** Report a cancellation the same way at every point it can land — set the
+ *  status line so Cancel is never a silent no-op. Used at every early return
+ *  below once `controller.signal.aborted` is true: previously only the
+ *  catch-block's cancel path set this, so a cancel that landed WHILE
+ *  resolving a still-pending (lazy-book) dataset — the longest window, since
+ *  that resolve can be a real network fetch — vanished with no status, no
+ *  toast, and no visible sign the click did anything. No toast here on
+ *  purpose: a user-initiated cancel is an expected outcome, not a failure
+ *  worth interrupting them over — the status line (same wording the
+ *  catch-block already used) is enough. */
+export function cancelled(s: StoreGet, verb: string): void {
+  s().setStatus(`${verb} cancelled`);
+}
+
 export async function exportActive(
   s: StoreGet,
   fn: (
@@ -67,12 +93,15 @@ export async function exportActive(
     return;
   }
   const controller = new AbortController();
-  const opId = beginOp(`${capitalize(verb)}ing ${found.name}…`, () => controller.abort());
+  const opId = beginOp(`${gerund(verb)} ${found.name}…`, () => controller.abort());
   try {
     const ds = await s().resolveDataset(found.id);
     // Cancelled while resolving a still-pending (lazy-book) dataset: never
     // reaches the actual export request at all.
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) {
+      cancelled(s, verb);
+      return;
+    }
     if (!ds) return;
     const stem = ds.name.replace(/\.[^.]+$/, "");
     await fn(stem, ds, controller.signal);
@@ -81,11 +110,14 @@ export async function exportActive(
     // module's header) makes this unreachable for postDownload/postBlob
     // callers today, but the guard is cheap and keeps that an
     // implementation detail `fn` is not required to know about.
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) {
+      cancelled(s, verb);
+      return;
+    }
     toast(`${past} ${stem}`, "ok");
   } catch (e: unknown) {
     if (controller.signal.aborted) {
-      s().setStatus(`${verb} cancelled`);
+      cancelled(s, verb);
       return;
     }
     const msg = `${verb} failed: ${e instanceof Error ? e.message : "error"}`;

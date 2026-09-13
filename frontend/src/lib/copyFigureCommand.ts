@@ -72,7 +72,7 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
         { transparent: s().copyFigureTransparent },
       );
       s().setStatus("rendering vector figure for the clipboard…");
-      const ok = await copySvgAsync(renderFigureBlob(spec, signal));
+      const ok = await copySvgAsync(renderFigureBlob(spec, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },
@@ -118,7 +118,7 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       // Hand the PENDING render to the clipboard rather than awaiting first —
       // see copyImageAsync: awaiting can drop the user activation the
       // Clipboard API requires, and the copy then fails invisibly.
-      const ok = await copyImageAsync(renderFigureBlob(spec, signal));
+      const ok = await copyImageAsync(renderFigureBlob(spec, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },

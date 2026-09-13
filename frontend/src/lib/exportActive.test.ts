@@ -135,4 +135,31 @@ describe("exportActive — cancel outcome", () => {
     expect(useApp.getState().status).toBe("export failed: network down");
     expect(toastMsgs()).toEqual(["export failed: network down"]);
   });
+
+  // F3 (2026-09-13 adversarial review of d6e67fb7): a cancel landing WHILE
+  // resolveDataset is still in flight used to hit a bare `if (aborted)
+  // return;` with no status/toast — the click looked like it did nothing at
+  // all. This is the LONGEST cancel window in practice (a lazy Origin book's
+  // resolve is a real network fetch), so it's the one most likely to
+  // actually get clicked mid-flight.
+  it("sets a cancelled status when cancel lands while resolving a still-pending dataset (not silent)", async () => {
+    type Ds = ReturnType<typeof useApp.getState>["datasets"][number];
+    let resolveDs!: (v: Ds | undefined) => void;
+    useApp.setState({
+      resolveDataset: vi.fn(() => new Promise<Ds | undefined>((r) => (resolveDs = r))),
+    });
+    const fn = vi.fn();
+    const p = exportActive(useApp.getState, fn);
+    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+
+    usePendingOps.getState().ops[0].cancel!();
+    // resolveDataset settles AFTER the cancel — the exact lazy-book race.
+    resolveDs(useApp.getState().datasets[0]);
+    await p;
+
+    expect(fn).not.toHaveBeenCalled(); // never reached the actual export
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(toastMsgs()).toEqual([]);
+    expect(usePendingOps.getState().ops).toHaveLength(0);
+  });
 });

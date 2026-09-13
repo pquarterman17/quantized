@@ -67,7 +67,13 @@ export function exportFigurePage(body: FigurePageSpec, signal?: AbortSignal): Pr
 }
 
 /** Render the page and return the raw image bytes — the composer UI's
- *  low-DPI PNG preview (same pattern as api.ts's renderFigureBlob). */
-export function renderFigurePageBlob(body: FigurePageSpec, signal?: AbortSignal): Promise<Blob> {
-  return postBlob("/api/export/figure-page", body, signal);
+ *  low-DPI PNG preview and clipboard copy (same pattern as api/figures.ts's
+ *  renderFigureBlob). No `signal` param: unlike renderFigureBlob, neither
+ *  caller (components/workshops/figurepage/usePagePreviewExport.ts) has an
+ *  AbortController to pass one from — the Figure Page composer's own export/
+ *  copy cancel wiring is a named PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 residual,
+ *  not done here. Add one back (mirroring exportFigurePage above) if/when
+ *  that lands. */
+export function renderFigurePageBlob(body: FigurePageSpec): Promise<Blob> {
+  return postBlob("/api/export/figure-page", body);
 }

@@ -1437,6 +1437,26 @@ import { fileURLToPath } from "node:url";
  *  restated: `d28fcd6e` IS an ancestor, but its 918,459 was measured in the
  *  second round and not here, and the only numbers this block stands behind are
  *  the two it measured itself.
+ *
+ *  2026-09-13 — P3.4 export-cancel (d6e67fb7): export-csv/export-hdf5/
+ *  export-page's command bodies moved off the eager path to the SAME
+ *  click-only dynamic-import pattern export-figure/export-origin already
+ *  used, as a side effect of giving each its own cancellable pendingOps
+ *  entry rather than letting store/commands.ts's runAction wrap the
+ *  returned promise in a second, non-cancellable op (see lib/
+ *  exportActive.ts's header). Measured after `npm ci`: 920,089 -> 915,638
+ *  B, -4,451 B net (despite the new cancel machinery being added, not
+ *  removed). EAGER_JS_BUDGET stays at 920,400 — SLACK is 40,000, so
+ *  915,638 is nowhere near the `EAGER_JS_BUDGET - SLACK` floor (880,400)
+ *  that would force a lower pin.
+ *
+ *  Same day, adversarial-review fix round on the commit above (silent-
+ *  cancel-during-resolve, the ParamDialog-backdrop-swallows-Cancel bug, and
+ *  unhandled dynamic-import rejections — see lib/exportActive.ts's
+ *  `cancelled`/`gerund` additions and commands/fileCommands.ts's
+ *  `runLazy`): measured 916,153 B after `npm ci`, +515 B over the 915,638
+ *  above for closing those gaps. Still 4,247 B under budget; still nowhere
+ *  near the SLACK floor.
  */
 const EAGER_JS_BUDGET = 920_400;
 
