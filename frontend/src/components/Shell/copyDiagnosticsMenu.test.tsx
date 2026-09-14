@@ -20,6 +20,23 @@ import { useApp } from "../../store/useApp";
 
 vi.mock("../../lib/clipboard", () => ({ copyText: vi.fn() }));
 
+// P3.4 re-review round 3, finding 2: the Help-menu warm import
+// (`MenuBar.tsx`'s `warmDiagnosticsChunk`) shipped with no test proving it
+// actually starts the chunk fetch when the menu opens. The plan's prior
+// wording ("an automated test cannot distinguish 'warmed early' from
+// 'fetched cold'") conflated LATENCY (genuinely untestable under vitest's
+// instant module resolution) with the regression that matters: whether the
+// chunk is imported on Help's closed→open transition at all, before any
+// item is clicked. That IS observable — wrap the module in a factory that
+// records its own evaluation and proxies to the real implementation, so the
+// tests below assert on evaluation, not timing, and every other test in
+// this file still gets the real collector/renderer behaviour.
+const diagnosticsEvals: string[] = [];
+vi.mock("../../store/diagnostics", async (importOriginal) => {
+  diagnosticsEvals.push("e");
+  return await importOriginal();
+});
+
 const { copyText } = await import("../../lib/clipboard");
 
 const SECRET_NAME = "UNPUBLISHED-LaSrMnO3-batch7";
@@ -79,6 +96,36 @@ async function clickCopyDiagnostics(): Promise<void> {
   // weak-wait ratchet fails the build for the latter.
   await vi.waitFor(() => expect(useApp.getState().status).not.toBe(""));
 }
+
+describe("Help menu warms the diagnostics chunk (P3.4 re-review round 3, finding 2)", () => {
+  // Order matters: `store/diagnostics` is an ES module, evaluated at most
+  // once per test-file run (the module cache is shared across `it`s in one
+  // file, only `vi.resetModules()` would clear it) — so these three cases
+  // run in the sequence the regression actually happens in, and this
+  // describe block sits first in the file so no earlier test has primed the
+  // cache by clicking "Copy diagnostics" first.
+  it("renders the menu bar without importing the chunk", () => {
+    render(<MenuBar actions={buildAppActions(useApp.getState)} onOpenPalette={vi.fn()} />);
+    expect(diagnosticsEvals.length).toBe(0);
+  });
+
+  it("opening a different menu (File) does not import the chunk", () => {
+    render(<MenuBar actions={buildAppActions(useApp.getState)} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("File"));
+    expect(diagnosticsEvals.length).toBe(0);
+  });
+
+  it("opening Help imports the chunk exactly once, before any item is clicked", async () => {
+    render(<MenuBar actions={buildAppActions(useApp.getState)} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("Help"));
+    // Wait on the recorded evaluation array itself (state), not on a mock's
+    // call flag — architecture.test.ts's weak-wait ratchet only flags a
+    // waitFor callback whose expect() target ends in the "has been called"
+    // matcher, which this is not.
+    await vi.waitFor(() => expect(diagnosticsEvals.length).toBe(1));
+    expect(diagnosticsEvals.length).toBe(1);
+  });
+});
 
 describe("Help ▸ Copy diagnostics", () => {
   it("copies a bundle and confirms it", async () => {

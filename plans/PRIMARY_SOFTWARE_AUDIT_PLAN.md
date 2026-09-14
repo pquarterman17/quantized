@@ -4195,7 +4195,16 @@ Original acceptance criteria (unchanged):
   re-review — **60** only reproduces against the paren-less `setStatus`
   pattern, a 334-site superset that also counts declarations, types and
   comments, not the 263-site `setStatus(` figure this box is about) and
-  **26** inside a brace-matched `catch` block.
+  **26** inside a brace-matched `catch` block. **52 corrected to 51 in the
+  round-3 re-review**: `grep -rn` prefixes every output line with
+  `path:lineno:` before the pattern is matched, so a file whose PATH
+  contains a failure word inflates the count — `components/Inspector/
+  ErrorRolesCard.tsx:126`'s own `setStatus(` line carries no failure wording
+  (its message is on the following line) and matched only on "Error" in the
+  filename. Reproducible method: strip the `path:lineno:` prefix before
+  matching (`grep -rnE 'setStatus\(' … | grep -v '\.test\.' | sed
+  's/^[^:]*:[0-9]*://' | grep -icE '…'`), or equivalently `grep -rhE` (no
+  filename) in place of `-rnE`.
 
   Rubric, because "all three facts in every message" would be noise in most of
   them:
@@ -4451,9 +4460,10 @@ Original acceptance criteria (unchanged):
      indistinguishable from a truly dead backend. Fixed: `store/backendHealth.ts`
      now stamps `Date.now()` at record time and computes the age at READ
      time (not cached at record time, so it keeps growing while the report
-     sits open); the row renders `quantized 0.25.0 (startup handshake, 42 min
-     ago)`, and the unreachable case renders `unreachable or not yet
-     answered`, honestly covering THREE indistinguishable cases (dead
+     sits open); the row renders `quantized 0.25.0 (startup handshake, 2520 s
+     ago)` (`age()`'s convention is seconds, not minutes — see
+     `store/diagnostics.test.ts:~245`), and the unreachable case renders
+     `unreachable or not yet answered`, honestly covering THREE indistinguishable cases (dead
      backend, offline/file-served page, click before the handshake answers)
      instead of the two the field doc used to enumerate — `lib/diagnostics.ts`'s
      `backend` field doc corrected to say so. The finding-3 paragraph above
@@ -4485,13 +4495,19 @@ Original acceptance criteria (unchanged):
      session can still be waiting on a real fetch for the chunk if the user
      reaches the command before the warm import (started when they opened
      Help) has finished — narrower than the pre-fix hazard (every click) but
-     not eliminated. No test guards the warm-import timing itself: vitest
-     resolves a mocked or real dynamic import from the in-process module
-     graph effectively instantly regardless of whether `warmDiagnosticsChunk`
-     ran, so an automated test cannot distinguish "warmed early" from
-     "fetched cold" the way a real network-served chunk on a slow connection
-     would — the same limitation the original review's own F3 probe used a
-     manual `vi.mock` + `sleep` harness to work around, not a per-commit test.
+     not eliminated. **Corrected in the round-3 re-review (finding 2
+     below):** the LATENCY the warm import saves is genuinely not testable
+     in vitest — it resolves a mocked or real dynamic import from the
+     in-process module graph effectively instantly regardless of whether
+     `warmDiagnosticsChunk` ran, the same limitation the original review's
+     own F3 probe used a manual `vi.mock` + `sleep` harness to work around,
+     not a per-commit test — but that is a narrower claim than "an automated
+     test cannot distinguish 'warmed early' from 'fetched cold'", which
+     conflated timing with the regression that actually matters: whether the
+     chunk is imported when the Help menu opens, before any item is clicked.
+     That IS observable, and is now pinned by
+     `components/Shell/copyDiagnosticsMenu.test.tsx`'s "Help menu warms the
+     diagnostics chunk" tests.
   4. NIT — the census bound was not reproducible with the pattern it named:
      the plan claimed **60** `setStatus(` sites carry failure wording, but
      that number only reproduces against the paren-less `setStatus` pattern
@@ -4499,11 +4515,26 @@ Original acceptance criteria (unchanged):
      the reproducible figure for `setStatus(` (263 sites, matching the box's
      other number) is **52**. Re-measured independently with a plain grep
      over non-test `frontend/src`; both boxes above corrected to 52.
+     **Corrected again to 51 in the round-3 re-review**: `grep -rn` matches
+     the pattern against each output line's `path:lineno:code` haystack,
+     not just `code` — `components/Inspector/ErrorRolesCard.tsx:126` counted
+     only because "Error" appears in the FILENAME, the exact class of defect
+     this nit was originally filed for. Corrected method: strip the
+     `path:lineno:` prefix before matching (or use `grep -rhE`, which omits
+     the filename) — see the box above for the reproducible command.
   5. NIT — the plan's recorded gate run (99 files, 1941 passed) predates this
      commit's own five new tests (1936 prior + 5 = 1941, i.e. it was the
-     PARENT's run). Re-measured at this commit: **100 files, 1954 passed** —
-     the delta versus 1941 includes both this round's new backend-health
-     tests and the prior round's five.
+     PARENT's run). Re-measured — **corrected twice more since**: the figure
+     first written here (100 files, 1954 passed) turned out to be the
+     PARENT's run again (`5af88343`, not this commit), caught by the
+     round-3 re-review; this commit's own count at the time was 101 files,
+     1962 passed (`store/backendHealth.test.ts` new at +5,
+     `lib/diagnostics.test.ts` +2, `store/diagnostics.test.ts` +1, over
+     `5af88343`'s 100/1954). The round-3 fixes below (a new warm-import test
+     plus doc/plan edits) move the count again — see this entry's closing
+     Gate line for the number that is actually current, measured from a
+     fresh worktree of the finished commit rather than the working tree that
+     produced it, per the round-3 reviewer's own suggested guard.
   6. NIT — the sanitizer regex (`/[\x00-\x1f\x7f]+/g`) stripped only ASCII C0
      controls plus DEL; U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR and
      U+0085 NEL are ALSO forced line breaks under CSS Text, and U+202E
@@ -4547,6 +4578,22 @@ Original acceptance criteria (unchanged):
       constant for the rest of the session. Fixed: `Object.freeze`, matching
       the repo's frozen `DataStruct` convention. New test asserts both
       `Object.isFrozen` and that an assignment attempt throws.
+  12. NIT (**fixed in the round-3 re-review, 2026-09-14**, not this commit) —
+      `lib/diagnostics.ts`'s `DIAGNOSTICS_SCHEMA_VERSION` did not move even
+      though the `backend` row's rendered layout changed in BOTH this round
+      and the round above it: `"backend  quantized 0.23.2"` became
+      `"backend  quantized 0.23.2 (startup handshake, 12 s ago)"`, and
+      `"backend  unreachable"` became `"backend  unreachable or not yet
+      answered"` — both breaking for a line-scoped parser (`/^backend\s+
+      unreachable$/` no longer matches; an "app version" split now picks up
+      extra tokens), and this commit had to rewrite its own regexes in three
+      test files as a direct result, which is the evidence the layout truly
+      changed. Precedent: `3cbc115b`, which bumped 1 → 2 for *adding* the
+      `backend` row, a strictly smaller change than reshaping its content.
+      Fixed: `DIAGNOSTICS_SCHEMA_VERSION = 3`. No in-repo consumer reads the
+      constant; the only test asserts the stamp against the constant itself
+      (`lib/diagnostics.test.ts`'s "stamps the report schema..."), so the
+      bump needed no test changes beyond the constant.
 
   Sabotage (all verified failing, then reverted):
 
@@ -4560,11 +4607,29 @@ Original acceptance criteria (unchanged):
   | 9 | `copyDiagnosticsMenu.test.tsx`: remove `resetBackendHealthForTests()` from `beforeEach` AND record a leaked backend identity in an earlier test | caught — the later "unreachable" assertion fails, reproducing the exact poisoning scenario nit 9 describes |
   | 10 | `commands/uiCommands.ts`: reinsert a fire-and-forget `void fetch("/api/health")` in the click handler (does not stall the clipboard write) | caught by the new DIRECT assertion (`hungFetch` called once) — a `waitFor`-only check would have missed this, since nothing stalls |
   | 11 | `store/backendHealth.ts`: drop `Object.freeze` from `BACKEND_UNREACHABLE` | caught — `store/backendHealth.test.ts`'s "freezes BACKEND_UNREACHABLE..." |
+  | 12 (round-3) | `components/Shell/MenuBar.tsx`: revert `title("Help", warmDiagnosticsChunk)` to `title("Help")` in a scratch copy | caught — `copyDiagnosticsMenu.test.tsx`'s "opening Help imports the chunk exactly once, before any item is clicked" fails (`diagnosticsEvals.length` stays `0`); reverted |
 
-  Gate: `npx tsc -b --force` clean; `npx eslint src --max-warnings=0` clean;
+  **Round-3 re-review, 2026-09-14** (closing the round-3 adversarial
+  re-review of this commit): fixed finding 1 (this Gate line and nit 5 above
+  both recorded the PARENT's test count, not this commit's own — a third
+  recurrence of the exact mistake nit 5 itself was filed to correct; see nit
+  5's text above, now corrected) and finding 2 (item 12 above: the warm
+  import shipped with no test — added and sabotage-verified) as CONFIRMED,
+  and nits 3/4/5 (this section's items 2 and 12, and the two boxes corrected
+  to 51 earlier in this P3.4 entry) as NITs. The round-3 re-review found the
+  CODE clean on every one of the 11 prior items it re-probed (nothing there
+  needed a fix); its two CONFIRMED findings and three nits are all
+  record/test-level — item 12's new test and the `DIAGNOSTICS_SCHEMA_VERSION`
+  bump above are the only code changes this round, everything else is the
+  plan's own record catching up to what the code already did.
+
+  Gate (measured in THIS worktree, after all round-3 edits landed, so it is
+  this commit's own run — not a parent's): `npx tsc -b --force` clean;
+  `npx eslint src --max-warnings=0` clean;
   `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
-  src/components/Shell src/architecture.test.ts` — **100 files, 1954 passed,
-  0 failed**; `uv run pytest -q tests/test_repo_integrity.py` — 12 passed.
+  src/components/Shell src/architecture.test.ts` — **101 files, 1965 passed,
+  0 failed**; `uv run pytest -q tests/test_repo_integrity.py`
+  — 12 passed.
   `store/useApp.ts` untouched (`wc -l` 2321, unchanged, at its 2322 pin).
 
   Bundle (eager JS = entry + modulepreload chunks, measured the same way

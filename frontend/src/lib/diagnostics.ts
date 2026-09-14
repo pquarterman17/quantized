@@ -114,7 +114,7 @@ export interface DiagnosticsSnapshot {
 /** Bumped when the rendered layout changes in a way that would break a
  *  consumer parsing it. Owned by the builder, not the snapshot: the format is
  *  this module's, and a collector must not be able to misreport it. */
-export const DIAGNOSTICS_SCHEMA_VERSION = 2;
+export const DIAGNOSTICS_SCHEMA_VERSION = 3;
 
 function section(title: string, rows: readonly (readonly [string, string])[]): string {
   const width = Math.max(...rows.map(([k]) => k.length));
