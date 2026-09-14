@@ -1,5 +1,5 @@
-// P4.2 canonical plot/project regression matrix — the EIGHT canonical figures
-// plus the multi-panel page (NINE committed goldens in all).
+// P4.2 canonical plot/project regression matrix — the NINE canonical figures
+// plus the multi-panel page (TEN committed goldens in all).
 //
 // Built programmatically (no recorded JSON input) so they are deterministic on
 // every platform, from ONE small dataset whose channels cover every binding the
@@ -19,7 +19,7 @@
 // 2-D figure cannot be expressed on the document path the other three legs
 // share. The map view is a separate, non-document surface (`lib/mapdata.ts`,
 // `lib/mapRender.ts`). Documented gap, not a silent omission: `MATRIX_FIXTURES`
-// holds EIGHT figure fixtures and the page fixture below makes NINE committed
+// holds NINE figure fixtures and the page fixture below makes TEN committed
 // goldens.
 
 import {
@@ -226,6 +226,25 @@ export function decorFigure(): FigureDocument {
   );
 }
 
+/** THREE plotted channels with the FIRST one HIDDEN (BUG-015). The canvas keeps
+ *  a hidden series in its display list with `show:false`, so channels 1 and 2
+ *  sit on palette slots 1 and 2; the export drops hidden channels outright and
+ *  the reopened document re-derives the list the same way. Any leg that
+ *  renumbered its own filtered list would put the survivors on slots 0 and 1,
+ *  which is the bug this fixture exists to keep fixed — three channels rather
+ *  than the two-series minimum so a one-slot slide and a "always slot 0" bug
+ *  are distinguishable. */
+export function hiddenFigure(): FigureDocument {
+  return makeFigure(
+    "hidden",
+    baseView({
+      yKeys: [0, 1, 2],
+      hiddenChannels: [0],
+      seriesStyles: { 0: { width: 2 }, 1: { width: 1 }, 2: { width: 3 } },
+    }),
+  );
+}
+
 export const MATRIX_FIXTURES = [
   "plain",
   "errors",
@@ -235,6 +254,7 @@ export const MATRIX_FIXTURES = [
   "break",
   "waterfall",
   "decor",
+  "hidden",
 ] as const;
 
 export type MatrixFixtureName = (typeof MATRIX_FIXTURES)[number];
@@ -249,6 +269,7 @@ export function matrixFixture(name: MatrixFixtureName): FigureDocument {
     case "break": return breakFigure();
     case "waterfall": return waterfallFigure();
     case "decor": return decorFigure();
+    case "hidden": return hiddenFigure();
   }
 }
 

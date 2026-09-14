@@ -140,10 +140,11 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
     specs.map((spec) => (spec?.line && spec.line !== "none" ? DASH[spec.line] : undefined));
 
   /** What `lib/figureSpec.ts` builds: the hidden-FILTERED channel list, plus
-   *  each survivor's position in the UNFILTERED display list. */
+   *  each survivor's position in the UNFILTERED display list. The positions go
+   *  in unconditionally (BUG-015) — `on` toggles only the dash/glyph cycle. */
   const exportSpecs = (styles: Record<number, SeriesStyle>, on: boolean, hidden: number[] = []) => {
     const visible = PLOTTED.filter((ch) => !hidden.includes(ch));
-    return buildExportStyles(visible, styles, on ? visible.map((ch) => PLOTTED.indexOf(ch)) : null);
+    return buildExportStyles(visible, styles, visible.map((ch) => PLOTTED.indexOf(ch)), on);
   };
 
   it("OFF: neither side encodes a dash (and they agree about that)", () => {
@@ -208,13 +209,26 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
     }
   });
 
-  it("OFF: a hidden series leaves the export byte-identical to before the cycle", () => {
-    // The invariant the cycle must not quietly buy its correctness with: with
-    // the preference off, `buildExportStyles` is exactly the two-argument
-    // function it was — palette skew and all.
+  it("OFF: the positions still hold — no dash is invented, and no palette skew either (BUG-015)", () => {
+    // The two halves are independent. With the preference OFF nothing is
+    // cycled — only the explicitly styled series carries a line, and no glyph
+    // is invented — but the PALETTE still rides the canvas' positions, because
+    // colouring by the hidden-filtered index is BUG-015 and was never part of
+    // the opt-in. (This test previously asserted that skew, by comparing
+    // against the positionless two-argument call.)
     const styles: Record<number, SeriesStyle> = { 1: { width: 3 }, 2: { line: "dotted" } };
-    const visible = PLOTTED.filter((ch) => ch !== 0);
-    expect(exportSpecs(styles, false, [0])).toEqual(buildExportStyles(visible, styles));
+    const specs = exportSpecs(styles, false, [0]); // survivors: channel 2, then 1
+    expect(specs.map((s) => s?.line)).toEqual(["dotted", undefined]);
+    expect(specs.map((s) => s?.marker_shape)).toEqual([undefined, undefined]);
+    const root = document.documentElement;
+    const paint = ["#ffcccc", "#ccffcc", "#ccccff"];
+    paint.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    try {
+      // Positions 0 and 2 — NOT the filtered 0 and 1 the bug produced.
+      expect(exportSpecs(styles, false, [0]).map((s) => s?.color)).toEqual([paint[0], paint[2]]);
+    } finally {
+      paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
   });
 
   it("ON: parity holds when some series are explicitly styled and some are not", () => {

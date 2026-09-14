@@ -11,14 +11,13 @@
 // golden because the test went red".
 //
 // FIVE DIVERGENCES THIS MATRIX FOUND, each filed as a bug and pinned below by
-// a test that asserts BOTH concrete values and the fact that they differ (none
-// of them is fixed here — this slice is tests-only). They are deliberately NOT
-// `it.fails`: a bare `it.fails` is satisfied by ANY throw, so a changed
-// `createFigureDocument` signature would have kept them "green" for the wrong
-// reason, and a real fix would flip them to an unexplained "unexpected pass".
-// As written, fixing the bug turns the divergence assertion red and the fix
-// INVERTS it (`.not.toEqual` becomes `.toEqual`, the two pinned values become
-// one).
+// a test that asserts BOTH concrete values and the fact that they differ. They
+// are deliberately NOT `it.fails`: a bare `it.fails` is satisfied by ANY throw,
+// so a changed `createFigureDocument` signature would have kept them "green"
+// for the wrong reason, and a real fix would flip them to an unexplained
+// "unexpected pass". As written, fixing the bug turns the divergence assertion
+// red and the fix INVERTS it (`.not.toEqual` becomes `.toEqual`, the two
+// pinned values become one) — which is exactly what D4 below now is.
 //   D1 / BUG-012 x-breaks  — a document's `plot.axisBreaks.x` reaches the
 //                  export wire and survives reopen, but `PlotView` — the whole
 //                  input the canvas is built from — has no field for it.
@@ -28,8 +27,13 @@
 //   D3 / BUG-014 rename    — a legend rename replaces the whole on-screen label
 //                  (unit and all) but only `dataset.labels[ch]` on the wire, so
 //                  the exported legend reads "Loop 1 (au)".
-//   D4 / BUG-015 hidden    — hiding a series shifts every later series' palette
-//                  colour on the exported figure but not on the canvas.
+//   D4 / BUG-015 hidden    — FIXED 2026-09-14. Hiding a series used to shift
+//                  every later series' palette colour on the exported figure
+//                  but not on the canvas; `lib/figureSpec.ts` now derives the
+//                  UNFILTERED display position for every producer, so the
+//                  `hidden` fixture is a full member of the matrix above
+//                  (screen ≡ export ≡ reopen) and the pin below is the
+//                  inverted equality.
 //   D5 / BUG-016 grouped styling — the canvas gives every level of a grouped
 //                  channel that channel's style; `routes/export_figures.py`'s
 //                  `group_col` branch drops `series_styles` entirely, so the
@@ -42,6 +46,7 @@ import decorGolden from "./__fixtures__/regressionMatrix/decor.json";
 import errorsGolden from "./__fixtures__/regressionMatrix/errors.json";
 import facetGolden from "./__fixtures__/regressionMatrix/facet.json";
 import groupGolden from "./__fixtures__/regressionMatrix/group.json";
+import hiddenGolden from "./__fixtures__/regressionMatrix/hidden.json";
 import pageGolden from "./__fixtures__/regressionMatrix/page.json";
 import plainGolden from "./__fixtures__/regressionMatrix/plain.json";
 import waterfallGolden from "./__fixtures__/regressionMatrix/waterfall.json";
@@ -92,6 +97,7 @@ const GOLDENS: Record<MatrixFixtureName, unknown> = {
   break: breakGolden,
   waterfall: waterfallGolden,
   decor: decorGolden,
+  hidden: hiddenGolden,
 };
 
 /** Fixtures on which a leg is KNOWN to disagree, naming the field and which
@@ -222,6 +228,15 @@ describe("P4.2 regression matrix: every fixture projects its distinguishing feat
     expect(projectScreen(matrixFixture("waterfall"), dataset).waterfallOffset).toBeGreaterThan(0);
   });
 
+  it("hidden — the hidden channel is drawn by nobody, and the survivors keep their slots", () => {
+    const p = projectScreen(matrixFixture("hidden"), dataset);
+    expect(p.series.map((s) => s.channel)).toEqual([1, 2]);
+    // Their WIDTHS prove the fixture really styles all three channels (so the
+    // colour claim below is about position, not about there being one style).
+    expect(p.series.map((s) => s.width)).toEqual([1, 3]);
+    expect(p.series.map((s) => s.color)).toEqual([TEST_SERIES_PALETTE[1], TEST_SERIES_PALETTE[2]]);
+  });
+
   it("decor — annotations, shapes, reference lines, a region shade and the legend title", () => {
     const p = projectScreen(matrixFixture("decor"), dataset);
     expect(p.decor.annotations.map((a) => a.text)).toEqual(["onset", "plateau"]);
@@ -304,7 +319,7 @@ describe("P4.2 regression matrix: multi-panel page", () => {
 //
 // Each test is named for the bug it reproduces, so `plans/BUGS_AND_ISSUES.md`
 // and the suite refer to each other by the same string.
-describe("P4.2 regression matrix: divergences found (documented, NOT fixed here)", () => {
+describe("P4.2 regression matrix: divergences found (D4 since FIXED, see below)", () => {
   const dataset = matrixDataset();
 
   // BUG-012 (D1). `FigureDocument.plot.axisBreaks.x` is the canonical home for
@@ -380,22 +395,32 @@ describe("P4.2 regression matrix: divergences found (documented, NOT fixed here)
     );
   });
 
-  // BUG-015 (D4). The canvas keeps a hidden series in its display list with
-  // `show:false`, so later series keep their palette POSITION; the export wire
-  // drops hidden channels entirely and `buildExportStyles` is called with
-  // `cycle: null` (`buildFigureSpecFromDocument` never opts into
-  // `autoSeriesStyles`), so the remaining series are coloured by their FILTERED
-  // index. This is the same position-skew `SeriesCycle` was introduced to fix
-  // for the live Stage export; a saved document's export does not carry it.
-  it("DIVERGENCE (BUG-015): hiding a series leaves the next one on palette slot 1 on screen and slot 0 on export", () => {
-    const hidden = hiddenFigure();
-    // Both legs draw exactly one series (channel 1); they disagree on its slot.
-    expect(projectScreen(hidden, dataset).series.map((s) => s.channel)).toEqual([1]);
-    expect(projectExport(hidden, dataset).series.map((s) => s.channel)).toEqual([1]);
-    expect(projectScreen(hidden, dataset).series[0].color).toBe(TEST_SERIES_PALETTE[1]);
-    expect(projectExport(hidden, dataset).series[0].color).toBe(TEST_SERIES_PALETTE[0]);
-    expect(projectExport(hidden, dataset).series[0].color).not.toBe(
-      projectScreen(hidden, dataset).series[0].color,
+  // BUG-015 (D4), FIXED 2026-09-14 — this is the divergence assertion INVERTED.
+  // The canvas keeps a hidden series in its display list with `show:false`, so
+  // later series keep their palette POSITION; the export wire drops hidden
+  // channels entirely. `lib/figureSpec.ts` now derives each survivor's position
+  // in the UNFILTERED display list unconditionally and hands it to
+  // `buildExportStyles`, so a saved document — which never opts into
+  // `autoSeriesStyles` — is coloured by display position like the canvas rather
+  // than by its own filtered index.
+  it("BUG-015: hiding a series leaves the survivors on palette slots 1 and 2 on BOTH screen and export", () => {
+    const hidden = matrixFixture("hidden");
+    // Both legs draw exactly the two survivors (channels 1 and 2).
+    expect(projectScreen(hidden, dataset).series.map((s) => s.channel)).toEqual([1, 2]);
+    expect(projectExport(hidden, dataset).series.map((s) => s.channel)).toEqual([1, 2]);
+    // Non-vacuous: slots 1 and 2 are the survivors' ORIGINAL positions, and
+    // they are different paints from slots 0 and 1, which the filtered index
+    // would have given them.
+    expect(projectScreen(hidden, dataset).series.map((s) => s.color)).toEqual([
+      TEST_SERIES_PALETTE[1],
+      TEST_SERIES_PALETTE[2],
+    ]);
+    expect([TEST_SERIES_PALETTE[1], TEST_SERIES_PALETTE[2]]).not.toEqual([
+      TEST_SERIES_PALETTE[0],
+      TEST_SERIES_PALETTE[1],
+    ]);
+    expect(projectExport(hidden, dataset).series.map((s) => s.color)).toEqual(
+      projectScreen(hidden, dataset).series.map((s) => s.color),
     );
   });
 
@@ -461,20 +486,3 @@ function renamedFigure(): FigureDocument {
   });
 }
 
-/** Two channels with the FIRST one hidden (BUG-015). */
-function hiddenFigure(): FigureDocument {
-  return createFigureDocument({
-    id: "hidden",
-    name: "hidden",
-    datasetId: "matrix-ds",
-    view: {
-      ...defaultPlotView(),
-      xKey: null,
-      yKeys: [0, 1],
-      hiddenChannels: [0],
-      xAxisLabel: "Index",
-      yAxisLabel: "Signal (au)",
-      seriesStyles: { 0: { width: 2 }, 1: { width: 1 } },
-    },
-  });
-}

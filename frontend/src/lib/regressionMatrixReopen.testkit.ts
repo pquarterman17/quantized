@@ -102,7 +102,12 @@ export function projectReopen(reopened: ReopenedProject): CanonicalFigure {
   const y2 = new Set(figure.bindings.y2Keys ?? []);
   const comparableStyle = styleComparable(mode);
 
-  const series: CanonicalSeries[] = drawnChannels.map((ch, i) => {
+  const series: CanonicalSeries[] = drawnChannels.map((ch) => {
+    // The DISPLAY position — this channel's slot in the UNFILTERED list, which
+    // is the index space a renderer resolves the palette in (a hidden series
+    // keeps its slot on the canvas, and since BUG-015 on the export wire too).
+    // Indexing the hidden-filtered list instead was the same skew, here.
+    const i = displayChannels.indexOf(ch);
     const style = resolveSeriesStyle(view.seriesStyles[ch], i, null);
     return {
       channel: ch,

@@ -249,6 +249,13 @@ function buildFigureSpecForView(
   // divergence rather than a refusal: the canvases could not see it, so with
   // `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and
   // the PDF drew all three solid.
+  //
+  // The POSITIONS are not part of that opt-in and never were (BUG-015): they
+  // are just where each surviving channel sits in the canvas' own display
+  // list, and `buildExportStyles` colours by them ALWAYS. Deriving them only
+  // when the cycle was on is what let a saved document — which never opts in —
+  // recolour a figure the moment one series was hidden.
+  const positions = plotted.map((ch) => displayChannels.indexOf(ch));
   const seriesCycle =
     extras.autoSeriesStyles &&
     overlayExportsSeriesStyles({
@@ -264,9 +271,7 @@ function buildFigureSpecForView(
       statMode: st.statMode,
       xKey: st.xKey,
       yKeys: st.yKeys,
-    })
-      ? plotted.map((ch) => displayChannels.indexOf(ch))
-      : null;
+    });
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -318,7 +323,7 @@ function buildFigureSpecForView(
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
     ...(extras.publicationSeriesStyles === undefined
-      ? { series_styles: buildExportStyles(plotted, st.seriesStyles, seriesCycle) }
+      ? { series_styles: buildExportStyles(plotted, st.seriesStyles, positions, seriesCycle) }
       : extras.publicationSeriesStyles === null
         ? {}
         : { series_styles: structuredClone(extras.publicationSeriesStyles) }),

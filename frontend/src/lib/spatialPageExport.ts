@@ -46,7 +46,6 @@ import {
   secondaryAxisWire,
 } from "./axisspec";
 import { buildExportStyles } from "./exportStyles";
-import { displayPositions } from "./seriesStyleCycle";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
@@ -201,10 +200,14 @@ function spatialPanelFigure(
     y_fmt: appearance ? axisFmtParam(appearance.yFmt) : undefined,
     x_step: panel.xStep,
     y_step: panel.yStep,
+    // No `positions`: this `plotted` is `spatialPlottedChannels(panel)`, the
+    // SAME hidden-filtered list the cell canvas draws from, so plotted order IS
+    // display order here (unlike `figureSpec.ts` — BUG-015).
     series_styles: buildExportStyles(
       plotted,
       panel.seriesStyles ?? {},
-      displayPositions(appearance?.autoSeriesStyles ?? false, plotted.length),
+      null,
+      appearance?.autoSeriesStyles ?? false,
     ),
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
       y2Plotted: y2Axis !== null,

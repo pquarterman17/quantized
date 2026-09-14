@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-14 (BUG-016 filed; BUG-012..BUG-015 divergence tests renamed)  
+**Updated:** 2026-09-14 (BUG-015 fixed; BUG-016 filed; BUG-012..BUG-015 divergence tests renamed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -39,7 +39,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-012)` test, not fixed |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-013)` test, not fixed |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-014)` test, not fixed |
-| BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-015)` test, not fixed |
+| BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
 
 ---
@@ -3442,7 +3442,7 @@ different measurement.
 
 ---
 
-## BUG-015 — hiding a series shifts later series' export palette colour, not the canvas'
+## ~~BUG-015 — hiding a series shifts later series' export palette colour, not the canvas'~~ **FIXED 2026-09-14**
 
 **Priority:** P2 — a visible, wrong-looking export (recoloured series) with a
 workaround (temporarily un-hide, export, re-hide, or manually recolour after
@@ -3459,7 +3459,7 @@ report.
 builder, the export channel filter, and `buildExportStyles`, not inferred —
 see Confirmed implementation evidence below.
 
-**Suggested implementation owner/model:** Unassigned.
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-14.
 
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
 plot/project regression matrix"), divergence D4.
@@ -3473,6 +3473,11 @@ reflows the colours of the series still visible. Exporting the same figure
 exported colour does not match what the user sees on screen.
 
 #### Confirmed implementation evidence
+
+(As FILED, 2026-09-14, before the fix. Line numbers and the two code shapes
+called out below — `pos = cycle?.[i] ?? i` and the conditional `seriesCycle` —
+describe the code the bug was found in; the Completion record names what
+replaced them. Kept verbatim as the record of the finding.)
 
 - `frontend/src/lib/uplotOpts.ts:1309` (`const show = !args.hidden?.[i];`)
   and the surrounding series builder (e.g. `:1329`) — a hidden series stays
@@ -3530,48 +3535,102 @@ more than cosmetic polish.
 - [x] Expected result recorded — the exported figure's series colours
   should match the screen's, hidden series or not.
 - [x] Reproduced by an agent —
-  `frontend/src/lib/regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-015): hiding a series leaves the next one on palette
-  slot 1 on screen and slot 0 on export", ...)`.
+  `frontend/src/lib/regressionMatrix.test.ts`'s BUG-015 test (named
+  `DIVERGENCE (BUG-015): …` when filed; inverted and renamed by the fix, see
+  the Completion record).
 
 #### Fix checklist
 
-- [ ] Give `buildFigureSpecFromDocument`'s export path the same positional
+- [x] Give `buildFigureSpecFromDocument`'s export path the same positional
   correction `SeriesCycle`/`extras.autoSeriesStyles` already provides the
   live Stage export (`figureSpec.ts:253-262`), so `buildExportStyles`'s
   `pos` is computed from the UNFILTERED display index, not the filtered
-  `plotted` index.
-- [ ] Confirm the fix does not also turn on the (opt-in) auto dash/marker
+  `plotted` index. Done at the shared chokepoint rather than on the document
+  path: `buildFigureSpecForView` — which BOTH `buildStageFigureSpec` and
+  `buildFigureSpecFromDocument` route through — now derives `positions`
+  unconditionally, and `buildExportStyles` takes them as their own
+  argument, separate from the cycle opt-in.
+- [x] Confirm the fix does not also turn on the (opt-in) auto dash/marker
   CYCLE feature itself for saved documents — only the palette-POSITION
   correction, not `autoSeriesStyles`'s wider styling behaviour, should apply
-  universally.
-- [ ] Add a case with more than one hidden series (e.g. hiding series 0 of
-  three) to confirm the fix generalizes past the two-series minimal repro.
-- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-015): hiding a series leaves the next one on palette
-  slot 1 on screen and slot 0 on export", ...)` — delete the two palette-slot
-  pins and the `.not.toBe`, leaving
-  `expect(projectExport(...).series[0].color).toBe(projectScreen(...)
-  .series[0].color)`, and rename the test. The fix makes the current
-  assertion RED, not an "unexpected pass".
+  universally. `buildExportStyles`'s third argument is now the positions and
+  its fourth a boolean `cycle`; the cycle gate (`overlayExportsSeriesStyles`
+  + `extras.autoSeriesStyles`) is untouched, and
+  `figureSpec.test.ts`'s pre-existing "a saved FigureDocument is independent
+  of the preference" block still asserts `line: undefined` throughout.
+- [x] Add a case with more than one hidden series (e.g. hiding series 0 of
+  three) to confirm the fix generalizes past the two-series minimal repro —
+  `figureSpec.test.ts`'s "generalizes past the two-series repro: hiding 0 AND
+  1 leaves channel 2 on slot 2", plus the three-channel `hidden` matrix
+  fixture.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — the two
+  palette-slot pins and the `.not.toBe` are gone, replaced by the
+  screen-equals-export equality (kept non-vacuous by pinning the screen
+  slots and asserting they differ from the filtered ones), and the test is
+  renamed to drop the `DIVERGENCE` prefix.
 
 #### Acceptance criteria
 
-- [ ] Hiding a series on screen and exporting the figure produces the SAME
+- [x] Hiding a series on screen and exporting the figure produces the SAME
   palette colour for every remaining series as the screen shows.
-- [ ] `projectExport(hidden, dataset).series[0].color` equals
-  `projectScreen(hidden, dataset).series[0].color` — the equality
-  BUG-015's divergence test is inverted into.
-- [ ] An export with NO hidden series is byte-identical to before the fix
-  (no regression to the common, all-visible case).
+- [x] `projectExport(hidden, dataset).series[i].color` equals
+  `projectScreen(hidden, dataset).series[i].color` — the equality
+  BUG-015's divergence test is inverted into; `hidden` is now a full member
+  of the matrix, so `screen ≡ export` and `screen ≡ reopen` assert the whole
+  canonical payload for it, not just the colours.
+- [x] An export with NO hidden series is byte-identical to before the fix
+  (no regression to the common, all-visible case) — with nothing hidden
+  `plotted` IS the display list, so every position equals the old index;
+  `figureSpec.test.ts`'s "with NOTHING hidden the wire is unchanged" pins it,
+  and re-freezing the regression-matrix goldens wrote only the new
+  `hidden.json`, leaving the other nine byte-identical.
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- PR/commit: `fix(export): BUG-015 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `e479f5da`). Product change is three lines of behaviour across
+  `frontend/src/lib/exportStyles.ts` (new `positions` argument, taken always;
+  `cycle` demoted to a boolean), `frontend/src/lib/figureSpec.ts` (`positions`
+  derived unconditionally from `displayChannels`) and
+  `frontend/src/lib/spatialPageExport.ts` (call-site update — that panel's
+  `plotted` IS its canvas' list, so it passes `null` positions). No persisted
+  contract changed: the positions are derived at export-build time from
+  `yKeys`/`seriesOrder`/`hiddenChannels`, all of which a saved document
+  already carries, so there is NO new document field and no schema bump.
+- Automated tests: `frontend/src/lib/figureSpec.test.ts` — new block "hidden
+  series keep their palette slot on the export wire (BUG-015)" (4 tests:
+  slots 1 and 2 for a hidden 0 of three; hiding 0 AND 1; the dash/glyph half
+  under the cycle; the nothing-hidden no-op).
+  `frontend/src/lib/exportStyles.test.ts` — "OFF: the positions still hold —
+  no dash is invented, and no palette skew either (BUG-015)" (rewritten from
+  the test that used to assert the skew).
+  `frontend/src/lib/regressionMatrix.test.ts` — "BUG-015: hiding a series
+  leaves the survivors on palette slots 1 and 2 on BOTH screen and export"
+  (the inverted divergence), "hidden — the hidden channel is drawn by nobody,
+  and the survivors keep their slots", and the `hidden` fixture's own
+  `screen ≡ export`, `screen ≡ reopen` and golden tests.
+- Agent verification: sabotage table (each reverted in turn, then restored) —
+  (a) `positions` back to the filtered index in `figureSpec.ts` → 6 failures
+  including `regressionMatrix` `hidden > screen ≡ export`, the inverted
+  BUG-015 test, all three new `figureSpec.test.ts` BUG-015 assertions and the
+  pre-existing P3.3 "a HIDDEN channel does not renumber the survivors";
+  (b) `seriesColor(pos[i], …)` back to `seriesColor(i, …)` in
+  `exportStyles.ts` → 6 failures including both `exportStyles.test.ts`
+  palette-parity tests; (c) the reopen leg's display position back to the
+  filtered index → `hidden > screen ≡ reopen`.
+  Gate: `uv run pytest -q tests/test_repo_integrity.py`;
+  `npx tsc -b --force`; `npx eslint src --max-warnings=0`;
+  `npx vitest run src/lib src/architecture.test.ts` (274 files, 5205 tests);
+  `npx vitest run src/components/Stage src/components/workshops/figurebuilder
+  src/components/workshops/figurepage` (73 files, 1236 tests);
+  `node scripts/freeze-regression-matrix.mjs --check` clean;
+  `node scripts/check-bundle-size.mjs` green.
+- Owner verification: pending — export a figure with a series hidden and
+  confirm the PDF's colours match the legend on screen.
+- Notes: the REOPEN leg of the regression matrix (`lib/regressionMatrixReopen
+  .testkit.ts`) carried the same skew in its own projection and was corrected
+  to the unfiltered display position; it is a testkit, not product code, but
+  the `hidden` fixture's `screen ≡ reopen` is what now holds it there.
 
 ---
 

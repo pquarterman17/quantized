@@ -1144,6 +1144,77 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
   });
 });
 
+// ── BUG-015: hiding a series must not recolour the ones still drawn ─────────
+// The canvas keeps a hidden series in its display list with `show:false`, so
+// every later series keeps its palette slot; the export wire drops hidden
+// channels outright. Colouring the survivors by their position in the FILTERED
+// list is what made an exported figure disagree with the screen the user
+// authored it against — and it hit every SAVED document, which never opts into
+// the P3.3 cycle and so used to reach `buildExportStyles` with no positions at
+// all. The positions are now derived unconditionally; the cycle stays opt-in.
+describe("hidden series keep their palette slot on the export wire (BUG-015)", () => {
+  /** Three plotted channels, the FIRST one hidden. */
+  const hiddenDoc = (hiddenChannels: number[], seriesStyles = {}) =>
+    createFigureDocument({
+      id: "hidden",
+      name: "Hidden",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1, 2], hiddenChannels, seriesStyles },
+    });
+
+  /** `seriesColor` reads `--series-N` off the document and jsdom's stylesheet
+   *  has none, so without real tokens every slot falls back to one literal and
+   *  the assertions below could not fail. */
+  const withPalette = (paint: string[], run: () => void) => {
+    const root = document.documentElement;
+    paint.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    try {
+      run();
+    } finally {
+      paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
+  };
+
+  const PAINT = ["#ffcccc", "#ccffcc", "#ccccff"];
+
+  it("channels 1 and 2 take palette slots 1 and 2, not the filtered 0 and 1", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([0]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([PAINT[1], PAINT[2]]);
+    });
+  });
+
+  it("generalizes past the two-series repro: hiding 0 AND 1 leaves channel 2 on slot 2", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([0, 1]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([PAINT[2]]);
+    });
+  });
+
+  it("with the cycle ON, channel 2's dash and glyph are slot 2's as well", () => {
+    // The cycle rides the same positions, so the dash/marker half cannot drift
+    // from the palette half: slot 1 is dashed, slot 2 dotted + a triangle.
+    const spec = buildFigureSpecFromDocument(
+      hiddenDoc([0], { 2: { marker: true } }),
+      dataset,
+      "hidden",
+      { autoSeriesStyles: true },
+    );
+    expect((spec.series_styles ?? []).map((s) => s?.line)).toEqual(["dashed", "dotted"]);
+    expect((spec.series_styles ?? []).map((s) => s?.marker_shape)).toEqual([undefined, "triangle"]);
+  });
+
+  it("with NOTHING hidden the wire is unchanged — positions ARE the plotted order", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([0, 1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual(PAINT);
+    });
+  });
+});
+
 describe("greyscale (print-safe) export option (P3.3)", () => {
   const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
 
