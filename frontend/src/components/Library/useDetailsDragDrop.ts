@@ -85,25 +85,51 @@
 // stopped calling `preventDefault()` on `dragover` and the browser refused
 // the drop outright — worse than the stale cue this was fixing. Removed.
 //
-// Replacement: a CAPTURE-phase `pointerdown` listener on `document`, live
-// only while `activeDrag != null`, clears it when `event.isPrimary !== false`.
-// A pointer cannot fire a new PRIMARY `pointerdown` while it is the one still
-// holding a drag — its button or contact stays down for the operation's
-// duration — so this can never see the live-drag false positive the
-// `pointermove` catch did; excluding a non-primary press keeps a second
-// finger on a hybrid device from ending someone else's drag. `dragend`/
-// `drop` at `document` and a fresh `dragstart` (which republishes
-// `activeDrag`, implicitly superseding whatever it held) remain the other
-// two ways a drag ends.
+// Replacement, round 3: a CAPTURE-phase `pointerdown` listener on `document`,
+// live only while `activeDrag != null`, cleared it whenever `event.isPrimary
+// !== false`. ROUND 4 found that filter still wrong, for the same shape of
+// reason round 3 found the `pointermove` catch wrong: `isPrimary` is defined
+// PER POINTER TYPE (the first active pointer of each type is primary), not
+// "the pointer driving this interaction" — a mouse pointer is always
+// primary, so on a hybrid device (touchscreen laptop, pen display) a live
+// mouse drag is still ended by the user's very first finger touching the
+// screen, because that touch is primary for its own type. Measured in-repo
+// (tiles_review4.md probe P1): a `PointerEvent("pointerdown", {pointerType:
+// "touch", isPrimary: true})` mid-drag cleared `activeDrag` and the drop was
+// refused exactly as the removed `pointermove` catch refused it — a smaller
+// blast radius (needs a second input modality, not just any drag) but the
+// same category of bug. Removed.
 //
-// Residual: an abandoned drag whose source unmounted (released over nothing
-// after its source scrolled out) leaves its stale `drop-candidate` cue lit
-// until the user's next primary pointerdown anywhere on the page — it does
-// not self-heal on its own. No drop is ever refused by this mechanism,
-// unlike the removed one: a pointerdown cannot occur while the drag it would
-// end is still genuinely being held.
+// ROUND 4 replacement: the SAME listener shape — one ALWAYS-live capture-
+// phase `pointerdown` listener on `document`, registered once in this hook's
+// effect and never re-gated on `activeDrag` — but the STRICT same-pointer
+// rule instead of `isPrimary`: it records the `{pointerId, pointerType}` of
+// every press, and clears `activeDrag` only when the incoming press's id AND
+// type both match the PREVIOUSLY recorded press (checked before that record
+// is overwritten). That is provably safe on every engine, for every pointer
+// type: a pointer cannot fire a second `pointerdown` with its own id while
+// it is still down from the first — ids are reused only after release — so
+// a match proves the pointer that pressed last has since released, and
+// nothing about the pointer actually holding a live drag can ever satisfy
+// its own rule. A different pointer (any id, any type — including a second
+// finger, or a first finger on a hybrid device while a mouse drag is live)
+// proves nothing and is ignored, closing exactly the hybrid-device row
+// `isPrimary` left open. The `isPrimary` filter is gone entirely — nothing
+// left reads it.
+//
+// Residual (honest, not "categorical"): on touch and pen, where the browser
+// hands out a fresh `pointerId` per contact, the abandoned-drag cue no
+// longer self-heals on the user's very next press of that same modality —
+// clearing it still requires a `dragstart`, `dragend`, or `drop` (the other
+// three ways a drag ends; a fresh `dragstart` republishes `activeDrag`,
+// implicitly superseding whatever it held). On mouse/trackpad, where the
+// same device keeps the same id across presses, the self-heal still works.
+// Either way, no drop is EVER refused by this mechanism, for any pointer, on
+// any engine: the one rule it applies — same id and type as the last
+// press — cannot be satisfied by the pointer that is still holding the drag,
+// because that pointer cannot press again without having released first.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { isSelfOrDescendant } from "../../lib/foldertree";
@@ -151,12 +177,14 @@ export interface DetailsDragDropContext {
  *  actions are stable identities, so they add no rerenders.
  *
  *  Also owns the CONTAINER-level terminal-signal catch — see the file header
- *  above (findings 3 and 1) for the full contract: two CAPTURE-phase
- *  `document` listener sets, live only while `activeDrag` is non-null, clear
- *  it before any specific row/tile even sees the event — `dragend`/`drop`
- *  unconditionally, `pointerdown` only when `isPrimary !== false`. The
- *  per-row `onDragEnd` still fires too when its element survives; it is
- *  redundant with, not a third mechanism alongside, these. */
+ *  above (findings 3, 1, and ROUND 4) for the full contract: a CAPTURE-phase
+ *  `document` `dragend`/`drop` pair, live only while `activeDrag` is
+ *  non-null, plus a SEPARATE, ALWAYS-live capture-phase `pointerdown`
+ *  listener that clears `activeDrag` only when the press matches (same
+ *  `pointerId` AND `pointerType`) the immediately preceding press — never
+ *  `isPrimary`, which round 4 found unsafe. The per-row `onDragEnd` still
+ *  fires too when its element survives; it is redundant with, not a third
+ *  mechanism alongside, these. */
 export function useDetailsDragDropContext(): DetailsDragDropContext {
   const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const activeDrag = useLibraryStore((s) => s.activeDrag);
@@ -173,26 +201,31 @@ export function useDetailsDragDropContext(): DetailsDragDropContext {
     // committed move's `event.stopPropagation()` can never suppress it.
     document.addEventListener("dragend", clear, true);
     document.addEventListener("drop", clear, true);
-
-    // THIRD review round, finding 1: a `dragend`/`drop` fired at an element
-    // still attached to `document` is not the only way this drag can end —
-    // see the file header for the unmounted-source gap this closes, and why
-    // it is a `pointerdown` (not the removed `pointermove`) that closes it.
-    // A new PRIMARY pointerdown cannot belong to a pointer still holding a
-    // live drag, so this cannot false-positive on the dragging pointer the
-    // way `pointermove` did; a non-primary pointerdown (e.g. a second finger)
-    // is excluded so it cannot end someone else's drag.
-    const onPointerDown = (event: PointerEvent): void => {
-      if (event.isPrimary !== false) clear();
-    };
-    document.addEventListener("pointerdown", onPointerDown, true);
-
     return () => {
       document.removeEventListener("dragend", clear, true);
       document.removeEventListener("drop", clear, true);
-      document.removeEventListener("pointerdown", onPointerDown, true);
     };
   }, [activeDrag, setActiveDrag]);
+
+  // ROUND 4: a SEPARATE, ALWAYS-live listener — registered once, independent
+  // of `activeDrag` — because the rule it applies (same physical pointer
+  // pressed before, now releasing and pressing again) needs to see every
+  // press, including presses that happen while no drag is in flight, to
+  // keep `lastPress` accurate for whenever one starts. See the file header
+  // for why `pointerId`+`pointerType` equality is the strictly-safe rule
+  // `isPrimary` was not.
+  const lastPress = useRef<{ id: number; type: string } | null>(null);
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent): void => {
+      const prev = lastPress.current;
+      lastPress.current = { id: event.pointerId, type: event.pointerType };
+      if (prev != null && event.pointerId === prev.id && event.pointerType === prev.type) {
+        setActiveDrag(null);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [setActiveDrag]);
 
   return { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder };
 }

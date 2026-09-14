@@ -12,9 +12,9 @@
 // The full contract — payload types, the drag-handle-only source, "into"-
 // only drop zones, the two cue classes, and what ends a drag (including the
 // named residual) — lives once, in `useDetailsDragDrop.ts`'s file header.
-// Nothing here restates it. The names are re-exported view-neutrally so the
-// tile renderer never reads as if it were borrowing a Details-specific
-// facility.
+// Nothing here restates the rules themselves. The names are re-exported
+// view-neutrally so the tile renderer never reads as if it were borrowing a
+// Details-specific facility.
 
 export {
   useDetailsDragDrop as useTileDragDrop,

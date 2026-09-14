@@ -431,9 +431,19 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
   });
 
-  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by the next primary pointerdown", () => {
+  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by a pointerdown from the SAME physical pointer that pressed last", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The press that starts the drag — recorded by the always-live listener
+    // (ROUND 4) so a later press from this SAME pointer (id 1, type mouse)
+    // can prove it released.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
 
     const source = gripOf("folder:vf0");
     fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
@@ -460,36 +470,105 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(tileFor("folder:vtarget").className).toMatch(/\bdrop-candidate\b/);
 
     // No element the abandoned drag can bubble a signal through survives —
-    // the mechanism that DOES end it needs none: a new PRIMARY `pointerdown`
-    // anywhere on the page (useDetailsDragDrop.ts's file header, THIRD review
-    // round). Real `PointerEvent`s — jsdom (30.x, this repo's version)
-    // constructs them with a working `isPrimary`.
+    // the mechanism that DOES end it needs none: the SAME pointer (id 1,
+    // type mouse) pressing again proves it released the drag it was holding
+    // (useDetailsDragDrop.ts's file header, ROUND 4).
     act(() => {
-      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: true, bubbles: true, cancelable: true }));
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
     });
     expect(useApp.getState().activeDrag).toBeNull();
     expect(tileFor("folder:vtarget").className).not.toMatch(/\bdrop-candidate\b/);
   });
 
-  it("a pointerdown with isPrimary false does NOT end a live drag (a second pointer must not end someone else's)", () => {
+  it("a pointerdown from a DIFFERENT pointer (same type, different id) does NOT end someone else's drag", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
 
     fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // A second finger touching down on a hybrid device — e.g. while a first
-    // finger still holds this drag — must not end it.
+    // A second mouse (or a second finger, same type, different id) pressing
+    // down must not end someone else's drag — the rule compares only to the
+    // IMMEDIATELY PRECEDING press (id 1), and id 2 does not match it.
     act(() => {
-      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: false, bubbles: true, cancelable: true }));
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 2, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
     });
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // The SAME signal, but primary, does end it (proven end to end above).
+    // The mechanism is still live: that same id-2 press is now the recorded
+    // "last press", so id 2 pressing AGAIN matches it and clears — proving
+    // this is a genuine same-pointer check, not a dead listener, even though
+    // id 2 never touched the drag itself.
     act(() => {
-      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: true, bubbles: true, cancelable: true }));
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 2, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
     });
     expect(useApp.getState().activeDrag).toBeNull();
+  });
+
+  // REGRESSION (2026-09-14, tiles_review4.md probe P1): the ROUND-3 filter
+  // (`event.isPrimary !== false`) cleared `activeDrag` on a cross-modality
+  // press mid-drag, because Pointer Events defines "primary" PER POINTER
+  // TYPE — a first touch contact is primary for type "touch" even while a
+  // mouse drag (always primary for type "mouse") is live. This test fails
+  // against that filter (verified before the ROUND-4 fix landed: the second
+  // `dragover` was refused and the move never committed) and must keep
+  // passing now that the rule is same-id-AND-same-type instead.
+  it("a live mouse drag survives a cross-modality pointerdown mid-drag, and the move still commits", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A first touch contact on a hybrid device, mid-drag: different id AND
+    // different type from the mouse pointer holding this drag.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", {
+          pointerId: 7,
+          pointerType: "touch",
+          isPrimary: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after the cross-modality pointerdown",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
   });
 
   // REGRESSION (2026-09-14, THIRD review round finding 1): the fix this round

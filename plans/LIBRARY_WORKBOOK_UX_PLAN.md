@@ -937,13 +937,13 @@ Library presentation without changing organization or duplicating objects.
     while a drag is in flight, clears it on its first delivery (browsers
     suppress `pointermove` for the dragging pointer for the whole operation,
     per the HTML Standard, so the first one afterwards is the browser saying
-    the operation ended). Guarded against a `pointermove` that might
+    the operation ended) — **premise disproved and this mechanism REMOVED in
+    ROUND 3 below**. Guarded against a `pointermove` that might
     interleave with `dragstart` itself: it is honoured as a terminal signal
     only after a `dragover` (or the source's own `drag` event) has been seen
     for this drag, the cheap rule the round-2 review itself proposed
-    (`tiles_review2.md`; this heading's own "ROUND 2" numbers it, and the
-    review round the FIX responds to is one round earlier than its number —
-    corrected here after round 3 caught the earlier credit to "round-1").
+    (`tiles_review2.md`; this heading's own "ROUND 2" numbers it — corrected
+    here after round 3 caught the earlier credit to "round-1").
     Contract lives at `useDetailsDragDrop.ts`'s file header, with a pointer
     (not a fifth restatement) at the `useDetailsDragDropContext` doc block
     and both parity test files' block comments (N4) — round 3 found a second,
@@ -1045,21 +1045,131 @@ Library presentation without changing organization or duplicating objects.
     round above):** that same paragraph credited "the round-1 review" for the
     `dragover`-precondition guard; it is `tiles_review2.md`'s suggestion, and
     the paragraph's own "ROUND 2" heading already said so — corrected in
-    place, also above. **Gate:** `tsc -b --force` and `eslint
-    --max-warnings=0` clean; scoped `vitest run src/components/Library
-    src/architecture.test.ts` 36 files / 539 tests, all green —
-    `LibraryTiles.parity.test.tsx` 28 (was 27; net +1 is this round's own
-    change: two tests replaced by the rewritten test and the new guard test,
-    plus the one new regression test); the +2 tests since round 2's reported
-    536 are the unrelated intervening focus-review commit
-    (`56ac4f46`), not this fix. `uv run pytest -q tests/test_repo_integrity.py`
-    12 passed. **Bundle:** this round's real parent is `56ac4f46`
-    (`git rev-parse HEAD~1`). Measured directly via a scratch
-    `git worktree add` at that SHA (node_modules symlinked, `rm -rf
-    node_modules/.vite`, `npm run build`; worktree removed after): parent
-    916,111 B eager; this round's own tree also 916,111 B eager — 0 B delta,
-    same lazy-loading argument as the two rounds before it (the Library is
-    reached only through `App.tsx`'s and `Library.tsx`'s lazy seams).
+    place, also above. **Gate (CORRECTED by the ROUND-4 review, tiles_review4.md
+    findings 2 and 3 — this round's own numbers were measured before a rebase
+    past three later commits and went stale without being re-measured):**
+    `tsc -b --force` and `eslint --max-warnings=0` clean; scoped `vitest run
+    src/components/Library src/architecture.test.ts`, re-measured on the
+    merged tree, is 36 files / 542 tests (not the 539 recorded when this
+    entry was authored) — `LibraryTiles.parity.test.tsx` 28, as claimed;
+    the +6 tests since round 2's reported 536 are four intervening commits,
+    not one: `56ac4f46` +2, `2a3e201b` +1, `5f9ebf06` +2, plus this round's
+    own +1. `uv run pytest -q tests/test_repo_integrity.py` 12 passed.
+    **Bundle:** this round's real parent, re-measured the same way, is
+    `5f9ebf06` (`git rev-parse HEAD~1` of the MERGED commit `68cc27eb`, not
+    the `56ac4f46` this entry originally named — three more commits
+    (`49ba0f10`, `2a3e201b`, `5f9ebf06`) landed between authoring and merge,
+    and `5f9ebf06` itself touches eager code): parent 916,149 B eager; this
+    round's own tree (`68cc27eb`) also 916,149 B eager — 0 B delta, same
+    lazy-loading argument as the two rounds before it (the Library is
+    reached only through `App.tsx`'s and `Library.tsx`'s lazy seams). Adopted
+    rule: re-measure the bundle (and the scoped test count) after any rebase,
+    since `HEAD~1` at authoring time is not `HEAD~1` at merge time.
+  - [x] **Tiles drag/drop — adversarial review, ROUND 4 (2026-09-14).** One
+    finding against the round above (mechanism), plus two stale-number
+    recurrences and three doc nits.
+    **Finding 1 (CONFIRMED, mechanism measured in-repo):** the round-3
+    filter — `event.isPrimary !== false` — is still wrong, for the same
+    shape of reason round 3 found the `pointermove` catch wrong. `isPrimary`
+    is defined PER POINTER TYPE (the first active pointer of each type is
+    primary), not "the pointer driving this interaction": a mouse pointer is
+    ALWAYS primary, so on a hybrid device (touchscreen laptop, pen display) a
+    live mouse drag is still ended by the user's very first finger touching
+    the screen, because that touch is primary for its own type — the exact
+    hybrid-device case the header's own next sentence claimed the filter
+    protected. Measured in-repo (`tiles_review4.md` probe P1): a
+    `PointerEvent("pointerdown", {pointerType: "touch", isPrimary: true})`
+    mid-drag cleared `activeDrag` and the second `dragover` was refused,
+    exactly as the removed `pointermove` catch refused it — a smaller blast
+    radius (needs a second input modality present, not just any drag) but
+    the same category of bug, and the two absolute claims in the header
+    (`useDetailsDragDrop.ts:91-92`, `:101-103` — "so this can never see the
+    live-drag false positive", "No drop is ever refused by this mechanism")
+    were false. **Decision (orchestrator call):** narrow to the STRICT
+    same-pointer rule instead of reverting or tuning `isPrimary` further.
+    **Fix:** the listener shape is unchanged — one CAPTURE-phase
+    `pointerdown` listener on `document` — but it is now registered ONCE,
+    ALWAYS live (never re-gated on `activeDrag`, so it keeps seeing presses
+    between drags too), and compares `{pointerId, pointerType}` against the
+    IMMEDIATELY PRECEDING press rather than reading `isPrimary`: it clears
+    `activeDrag` only when both match, then records the new press. That is
+    provably safe on every engine, for every pointer type: a pointer cannot
+    fire a second `pointerdown` with its own id while it is still down from
+    the first — ids are reused only after release — so nothing about the
+    pointer actually holding a live drag can ever satisfy its own rule, and a
+    different pointer (any id, any type) proves nothing and is ignored,
+    closing exactly the hybrid-device row `isPrimary` left open. The
+    `isPrimary` filter is dropped entirely — round-3 finding 6 (the
+    `!== false` vs `=== true` fail-open nit) is therefore moot, since nothing
+    reads `isPrimary` any more. **Residual (honest, narrowed — not
+    "categorical"):** on touch and pen, where the browser hands out a fresh
+    `pointerId` per contact, an abandoned drag's stale cue no longer
+    self-heals on the very next press of that modality; clearing it still
+    needs a `dragstart`, `dragend`, or `drop` (the other three ways a drag
+    ends). On mouse/trackpad, where the same device keeps the same id across
+    presses, the self-heal still works. Either way, no drop is EVER refused
+    by this mechanism, for any pointer, on any engine: the one rule it
+    applies cannot be satisfied by the pointer still holding the drag,
+    because that pointer cannot press again without having released first.
+    Both header absolute claims were rewritten to state this precise rule
+    instead of the disproved "can never"/"is ever" wording.
+    **Test:** the abandoned-drag test now presses the SAME pointer
+    (mouse, id 1) both before `dragstart` and again after the source detaches,
+    and asserts the second press clears; a new test presses a DIFFERENT
+    pointer (mouse, id 2) mid-drag and asserts it does NOT clear (then shows
+    id 2 pressing again — matching itself — does clear, proving the
+    listener is live rather than dead); a NEW regression test reproduces
+    `tiles_review4.md` probe P1 directly — a live mouse (id 1) drag survives
+    a cross-modality `{pointerType: "touch", pointerId: 7, isPrimary: true}`
+    pointerdown fired between `dragover` and `drop`, and the move still
+    commits — confirmed to **FAIL against the pre-fix (round-3) code**
+    before this fix landed: reverted only `useDetailsDragDrop.ts` (via a
+    tagged, later-dropped `git stash`, not a bare `git stash`/`pop`), ran
+    this one test in isolation, got `expected true to be false` on the
+    second `dragover` (the move never committed), then restored the fix; the
+    existing mid-drag `pointermove` regression test (round 3) is unchanged
+    and still passes. **Sabotage** (each applied to the real file, the
+    scoped suite re-run, then reverted):
+
+    | mutation | tests expected to fail | tests that failed |
+    |---|---|---|
+    | remove the `pointerdown` listener registration entirely | 2 | **2** — the rewritten abandoned-drag test and the different-pointer test (both need a live pointerdown to reach their closing assertion) |
+    | compare only `pointerType` (drop the `pointerId` check) | 1 | **1** — the different-pointer test (id 2, same type as id 1, now matches and clears) |
+    | compare nothing (clear on ANY pointerdown) | 2 | **2** — the different-pointer test and the new P1 cross-modality regression test |
+    | re-add a `pointermove` clear (the round-2/3 mechanism) | 1 | **1** — the existing mid-drag `pointermove` regression test |
+
+    **Gate:** `tsc -b --force` and `eslint --max-warnings=0` clean; scoped
+    `vitest run src/components/Library src/architecture.test.ts` 36 files /
+    543 tests, all green — `LibraryTiles.parity.test.tsx` 29 (was 28; net +1
+    is this round's own change: two tests rewritten in place — the
+    abandoned-drag test and the `isPrimary`-guard test, the latter replaced
+    by the different-pointer test — plus the one new P1 regression test).
+    `uv run pytest -q tests/test_repo_integrity.py` 12 passed. **Bundle:**
+    this round's real parent is `68cc27eb` (`git rev-parse HEAD~1`).
+    Measured directly: a scratch `git worktree add` at `68cc27eb`
+    (node_modules symlinked — read-only measurement, no build was run
+    against the symlink until this round's own tree needed one, at which
+    point `rm -rf node_modules/.vite` and `npm run build` ran against the
+    scratch worktree's own output directory, not this worktree's; the
+    scratch worktree was removed after) gives 916,149 B eager; this round's
+    own tree (`useDetailsDragDrop.ts` only, reached exclusively through
+    `App.tsx`'s and `Library.tsx`'s lazy seams like every round before it)
+    also 916,149 B eager — 0 B delta. **Findings 2/3 (stale numbers,
+    corrected):** the ROUND-3 entry above recorded its own parent SHA and
+    bundle/test-count figures before a rebase landed three more commits
+    underneath it and never re-measured after — corrected in place above,
+    per `tiles_review4.md` findings 2 and 3. **Findings 4/5 (doc nits,
+    corrected):** the ROUND-2 entry's round-credit parenthetical contained a
+    false, self-undoing clause ("the review round the FIX responds to is one
+    round earlier than its number") — deleted, keeping the correct credit;
+    and its still-present-tense restatement of the disproved `pointermove`
+    suppression premise now carries an explicit superseded marker. **Finding
+    7 (doc nit, corrected):** `useTileDragDrop.ts`'s "Nothing here restates
+    it" softened to "Nothing here restates the rules themselves" — the file
+    does restate a slice of the contract as rationale, which is fine and
+    already said elsewhere, but "restates it" (unqualified) overclaimed.
+    **Finding 6 (round-3's `isPrimary !== false` fail-open nit): MOOT** —
+    `isPrimary` is no longer read anywhere in this mechanism.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
