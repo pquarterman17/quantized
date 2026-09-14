@@ -168,11 +168,36 @@ async function assignPanel(win: Locator, slotIndex: number, sourceIndex: number)
   await editableFigureSource(win, sourceIndex).click();
 }
 
+// The composer's debounced live preview (usePagePreviewExport.ts's
+// `renderFigurePageBlob`, re-fired on every slots/layout/output change,
+// 400ms after the last one) POSTs to this EXACT SAME URL as the real Export
+// button (`exportFigurePage`) — lib/api/figurePage.ts's own header names
+// both as sharing "/api/export/figure-page", and the backend route
+// (routes/export_page.py's `export_figure_page`) sets an identical
+// `Content-Disposition: attachment` on every response regardless of which
+// caller's intent produced it, so there is no method/URL/header signal that
+// tells a real Export click's response apart from a stray in-flight preview
+// render's. The two are distinguishable only by REQUEST BODY: the preview
+// (and the Copy button's clipboard render) always force `fmt: "png"`
+// (usePagePreviewExport.ts's PREVIEW_DPI/COPY_PAGE_DPI paths), while a real
+// Export click sends the page's own chosen format — "pdf" by default, and
+// never changed to "png" anywhere in this journey. Without this filter, a
+// still-in-flight preview response (queued by an EARLIER edit's debounce,
+// e.g. the "Edit ONE panel" step below) can arrive inside a LATER
+// exportPageNow() call's `waitForResponse` window and get mistaken for that
+// call's own response — forced deterministically in a probe (scratchpad
+// a6_flake/probe.spec.ts, held-route reproduction, 3/5 runs corrupted
+// `finalBody` this way before this filter existed). Filtering on the
+// request body — the actual state this assertion cares about — rather than
+// adding a settle-time wait closes the race at its source instead of just
+// narrowing the window.
 function figurePageExportResponse(page: Page) {
-  return page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" && new URL(response.url()).pathname === "/api/export/figure-page",
-  );
+  return page.waitForResponse((response) => {
+    if (response.request().method() !== "POST") return false;
+    if (new URL(response.url()).pathname !== "/api/export/figure-page") return false;
+    const body = response.request().postDataJSON() as { fmt?: string };
+    return body.fmt !== "png";
+  });
 }
 
 /** Click the composer's Export button and return the real export request's
