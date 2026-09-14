@@ -1140,3 +1140,91 @@ describe("useFigurePage figdoc panel canonical-adapter migration", () => {
     expect(spec!.panels[0].figure.error_spans![0]).not.toBeNull();
   });
 });
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: page-wide print-safe (greyscale) output.
+// One checkbox on the composer, applied to EVERY panel of the page — and to
+// the PREVIEW and clipboard copy as well as the file export, since all three
+// share `buildSpec` (usePagePreviewExport.ts). Pinned at the request layer:
+// present on every panel when on, ABSENT entirely when off.
+describe("useFigurePage page-wide greyscale (P3.3)", () => {
+  it("is off by default and sends no greyscale key at all", async () => {
+    const { result } = renderHook(() => useFigurePage());
+    expect(result.current.greyscale).toBe(false);
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    await act(async () => {
+      await result.current.exportNow();
+    });
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect("greyscale" in body.panels[0].figure).toBe(false);
+  });
+
+  it("exports greyscale: true on EVERY panel once the page option is on", async () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    act(() => result.current.assign(1, result.current.docSources[0]));
+    act(() => result.current.setGreyscale(true));
+    expect(result.current.greyscale).toBe(true);
+    await act(async () => {
+      await result.current.exportNow();
+    });
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect(body.panels).toHaveLength(2);
+    expect(body.panels.map((panel) => panel.figure.greyscale)).toEqual([true, true]);
+  });
+
+  it("the debounced preview shows the print-safe page, not the coloured one it came from", async () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    // Wait on the preview STATE (the resolved render), not on the mock call.
+    await waitFor(() => expect(result.current.preview).not.toBeNull(), { timeout: 2000 });
+    expect("greyscale" in vi.mocked(renderFigurePageBlob).mock.calls[0][0].panels[0].figure).toBe(false);
+    act(() => result.current.setGreyscale(true));
+    await waitFor(
+      () =>
+        expect(vi.mocked(renderFigurePageBlob).mock.calls.at(-1)![0].panels[0].figure.greyscale).toBe(true),
+      { timeout: 2000 },
+    );
+  });
+
+  it("copies the print-safe page to the clipboard too (same buildSpec share)", async () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    act(() => result.current.setGreyscale(true));
+    await act(async () => {
+      await result.current.copyNow();
+    });
+    const body = vi.mocked(renderFigurePageBlob).mock.calls.at(-1)![0];
+    expect(body.fmt).toBe("png");
+    expect(body.panels[0].figure.greyscale).toBe(true);
+  });
+
+  it("turning it off again removes the key rather than saving greyscale: false", () => {
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.setGreyscale(true));
+    expect(result.current.pageDocument.output.greyscale).toBe(true);
+    act(() => result.current.setGreyscale(false));
+    expect(result.current.greyscale).toBe(false);
+    expect("greyscale" in result.current.pageDocument.output).toBe(false);
+  });
+
+  // Persistence: the flag rides the saved PageDocument, so a page reopened
+  // from the Library remembers it (and Library's own export-without-reopening
+  // reads the same saved field — PagesSection.test.tsx pins that half).
+  it("a saved page remembers greyscale across close -> reopen", async () => {
+    const seeded = win({ id: "w1", title: "Loop A", view: { ...defaultPlotView(), yKeys: [1] } });
+    useApp.setState({ plotWindows: [seeded], editableFigures: [seeded.document!], pages: [], pageDocSeed: null });
+
+    const before = renderHook(() => useFigurePage());
+    act(() => before.result.current.assign(0, before.result.current.windowSources[0]));
+    act(() => before.result.current.setGreyscale(true));
+    act(() => before.result.current.save());
+    const savedId = useApp.getState().pages[0].id;
+    expect(useApp.getState().pages[0].output.greyscale).toBe(true);
+    before.unmount();
+
+    useApp.getState().openPageDocument(savedId);
+    const after = renderHook(() => useFigurePage());
+    expect(after.result.current.greyscale).toBe(true);
+    const spec = await after.result.current.buildSpec();
+    expect(spec!.panels[0].figure.greyscale).toBe(true);
+  });
+});

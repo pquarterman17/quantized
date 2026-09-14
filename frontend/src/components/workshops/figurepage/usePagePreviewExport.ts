@@ -20,6 +20,7 @@ import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard"
 import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage";
 import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
+import { withPageGreyscale } from "../../../lib/pageGreyscale";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { panelFigure, panelRenderInputs } from "./panelResolve";
@@ -53,11 +54,18 @@ export interface PagePreviewExportOutput {
   layout: PageLayoutSettings;
   fmt: string;
   dpi: number;
+  /** P3.3 page-wide print-safe output. Applied inside `buildSpec` below, so
+   *  it reaches the PREVIEW and the clipboard copy as well as the file
+   *  export — the composer's preview is the same server route, and a
+   *  what-you-see-is-what-you-export preview is the whole point of showing
+   *  one. Off/absent leaves the request byte-identical (see
+   *  lib/pageGreyscale.ts). */
+  greyscale: boolean;
 }
 
 export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExportOutput) {
   const setStatus = useApp((s) => s.setStatus);
-  const { rows, cols, style, labelFormat, labelPos, layout, fmt, dpi } = output;
+  const { rows, cols, style, labelFormat, labelPos, layout, fmt, dpi, greyscale } = output;
 
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,20 +102,26 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       });
     }
     if (panels.length === 0) return null;
-    return {
-      rows,
-      cols,
-      panels,
-      style,
-      label_format: labelFormat,
-      label_pos: labelPos,
-      row_gap: layout.rowGap,
-      col_gap: layout.colGap,
-      link_x: layout.linkX,
-      link_y: layout.linkY,
-      align_labels: layout.alignLabels,
-      resize_mode: layout.resizeMode,
-    };
+    // P3.3: greyscale is applied HERE, on the one shared derivation, so the
+    // preview, the file export and the clipboard copy can never disagree
+    // about whether this page is print-safe.
+    return withPageGreyscale(
+      {
+        rows,
+        cols,
+        panels,
+        style,
+        label_format: labelFormat,
+        label_pos: labelPos,
+        row_gap: layout.rowGap,
+        col_gap: layout.colGap,
+        link_x: layout.linkX,
+        link_y: layout.linkY,
+        align_labels: layout.alignLabels,
+        resize_mode: layout.resizeMode,
+      },
+      greyscale,
+    );
   }
 
   // Debounced low-DPI PNG preview — re-renders on any page-shape change AND
@@ -162,9 +176,11 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     // is the fingerprint of exactly those store reads (#8g); the 400 ms
     // debounce absorbs any churn while they settle. F3.5: `layout` joins the
     // dep list so a gap/link/align/resize-mode change refreshes the preview
-    // the same way a style/label change already does.
+    // the same way a style/label change already does. P3.3: `greyscale` joins
+    // it for the same reason — the preview must show the print-safe page the
+    // export will produce, not the coloured one it came from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, rows, cols, style, labelFormat, labelPos, layout, renderInputs]);
+  }, [slots, rows, cols, style, labelFormat, labelPos, layout, greyscale, renderInputs]);
 
   async function exportNow(): Promise<void> {
     try {

@@ -213,6 +213,12 @@ export default function FigurePageView() {
           />
           <label className="qzk-field-lbl">DPI (raster)</label>
           <NumberField value={p.dpi} onChange={(v) => p.setDpi(Number(v) || 300)} width={90} />
+          {/* P3.3: page-wide print-safe output — one page setting applied to
+              every panel, and to the PREVIEW as well as the export/copy, so
+              what is on screen is what is exported (usePagePreviewExport). */}
+          <Checkbox checked={p.greyscale} onChange={p.setGreyscale}>
+            Greyscale
+          </Checkbox>
 
           {/* Per-panel overrides for the selected slot */}
           {sel?.source && selIdx !== null && (

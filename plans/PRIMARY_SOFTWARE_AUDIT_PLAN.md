@@ -3686,18 +3686,42 @@ covers a much smaller subset and guards focus on Analyze.
       `exportPageCommand.test.ts` pins the field's presence (identical to
       `GREYSCALE_FIELD`) and the threaded/omitted wire value across every
       panel; `spatialPageExport.test.ts` pins the same at the request-
-      builder layer. **A SEPARATE residual remains, not closed here:** the
-      Figure Page composer (`components/workshops/figurepage/`,
-      `usePagePreviewExport.ts`) has its OWN export path with no modal
-      dialog at all — fmt/style/DPI are plain always-visible controls in
-      `FigurePageView.tsx` — so adding greyscale there is a page-wide-vs-
-      per-panel product decision plus new `useFigurePage.ts` state, not a
-      dialog-field reuse; left for a follow-up rather than folded into this
-      close. The review of that close found a SECOND such path rooted in the
-      same `PageDocument.output` settings: `components/Library/PagesSection.tsx`
-      (export a saved page without reopening) sends `fmt`/`dpi` from
-      `PageOutputSettings`, which has no greyscale field either — one field on
-      `PageOutputSettings` would close both. The review also
+      builder layer. ~~**A SEPARATE residual remained — the two `PageDocument.output`
+      export paths.**~~ **CLOSED 2026-09-14.** The Figure Page composer
+      (`components/workshops/figurepage/`, its own export path with no modal
+      dialog) and Library's export-a-saved-page-without-reopening
+      (`components/Library/PagesSection.tsx`) now offer it. Greyscale is a
+      PAGE-WIDE output setting on those paths: `PageOutputSettings.greyscale` (`lib/pageDocument.ts`), ADDITIVE
+      (absent === off, no schema version bump — the same convention
+      `createdAt`/`modifiedAt` use, and unlike `layout`'s v1->v2, since an
+      older build ignoring the field still renders exactly what it always
+      did). `sanitizeOutput` keeps only a literal `true`, and the composer's
+      setter DELETES the key when unticked, so "off" has one canonical shape:
+      a page toggled on and off again is byte-identical to one that never had
+      it and does not read as dirty. The route is per-panel, so one shared
+      pure helper (`lib/pageGreyscale.ts`'s `withPageGreyscale`, an identity
+      when off) spreads `greyscale: true` onto EVERY panel's own figure spec
+      for both paths — `buildPageSpecFromDocument` (Library's "export a saved
+      page without reopening it", `components/Library/PagesSection.tsx`) and
+      the Figure Page composer's `buildSpec`
+      (`workshops/figurepage/usePagePreviewExport.ts`). Applying it inside
+      `buildSpec` — the ONE spec-derivation path that feeds the file export,
+      the debounced PNG preview and the clipboard copy alike — is deliberate:
+      the preview is the same server route, so the on-screen page is the page
+      that gets exported (`greyscale` joined the preview effect's dep list for
+      that reason). The composer's control is one "Greyscale" checkbox beside
+      the existing format/style/DPI controls (`FigurePageView.tsx`), and the
+      flag rides the saved PageDocument, so a reopened page remembers it and
+      Library's export-without-reopening honours it. Tests:
+      `FigurePageView.test.tsx` (new — the checkbox at the DOM layer, both
+      directions), `useFigurePage.test.ts` (export/preview/copy all carry
+      `greyscale: true` on every panel, absence when off, the off-again key
+      removal, and a save -> reopen persistence round trip),
+      `PagesSection.test.tsx` (the saved page's own flag on every panel of the
+      export request, and its ABSENCE when the page never turned it on), and
+      `pageDocument.test.ts` (a pre-P3.3 document loads unchanged with the key
+      absent; a saved `greyscale: true` survives the JSON round trip; `false`
+      and junk both load as absent). The review also
       found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
       a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to
