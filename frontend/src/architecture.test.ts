@@ -1682,6 +1682,8 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
   revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
   activeDrag: "active drag state for Library folder drag feedback; transient",
+  activeDragPress:
+    "pointer press that owns the drag in activeDrag (ROUND 6 of the Tiles drag review); transient, written only by setActiveDrag alongside activeDrag itself",
   // LIBRARY_WORKBOOK_UX_PLAN PR C/E2: tree UI state. PR E2 now persists all
   // three into the .dwk (lib/workspace.ts's parseWorkspace/serializeWorkspace),
   // but persisted is not the same as undoable — they're view/navigation state

@@ -1012,7 +1012,8 @@ Library presentation without changing organization or duplicating objects.
     fixed):** an abandoned drag whose source unmounted (released over
     nothing) leaves its stale `drop-candidate` cue lit until the user's next
     primary pointerdown anywhere on the page — it does not self-heal. No drop
-    is ever refused by this mechanism, unlike the removed one.
+    is ever refused by this mechanism, unlike the removed one — **disproved in
+    ROUND 4 below**.
     **Test:** the abandoned-drag test was rewritten to end via a primary
     `PointerEvent("pointerdown")` instead of `pointermove` (jsdom 30.x, this
     repo's pinned version, constructs `PointerEvent` with a working
@@ -1175,8 +1176,11 @@ Library presentation without changing organization or duplicating objects.
     it" softened to "Nothing here restates the rules themselves" — the file
     does restate a slice of the contract as rationale, which is fine and
     already said elsewhere, but "restates it" (unqualified) overclaimed.
-    **Finding 6 (round-3's `isPrimary !== false` fail-open nit): MOOT** —
-    `isPrimary` is no longer read anywhere in this mechanism.
+    **Finding 6 (round-3's `isPrimary !== false` fail-open nit): MOOT as to
+    `isPrimary`** — it is no longer read anywhere in this mechanism — **but the
+    fail-open HALF of that nit was real and is fixed in ROUND 5 below**: the
+    listener kept comparing a field that is `undefined` on a non-`PointerEvent`
+    dispatch, so two such dispatches matched each other.
   - [x] **Tiles drag/drop — adversarial review, ROUND 5 (2026-09-14).** One
     mechanism finding against the round above, plus a stale bundle number, a
     missing superseded marker, and a per-instance doc nit.
@@ -1284,6 +1288,127 @@ Library presentation without changing organization or duplicating objects.
     `setActiveDrag(null)` from a second instance is a no-op on an
     already-null store field; the doc comment above
     `useDetailsDragDropContext` now says so.
+  - [x] **Tiles drag/drop — adversarial review, ROUND 6 (2026-09-14).** One
+    mechanism finding against the round above (with a new false positive AND a
+    coverage regression inside it), a doc claim that was factually wrong, and
+    two plan nits.
+    **Finding 1 (CONFIRMED, both halves measured in-repo):** round 5's
+    `dragPress` was an ownership snapshot that nothing validated against the
+    drag it claimed to own. `useDetailsDragDrop`'s own `onDragStart` was its
+    ONLY writer, while `activeDrag` has FIVE publishers — `FolderRow.tsx`,
+    `WorkbookRow.tsx` and `DatasetRowParts.tsx` publish into the same store
+    field, and `LibraryTree` is virtualized exactly like the flat renderers, so
+    a Tree drag can be abandoned in precisely the way this mechanism exists to
+    recover from. (a) A stale snapshot left by an ABANDONED Tiles drag was
+    inherited by the next Tree-published drag, so ONE press from the abandoned
+    drag's pointer refused a live, unrelated drop (`tiles_review6.md` probe N1)
+    — a NEW false positive of the same family as rounds 3/4/5, introduced by
+    round 5. (b) A Tree-published drag recorded no snapshot at all, so no press
+    could ever end it — round 4's self-heal was lost for Tree rows on every
+    pointer type (probe N2). **Decision (orchestrator call, the reviewer's
+    option (i)):** move the press record NEXT TO `activeDrag` in the store, so
+    ONE publish path sets both. "Every publisher must remember to call
+    `noteDragPointer`" is an invariant nothing enforced; making the two fields
+    move together removes the invariant instead of documenting it.
+    **Fix:** a new leaf module `frontend/src/lib/lastPointerPress.ts` owns the
+    recorder — one module-level, always-live CAPTURE-phase `document`
+    `pointerdown` listener, attached once per document (idempotent, and a no-op
+    where there is no `document`), recording `{id, type}` for any press whose
+    `pointerId` is a number and ignoring every dispatch whose is not (round
+    5's finding-4 guard, relocated here so it is applied once and
+    `PointerPress.id` is a real number by construction downstream). It is
+    attached at import rather than on first read because the first read happens
+    when a drag is published — strictly after the press that owns it — so a
+    lazily-attached recorder would miss the first drag's press. `setActiveDrag`
+    (`store/libraryPanel.ts`) snapshots it into a new `activeDragPress` field
+    in the SAME `set()` that publishes the drag: every publisher gets the owner
+    press for free, replacing a drag replaces its press, and clearing a drag
+    clears it — closing 1a and 1b together, because no snapshot can outlive its
+    drag or be matched against a drag it does not own. `useDetailsDragDrop.ts`
+    loses `lastPress`, `dragPress` and `noteDragPointer` entirely; its
+    capture-phase `pointerdown` listener now reads the live `activeDrag` /
+    `activeDragPress` pair imperatively (`getLibraryState()`, a new
+    non-reactive narrowed read on `store/hooks/useLibraryStore.ts` — an event
+    listener, not a render body, and deliberately not `useApp.getState()` under
+    `components/`, which would have moved the getState()-in-render file-count
+    ratchet off its pin for a call that ratchet does not target).
+    **The rule, in plain words** (header + this entry, no categorical safety
+    claim): the store remembers which pointer pressed last before a drag was
+    published; a later press from that same pointer clears the drag; every
+    other press is ignored by this mechanism; a drag published with no prior
+    press has no owner press and is ended only by `dragstart`, `dragend` or
+    `drop`. **Residuals (honest, named, not closed):** (1) on touch and pen the
+    browser hands out a fresh `pointerId` per contact, so an abandoned drag's
+    stale cue does not self-heal on the user's next press of that modality —
+    clearing it still needs a `dragstart`, `dragend` or `drop`; (2) **finding 2
+    (CONFIRMED, doc claim was wrong):** the module-level record is never
+    invalidated, so the round-5 header's "`dragPress` is `null` when no press
+    preceded the `dragstart`" was false — once the page has seen one press, a
+    `dragstart` with no press of its own INHERITS the last press the recorder
+    saw, which for a pointer-initiated drag is the dragging pointer and for a
+    programmatic or synthetic one is an unrelated pointer that may press again
+    and end the drag. Both the header and this entry now state that instead.
+    **Test:** every existing drag-end test in `LibraryTiles.parity.test.tsx`
+    stays green with its setup adapted to the store-owned record
+    (`__resetLastPointerPress()` in `beforeEach`, `activeDragPress: null` in
+    the fixture); two NEW regression tests lock the reviewer's probes — N1
+    drives an abandoned mouse-id-1 Tiles drag, then a pen-id-9 Tree-published
+    drag (published exactly as `FolderRow.tsx` does: `setActiveDrag` with no
+    press bookkeeping of its own), fires one mouse-id-1 press between
+    `dragover` and `drop`, and asserts the second `dragover` is still accepted
+    and the move commits — **confirmed to FAIL against the pre-fix code**
+    (`activeDrag` measured as `null` right after that single press, exactly as
+    the review reported, so the refused `dragover` and refused move follow);
+    N2 asserts a Tree-published mouse-id-1 drag IS cleared by a second
+    mouse-id-1 press, at the DOM layer (the `drop-candidate` cue goes out),
+    which the pre-fix code could not do at all. `store/libraryPanel.test.ts`
+    gains four store-level tests (snapshot taken, null press when none
+    preceded, re-snapshot on every publish, cleared together with the drag) and
+    the new module gets its own `src/lib/lastPointerPress.test.ts` (7 tests,
+    including a capture-phase proof that a `stopPropagation()` below still
+    reaches the recorder). **Sabotage** (each applied to the real file, the
+    affected test files re-run, then restored from a saved copy):
+
+    | mutation | tests expected to fail | tests that failed |
+    |---|---|---|
+    | `setActiveDrag` stops snapshotting (`set({ activeDrag })` as before) | 2 | **5** — N2 "a Tree-published drag IS cleared by a second press from the pointer that started it", the store's "snapshots the press that was last seen before the drag was published" and "re-snapshots on every publish, so a replacing drag never inherits the previous drag's press", plus N1 "a press left over from an ABANDONED drag does not clear a later Tree-published drag, and its move commits" and the existing "an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by a pointerdown from the SAME physical pointer that pressed last" (both also need the snapshot) |
+    | the hook matches against a stale local copy of the owner press instead of the store's live one | 1 | **1** — N1 |
+    | drop the `typeof press.pointerId !== "number"` guard in `lib/lastPointerPress.ts` | 1 | **3** — the existing "a plain, non-PointerEvent pointerdown (no numeric pointerId) does not clear a live drag, even fired before AND after dragstart", plus the module's own "ignores a dispatch with no numeric pointerId, leaving the previous record intact" and "never records a non-PointerEvent, even as the very first dispatch it sees" |
+    | re-add a `pointermove` clear (the round-2/3 mechanism) | 1 | **1** — the existing "a pointermove delivered mid-drag, between dragover and drop, does not refuse the drop" |
+
+    **Findings 3/4 (plan nits, corrected in place above):** the ROUND-3 entry's
+    second disproved sentence ("No drop is ever refused by this mechanism,
+    unlike the removed one") now carries "— **disproved in ROUND 4 below**",
+    matching the marker its first one already had; and the ROUND-4 entry's
+    unqualified "Finding 6 … MOOT" is narrowed to "MOOT as to `isPrimary`",
+    with the fail-open half named as real and fixed in ROUND 5 — it sat one
+    entry above its own refutation.
+    **Gate:** `tsc -b --force` and `eslint src --max-warnings=0` clean; scoped
+    `vitest run src/components/Library src/architecture.test.ts` 36 files /
+    **547** tests (was 545; +2 = N1 and N2) — `LibraryTiles.parity.test.tsx`
+    **33** (was 31); `vitest run src/components/Library src/store
+    src/lib/lastPointerPress.test.ts src/architecture.test.ts` 114 files /
+    2,276 tests, all green. `uv run pytest -q tests/test_repo_integrity.py` 12
+    passed. `useDetailsDragDrop.ts` is **428** lines (was 419) and
+    `store/libraryPanel.ts` **221**, both against the 500-line general `.ts`
+    ceiling — no pin needed, and no `.tsx` changed. The getState()-in-render
+    file-count ratchet is unmoved: still **80** files under
+    `components/`+`App*.tsx` calling `useApp.getState()`, because the hook's
+    imperative read goes through `store/hooks/useLibraryStore.ts`.
+    **Bundle:** this round's real parent is `3c6377f7` (`git rev-parse HEAD~1`,
+    the ROUND-5 commit this review was run against), measured in a scratch
+    `git worktree add` with a fresh `npm ci` and `rm -rf node_modules/.vite`:
+    **916,161 B** eager — the same figure the round-5 entry recorded for its
+    own tree, as it must be. This round's own tree (same clean-cache rebuild)
+    measures **916,515 B** eager: **+354 B**, the first non-zero delta in six
+    rounds. The reason is structural and expected, not an accident: unlike
+    every previous round, the change is not confined behind `App.tsx`'s and
+    `Library.tsx`'s lazy seams — `lib/lastPointerPress.ts` is imported by
+    `store/libraryPanel.ts`, which is part of the eagerly-loaded `useApp`
+    store, so the recorder ships eagerly. That is the cost of the fix's whole
+    point (one publish path in the store, not five in the renderers).
+    `check-bundle-size.mjs` reports 895.0 kB against its 898.8 kB budget —
+    3.8 kB of headroom, no pin moved.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged

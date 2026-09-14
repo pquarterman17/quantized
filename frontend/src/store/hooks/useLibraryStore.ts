@@ -29,6 +29,17 @@ export function useLibraryStore<T>(selector: (s: LibraryPanelSlice) => T): T {
   return useApp(selector as (s: AppState) => T);
 }
 
+/** Imperative, NON-reactive read of the same slice — for event listeners,
+ *  effects and callbacks that need the value as it is right now rather than as
+ *  it was at the last render. Never call this in a render body: a render-time
+ *  read takes no subscription, so React never re-runs the render when the
+ *  value changes (architecture.test.ts's getState()-in-render ratchet exists
+ *  for exactly that bug). Narrowed to `LibraryPanelSlice` for the same reason
+ *  the hooks above are — the import line says which domain a caller touches. */
+export function getLibraryState(): LibraryPanelSlice {
+  return useApp.getState();
+}
+
 /** Shallow-compared variant — for a selector that returns a fresh object/array
  *  each call (e.g. picking several fields at once), so the component only
  *  rerenders when one of the picked values actually changes. */

@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryWorkspace from "./LibraryWorkspace";
 import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { VIRTUALIZE_ABOVE } from "./useTileVirtualization";
+import { __resetLastPointerPress } from "../../lib/lastPointerPress";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/cssRules.testkit";
 import { useApp } from "../../store/useApp";
@@ -41,6 +42,9 @@ const folder = (id: string, name: string, parentId: string | null, order: number
 });
 
 beforeEach(() => {
+  // The press recorder is module-level and always live, so one test's presses
+  // would otherwise be visible to the next.
+  __resetLastPointerPress();
   useApp.setState({
     // A root container holding two folder tiles and one unfoldered workbook
     // tile — the Details fixture's shape (Alpha / Beta / Run) in tile form.
@@ -65,6 +69,7 @@ beforeEach(() => {
     trash: [],
     history: [],
     activeDrag: null,
+    activeDragPress: null,
   });
 });
 
@@ -75,6 +80,16 @@ const gripOf = (key: string): HTMLElement =>
   tileFor(key).querySelector(".qzk-drag-handle") as HTMLElement;
 
 const applyToStore = (change: () => void): void => act(() => { change(); });
+
+/** One physical press, delivered where `lib/lastPointerPress.ts`'s always-live
+ *  capture listener sees it. Call inside `act` — a press can clear a published
+ *  drag, which rerenders. */
+const press = (pointerId: number, pointerType: string): void => {
+  fireEvent(
+    document,
+    new PointerEvent("pointerdown", { pointerId, pointerType, bubbles: true, cancelable: true }),
+  );
+};
 
 function transfer(type: string, id: string) {
   return { types: [type], getData: (t: string) => (t === type ? id : ""), setData: () => {}, effectAllowed: "" };
@@ -525,8 +540,8 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
   // before it, not against the pointer that started the drag. Two identical
   // presses from a pointer that never touched the drag (here, two mouse
   // clicks with a constant id) matched each other and cleared it anyway. This
-  // test FAILS against the round-4 code (verified: reverted `noteDragPointer`
-  // and the `dragPress` snapshot, ran this test in isolation, got "expected
+  // test FAILS against the round-4 code (verified: reverted the owner-press
+  // snapshot, ran this test in isolation, got "expected
   // true to be false" on the second `dragover` — the drop was refused) and
   // must pass now that the rule matches against the drag's own starting press.
   it("two consecutive presses from a THIRD pointer, mid-drag, do not clear a drag that pointer never started", () => {
@@ -575,10 +590,10 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
   // Finding 4 (tiles_review5.md): a dispatch that is not a real `PointerEvent`
   // carries no numeric `pointerId` (`undefined`), and `undefined === undefined`
   // would otherwise let two such dispatches match each other. The FIRST
-  // synthetic dispatch happens BEFORE `dragstart` so it can pollute the
-  // always-live `lastPress` record with `{id: undefined, type: undefined}`
-  // — without the guard, `noteDragPointer` would snapshot that polluted
-  // value into `dragPress`, and the SECOND synthetic dispatch after
+  // synthetic dispatch happens BEFORE `dragstart` so it can pollute
+  // `lib/lastPointerPress.ts`'s record with `{id: undefined, type: undefined}`
+  // — without that module's guard, `setActiveDrag` would snapshot the polluted
+  // value into `activeDragPress`, and the SECOND synthetic dispatch after
   // `dragstart` would then match it and clear the drag.
   it("a plain, non-PointerEvent pointerdown (no numeric pointerId) does not clear a live drag, even fired before AND after dragstart", () => {
     render(<LibraryWorkspace onClose={vi.fn()} />);
@@ -678,6 +693,85 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
 
     expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
+  });
+
+  // REGRESSION N1 (2026-09-14, tiles_review6.md finding 1b): the round-5 owner
+  // snapshot lived in this hook and was written ONLY by the hook's own
+  // `onDragStart`, while `activeDrag` has four other publishers (the three
+  // Tree rows). An ABANDONED Tiles drag therefore left a snapshot behind with
+  // no owning drag, and the next drag a TREE row published inherited it — one
+  // press from the abandoned drag's pointer then refused a live, unrelated
+  // drag. The press record now lives beside `activeDrag` in the store and is
+  // re-snapshotted by `setActiveDrag` itself, so the Tree publish below
+  // replaces the stale record rather than inheriting it. Verified to FAIL
+  // against the pre-fix code (see this round's plan entry).
+  it("a press left over from an ABANDONED drag does not clear a later Tree-published drag, and its move commits", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // A Tiles drag pressed by mouse id 1 …
+    act(() => press(1, "mouse"));
+    const source = gripOf("folder:vf0");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
+
+    // … and abandoned: its source scrolls out of the virtualized window, so
+    // the browser's `dragend` fires at a DETACHED node and reaches no
+    // ancestor (the shape the test above measures).
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+    act(() => {
+      fireDrag(source, "dragend", transfer(FOLDER_DND, "vf0"));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // The user now starts a TREE drag with a pen (id 9). `FolderRow.tsx`
+    // publishes exactly this way — its `onDragStart` fills the dataTransfer
+    // and calls `setActiveDrag`, with no press bookkeeping of its own.
+    act(() => press(9, "pen"));
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "vf1" }));
+    expect(useApp.getState().activeDragPress).toEqual({ id: 9, type: "pen" });
+
+    const target = tileFor("folder:vtarget");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "vf1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // ONE press from mouse id 1 — the pointer the ABANDONED drag was held by,
+    // which owns nothing now.
+    act(() => press(1, "mouse"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf1" });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "vf1")),
+      "the target must still accept the Tree-published drag",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "vf1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "vf1")!.parentId).toBe("vtarget");
+  });
+
+  // REGRESSION N2 (2026-09-14, tiles_review6.md finding 1c): the same
+  // hook-owned snapshot meant a Tree-published drag recorded no owner press at
+  // all, so no press could ever end it — an abandoned TREE drag kept its stale
+  // `drop-candidate` cue lit until the next dragstart/dragend/drop. With the
+  // record owned by `setActiveDrag`, every publisher gets the owner press, so
+  // the self-heal now covers Tree rows too.
+  it("a Tree-published drag IS cleared by a second press from the pointer that started it", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => press(1, "mouse"));
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "f1" }));
+    expect(useApp.getState().activeDragPress).toEqual({ id: 1, type: "mouse" });
+    expect(tileFor("folder:f2").className).toMatch(/\bdrop-candidate\b/);
+
+    act(() => press(1, "mouse"));
+
+    expect(useApp.getState().activeDrag).toBeNull();
+    expect(useApp.getState().activeDragPress).toBeNull();
+    expect(tileFor("folder:f2").className).not.toMatch(/\bdrop-candidate\b/);
   });
 });
 
