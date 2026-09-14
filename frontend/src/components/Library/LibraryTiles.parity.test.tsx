@@ -431,7 +431,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
   });
 
-  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by the next pointermove", () => {
+  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by the next primary pointerdown", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
@@ -439,14 +439,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // A real drag fires `dragover` continuously over whatever is under the
-    // pointer, valid drop target or not. This is what tells the container's
-    // guarded pointermove catch (useDetailsDragDrop.ts's file header, THIRD
-    // review round) that the drag is genuinely under way, before it will
-    // treat a later pointermove as the end signal.
     const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
-    fireDrag(scroller, "dragover", transfer(FOLDER_DND, "vf0"));
-
     act(() => {
       scroller.scrollTop = SCROLL_PAST_END;
       fireEvent.scroll(scroller);
@@ -466,41 +459,71 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
     expect(tileFor("folder:vtarget").className).toMatch(/\bdrop-candidate\b/);
 
-    // The browser suppresses `pointermove` for the dragging pointer for the
-    // whole operation; its first delivery afterwards is therefore the one
-    // signal that needs no live source node at all.
+    // No element the abandoned drag can bubble a signal through survives —
+    // the mechanism that DOES end it needs none: a new PRIMARY `pointerdown`
+    // anywhere on the page (useDetailsDragDrop.ts's file header, THIRD review
+    // round). Real `PointerEvent`s — jsdom (30.x, this repo's version)
+    // constructs them with a working `isPrimary`.
     act(() => {
-      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
+      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: true, bubbles: true, cancelable: true }));
     });
     expect(useApp.getState().activeDrag).toBeNull();
     expect(tileFor("folder:vtarget").className).not.toMatch(/\bdrop-candidate\b/);
   });
 
-  it("a pointermove delivered before any dragover is observed does NOT end the drag (guards the drag-start interleave)", () => {
+  it("a pointerdown with isPrimary false does NOT end a live drag (a second pointer must not end someone else's)", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
     fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // No dragover/drag has fired yet — a pointermove here must be ignored,
-    // or a drag would clear itself on its own first frame.
+    // A second finger touching down on a hybrid device — e.g. while a first
+    // finger still holds this drag — must not end it.
     act(() => {
-      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
+      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: false, bubbles: true, cancelable: true }));
     });
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // Once a dragover has been observed, the SAME pointermove signal does end
-    // the drag (the previous test proves this end to end). Fired on the
-    // scroller, not a folder tile, since "vtarget" is not yet in the
-    // rendered window here — a real drag fires dragover over whatever is
-    // under the pointer regardless.
-    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
-    fireDrag(scroller, "dragover", transfer(FOLDER_DND, "vf0"));
+    // The SAME signal, but primary, does end it (proven end to end above).
+    act(() => {
+      fireEvent(document, new PointerEvent("pointerdown", { isPrimary: true, bubbles: true, cancelable: true }));
+    });
+    expect(useApp.getState().activeDrag).toBeNull();
+  });
+
+  // REGRESSION (2026-09-14, THIRD review round finding 1): the fix this round
+  // replaces cleared `activeDrag` on the first `pointermove` seen after a
+  // `dragover` — a signal that is live throughout a Chromium touch/pen drag
+  // and at boundary crossings on Firefox (not a one-off at drag-start), so it
+  // cleared a drag that was still genuinely in progress. That refuses the
+  // drop outright: a real browser stops receiving `preventDefault()` on
+  // `dragover` and never fires `drop` at all. This test fails on the removed
+  // mechanism (verified before this fix landed) and must keep passing.
+  it("a pointermove delivered mid-drag, between dragover and drop, does not refuse the drop", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A drag that is genuinely still live keeps generating `pointermove` —
+    // this must never be mistaken for the operation ending.
     act(() => {
       fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
     });
-    expect(useApp.getState().activeDrag).toBeNull();
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after the mid-drag pointermove",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
   });
 });
 

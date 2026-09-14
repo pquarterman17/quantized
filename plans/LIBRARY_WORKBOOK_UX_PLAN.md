@@ -940,11 +940,15 @@ Library presentation without changing organization or duplicating objects.
     the operation ended). Guarded against a `pointermove` that might
     interleave with `dragstart` itself: it is honoured as a terminal signal
     only after a `dragover` (or the source's own `drag` event) has been seen
-    for this drag, the cheap rule the round-1 review itself proposed. Full
-    contract now lives ONCE, in `useDetailsDragDrop.ts`'s file header; the
-    `useDetailsDragDropContext` doc block and both parity test files' block
-    comments were collapsed to one-line pointers at it (N4) instead of a
-    fifth restatement. **Test:** the circular test was rewritten in
+    for this drag, the cheap rule the round-2 review itself proposed
+    (`tiles_review2.md`; this heading's own "ROUND 2" numbers it, and the
+    review round the FIX responds to is one round earlier than its number —
+    corrected here after round 3 caught the earlier credit to "round-1").
+    Contract lives at `useDetailsDragDrop.ts`'s file header, with a pointer
+    (not a fifth restatement) at the `useDetailsDragDropContext` doc block
+    and both parity test files' block comments (N4) — round 3 found a second,
+    untouched copy in `useTileDragDrop.ts` still stating the reverted
+    contract; see that round's entry below for the fix. **Test:** the circular test was rewritten in
     `LibraryTiles.parity.test.tsx` to fire `dragend` at the SOURCE element
     itself after it unmounts (asserting `activeDrag` survives — the measured
     browser behaviour) and only then fire a `pointermove` on `document`
@@ -973,6 +977,89 @@ Library presentation without changing organization or duplicating objects.
     `LibraryDetails.scale.test.tsx`/`LibraryTree.scale.test.tsx` landing in
     unrelated intervening commits, not this fix. `uv run pytest -q
     tests/test_repo_integrity.py` 12 passed.
+  - [x] **Tiles drag/drop — adversarial review, ROUND 3 (2026-09-14).** One
+    finding against the round above, plus the two nits fixed alongside it.
+    **Finding 1 (CONFIRMED, mechanism measured in-repo; field impact
+    plausible, needs a real browser):** the round-2 fix's premise does not
+    hold on every engine/pointer type. "A user agent suppresses `pointermove`
+    for as long as a drag is under way" is true of the HTML Standard's
+    device-input suppression for MOUSE; Pointer Events' own suppression is a
+    one-shot `pointercancel`/`pointerout`/`pointerleave` fired once at drag
+    start, and Chromium keeps the pointer stream live for the WHOLE operation
+    on touch and pen (cross-engine traces in whatwg/html#11771). A stray
+    `pointermove` mid-drag on those pointer types cleared `activeDrag` early;
+    the specific target's `legalDrag` check closes over that value at render
+    time, so once it went null the target stopped calling
+    `preventDefault()` on `dragover` and the browser refused the drop
+    outright — strictly worse than the stale cue this was fixing, on a code
+    path no test in this repo can see (jsdom implements no drag-and-drop
+    suppression at all). **Decision (orchestrator call, not re-opened for
+    debate here):** removed. The reviewer's own alternative — a 700 ms
+    staleness timer requiring no live drag signal before treating a
+    `pointermove` as terminal — was considered and rejected: a refused drop
+    is worse than a lingering cue, and no amount of staleness-timer tuning
+    changes that a `pointermove` can be part of a still-live operation on
+    Chromium touch/pen. **Fix:** a CAPTURE-phase `pointerdown` listener on
+    `document`, live only while `activeDrag != null`, clears it when
+    `event.isPrimary !== false`. A pointer cannot fire a new PRIMARY
+    `pointerdown` while it is the one still holding a drag, so this cannot
+    see the live-drag false positive `pointermove` did; a non-primary
+    pointerdown (a second finger on a hybrid device) is excluded so it cannot
+    end someone else's drag. `dragend`/`drop` at `document` and a fresh
+    `dragstart` (which republishes `activeDrag`, superseding whatever it
+    held) remain the other two ways a drag ends. **Residual (named, not
+    fixed):** an abandoned drag whose source unmounted (released over
+    nothing) leaves its stale `drop-candidate` cue lit until the user's next
+    primary pointerdown anywhere on the page — it does not self-heal. No drop
+    is ever refused by this mechanism, unlike the removed one.
+    **Test:** the abandoned-drag test was rewritten to end via a primary
+    `PointerEvent("pointerdown")` instead of `pointermove` (jsdom 30.x, this
+    repo's pinned version, constructs `PointerEvent` with a working
+    `isPrimary`, so no `Object.defineProperty` fallback was needed); a second
+    test locks the guard (`isPrimary: false` does NOT clear a live drag —
+    stronger than the old drag-start-interleave guard it replaces, since it
+    protects the whole operation, not just the first frame); a third,
+    NEW regression test drives a folder-onto-folder drag with one
+    `pointermove` fired between `dragover` and `drop` and asserts the second
+    `dragover` is still accepted and the drop still commits — confirmed to
+    FAIL against the pre-fix code (reverted the two hook files to their
+    round-2 state, ran this one test in isolation, got the exact "expected
+    true to be false" failure the reviewer's probe predicted, then restored
+    the fix). **Sabotage** (each applied to the real file, the scoped suite
+    re-run, then reverted):
+
+    | mutation | tests expected to fail | tests that failed |
+    |---|---|---|
+    | remove the `pointerdown` listener entirely | 2 | **2** — the rewritten abandoned-drag test and the `isPrimary: false` guard test (its own closing assertion also needs a live pointerdown to end the drag) |
+    | drop the `isPrimary` filter (clear on ANY pointerdown) | 1 | **1** — the `isPrimary: false` guard test |
+    | re-add a `pointermove` clear | 1 | **1** — the new regression test |
+
+    **N4 (finding 2 from the round above, now actually closed):** the
+    "contract lives ONCE" claim two paragraphs up was false — `useTileDragDrop.ts`
+    held an untouched 27-line restatement, including a `Cancelling cleanly …`
+    bullet describing the CONTRACT ROUND 2 REVERTED, so a reader of the Tiles
+    module was told the opposite of the shipped behaviour. Collapsed that
+    file's header to a short pointer at `useDetailsDragDrop.ts`'s file header;
+    the paragraph two above is corrected in place to say so rather than claim
+    "ONCE" where a second, wrong copy still existed. **Nit (finding 3 from the
+    round above):** that same paragraph credited "the round-1 review" for the
+    `dragover`-precondition guard; it is `tiles_review2.md`'s suggestion, and
+    the paragraph's own "ROUND 2" heading already said so — corrected in
+    place, also above. **Gate:** `tsc -b --force` and `eslint
+    --max-warnings=0` clean; scoped `vitest run src/components/Library
+    src/architecture.test.ts` 36 files / 539 tests, all green —
+    `LibraryTiles.parity.test.tsx` 28 (was 27; net +1 is this round's own
+    change: two tests replaced by the rewritten test and the new guard test,
+    plus the one new regression test); the +2 tests since round 2's reported
+    536 are the unrelated intervening focus-review commit
+    (`56ac4f46`), not this fix. `uv run pytest -q tests/test_repo_integrity.py`
+    12 passed. **Bundle:** this round's real parent is `56ac4f46`
+    (`git rev-parse HEAD~1`). Measured directly via a scratch
+    `git worktree add` at that SHA (node_modules symlinked, `rm -rf
+    node_modules/.vite`, `npm run build`; worktree removed after): parent
+    916,111 B eager; this round's own tree also 916,111 B eager — 0 B delta,
+    same lazy-loading argument as the two rounds before it (the Library is
+    reached only through `App.tsx`'s and `Library.tsx`'s lazy seams).
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged

@@ -72,35 +72,36 @@
 // actually prove closed (that test dispatched `dragend` AT `document`,
 // begging the question it was meant to settle).
 //
-// THIRD review round (2026-09-14, finding 1): a second, independent terminal
-// signal that needs no live source element at all. Per the HTML Standard, a
-// user agent suppresses `pointermove` (and `mousemove`) for the dragging
-// pointer for as long as an HTML5 drag-and-drop operation is under way; the
-// first `pointermove` delivered afterwards is therefore the browser telling
-// us the operation ended, regardless of which element the source used to be.
-// A CAPTURE-phase `pointermove` listener on `document`, live only while
-// `activeDrag != null`, clears it on that first delivery. Guarded: a
-// `pointermove` that arrives before the browser has actually entered the
-// suppressed state (immediately at `dragstart`, on a browser where the two
-// events can still interleave) must not be mistaken for the end signal, or
-// every drag would clear itself on its own first frame. The guard is the
-// cheap, conservative rule the round-2 review itself proposed: track whether
-// a `dragover` (or the source's own periodic `drag` event) has been seen
-// since this drag started — either one fires only while a drag is genuinely
-// in progress, over WHATEVER is under the pointer, valid target or not — and
-// treat `pointermove` as terminal only once one has. This cannot be verified
-// against a real browser here: jsdom, which every test in this repo runs
-// under, implements no drag-and-drop suppression at all — it only dispatches
-// whichever events a test fires by hand — so the guard is documented from
-// the HTML Standard's drag-and-drop section, not measured against a real
-// Chromium/Firefox drag. The two `document`-level catches are therefore
-// complementary, not redundant: `dragend`/`drop` end a drag whose relevant
-// element is still attached; the guarded `pointermove` ends one whose source
-// is not, with no dependency on any element surviving at all. Neither one
-// decides legality — the specific target's own `legalDrag` check already
-// closed over the pre-clear `activeDrag` value by the time either callback
-// fires (see the note at `legalDrag`'s definition below) — they only clear
-// the published drag once the operation is over.
+// THIRD review round (2026-09-14, finding 1): the round-2 fix's premise did
+// not hold. "A user agent suppresses `pointermove` for as long as a drag is
+// under way" is true of the HTML Standard's device-input suppression for
+// MOUSE, but Pointer Events' own suppression is a one-shot `pointercancel`
+// / `pointerout` / `pointerleave` fired once at drag start — nothing in it
+// bars a later `pointermove`, and Chromium keeps the pointer stream live for
+// the WHOLE operation on touch and pen (measured cross-engine in
+// whatwg/html#11771). A `pointermove` catch therefore cleared `activeDrag`
+// mid-drag on those pointer types: the specific target's `legalDrag` check
+// closes over `activeDrag` at render time, so once it went null the target
+// stopped calling `preventDefault()` on `dragover` and the browser refused
+// the drop outright — worse than the stale cue this was fixing. Removed.
+//
+// Replacement: a CAPTURE-phase `pointerdown` listener on `document`, live
+// only while `activeDrag != null`, clears it when `event.isPrimary !== false`.
+// A pointer cannot fire a new PRIMARY `pointerdown` while it is the one still
+// holding a drag — its button or contact stays down for the operation's
+// duration — so this can never see the live-drag false positive the
+// `pointermove` catch did; excluding a non-primary press keeps a second
+// finger on a hybrid device from ending someone else's drag. `dragend`/
+// `drop` at `document` and a fresh `dragstart` (which republishes
+// `activeDrag`, implicitly superseding whatever it held) remain the other
+// two ways a drag ends.
+//
+// Residual: an abandoned drag whose source unmounted (released over nothing
+// after its source scrolled out) leaves its stale `drop-candidate` cue lit
+// until the user's next primary pointerdown anywhere on the page — it does
+// not self-heal on its own. No drop is ever refused by this mechanism,
+// unlike the removed one: a pointerdown cannot occur while the drag it would
+// end is still genuinely being held.
 
 import { useEffect, useState } from "react";
 
@@ -150,11 +151,12 @@ export interface DetailsDragDropContext {
  *  actions are stable identities, so they add no rerenders.
  *
  *  Also owns the CONTAINER-level terminal-signal catch — see the file header
- *  above (findings 3 and 1) for the full contract: two independent
- *  CAPTURE-phase `document` listener sets, live only while `activeDrag` is
- *  non-null, clear it unconditionally before any specific row/tile even sees
- *  the event. The per-row `onDragEnd` still fires too when its element
- *  survives; it is redundant with, not a third mechanism alongside, these. */
+ *  above (findings 3 and 1) for the full contract: two CAPTURE-phase
+ *  `document` listener sets, live only while `activeDrag` is non-null, clear
+ *  it before any specific row/tile even sees the event — `dragend`/`drop`
+ *  unconditionally, `pointerdown` only when `isPrimary !== false`. The
+ *  per-row `onDragEnd` still fires too when its element survives; it is
+ *  redundant with, not a third mechanism alongside, these. */
 export function useDetailsDragDropContext(): DetailsDragDropContext {
   const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const activeDrag = useLibraryStore((s) => s.activeDrag);
@@ -174,25 +176,21 @@ export function useDetailsDragDropContext(): DetailsDragDropContext {
 
     // THIRD review round, finding 1: a `dragend`/`drop` fired at an element
     // still attached to `document` is not the only way this drag can end —
-    // see the file header for the unmounted-source gap and why a guarded
-    // `pointermove` closes it.
-    let dragInProgress = false;
-    const noteDragInProgress = (): void => {
-      dragInProgress = true;
+    // see the file header for the unmounted-source gap this closes, and why
+    // it is a `pointerdown` (not the removed `pointermove`) that closes it.
+    // A new PRIMARY pointerdown cannot belong to a pointer still holding a
+    // live drag, so this cannot false-positive on the dragging pointer the
+    // way `pointermove` did; a non-primary pointerdown (e.g. a second finger)
+    // is excluded so it cannot end someone else's drag.
+    const onPointerDown = (event: PointerEvent): void => {
+      if (event.isPrimary !== false) clear();
     };
-    const onPointerMove = (): void => {
-      if (dragInProgress) clear();
-    };
-    document.addEventListener("dragover", noteDragInProgress, true);
-    document.addEventListener("drag", noteDragInProgress, true);
-    document.addEventListener("pointermove", onPointerMove, true);
+    document.addEventListener("pointerdown", onPointerDown, true);
 
     return () => {
       document.removeEventListener("dragend", clear, true);
       document.removeEventListener("drop", clear, true);
-      document.removeEventListener("dragover", noteDragInProgress, true);
-      document.removeEventListener("drag", noteDragInProgress, true);
-      document.removeEventListener("pointermove", onPointerMove, true);
+      document.removeEventListener("pointerdown", onPointerDown, true);
     };
   }, [activeDrag, setActiveDrag]);
 
