@@ -249,9 +249,20 @@ export default function LibraryWorkspace({ onClose }: Props) {
   }, [virt.virtualized, virt.start, virt.end, items, rovingKey]);
 
   // Arrow/Enter while the GRID itself holds focus (the scroll-out fallback
-  // above): resume from the roving tile's model position.
+  // above): resume from the roving tile's model position. Delete/Backspace
+  // is CONSUMED, not acted on (focus-review fix, 2026-09-14): Tree and
+  // Details already do this for their own scroll-out holder (the
+  // lib/focusGuard.ts data-loss path — a focused plain container is not an
+  // editing target, so an unconsumed Delete here would fall through to the
+  // global selection-based removal and delete the stale `selectedIds` behind
+  // a confirm, which is not what the scrolled-away roving tile is showing).
   const onGridKeyDown = (event: React.KeyboardEvent): void => {
-    if (event.target !== gridRef.current || rovingKey == null) return;
+    if (event.target !== gridRef.current) return;
+    if (event.key === "Delete" || event.key === "Backspace") {
+      event.preventDefault();
+      return;
+    }
+    if (rovingKey == null) return;
     if (event.key === "ArrowRight" || event.key === "ArrowDown") {
       event.preventDefault(); moveFocus(rovingKey, 1);
     } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {

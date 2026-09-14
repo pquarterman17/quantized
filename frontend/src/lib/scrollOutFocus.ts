@@ -20,9 +20,11 @@
 // item's MODEL position — so the fallback is a waypoint, never a dead end.
 //
 // `tabIndex: -1` is load-bearing and deliberately NOT 0: the container must be
-// focusable by script only. All three renderers keep exactly ONE sequential
-// Tab stop (the roving row/tile), and a tabbable container would both add a
-// second one and let Tab land somewhere no arrow key means anything.
+// focusable by script only. Each renderer keeps exactly ONE sequential Tab
+// stop AMONG ITS ROWS/TILES (the roving row/tile) — Details additionally has
+// its own independent sort-header roving stop, so its whole component has
+// two, by design; see LibraryDetails.tsx. A tabbable container would add a
+// further stop and let Tab land somewhere no arrow key means anything.
 
 /** Marker attribute on the container that catches the orphaned focus. The
  *  deferred focus retries (`focusTileWhenRendered`, `focusRowWhenRendered`)

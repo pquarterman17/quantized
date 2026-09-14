@@ -156,13 +156,25 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   // DOM focus sits. Declared AFTER the removal recovery above so that effect
   // gets first claim on an orphaned focus (the shared predicate also excludes
   // the removal case outright, via `stillInModel`).
+  //
+  // Keyed on `focusKey`, NOT `rovingKey` (focus-review fix, 2026-09-14):
+  // `rovingKey` is non-null even when NO row has ever been focused (it falls
+  // back to the selected row, then rows[0]) — a wrapper predicate that used
+  // it would claim focus off a pure wheel-browse of an untouched table (no
+  // click, no keystroke, no selection) and, from then on, silently swallow
+  // the global Delete-selection shortcut. `focusKey` is set only by a row's
+  // real `onFocusRow`, so it is null until a row has genuinely held focus —
+  // exactly the fact this predicate needs. The RESUME branch in
+  // `onNavKeyDown` below still uses `rovingKey`: once the wrapper legitimately
+  // holds focus, resuming from the model's current roving position (not
+  // necessarily the row that scrolled out) is correct.
   useEffect(() => {
-    const selector = rovingKey != null ? `[data-lib-row="${CSS.escape(rovingKey)}"]` : null;
-    const stillInModel = rows.some((r) => r.node.key === rovingKey);
+    const selector = focusKey != null ? `[data-lib-row="${CSS.escape(focusKey)}"]` : null;
+    const stillInModel = rows.some((r) => r.node.key === focusKey);
     if (needsScrollOutFocusFallback(virt.virtualized, selector, stillInModel, scrollRef.current)) {
       scrollRef.current?.focus();
     }
-  }, [virt.virtualized, virt.start, virt.end, rows, rovingKey, scrollRef]);
+  }, [virt.virtualized, virt.start, virt.end, rows, focusKey, scrollRef]);
 
   const onNavKeyDown = (event: React.KeyboardEvent): void => {
     // The SCROLL WRAPPER itself holds focus — the scroll-out fallback effect

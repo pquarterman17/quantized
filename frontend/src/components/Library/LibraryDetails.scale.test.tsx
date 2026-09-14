@@ -181,4 +181,24 @@ describe("LibraryDetails — large-Library virtualization", () => {
       expect((document.activeElement as HTMLElement).matches("[data-lib-row]")).toBe(true);
     });
   });
+
+  // Focus review (2026-09-14, F1): the fallback predicate must key on a REAL
+  // prior row focus, not the roving tab-stop fact (which is non-null even
+  // with nothing ever focused). A pure wheel-browse of an UNTOUCHED table —
+  // no click, no keystroke, no selection — must not move focus off <body>,
+  // or the global Delete-selection shortcut silently stops working from then
+  // on. Contrast with the test above, which focuses a row FIRST.
+  it("a bare wheel scroll of an UNTOUCHED table (nothing ever focused) does not steal focus, so Delete still reaches the global handler", () => {
+    const { hierarchy } = seed(5000);
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(document.activeElement).toBe(document.body);
+
+    const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+
+    expect(document.activeElement).toBe(document.body);
+    // Not defaultPrevented — nothing here consumed it, so it is free to reach
+    // useGlobalShortcuts.ts's window-level Delete-selection fallback.
+    expect(fireEvent.keyDown(document.body, { key: "Delete" })).toBe(true);
+  });
 });

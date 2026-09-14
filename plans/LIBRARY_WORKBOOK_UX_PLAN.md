@@ -549,7 +549,10 @@ as a CSS-only tree redesign.
   box names.
 - [~] Preserve keyboard navigation and **Show in Library** across virtualization
   boundaries. **Verification pass (2026-09-09), downgraded from `[x]` in review
-  the same day** — see the Tree↔Details swap caveat at the end of this entry. Arrow-key navigation
+  the same day** — see the Tree↔Details swap caveat in reason (2) of the item
+  above (Virtualize row/tile rendering...), NOT at the end of this entry (the
+  pointer was wrong; fixed 2026-09-14 review round — this entry now ends with
+  its own residuals paragraph below). Arrow-key navigation
   (`LibraryTree`) and Up/Down/Home/End (`LibraryDetails`) call the window's
   `ensureVisible(index)` before focusing an off-window target, then retry
   focus across a few animation frames (`focusRowWhenRendered`, the tree
@@ -587,9 +590,11 @@ as a CSS-only tree redesign.
   the recovery effects' case, and focus the user moved deliberately is never
   stolen. The container is not a dead end: the next nav key resumes from the
   roving row's MODEL position (`LibraryTree`'s `fromContainer` branch,
-  `LibraryDetails`' wrapper branch in `onNavKeyDown`), and it CONSUMES
-  Delete/Backspace so a focused plain container cannot feed the global dataset
-  removal (`lib/focusGuard.ts`'s data-loss path — asserted, not assumed).
+  `LibraryDetails`' wrapper branch in `onNavKeyDown`), and Tree/Details'
+  holders CONSUME Delete/Backspace so a focused plain container cannot feed
+  the global dataset removal (`lib/focusGuard.ts`'s data-loss path — asserted,
+  not assumed; Tiles' own grid holder did not, until the 2026-09-14 review
+  round below closed that gap too).
   `focusRowWhenRendered` now always treats the holder as an owned place for
   focus to sit mid-retry, as `focusTileWhenRendered` already did. Guarded by
   "an organic scroll that unmounts the focused row keeps focus inside the
@@ -599,10 +604,36 @@ as a CSS-only tree redesign.
   branch -> both new fail; drop `scrollOutFocusProps` from a container -> both
   new fail). **Residual, not claimed:** the fallback restores keyboard REACH,
   not the scroll position — the viewport stays where the wheel left it until
-  the next nav key scrolls the roving row's neighbour back in; and while the
+  the next nav key scrolls the roving row's neighbour back in; while the
   container holds focus, assistive tech announces the list container rather
   than a row (identical to Tiles' long-standing behaviour, since it is now
-  literally the same mechanism).
+  literally the same mechanism); the Tree holder's key surface is arrows +
+  Delete only — `Enter`, `Escape`, `Home`/`End` are neither handled nor
+  consumed there and bubble to the window handlers (harmless today, not
+  audited); and the rendered Tree window's ~170 natively-tabbable
+  `<button>`s (pre-existing, not introduced by this mechanism) mean Tab from
+  the holder walks into row internals rather than leaving the list — a
+  separate accessibility gap, not this fallback's.
+  **Adversarial review round (2026-09-14).** Three findings, all fixed in the
+  same commit: (1) `LibraryDetails.tsx`'s fallback predicate was keyed on
+  `rovingKey` — non-null even with NOTHING ever focused (it falls back to the
+  selected row, then `rows[0]`) — so a pure wheel-browse of an untouched table
+  moved focus into the wrapper and silently swallowed the global Delete
+  shortcut from then on; re-keyed on `focusKey` (set only by a row's real
+  `onFocusRow`), leaving the RESUME branch on `rovingKey` unchanged. Guarded
+  by a new `LibraryDetails.scale.test.tsx` case (focus nothing, one bare
+  scroll, assert `activeElement` stays `<body>` and Delete still reaches
+  `useGlobalShortcuts.ts`). (2) Tiles' grid holder — the renderer this
+  mechanism was extracted FROM — did not consume Delete/Backspace while
+  holding fallback focus, contradicting the "CONSUMES Delete/Backspace" claim
+  two paragraphs up (true of Tree/Details, not of Tiles); brought in line
+  (the safer side, per this entry's own rationale) rather than relaxing
+  Tree/Details, guarded by a new `LibraryWorkspace.scale.test.tsx` case that
+  mounts the real `useGlobalShortcuts()` alongside the grid and asserts no
+  dataset is removed. (3) `lib/scrollOutFocus.ts`'s module doc claimed "all
+  three renderers keep exactly ONE sequential Tab stop" — false for Details,
+  which has two by design (the sort-header stop plus the row stop, asserted
+  in `LibraryDetails.test.tsx`); reworded to "among its rows/tiles".
 - [x] Add scale fixtures covering deep folders, wide folders, large search
   result sets, stale thumbnails, and rapid view switching. **Verification
   pass (2026-09-09; counts refreshed 2026-09-13 when the organic-scroll focus
