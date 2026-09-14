@@ -17,7 +17,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
-import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
+import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { VIRTUALIZE_ABOVE } from "./useTileVirtualization";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/cssRules.testkit";
@@ -117,22 +117,46 @@ describe("LibraryTiles — L1.4 drag source parity", () => {
     // The grip is the ONLY draggable element anywhere in the grid.
     const draggables = [...document.querySelectorAll("[draggable='true']")];
     expect(draggables.every((el) => el.classList.contains("qzk-drag-handle"))).toBe(true);
-    // Every kind the Tree/Details can drag has a grip here too: folders,
-    // workbooks and (below, in its own container) worksheets.
+    // Folders and workbooks get a grip; a worksheet tile deliberately does
+    // NOT (finding 5, below) — only those two kinds are legal drag sources
+    // with a reachable target anywhere in this workspace.
     expect(gripOf("folder:f1")).not.toBeNull();
     expect(gripOf("folder:f2")).not.toBeNull();
   });
 
-  it("a worksheet tile is a drag source publishing the Tree's DATASET_DND payload", () => {
+  // REVIEW ROUND (2026-09-13, finding 5): a worksheet drag's payload is
+  // `DATASET_DND`, the plot-target type only a Stage window accepts
+  // (WindowCanvas.tsx, PlotWindowFrame.tsx) — and the Tile workspace REPLACES
+  // the Stage while it is open (App.tsx's `libraryViewMode === "tiles"`
+  // branch). No folder tile accepts `DATASET_DND` either. So while Tiles is
+  // open, nothing on screen can ever receive a worksheet drag: it is a drag
+  // to nowhere. The shared hook still computes `handleProps` for a worksheet
+  // (Details' Stage sits right next to its table, so the identical drag is
+  // real there) — `LibraryTile` is the one that declines to render a grip
+  // for it, so the affordance itself is never offered instead of silently
+  // failing every time it is used.
+  it("a worksheet tile has NO drag grip in Tiles — nothing here can receive its DATASET_DND payload", () => {
     applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
-    const grip = gripOf("worksheet:a");
-    expect(grip).toHaveAttribute("draggable", "true");
-    const setData = vi.fn();
-    fireDrag(grip, "dragstart", { types: [], getData: () => "", setData, effectAllowed: "" });
-    expect(setData).toHaveBeenCalledWith(DATASET_DND, "a");
-    expect(useApp.getState().activeDrag).toEqual({ kind: "dataset", id: "a" });
+    const tile = tileFor("worksheet:a");
+    expect(tile).not.toBeNull();
+    expect(gripOf("worksheet:a")).toBeNull();
+    expect(tile.querySelector("[draggable]")).toBeNull();
+  });
+
+  it("a worksheet tile still has no grip when it is part of a live multi-selection", () => {
+    applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
+    applyToStore(() =>
+      useApp.setState({ datasets: [worksheet("a", "w", 0), worksheet("b", "w", 1)] }),
+    );
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    applyToStore(() => useApp.getState().selectIds(["a", "b"]));
+
+    expect(gripOf("worksheet:a")).toBeNull();
+    expect(gripOf("worksheet:b")).toBeNull();
+    // The bulk move route is unaffected: still the tile menu's "Move to …".
+    expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
   });
 
   it("the grip publishes the kind-matched payload for folders and workbooks", () => {
@@ -320,28 +344,6 @@ describe("LibraryTiles — L1.4 drop target parity", () => {
     expect(useApp.getState().history).toHaveLength(historyBefore);
   });
 
-  it("a drag of a SELECTED worksheet tile moves only that node — Details does the same", () => {
-    // Details' drag carries one entityId in one dataTransfer slot and has no
-    // multi-selection variant; Tiles mirrors that exactly rather than
-    // inventing a bulk drag Details and the Tree do not have. The keyboard/AT
-    // and menu route to a bulk move stays "Move N selected to …".
-    applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
-    applyToStore(() =>
-      useApp.setState({ datasets: [worksheet("a", "w", 0), worksheet("b", "w", 1)] }),
-    );
-    render(<LibraryWorkspace onClose={vi.fn()} />);
-    applyToStore(() => useApp.getState().selectIds(["a", "b"]));
-
-    const setData = vi.fn();
-    fireDrag(gripOf("worksheet:a"), "dragstart", { types: [], getData: () => "", setData, effectAllowed: "" });
-
-    expect(setData).toHaveBeenCalledTimes(1);
-    expect(setData).toHaveBeenCalledWith(DATASET_DND, "a");
-    expect(useApp.getState().activeDrag).toEqual({ kind: "dataset", id: "a" });
-    // The selection is untouched by the drag.
-    expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
-  });
-
   it("right-click on an ALREADY-SELECTED tile keeps the multi-selection (Details' selectForMenu rule)", () => {
     applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
     applyToStore(() =>
@@ -356,53 +358,108 @@ describe("LibraryTiles — L1.4 drop target parity", () => {
   });
 });
 
+// REVIEW ROUND (2026-09-13, finding 3): the prior version of this block
+// asserted the OPPOSITE of what is asserted below — that a drag whose source
+// scrolled out of the window "cancelled cleanly". That was the regression:
+// cancelling on unmount meant `legalDrag` (which requires `activeDrag !=
+// null`) went false the moment the source scrolled away, so every folder
+// silently refused a drop that, before the drag/drop commit, would have
+// completed. The contract is now the opposite — the drag SURVIVES its
+// source's unmount, and only a real terminal signal (a `drop` that commits
+// a move, or a `dragend` with nothing to drop on) ends it. Folder tiles
+// stand in for worksheet tiles here because a worksheet tile no longer has a
+// grip in Tiles at all (finding 5, above) — folders and workbooks are the
+// only kinds with a reachable target to prove survival against.
 describe("LibraryTiles — L1.4 drag under virtualization", () => {
   const MANY = VIRTUALIZE_ABOVE + 20;
 
-  /** A workbook container holding enough worksheets to virtualize. */
-  function seedVirtualized(): void {
-    useApp.setState({
-      datasets: Array.from({ length: MANY }, (_, i) => worksheet(`ws${i}`, "w", i)),
-      librarySelection: { kind: "workbook", id: "w" },
-    });
+  /** Enough root-level folders to force the grid to virtualize, plus one
+   *  more, ordered last, to serve as a drop target that a large scroll
+   *  keeps inside the rendered window (folders sort before the fixture's
+   *  unfoldered workbook regardless of `order` — libraryHierarchy.ts's
+   *  section band — so this stays the second-to-last item overall). */
+  function seedVirtualizedFolders(): FolderNode[] {
+    const many = Array.from({ length: MANY }, (_, i) => folder(`vf${i}`, `Folder ${i}`, null, i));
+    return [...many, folder("vtarget", "Target", null, MANY)];
   }
 
-  it("a drag whose SOURCE tile is virtualized out mid-drag cancels cleanly and never throws", () => {
-    applyToStore(seedVirtualized);
+  const SCROLL_PAST_END = 1_000_000;
+
+  it("a drag whose SOURCE tile scrolls out of the virtualized window still completes when dropped on a folder", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
-    expect(tileFor("worksheet:ws0")).not.toBeNull();
+    expect(tileFor("folder:vf0")).not.toBeNull();
 
-    fireDrag(gripOf("worksheet:ws0"), "dragstart", transfer(DATASET_DND, "ws0"));
-    expect(useApp.getState().activeDrag).toEqual({ kind: "dataset", id: "ws0" });
+    fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // Scroll far enough that the source tile's row leaves the window and
-    // unmounts — the browser then has no element left to fire `dragend` on.
+    // Scroll far enough that the source tile leaves the window and unmounts
+    // — the browser then has no element left to fire a local `dragend` on.
     const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
     expect(() =>
       act(() => {
-        scroller.scrollTop = 4000;
+        scroller.scrollTop = SCROLL_PAST_END;
         fireEvent.scroll(scroller);
       }),
     ).not.toThrow();
+    expect(tileFor("folder:vf0")).toBeNull();
+    // The drag SURVIVES the unmount — before this fix `activeDrag` would
+    // already be null here, and the drop below would be refused.
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    expect(tileFor("worksheet:ws0")).toBeNull();
-    // Cancelled cleanly: nothing is left glowing as a drop candidate.
+    const target = tileFor("folder:vtarget");
+    expect(target, "the drop target must still be in the rendered window").not.toBeNull();
+    fireDrag(target, "dragover", transfer(FOLDER_DND, "vf0"));
+    fireDrag(target, "drop", transfer(FOLDER_DND, "vf0"));
+
+    // The SAME store action every other drop test in this file checks.
+    expect(useApp.getState().folders.find((f) => f.id === "vf0")!.parentId).toBe("vtarget");
+    // The document-level catch clears the published drag right after — it
+    // must be CAPTURE-phase: the target's own onDrop calls
+    // `stopPropagation()` once it commits, which would suppress a bubble-
+    // phase listener and leave this permanently set.
     expect(useApp.getState().activeDrag).toBeNull();
   });
 
-  it("an unmount during someone ELSE's drag clears nothing", () => {
-    applyToStore(seedVirtualized);
+  it("scrolling OTHER tiles in and out of the window during an active drag never clears activeDrag by itself", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
-    // A drag that belongs to a node which is NOT in the rendered window.
-    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "f1" }));
+    // A drag that belongs to a node which is not even in the rendered window.
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "vf0" }));
     const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
     act(() => {
-      scroller.scrollTop = 4000;
+      scroller.scrollTop = SCROLL_PAST_END;
       fireEvent.scroll(scroller);
     });
 
-    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+  });
+
+  it("a drag that ends with no drop clears activeDrag through the document-level dragend catch, even after its source unmounted", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+    expect(tileFor("folder:vf0")).toBeNull(); // no element left to fire dragend on
+
+    // A real browser still ends the drag operation even though its source
+    // node is detached — the terminal signal is caught at `document` instead
+    // of relying on the (now-gone) source's own onDragEnd.
+    act(() => {
+      const evt = new Event("dragend", { bubbles: true, cancelable: true });
+      Object.defineProperty(evt, "dataTransfer", { value: transfer(FOLDER_DND, "vf0"), configurable: true });
+      document.dispatchEvent(evt);
+    });
+
+    expect(useApp.getState().activeDrag).toBeNull();
   });
 });
 
@@ -424,6 +481,25 @@ describe("LibraryTiles — L1.4 cues are painted, not just classed", () => {
       .filter((r) => declares(r.body, "opacity", "1") && reachesOnHover(r.selector, grip))
       .map((r) => r.selector);
     expect(revealing, "no stylesheet rule raises the Tiles grip's opacity — it is invisible").not.toEqual([]);
+  });
+
+  // Nit N1 (review round): at `opacity: 0` the grip was still an absolutely
+  // positioned element sitting over the tile's top-left corner, so it ate a
+  // ~12x16px dead zone of the tile body's own click/browse target even while
+  // invisible. `pointer-events` must be `none` at rest and `auto` again once
+  // the SAME hover that reveals the grip is active.
+  it("the tile grip has no pointer-events dead zone at rest, and regains them on tile hover", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const grip = gripOf("workbook:w");
+    const rules = flatRules(SHELL_CSS);
+
+    expect(
+      rules.some((r) => r.selector === ".qzk-tile-grip" && declares(r.body, "pointer-events", "none")),
+    ).toBe(true);
+    const reenabling = rules
+      .filter((r) => declares(r.body, "pointer-events", "auto") && reachesOnHover(r.selector, grip))
+      .map((r) => r.selector);
+    expect(reenabling, "no rule restores pointer-events on the grip when its tile is hovered").not.toEqual([]);
   });
 
   it("the grip is positioned OUT OF FLOW so it cannot change the measured tile height", () => {

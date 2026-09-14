@@ -741,8 +741,9 @@ Library presentation without changing organization or duplicating objects.
   `dnd.ts`'s three payload types and `useDetailsDragDrop.ts`'s "into"-only
   contract (a tile grid has no above/below band either).
   - [x] **Tiles drag/drop (2026-09-13) — the residual above is CLOSED, and
-    with it the parent box.** A `.qzk-drag-handle` grip on every folder,
-    workbook and worksheet tile is the ONLY `draggable` element in the grid,
+    with it the parent box.** A `.qzk-drag-handle` grip is the ONLY
+    `draggable` element in the grid — on every folder and workbook tile (a
+    worksheet tile does NOT get one; see the review-round paragraph below) —
     and a folder tile is an "into" drop target. The contract is not a mirror
     of Details', it IS Details': `useTileDragDrop.ts` contains no drag logic
     at all, only a view-neutral re-export of `useDetailsDragDrop`, whose body
@@ -762,13 +763,14 @@ Library presentation without changing organization or duplicating objects.
     carries one entityId and neither the Tree nor Details has a bulk drag; the
     bulk route stays the menu's "Move N selected to …". Two fixes fell out,
     both in the SHARED hook so Details gets them too: a drag whose source row
-    or tile is virtualized out mid-drag now cancels cleanly (the element
-    `dragend` would have fired on is gone, so `activeDrag` used to stay set
-    and leave every folder glowing after the pointer was released), and the
-    three stylesheet-assertion helpers both parity suites use now live once in
+    or tile is virtualized out mid-drag used to cancel via a per-row unmount
+    effect (**SUPERSEDED — see the 2026-09-13 review-round paragraph below,
+    this was itself a regression**), and the three stylesheet-assertion
+    helpers both parity suites use now live once in
     `styles/cssRules.testkit.ts` instead of drifting in two copies. 24 DOM-
-    and stylesheet-layer tests in `LibraryTiles.parity.test.tsx`, each
-    sabotage-verified against 19 mutations.
+    and stylesheet-layer tests in `LibraryTiles.parity.test.tsx` at merge,
+    each sabotage-verified against 19 mutations (counts moved again in the
+    review round below).
   - What this bullet does NOT claim. Two GESTURE differences remain, both
     deliberate and neither one of the seven verbs: Tiles collects a rename
     through the modal `askParams` prompt while Tree and Details use an
@@ -780,7 +782,81 @@ Library presentation without changing organization or duplicating objects.
     Thumbnail/rapid-switching cancellation stays an E-c concern, not an L1.4
     one. Spring-loaded folders (hover a folder tile mid-drag to browse into
     it) were NOT added: the Tree does not have them either, and adding them to
-    one view would be a new divergence, not parity.
+    one view would be a new divergence, not parity. **Added in the 2026-09-13
+    review round below: a worksheet tile has NO drag grip in Tiles at all** —
+    unlike the other six kinds' drag/drop, this one verb is NOT at parity for
+    worksheets, deliberately, because there is nowhere in Tiles for its
+    `DATASET_DND` payload to land.
+  - [x] **Tiles drag/drop — adversarial review round (2026-09-13).** Five
+    findings, two of them behavioral, against the bullet above.
+    **F3 (CONFIRMED regression):** the per-row unmount-cancel effect this
+    bullet described as "cancels cleanly" instead broke the flow
+    virtualization exists for — scrolling a drag's SOURCE row/tile out of the
+    rendered window cleared `activeDrag` right there (overscan is only 2
+    tile-rows / 6 Details rows), so every folder in view then refused the
+    drop that followed, silently (`legalDrag` requires `activeDrag != null`).
+    Fixed by moving the cancel from the per-row hook to the CONTAINER
+    (`useDetailsDragDropContext`, called once per table/grid): one CAPTURE-
+    phase `dragend` and one CAPTURE-phase `drop` listener on `document`,
+    installed only while a drag is in flight, clear it unconditionally.
+    Capture (not bubble) matters — a committed move's `onDrop` calls
+    `event.stopPropagation()`, which would silence a bubble-phase document
+    listener for exactly the success case; capture runs before the target is
+    even reached, so it cannot be skipped. `activeDrag` now survives its
+    source's unmount and the drag completes normally on drop; DOM-tested in
+    both `LibraryTiles.parity.test.tsx` and `LibraryDetails.parity.test.tsx`
+    (the hook is shared) with a scroll-past-the-source-then-drop case, a
+    scroll-of-unrelated-tiles case, and a dragend-with-no-drop case fired
+    directly at `document` (simulating a fully detached source). **F4
+    (latent, StrictMode):** the removed per-row effect assigned ownership
+    during RENDER (`ownsDragRef.current = …`), so a mount → cleanup → mount
+    under `<StrictMode>` could cancel a drag the mounting node owned; moot
+    now that the ref and the effect are gone entirely, not merely reordered.
+    **F5 (product decision — TAKEN):** a worksheet tile's grip in Tiles was a
+    drag to nowhere — its `DATASET_DND` payload only a Stage window accepts,
+    and the Tile workspace REPLACES the Stage while open, so nothing on
+    screen could ever receive it. Chose the reviewer's preferred fix over
+    recording it as a residual: `LibraryTile.tsx` no longer renders a grip for
+    `node.kind === "worksheet"` (the shared hook still computes `handleProps`
+    for one, since the identical grip is a real gesture in Details); the two
+    parity tests that expected it were replaced with tests asserting its
+    absence, including under a live multi-selection. **Nits taken:** N1 — the
+    grip's `opacity: 0` at rest left it `pointer-events: auto`, eating a
+    ~12x16px dead zone of the tile's own click/browse target; now
+    `pointer-events: none` until the tile hover that reveals it.
+    N2 — clarifying, not a text change: the grip's a11y (`aria-hidden`, no
+    tab stop) follows DETAILS, not the Tree (whose `FolderRow` grips ARE
+    focusable); the DROP semantics (payload types, legality, cue classes, the
+    two store actions) follow the Tree/Details SHARED hook. Only the original
+    commit's subject line conflated the two. N3 — `{...dnd.rowProps}` now
+    spreads before the tile's own explicit handlers, so a future same-named
+    prop is decided by the handler visibly written below rather than silently
+    overwritten (today's two sets are disjoint; this guards a collision that
+    does not yet exist). N4 (bundle claim, below) taken; nothing else changed.
+    **Bundle (F1/F2 — CONFIRMED wrong, corrected):** the original body dated
+    its "+7 B" delta against `2920e34a`, four commits back from `b0596cbf`,
+    not its real parent — and its explanation ("what sharing buys… a real
+    second copy would have cost ~1 kB") assumed the Library is eager, which it
+    is not: `App.tsx` lazy-loads `LibraryWorkspace`, `Library.tsx` lazy-loads
+    `LibraryTree`/`LibraryDetails`, so `LibraryTile.tsx`,
+    `useDetailsDragDrop.ts` and the Tiles-scoped `shell.css` rules are all
+    reached exclusively through those seams — the eager-bundle metric cannot
+    see a duplicated hook, or this fix, either way. Measured directly: this
+    review round's real parent (`git rev-parse HEAD~1` = `0931637d`) builds to
+    916,112 B eager; this round's own tree ALSO measures 916,112 B eager —
+    0 B delta, exactly as the lazy-loading argument predicts, not a
+    coincidence. Gate: `tsc -b --force` and `eslint --max-warnings=0` clean;
+    scoped `vitest run src/components/Library src/architecture.test.ts` 36
+    files / 533 tests, all green; `LibraryTiles.parity.test.tsx` now 26 tests
+    (was 24 — net +2: -2 worksheet-drag tests, +2 worksheet-no-grip tests,
+    the 2-test virtualization block became 3, +1 pointer-events test) and
+    `LibraryDetails.parity.test.tsx` 30 (+1); `uv run pytest -q
+    tests/test_repo_integrity.py` 12 passed. Every new/rewritten test
+    sabotage-verified: reverting the container-level catch entirely, reverting
+    it to bubble-phase, reintroducing the original per-row `ownsDragRef`
+    effect alongside the fix, re-enabling the worksheet grip, and reverting
+    the `pointer-events` rule each broke the specific test(s) written against
+    it and only those, then were restored.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged

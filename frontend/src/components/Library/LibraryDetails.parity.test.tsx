@@ -537,3 +537,47 @@ describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
     expect(reopened!.value).toBe("Half typed");
   });
 });
+
+// REVIEW ROUND (2026-09-13, finding 3): useDetailsDragDrop.ts is shared
+// verbatim with the Tile workspace (useTileDragDrop.ts is a re-export), so
+// the fix belongs here too and this is the Details half of the same proof —
+// see LibraryTiles.parity.test.tsx's "drag under virtualization" block for
+// the Tiles half and the fuller regression writeup.
+describe("LibraryDetails — L1.4 drag survives its source scrolling out of the window", () => {
+  it("a drag whose SOURCE row scrolls out of the virtualized window still completes when dropped on a folder", () => {
+    applyToStore(() =>
+      useApp.setState({ datasets: Array.from({ length: 4000 }, (_, i) => dataset(`d${i}`, `run-${i}.csv`, i)) }),
+    );
+    render(<Harness />);
+    expect(rowFor("workbook:w")).not.toBeNull();
+
+    const grip = rowFor("workbook:w").querySelector(".qzk-drag-handle") as HTMLElement;
+    const payload = { ...transfer(WORKBOOK_DND, "w"), effectAllowed: "" };
+    fireDrag(grip, "dragstart", payload);
+    expect(useApp.getState().activeDrag).toEqual({ kind: "workbook", id: "w" });
+
+    // Scroll far enough that the source row leaves the window and unmounts —
+    // the browser then has no element left to fire a local `dragend` on.
+    const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.scroll(panel, { target: { scrollTop: 1_000_000 } });
+    expect(rowFor("workbook:w"), "the source row must really be gone, or this proves nothing").toBeNull();
+    // The drag SURVIVES the unmount — before this fix a per-row unmount
+    // effect cleared `activeDrag` right here, and the drop below would have
+    // been silently refused.
+    expect(useApp.getState().activeDrag).toEqual({ kind: "workbook", id: "w" });
+
+    const target = rowFor("folder:f2");
+    expect(target, "the drop target must still be in the rendered window").not.toBeNull();
+    fireDrag(target, "dragover", payload);
+    fireDrag(target, "drop", payload);
+
+    // The SAME store action every other Details drop test in this file
+    // checks.
+    expect(useApp.getState().workbooks.find((w) => w.id === "w")!.folderId).toBe("f2");
+    // The document-level catch clears the published drag right after — it
+    // must be CAPTURE-phase: the target's own onDrop calls
+    // `stopPropagation()` once it commits, which would suppress a bubble-
+    // phase listener and leave this permanently set.
+    expect(useApp.getState().activeDrag).toBeNull();
+  });
+});

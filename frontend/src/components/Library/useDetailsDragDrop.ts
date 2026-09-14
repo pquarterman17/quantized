@@ -41,8 +41,31 @@
 // calls once and passes down (review round: the per-row hook held five
 // subscriptions, so a 40-row window carried 200). The per-row hook keeps only
 // its own hover flag.
+//
+// SECOND review round (2026-09-13, finding 3): a drag must survive its own
+// SOURCE unmounting. Both flat renderers window their rows/tiles, so
+// scrolling the dragged node out of the rendered window is the routine case
+// virtualization exists for, not an edge case — and the first cut of this fix
+// cancelled the drag right there (a per-row effect that cleared `activeDrag`
+// on unmount if the node owned it), which meant every folder silently
+// refused the drop the instant its source scrolled out of view. The cancel
+// now lives ONCE at the CONTAINER (`useDetailsDragDropContext`, called once
+// per table/grid, never per row) instead: `document`-level `dragend` and
+// `drop` listeners, installed only while a drag is in flight, are the single
+// terminal signal that ends it, regardless of whether the row that started
+// it is still mounted. They are registered on the CAPTURE phase, not bubble
+// — a legal drop's own handler calls `event.stopPropagation()` once it
+// commits the move (so a refused, ancestor-scoped drop target never sees a
+// drop meant for a more specific one), which would stop a bubble-phase
+// document listener from ever running for the success case. Capture runs
+// top-down, before that target is even reached, so it cannot be skipped by
+// anything a descendant's handler does later in the same dispatch. Neither
+// listener decides legality — the specific target's own `legalDrag` check
+// already closed over the pre-clear `activeDrag` value by the time this
+// callback fires — they only clear the published drag once the operation is
+// over.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { isSelfOrDescendant } from "../../lib/foldertree";
@@ -87,7 +110,16 @@ export interface DetailsDragDropContext {
  *  computed in the render body, and a `getState()` there would freeze the
  *  folder tree at the render that happened to precede the drag
  *  (architecture.test.ts's getState()-in-render ratchet). The two move
- *  actions are stable identities, so they add no rerenders. */
+ *  actions are stable identities, so they add no rerenders.
+ *
+ *  Also owns the CONTAINER-level drag-end catch (see the file header, finding
+ *  3): while `activeDrag` is non-null, one CAPTURE-phase `dragend` and one
+ *  CAPTURE-phase `drop` listener sit on `document` and clear it
+ *  unconditionally, before any specific row/tile even sees the event. The
+ *  per-row `onDragEnd` still fires too when its element survives, but this is
+ *  the one path that also covers a source whose row/tile has unmounted, or a
+ *  browser that never delivers the terminal event anywhere but the document
+ *  root. */
 export function useDetailsDragDropContext(): DetailsDragDropContext {
   const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const activeDrag = useLibraryStore((s) => s.activeDrag);
@@ -95,6 +127,21 @@ export function useDetailsDragDropContext(): DetailsDragDropContext {
   const workbooks = useApp((s) => s.workbooks);
   const moveFolder = useApp((s) => s.moveFolder);
   const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
+
+  useEffect(() => {
+    if (activeDrag == null) return;
+    const clear = (): void => setActiveDrag(null);
+    // Capture phase (the `true` third argument) — see the file header:
+    // it runs before any specific drop target's own handler, so a
+    // committed move's `event.stopPropagation()` can never suppress it.
+    document.addEventListener("dragend", clear, true);
+    document.addEventListener("drop", clear, true);
+    return () => {
+      document.removeEventListener("dragend", clear, true);
+      document.removeEventListener("drop", clear, true);
+    };
+  }, [activeDrag, setActiveDrag]);
+
   return { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder };
 }
 
@@ -124,24 +171,6 @@ export interface DetailsDragDrop {
 export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContext): DetailsDragDrop {
   const { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder } = ctx;
   const [hovered, setHovered] = useState(false);
-
-  // Cancel cleanly when the drag SOURCE unmounts mid-drag. Both flat
-  // renderers window their rows/tiles (useLibraryDetailsVirtualization,
-  // useTileVirtualization), so a drag that scrolls its own source out of the
-  // window destroys the element `dragend` would have fired on — React has
-  // already detached the listener, `setActiveDrag(null)` never runs, and
-  // every folder in the view stays lit at `drop-candidate` after the pointer
-  // is released. The ref (not `activeDrag` in the dep list) keeps this a
-  // mount-once effect whose cleanup clears the drag ONLY if this node still
-  // owned it, so an unmount during someone else's drag clears nothing.
-  const ownsDragRef = useRef(false);
-  ownsDragRef.current = activeDrag != null && activeDrag.id === node.entityId;
-  useEffect(
-    () => () => {
-      if (ownsDragRef.current) setActiveDrag(null);
-    },
-    [setActiveDrag],
-  );
 
   const source = dragSourceOf(node);
   const handleProps = source

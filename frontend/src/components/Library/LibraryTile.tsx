@@ -12,6 +12,20 @@
 // store actions the Details rows and the Tree rows use. There is no
 // Tiles-specific move path.
 //
+// REVIEW ROUND (2026-09-13, finding 5): a WORKSHEET tile does not render a
+// grip at all, even though the shared hook happily returns `handleProps` for
+// one (`dragSourceOf`'s `DATASET_DND` case, useDetailsDragDrop.ts). In
+// Details that grip is a real gesture — the plot-target payload lands on a
+// Stage window docked right next to the table. In Tiles there is no such
+// target: this workspace REPLACES the Stage while it is open
+// (`App.tsx`'s `libraryViewMode === "tiles"` branch), and a folder tile only
+// ever accepts `WORKBOOK_DND`/`FOLDER_DND`. A worksheet drag in Tiles is
+// therefore a drag to nowhere — nothing on screen can receive it — so
+// showing the grip would offer a gesture that always fails silently.
+// Suppressing it here (rather than making the hook lie about the kind) is
+// honest: the keyboard/AT route to the same move is unaffected, since it was
+// always the tile menu's "Move to …" items, not this grip.
+//
 // Two invariants the grip is careful about:
 //   * It is not a tab stop and not an AT target (`aria-hidden`, no tabindex),
 //     exactly like the Details grip. The grid's keyboard model is a ROVING
@@ -80,6 +94,14 @@ export default function LibraryTile({
       aria-label={`${node.name}, ${KIND_LABEL[node.kind]}`}
       aria-setsize={setSize}
       aria-posinset={posInSet}
+      // Nit N3 (review round): spread FIRST. JSX resolves same-named props by
+      // SOURCE ORDER — last one wins — so spreading `rowProps` before the
+      // tile's own explicit handlers means a future name collision (e.g. an
+      // `onDragOver` added here) is decided by the handler visibly written
+      // below, not silently overwritten by the hook's. Today's two sets are
+      // disjoint (drag-target props vs. click/keyboard), so this changes
+      // nothing yet.
+      {...dnd.rowProps}
       onClick={() => onSelect(node)}
       onDoubleClick={() => onOpen(node)}
       onFocus={() => onFocus(node.key)}
@@ -106,9 +128,11 @@ export default function LibraryTile({
           onMoveFocus(node.key, -1);
         }
       }}
-      {...dnd.rowProps}
     >
-      {dnd.handleProps && (
+      {/* Finding 5: no grip for a worksheet tile — Tiles has no reachable
+          drop target for its DATASET_DND payload while the Stage it targets
+          is replaced by this very workspace (see the header note). */}
+      {dnd.handleProps && node.kind !== "worksheet" && (
         <span className="qzk-drag-handle qzk-tile-grip" title="Drag to move" aria-hidden="true" {...dnd.handleProps}>
           ⠿
         </span>

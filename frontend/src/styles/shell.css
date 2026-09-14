@@ -430,9 +430,16 @@ body {
    badge is sized in tokens and colours, never literals. The cue rules come
    AFTER `.qzk-library-tile:hover` on purpose: both are (0,2,0) specificity, so
    source order is what lets `dropinto`'s background win while the pointer is
-   over the tile. Outline (not border) so the cue never reflows the grid. */
-.qzk-tile-grip { position: absolute; top: 6px; left: 6px; z-index: 1; padding: 1px 3px; border-radius: var(--radius-sm); background: var(--surface-1); box-shadow: var(--shadow-sm); }
+   over the tile. Outline (not border) so the cue never reflows the grid.
+   REVIEW ROUND (nit N1): at `opacity: 0` the grip is invisible but still an
+   absolutely-positioned element sitting over the tile's top-left corner, so
+   it silently ate a ~12x16px dead zone of the tile body's own click/browse
+   target. `pointer-events: none` at rest, `auto` again once the tile hover
+   that reveals it is active, closes the dead zone without touching the
+   opacity reveal timing. */
+.qzk-tile-grip { position: absolute; top: 6px; left: 6px; z-index: 1; padding: 1px 3px; border-radius: var(--radius-sm); background: var(--surface-1); box-shadow: var(--shadow-sm); pointer-events: none; }
 .qzk-library-tile:hover .qzk-drag-handle { opacity: 1; }
+.qzk-library-tile:hover .qzk-tile-grip { pointer-events: auto; }
 .qzk-library-tile.drop-candidate { outline: 1px dashed var(--accent); outline-offset: -2px; }
 .qzk-library-tile.dropinto { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--surface-2); }
 
