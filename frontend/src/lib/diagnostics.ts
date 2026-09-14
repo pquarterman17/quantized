@@ -72,13 +72,21 @@ export interface DiagnosticsSnapshot {
    *  reduced to a count and a byte total. Present so an unrecognised slot
    *  filling the quota is still visible, without printing its name. */
   otherStorage: { slots: number; bytes: number };
-  /** The server this SPA is talking to. A desktop launch pairs a bundled SPA
-   *  with a bundled backend, so a version mismatch here is a real and
-   *  otherwise invisible cause of "the button does nothing" — the frontend
-   *  build alone cannot show it. `reachable: false` covers both a dead
-   *  backend and an offline/file-served page, which is itself the answer to
-   *  a whole class of reports. Server-generated constants, never user data. */
-  backend: { reachable: boolean; app: string | null; version: string | null };
+  /** The server this SPA is talking to, cached from the app's OWN startup
+   *  handshake (`store/backendHealth.ts`) rather than re-probed when the
+   *  report is copied — see that module's header for why. A desktop launch
+   *  pairs a bundled SPA with a bundled backend, so a version mismatch here
+   *  is a real and otherwise invisible cause of "the button does nothing" —
+   *  the frontend build alone cannot show it. `reachable: false` covers
+   *  THREE cases, indistinguishable on purpose because all three answer the
+   *  same triage question ("this SPA could not name a server"): a dead
+   *  backend, an offline/file-served page, and a click that lands before the
+   *  startup handshake has answered. `ageSec` (null only when `reachable` is
+   *  false) is how long ago the handshake settled, not how long ago the
+   *  report was taken — the two diverge whenever "Copy diagnostics" is
+   *  clicked well after startup. Server-generated constants, never user
+   *  data. */
+  backend: { reachable: boolean; app: string | null; version: string | null; ageSec: number | null };
   /** How this session is doing right now: states, counts and ages only — no
    *  message text (see `store/toasts.ts`'s counter header for why the
    *  obvious "last N messages" would undo this module's whole promise, and
@@ -121,11 +129,22 @@ const yesNo = (b: boolean): string => (b ? "yes" : "no");
  *  `store/backendHealth.ts`'s header notes the sibling `fermiviewer` serves
  *  the same shape on the same default port. Pasted verbatim with no clamp,
  *  a value containing e.g. `"\n## Session health"` could break this report's
- *  column layout or forge a section heading. Strip control characters
- *  (newlines included) and cap the length — the identity string is still
- *  legible; it just cannot rewrite the report around it. */
+ *  column layout or forge a section heading. Strip every Unicode control,
+ *  format, line-separator and paragraph-separator character — not just the
+ *  ASCII C0 range — since U+2028/U+2029 (line/paragraph separator), U+0085
+ *  (NEL) are forced line breaks under CSS Text and U+202E (right-to-left
+ *  override) reorders rendered text, none of which the old `\x00-\x1f`
+ *  range caught — and cap the length. `String(v)` first: this string is
+ *  declared `string | null` by the type above, but it is filled from an
+ *  untrusted server response cast with `as` in `lib/api.ts`, so a hostile or
+ *  buggy backend can hand this function a number or object at runtime; a
+ *  bare `v.replace` would then throw and delete the WHOLE report (P3.4
+ *  review round, finding 1) instead of degrading to a printed value. */
 function sanitizeServerString(v: string): string {
-  return v.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 64);
+  return String(v)
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, " ")
+    .trim()
+    .slice(0, 64);
 }
 
 /** Ages, never timestamps: "41 s ago" answers the triage question ("how long
@@ -137,6 +156,20 @@ function sanitizeServerString(v: string): string {
  *  reconstructible relative to it — readability, not concealment, is the
  *  reason.) */
 const age = (seconds: number | null): string => (seconds === null ? "never" : `${seconds} s ago`);
+
+/** Renders the `backend` row. `reachable: false` is rendered identically
+ *  whether the startup handshake failed or simply has not answered yet (see
+ *  the `backend` field's doc on `DiagnosticsSnapshot`) — both are the same
+ *  fact to the report's reader. Sanitizes BEFORE checking for an empty
+ *  result, not after (P3.4 review round, nit 7): an identity that is
+ *  nothing but control characters must read as "unknown app", not as a
+ *  blank slot that looks like the field was simply omitted. */
+function backendRow(b: DiagnosticsSnapshot["backend"]): string {
+  if (!b.reachable) return "unreachable or not yet answered";
+  const app = sanitizeServerString(b.app ?? "") || "unknown app";
+  const version = sanitizeServerString(b.version ?? "") || "unknown version";
+  return `${app} ${version} (startup handshake, ${age(b.ageSec)})`;
+}
 
 /** Render a plain-text diagnostic bundle. Deterministic: the same snapshot
  *  always produces the same text, so it diffs cleanly across reports. */
@@ -156,14 +189,7 @@ export function buildDiagnostics(s: DiagnosticsSnapshot): string {
       ["shell", s.platform.desktop ? "desktop" : "browser"],
       ["language", s.platform.language],
       ["user agent", s.platform.userAgent],
-      [
-        "backend",
-        s.backend.reachable
-          ? `${s.backend.app ? sanitizeServerString(s.backend.app) : "unknown app"} ${
-              s.backend.version ? sanitizeServerString(s.backend.version) : "unknown version"
-            }`
-          : "unreachable",
-      ],
+      ["backend", backendRow(s.backend)],
     ]),
     "",
     section("Display", [

@@ -67,7 +67,19 @@ export default function App() {
     // synchronously at click time instead of re-probing `/api/health` itself.
     health()
       .then((info) => {
-        recordBackendHealth({ reachable: true, app: info.app ?? null, version: info.version ?? null });
+        // Guard the recorded shape at the boundary rather than trusting
+        // `lib/api.ts`'s `as`-cast response type (P3.4 review round, finding
+        // 1): a hostile or buggy backend can answer with `app`/`version` of
+        // any JSON type, and `BackendIdentity` promises callers a real
+        // `string | null`. `sanitizeServerString` in `lib/diagnostics.ts`
+        // now also coerces defensively, but recording `null` for a
+        // non-string here keeps `BackendInfo` honest at its source instead
+        // of relying on that second layer alone.
+        recordBackendHealth({
+          reachable: true,
+          app: typeof info.app === "string" ? info.app : null,
+          version: typeof info.version === "string" ? info.version : null,
+        });
         setStatus("backend ready");
       })
       .catch(() => {

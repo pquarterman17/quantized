@@ -9,7 +9,7 @@
 // label, an absolute project path, real measurements — and asserts none of it
 // reaches the text a user copies.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct, Dataset } from "../lib/types";
 import { useAutosaveStatus } from "./autosaveStatus";
@@ -214,17 +214,37 @@ describe("session health reaches the bundle as state, never as message text", ()
     // App.tsx calls lib/api.ts's health() once at mount and hands the result
     // to recordBackendHealth; this simulates that settling before the click.
     recordBackendHealth({ reachable: true, app: "quantized", version: "9.9.9-test" });
-    expect(diagnosticsText()).toMatch(/backend\s+quantized 9\.9\.9-test/);
+    // Read back immediately: elapsed time between the record above and the
+    // read below is sub-millisecond, so the age rounds to 0.
+    expect(diagnosticsText()).toMatch(/backend\s+quantized 9\.9\.9-test \(startup handshake, 0 s ago\)/);
   });
 
-  it("says 'unreachable' when the startup probe failed or has not answered yet", () => {
+  it("says 'unreachable or not yet answered' before the startup handshake has ever recorded anything (P3.4 review round F2)", () => {
     // resetBackendHealthForTests() in beforeEach already leaves this at its
     // default — the same state as a fresh session before App.tsx's health()
     // has settled, or after it rejected. No network access happens here.
     const text = diagnosticsText();
-    expect(text).toMatch(/backend\s+unreachable/);
+    expect(text).toMatch(/backend\s+unreachable or not yet answered/);
     // The rest of the report must still be there — an offline backend is a
     // thing to REPORT, not a reason to have no report.
     expect(text).toContain("# Quantized diagnostics");
+  });
+
+  it("ages the recorded backend identity between the handshake and the click, rather than reading it as still-live state (P3.4 review round F2)", () => {
+    // The row used to be rendered as if the startup handshake were still
+    // answering right now — a backend that died minutes ago read as "fine",
+    // and a healthy one read as "unreachable" for the whole window before
+    // the handshake settled. This proves the row instead carries its own
+    // age: recording at one moment and reading much later must show a large,
+    // correct age, not 0 and not "unreachable".
+    vi.useFakeTimers();
+    try {
+      recordBackendHealth({ reachable: true, app: "quantized", version: "0.25.0" });
+      vi.advanceTimersByTime(42 * 60 * 1000); // 42 minutes pass before the click
+      const text = diagnosticsText();
+      expect(text).toMatch(/backend\s+quantized 0\.25\.0 \(startup handshake, 2520 s ago\)/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

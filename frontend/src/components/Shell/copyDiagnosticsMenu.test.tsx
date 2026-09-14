@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MenuBar from "./MenuBar";
 import { buildAppActions } from "../../appCommands";
 import type { DataStruct, Dataset } from "../../lib/types";
+import { resetBackendHealthForTests } from "../../store/backendHealth";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../../lib/clipboard", () => ({ copyText: vi.fn() }));
@@ -48,8 +49,14 @@ beforeEach(() => {
   // P3.4 review round (2026-09-14): the command no longer probes /api/health
   // itself — it reads store/backendHealth.ts's cached value synchronously,
   // and this test never mounts App.tsx (only MenuBar), so that cache stays
-  // at its default "unreachable" throughout. No fetch stub is needed; none
-  // of these assertions depend on the backend field.
+  // at its default "unreachable or not yet answered" throughout. No fetch
+  // stub is needed; none of these assertions depend on the backend field.
+  // Reset explicitly (re-review nit 9) rather than relying on no test in
+  // this file ever calling recordBackendHealth: a module-level `let` is
+  // process state, not per-test state, and a later test added here that DID
+  // record something would otherwise leak into every test that runs after
+  // it in the same file.
+  resetBackendHealthForTests();
   useApp.setState({
     datasets: [{ id: "d1", name: SECRET_NAME, data, sourcePath: SECRET_PATH } as Dataset],
     activeId: "d1",
@@ -101,7 +108,7 @@ describe("Help ▸ Copy diagnostics", () => {
     expect(text).toMatch(/datasets\s+1/);
   });
 
-  it("completes the clipboard write without awaiting any network call (P3.4 review round F3)", async () => {
+  it("removes the app's own /api/health round-trip from the click path (P3.4 review round F3, narrowed in the re-review)", async () => {
     // A `fetch` that never resolves stands in for a hung/slow backend — the
     // same shape App.tsx's own startup `health()` probe would take if the
     // server never answered. Before this fix, the command awaited a fresh
@@ -109,12 +116,28 @@ describe("Help ▸ Copy diagnostics", () => {
     // sat directly between the click and `navigator.clipboard.writeText`,
     // which can drop the transient user-activation the Clipboard API
     // requires (see store/backendHealth.ts's header). The command now reads
-    // a cached value synchronously and never calls `fetch` at all, so a
-    // hung `fetch` must not be able to stall it.
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    // a cached value synchronously and never calls `fetch` at all — that is
+    // the property this test proves. (What it does NOT prove, per the
+    // re-review: the click path's one remaining `await`, the lazily-imported
+    // `store/diagnostics.ts` renderer chunk, still runs here — vitest
+    // resolves a dynamic import from the in-process module graph instantly,
+    // unlike a real network-served chunk on a slow connection. MenuBar's
+    // `warmDiagnosticsChunk` starts that fetch when the Help menu opens, so
+    // in production only the FIRST "Copy diagnostics" click of a session can
+    // still be waiting on it — a hazard one order of magnitude rarer than
+    // the per-click `/api/health` probe this test guards against, and not a
+    // regression this test is positioned to catch.)
+    const hungFetch = vi.fn(() => new Promise(() => {}));
+    vi.stubGlobal("fetch", hungFetch);
     await clickCopyDiagnostics();
+    // Direct, unconditional assertion (re-review nit 10) rather than only
+    // inferring "no network call" from `waitFor` timing out at its default —
+    // that would prove "less than ~1 s elapsed", not "fetch was never
+    // called". A bare `.not.toHaveBeenCalled()` outside `waitFor` is exempt
+    // from the weak-wait ratchet (CLAUDE.md's Test determinism notes).
+    expect(hungFetch).not.toHaveBeenCalled();
     const text = copied();
     expect(text).toContain("# Quantized diagnostics");
-    expect(text).toMatch(/backend\s+unreachable/);
+    expect(text).toMatch(/backend\s+unreachable or not yet answered/);
   });
 });

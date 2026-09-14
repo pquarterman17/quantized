@@ -4189,10 +4189,13 @@ Original acceptance criteria (unchanged):
   CLASSIFICATION against the rubric below, not a grep figure — the previous
   wording of this box implied it had the same "measured by grep" provenance
   as the 132/139, which is not reproducible with one grep. The reproducible
-  grep bounds it is built from: **60** `setStatus(` sites whose own line
+  grep bounds it is built from: **52** `setStatus(` sites whose own line
   carries failure wording (`fail|error|could not|unable|refus|cannot|
-  unavailable|invalid|nothing`, case-insensitive) and **26** inside a
-  brace-matched `catch` block.
+  unavailable|invalid|nothing`, case-insensitive; corrected in the 2026-09-14
+  re-review — **60** only reproduces against the paren-less `setStatus`
+  pattern, a 334-site superset that also counts declarations, types and
+  comments, not the 263-site `setStatus(` figure this box is about) and
+  **26** inside a brace-matched `catch` block.
 
   Rubric, because "all three facts in every message" would be noise in most of
   them:
@@ -4261,7 +4264,7 @@ Original acceptance criteria (unchanged):
   | Site | Missing | Now says / test |
   |---|---|---|
   | `store/importDatasets.ts:456` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
-  | `store/workspaceIO.ts:451-452` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
+  | `store/workspaceIO.ts:451-453` (msg + setStatus + toast — corrected 2026-09-14 re-review, the prior correction's 451-452 range covered msg+setStatus but dropped the toast line) | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
   | `store/reimport.ts:335` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the last STORE-MUTATING statement of the `try` (the comment originally said "the LAST statement", which is wrong — a `setStatus`/`toast` follow it; neither touches the store), so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
   | `store/useApp.ts:1712` | (a), (b) | `could not merge the selected datasets: <why> — nothing was added` (was a bare `e.message`). `addDataset` runs after the throwing call. |
   | `store/dataIntake.ts:175-177` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
@@ -4346,8 +4349,9 @@ Original acceptance criteria (unchanged):
      `ReportPanel.tsx:148` — are now in the audit table above with rubric
      verdicts (all PASS). The "83 failure `setStatus(` sites" figure was also
      presented as "measured by grep" when it is a classification; the box
-     above now says so and gives the reproducible grep bounds (263 total / 60
-     failure-worded / 26 in catch blocks).
+     above now says so and gives the reproducible grep bounds (263 total / 52
+     failure-worded / 26 in catch blocks — corrected from 60 in the 2026-09-14
+     re-review below, see nit 4 there).
   3. **PLAUSIBLE — an awaited network probe sat between the click and the
      clipboard write.** `diagnosticsText()` used to `await probeBackend()` (a
      fresh `/api/health` fetch, up to 1.5 s) on every "Copy diagnostics"
@@ -4362,9 +4366,12 @@ Original acceptance criteria (unchanged):
      dynamically-imported chunk into the eager bundle); `collectDiagnostics`/
      `diagnosticsText` read it back synchronously and `probeBackend` plus its
      1.5 s timeout are deleted outright — no sync fallback needed one, since
-     the startup probe already runs before any click is possible. `lib/api.ts`'s
-     `health()` return type widened from `{status}` to `{status, app?,
-     version?}` so `App.tsx` has the data to record.
+     the startup probe runs at startup; a click before it answers reads "not
+     yet answered" (corrected in the 2026-09-14 re-review below — the
+     original wording, "already runs before any click is possible", conflated
+     STARTING with ANSWERING). `lib/api.ts`'s `health()` return type widened
+     from `{status}` to `{status, app?, version?}` so `App.tsx` has the data
+     to record.
   4. NITs fixed: control characters stripped/length-clamped from the echoed
      backend `app`/`version` (`lib/diagnostics.ts`'s new `sanitizeServerString`
      — these are server-generated but same-origin-relative, and the sibling
@@ -4385,14 +4392,14 @@ Original acceptance criteria (unchanged):
      instead); `probeBackend`'s missing `AbortController`/`clearTimeout` is
      moot, since finding 3 deletes the function entirely; a BUG-009-style reset
      ratchet for `store/backendHealth.ts`'s new module state was considered and
-     NOT added — the precedent (`architecture.test.ts`'s "pending-guard suites
-     must reset the book-transport record", ~line 1390) exists to catch a
-     specific POISONING failure mode (a stale failure record misdirecting a
-     LATER test's assertion), which this module cannot produce: its only state
-     is a redacted `{reachable, app, version}` triple with no failure-message
-     path, and every test that touches it already resets it in `beforeEach`/
-     `afterEach`. Generalizing that ratchet to "any module state" would be new
-     test infrastructure, not a cheap nit.
+     NOT added at the time — **the stated reason was wrong and is corrected in
+     the 2026-09-14 re-review below (nit 9)**: the module state IS reachable by
+     the POISONING failure mode the precedent exists to catch (a stale
+     `{reachable: true, app, version}` left by an earlier test in the same file
+     can misdirect a later test asserting `backend unreachable`); the honest
+     reason to decline the ratchet is narrower — no test recorded backend
+     health at the time, so nothing was poisoning anything YET, not that the
+     module structurally cannot be poisoned.
 
   Sabotage (all verified failing, then reverted):
 
@@ -4420,6 +4427,162 @@ Original acceptance criteria (unchanged):
   most of its lines are comments, stripped by minification). `EAGER_JS_BUDGET`
   is 920,400 B (`check-bundle-size.mjs`), unchanged — the commit lands 3,015 B
   under budget, no pin edit owed.
+
+  **Re-review round, 2026-09-14** (an adversarial re-review of the review-
+  round commit above, `d4c06387`): found 3 CONFIRMED issues and 8 nits, all
+  fixed in one follow-up commit. Findings and fixes:
+  1. **CONFIRMED — `sanitizeServerString` turned a non-string `app`/`version`
+     into a total loss of the report.** `lib/api.ts`'s `health()` response is
+     an unchecked `as`-cast; a hostile or buggy backend answering with a
+     number or object for `app`/`version` made `v.replace` throw, and the
+     throw propagated out of `diagnosticsText()` into the command's outer
+     `.catch` — no report at all, exactly the case the sanitizer exists to
+     harden against. Fixed at BOTH layers: `sanitizeServerString` now calls
+     `String(v)` before `.replace`, and `App.tsx`'s mount effect guards the
+     recording site itself (`typeof info.app === "string" ? info.app : null`,
+     same for `version`) so `BackendInfo` stays honest at its source. Hostile
+     test extended with a `42` and a `{}` — both render as text (`"42"`,
+     `"[object Object]"`), neither throws.
+  2. **CONFIRMED — the `backend` row became a startup snapshot rendered as
+     live state.** `recordBackendHealth` has exactly one non-test caller, in
+     a mount effect that runs once; nothing ever refreshed or invalidated it,
+     so a backend that died minutes ago still read as "quantized 0.25.0" and
+     a click before the handshake settled read as "unreachable" —
+     indistinguishable from a truly dead backend. Fixed: `store/backendHealth.ts`
+     now stamps `Date.now()` at record time and computes the age at READ
+     time (not cached at record time, so it keeps growing while the report
+     sits open); the row renders `quantized 0.25.0 (startup handshake, 42 min
+     ago)`, and the unreachable case renders `unreachable or not yet
+     answered`, honestly covering THREE indistinguishable cases (dead
+     backend, offline/file-served page, click before the handshake answers)
+     instead of the two the field doc used to enumerate — `lib/diagnostics.ts`'s
+     `backend` field doc corrected to say so. The finding-3 paragraph above
+     also had the same conflation ("the startup probe already runs before
+     any click is possible") — corrected there to "runs at startup; a click
+     before it answers reads 'not yet answered'". Tests: before any
+     `recordBackendHealth` call → "not yet answered"; immediately after →
+     the timestamped row at 0 s; and (new) recording under fake timers, then
+     advancing 42 minutes before reading → the row shows 2520 s, proving the
+     age is computed at read time and not frozen at record time.
+  3. **CONFIRMED (doc-promise) — "depends on nothing but synchronous module
+     state" was false on the first click.** `commands/uiCommands.ts` still
+     does `await import("../store/diagnostics")` before building the text;
+     that chunk is deliberately excluded from the eager bundle, so in
+     production the first "Copy diagnostics" click of a session can fetch it
+     over the network inside the user gesture — the same hazard class the
+     network probe removal was for, one order of magnitude rarer (once per
+     page load). Fixed two ways: the claims in `store/backendHealth.ts`'s
+     header and the `copyDiagnosticsMenu.test.tsx` test title are narrowed to
+     "removes the app's own `/api/health` round-trip; the one remaining await
+     is the lazily-imported renderer chunk"; and `components/Shell/MenuBar.tsx`
+     now warms that chunk (`void import("../../store/diagnostics").catch(() =>
+     {})`) when the Help menu opens (a closed→open transition only, via a
+     small `onOpen` callback added to the shared `title()` helper — no static
+     or eager import, so it stays off `dist/index.html`'s modulepreload list;
+     verified by diffing the eager-ref list before/after, unchanged at 35
+     files). From the SECOND "Copy diagnostics" click of a session onward the
+     import resolves from the module cache instantly; the FIRST click of a
+     session can still be waiting on a real fetch for the chunk if the user
+     reaches the command before the warm import (started when they opened
+     Help) has finished — narrower than the pre-fix hazard (every click) but
+     not eliminated. No test guards the warm-import timing itself: vitest
+     resolves a mocked or real dynamic import from the in-process module
+     graph effectively instantly regardless of whether `warmDiagnosticsChunk`
+     ran, so an automated test cannot distinguish "warmed early" from
+     "fetched cold" the way a real network-served chunk on a slow connection
+     would — the same limitation the original review's own F3 probe used a
+     manual `vi.mock` + `sleep` harness to work around, not a per-commit test.
+  4. NIT — the census bound was not reproducible with the pattern it named:
+     the plan claimed **60** `setStatus(` sites carry failure wording, but
+     that number only reproduces against the paren-less `setStatus` pattern
+     (334 sites, a superset that also counts declarations/types/comments);
+     the reproducible figure for `setStatus(` (263 sites, matching the box's
+     other number) is **52**. Re-measured independently with a plain grep
+     over non-test `frontend/src`; both boxes above corrected to 52.
+  5. NIT — the plan's recorded gate run (99 files, 1941 passed) predates this
+     commit's own five new tests (1936 prior + 5 = 1941, i.e. it was the
+     PARENT's run). Re-measured at this commit: **100 files, 1954 passed** —
+     the delta versus 1941 includes both this round's new backend-health
+     tests and the prior round's five.
+  6. NIT — the sanitizer regex (`/[\x00-\x1f\x7f]+/g`) stripped only ASCII C0
+     controls plus DEL; U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR and
+     U+0085 NEL are ALSO forced line breaks under CSS Text, and U+202E
+     RIGHT-TO-LEFT OVERRIDE reorders rendered text — none of them were
+     caught, so a hostile backend identity pasted into a `<pre>` (a GitHub
+     issue) could still break the column layout or forge a heading. Fixed:
+     `/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu` (Unicode control + format + line/
+     paragraph separator categories). Hostile test extended with all four.
+  7. NIT — the truthiness check ran BEFORE sanitizing, so a control-
+     character-only identity (`"\n\n"`) was "present", sanitized to `""`,
+     and rendered with the app slot simply missing — indistinguishable from
+     a field that was never collected. Fixed: sanitize first, then
+     `|| "unknown app"`. New test: `"\n\n"` renders "unknown app".
+  8. NIT — one of the four re-pointed plan line refs from the prior round
+     still missed: `workspaceIO.ts:451-452` covers msg+setStatus but drops
+     the toast line at `:453`. Corrected to `451-453`.
+  9. NIT — the stated reason for declining a BUG-009-style reset ratchet on
+     `store/backendHealth.ts` was wrong: it claimed the module "cannot
+     produce" the poisoning failure mode the ratchet exists to catch, but it
+     can — a stale `{reachable: true, app, version}` left by an earlier test
+     in the same file would misdirect a later test asserting `backend
+     unreachable`, and `copyDiagnosticsMenu.test.tsx` was exactly such a
+     test, passing only because the file never called
+     `resetBackendHealthForTests`. Verified by temporarily removing that
+     call and injecting a leaked `recordBackendHealth` in an earlier test in
+     the same file: the later "unreachable" assertion failed, reproducing
+     the exact scenario described. Fixed: `resetBackendHealthForTests()`
+     added to `copyDiagnosticsMenu.test.tsx`'s `beforeEach`; the plan's
+     stated reason corrected to the honest one — no test recorded backend
+     health at the time, not that the module structurally cannot be
+     poisoned.
+  10. NIT — the network-call exclusion test asserted the property only
+      through `vi.waitFor`'s default-timeout backstop, which proves "under
+      about a second," not "fetch was never called." Added a direct,
+      unconditional `expect(hungFetch).not.toHaveBeenCalled()` outside any
+      `waitFor` (exempt from the weak-wait ratchet, which only flags
+      `waitFor(() => expect(mock).toHaveBeenCalled())`).
+  11. NIT — `BACKEND_UNREACHABLE` was an exported, unfrozen object handed out
+      by reference (`getBackendHealth()` returns it directly when nothing has
+      been recorded); any consumer that wrote to it would poison the shared
+      constant for the rest of the session. Fixed: `Object.freeze`, matching
+      the repo's frozen `DataStruct` convention. New test asserts both
+      `Object.isFrozen` and that an assignment attempt throws.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1 | `lib/diagnostics.ts`: drop `String(v)` from `sanitizeServerString` | caught — `diagnostics.test.ts`'s "renders a numeric or object backend identity as text rather than throwing" |
+  | 2a | `store/backendHealth.ts`: hardcode `ageSec = 0` instead of computing it from `recordedAt` | caught — `store/backendHealth.test.ts`'s "computes the age at READ time..." AND `store/diagnostics.test.ts`'s "ages the recorded backend identity..." |
+  | 2b | `lib/diagnostics.ts`: revert `backendRow`'s unreachable case to `"unreachable"` | caught — `diagnostics.test.ts`, `store/diagnostics.test.ts` and `copyDiagnosticsMenu.test.tsx` all fail (3 files) |
+  | 6 | `lib/diagnostics.ts`: narrow the sanitizer regex back to `/[\x00-\x1f\x7f]+/g` | caught — `diagnostics.test.ts`'s "strips control, format and line/paragraph-separator characters..." |
+  | 7 | `lib/diagnostics.ts`: check truthiness before sanitizing (revert order) | caught — `diagnostics.test.ts`'s "renders a control-character-only identity as 'unknown app'..." |
+  | 9 | `copyDiagnosticsMenu.test.tsx`: remove `resetBackendHealthForTests()` from `beforeEach` AND record a leaked backend identity in an earlier test | caught — the later "unreachable" assertion fails, reproducing the exact poisoning scenario nit 9 describes |
+  | 10 | `commands/uiCommands.ts`: reinsert a fire-and-forget `void fetch("/api/health")` in the click handler (does not stall the clipboard write) | caught by the new DIRECT assertion (`hungFetch` called once) — a `waitFor`-only check would have missed this, since nothing stalls |
+  | 11 | `store/backendHealth.ts`: drop `Object.freeze` from `BACKEND_UNREACHABLE` | caught — `store/backendHealth.test.ts`'s "freezes BACKEND_UNREACHABLE..." |
+
+  Gate: `npx tsc -b --force` clean; `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — **100 files, 1954 passed,
+  0 failed**; `uv run pytest -q tests/test_repo_integrity.py` — 12 passed.
+  `store/useApp.ts` untouched (`wc -l` 2321, unchanged, at its 2322 pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does, via a standalone byte-exact re-implementation
+  since the script itself only prints rounded kB): this commit's parent
+  (`git rev-parse HEAD~1` = `1593cdee`, the branch tip this round started
+  from) measured **917,739 B** in a scratch worktree (`git worktree add` +
+  `npm ci`); this commit (HEAD) measured **918,124 B** — **+385 B**, from the
+  doc/comment growth, the `App.tsx` guard, `MenuBar.tsx`'s `warmDiagnosticsChunk`,
+  and `backendHealth.ts`'s `recordedAt`/age arithmetic. `EAGER_JS_BUDGET` is
+  920,400 B, unchanged — the commit lands 2,276 B under budget, well clear of
+  the `EAGER_JS_BUDGET - SLACK` (880,400 B) floor that would force a lower
+  pin, no pin edit owed. Confirmed the warm import stayed lazy: `dist/assets/`
+  contains a `diagnostics-*.js` chunk that appears in neither build's
+  `index.html` (no `<script type="module">`, no `<link rel="modulepreload">`),
+  and the eager-ref list is the same 35 files before and after (three files'
+  content hashes shifted from unrelated upstream edits — `index`,
+  `contextActions`, `datasetRemoval` — no file added or removed).
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
   write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
   (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"
