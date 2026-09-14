@@ -453,6 +453,76 @@ describe("series-vs-background legibility (regression guard)", () => {
       });
     }
   });
+
+  // LIGHT-canvas twin of the dark ratchet above (2026-09-14). Same rationale:
+  // `applyPalette` writes the SAME literal hex onto `--series-N` regardless of
+  // which canvas background is in effect, and a per-window override
+  // (`PlotBg`) can pin a window to the LIGHT axes background independent of
+  // the app's global theme — so a preset colour illegible on light is just as
+  // real a bug as one illegible on dark, and was previously unratcheted.
+  //
+  // MEASURED (via `resolveDrawColor(hex, false)` against the shipped presets
+  // in `lib/palettes.ts`, contrast floor 2.2 — see `lib/contrastColor.ts`):
+  //   okabe-ito:  slot 0 #E69F00 = 2.12, slot 1 #56B4E9 = 2.18,
+  //               slot 3 #F0E442 = 1.25, slot 7 #BBBBBB = 1.81
+  //   tol-bright: slot 3 #CCBB44 = 1.84, slot 4 #66CCEE = 1.73,
+  //               slot 6 #BBBBBB = 1.81
+  //   tableau10:  slot 3 #76B7B2 = 2.16, slot 5 #EDC948 = 1.52,
+  //               slot 7 #FF9DA7 = 1.86
+  //   viridis:    slot 6 #6DCD59 = 1.88, slot 7 #FDE725 = 1.19
+  // All pre-existing (none of these presets' declared hex was changed by this
+  // commit) and none newly introduced — recorded, not fixed, same as the
+  // dark-canvas `viridis` slot 0 entry above. Matches the counts already
+  // noted in the "Shipped palette presets" header comment below (4/3/3/2).
+  const LIGHT_LEGIBILITY_SUBSTITUTIONS: Record<string, number[]> = {
+    "okabe-ito": [0, 1, 3, 7],
+    "tol-bright": [3, 4, 6],
+    tableau10: [3, 5, 7],
+    viridis: [6, 7],
+  };
+
+  it("covers every non-default preset (guards the light substitution table above against a silently-skipped preset)", () => {
+    const withColors = PALETTES.filter((p): p is Palette & { colors: string[] } => p.colors !== null);
+    expect(withColors.map((p) => p.value).sort()).toEqual(Object.keys(LIGHT_LEGIBILITY_SUBSTITUTIONS).sort());
+  });
+
+  it("every preset's declared hex is either legible on the light canvas unchanged, or a recorded pre-existing substitution", () => {
+    for (const preset of PALETTES) {
+      if (!preset.colors) continue;
+      const expectedSubstituted = new Set(LIGHT_LEGIBILITY_SUBSTITUTIONS[preset.value] ?? []);
+      preset.colors.forEach((hex, i) => {
+        const resolved = resolveDrawColor(hex, false);
+        if (expectedSubstituted.has(i)) {
+          expect(
+            resolved,
+            `${preset.value} series-${i + 1} (${hex}) expected to already be substituted on light`,
+          ).not.toBe(hex);
+        } else {
+          expect(resolved, `${preset.value} series-${i + 1} (${hex}) on light bg`).toBe(hex);
+        }
+      });
+    }
+  });
+
+  // Sabotage guard: pins the two substitution tables above verbatim so a
+  // silent addition (or removal) of an index on EITHER canvas — not caught by
+  // the per-preset ratchets above, which only compare against whatever the
+  // table currently says — fails loudly here instead of quietly widening (or
+  // narrowing) what counts as "pre-existing".
+  it("the recorded dark/light substitution lists are exactly today's documented sets (no silent growth)", () => {
+    expect(DARK_LEGIBILITY_SUBSTITUTIONS).toEqual({
+      "okabe-ito": [],
+      "tol-bright": [],
+      tableau10: [],
+      viridis: [0],
+    });
+    expect(LIGHT_LEGIBILITY_SUBSTITUTIONS).toEqual({
+      "okabe-ito": [0, 1, 3, 7],
+      "tol-bright": [3, 4, 6],
+      tableau10: [3, 5, 7],
+      viridis: [6, 7],
+    });
+  });
 });
 
 // ---- THE CHECK THAT MATTERS: series-vs-series distinguishability under CVD ----

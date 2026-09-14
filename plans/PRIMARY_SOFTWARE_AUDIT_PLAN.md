@@ -3576,6 +3576,22 @@ covers a much smaller subset and guards focus on Analyze.
     distinguishability verdict — `seriesPalette.cvd.test.ts`'s "shipped
     palette presets" and extended "series-vs-background legibility" describe
     blocks will catch a regression on either axis if one is picked.
+    **Round 4 (2026-09-14, light-canvas twin of the round-3 preset ratchet):**
+    round 3's dark-canvas legibility ratchet covered every `PALETTES` preset
+    only against the DARK axes background; a per-window override (`PlotBg`)
+    can pin a window to the LIGHT background independent of the app's global
+    theme, and that side was unratcheted. `seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe now adds the light-canvas
+    mirror (`resolveDrawColor(hex, false)`), table-driven the same way.
+    Measured, pre-existing, none introduced by this round: `okabe-ito` slots
+    0/1/3/7 (contrast 2.12/2.18/1.25/1.81), `tol-bright` slots 3/4/6
+    (1.84/1.73/1.81), `tableau10` slots 3/5/7 (2.16/1.52/1.86), `viridis`
+    slots 6/7 (1.88/1.19) — all below the 2.2 floor, all recorded rather than
+    fixed, matching the counts already noted in this test file's "Shipped
+    palette presets" header comment (4/3/3/2). No preset colour changed. A
+    companion assertion pins both the dark and light substitution tables
+    verbatim so a future silent addition or removal on either canvas fails
+    the suite instead of quietly changing what counts as "pre-existing".
     - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
     - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
   - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
