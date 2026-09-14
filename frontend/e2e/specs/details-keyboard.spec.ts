@@ -32,8 +32,11 @@ test("Details view: one tab stop, arrow traversal, Enter opens; global dataset n
   await expect(page.getByLabel("Library details table")).toBeVisible();
 
   // P1 fix: the wrapper is NOT in the Tab order; the roving row is the
-  // table's single sequential stop.
-  await expect(page.locator(".qzk-details-scroll")).not.toHaveAttribute("tabindex", /.+/);
+  // table's single sequential stop. The wrapper carries tabindex="-1" (the
+  // organic-scroll focus fallback, lib/scrollOutFocus.ts): focusable only
+  // programmatically, never a sequential stop.
+  await expect(page.locator(".qzk-details-scroll")).toHaveAttribute("tabindex", "-1");
+  await expect(page.locator(".qzk-details-scroll")).toHaveAttribute("data-scroll-out-focus", "");
   // Two stops since the header-roving follow-on: one header button + one row.
   await expect(page.locator('.qzk-details-wrap [tabindex="0"]')).toHaveCount(2);
   await expect(page.locator('.qzk-details-wrap thead [tabindex="0"]')).toHaveCount(1);

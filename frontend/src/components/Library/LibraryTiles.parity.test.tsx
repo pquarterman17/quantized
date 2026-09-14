@@ -1,0 +1,921 @@
+// L1.4 interaction parity for the TILE renderer: drag/drop must mean in Tiles
+// exactly what it means in Details and in the Tree, through the SAME payload
+// types, the SAME legality rules, the SAME cue classes and the SAME two store
+// actions. Deliberately shaped as a mirror of LibraryDetails.parity.test.tsx's
+// drag/drop block, assertion for assertion, so a future divergence shows up as
+// a diff between two files rather than as a silent behaviour gap.
+//
+// These render the real <LibraryWorkspace> over a store-backed hierarchy, so a
+// move is asserted at the layer the user experiences: the store changed AND
+// the moved tile left the container it was in.
+//
+// jsdom has no real drag-and-drop, so drag events are hand-built with a fake
+// `dataTransfer` and dispatched through RTL's low-level fireEvent — the same
+// workaround FolderRow.test.tsx and LibraryDetails.parity.test.tsx use.
+
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import LibraryWorkspace from "./LibraryWorkspace";
+import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
+import { VIRTUALIZE_ABOVE } from "./useTileVirtualization";
+import { __resetLastPointerPress } from "../../lib/lastPointerPress";
+import type { Dataset, FolderNode } from "../../lib/types";
+import { declares, flatRules, reachesOnHover, readShellCss } from "../../styles/cssRules.testkit";
+import { useApp } from "../../store/useApp";
+
+vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+
+const worksheet = (id: string, workbookId: string, order = 0): Dataset => ({
+  id,
+  name: `${id}.csv`,
+  workbookId,
+  order,
+  data: { time: [0, 1], values: [[1], [2]], labels: ["signal"], units: ["V"], metadata: {} },
+});
+
+const folder = (id: string, name: string, parentId: string | null, order: number): FolderNode => ({
+  id,
+  name,
+  parentId,
+  order,
+});
+
+beforeEach(() => {
+  // The press recorder is module-level and always live, so one test's presses
+  // would otherwise be visible to the next.
+  __resetLastPointerPress();
+  useApp.setState({
+    // A root container holding two folder tiles and one unfoldered workbook
+    // tile — the Details fixture's shape (Alpha / Beta / Run) in tile form.
+    datasets: [worksheet("a", "w")],
+    workbooks: [{ id: "w", name: "Run" }],
+    folders: [folder("f1", "Alpha", null, 0), folder("f2", "Beta", null, 1)],
+    originFigures: [],
+    editableFigures: [],
+    figureDocs: [],
+    pages: [],
+    reports: [],
+    selectedIds: [],
+    librarySelection: null,
+    activeId: null,
+    expandedFolders: ["f1", "f2"],
+    expandedWorkbookIds: ["w"],
+    revealTarget: null,
+    workbookLastChild: {},
+    figurePageOpen: false,
+    cmdkOpen: false,
+    confirmRemove: false,
+    trash: [],
+    history: [],
+    activeDrag: null,
+    activeDragPress: null,
+  });
+});
+
+const tileFor = (key: string): HTMLElement =>
+  document.querySelector(`[data-library-tile="${key}"]`) as HTMLElement;
+
+const gripOf = (key: string): HTMLElement =>
+  tileFor(key).querySelector(".qzk-drag-handle") as HTMLElement;
+
+const applyToStore = (change: () => void): void => act(() => { change(); });
+
+/** One physical press, delivered where `lib/lastPointerPress.ts`'s always-live
+ *  capture listener sees it. Call inside `act` — a press can clear a published
+ *  drag, which rerenders. */
+const press = (pointerId: number, pointerType: string): void => {
+  fireEvent(
+    document,
+    new PointerEvent("pointerdown", { pointerId, pointerType, bubbles: true, cancelable: true }),
+  );
+};
+
+function transfer(type: string, id: string) {
+  return { types: [type], getData: (t: string) => (t === type ? id : ""), setData: () => {}, effectAllowed: "" };
+}
+
+/** Dispatch one drag event; returns false when a handler called
+ *  preventDefault — which for `dragover` is precisely "this target ACCEPTS the
+ *  drop" (a real browser fires no drop event without it). */
+function fireDrag(el: Element, type: "dragstart" | "dragover" | "dragend" | "drop", dataTransfer: unknown): boolean {
+  const evt = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(evt, "dataTransfer", { value: dataTransfer, configurable: true });
+  return fireEvent(el, evt);
+}
+
+/** dragstart on the source tile's grip, then dragover the destination tile.
+ *  Returns whether the destination ACCEPTED the drag. */
+function beginDragOver(sourceKey: string, destKey: string, type: string, id: string): boolean {
+  const payload = transfer(type, id);
+  fireDrag(gripOf(sourceKey), "dragstart", payload);
+  return !fireDrag(tileFor(destKey), "dragover", payload);
+}
+
+/** The full Tree-equivalent drag: grip dragstart (which publishes activeDrag,
+ *  the signal a drop target consults during dragover) then dragover + drop on
+ *  the destination tile. */
+function dragTileOnto(sourceKey: string, destKey: string, type: string, id: string): void {
+  const payload = transfer(type, id);
+  fireDrag(gripOf(sourceKey), "dragstart", payload);
+  fireDrag(tileFor(destKey), "dragover", payload);
+  fireDrag(tileFor(destKey), "drop", payload);
+}
+
+describe("LibraryTiles — L1.4 drag source parity", () => {
+  it("only the grip starts a drag — the tile body is not draggable (Tree/Details convention)", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const tile = tileFor("workbook:w");
+
+    expect(tile).not.toHaveAttribute("draggable");
+    expect(gripOf("workbook:w")).toHaveAttribute("draggable", "true");
+    // The grip is the ONLY draggable element anywhere in the grid.
+    const draggables = [...document.querySelectorAll("[draggable='true']")];
+    expect(draggables.every((el) => el.classList.contains("qzk-drag-handle"))).toBe(true);
+    // Folders and workbooks get a grip; a worksheet tile deliberately does
+    // NOT (finding 5, below) — only those two kinds are legal drag sources
+    // with a reachable target anywhere in this workspace.
+    expect(gripOf("folder:f1")).not.toBeNull();
+    expect(gripOf("folder:f2")).not.toBeNull();
+  });
+
+  // REVIEW ROUND (2026-09-13, finding 5): a worksheet drag's payload is
+  // `DATASET_DND`, the plot-target type only a Stage window accepts
+  // (WindowCanvas.tsx, PlotWindowFrame.tsx) — and the Tile workspace REPLACES
+  // the Stage while it is open (App.tsx's `libraryViewMode === "tiles"`
+  // branch). No folder tile accepts `DATASET_DND` either. So while Tiles is
+  // open, nothing on screen can ever receive a worksheet drag: it is a drag
+  // to nowhere. The shared hook still computes `handleProps` for a worksheet
+  // (Details' Stage sits right next to its table, so the identical drag is
+  // real there) — `LibraryTile` is the one that declines to render a grip
+  // for it, so the affordance itself is never offered instead of silently
+  // failing every time it is used.
+  it("a worksheet tile has NO drag grip in Tiles — nothing here can receive its DATASET_DND payload", () => {
+    applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    const tile = tileFor("worksheet:a");
+    expect(tile).not.toBeNull();
+    expect(gripOf("worksheet:a")).toBeNull();
+    expect(tile.querySelector("[draggable]")).toBeNull();
+  });
+
+  it("a worksheet tile still has no grip when it is part of a live multi-selection", () => {
+    applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
+    applyToStore(() =>
+      useApp.setState({ datasets: [worksheet("a", "w", 0), worksheet("b", "w", 1)] }),
+    );
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    applyToStore(() => useApp.getState().selectIds(["a", "b"]));
+
+    expect(gripOf("worksheet:a")).toBeNull();
+    expect(gripOf("worksheet:b")).toBeNull();
+    // The bulk move route is unaffected: still the tile menu's "Move to …".
+    expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
+  });
+
+  it("the grip publishes the kind-matched payload for folders and workbooks", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    const wbSet = vi.fn();
+    fireDrag(gripOf("workbook:w"), "dragstart", { types: [], getData: () => "", setData: wbSet, effectAllowed: "" });
+    expect(wbSet).toHaveBeenCalledWith(WORKBOOK_DND, "w");
+    expect(useApp.getState().activeDrag).toEqual({ kind: "workbook", id: "w" });
+
+    const fSet = vi.fn();
+    fireDrag(gripOf("folder:f2"), "dragstart", { types: [], getData: () => "", setData: fSet, effectAllowed: "" });
+    expect(fSet).toHaveBeenCalledWith(FOLDER_DND, "f2");
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f2" });
+  });
+
+  it("the grip neither selects the tile nor browses into it nor opens it", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const grip = gripOf("folder:f1");
+
+    fireEvent.click(grip);
+    fireEvent.doubleClick(grip);
+
+    // A tile-body click would have selected f1 AND navigated the workspace
+    // into it; a double-click would have toggled its disclosure.
+    expect(useApp.getState().librarySelection).toBeNull();
+    expect(screen.getByRole("list", { name: "Project items" })).toBeInTheDocument();
+    expect(useApp.getState().expandedFolders).toEqual(["f1", "f2"]);
+  });
+
+  it("the grip is not a tab stop, so the grid's roving keyboard model is untouched", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    expect(gripOf("folder:f1")).not.toHaveAttribute("tabindex");
+    expect(gripOf("folder:f1")).toHaveAttribute("aria-hidden", "true");
+    // Exactly one tile carries the grid's tab stop, as before the grip existed.
+    const tabbable = [...document.querySelectorAll("[data-library-tile]")].filter(
+      (el) => el.getAttribute("tabindex") === "0",
+    );
+    expect(tabbable).toHaveLength(1);
+  });
+});
+
+describe("LibraryTiles — L1.4 drop target parity", () => {
+  it("dragging a workbook tile onto a folder tile moves it, in the store AND on screen", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    expect(tileFor("workbook:w")).not.toBeNull();
+
+    dragTileOnto("workbook:w", "folder:f2", WORKBOOK_DND, "w");
+
+    // The SAME store action Details' drop and the Tree's FolderRow call.
+    expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBe("f2");
+    // …and the tile left the root container it was in.
+    expect(tileFor("workbook:w")).toBeNull();
+  });
+
+  it("dragging a folder tile onto another folder tile reparents it", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    dragTileOnto("folder:f2", "folder:f1", FOLDER_DND, "f2");
+
+    expect(useApp.getState().folders.find((f) => f.id === "f2")!.parentId).toBe("f1");
+    expect(tileFor("folder:f2")).toBeNull();
+  });
+
+  it("the menu's Move to … and the drag reach the same destination", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    fireEvent.contextMenu(tileFor("workbook:w"), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByText('Move to "Beta"'));
+    expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBe("f2");
+  });
+
+  it("the hovered target shows `dropinto` while every OTHER legal target rests at `drop-candidate`", () => {
+    applyToStore(() =>
+      useApp.setState({ folders: [...useApp.getState().folders, folder("f3", "Gamma", null, 2)] }),
+    );
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    expect(beginDragOver("folder:f2", "folder:f1", FOLDER_DND, "f2")).toBe(true);
+    expect(tileFor("folder:f1").className).toContain("dropinto");
+    expect(tileFor("folder:f1").className).not.toContain("drop-candidate");
+    expect(tileFor("folder:f3").className).toContain("drop-candidate");
+    expect(tileFor("folder:f3").className).not.toContain("dropinto");
+    // The dragged folder is never a candidate for itself…
+    expect(tileFor("folder:f2").className).toBe("qzk-library-tile");
+    // …nor is a tile that cannot accept a move at all.
+    expect(tileFor("workbook:w").className).toBe("qzk-library-tile");
+  });
+
+  it("a drop on a NON-folder tile is refused: no cue, no move, no undo step", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const historyBefore = useApp.getState().history.length;
+
+    // A folder dragged onto the WORKBOOK tile — only folders accept a move.
+    expect(beginDragOver("folder:f2", "workbook:w", FOLDER_DND, "f2")).toBe(false);
+    expect(tileFor("workbook:w").className).not.toContain("drop-candidate");
+    expect(tileFor("workbook:w").className).not.toContain("dropinto");
+    fireDrag(tileFor("workbook:w"), "drop", transfer(FOLDER_DND, "f2"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f2")!.parentId).toBeNull();
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  // Selection note: unlike the Details fixture, a worksheet multi-selection
+  // cannot be held on screen here — selecting one NAVIGATES the tile
+  // workspace into its workbook (LibraryWorkspace's sidebar-follows-selection
+  // effect), so the folder tiles under test would unmount. The drag's
+  // selection invariant is asserted instead in "a drag of a SELECTED
+  // worksheet tile moves only that node", which keeps a live two-worksheet
+  // selection across a dragstart. What is checked here is that a refused drop
+  // writes NO selection of its own.
+  it("a folder dropped on ITSELF is refused, leaving placement, undo stack and selection untouched", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const selectedBefore = [...useApp.getState().selectedIds];
+    const selectionBefore = useApp.getState().librarySelection;
+    const historyBefore = useApp.getState().history.length;
+
+    expect(beginDragOver("folder:f2", "folder:f2", FOLDER_DND, "f2")).toBe(false);
+    expect(tileFor("folder:f2").className).not.toContain("drop-candidate");
+    fireDrag(tileFor("folder:f2"), "drop", transfer(FOLDER_DND, "f2"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f2")!.parentId).toBeNull();
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+    expect(useApp.getState().selectedIds).toEqual(selectedBefore);
+    expect(useApp.getState().librarySelection).toEqual(selectionBefore);
+  });
+
+  it("a folder dropped on its OWN DESCENDANT is refused the same way", () => {
+    applyToStore(() =>
+      useApp.setState({ folders: [...useApp.getState().folders, folder("f3", "Child", "f2", 0)] }),
+    );
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    // Browse into f2 so its child folder tile is on screen.
+    fireEvent.click(tileFor("folder:f2"));
+    const historyBefore = useApp.getState().history.length;
+
+    const payload = transfer(FOLDER_DND, "f2");
+    // f2's own grip is not rendered inside f2, so publish the drag directly
+    // from the store the way its dragstart would have.
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "f2" }));
+    expect(fireDrag(tileFor("folder:f3"), "dragover", payload)).toBe(true); // not accepted
+    fireDrag(tileFor("folder:f3"), "drop", payload);
+
+    expect(useApp.getState().folders.find((f) => f.id === "f2")!.parentId).toBeNull();
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  it("dropping a workbook on the folder it is ALREADY in records no undo step", () => {
+    applyToStore(() => useApp.setState({ workbooks: [{ id: "w", name: "Run", folderId: "f1" }] }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    // Browse into Alpha, where the workbook tile now lives, then drag it back
+    // onto Alpha via the breadcrumb-less route: publish the drag and drop on
+    // the folder tile at root.
+    const historyBefore = useApp.getState().history.length;
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "workbook", id: "w" }));
+    fireDrag(tileFor("folder:f1"), "dragover", transfer(WORKBOOK_DND, "w"));
+    fireDrag(tileFor("folder:f1"), "drop", transfer(WORKBOOK_DND, "w"));
+
+    expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBe("f1");
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  it("a bare `drop` with no drag in flight is refused (the drop handler re-decides for itself)", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const historyBefore = useApp.getState().history.length;
+
+    // No dragstart at all: activeDrag is null, so nothing is legal here.
+    fireDrag(tileFor("folder:f2"), "drop", transfer(WORKBOOK_DND, "w"));
+
+    expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  it("a CANCELLED drag (dragstart then dragend, no drop) writes nothing at all", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const historyBefore = useApp.getState().history.length;
+
+    const payload = transfer(WORKBOOK_DND, "w");
+    fireDrag(gripOf("workbook:w"), "dragstart", payload);
+    expect(useApp.getState().activeDrag).toEqual({ kind: "workbook", id: "w" });
+    fireDrag(gripOf("workbook:w"), "dragend", payload);
+
+    expect(useApp.getState().activeDrag).toBeNull();
+    expect(useApp.getState().workbooks.find((wb) => wb.id === "w")!.folderId).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
+  it("right-click on an ALREADY-SELECTED tile keeps the multi-selection (Details' selectForMenu rule)", () => {
+    applyToStore(() => useApp.setState({ librarySelection: { kind: "workbook", id: "w" } }));
+    applyToStore(() =>
+      useApp.setState({ datasets: [worksheet("a", "w", 0), worksheet("b", "w", 1)] }),
+    );
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    applyToStore(() => useApp.getState().selectIds(["a", "b"]));
+
+    fireEvent.contextMenu(tileFor("worksheet:a"), { clientX: 5, clientY: 5 });
+
+    expect(useApp.getState().selectedIds).toEqual(["a", "b"]);
+  });
+});
+
+// REVIEW ROUND (2026-09-13, finding 3; 2026-09-14, finding 1): the drag
+// survives its source's unmount, and the terminal signals that DO end it are
+// exactly the ones documented in useDetailsDragDrop.ts's file header — that
+// comment is the authoritative contract; nothing here restates it. Folder
+// tiles stand in for worksheet tiles because a worksheet tile no longer has a
+// grip in Tiles at all (finding 5, above) — folders and workbooks are the
+// only kinds with a reachable target to prove survival against.
+describe("LibraryTiles — L1.4 drag under virtualization", () => {
+  const MANY = VIRTUALIZE_ABOVE + 20;
+
+  /** Enough root-level folders to force the grid to virtualize, plus one
+   *  more, ordered last, to serve as a drop target that a large scroll
+   *  keeps inside the rendered window (folders sort before the fixture's
+   *  unfoldered workbook regardless of `order` — libraryHierarchy.ts's
+   *  section band — so this stays the second-to-last item overall). */
+  function seedVirtualizedFolders(): FolderNode[] {
+    const many = Array.from({ length: MANY }, (_, i) => folder(`vf${i}`, `Folder ${i}`, null, i));
+    return [...many, folder("vtarget", "Target", null, MANY)];
+  }
+
+  const SCROLL_PAST_END = 1_000_000;
+
+  it("a drag whose SOURCE tile scrolls out of the virtualized window still completes when dropped on a folder", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    expect(tileFor("folder:vf0")).not.toBeNull();
+
+    fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // Scroll far enough that the source tile leaves the window and unmounts
+    // — the browser then has no element left to fire a local `dragend` on.
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    expect(() =>
+      act(() => {
+        scroller.scrollTop = SCROLL_PAST_END;
+        fireEvent.scroll(scroller);
+      }),
+    ).not.toThrow();
+    expect(tileFor("folder:vf0")).toBeNull();
+    // The drag SURVIVES the unmount — before this fix `activeDrag` would
+    // already be null here, and the drop below would be refused.
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    const target = tileFor("folder:vtarget");
+    expect(target, "the drop target must still be in the rendered window").not.toBeNull();
+    fireDrag(target, "dragover", transfer(FOLDER_DND, "vf0"));
+    fireDrag(target, "drop", transfer(FOLDER_DND, "vf0"));
+
+    // The SAME store action every other drop test in this file checks.
+    expect(useApp.getState().folders.find((f) => f.id === "vf0")!.parentId).toBe("vtarget");
+    // The document-level catch clears the published drag right after — it
+    // must be CAPTURE-phase: the target's own onDrop calls
+    // `stopPropagation()` once it commits, which would suppress a bubble-
+    // phase listener and leave this permanently set.
+    expect(useApp.getState().activeDrag).toBeNull();
+  });
+
+  it("scrolling OTHER tiles in and out of the window during an active drag never clears activeDrag by itself", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // A drag that belongs to a node which is not even in the rendered window.
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "vf0" }));
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+  });
+
+  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by a pointerdown from the SAME physical pointer that pressed last", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The press that starts the drag — recorded by the always-live listener
+    // (ROUND 4) so a later press from this SAME pointer (id 1, type mouse)
+    // can prove it released.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    const source = gripOf("folder:vf0");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+    expect(tileFor("folder:vf0")).toBeNull(); // the source tile is really gone
+
+    // What a real browser actually does with an abandoned drag: it fires
+    // `dragend` at the SOURCE element, not at `document`. Firing it here (at
+    // the now-detached grip) instead of at `document` — the opposite of what
+    // the second review round's test did — is the measured behaviour: the
+    // event has no ancestor chain left to bubble through, so the container's
+    // capture listener never runs, and every legal folder tile is left
+    // glowing with the stale `drop-candidate` cue.
+    act(() => {
+      fireDrag(source, "dragend", transfer(FOLDER_DND, "vf0"));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+    expect(tileFor("folder:vtarget").className).toMatch(/\bdrop-candidate\b/);
+
+    // No element the abandoned drag can bubble a signal through survives —
+    // the mechanism that DOES end it needs none: the SAME pointer (id 1,
+    // type mouse) pressing again proves it released the drag it was holding
+    // (useDetailsDragDrop.ts's file header, ROUND 4).
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(useApp.getState().activeDrag).toBeNull();
+    expect(tileFor("folder:vtarget").className).not.toMatch(/\bdrop-candidate\b/);
+  });
+
+  it("a pointerdown from a DIFFERENT pointer (id 1 started the drag) does not clear it, even pressed twice", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // ROUND 5: the rule matches against the press that STARTED this drag
+    // (id 1), not against whatever pressed immediately before the incoming
+    // press. Pointer id 2 never started this drag, so it does not clear it
+    // — not on the first press, and not on a second, consecutive press
+    // either (the round-4 rule's counterexample: two same-id presses from a
+    // pointer that never touched the drag used to clear it anyway).
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 2, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 2, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+  });
+
+  // REGRESSION (2026-09-14, tiles_review5.md probe P3): the round-4 rule
+  // compared an incoming press against whichever pointer pressed immediately
+  // before it, not against the pointer that started the drag. Two identical
+  // presses from a pointer that never touched the drag (here, two mouse
+  // clicks with a constant id) matched each other and cleared it anyway. This
+  // test FAILS against the round-4 code (verified: reverted the owner-press
+  // snapshot, ran this test in isolation, got "expected
+  // true to be false" on the second `dragover` — the drop was refused) and
+  // must pass now that the rule matches against the drag's own starting press.
+  it("two consecutive presses from a THIRD pointer, mid-drag, do not clear a drag that pointer never started", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The press that starts the drag — touch id 7.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 7, pointerType: "touch", bubbles: true, cancelable: true }),
+      );
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A third party — a mouse whose id is constant across clicks — clicks
+    // TWICE while the touch drag is live, between dragover and drop.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after two third-party presses",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
+  });
+
+  // Finding 4 (tiles_review5.md): a dispatch that is not a real `PointerEvent`
+  // carries no numeric `pointerId` (`undefined`), and `undefined === undefined`
+  // would otherwise let two such dispatches match each other. The FIRST
+  // synthetic dispatch happens BEFORE `dragstart` so it can pollute
+  // `lib/lastPointerPress.ts`'s record with `{id: undefined, type: undefined}`
+  // — without that module's guard, `setActiveDrag` would snapshot the polluted
+  // value into `activeDragPress`, and the SECOND synthetic dispatch after
+  // `dragstart` would then match it and clear the drag.
+  it("a plain, non-PointerEvent pointerdown (no numeric pointerId) does not clear a live drag, even fired before AND after dragstart", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(document, new Event("pointerdown", { bubbles: true, cancelable: true }));
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    act(() => {
+      fireEvent(document, new Event("pointerdown", { bubbles: true, cancelable: true }));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+  });
+
+  // REGRESSION (2026-09-14, tiles_review4.md probe P1): the ROUND-3 filter
+  // (`event.isPrimary !== false`) cleared `activeDrag` on a cross-modality
+  // press mid-drag, because Pointer Events defines "primary" PER POINTER
+  // TYPE — a first touch contact is primary for type "touch" even while a
+  // mouse drag (always primary for type "mouse") is live. This test fails
+  // against that filter (verified before the ROUND-4 fix landed: the second
+  // `dragover` was refused and the move never committed) and must keep
+  // passing now that the rule is same-id-AND-same-type instead.
+  it("a live mouse drag survives a cross-modality pointerdown mid-drag, and the move still commits", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A first touch contact on a hybrid device, mid-drag: different id AND
+    // different type from the mouse pointer holding this drag.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", {
+          pointerId: 7,
+          pointerType: "touch",
+          isPrimary: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after the cross-modality pointerdown",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
+  });
+
+  // REGRESSION (2026-09-14, THIRD review round finding 1): the fix this round
+  // replaces cleared `activeDrag` on the first `pointermove` seen after a
+  // `dragover` — a signal that is live throughout a Chromium touch/pen drag
+  // and at boundary crossings on Firefox (not a one-off at drag-start), so it
+  // cleared a drag that was still genuinely in progress. That refuses the
+  // drop outright: a real browser stops receiving `preventDefault()` on
+  // `dragover` and never fires `drop` at all. This test fails on the removed
+  // mechanism (verified before this fix landed) and must keep passing.
+  it("a pointermove delivered mid-drag, between dragover and drop, does not refuse the drop", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A drag that is genuinely still live keeps generating `pointermove` —
+    // this must never be mistaken for the operation ending.
+    act(() => {
+      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
+    });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after the mid-drag pointermove",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
+  });
+
+  // REGRESSION N1 (2026-09-14, tiles_review6.md finding 1b): the round-5 owner
+  // snapshot lived in this hook and was written ONLY by the hook's own
+  // `onDragStart`, while `activeDrag` has four other publishers (the three
+  // Tree rows). An ABANDONED Tiles drag therefore left a snapshot behind with
+  // no owning drag, and the next drag a TREE row published inherited it — one
+  // press from the abandoned drag's pointer then refused a live, unrelated
+  // drag. The press record now lives beside `activeDrag` in the store and is
+  // re-snapshotted by `setActiveDrag` itself, so the Tree publish below
+  // replaces the stale record rather than inheriting it. Verified to FAIL
+  // against the pre-fix code (see this round's plan entry).
+  it("a press left over from an ABANDONED drag does not clear a later Tree-published drag, and its move commits", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // A Tiles drag pressed by mouse id 1 …
+    act(() => press(1, "mouse"));
+    const source = gripOf("folder:vf0");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
+
+    // … and abandoned: its source scrolls out of the virtualized window, so
+    // the browser's `dragend` fires at a DETACHED node and reaches no
+    // ancestor (the shape the test above measures).
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+    act(() => {
+      fireDrag(source, "dragend", transfer(FOLDER_DND, "vf0"));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // The user now starts a TREE drag with a pen (id 9). `FolderRow.tsx`
+    // publishes exactly this way — its `onDragStart` fills the dataTransfer
+    // and calls `setActiveDrag`, with no press bookkeeping of its own.
+    act(() => press(9, "pen"));
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "vf1" }));
+    expect(useApp.getState().activeDragPress).toEqual({ id: 9, type: "pen" });
+
+    const target = tileFor("folder:vtarget");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "vf1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // ONE press from mouse id 1 — the pointer the ABANDONED drag was held by,
+    // which owns nothing now.
+    act(() => press(1, "mouse"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf1" });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "vf1")),
+      "the target must still accept the Tree-published drag",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "vf1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "vf1")!.parentId).toBe("vtarget");
+  });
+
+  // REGRESSION N2 (2026-09-14, tiles_review6.md finding 1c): the same
+  // hook-owned snapshot meant a Tree-published drag recorded no owner press at
+  // all, so no press could ever end it — an abandoned TREE drag kept its stale
+  // `drop-candidate` cue lit until the next dragstart/dragend/drop. With the
+  // record owned by `setActiveDrag`, every publisher gets the owner press, so
+  // the self-heal now covers Tree rows too.
+  it("a Tree-published drag IS cleared by a second press from the pointer that started it", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => press(1, "mouse"));
+    applyToStore(() => useApp.getState().setActiveDrag({ kind: "folder", id: "f1" }));
+    expect(useApp.getState().activeDragPress).toEqual({ id: 1, type: "mouse" });
+    expect(tileFor("folder:f2").className).toMatch(/\bdrop-candidate\b/);
+
+    act(() => press(1, "mouse"));
+
+    expect(useApp.getState().activeDrag).toBeNull();
+    expect(useApp.getState().activeDragPress).toBeNull();
+    expect(tileFor("folder:f2").className).not.toMatch(/\bdrop-candidate\b/);
+  });
+
+  // RESIDUAL PIN (2026-09-14, tiles_review7.md finding 1, probe B1) — NOT a
+  // feature test: this locks in a known, named, and NOT closed gap so a
+  // future change to it is visible, rather than asserting it is correct
+  // behaviour. The owner press recorded by `setActiveDrag` is the LAST press
+  // seen before the drag publishes, which is the dragging pointer only if no
+  // OTHER pointer pressed between that pointer's own `pointerdown` and its
+  // `dragstart`. On a hybrid device (touchscreen laptop, pen display) a click
+  // landing inside that window is recorded as the owner instead, and a later
+  // press from that unrelated pointer wrongly ends the still-live drag — see
+  // the residuals in this file's header and in store/libraryPanel.ts.
+  it("RESIDUAL: an interleaved press before dragstart is wrongly recorded as the drag's owner, and later kills a still-live drag", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The pointer that actually starts the drag: a touchscreen finger, id 5.
+    act(() => press(5, "touch"));
+    // An UNRELATED mouse click lands inside the drag-initiation window —
+    // after the dragging pointer's own pointerdown, before its dragstart.
+    act(() => press(1, "mouse"));
+
+    const source = gripOf("folder:f1");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "f1"));
+
+    // Documented, not desired: the LAST press before publish is recorded as
+    // the owner, so the unrelated mouse — not the touch pointer that
+    // actually started the drag — owns it.
+    expect(useApp.getState().activeDragPress).toEqual({ id: 1, type: "mouse" });
+
+    const target = tileFor("folder:f2");
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the first dragover is still accepted",
+    ).toBe(false);
+
+    // The recorded (wrong) owner presses again — an ordinary, unrelated
+    // click — and it matches activeDragPress, so it clears the still-live
+    // drag.
+    act(() => press(1, "mouse"));
+    expect(useApp.getState().activeDrag).toBeNull();
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target is wrongly dead after the interleaved owner's second press",
+    ).toBe(true);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(
+      useApp.getState().folders.find((f) => f.id === "f1")!.parentId,
+      "the move is wrongly refused",
+    ).toBeNull();
+  });
+});
+
+describe("LibraryTiles — L1.4 cues are painted, not just classed", () => {
+  // The same three helpers and the same sheet the Details parity test uses
+  // (styles/cssRules.testkit.ts) — a drifted copy of "does any rule actually
+  // paint this cue?" is not evidence.
+  const SHELL_CSS = readShellCss();
+
+  it("the tile grip is hidden at rest AND revealed by a rule that reaches it on tile hover", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const grip = gripOf("workbook:w");
+    const rules = flatRules(SHELL_CSS);
+
+    expect(
+      rules.filter((r) => declares(r.body, "opacity", "0") && reachesOnHover(r.selector, grip)).length,
+    ).toBeGreaterThan(0);
+    const revealing = rules
+      .filter((r) => declares(r.body, "opacity", "1") && reachesOnHover(r.selector, grip))
+      .map((r) => r.selector);
+    expect(revealing, "no stylesheet rule raises the Tiles grip's opacity — it is invisible").not.toEqual([]);
+  });
+
+  // Nit N1 (review round): at `opacity: 0` the grip was still an absolutely
+  // positioned element sitting over the tile's top-left corner, so it ate a
+  // ~12x16px dead zone of the tile body's own click/browse target even while
+  // invisible. `pointer-events` must be `none` at rest and `auto` again once
+  // the SAME hover that reveals the grip is active.
+  it("the tile grip has no pointer-events dead zone at rest, and regains them on tile hover", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const grip = gripOf("workbook:w");
+    const rules = flatRules(SHELL_CSS);
+
+    expect(
+      rules.some((r) => r.selector === ".qzk-tile-grip" && declares(r.body, "pointer-events", "none")),
+    ).toBe(true);
+    const reenabling = rules
+      .filter((r) => declares(r.body, "pointer-events", "auto") && reachesOnHover(r.selector, grip))
+      .map((r) => r.selector);
+    expect(reenabling, "no rule restores pointer-events on the grip when its tile is hovered").not.toEqual([]);
+  });
+
+  it("the grip is positioned OUT OF FLOW so it cannot change the measured tile height", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const grip = gripOf("workbook:w");
+    const tile = tileFor("workbook:w");
+    const rules = flatRules(SHELL_CSS);
+    const declared = (el: Element, prop: string): string[] =>
+      rules
+        .filter((r) => reachesOnHover(r.selector, el))
+        .flatMap((r) => {
+          const m = r.body.match(new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;]+)`));
+          return m ? [m[1].trim()] : [];
+        });
+
+    // useTileVirtualization sizes its spacers from tile offsetHeight, so an
+    // in-flow grip would shift every row estimate.
+    expect(declared(grip, "position")).toContain("absolute");
+    // …which only works if the tile is the containing block.
+    expect(declared(tile, "position")).toContain("relative");
+  });
+
+  it.each(["drop-candidate", "dropinto"])("the `%s` cue on a tile is painted by the stylesheet", (cue) => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const tile = tileFor("folder:f1");
+    const rules = flatRules(SHELL_CSS);
+
+    tile.classList.add(cue);
+    const painting = rules
+      .filter((r) => r.selector.includes(cue) && reachesOnHover(r.selector, tile))
+      .filter((r) => /(^|[;{\s])(outline|background|box-shadow)\s*:/.test(r.body))
+      .map((r) => r.selector);
+    tile.classList.remove(cue);
+
+    expect(painting, `no rule keyed on .${cue} matches a tile — the cue is invisible`).not.toEqual([]);
+  });
+
+  it("the tile cues carry the SAME declarations the Details rows' cues carry", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+    const rules = flatRules(SHELL_CSS);
+    const outlineOf = (selector: string): string | undefined =>
+      rules.find((r) => r.selector === selector)?.body.match(/outline\s*:\s*([^;]+)/)?.[1].trim();
+
+    // Identical cue, identical paint — the plan's "drop cues mean what the
+    // Tree's mean" requirement, checked against the sheet rather than trusted.
+    expect(outlineOf(".qzk-library-tile.drop-candidate")).toBe(
+      outlineOf(".qzk-details-table tbody tr.drop-candidate"),
+    );
+    expect(outlineOf(".qzk-library-tile.dropinto")).toBe(
+      outlineOf(".qzk-details-table tbody tr.dropinto"),
+    );
+    expect(outlineOf(".qzk-library-tile.drop-candidate")).toBe(
+      outlineOf(".qzk-folder-head.drop-candidate"),
+    );
+  });
+});

@@ -33,6 +33,7 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
 
 import { computeAxisWindow } from "../../lib/gridwindow";
+import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
 
 export const VIRTUALIZE_ABOVE = 150;
 const OVERSCAN_ROWS = 6;
@@ -147,10 +148,12 @@ export function useListVirtualization(
 /** Focus a row that may not be rendered yet (a caller's `ensureVisible` just
  *  moved the window): retry across a few animation frames, the same contract
  *  as useTileVirtualization's `focusTileWhenRendered`. The retry stands down
- *  the moment focus belongs to anything it doesn't own — `owned` names extra
- *  selectors (the row focus is transitioning FROM, a scroll-out fallback
- *  holder) besides `selector` itself that are legitimate places for focus to
- *  sit mid-retry without aborting it. */
+ *  the moment focus belongs to anything it doesn't own — besides `selector`
+ *  itself, the scroll-out fallback holder (lib/scrollOutFocus, always owned:
+ *  a fallback that fires mid-retry, or the container the keystroke that
+ *  started this retry came FROM, must not abort it) and any extra `owned`
+ *  selectors the caller names (the row focus is transitioning FROM) are
+ *  legitimate places for focus to sit mid-retry. */
 export function focusRowWhenRendered(
   selector: string,
   owned: readonly string[] = [],
@@ -164,7 +167,7 @@ export function focusRowWhenRendered(
   root?: ParentNode | null,
 ): void {
   let attempts = 0;
-  const ownedSelector = [selector, ...owned].join(",");
+  const ownedSelector = [selector, SCROLL_OUT_FOCUS_SELECTOR, ...owned].join(",");
   const tryFocus = (): void => {
     const active = document.activeElement;
     if (active instanceof HTMLElement && active !== document.body && !active.matches(ownedSelector)) return;

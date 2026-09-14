@@ -19,6 +19,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import ParamDialog, { askParams, type ParamField } from "./ParamDialog";
+import { GREYSCALE_FIELD } from "../../lib/exportFigureCommand";
 import type { ParamValues } from "../../lib/params";
 
 /** Open the dialog inside act() so the render-time value reset commits. */
@@ -131,16 +132,9 @@ describe("ParamDialog / askParams", () => {
   // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" export
   // checkbox (lib/exportFigureCommand.ts) is a `type: "boolean"` ParamField
   // -- the ONE field type this file had never exercised at all before this
-  // test (every fixture above is select/number/text). Mirrors the real
-  // field's key/label/hint verbatim so this pins the actual production
-  // shape, not a generic stand-in.
-  const GREYSCALE_FIELD: ParamField = {
-    key: "greyscale",
-    label: "Greyscale (print-safe)",
-    type: "boolean",
-    default: false,
-    hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
-  };
+  // test (every fixture above is select/number/text). Imports the REAL
+  // field object (no hand-copied duplicate to drift), so this pins the
+  // actual production shape, not a generic stand-in.
 
   it("a boolean field defaults to unchecked and resolves false untouched", async () => {
     render(<ParamDialog />);

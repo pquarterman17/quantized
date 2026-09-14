@@ -51,6 +51,7 @@ import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepageActions";
 import type { PageDocument } from "../../../lib/pageDocument";
 import { pagePanelLabels, resolvePagePanel } from "../../../lib/pageDocumentActions";
+import { withPageGreyscale } from "../../../lib/pageGreyscale";
 import { type PlotWindow } from "../../../lib/plotview";
 import { useApp, type AppState } from "../../../store/useApp";
 
@@ -347,18 +348,25 @@ export async function buildPageSpecFromDocument(
     });
   }
   if (panels.length === 0) return null;
-  return {
-    rows: pageDoc.rows,
-    cols: pageDoc.cols,
-    panels,
-    style: pageDoc.output.stylePreset,
-    label_format: pageDoc.output.labelFormat,
-    label_pos: pageDoc.output.labelPos,
-    row_gap: pageDoc.layout.rowGap,
-    col_gap: pageDoc.layout.colGap,
-    link_x: pageDoc.layout.linkX,
-    link_y: pageDoc.layout.linkY,
-    align_labels: pageDoc.layout.alignLabels,
-    resize_mode: pageDoc.layout.resizeMode,
-  };
+  // P3.3: the saved page's own page-wide print-safe choice reaches every
+  // panel here, so Library's export-without-reopening honours it exactly as
+  // the composer's own export does (withPageGreyscale is an identity when
+  // off/absent -- see its doc).
+  return withPageGreyscale(
+    {
+      rows: pageDoc.rows,
+      cols: pageDoc.cols,
+      panels,
+      style: pageDoc.output.stylePreset,
+      label_format: pageDoc.output.labelFormat,
+      label_pos: pageDoc.output.labelPos,
+      row_gap: pageDoc.layout.rowGap,
+      col_gap: pageDoc.layout.colGap,
+      link_x: pageDoc.layout.linkX,
+      link_y: pageDoc.layout.linkY,
+      align_labels: pageDoc.layout.alignLabels,
+      resize_mode: pageDoc.layout.resizeMode,
+    },
+    pageDoc.output.greyscale,
+  );
 }

@@ -1508,11 +1508,105 @@ Check these only with automated coverage plus an owner-visible desktop run.
       exported-SVG label assertion directly. Runs in CI's `e2e.yml`. Owner
       desktop run still gates the checkbox.
 - [ ] **A6 Multi-panel:** Build a 2×2 page, link then unlink axes, rearrange,
-      save/reopen, edit one panel, and preserve layout.
+      save/reopen, edit one panel, and preserve layout. **Automated half DONE
+      2026-09-13** — `e2e/specs/multi-panel-journey.spec.ts`, a real-Chromium
+      journey against the real backend: two fixture imports, four SEPARATELY
+      SAVED editable figures (two per dataset) built via `New Graph Window` +
+      `Save Editable Figure` → the "Multi-panel export…" composer's real
+      click-a-slot/click-a-source flow fills a 2×2 grid → Link X/Y checked,
+      then a real Export request asserts `link_x`/`link_y` reach
+      `/api/export/figure-page` (and the 4-panel order/labels with it) →
+      unchecked, a second real export asserts both flags flip back to
+      `false` → F3.5's Shift+Arrow keyboard rearrange swaps (0,1) and (2,3),
+      fully reshuffling the page → Save (F3.3) asserts the saved
+      `PageDocument`'s panel order → a real "Save workspace (.dwk)…" /
+      "Open workspace (.dwk)…" round trip (quick-figure-lifecycle.spec.ts's
+      own precedent) asserts the same id and panel order survived the actual
+      file format, not just the in-memory store → the page is reopened from
+      its Library row (a real double-click — see the spec's own header for
+      why: the default Tree view renders every artifact kind, pages
+      included, through `ArtifactRows.tsx`'s shared single-click-selects/
+      double-click-opens row, not `PagesSection.tsx`'s flat single-click
+      section, discovered by tracing a click that reached the DOM target but
+      never invoked the store action) → one panel's title is edited and
+      Saved again, asserting only that panel's override changed → a final
+      real export asserts the same rearranged 4-panel order plus the one
+      edited override, the other three still carrying none. Runs in CI's
+      `e2e.yml`.
+      Scope, read from source before writing anything (see the spec's own
+      header): this repo has two unrelated "multi-panel" mechanisms —
+      `store/panels.ts`'s composite `kind:"panel"` WINDOW (Library's "Panel:
+      side by side/stacked/grid" quick picks) has no PageDocument, no save/
+      reopen, and no page-export wire, so it is NOT what F3/A6 describe;
+      `lib/pageDocument.ts`'s `PageDocument` (the "Figure Page" composer) is
+      the durable, saved, reopenable artifact F3.1-F3.6 actually built, and
+      is what this journey drives throughout.
+      `test.fixme("a live zoom on one panel propagates to its linked
+      sibling panel, and stops once unlinked")`: FigurePageView's preview is
+      ONE static server-rendered `<img>` (`usePagePreviewExport.ts`'s
+      debounced PNG blob) and `SlotGrid` has no interactive per-panel uPlot
+      canvas — there is no live pan/zoom gesture anywhere in this composer
+      to drive or observe propagating, and `PageLayoutSettings.linkX`/
+      `linkY` are render-time flags the backend's matplotlib composer
+      consumes at export time only (`calc.figure_page_layout`), not a live
+      sync mechanism. The main test's Link X/Y export-flag assertions are
+      the load-bearing half of "link/unlink" this UI can actually claim
+      today; faking a canvas zoom against a plain `<img>` would prove
+      nothing real, so this stays a named gap instead.
+      Verified load-bearing: planting a no-op `moveSlot` in
+      `lib/figurepageActions.ts` (rearrange becomes inert) reddens the
+      spec's post-rearrange slot-order assertion (`slot(win, 0)` still
+      shows the pre-rearrange figure); reverted byte-identical. Owner
+      desktop run still gates the checkbox.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
       seconds and visually compare it with the internal figure.
 - [ ] **A8 Vector export:** Export SVG/PDF and compare limits, ticks, text,
-      legend, errors, annotations, and panel placement.
+      legend, errors, annotations, and panel placement. **Automated half DONE
+      2026-09-13** — `tests/test_export_vector_structure.py`, against the real
+      FastAPI routes (`/api/export/figure`, `/api/export/figure-hitmap`,
+      `/api/export/figure-page`), plus `frontend/src/lib/figureSpec.a8.test.ts`
+      for the wire-contract half. What is compared, structurally:
+      LIMITS — `/api/export/figure-hitmap`'s `axes.xlim`/`ylim` (the exact
+      `ax.get_xlim()`/`get_ylim()` the renderer set) against the requested
+      `overrides.x_lim`/`y_lim`; TICKS — the literal tick-label strings a
+      requested `x_step` + `x_fmt` produce, read out of the exported SVG's
+      `matplotlib.axis_1` group; TEXT — a rich-text title (`$\mu_0 H$
+      ($\AA^{-1}$)`) renders as real glyphs (μ, Å), not the raw markup, which
+      only ever survives inside an unrendered XML comment; LEGEND — `<g
+      id="legend_1">`'s child `<text>` entries, exact strings and order;
+      ERRORS — an error-span series draws a real `<g id="LineCollection_1">`;
+      ANNOTATIONS — each annotation's text appears exactly once, standalone
+      (not swallowed into the legend); PANEL PLACEMENT — a 2×2
+      `/api/export/figure-page` export's four `axes_N` groups' own
+      background-patch pixel rects tile a 2×2 grid in row-major order, and
+      each panel's own title lands inside the geometrically-correct `axes_N`
+      block. NOT compared: SVG byte-identity (a build timestamp/UUID varies);
+      sub-pixel text placement/font metrics ("the text is present, in the
+      right group, in the right order" is checked, not glyph-outline
+      identity); PDF text extraction (`pypdf`/`pdfminer` are not project
+      dependencies — checked against `pyproject.toml` — so PDF assertions are
+      limited to the file magic, media type, and page count via a
+      `/Type /Page` object-count regex, no library needed for that one fact).
+      The frontend half (`figureSpec.a8.test.ts`) pins that
+      `buildFigureSpecFromDocument`, given a document with the same limits/
+      step+format/title/legend/error-binding/annotations/arrow-shape shape,
+      carries every one of those fields onto the `FigureSpec` wire object —
+      the contract half of the comparison, so a dropped field is caught
+      before the exported SVG ever changes. Verified load-bearing: backend,
+      six sabotages, six reddened tests — dropping `y_lim` application
+      (`figure_overrides.apply_axis_shape_overrides`) reddens the limits
+      test; no-op'ing `apply_tick_formats` reddens both tick tests; reversing
+      the legend's handles/labels in `_apply_overrides` reddens the legend
+      test; skipping the annotations loop reddens the annotations test;
+      skipping `apply_error_bars` reddens the error-collection test;
+      transposing a grid panel's `(row, col)` indices in
+      `figure_page._build_page_figure` reddens the panel-placement test.
+      Frontend, two sabotages, two reddened tests — dropping `x_lim` from
+      `figureViewOverrides.viewOverrides` (which also reddens the existing
+      `figureSpec.test.ts` byte-equality test) and emptying its `annotations`
+      mapping. All eight reverted byte-identical. Runs in CI's `ci.yml`
+      (`backend` job's `pytest -n auto`; `frontend` job's vitest). Owner
+      desktop run still gates the checkbox.
 - [ ] **A9 Time targets:** First unfamiliar dataset to acceptable figure in at
       most 20 minutes; routine figure in at most 2 minutes; copy/paste in
       seconds.

@@ -1,0 +1,380 @@
+"""A8 acceptance journey (FIGURE_AUTHORING_WORKFLOW_PLAN, ~line 1514):
+"Export SVG/PDF and compare limits, ticks, text, legend, errors,
+annotations, and panel placement."
+
+This is the STRUCTURAL half of that comparison: what Stage's figure spec
+says (axis limits, tick positions/labels, title/axis-label text, legend
+entries, error spans, annotations, panel placement) versus what the real
+export routes (``/api/export/figure``, ``/api/export/figure-hitmap``,
+``/api/export/figure-page``) actually put into the rendered SVG/PDF bytes.
+Every render below goes through the real FastAPI routes (``TestClient``),
+never a hand-rolled matplotlib call — so a route-layer regression (e.g. a
+dropped kwarg in ``routes.export_figures``) is just as reachable as a
+``calc/`` one.
+
+What is compared, and how:
+  * axis LIMITS -- ``/api/export/figure-hitmap``'s ``axes.xlim``/``ylim``
+    (exact floats the renderer actually set, harvested via
+    ``calc.figure_hitmap.collect_map``'s own ``ax.get_xlim()``/
+    ``get_ylim()`` -- not re-derived here) against the requested
+    ``overrides["x_lim"]``/``["y_lim"]``.
+  * TICKS -- the exact tick-label strings the requested ``x_step`` +
+    ``x_fmt`` produce, read literally out of the exported SVG's
+    ``matplotlib.axis_1`` group (matplotlib emits the tick value as plain
+    ``<text>`` content, not a raster glyph).
+  * TEXT -- title/axis-label strings appear as rendered glyphs (rich-text
+    mathtext renders as real Unicode -- mu/Å -- not the raw ``$...$``
+    markup, which only ever appears inside an XML *comment* matplotlib
+    emits alongside the real ``<tspan>`` content).
+  * LEGEND -- ``<g id="legend_1">``'s child ``<text>`` entries, exact
+    strings AND order.
+  * ERRORS -- an error-span series draws a ``LineCollection`` (the bar) in
+    the SVG; its absence means the export silently dropped the uncertainty.
+  * ANNOTATIONS -- each annotation's text appears exactly once, standalone
+    (not swallowed into the legend or a tick label).
+  * PANEL PLACEMENT -- a 2x2 page's four ``axes_N`` groups' own background-
+    patch pixel rects tile a 2x2 grid in row-major order, and each panel's
+    own title text lands inside the geometrically-correct ``axes_N`` block.
+
+What is NOT compared (out of scope for this suite):
+  * Byte-identity of the SVG (it carries a build timestamp/UUID in some
+    matplotlib versions) -- every assertion below is structural/textual.
+  * Sub-pixel text placement, font metrics, or anti-aliasing -- "the text
+    is present, in the right group, in the right order" is checked, not
+    "the glyph outline is identical".
+  * PDF text extraction -- neither ``pypdf`` nor ``pdfminer`` is a project
+    dependency (checked against ``pyproject.toml``); PDF assertions here
+    are limited to the file magic, media type, and the real PDF *page
+    count* (via a ``/Type /Page`` object-count regex on the raw bytes --
+    no library needed for that one structural fact).
+  * The frontend's on-screen render -- ``figureSpec.a8.test.ts`` pins that
+    the WIRE payload built from a document carries every one of these
+    fields; this file is the other half, proving the SERVER honors them.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+from typing import Any
+
+from fastapi.testclient import TestClient
+
+from quantized.app import app
+
+client = TestClient(app)
+
+_N = 40
+
+# ---------------------------------------------------------------------------
+# Fixture: one dataset, one flat-figure payload exercising every dimension
+# the A8 journey names, and one 2x2 page payload for panel placement.
+# ---------------------------------------------------------------------------
+
+
+def _dataset() -> dict[str, Any]:
+    xs = [10.0 * i / (_N - 1) for i in range(_N)]
+    a = [math.sin(v) for v in xs]
+    b = [math.cos(v) for v in xs]
+    c = [0.1 * v for v in xs]
+    return {
+        "time": xs,
+        "values": [[a[i], b[i], c[i]] for i in range(_N)],
+        "labels": ["Series A", "Series B", "Series C"],
+        "units": ["au", "au", "au"],
+        "metadata": {},
+    }
+
+
+_ERROR_MAG = [0.15] * _N
+_LEGEND_ENTRIES = ["Series A (au)", "Series B (au)", "Series C (au)"]
+_ANNOTATION_TEXTS = ("peak note", "dip note")
+
+
+def _fixture_payload(fmt: str = "svg") -> dict[str, Any]:
+    """A single-panel figure exercising limits, ticks, rich text, a
+    3-series legend, one series' error spans, two annotations, and an
+    arrow shape -- everything A8 names except panel placement (covered by
+    ``_page_payload`` below, since placement is meaningless for one panel)."""
+    return {
+        "dataset": _dataset(),
+        "y_keys": [0, 1, 2],
+        "fmt": fmt,
+        "title": r"Field $\mu_0 H$ ($\AA^{-1}$)",
+        "x_label": "Field",
+        "y_label": "Signal",
+        "x_step": 1.0,
+        "x_fmt": {"mode": "fixed", "digits": 1},
+        "error_spans": [{"y": {"plus": _ERROR_MAG, "minus": _ERROR_MAG}}, None, None],
+        "overrides": {
+            "x_lim": [1.0, 9.0],
+            "y_lim": [-1.5, 1.5],
+            "legend": {"show": True, "loc": "upper right"},
+            "annotations": [
+                {"x": 3.0, "y": 0.5, "text": "peak note"},
+                {"x": 6.0, "y": -0.5, "text": "dip note"},
+            ],
+            "shapes": [{"kind": "arrow", "x1": 2.0, "y1": 1.0, "x2": 4.0, "y2": 1.2}],
+        },
+        "filename": "a8_fixture",
+    }
+
+
+def _page_payload(fmt: str = "svg") -> dict[str, Any]:
+    """A 2x2 page, one series per panel, panel titles A/B/C/D in row-major
+    placement order -- the placement half of the A8 journey."""
+    ds = _dataset()
+
+    def _panel(row: int, col: int, key: int, title: str) -> dict[str, Any]:
+        return {
+            "figure": {"dataset": ds, "y_keys": [key], "title": title},
+            "row": row,
+            "col": col,
+        }
+
+    return {
+        "rows": 2,
+        "cols": 2,
+        "fmt": fmt,
+        "panels": [
+            _panel(0, 0, 0, "Panel A"),
+            _panel(0, 1, 1, "Panel B"),
+            _panel(1, 0, 2, "Panel C"),
+            _panel(1, 1, 0, "Panel D"),
+        ],
+        "filename": "a8_page",
+    }
+
+
+# ---------------------------------------------------------------------------
+# SVG structural helpers: matplotlib's SVG backend is stable enough (see
+# tests/test_calc_figure.py's existing "search the SVG text" precedent) to
+# read structurally, not just for substring containment -- these helpers do
+# depth-aware `<g id="...">...</g>` extraction so a nested legend/tick group
+# never gets truncated early by the first unrelated `</g>` after it.
+# ---------------------------------------------------------------------------
+
+
+def _extract_group(svg: str, gid: str) -> str:
+    """The full ``<g id="{gid}">...</g>`` subtree, matching the closing tag
+    by nesting DEPTH (not the next literal ``</g>``) so a group that itself
+    contains child groups (legend entries, axis ticks, ...) is returned
+    whole."""
+    m = re.search(rf'<g id="{re.escape(gid)}">', svg)
+    assert m, f'<g id="{gid}"> not found in SVG'
+    depth = 1
+    pos = m.end()
+    for tm in re.finditer(r"<g\b|</g>", svg[pos:]):
+        if tm.group() == "</g>":
+            depth -= 1
+            if depth == 0:
+                return svg[m.start() : pos + tm.end()]
+        else:
+            depth += 1
+    raise AssertionError(f"unbalanced <g> nesting for {gid!r}")
+
+
+_RECT_PATH_RE = re.compile(
+    r"<path d=\"M\s+([\d.]+)\s+([\d.]+)\s*\n"
+    r"L\s+([\d.]+)\s+([\d.]+)\s*\n"
+    r"L\s+([\d.]+)\s+([\d.]+)\s*\n"
+    r"L\s+([\d.]+)\s+([\d.]+)\s*\n"
+    r"z"
+)
+
+
+def _axes_bbox_px(axes_block: str) -> tuple[float, float, float, float]:
+    """(x0, y0, x1, y1) pixel rect of an axes group's OWN background patch
+    (``ax.patch``, always the first child path in the group) -- SVG pixel
+    coordinates, y growing DOWNWARD."""
+    m = _RECT_PATH_RE.search(axes_block)
+    assert m, "axes background rect (ax.patch) not found in this axes block"
+    xs = [float(m.group(i)) for i in (1, 3, 5, 7)]
+    ys = [float(m.group(i)) for i in (2, 4, 6, 8)]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _legend_entries(svg: str) -> list[str]:
+    legend = _extract_group(svg, "legend_1")
+    return re.findall(r"<text[^>]*>([^<]*)</text>", legend)
+
+
+def _pdf_page_count(pdf_bytes: bytes) -> int:
+    """Count real ``/Type /Page`` objects (word-boundary'd so ``/Pages``,
+    the page-TREE root every PDF also has exactly one of, never counts) --
+    no PDF library needed for this one structural fact (none is a project
+    dependency; see this module's docstring)."""
+    return len(re.findall(rb"/Type\s*/Page\b", pdf_bytes))
+
+
+# ---------------------------------------------------------------------------
+# Limits
+# ---------------------------------------------------------------------------
+
+
+def test_axis_limits_match_the_requested_overrides() -> None:
+    # The hit-map route harvests `ax.get_xlim()`/`get_ylim()` directly off
+    # the SAME rendered Axes the SVG/PDF export draws -- the ground truth
+    # for "did the requested x_lim/y_lim actually apply", independent of
+    # any pixel-to-data reconstruction from the SVG.
+    resp = client.post("/api/export/figure-hitmap", json=_fixture_payload("png"))
+    assert resp.status_code == 200, resp.text
+    axes = resp.json()["axes"]
+    assert axes["xlim"] == [1.0, 9.0]
+    assert axes["ylim"] == [-1.5, 1.5]
+
+
+def test_axis_limits_clip_the_ticks_to_the_requested_range() -> None:
+    # The x_lim=[1, 9] + x_step=1 combination is only meaningful if BOTH
+    # applied: a dropped x_lim would still show a step-1 sequence, just not
+    # bounded to [1, 9] (e.g. a 0.0 or 10.0 tick would leak in).
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    xaxis = _extract_group(svg, "matplotlib.axis_1")
+    x_ticks = re.findall(r"<text[^>]*>([^<]*)</text>", xaxis)
+    assert x_ticks[:-1] == [f"{v}.0" for v in range(1, 10)]  # last entry is the x label
+    assert "0.0" not in x_ticks[:-1]
+    assert "10.0" not in x_ticks
+
+
+# ---------------------------------------------------------------------------
+# Ticks (custom step + explicit number format)
+# ---------------------------------------------------------------------------
+
+
+def test_tick_labels_use_the_requested_step_and_format() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    xaxis = _extract_group(svg, "matplotlib.axis_1")
+    for v in range(1, 10):
+        assert f"{v}.0" in xaxis  # x_fmt={"mode": "fixed", "digits": 1}, x_step=1.0
+
+
+# ---------------------------------------------------------------------------
+# Text: rich-text title + plain axis labels
+# ---------------------------------------------------------------------------
+
+
+def test_title_and_axis_labels_render_with_rich_text_glyphs() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert "Field" in svg  # x_label, plain text
+    assert "Signal" in svg  # y_label, plain text
+    # Rich-text mathtext title ($\mu_0 H$ ($\AA^{-1}$)) renders as real
+    # glyphs, not the raw markup: mu, H, and Å must appear as RENDERED
+    # <tspan> content.
+    rendered = "".join(re.findall(r"<tspan[^>]*>([^<]*)</tspan>", svg))
+    assert "μ" in rendered
+    assert "Å" in rendered
+    # The raw source only ever appears inside matplotlib's own XML comment
+    # (harmless, unrendered) -- the RENDERED text must never contain the
+    # literal markup.
+    assert "\\mu_0" not in rendered
+    assert "\\AA" not in rendered
+
+
+# ---------------------------------------------------------------------------
+# Legend: exact entries, exact order
+# ---------------------------------------------------------------------------
+
+
+def test_legend_has_exactly_the_requested_entries_in_order() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == _LEGEND_ENTRIES
+
+
+# ---------------------------------------------------------------------------
+# Errors: an error-span series draws a real error-bar collection
+# ---------------------------------------------------------------------------
+
+
+def test_error_spans_render_a_line_collection() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert '<g id="LineCollection_1">' in svg
+
+
+# ---------------------------------------------------------------------------
+# Annotations: text present exactly once, standalone (not the legend/ticks)
+# ---------------------------------------------------------------------------
+
+
+def test_annotations_render_standalone_not_swallowed_by_the_legend() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    legend = _extract_group(svg, "legend_1")
+    for text in _ANNOTATION_TEXTS:
+        assert svg.count(text) == 1, f"{text!r} should appear exactly once"
+        assert text not in legend
+
+
+def test_arrow_annotation_renders_as_its_own_shape_group() -> None:
+    # A line/arrow "annotation" (calc.figure_shapes) is a distinct drawn
+    # artist from a text annotation, tagged with a stable gid so it can be
+    # told apart from ordinary series/tick lines.
+    resp = client.post("/api/export/figure", json=_fixture_payload("svg"))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert '<g id="shape:0">' in svg
+
+
+# ---------------------------------------------------------------------------
+# PDF: format sanity + real page count (no PDF library available/needed)
+# ---------------------------------------------------------------------------
+
+
+def test_pdf_export_is_a_single_page_with_the_requested_content_type() -> None:
+    resp = client.post("/api/export/figure", json=_fixture_payload("pdf"))
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content[:5] == b"%PDF-"
+    assert _pdf_page_count(resp.content) == 1
+
+
+def test_page_pdf_export_is_a_single_page() -> None:
+    # A 2x2 page composes four panels onto ONE rendered page -- still one
+    # PDF page, not four.
+    resp = client.post("/api/export/figure-page", json=_page_payload("pdf"))
+    assert resp.status_code == 200, resp.text
+    assert resp.content[:5] == b"%PDF-"
+    assert _pdf_page_count(resp.content) == 1
+
+
+# ---------------------------------------------------------------------------
+# Panel placement: a 2x2 page's four axes tile a grid in row-major order
+# ---------------------------------------------------------------------------
+
+
+def test_page_2x2_panels_tile_the_grid_in_row_major_order() -> None:
+    resp = client.post("/api/export/figure-page", json=_page_payload("svg"))
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+
+    blocks = {i: _extract_group(svg, f"axes_{i}") for i in range(1, 5)}
+    boxes = {i: _axes_bbox_px(blocks[i]) for i in range(1, 5)}
+    a_x0, a_y0, a_x1, a_y1 = boxes[1]
+    b_x0, b_y0, b_x1, b_y1 = boxes[2]
+    c_x0, c_y0, c_x1, c_y1 = boxes[3]
+    d_x0, d_y0, d_x1, d_y1 = boxes[4]
+
+    # Row 0 (axes_1/A, axes_2/B) sits ABOVE row 1 (axes_3/C, axes_4/D) --
+    # SVG y grows downward, so a smaller y is higher on the page.
+    assert a_y1 <= c_y0 + 1e-6
+    assert b_y1 <= d_y0 + 1e-6
+    # Col 0 (A, C) sits LEFT of col 1 (B, D).
+    assert a_x1 <= b_x0 + 1e-6
+    assert c_x1 <= d_x0 + 1e-6
+    # Same-row panels share a y-extent; same-column panels share an x-extent
+    # (a real grid, not four arbitrarily placed boxes).
+    assert (a_y0, a_y1) == (b_y0, b_y1)
+    assert (c_y0, c_y1) == (d_y0, d_y1)
+    assert (a_x0, a_x1) == (c_x0, c_x1)
+    assert (b_x0, b_x1) == (d_x0, d_x1)
+
+    # Each panel's OWN title lands inside the geometrically-correct axes_N
+    # block -- proof the authored row/col order and the rendered grid
+    # position agree, not just that four boxes happen to tile a grid.
+    assert "Panel A" in blocks[1]
+    assert "Panel B" in blocks[2]
+    assert "Panel C" in blocks[3]
+    assert "Panel D" in blocks[4]

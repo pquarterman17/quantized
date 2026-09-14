@@ -12,6 +12,7 @@ import LibraryWorkspace from "./LibraryWorkspace";
 import { VIRTUALIZE_ABOVE } from "./useTileVirtualization";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -205,6 +206,45 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     await waitFor(() => {
       expect((document.activeElement as HTMLElement | null)?.dataset.libraryTile).toBe("worksheet:d1");
     });
+  });
+
+  // Focus review (2026-09-14, F2): Tree and Details' scroll-out holders both
+  // CONSUME Delete/Backspace so a focused plain container cannot feed the
+  // global selection-based removal (lib/focusGuard.ts's data-loss path) —
+  // Tiles' grid holder, the renderer the mechanism was extracted FROM, did
+  // not. Mount the real global shortcut handler alongside the grid so this
+  // proves the keystroke never reaches it, not merely that SOME preventDefault
+  // happened — useGlobalShortcuts.ts's own Delete/Backspace branch calls
+  // preventDefault() itself once it decides to act (whether or not there is
+  // anything selected to remove), so `fireEvent`'s return value alone cannot
+  // tell "the grid consumed it" apart from "the global handler ran and had
+  // nothing to do". A live, selected dataset makes the outcomes observably
+  // different: it is removed if the keystroke reaches the global handler,
+  // and untouched if the grid holder consumes it first.
+  it("Delete/Backspace on the grid holder (fallback focus) does not reach the global dataset removal", () => {
+    function GlobalHarness() {
+      useGlobalShortcuts();
+      return <LibraryWorkspace onClose={vi.fn()} />;
+    }
+    seed(500);
+    useApp.setState({ selectedIds: ["d5"], activeId: "d5" });
+    render(<GlobalHarness />);
+    const section = screen.getByLabelText("Library workspace");
+    const first = renderedTiles()[0];
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    section.scrollTop = 24000; // the focused tile unmounts with its window
+    fireEvent.scroll(section);
+    expect(document.querySelector('[data-library-tile="worksheet:d0"]')).toBeNull();
+    const holder = document.activeElement as HTMLElement;
+    expect(holder).not.toBe(document.body); // the grid took the orphaned focus
+    expect(holder.hasAttribute("data-scroll-out-focus")).toBe(true);
+
+    fireEvent.keyDown(holder, { key: "Delete" });
+    expect(useApp.getState().datasets.some((d) => d.id === "d5")).toBe(true); // NOT removed
+    fireEvent.keyDown(holder, { key: "Backspace" });
+    expect(useApp.getState().datasets).toHaveLength(500); // NOT removed
   });
 
   it("windowed listitems report their TRUE set size and position to assistive tech", () => {

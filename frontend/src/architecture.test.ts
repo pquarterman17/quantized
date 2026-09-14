@@ -1682,6 +1682,8 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   libraryPanelWidth: "Library panel width preference; UI layout state, not data",
   revealTarget: "scroll-to target for Library tree; ephemeral, cleared after reveal",
   activeDrag: "active drag state for Library folder drag feedback; transient",
+  activeDragPress:
+    "pointer press that owns the drag in activeDrag (ROUND 6 of the Tiles drag review); transient, written only by setActiveDrag alongside activeDrag itself",
   // LIBRARY_WORKBOOK_UX_PLAN PR C/E2: tree UI state. PR E2 now persists all
   // three into the .dwk (lib/workspace.ts's parseWorkspace/serializeWorkspace),
   // but persisted is not the same as undoable — they're view/navigation state
@@ -2307,13 +2309,29 @@ describe("file URLs are converted with fileURLToPath, never .pathname (#269)", (
 // the surrounding function, which a grep-only guard can't do reliably) — it
 // caps the FILE COUNT so the imperative-getState() footprint can only shrink,
 // the same shape as the weak-wait ratchet above.
-const GETSTATE_IN_RENDER_FILE_COUNT_PIN = 80;
+//
+// WIDENED 2026-09-14 (tiles_review7.md finding 3): `getLibraryState()`
+// (store/hooks/useLibraryStore.ts) is `useApp.getState()` behind a new name
+// — an alias added for the Tiles drag/drop rework so an imperative read from
+// a `document` event listener (useDetailsDragDrop.ts) would not move this
+// ratchet's pin for a call the ratchet was never meant to police. Filtering
+// on the literal string `useApp.getState()` alone made that alias invisible
+// to the ratchet: a future render-body read through `getLibraryState(` would
+// go uncounted. Widened to catch both spellings. This is a file-count
+// ratchet, so the file the widened filter itself newly counts moves the pin
+// by exactly that many files — MEASURED (`useDetailsDragDrop.ts`, the only
+// file that calls `getLibraryState(` without also calling
+// `useApp.getState()`): 80 -> 81, exactly one file, and that one use is
+// legitimate under the ratchet's own rule (a capture-phase `pointerdown`
+// listener, not a render body — see the file's own comment at the call
+// site).
+const GETSTATE_IN_RENDER_FILE_COUNT_PIN = 81;
 
 describe("getState()-in-render ratchet (repo evaluation 2026-09-03)", () => {
   it("no more files under components/ + App*.tsx call useApp.getState() than the 2026-09-03 baseline", () => {
     const withGetState = sources()
       .filter(([p]) => p.startsWith("./components/") || /^\.\/App.*\.tsx$/.test(p))
-      .filter(([, src]) => src.includes("useApp.getState()"))
+      .filter(([, src]) => src.includes("useApp.getState()") || src.includes("getLibraryState("))
       .map(([p]) => p);
     expect(
       withGetState.length,

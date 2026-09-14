@@ -50,6 +50,7 @@ import { displayPositions } from "./seriesStyleCycle";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
+import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
 import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
@@ -73,6 +74,17 @@ export interface SpatialPageAppearance {
    *  its page panel get the same dash. Absent/false = no cycle, byte-identical
    *  to before the cycle existed. */
   autoSeriesStyles?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: one page-level "print
+   *  safe" choice, applied to EVERY panel's own `FigureSpec.greyscale` (the
+   *  backend's `PagePanel.greyscale` is genuinely per-panel, but this
+   *  composer offers no per-panel UI — see `lib/exportPageCommand.ts`'s own
+   *  doc). Omitted/false = today's coloured export, byte-identical, mirroring
+   *  the single-figure dialog's own wire convention (`lib/figureSpec.ts`'s
+   *  `...(o.greyscale ? { greyscale: true } : {})`). A facet panel would be a
+   *  documented no-op (`FigureSpec.greyscale`'s own doc: never applies once
+   *  `.facets` is set) — moot today since `spatialPanelFigure` below never
+   *  emits `.facets`. */
+  greyscale?: boolean;
 }
 
 function panelOverrides(
@@ -251,7 +263,7 @@ export function buildSpatialPageRequest(
   }
   const { rows, cols } = spatialGridSize(panels);
   const { width_in, height_in } = pageSizeInches(pageSetup);
-  return {
+  const spec: FigurePageSpec = {
     rows,
     cols,
     panels: panelSpecs,
@@ -259,4 +271,10 @@ export function buildSpatialPageRequest(
     width_in,
     height_in,
   };
+  // P3.3 residual close: the ONE construction site for the page-wide
+  // greyscale choice (lib/pageGreyscale.ts's own doc) -- rather than this
+  // path spreading the wire literal itself, which is how it and the two
+  // PageDocument-rooted paths (panelResolve.ts, usePagePreviewExport.ts)
+  // would drift.
+  return withPageGreyscale(spec, appearance?.greyscale);
 }

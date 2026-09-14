@@ -15,6 +15,7 @@ import {
 import { LIBRARY_DETAILS_COLUMNS } from "../../lib/libraryDetailsColumns";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
+import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import { parseQuery } from "../../lib/smartfolders";
 import type { BatchMetadataPatch } from "../../store/datasetMeta";
 import { toast } from "../../store/toasts";
@@ -147,7 +148,48 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed off the row list only
   }, [rows]);
 
+  // ORGANIC-SCROLL focus fallback (lib/scrollOutFocus). A mouse-wheel scroll
+  // that unmounts the focused <tr> orphans focus to <body> with no keystroke
+  // to recover it — the scroll wrapper takes it instead, and onNavKeyDown
+  // resumes from the roving row. `effectiveRovingKey` is a DIFFERENT fact: it
+  // keeps the rendered window TABBABLE, which says nothing about where live
+  // DOM focus sits. Declared AFTER the removal recovery above so that effect
+  // gets first claim on an orphaned focus (the shared predicate also excludes
+  // the removal case outright, via `stillInModel`).
+  //
+  // Keyed on `focusKey`, NOT `rovingKey` (focus-review fix, 2026-09-14):
+  // `rovingKey` is non-null even when NO row has ever been focused (it falls
+  // back to the selected row, then rows[0]) — a wrapper predicate that used
+  // it would claim focus off a pure wheel-browse of an untouched table (no
+  // click, no keystroke, no selection) and, from then on, silently swallow
+  // the global Delete-selection shortcut. `focusKey` is set only by a row's
+  // real `onFocusRow`, so it is null until a row has genuinely held focus —
+  // exactly the fact this predicate needs. The RESUME branch in
+  // `onNavKeyDown` below still uses `rovingKey`: once the wrapper legitimately
+  // holds focus, resuming from the model's current roving position (not
+  // necessarily the row that scrolled out) is correct.
+  useEffect(() => {
+    const selector = focusKey != null ? `[data-lib-row="${CSS.escape(focusKey)}"]` : null;
+    const stillInModel = rows.some((r) => r.node.key === focusKey);
+    if (needsScrollOutFocusFallback(virt.virtualized, selector, stillInModel, scrollRef.current)) {
+      scrollRef.current?.focus();
+    }
+  }, [virt.virtualized, virt.start, virt.end, rows, focusKey, scrollRef]);
+
   const onNavKeyDown = (event: React.KeyboardEvent): void => {
+    // The SCROLL WRAPPER itself holds focus — the scroll-out fallback effect
+    // above put it there when an organic scroll unmounted the focused row. A
+    // nav key resumes from the roving row's model position; everything else,
+    // Delete included, falls through to the belt below, which
+    // consumes it rather than let it reach the global dataset handlers.
+    if (event.target === scrollRef.current) {
+      const resume = detailsNavIndex(rows.length, keyIndex(rovingKey), event.key);
+      if (resume != null) {
+        event.preventDefault();
+        focusRowAt(resume);
+        return;
+      }
+    }
     // L1.4: a row's inline rename input owns its own keys. `.closest(
     // "[data-lib-row]")` below resolves ANY descendant — including that
     // input — to its ancestor row, which is exactly how LibraryTree's P2
@@ -242,8 +284,11 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
        *  keyboard entry lands directly on the current row and a focused
        *  wrapper can never leak Up/Down past onNavKeyDown's row check to
        *  the global dataset navigator. The accessible name lives on the
-       *  <table> itself, where it labels a real role. */}
-      <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
+       *  <table> itself, where it labels a real role. `tabIndex={-1}` (from
+       *  scrollOutFocusProps) keeps that true — it makes the wrapper
+       *  focusable by SCRIPT only, for the scroll-out fallback, and adds no
+       *  sequential stop. */}
+      <div className="qzk-details-scroll" ref={scrollRef} {...scrollOutFocusProps} onKeyDown={onNavKeyDown}>
         {/* REVIEW ROUND: a VIRTUALIZED table must declare its true size. Without
             `aria-rowcount` a screen reader announces only the rendered window
             (~40 rows) as the entire table, so a 5,000-row Library sounds like a

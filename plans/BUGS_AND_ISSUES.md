@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-13  
+**Updated:** 2026-09-14  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -29,12 +29,12 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
-| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **9 of 10 code sites fixed; site 9 took FOUR attempts** (2026-09-10). `lib/barlayout.ts` still open (see entry). Declared closed three times before it was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite has caught essentially none of it; adversarial review, per-branch sabotage and measuring claims have caught all of it. Treat any "closed" here as unproven until a shape-search and a sabotage back it |
+| BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
 | BUG-009 | P2 | Pending-dataset contract | Five ad-hoc guards rather than one contract; the data-CORRUPTING sites and the row-state family are guarded + ratcheted, and a failed fetch now names its reason instead of promising a retry forever — but "refuse" should still be "resolve-then-apply" | Unassigned | Found across five review rounds, 2026-09-10; corrupting sites, row state and the misleading message fixed, the deferral refactor open. A load-path fix for the row-state/pending clamp (Group AF, 2026-09-13) was built and reverted after adversarial review — see the entry |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
-| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review round 2 (2026-09-13) closed a regression round 1 introduced (`startInFlight` could stick forever on a hung fetch), finished the finding #5 fix (reason now paired with its own book, not a stale one), closed the still-lying status-line nit, and corrected a false "still open" residual claim against `workbookTransfer.ts` — see the entry. Owner call on abort-vs-partial-pack still open |
+| BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 
 ---
@@ -119,12 +119,12 @@ The implementation must use the file format's semantics, not merely the exact di
 
 ### Acceptance criteria
 
-- [ ] A freshly imported recognized `.refl` file opens with only its measured reflectivity/intensity curve selected.
-- [ ] Vertical bars represent the intensity uncertainty.
-- [ ] Horizontal bars represent Q resolution when provided.
-- [ ] Neither uncertainty column appears as a normal legend series unless the user explicitly chooses to plot it.
-- [ ] The worksheet still exposes every original column and value.
-- [ ] Ambiguous/unrecognized layouts are not silently given confident but unsupported bindings.
+- [x] A freshly imported recognized `.refl` file opens with only its measured reflectivity/intensity curve selected. **2026-09-14 (Claude):** backend, `tests/test_io_ncnr.py::test_refl_declares_uncertainty_and_resolution_roles` asserts `ds.metadata["default_value_channels"] == [0]` on the real fixture; frontend, `frontend/src/lib/plotdata.test.ts`'s "BUG-001: an NCNR .refl import selects only the measured channel by default" pins `defaultDenseChannels` to `[0]` on an all-equally-dense 3-channel dataset (so the hint, not the density heuristic, is what is doing the work), and `frontend/src/store/reimport.test.ts`'s "only the measured channel is the default (before any customization)" (inside the BUG-001 describe block) asserts the same against the real NCNR-shaped metadata — its own comment names this exact acceptance criterion.
+- [x] Vertical bars represent the intensity uncertainty. **2026-09-14 (Claude):** `frontend/src/lib/errorbars.test.ts`'s "NCNR reductus .refl role bindings (BUG-001)" describe block, case "binds the uncertainty channel to a VERTICAL (y-axis) span on the measured series" — asserts `buildErrorSpans` produces a y-axis span from the uncertainty column's own values; end-to-end confirmation through the real render hook in `usePlotPayload.errorRoles.test.ts`'s "draws a VERTICAL span from the uncertainty binding and a HORIZONTAL span from the resolution binding".
+- [x] Horizontal bars represent Q resolution when provided. **2026-09-14 (Claude):** same describe block, case "binds the resolution channel to a HORIZONTAL (x-axis) span, not a y one" — asserts an x-axis span from the resolution column; same end-to-end hook test as above.
+- [x] Neither uncertainty column appears as a normal legend series unless the user explicitly chooses to plot it. **2026-09-14 (Claude):** default-hidden half — `errorbars.test.ts`'s "draws neither uncertainty nor resolution as a plotted series alongside the spans" (only channel 0 is ever passed as `plotted`) and `usePlotPayload.errorRoles.test.ts`'s "plots only the measured channel; uncertainty/resolution never appear as series". Explicit-choice half — `reimport.test.ts`'s "a customization that WIDENS the default (plotting uncertainty as an ordinary series) survives a same-shape reimport" drives the real store (`yKeys: [0, 1]`, the Channels-card checkbox path) and confirms uncertainty stays plotted once the user asks for it.
+- [x] The worksheet still exposes every original column and value. **2026-09-14 (Claude):** `tests/test_io_ncnr.py::test_refl_declares_uncertainty_and_resolution_roles` asserts `ds.labels == ("Intensity", "uncertainty", "resolution")` and `ds.values.shape == (325, 3)` on the real fixture — every imported column present and untouched, exactly this criterion's wording.
+- [x] Ambiguous/unrecognized layouts are not silently given confident but unsupported bindings. **2026-09-14 (Claude):** `tests/test_io_ncnr.py::test_refl_roles_fail_safe_on_unrecognised_layouts` (parametrized: swapped uncertainty/resolution order, and no recognisable token at all) asserts `_refl_role_metadata(...) == {}` — no roles emitted, rather than a confident but wrong binding.
 - [ ] Owner verifies the reported file visually on Windows.
 
 ### Completion record
@@ -405,9 +405,9 @@ Use a compact, scan-first Origin-like tree as the default for expanded workbook 
 ### Acceptance criteria
 
 - [ ] A new user can identify folders, workbooks, worksheets, and saved graphs without trial-and-error clicking. — glyphs now exist for all four kinds; a real judgment call needs an actual new-user/owner session.
-- [ ] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews. — very likely true (a compact row is one ~20-24px line vs. the prior ~90-110px card) but not visually confirmed against a rendered viewport — no screenshot taken this pass.
+- [ ] At least six worksheet rows are comfortably visible in a typical-height Library without scrolling past large previews. — very likely true (a compact row is one ~20-24px line vs. the prior ~90-110px card) but not visually confirmed against a rendered viewport — no screenshot taken this pass. **2026-09-14 (Claude), partial evidence added, still left unticked:** `frontend/src/components/Library/LibraryTree.compactRows.test.tsx` renders the real `LibraryTree` with 8 worksheets and confirms, at the DOM+CSS-text layer, the two structural facts that ARE honestly establishable without a real browser: every worksheet row is a single line with no `.qzk-ds-spark`/`.qzk-ds-foot` child mounted by default (no preview, no full-card footer), and `shell.css` declares the compact modifier's padding as measurably smaller than the full card's (`3px 4px` vs `8px 9px`). That is NOT the same as proving six such rows fit in a 480px panel: `shell.css` declares no `height`/`line-height` for `.qzk-ds-compact`/`.qzk-ds-compact-row`/`.qzk-ds-name`, so the row's actual rendered height depends on the browser's font-metric default line-height, which neither CSS-text parsing nor jsdom's layout-free DOM can supply. Sabotage-verified (forcing the preview open by default via `DatasetRowPreview`'s `isPreviewExpanded` call, and inflating the compact padding to the full card's in a scratch edit of `shell.css`) made the corresponding assertions fail; both reverted byte-identical. Left unticked per this box's own honesty requirement.
 - [x] A user can reveal a plot thumbnail when desired without opening or replacing the active plot. — test-verified: `selectedIds`/`activeId` unchanged after toggling the preview.
-- [ ] Names and action meanings are recoverable even when the Library is narrow. — the tooltip/ellipsis mechanism is preserved, not re-tested at a narrow panel width.
+- [x] Names and action meanings are recoverable even when the Library is narrow. — the tooltip/ellipsis mechanism is preserved, not re-tested at a narrow panel width. **2026-09-14 (Claude):** `LibraryTree.compactRows.test.tsx`'s "narrow-panel name/action recoverability" describe block renders the real `LibraryTree` with a deliberately long worksheet name and asserts (1) the name element's `title` attribute contains the full, untruncated name — recoverable regardless of rendered width — and (2) `shell.css`'s `.qzk-ds-name` rule declares `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap` (parsed from the stylesheet text via `styles/cssRules.testkit.ts`, not assumed). Sabotage-verified: stripping the `title` attribute from `DatasetRowParts.tsx`'s name span, and separately dropping the three overflow declarations from `shell.css`'s `.qzk-ds-name` rule, each made its corresponding assertion fail; both reverted byte-identical.
 - [x] Tree, Tiles, and Details views retain consistent selection and activation behavior. — Tiles/Details untouched; Tree's selection/activation logic is unchanged (only the worksheet row's markup changed), and `LibraryTree.test.tsx` passes unmodified.
 - [ ] The reported Origin project remains navigable with no missing or duplicated nodes. — not tested against the owner's actual reported project (not available here).
 - [ ] Owner verifies the revised workflow on the reported project. — pending; required before this item can be marked complete.
@@ -1252,8 +1252,22 @@ The two hesitations, and what they were actually worth:
   by any column.
 - [x] Actual result recorded — the child's `metadata.text_columns` is the
   parent's, unsliced; every text cell is off by the filter's own offsets.
-- [ ] Reproduced by a test — deliberately not added yet: a passing test would
+- [x] Reproduced by a test — deliberately not added yet: a passing test would
   lock in the wrong behavior, and a failing one belongs with the fix.
+  **2026-09-14 (Claude):** added now that the fix is shipped everywhere (see
+  the "Every caller covered" box below). `frontend/src/components/Stage/
+  worksheet/extractRows.test.ts`'s "planExtract — a filtered row subset's
+  text cells line up with THEIR OWN rows on Extract (BUG-006)" describe block
+  reproduces the original user-visible symptom end to end, at the layer the
+  user experiences: a dataset with `metadata.text_columns`, filtered to a
+  non-contiguous row subset (simulating the Data Filter), run through
+  `planExtract` — the exact function `useWorksheetView`'s `extractSubset`
+  calls for the Extract button — then asserts every child row's OWN text cell
+  names the same source row its own numeric value came from. Sabotage-
+  verified: reverting `lib/datasetsplit.ts`'s `sliceDataStruct` to copy
+  `metadata` wholesale (`{ ...data.metadata }`, dropping the
+  `sliceRowSidecars` call) made it fail (`expected [...] to have a length of
+  4 but got 6`); reverted byte-identical.
 - [ ] Confirmed visually on real owner data.
 
 #### Investigation
@@ -1305,7 +1319,7 @@ The two hesitations, and what they were actually worth:
   `{name: array}` objects), so removing either alone left it green. It is now
   labelled as the characterization test it is, and the shape guard got its own
   test that DOES fail when the `Array.isArray` rejection is removed.
-- [ ] ~~Every caller covered~~ — SIX of eight, see "STILL OPEN" below. This box
+- [x] ~~Every caller covered~~ — SIX of eight, see "STILL OPEN" below. This box
   was ticked twice on an enumeration that was never verified against a search;
   the two misses were found by review, not by the suite. The fix is in one
   shared helper, and
@@ -1314,6 +1328,38 @@ The two hesitations, and what they were actually worth:
   no longer carried by REFERENCE (its sidecars must be sliced), and those tests
   had been pinning that aliasing rather than any contract. Content is unchanged
   for a dataset carrying no row-indexed sidecar.
+  **RECONCILED 2026-09-14 (Claude):** the "STILL OPEN" this note pointed to is
+  a heading inside BUG-009's entry, not this one — a stale cross-reference
+  left over from before Group P closed the remaining sites (2026-09-10) and
+  the `PREVIEW_SOURCE_ROWS` label-path fix generalized (2026-09-12). Re-verified
+  against the CODE, not the prose, by grepping every call site of the shared
+  helpers (`ROW_INDEXED_SIDECARS`/`sliceRowSidecars`/`concatRowSidecars`/
+  `withoutRowSidecars`/`PREVIEW_SOURCE_ROWS` in `lib/rowSidecars.ts`, and
+  `slice_row_sidecars`/`drop_row_sidecars` in `row_sidecars.py`) rather than
+  trusting a count. All TEN sites this entry ever named now carry the fix:
+  1. `lib/datasetsplit.ts:463` `sliceDataStruct` (Extract, Split-by-column,
+     byPartition) — slices.
+  2. `lib/rowstate.ts:73` `pruneExcluded` — slices.
+  3. `lib/facet.ts:62` `facetSlices` — slices.
+  4. `store/cellEdit.ts:161,208` `insertRows`/`deleteRows` — slices (sized by
+     `sidecarRowCount`, not `time.length`).
+  5. `lib/worksheetTransforms.ts`'s `provenance()` (transpose/stack/unstack) —
+     deliberately DROPS both `ROW_INDEXED_SIDECARS` and `PREVIEW_SOURCE_ROWS`;
+     no row mapping exists for those reshapes.
+  6. `lib/merge.ts:196-197` `mergeDatasets` — `withoutRowSidecars` +
+     `concatRowSidecars` (per-input span, no truncation, no silent drop of
+     datasets 1..N).
+  7. `calc/corrections.py:328` xTrim — `slice_row_sidecars`.
+  8. `calc/resample.py:143` — deliberately `drop_row_sidecars`; no output row
+     is an input row.
+  9. `store/importDatasets.ts` (composes `PREVIEW_SOURCE_ROWS` onto a pending
+     book's preview metadata) + `components/Stage/worksheet/textColumns.ts`'s
+     `worksheetTextColumns` (suppresses text columns while `rowsAreSampled`,
+     never misattributes them) — the render half of site 9.
+  10. `lib/barlayout.ts:126` `textLabelsFor` — reads `PREVIEW_SOURCE_ROWS` via
+      `asPreviewSourceRows`; the label path closed 2026-09-10 and generalized
+      via the `preview_rows` wire field shipped 2026-09-12.
+  TEN of ten, by search rather than by enumeration this time.
 - [x] `store/cellEdit.ts`'s `insertRows`/`deleteRows` — the worst site, because
   a slice produces a NEW dataset while a row edit is PERSISTED into the
   existing one. Both are slices in disguise and share `sliceRowSidecars`:
@@ -2933,6 +2979,66 @@ off-by-one spec-range citation) and six nits. This follow-up commit closes:
   abort-vs-partial-pack choice); nit 5's "named book may be merely slow"
   narrowing is a new, separate open judgment call from this round.
 
+#### Residual closed (2026-09-13): Save/Save As now closes finding #2's window too
+
+Round 1's Residual bullet and round 2's correction of it left one real gap
+open: `store/workspaceIO.ts`'s `prepareWorkspaceState` — the shared preface
+for Save and Save As — re-read the store after its own
+`await get().resolvePendingDatasets()` but never re-checked `pending` on
+that re-read, the identical window finding #2 closed for Pack Project. It
+was left open at the time because `store/workspaceIO.ts` and the other
+BUG-010 files were being edited concurrently for that bug; BUG-010 has
+since landed and been through its own review round, so this follow-up
+commit closes it:
+
+- **The fix, mirroring `packProjectContent.ts`'s own post-await re-check
+  verbatim:** `prepareWorkspaceState` (`frontend/src/store/workspaceIO.ts`)
+  re-checks `s.datasets` for a still-`pending` entry right after the
+  `const s = get();` re-read (resolve call `:73`, re-check `:81-96`) and
+  refuses the save — `"couldn't load full data for every book: \"<name>\" was
+  still loading"`, same status + danger-toast shape as the sibling
+  fetch-failure `catch` immediately above it — rather than letting a book
+  that turned pending DURING the resolve await reach `serializeWorkspace`
+  with its downsampled preview rows (and a stray `pending` field). Both Save
+  and Save As share this one preface function, so one fix closes it for
+  both entry points, exactly like Pack Project's preview/Start-pack pair
+  shared `serializeCurrentWorkspaceForPack`.
+- **`lib/workspaceSerialize.ts`'s `pending` comment updated to say so:** the
+  comment previously narrowed itself, twice, to name `store/workspaceIO.ts`
+  as the one export path still carrying this window. It now states the
+  guarantee holds on every explicit export path — Save, Save As, workbook
+  Copy/Duplicate, and Pack Project all resolve pending datasets first AND
+  refuse rather than serialize a book that turns pending again during that
+  resolve.
+- **Regression test:** `frontend/src/store/workspaceIO.test.ts`'s new
+  `describe("BUG-011 residual — a book that goes pending DURING the resolve
+  await (Save/Save As)")` — same shape as `packProject.test.ts`'s sibling
+  spec for finding #2: a lazy book's fetch is held open, a second lazy book
+  is added to the store while the first is still in flight, then the first
+  resolves. Asserts the save is refused by name (`"book2.opj" was still
+  loading"`), the danger toast carries the same text, `saveBlob` (the
+  browser-download fallback this path exercises) is never called, and the
+  book that turned pending is still `pending` afterwards (a `currentProject`
+  assertion that could not fail was removed in the review round).
+  Sabotage-verified: removing the re-check fails exactly this one new spec
+  (41 other specs in the file untouched), restored byte-identical after.
+- Scope: `store/workspaceIO.ts` and `lib/workspaceSerialize.ts` were the only
+  files this residual named as open; `store/workbookTransfer.ts` and
+  `lib/workbookTransfer.ts` were already closed (round 2's correction) and
+  are untouched here.
+- **Bundle:** measured against `2920e34a`, which the agent named as the
+  parent; the commit's real parent on the branch is `dafaa333` (the PR #359
+  merge, whose tree is identical — the review round corrected the SHA; sixth
+  recurrence of the ancestor-vs-parent citation) — it builds to
+  916,466 B eager (rebuilt in a throwaway `git worktree add` with its own
+  `npm ci`, never a `cp -r` of a worktree), this commit to 916,645 B, +179 B,
+  3,755 B under the unmoved 920,400 B budget.
+- Owner verification: unchanged from the original fix and every review round
+  since — still open (the severity call and abort-vs-partial-pack choice,
+  and nit 5's "named book may be merely slow" narrowing from round 3). This
+  residual closure is a code-verifiable fix, not a resolution of either
+  open owner call.
+
 ---
 
 ## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
@@ -3212,3 +3318,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Adversarial review round on the BUG-010 fix (commit `762e00c1`): closed the one real coverage gap — File ▸ Open / Open without layout (`lib/openWorkspaceReplace.ts`'s `replaceWorkspace`/`replaceWorkspaceSafely`) never called `notifyMigrationWarnings`, so it was the one load path with a status-line fold but no toast, contradicting the entry's own "shows both" claim. Also: gave the helper a longer, non-clobberable TTL (`TOAST_ACTION_TTL`) since it is the ONLY surface on two sites; added direct unit tests for the helper's "one toast, never one per warning"/"(+N more)" rules; replaced `duplicateWorkbook`'s un-failable "pinned by its own test" assertion with a structural one against a live-state round trip; corrected three stale design sentences, four off-by-one file:line citations, and one non-existent symbol name (`parseWorkbookPackage` -> `parseTransferPackage`) in the plan entry; removed a stray doubled blank line before `## New issue template` | 3 new specs (`lib/openWorkspaceReplace.test.ts` x3) + 4 new specs (`store/toasts.test.ts` x4) + 1 test strengthened (`store/workbookTransfer.test.ts`), every one sabotage-verified, source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0`/full vitest (636 files, 10422 passed + 2 expected-fail, 0 FAIL)/`npm run build` all clean; `uv run pytest -q tests/test_repo_integrity.py` 12 passed; eager bundle +69 B (916,384 B at the `a99ebb6d` parent -> 916,453 B here), 3,947 B under the unmoved 920,400 B budget |
 | 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |

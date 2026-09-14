@@ -12,10 +12,23 @@
 // verbatim with "Copy figure" so a pasted figure and an exported one cannot
 // drift. This file now owns only the DIALOG and the download verb.
 
-import { askParams } from "../components/overlays/ParamDialog";
+import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { exportActive, type StoreGet } from "./exportActive";
 import { buildStageFigureSpec } from "./figureSpec";
+
+/** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
+ *  Export-figure dialog's own first boolean field. Exported so every OTHER
+ *  export dialog that embeds a `FigureSpec` (lib/exportPageCommand.ts's page
+ *  export) reuses this exact field instead of duplicating the label/hint text
+ *  and risking the two drifting apart. */
+export const GREYSCALE_FIELD: ParamField = {
+  key: "greyscale",
+  label: "Greyscale (print-safe)",
+  type: "boolean",
+  default: false,
+  hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
+};
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
@@ -42,13 +55,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       default: 300,
       hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
     },
-    {
-      key: "greyscale",
-      label: "Greyscale (print-safe)",
-      type: "boolean",
-      default: false,
-      hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
-    },
+    GREYSCALE_FIELD,
     { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {
       key: "x_label",

@@ -298,6 +298,71 @@ describe("serialize / sanitize round trip", () => {
   });
 });
 
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: page-wide print-safe output. ADDITIVE --
+// absent === off, no version bump (see PageOutputSettings.greyscale's doc),
+// so an existing saved page must load and round-trip completely unchanged.
+describe("output.greyscale (P3.3 — additive, absent === off)", () => {
+  it("a page saved before this field existed loads with greyscale off, key absent", () => {
+    const restored = sanitizePageDocument({
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: PAGE_DOCUMENT_VERSION,
+      id: "p1",
+      name: "Pre-P3.3 page",
+      rows: 1,
+      cols: 1,
+      panels: [{ figureId: "figure-1", label: null, title: null }],
+      output: { format: "pdf", stylePreset: "default", dpi: 300, labelFormat: "(a)", labelPos: "nw" },
+    });
+    expect(restored).not.toBeNull();
+    expect(restored!.output.greyscale).toBeUndefined();
+    expect("greyscale" in restored!.output).toBe(false);
+  });
+
+  it("createPageDocument leaves it absent by default (DEFAULT_OUTPUT has no entry)", () => {
+    const doc = createPageDocument({ id: "p1", name: "x" });
+    expect("greyscale" in doc.output).toBe(false);
+  });
+
+  it("a saved greyscale: true survives save/load (JSON round trip)", () => {
+    const doc = createPageDocument({ id: "p1", name: "Print-safe page", output: { greyscale: true } });
+    expect(doc.output.greyscale).toBe(true);
+    const restored = deserializePageDocument(serializePageDocument(doc));
+    expect(restored).toEqual(doc);
+    expect(restored!.output.greyscale).toBe(true);
+  });
+
+  it("only a literal true survives — false and junk both load as absent (one canonical off)", () => {
+    const base = {
+      schema: PAGE_DOCUMENT_SCHEMA,
+      version: PAGE_DOCUMENT_VERSION,
+      id: "p1",
+      name: "x",
+      rows: 1,
+      cols: 1,
+      panels: [],
+    };
+    for (const value of [false, "true", 1, null]) {
+      const restored = sanitizePageDocument({ ...base, output: { greyscale: value } });
+      expect("greyscale" in restored!.output).toBe(false);
+    }
+  });
+
+  // Kept alongside the real-hook parity test in useFigurePage.test.ts ("dirty
+  // toggles on a real greyscale flip exactly like an ordinary field"): this
+  // one is a fast unit-level pin on `pageDocumentDirty` itself (the pure
+  // comparison contract), built from hand-constructed objects rather than a
+  // rendered hook -- the hook-level test is what actually proves the real
+  // `setGreyscale` wiring produces this same shape.
+  it("a page whose greyscale was turned on and off again is not dirty against the saved copy", () => {
+    const saved = createPageDocument({ id: "p1", name: "Results" });
+    const toggledOn: PageDocument = { ...saved, output: { ...saved.output, greyscale: true } };
+    expect(pageDocumentDirty(toggledOn, [saved])).toBe(true);
+    const output = { ...toggledOn.output };
+    delete output.greyscale; // exactly what useFigurePage's setGreyscale(false) does
+    expect(pageDocumentDirty({ ...toggledOn, output }, [saved])).toBe(false);
+  });
+});
+
 describe("sanitizePageDocuments (migration)", () => {
   it("an absent field loads as [] without crashing (pre-F3.1 workspace)", () => {
     expect(sanitizePageDocuments(undefined)).toEqual([]);

@@ -37,6 +37,16 @@
 //     tint) reads it non-reactively where a per-row render doesn't need to
 //     re-run on every OTHER row's drag, and reactively where the whole-tree
 //     highlight does.
+//   - `activeDragPress` — the pointer press that OWNS the drag above, kept
+//     HERE rather than in the renderer that publishes the drag (ROUND 6 of the
+//     Tiles drag/drop review, 2026-09-14). `activeDrag` has five publishers;
+//     a press record owned by one of them describes only that publisher's
+//     drags, and — being cleared on a different schedule — could outlive its
+//     own drag and then be matched against someone else's. Snapshotting it
+//     inside `setActiveDrag` makes the two fields move together by
+//     construction. `lib/lastPointerPress.ts` supplies the press; the rule
+//     that reads it back lives in `components/Library/useDetailsDragDrop.ts`'s
+//     file header.
 //
 // LIBRARY_WORKBOOK_UX_PLAN PR C additions (all three now PERSISTED into the
 // .dwk by PR E2 — lib/workspace.ts's parseWorkspace/serializeWorkspace — but
@@ -76,6 +86,7 @@
 // persisting to disk, just worth surviving one session's searches.
 
 import { updateFolder as treeUpdateFolder } from "../lib/foldertree";
+import { lastPointerPress, type PointerPress } from "../lib/lastPointerPress";
 import type { AppState } from "./useApp";
 
 /** L0.46/L0.5-L0.6/L0.25: what the Library tree currently has "current" for
@@ -115,6 +126,15 @@ export interface LibraryPanelSlice {
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
+  /** The pointer press seen last before `activeDrag` was published — NOT
+   *  necessarily the press that started the drag. Those differ whenever
+   *  another pointer presses between the dragging pointer's own `pointerdown`
+   *  and its `dragstart`: that other pointer becomes the recorded owner
+   *  instead (residual, review round 7 — see useDetailsDragDrop.ts's header
+   *  for the full statement). Null when no press preceded it (and always
+   *  null while `activeDrag` is null). Written ONLY by `setActiveDrag`,
+   *  never separately; see the module doc above. */
+  activeDragPress: PointerPress | null;
   /** PR C — workbook disclosure state (persisted into the .dwk by PR E2). */
   expandedWorkbookIds: string[];
   toggleWorkbookExpanded: (id: string) => void;
@@ -163,7 +183,19 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     clearReveal: () => set({ revealTarget: null }),
     updateFolder: (id, patch) => set((s) => ({ folders: treeUpdateFolder(s.folders, id, patch) })),
     activeDrag: null,
-    setActiveDrag: (activeDrag) => set({ activeDrag }),
+    activeDragPress: null,
+    // ONE publish path for BOTH fields. Every drag source — the three Tree
+    // rows and the two flat renderers' shared `onDragStart` — calls this, so
+    // the owner press is recorded for every drag without any of them opting
+    // in, and a publisher CANNOT skip it. Because the snapshot is taken here,
+    // it can never outlive the drag it belongs to: replacing the drag
+    // replaces the press, and clearing the drag clears it. It CAN still
+    // misidentify the drag's own initiating pointer — the snapshot is the
+    // last press seen before publish, not necessarily the dragging pointer's
+    // own `pointerdown` (residual, review round 7; see
+    // useDetailsDragDrop.ts's header for the full statement).
+    setActiveDrag: (activeDrag) =>
+      set({ activeDrag, activeDragPress: activeDrag == null ? null : lastPointerPress() }),
     expandedWorkbookIds: [],
     toggleWorkbookExpanded: (id) =>
       set((s) => ({

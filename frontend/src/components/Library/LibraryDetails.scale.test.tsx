@@ -144,4 +144,61 @@ describe("LibraryDetails — large-Library virtualization", () => {
     render(<LibraryDetails hierarchy={hierarchy} />);
     expect(renderedRows().length).toBeGreaterThan(0);
   });
+
+  // The ORGANIC (non-keyboard) scroll case — a mouse wheel or scrollbar drag
+  // that unmounts the focused row with no keystroke anywhere in the
+  // interaction. `effectiveRovingKey` keeps the window TABBABLE, which is a
+  // different fact from where live DOM focus sits: once the focused <tr>
+  // unmounts, jsdom (like a browser) orphans focus to <body>. Tiles' E-c3
+  // container fallback is the reference; this is the Details half.
+  it("an organic scroll that unmounts the focused row keeps focus inside the table, and a later arrow key resumes", async () => {
+    const { hierarchy } = seed(5000);
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
+    const focused = renderedRows()[3];
+    const focusedKey = focused.getAttribute("data-lib-row")!;
+    focused.focus();
+    expect(document.activeElement).toBe(focused);
+
+    // NO keyboard interaction: the window moves under the focused row.
+    fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+
+    expect(document.querySelector(`[data-lib-row="${focusedKey}"]`)).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    // lib/focusGuard.ts's data-loss path: a focused plain container is not an
+    // "editing target", so the container must CONSUME Delete itself rather
+    // than let it reach the global dataset removal. fireEvent returns false
+    // when the keystroke was preventDefault()ed — the documented extension
+    // protocol useGlobalShortcuts.ts honours.
+    expect(fireEvent.keyDown(document.activeElement!, { key: "Delete" })).toBe(false);
+
+    // …and the fallback is not a dead end: the next arrow key navigates from
+    // the roving row's MODEL position, landing on a real row again.
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement).matches("[data-lib-row]")).toBe(true);
+    });
+  });
+
+  // Focus review (2026-09-14, F1): the fallback predicate must key on a REAL
+  // prior row focus, not the roving tab-stop fact (which is non-null even
+  // with nothing ever focused). A pure wheel-browse of an UNTOUCHED table —
+  // no click, no keystroke, no selection — must not move focus off <body>,
+  // or the global Delete-selection shortcut silently stops working from then
+  // on. Contrast with the test above, which focuses a row FIRST.
+  it("a bare wheel scroll of an UNTOUCHED table (nothing ever focused) does not steal focus, so Delete still reaches the global handler", () => {
+    const { hierarchy } = seed(5000);
+    render(<LibraryDetails hierarchy={hierarchy} />);
+    expect(document.activeElement).toBe(document.body);
+
+    const panel = document.querySelector(".qzk-details-scroll") as HTMLElement;
+    fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+
+    expect(document.activeElement).toBe(document.body);
+    // Not defaultPrevented — nothing here consumed it, so it is free to reach
+    // useGlobalShortcuts.ts's window-level Delete-selection fallback.
+    expect(fireEvent.keyDown(document.body, { key: "Delete" })).toBe(true);
+  });
 });

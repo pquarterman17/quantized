@@ -282,4 +282,43 @@ describe("LibraryTree — large-Library virtualization", () => {
       expect(document.activeElement).not.toBe(last);
     });
   });
+
+  // The ORGANIC (non-keyboard) scroll case — a mouse wheel or scrollbar drag
+  // that unmounts the focused row with no keystroke anywhere in the
+  // interaction. Tiles has carried a container-level fallback for this since
+  // E-c3 ("keyboard survives the focused tile scrolling out of the window");
+  // this is the Tree half of that contract. jsdom orphans focus to <body>
+  // when a focused node is removed, exactly as a browser does, so the
+  // assertion is the same one Tiles makes.
+  it("an organic scroll that unmounts the focused row keeps focus inside the tree, and a later arrow key resumes", async () => {
+    seedWide(5000);
+    useApp.setState({ librarySelection: null });
+    render(<Harness />);
+    const panel = document.querySelector(".qzk-lib-tree") as HTMLElement;
+    const focused = renderedRows()[3];
+    const focusedId = focused.getAttribute("data-ds-id")!;
+    focused.focus();
+    expect(document.activeElement).toBe(focused);
+
+    // NO keyboard interaction: the window moves under the focused row.
+    fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+
+    expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    // lib/focusGuard.ts's data-loss path: a focused plain container is not an
+    // "editing target", so the container must CONSUME Delete itself rather
+    // than let it reach the global dataset removal. fireEvent returns false
+    // when the keystroke was preventDefault()ed — the documented extension
+    // protocol useGlobalShortcuts.ts honours.
+    expect(fireEvent.keyDown(document.activeElement!, { key: "Delete" })).toBe(false);
+
+    // …and the fallback is not a dead end: the next arrow key navigates from
+    // the roving row's MODEL position, landing on a real row again.
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement).matches("[data-lib-row], [data-ds-id]")).toBe(true);
+    });
+  });
 });

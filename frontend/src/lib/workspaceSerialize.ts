@@ -233,28 +233,35 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // awaited was already taken. Pack Project's serializer re-reads the
       // store after its await and REFUSES if anything is still `pending`
       // rather than trusting the resolve alone (packProjectContent.ts,
-      // same file/function as above), so that path is closed there. Save/
-      // Save As (store/workspaceIO.ts:73-82) re-reads the store after its
-      // own resolve await the same way but does NOT re-check `pending` on
-      // it — that identical narrower window is open there, recorded as a
-      // residual on BUG-011 rather than fixed here.
+      // same file/function as above), so that path is closed there.
       //
-      // ROUND 2 CORRECTION: the paragraph above used to say this SAME
+      // ROUND 2 CORRECTION: a following paragraph here used to say this SAME
       // window was open on "the two workbook-transfer paths" too. That was
       // FALSE — both call `buildTransferPackage` (lib/workbookTransfer.ts)
       // AFTER their own resolve await, and that function re-reads `pending`
       // on the fresh state it is handed and refuses if anything still is
       // (lib/workbookTransfer.ts:182-183) — a re-check of its own, closing
-      // this for workbook Copy/Duplicate already. Only Save/Save As above
-      // is still an open residual.
+      // this for workbook Copy/Duplicate already.
       //
-      // So `d.pending` should never reach a packed Pack Project bundle; the
-      // other three export paths carry the same (narrow, unresolved) risk
-      // Pack Project itself had before this fix. Only autosave
-      // (lib/autosave.ts, which reuses this same serializer for its
-      // localStorage snapshot) can LEGITIMATELY still have one — that
-      // round-trip is fine, since the render-side ensureBookData hooks
-      // re-fetch it the next time that dataset is shown after a reload.
+      // BUG-011 RESIDUAL CLOSED (2026-09-13): Save/Save As
+      // (store/workspaceIO.ts's `prepareWorkspaceState`) carried the
+      // identical narrower window — it re-read the store after its own
+      // resolve await but did not re-check `pending` on it — recorded above
+      // as an open residual while store/workspaceIO.ts was being edited
+      // concurrently for BUG-010. Closed the same way as Pack Project's own
+      // fix: a post-await re-check (`prepareWorkspaceState`, resolve at
+      // `:73`, re-check at `:81-96`) refuses the save by name
+      // ("… was still loading") rather than serializing the preview.
+      //
+      // So the guarantee now holds on every explicit export path — Save,
+      // Save As, workbook Copy/Duplicate, and Pack Project all resolve
+      // pending datasets first AND refuse rather than serialize a book that
+      // turns pending again during that resolve — and `d.pending` should
+      // never reach any of their payloads. Only autosave (lib/autosave.ts,
+      // which reuses this same serializer for its localStorage snapshot) can
+      // LEGITIMATELY still have one — that round-trip is fine, since the
+      // render-side ensureBookData hooks re-fetch it the next time that
+      // dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —

@@ -3576,6 +3576,22 @@ covers a much smaller subset and guards focus on Analyze.
     distinguishability verdict — `seriesPalette.cvd.test.ts`'s "shipped
     palette presets" and extended "series-vs-background legibility" describe
     blocks will catch a regression on either axis if one is picked.
+    **Round 4 (2026-09-14, light-canvas twin of the round-3 preset ratchet):**
+    round 3's dark-canvas legibility ratchet covered every `PALETTES` preset
+    only against the DARK axes background; a per-window override (`PlotBg`)
+    can pin a window to the LIGHT background independent of the app's global
+    theme, and that side was unratcheted. `seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe now adds the light-canvas
+    mirror (`resolveDrawColor(hex, false)`), table-driven the same way.
+    Measured, pre-existing, none introduced by this round: `okabe-ito` slots
+    0/1/3/7 (contrast 2.12/2.18/1.25/1.81), `tol-bright` slots 3/4/6
+    (1.84/1.73/1.81), `tableau10` slots 3/5/7 (2.16/1.52/1.86), `viridis`
+    slots 6/7 (1.88/1.19) — all below the 2.2 floor, all recorded rather than
+    fixed, matching the counts already noted in this test file's "Shipped
+    palette presets" header comment (4/3/3/2). No preset colour changed. A
+    companion assertion pins both the dark and light substitution tables
+    verbatim so a future silent addition or removal on either canvas fails
+    the suite instead of quietly changing what counts as "pre-existing".
     - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
     - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
   - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
@@ -3653,14 +3669,62 @@ covers a much smaller subset and guards focus on Analyze.
       never having sent it) — every `kind` there colours by a continuous
       z-value (`cmap`), the same "colour IS the plotted quantity" case this
       flag already leaves untouched for a `color_by` scatter, so there is no
-      categorical palette for a print-safe ramp to replace. **RESIDUAL —
-      page-route greyscale is API-only today.** `PagePanel.greyscale` is
-      honoured by the backend (pinned above), but the composer's own
-      "Export page…" dialog (`lib/exportPageCommand.ts`) offers only
-      fmt/dpi — no per-panel greyscale checkbox — so a user cannot reach
-      this from the UI yet; only a direct API caller can. The review also
-      found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
-      a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
+      categorical palette for a print-safe ramp to replace. ~~**RESIDUAL —
+      page-route greyscale is API-only today.**~~ **CLOSED.** The spatial
+      page composer's "Export page…" dialog (`lib/exportPageCommand.ts`)
+      now reuses `lib/exportFigureCommand.ts`'s own `GREYSCALE_FIELD`
+      (never a duplicate definition) and threads the answer as ONE
+      page-level choice onto EVERY panel's own `FigureSpec.greyscale`
+      (`lib/spatialPageExport.ts`'s `SpatialPageAppearance.greyscale` ->
+      `spatialPanelFigure`) — `PagePanel.greyscale` stays genuinely
+      per-panel on the backend, but this dialog has no per-panel UI, so
+      "on" means "on for the whole page". Omitted/false is byte-identical
+      to before, mirroring the single-figure dialog's own wire convention.
+      A facet panel would be a documented no-op (`FigureSpec.greyscale`
+      never applies once `.facets` is set) — moot today since
+      `spatialPanelFigure` never emits `.facets`. Tests:
+      `exportPageCommand.test.ts` pins the field's presence (identical to
+      `GREYSCALE_FIELD`) and the threaded/omitted wire value across every
+      panel; `spatialPageExport.test.ts` pins the same at the request-
+      builder layer. ~~**A SEPARATE residual remained — the two `PageDocument.output`
+      export paths.**~~ **CLOSED 2026-09-14.** The Figure Page composer
+      (`components/workshops/figurepage/`, its own export path with no modal
+      dialog) and Library's export-a-saved-page-without-reopening
+      (`components/Library/PagesSection.tsx`) now offer it. Greyscale is a
+      PAGE-WIDE output setting on those paths: `PageOutputSettings.greyscale`
+      (`lib/pageDocument.ts`), ADDITIVE (absent === off, no schema version
+      bump — the same convention `createdAt`/`modifiedAt` use, and unlike
+      `layout`'s v1->v2, since an
+      older build ignoring the field still renders exactly what it always
+      did). `sanitizeOutput` keeps only a literal `true`, and the composer's
+      setter DELETES the key when unticked, so "off" has one canonical shape:
+      a page toggled on and off again is byte-identical to one that never had
+      it and does not read as dirty. The route is per-panel, so one shared
+      pure helper (`lib/pageGreyscale.ts`'s `withPageGreyscale`, an identity
+      when off) spreads `greyscale: true` onto EVERY panel's own figure spec
+      for both paths — `buildPageSpecFromDocument` (Library's "export a saved
+      page without reopening it", `components/Library/PagesSection.tsx`) and
+      the Figure Page composer's `buildSpec`
+      (`workshops/figurepage/usePagePreviewExport.ts`). Applying it inside
+      `buildSpec` — the ONE spec-derivation path that feeds the file export,
+      the debounced PNG preview and the clipboard copy alike — is deliberate:
+      the preview is the same server route, so the on-screen page is the page
+      that gets exported (`greyscale` joined the preview effect's dep list for
+      that reason). The composer's control is one "Greyscale" checkbox beside
+      the existing format/style/DPI controls (`FigurePageView.tsx`), and the
+      flag rides the saved PageDocument, so a reopened page remembers it and
+      Library's export-without-reopening honours it. Tests:
+      `FigurePageView.test.tsx` (new — the checkbox at the DOM layer, both
+      directions), `useFigurePage.test.ts` (export/preview/copy all carry
+      `greyscale: true` on every panel, absence when off, the off-again key
+      removal, and a save -> reopen persistence round trip),
+      `PagesSection.test.tsx` (the saved page's own flag on every panel of the
+      export request, and its ABSENCE when the page never turned it on), and
+      `pageDocument.test.ts` (a pre-P3.3 document loads unchanged with the key
+      absent; a saved `greyscale: true` survives the JSON round trip; `false`
+      and junk both load as absent). The spatial close's review (2026-09-13)
+      also found and fixed a vector-only defect: error-bar CAPS (`capsize=2`)
+      kept a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to
       be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
       face/edge colour explicitly from the series' own (now grey) colour.
@@ -3989,7 +4053,7 @@ Original acceptance criteria (unchanged):
   of the surface was neither wired NOR named. The full residual — every
   `postDownload`/`postBlob` call with no `signal` and no `pendingOps` entry
   — stays uncancelled and untracked: `components/workshops/figurepage/
-  usePagePreviewExport.ts:188,219` (the Figure Page composer's OWN export +
+  usePagePreviewExport.ts:204,235` (the Figure Page composer's OWN export +
   clipboard copy — the longest render in the app, and the most-requested
   cancel target of anything on this list), `components/workshops/
   figurebuilder/previewExport.ts:53,77`, `components/Library/

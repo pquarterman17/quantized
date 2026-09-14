@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialComposition } from "./composition";
+import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
 import { defaultPageSetup } from "./pagesetup";
 import { usePendingOps } from "../store/pendingOps";
@@ -120,6 +121,100 @@ describe("runExportSpatialPageCommand", () => {
       expect(body.panels[0].figure.dataset.time).toEqual([1]);
       expect(body.panels[0].figure.dataset.values).toEqual([[2]]);
     });
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: "page-route greyscale is
+// API-only today" — the backend's `PagePanel.greyscale` was already honored
+// (calc/figure_page.py, routes/export_page.py), but this dialog offered only
+// fmt/dpi, with no way to reach it from the UI. Closed by reusing
+// lib/exportFigureCommand.ts's own GREYSCALE_FIELD (never duplicating the
+// label/hint) and threading the answer onto EVERY panel's own figure spec —
+// one page-level choice, since this dialog has no per-panel affordance.
+describe("runExportSpatialPageCommand — P3.3 greyscale residual (page export)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetLeakedMocks(); // F7 — see this function's own doc
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "book",
+          data: {
+            time: [0, 1],
+            values: [[1], [2]],
+            labels: ["signal"],
+            units: [""],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      // TWO panels — "every panel" is not vacuously true with just one.
+      composition: spatialComposition([
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 1],
+          yLim: [1, 2],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 0,
+          pageRect: { left: 0.05, top: 0.05, width: 0.4, height: 0.4 },
+        },
+        {
+          datasetId: "d1",
+          xKey: null,
+          yKeys: [0],
+          xLim: [0, 1],
+          yLim: [1, 2],
+          xLog: false,
+          yLog: false,
+          row: 0,
+          col: 1,
+          pageRect: { left: 0.55, top: 0.05, width: 0.4, height: 0.4 },
+        },
+      ]),
+      pageSetup: defaultPageSetup(),
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      showGrid: true,
+      showAxisBox: false,
+    });
+  });
+
+  it("offers a greyscale field matching the single-figure dialog's own definition", async () => {
+    await runExportSpatialPageCommand(useApp.getState);
+    const fields = vi.mocked(askParams).mock.calls[0][1];
+    const field = fields.find((f) => f.key === "greyscale");
+    expect(field).toBe(GREYSCALE_FIELD); // the SAME object, not a structural twin
+  });
+
+  it("threads greyscale: true onto EVERY panel's figure spec when the checkbox is on", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({ fmt: "pdf", dpi: 300, greyscale: true });
+    await runExportSpatialPageCommand(useApp.getState);
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect(body.panels).toHaveLength(2);
+    expect(body.panels[0].figure.greyscale).toBe(true);
+    expect(body.panels[1].figure.greyscale).toBe(true);
+  });
+
+  it("omits greyscale from every panel when the dialog's default (false) goes unchanged", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({ fmt: "pdf", dpi: 300, greyscale: false });
+    await runExportSpatialPageCommand(useApp.getState);
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect("greyscale" in body.panels[0].figure).toBe(false);
+    expect("greyscale" in body.panels[1].figure).toBe(false);
+  });
+
+  it("omits greyscale from every panel when the dialog result carries no greyscale key at all", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({ fmt: "pdf", dpi: 300 });
+    await runExportSpatialPageCommand(useApp.getState);
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect("greyscale" in body.panels[0].figure).toBe(false);
+    expect("greyscale" in body.panels[1].figure).toBe(false);
   });
 });
 
