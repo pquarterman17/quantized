@@ -483,7 +483,7 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(tileFor("folder:vtarget").className).not.toMatch(/\bdrop-candidate\b/);
   });
 
-  it("a pointerdown from a DIFFERENT pointer (same type, different id) does NOT end someone else's drag", () => {
+  it("a pointerdown from a DIFFERENT pointer (id 1 started the drag) does not clear it, even pressed twice", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
@@ -497,9 +497,12 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // A second mouse (or a second finger, same type, different id) pressing
-    // down must not end someone else's drag — the rule compares only to the
-    // IMMEDIATELY PRECEDING press (id 1), and id 2 does not match it.
+    // ROUND 5: the rule matches against the press that STARTED this drag
+    // (id 1), not against whatever pressed immediately before the incoming
+    // press. Pointer id 2 never started this drag, so it does not clear it
+    // — not on the first press, and not on a second, consecutive press
+    // either (the round-4 rule's counterexample: two same-id presses from a
+    // pointer that never touched the drag used to clear it anyway).
     act(() => {
       fireEvent(
         document,
@@ -508,17 +511,89 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     });
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
-    // The mechanism is still live: that same id-2 press is now the recorded
-    // "last press", so id 2 pressing AGAIN matches it and clears — proving
-    // this is a genuine same-pointer check, not a dead listener, even though
-    // id 2 never touched the drag itself.
     act(() => {
       fireEvent(
         document,
         new PointerEvent("pointerdown", { pointerId: 2, pointerType: "mouse", bubbles: true, cancelable: true }),
       );
     });
-    expect(useApp.getState().activeDrag).toBeNull();
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+  });
+
+  // REGRESSION (2026-09-14, tiles_review5.md probe P3): the round-4 rule
+  // compared an incoming press against whichever pointer pressed immediately
+  // before it, not against the pointer that started the drag. Two identical
+  // presses from a pointer that never touched the drag (here, two mouse
+  // clicks with a constant id) matched each other and cleared it anyway. This
+  // test FAILS against the round-4 code (verified: reverted `noteDragPointer`
+  // and the `dragPress` snapshot, ran this test in isolation, got "expected
+  // true to be false" on the second `dragover` — the drop was refused) and
+  // must pass now that the rule matches against the drag's own starting press.
+  it("two consecutive presses from a THIRD pointer, mid-drag, do not clear a drag that pointer never started", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The press that starts the drag — touch id 7.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 7, pointerType: "touch", bubbles: true, cancelable: true }),
+      );
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    const target = tileFor("folder:f2");
+    expect(fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")), "the first dragover must be accepted").toBe(
+      false,
+    );
+
+    // A third party — a mouse whose id is constant across clicks — clicks
+    // TWICE while the touch drag is live, between dragover and drop.
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+    act(() => {
+      fireEvent(
+        document,
+        new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target must still accept the drag after two third-party presses",
+    ).toBe(false);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(useApp.getState().folders.find((f) => f.id === "f1")!.parentId).toBe("f2");
+  });
+
+  // Finding 4 (tiles_review5.md): a dispatch that is not a real `PointerEvent`
+  // carries no numeric `pointerId` (`undefined`), and `undefined === undefined`
+  // would otherwise let two such dispatches match each other. The FIRST
+  // synthetic dispatch happens BEFORE `dragstart` so it can pollute the
+  // always-live `lastPress` record with `{id: undefined, type: undefined}`
+  // — without the guard, `noteDragPointer` would snapshot that polluted
+  // value into `dragPress`, and the SECOND synthetic dispatch after
+  // `dragstart` would then match it and clear the drag.
+  it("a plain, non-PointerEvent pointerdown (no numeric pointerId) does not clear a live drag, even fired before AND after dragstart", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    act(() => {
+      fireEvent(document, new Event("pointerdown", { bubbles: true, cancelable: true }));
+    });
+
+    fireDrag(gripOf("folder:f1"), "dragstart", transfer(FOLDER_DND, "f1"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
+
+    act(() => {
+      fireEvent(document, new Event("pointerdown", { bubbles: true, cancelable: true }));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "f1" });
   });
 
   // REGRESSION (2026-09-14, tiles_review4.md probe P1): the ROUND-3 filter

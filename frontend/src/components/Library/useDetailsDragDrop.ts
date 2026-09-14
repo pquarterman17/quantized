@@ -102,34 +102,54 @@
 //
 // ROUND 4 replacement: the SAME listener shape — one ALWAYS-live capture-
 // phase `pointerdown` listener on `document`, registered once in this hook's
-// effect and never re-gated on `activeDrag` — but the STRICT same-pointer
-// rule instead of `isPrimary`: it records the `{pointerId, pointerType}` of
-// every press, and clears `activeDrag` only when the incoming press's id AND
-// type both match the PREVIOUSLY recorded press (checked before that record
-// is overwritten). That is provably safe on every engine, for every pointer
-// type: a pointer cannot fire a second `pointerdown` with its own id while
-// it is still down from the first — ids are reused only after release — so
-// a match proves the pointer that pressed last has since released, and
-// nothing about the pointer actually holding a live drag can ever satisfy
-// its own rule. A different pointer (any id, any type — including a second
-// finger, or a first finger on a hybrid device while a mouse drag is live)
-// proves nothing and is ignored, closing exactly the hybrid-device row
-// `isPrimary` left open. The `isPrimary` filter is gone entirely — nothing
-// left reads it.
+// effect and not re-gated on `activeDrag` — but the STRICT same-pointer rule
+// instead of `isPrimary`: it recorded the `{pointerId, pointerType}` of every
+// press, and cleared `activeDrag` when the incoming press's id AND type both
+// matched the PREVIOUSLY recorded press. — premise disproved and this
+// mechanism REMOVED in ROUND 5 below: the rule "the pointer holding the drag
+// cannot satisfy its own rule" is true, but round 5 found the comparison
+// target was wrong — it compared against whichever pointer happened to press
+// immediately before the incoming one, not against the pointer that started
+// the drag. A different, non-dragging pointer that presses twice in a row
+// (two mouse clicks, whose id stays constant across presses) matched itself
+// and cleared a drag it had not touched — measured in-repo (tiles_review5.md
+// probe P3): a live touch drag was killed by two consecutive mouse clicks
+// fired between `dragover` and `drop`, and this round's own "different
+// pointer" test had locked in that counterexample as intended behaviour.
 //
-// Residual (honest, not "categorical"): on touch and pen, where the browser
-// hands out a fresh `pointerId` per contact, the abandoned-drag cue no
-// longer self-heals on the user's very next press of that same modality —
-// clearing it still requires a `dragstart`, `dragend`, or `drop` (the other
-// three ways a drag ends; a fresh `dragstart` republishes `activeDrag`,
-// implicitly superseding whatever it held). On mouse/trackpad, where the
-// same device keeps the same id across presses, the self-heal still works.
-// Either way, no drop is EVER refused by this mechanism, for any pointer, on
-// any engine: the one rule it applies — same id and type as the last
-// press — cannot be satisfied by the pointer that is still holding the drag,
-// because that pointer cannot press again without having released first.
+// ROUND 5 replacement: the same listener shape again, but the comparison
+// target changes from "the immediately preceding press" to "the press
+// recorded when THIS drag started". `noteDragPointer` snapshots the
+// always-live `lastPress` record into `dragPress` at the point
+// `handleProps.onDragStart` publishes `activeDrag`; the listener matches an
+// incoming press against `dragPress`, not against whatever pressed right
+// before it, and clears both `dragPress` and `activeDrag` together on a
+// match. A pointer that did not start the drag can press any number of
+// times without matching `dragPress`, closing the round-5 counterexample.
+// The rule, stated precisely: a stale drag is cleared by a press from the
+// pointer that started it; that pointer cannot press again while it still
+// holds the drag (a given id is reused only after its pointer releases); any
+// other pointer is ignored by this mechanism.
+//
+// ROUND 5 also closes a separate, latent gap (finding 4): a dispatch that is
+// not a real `PointerEvent` — a plain `new Event("pointerdown")`, say —
+// carries no numeric `pointerId`, and two such dispatches compared equal to
+// each other under the old check (`undefined === undefined`). The listener
+// now ignores any press whose `pointerId` is not a `number`, before either
+// recording or matching it. Nothing under `frontend/src` outside tests
+// dispatches a synthetic `pointerdown` today, so this was latent, not live.
+//
+// Residual (honest, named, not closed): on touch and pen, where the browser
+// hands out a fresh `pointerId` per contact, an abandoned drag's stale cue
+// does not self-heal on the user's next press of that same modality —
+// clearing it still needs a `dragstart`, `dragend`, or `drop` (the other
+// three ways a drag ends; a fresh `dragstart` snapshots a new `dragPress`,
+// superseding whatever the previous one held). `dragPress` is `null` when no
+// press preceded the `dragstart` that set it — a programmatic or synthetic
+// drag start, for instance — and in that case no press clears the drag this
+// mechanism watches for; the other three end-of-drag paths still apply.
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DATASET_DND, FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { isSelfOrDescendant } from "../../lib/foldertree";
@@ -167,6 +187,13 @@ export interface DetailsDragDropContext {
   workbooks: readonly WorkbookNode[];
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveWorkbookToFolder: (id: string, folderId: string | null) => void;
+  /** Snapshots the always-live pointerdown recorder's last-seen press as the
+   *  pointer that OWNS the drag about to start. A drag source calls this in
+   *  its own `onDragStart`, before publishing `activeDrag` — see the file
+   *  header (ROUND 5) for why the same-pointer check must match against the
+   *  press that started THIS drag, not against whatever pressed immediately
+   *  before the incoming press. */
+  noteDragPointer: () => void;
 }
 
 /** ONE subscription set for the whole table. `folders`/`workbooks` and
@@ -177,14 +204,24 @@ export interface DetailsDragDropContext {
  *  actions are stable identities, so they add no rerenders.
  *
  *  Also owns the CONTAINER-level terminal-signal catch — see the file header
- *  above (findings 3, 1, and ROUND 4) for the full contract: a CAPTURE-phase
- *  `document` `dragend`/`drop` pair, live only while `activeDrag` is
- *  non-null, plus a SEPARATE, ALWAYS-live capture-phase `pointerdown`
- *  listener that clears `activeDrag` only when the press matches (same
- *  `pointerId` AND `pointerType`) the immediately preceding press — never
- *  `isPrimary`, which round 4 found unsafe. The per-row `onDragEnd` still
+ *  above (findings 3, 1, and ROUNDs 4-5) for the full contract: a
+ *  CAPTURE-phase `document` `dragend`/`drop` pair, live only while
+ *  `activeDrag` is non-null, plus a SEPARATE, ALWAYS-live capture-phase
+ *  `pointerdown` listener that clears `activeDrag` (and the `dragPress`
+ *  snapshot below) only when the press matches (same `pointerId` AND
+ *  `pointerType`) the press recorded at the START of the live drag — not
+ *  `isPrimary` (round 4 found that unsafe) and not the immediately preceding
+ *  press (round 5 found that unsafe too). The per-row `onDragEnd` still
  *  fires too when its element survives; it is redundant with, not a third
- *  mechanism alongside, these. */
+ *  mechanism alongside, these.
+ *
+ *  This hook is called once per mounted flat-renderer instance
+ *  (`LibraryWorkspace` and `LibraryDetails` each have their own call site,
+ *  and both can be mounted at once), so each instance keeps its own
+ *  `lastPress`/`dragPress` pair and registers its own listener. Harmless: all
+ *  instances observe the same press sequence, so their `lastPress` records
+ *  agree, and a redundant `setActiveDrag(null)` from a second instance is a
+ *  no-op on an already-null store field. */
 export function useDetailsDragDropContext(): DetailsDragDropContext {
   const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const activeDrag = useLibraryStore((s) => s.activeDrag);
@@ -193,41 +230,68 @@ export function useDetailsDragDropContext(): DetailsDragDropContext {
   const moveFolder = useApp((s) => s.moveFolder);
   const moveWorkbookToFolder = useApp((s) => s.moveWorkbookToFolder);
 
+  // `lastPress` is the always-live recorder (every press, drag or no drag);
+  // `dragPress` is the OWNER snapshot — the press `lastPress` held at the
+  // moment the live drag started, taken by `noteDragPointer`. Comparing
+  // incoming presses against `dragPress` rather than against `lastPress`'s
+  // immediately-preceding value is the round-5 fix: see the file header.
+  const lastPress = useRef<{ id: number; type: string } | null>(null);
+  const dragPress = useRef<{ id: number; type: string } | null>(null);
+
+  const clearDrag = useCallback((): void => {
+    dragPress.current = null;
+    setActiveDrag(null);
+  }, [setActiveDrag]);
+
   useEffect(() => {
     if (activeDrag == null) return;
-    const clear = (): void => setActiveDrag(null);
     // Capture phase (the `true` third argument) — see the file header:
     // it runs before any specific drop target's own handler, so a
-    // committed move's `event.stopPropagation()` can never suppress it.
-    document.addEventListener("dragend", clear, true);
-    document.addEventListener("drop", clear, true);
+    // committed move's `event.stopPropagation()` cannot suppress it.
+    document.addEventListener("dragend", clearDrag, true);
+    document.addEventListener("drop", clearDrag, true);
     return () => {
-      document.removeEventListener("dragend", clear, true);
-      document.removeEventListener("drop", clear, true);
+      document.removeEventListener("dragend", clearDrag, true);
+      document.removeEventListener("drop", clearDrag, true);
     };
-  }, [activeDrag, setActiveDrag]);
+  }, [activeDrag, clearDrag]);
 
-  // ROUND 4: a SEPARATE, ALWAYS-live listener — registered once, independent
-  // of `activeDrag` — because the rule it applies (same physical pointer
-  // pressed before, now releasing and pressing again) needs to see every
-  // press, including presses that happen while no drag is in flight, to
-  // keep `lastPress` accurate for whenever one starts. See the file header
-  // for why `pointerId`+`pointerType` equality is the strictly-safe rule
-  // `isPrimary` was not.
-  const lastPress = useRef<{ id: number; type: string } | null>(null);
+  // ROUND 4/5: a SEPARATE, ALWAYS-live listener — registered once, independent
+  // of `activeDrag` — because it needs to see every press, including presses
+  // that happen while no drag is in flight, to keep `lastPress` accurate for
+  // whenever a drag starts and snapshots it via `noteDragPointer`. See the
+  // file header for why matching against `dragPress` (the drag's OWN
+  // starting press) rather than `isPrimary` or the immediately preceding
+  // press is the strictly-safe rule.
   useEffect(() => {
     const onPointerDown = (event: PointerEvent): void => {
-      const prev = lastPress.current;
+      // Finding 4: a dispatch that is not a real `PointerEvent` carries no
+      // numeric `pointerId` (`undefined`, under `===`, matches itself) — skip
+      // it before it can be recorded or matched.
+      if (typeof event.pointerId !== "number") return;
+      const owner = dragPress.current;
       lastPress.current = { id: event.pointerId, type: event.pointerType };
-      if (prev != null && event.pointerId === prev.id && event.pointerType === prev.type) {
-        setActiveDrag(null);
+      if (owner != null && event.pointerId === owner.id && event.pointerType === owner.type) {
+        clearDrag();
       }
     };
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [setActiveDrag]);
+  }, [clearDrag]);
 
-  return { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder };
+  const noteDragPointer = (): void => {
+    dragPress.current = lastPress.current;
+  };
+
+  return {
+    activeDrag,
+    setActiveDrag,
+    folders,
+    workbooks,
+    moveFolder,
+    moveWorkbookToFolder,
+    noteDragPointer,
+  };
 }
 
 export interface DetailsDragDrop {
@@ -254,7 +318,7 @@ export interface DetailsDragDrop {
 }
 
 export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContext): DetailsDragDrop {
-  const { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder } = ctx;
+  const { activeDrag, setActiveDrag, folders, workbooks, moveFolder, moveWorkbookToFolder, noteDragPointer } = ctx;
   const [hovered, setHovered] = useState(false);
 
   const source = dragSourceOf(node);
@@ -265,6 +329,10 @@ export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContex
           event.stopPropagation();
           event.dataTransfer.setData(source.type, node.entityId);
           event.dataTransfer.effectAllowed = "move";
+          // ROUND 5: snapshot the pointer that owns this drag BEFORE
+          // publishing it, so the always-live pointerdown listener can match
+          // against the drag's own starting press — see the file header.
+          noteDragPointer();
           setActiveDrag({ kind: source.drag, id: node.entityId });
         },
         onDragEnd: (): void => setActiveDrag(null),
