@@ -122,12 +122,32 @@ describe("libraryPanel slice — activeDrag carries its own owner press", () => 
     expect(useApp.getState().activeDragPress).toBeNull();
   });
 
-  it("re-snapshots on every publish, so a replacing drag never inherits the previous drag's press", () => {
+  it("re-snapshots on publish when a new press intervened", () => {
     press(9, "pen");
     useApp.getState().setActiveDrag({ kind: "folder", id: "f1" });
     press(1, "mouse");
     useApp.getState().setActiveDrag({ kind: "workbook", id: "w1" });
     expect(useApp.getState().activeDragPress).toEqual({ id: 1, type: "mouse" });
+  });
+
+  // REVIEW ROUND 7 (tiles_review7.md finding 2, probe B2): the test above
+  // exercises only the case where a NEW pointerdown lands between the two
+  // publishes. Nothing in `setActiveDrag` re-reads the press recorder unless
+  // it has fired again, so a replacing drag with NO intervening press
+  // inherits the previous drag's owner press verbatim — documented in
+  // useDetailsDragDrop.ts's header and store/libraryPanel.ts as a residual,
+  // not a bug (every real `onDragStart` publisher is preceded by its own
+  // `pointerdown`, so this needs an abandoned/programmatic drag in between).
+  it("inherits the previous drag's press when publish is replaced with no new press in between", () => {
+    press(9, "pen");
+    useApp.getState().setActiveDrag({ kind: "folder", id: "f1" });
+    const pressAfterA = useApp.getState().activeDragPress;
+
+    // No new press() call here — B replaces A with nothing intervening.
+    useApp.getState().setActiveDrag({ kind: "workbook", id: "w1" });
+
+    expect(useApp.getState().activeDragPress).toEqual(pressAfterA);
+    expect(useApp.getState().activeDragPress).toEqual({ id: 9, type: "pen" });
   });
 
   it("clears the snapshot together with the drag, so none can outlive its drag", () => {

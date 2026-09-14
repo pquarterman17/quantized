@@ -773,6 +773,57 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDragPress).toBeNull();
     expect(tileFor("folder:f2").className).not.toMatch(/\bdrop-candidate\b/);
   });
+
+  // RESIDUAL PIN (2026-09-14, tiles_review7.md finding 1, probe B1) — NOT a
+  // feature test: this locks in a known, named, and NOT closed gap so a
+  // future change to it is visible, rather than asserting it is correct
+  // behaviour. The owner press recorded by `setActiveDrag` is the LAST press
+  // seen before the drag publishes, which is the dragging pointer only if no
+  // OTHER pointer pressed between that pointer's own `pointerdown` and its
+  // `dragstart`. On a hybrid device (touchscreen laptop, pen display) a click
+  // landing inside that window is recorded as the owner instead, and a later
+  // press from that unrelated pointer wrongly ends the still-live drag — see
+  // the residuals in this file's header and in store/libraryPanel.ts.
+  it("RESIDUAL: an interleaved press before dragstart is wrongly recorded as the drag's owner, and later kills a still-live drag", () => {
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    // The pointer that actually starts the drag: a touchscreen finger, id 5.
+    act(() => press(5, "touch"));
+    // An UNRELATED mouse click lands inside the drag-initiation window —
+    // after the dragging pointer's own pointerdown, before its dragstart.
+    act(() => press(1, "mouse"));
+
+    const source = gripOf("folder:f1");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "f1"));
+
+    // Documented, not desired: the LAST press before publish is recorded as
+    // the owner, so the unrelated mouse — not the touch pointer that
+    // actually started the drag — owns it.
+    expect(useApp.getState().activeDragPress).toEqual({ id: 1, type: "mouse" });
+
+    const target = tileFor("folder:f2");
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the first dragover is still accepted",
+    ).toBe(false);
+
+    // The recorded (wrong) owner presses again — an ordinary, unrelated
+    // click — and it matches activeDragPress, so it clears the still-live
+    // drag.
+    act(() => press(1, "mouse"));
+    expect(useApp.getState().activeDrag).toBeNull();
+
+    expect(
+      fireDrag(target, "dragover", transfer(FOLDER_DND, "f1")),
+      "the target is wrongly dead after the interleaved owner's second press",
+    ).toBe(true);
+    fireDrag(target, "drop", transfer(FOLDER_DND, "f1"));
+
+    expect(
+      useApp.getState().folders.find((f) => f.id === "f1")!.parentId,
+      "the move is wrongly refused",
+    ).toBeNull();
+  });
 });
 
 describe("LibraryTiles — L1.4 cues are painted, not just classed", () => {

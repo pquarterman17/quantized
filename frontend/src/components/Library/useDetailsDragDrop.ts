@@ -178,6 +178,18 @@
 //     programmatic or synthetic one is an unrelated pointer that may press
 //     again and end the drag (review finding 2; the round-5 header's claim
 //     that the snapshot is null in that case was wrong).
+//   * The owner press is the last press recorded before the drag was
+//     published, NOT the press that started the drag — those two differ
+//     whenever another pointer presses between the dragging pointer's own
+//     `pointerdown` and its `dragstart` (a hybrid device, inside the
+//     initiation window): that other pointer is recorded as the owner
+//     instead, and its next press clears the drag (measured, review round 7
+//     probe B1). Not closed in code: the only invariant-free fix visible is
+//     tracking which pointers are still DOWN at publish time and preferring
+//     one of those, and that collides with the pointercancel-at-dragstart
+//     behaviour ROUND 3 above records (Pointer Events fires `pointercancel`
+//     for the dragging pointer at drag start, so the down-set can be empty
+//     exactly when it would be needed).
 
 import { useCallback, useEffect, useState } from "react";
 

@@ -126,10 +126,14 @@ export interface LibraryPanelSlice {
   /** GUI_INTERACTION #3 sub-item 2b — see the module doc above. */
   activeDrag: ActiveDrag | null;
   setActiveDrag: (drag: ActiveDrag | null) => void;
-  /** The pointer press seen immediately before `activeDrag` was published —
-   *  the press that OWNS the drag in flight, or null when no press preceded
-   *  it (and always null while `activeDrag` is null). Written ONLY by
-   *  `setActiveDrag`, never separately; see the module doc above. */
+  /** The pointer press seen last before `activeDrag` was published — NOT
+   *  necessarily the press that started the drag. Those differ whenever
+   *  another pointer presses between the dragging pointer's own `pointerdown`
+   *  and its `dragstart`: that other pointer becomes the recorded owner
+   *  instead (residual, review round 7 — see useDetailsDragDrop.ts's header
+   *  for the full statement). Null when no press preceded it (and always
+   *  null while `activeDrag` is null). Written ONLY by `setActiveDrag`,
+   *  never separately; see the module doc above. */
   activeDragPress: PointerPress | null;
   /** PR C — workbook disclosure state (persisted into the .dwk by PR E2). */
   expandedWorkbookIds: string[];
@@ -184,8 +188,12 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     // rows and the two flat renderers' shared `onDragStart` — calls this, so
     // the owner press is recorded for every drag without any of them opting
     // in, and a publisher CANNOT skip it. Because the snapshot is taken here,
-    // it can never outlive or misdescribe the drag it belongs to: replacing
-    // the drag replaces the press, and clearing the drag clears it.
+    // it can never outlive the drag it belongs to: replacing the drag
+    // replaces the press, and clearing the drag clears it. It CAN still
+    // misidentify the drag's own initiating pointer — the snapshot is the
+    // last press seen before publish, not necessarily the dragging pointer's
+    // own `pointerdown` (residual, review round 7; see
+    // useDetailsDragDrop.ts's header for the full statement).
     setActiveDrag: (activeDrag) =>
       set({ activeDrag, activeDragPress: activeDrag == null ? null : lastPointerPress() }),
     expandedWorkbookIds: [],

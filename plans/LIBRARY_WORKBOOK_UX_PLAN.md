@@ -1323,8 +1323,10 @@ Library presentation without changing organization or duplicating objects.
     (`store/libraryPanel.ts`) snapshots it into a new `activeDragPress` field
     in the SAME `set()` that publishes the drag: every publisher gets the owner
     press for free, replacing a drag replaces its press, and clearing a drag
-    clears it — closing 1a and 1b together, because no snapshot can outlive its
-    drag or be matched against a drag it does not own. `useDetailsDragDrop.ts`
+    clears it — closing 1a and 1b together, because no snapshot can outlive
+    its drag (a snapshot CAN still be matched against a drag it does not
+    itself own — see residual (3) below, added in ROUND 7).
+    `useDetailsDragDrop.ts`
     loses `lastPress`, `dragPress` and `noteDragPointer` entirely; its
     capture-phase `pointerdown` listener now reads the live `activeDrag` /
     `activeDragPress` pair imperatively (`getLibraryState()`, a new
@@ -1347,7 +1349,15 @@ Library presentation without changing organization or duplicating objects.
     `dragstart` with no press of its own INHERITS the last press the recorder
     saw, which for a pointer-initiated drag is the dragging pointer and for a
     programmatic or synthetic one is an unrelated pointer that may press again
-    and end the drag. Both the header and this entry now state that instead.
+    and end the drag. Both the header and this entry now state that instead;
+    (3) **(added ROUND 7, probe B1):** the owner press is the
+    last press recorded before the drag was published, NOT the press that
+    started the drag — if another pointer presses between the dragging
+    pointer's `pointerdown` and its `dragstart` (a hybrid device, inside the
+    initiation window), that other pointer is recorded as the owner and its
+    next press clears the drag; not closed in code because a still-down-
+    pointer set collides with the pointercancel-at-dragstart behaviour
+    recorded in ROUND 3.
     **Test:** every existing drag-end test in `LibraryTiles.parity.test.tsx`
     stays green with its setup adapted to the store-owned record
     (`__resetLastPointerPress()` in `beforeEach`, `activeDragPress: null` in
@@ -1409,6 +1419,101 @@ Library presentation without changing organization or duplicating objects.
     point (one publish path in the store, not five in the renderers).
     `check-bundle-size.mjs` reports 895.0 kB against its 898.8 kB budget —
     3.8 kB of headroom, no pin moved.
+  - [x] **Tiles drag/drop — adversarial review, ROUND 7 (2026-09-14).**
+    `tiles_review7.md` (reviewed `d810342e`, the ROUND-6 fix commit):
+    **NOT CLEAN — but close.** All the mechanism work held up; the residue
+    was three doc/test/ratchet-level gaps, closed here in one commit, no
+    product-code change.
+    **Finding 1 (CONFIRMED, doc):** the owner press `setActiveDrag` records
+    is "the last press before the drag was published", not "the press that
+    started the drag" — the two differ whenever another pointer presses
+    between the dragging pointer's own `pointerdown` and its `dragstart`
+    (probe B1: an interleaved click on a hybrid device becomes the owner and
+    its next press wrongly kills a still-live drag). `store/libraryPanel.ts`
+    asserted the stronger, false claim in three places ("can never outlive or
+    **misdescribe**", the `activeDragPress` field doc's "the press that OWNS
+    the drag in flight", and this plan's ROUND-6 "closing 1a and 1b …
+    because no snapshot can … be matched against a drag it does not own").
+    **Fix:** softened all three to what the code actually guarantees (the
+    snapshot cannot outlive its drag — true, tested) and added a third named
+    residual next to the two already there, in `useDetailsDragDrop.ts`'s
+    header residual list and this ROUND-6 entry's residual list (see (3)
+    below), plus a pointer from `store/libraryPanel.ts`. Not closed in code:
+    the only invariant-free fix visible is tracking which pointers are still
+    down at publish time, which collides with ROUND 3's recorded
+    `pointercancel`-at-`dragstart` behaviour (the down-set can be empty
+    exactly when needed). **Test:** `LibraryTiles.parity.test.tsx` gains one
+    new test, named honestly as a residual pin and not a feature —
+    "RESIDUAL: an interleaved press before dragstart is wrongly recorded as
+    the drag's owner, and later kills a still-live drag" — reproducing probe
+    B1 at the DOM layer (touch id 5 presses the grip, mouse id 1 clicks
+    before `dragstart`, the mouse is recorded as owner, a second mouse press
+    kills the live drag, the second `dragover` is refused, and the drop does
+    not commit). It passes unmodified against today's code (the residual is
+    real and documented, not a regression to fix).
+    **Finding 2 (NIT, test):** `libraryPanel.test.ts`'s "a replacing drag
+    never inherits the previous drag's press" is false when NO press
+    intervenes between two publishes — the existing test only ever pressed a
+    new pointer between them, so it proved re-snapshotting, not the
+    generalized "never inherits" its name claimed. **Fix:** renamed to
+    "re-snapshots on publish when a new press intervened", and added the B2
+    shape as a second test — "inherits the previous drag's press when
+    publish is replaced with no new press in between" — publishing drag A
+    after a pen press, then publishing drag B with no intervening
+    `pointerdown`, and asserting B's `activeDragPress` equals A's `{id: 9,
+    type: "pen"}`. In-app reachability stays low (every real publisher is an
+    `onDragStart`, itself preceded by its own `pointerdown`), so this is a
+    naming/coverage fix, not a bug fix.
+    **Finding 3 (NIT, ratchet):** the getState()-in-render file-count ratchet
+    (`architecture.test.ts`) filtered on the literal string
+    `useApp.getState()`, so `getLibraryState()` — the imperative-read alias
+    ROUND 6 added on `store/hooks/useLibraryStore.ts` for
+    `useDetailsDragDrop.ts`'s capture-phase listener — was invisible to it: a
+    future render-body read through that alias would go uncounted. **Fix:**
+    widened the filter to `src.includes("useApp.getState()") ||
+    src.includes("getLibraryState(")` and moved the pin, measured (not
+    guessed): the union of files matching either spelling under
+    `components/`+`App*.tsx` is exactly **81** (was 80 under the old
+    filter), because `useDetailsDragDrop.ts` is the only file that calls
+    `getLibraryState(` without already calling `useApp.getState()` — one
+    file, so the pin moves by exactly one. That file's own use remains
+    legitimate under the ratchet's rule (a `document` event listener, not a
+    render body).
+    **Sabotage** (each applied to the real file, the affected tests re-run,
+    then restored from a saved copy):
+
+    | # | mutation | test(s) expected to fail | result |
+    |---|---|---|---|
+    | 1 | `setActiveDrag` keeps the OLD `activeDragPress` snapshot when replacing a live drag, instead of re-reading the recorder (`store/libraryPanel.ts`) | the renamed test only | **1 failed** — "re-snapshots on publish when a new press intervened" (expected `{id:1,type:"mouse"}`, got `{id:9,type:"pen"}`); the new B2 "inherits …" test still passed, as it should (that behaviour is unaffected by this mutation) |
+    | 2 | add a fresh test-only scratch component under `src/components/` calling `getLibraryState()` directly in its render body, then delete it | the ratchet test | **1 failed** — "no more files under components/ + App*.tsx call useApp.getState() than the 2026-09-03 baseline" (82 > 81); passed again once the scratch file was removed |
+
+    (Finding 1's fix is doc-only — softened claims plus a residual-pin test
+    that passes unmodified — so no sabotage row applies to it; the pin
+    test's own value is that it will FAIL the moment a future change closes
+    or narrows the residual, which is the point of naming it as a pin.)
+    **Gate:** `tsc -b --force` and `eslint src --max-warnings=0` clean;
+    scoped `vitest run src/components/Library src/store
+    src/architecture.test.ts` — **114 files / 2,275 tests**, all green (+2
+    over this same command's pre-round count: the B1 residual pin and the B2
+    inheritance test are the only two new tests this round adds);
+    `uv run pytest -q tests/test_repo_integrity.py` — **12 passed**.
+    `useDetailsDragDrop.ts` **440** lines (was 428) and
+    `store/libraryPanel.ts` **229** (was 221), both still well under the
+    500-line `.ts` ceiling — no pin needed; no `.tsx` component changed.
+    **Bundle:** doc/test/ratchet-only — no runtime source module touched —
+    but per this repo's own lesson (a comment-only change CAN still move
+    eager bytes if comments survive minification), it was MEASURED, not
+    assumed. This round's parent is `git rev-parse HEAD~1` = `a140e4b9`,
+    remeasured here in a throwaway `git worktree add` + fresh `npm ci`:
+    **916,515 B** eager, matching the figure this plan already recorded for
+    that tree. This round's own tree (working tree rebuild after `rm -rf
+    node_modules/.vite dist`) measures the same **916,515 B** — **+0 B**,
+    confirmed by exact byte count (not the 1-decimal kB the build's own
+    `check-bundle-size.mjs` prints), because every edit here is a comment,
+    test, or plan-prose change and TypeScript's minifier strips comments
+    before the byte count is taken. `check-bundle-size.mjs` reports 895.0 kB
+    against its 898.8 kB budget — 3.8 kB of headroom, unchanged, no pin
+    moved.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
