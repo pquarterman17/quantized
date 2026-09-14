@@ -3,6 +3,12 @@
 // (see usePeaks), plus fit controls: fit all peaks simultaneously (shared
 // background) or each independently, then show the fitted parameters + R².
 // "→ Report" lands the fitted peak table as a #36 report sheet in the library.
+//
+// Audit P2.1: the fitted table is DURABLE — a fit is saved onto the dataset
+// (`Dataset.peakTable`, lib/peakTable.ts), so it survives a dataset switch, a
+// panel close, and a `.dwk` save/reopen, and each row carries an "incl."
+// checkbox whose state travels with it. Williamson-Hall's "Use fitted peaks"
+// reads that same table and honours the exclusions set here.
 
 import { useState } from "react";
 
@@ -39,6 +45,8 @@ export default function PeaksPanel() {
     busy,
     error,
     fitResult,
+    peakTable,
+    toggleExcluded,
     fitting,
     fitError,
     fitTogether,
@@ -114,13 +122,35 @@ export default function PeaksPanel() {
     fmtNum(p.localSNR),
   ]);
 
-  const fitRows = (fitResult?.peaks ?? []).map((p, i) => [
-    i + 1,
-    fmtNum(p.center),
-    fmtNum(p.height),
-    fmtNum(p.fwhm),
-    fmtNum(p.area),
-  ]);
+  // The durable table (audit P2.1) is index-aligned with `fitResult.peaks` —
+  // one is built from the other (lib/peakTable) — so row i's `excluded` flag
+  // and durable id come from `peakTable.peaks[i]`. Guarded with `?.` rather
+  // than asserted: the fit result is set a tick before the store write lands.
+  const fitRows = (fitResult?.peaks ?? []).map((p, i) => {
+    const entry = peakTable?.peaks[i];
+    return [
+      i + 1,
+      fmtNum(p.center),
+      fmtNum(p.height),
+      fmtNum(p.fwhm),
+      fmtNum(p.area),
+      entry ? (
+        <input
+          type="checkbox"
+          // Checked = INCLUDED, so the common case is a row of ticks and an
+          // exclusion reads as a gap. The label names the peak, because a bare
+          // "include" repeated N times is useless to a screen reader.
+          aria-label={`include peak ${i + 1}`}
+          checked={!entry.excluded}
+          // The row itself is a selection target (PeakTable's onSelect); without
+          // this, ticking a box would also move the peak selection.
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => toggleExcluded(entry.id, !e.target.checked)}
+        />
+      ) : null,
+    ];
+  });
+  const excludedCount = peakTable?.peaks.filter((p) => p.excluded).length ?? 0;
 
   const faint = { color: "var(--text-faint)" } as const;
 
@@ -179,10 +209,11 @@ export default function PeaksPanel() {
             {fitResult.model} ·{" "}
             {fitResult.R2 == null ? "independent fits" : `R² = ${fmtNum(fitResult.R2)}`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
+            {excludedCount > 0 && ` · ${excludedCount} excluded`}
           </div>
           <PeakTable
             ariaLabel="fitted peaks"
-            columns={["#", "center", "height", "FWHM", "area"]}
+            columns={["#", "center", "height", "FWHM", "area", "incl."]}
             rows={fitRows}
             selected={fittedSelection.selected}
             onSelect={fittedSelection.select}

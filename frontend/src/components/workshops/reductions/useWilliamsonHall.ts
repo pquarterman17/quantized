@@ -1,17 +1,29 @@
-// Williamson-Hall section — state hook. Crystallite size + microstrain from a
-// manually-entered XRD peak list (2-theta, FWHM) via
-// /api/reductions/williamson-hall -> calc.reductions.williamson_hall (golden
-// vs MATLAB). Peak entry is manual for v1: the Peaks workshop's fitted peaks
-// (center/fwhm — see usePeaks.ts's `fitResult`) live only in ITS OWN component
-// state, never published to the store, so there is nothing durable to prefill
-// from without new cross-workshop plumbing. Documented follow-up (MAIN_PLAN
-// #11), not built here per the porting brief ("do not build new cross-
-// workshop plumbing for v1").
+// Williamson-Hall section — state hook. Crystallite size + microstrain from an
+// XRD peak list (2-theta, FWHM) via /api/reductions/williamson-hall ->
+// calc.reductions.williamson_hall (golden vs MATLAB).
+//
+// PEAK ENTRY IS NO LONGER MANUAL-ONLY (audit P2.1). This header used to say the
+// Peaks workshop's fitted peaks "live only in ITS OWN component state, never
+// published to the store, so there is nothing durable to prefill from". That is
+// the gap P2.1 closed: a fit is now saved onto its dataset as a durable
+// `Dataset.peakTable` (lib/peakTable.ts), and `loadFittedPeaks` below fills this
+// section's rows from it in one action — honouring the user's per-peak
+// `excluded` flags and adopting the wavelength the pattern was measured at,
+// when the instrument metadata recorded one. Manual entry stays exactly as it
+// was for a pattern that was never fit here.
+//
+// The physics is untouched: the fit itself is still the backend's, and nothing
+// in this hook computes a number the calc layer does not (CLAUDE.md's
+// golden-parity rule). Per-peak UNCERTAINTIES are carried in the peak table but
+// not passed on — `calc.reductions.williamson_hall` takes no weights, so
+// feeding it any would be new, ungoldened numerics. See P2.1's plan entry.
 
 import { useState } from "react";
 
 import { williamsonHall } from "../../../lib/api/reductions";
+import { includedPeaks } from "../../../lib/peakTableFit";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
+import { useActiveDataset } from "../../../store/useApp";
 
 export interface WHPeakRow {
   twoTheta: number;
@@ -31,6 +43,22 @@ export interface WilliamsonHallState {
   /** At least 2 rows, each with 0 < 2θ < 180 and FWHM > 0, plus positive
    *  wavelength/K — mirrors the backend's own validation (calc.reductions). */
   canCompute: boolean;
+  /** How many of the active dataset's fitted peaks "Use fitted peaks" would
+   *  load — i.e. its durable peak table minus the excluded rows. 0 when there
+   *  is no table, which is also when the action is unavailable. */
+  fittedPeakCount: number;
+  /** How many rows of that table the user has excluded (0 when none, or when
+   *  there is no table) — shown so the action never silently drops peaks. */
+  fittedExcludedCount: number;
+  /** Where the loaded rows came from, once `loadFittedPeaks` has run: the
+   *  provenance the Peaks workshop recorded with the fit. Null until then, and
+   *  cleared the moment a row is edited by hand (the rows are then no longer
+   *  what the fit produced). */
+  fittedSource: string | null;
+  /** Replace the rows with the active dataset's INCLUDED fitted peaks, and
+   *  adopt the fit's wavelength when the instrument metadata carried one. A
+   *  no-op when there is no table or every peak in it is excluded. */
+  loadFittedPeaks: () => void;
   addRow: () => void;
   removeRow: (index: number) => void;
   updateRow: (index: number, patch: Partial<WHPeakRow>) => void;
@@ -49,6 +77,9 @@ export function useWilliamsonHall(): WilliamsonHallState {
   const [result, setResult] = useState<WilliamsonHallResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fittedSource, setFittedSource] = useState<string | null>(null);
+  const table = useActiveDataset()?.peakTable ?? null;
+  const included = table ? includedPeaks(table) : [];
 
   const canCompute =
     rows.length >= 2 &&
@@ -56,10 +87,37 @@ export function useWilliamsonHall(): WilliamsonHallState {
     wavelength > 0 &&
     kFactor > 0;
 
-  const addRow = (): void => setRows((r) => [...r, emptyRow()]);
-  const removeRow = (index: number): void => setRows((r) => r.filter((_, i) => i !== index));
-  const updateRow = (index: number, patch: Partial<WHPeakRow>): void =>
+  // Any hand edit invalidates the provenance label: the rows are then no longer
+  // the fit's output, and claiming otherwise would be the exact kind of
+  // untraceable result P2.1 exists to remove.
+  const addRow = (): void => {
+    setFittedSource(null);
+    setRows((r) => [...r, emptyRow()]);
+  };
+  const removeRow = (index: number): void => {
+    setFittedSource(null);
+    setRows((r) => r.filter((_, i) => i !== index));
+  };
+  const updateRow = (index: number, patch: Partial<WHPeakRow>): void => {
+    setFittedSource(null);
     setRows((r) => r.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  function loadFittedPeaks(): void {
+    if (!table || included.length === 0) return;
+    setRows(included.map((p) => ({ twoTheta: p.center, fwhm: p.fwhm })));
+    // The wavelength the pattern was MEASURED at beats whatever is currently
+    // typed in the panel; absent metadata leaves the field alone rather than
+    // guessing Cu Kα over someone's Mo source.
+    if (table.provenance.wavelengthA != null) setWavelength(table.provenance.wavelengthA);
+    setError(null);
+    const { datasetName, model, method } = table.provenance;
+    const excluded = table.peaks.length - included.length;
+    setFittedSource(
+      `${included.length} fitted peak${included.length === 1 ? "" : "s"} from ${datasetName || "the active dataset"}` +
+        ` · ${model} (${method})${excluded > 0 ? ` · ${excluded} excluded` : ""}`,
+    );
+  }
 
   async function compute(): Promise<void> {
     if (!canCompute) {
@@ -98,6 +156,10 @@ export function useWilliamsonHall(): WilliamsonHallState {
     busy,
     error,
     canCompute,
+    fittedPeakCount: included.length,
+    fittedExcludedCount: table ? table.peaks.length - included.length : 0,
+    fittedSource,
+    loadFittedPeaks,
     addRow,
     removeRow,
     updateRow,

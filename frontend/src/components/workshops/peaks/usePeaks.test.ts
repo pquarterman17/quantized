@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { fetchBookData } from "../../../lib/api";
 import { askParams } from "../../overlays/ParamDialog";
+import { peakTableFromFit } from "../../../lib/peakTableFit";
 import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
@@ -944,5 +945,136 @@ describe("usePeaks labelPeaks — round-6 review: P3 a non-positive sample no lo
     // smallest POSITIVE sample (10) as the floor instead of -5, stays
     // close to the apex.
     expect(anns[0].y).toBeLessThan(100);
+  });
+});
+
+describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () => {
+  it("a simultaneous fit becomes the dataset's durable table, with provenance", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "film.xrdml", data: { ...DATA, metadata: { wavelength_a: 1.5406 } } }],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+
+    const table = useApp.getState().datasets[0].peakTable;
+    expect(table?.peaks.map((p) => p.center)).toEqual([1.02]);
+    expect(table?.peaks[0].model).toBe("Lorentzian");
+    expect(table?.peaks[0].id).toBeTruthy();
+    expect(table?.peaks[0].excluded).toBe(false);
+    expect(table?.provenance).toMatchObject({
+      datasetId: "d1",
+      datasetName: "film.xrdml",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: 1.5406,
+    });
+    // Same record the hook exposes to the panel.
+    expect(result.current.peakTable).toEqual(table);
+  });
+
+  it("an independent (fitEach) run records method 'independent'", async () => {
+    vi.mocked(fitPeak).mockResolvedValue(single(1.02, true));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitEach(OPTS);
+    });
+    expect(useApp.getState().datasets[0].peakTable?.provenance.method).toBe("independent");
+  });
+
+  it("a fitEach that produced nothing leaves an earlier good table alone", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    const good = useApp.getState().datasets[0].peakTable;
+    expect(good?.peaks).toHaveLength(1);
+
+    vi.mocked(fitPeak).mockResolvedValue(single(1.02, false)); // every window fails
+    await act(async () => {
+      await result.current.fitEach(OPTS);
+    });
+    expect(useApp.getState().datasets[0].peakTable).toBe(good);
+  });
+
+  it("publishing the table does NOT re-run the peak search or clobber the fitted overlay", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    expect(findPeaks).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    // The publish replaces the dataset object; the detect effect must not
+    // re-arm on it (it depends on the detection inputs, not on the whole
+    // dataset), or the fitted markers would be replaced by detected ones.
+    expect(findPeaks).toHaveBeenCalledTimes(1);
+    expect(result.current.fitResult?.peaks[0].center).toBe(1.02);
+  });
+
+  it("re-detects when the DATA changes, as before", async () => {
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    expect(findPeaks).toHaveBeenCalledTimes(1);
+    act(() => {
+      useApp.setState({
+        datasets: [{ id: "d1", name: "x.dat", data: { ...DATA, values: [[2], [6], [3], [7], [3], [2]] } }],
+      });
+    });
+    await waitFor(() => expect(vi.mocked(findPeaks).mock.calls.length).toBe(2));
+  });
+
+  it("re-detects when rows are excluded, as before", async () => {
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    act(() => {
+      useApp.setState({ datasets: [{ id: "d1", name: "x.dat", data: DATA, excludedRows: [1] }] });
+    });
+    await waitFor(() => expect(vi.mocked(findPeaks).mock.calls.length).toBe(2));
+  });
+
+  it("rehydrates the fitted table from a reopened project (no fit re-run)", async () => {
+    const saved = peakTableFromFit(fitted(1.02), {
+      datasetId: "d1",
+      datasetName: "x.dat",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: null,
+    });
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: saved }],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.fitResult).not.toBeNull());
+    expect(result.current.fitResult).toEqual(fitted(1.02));
+    expect(fitMultiPeak).not.toHaveBeenCalled();
+  });
+
+  it("toggleExcluded marks the peak by its durable id and un-marks it again", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    const id = result.current.peakTable!.peaks[0].id;
+    act(() => result.current.toggleExcluded(id, true));
+    expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(true);
+    act(() => result.current.toggleExcluded(id, false));
+    expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(false);
   });
 });

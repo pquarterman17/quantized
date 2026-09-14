@@ -2640,8 +2640,81 @@ reusable recipe, and figure in one flow.
 
 **Models:** Sol high/Opus 4.8 for scientific contracts; Sonnet 5 for bounded UI.
 
-- [ ] Connect peak results to Williamson-Hall and available Pawley capability.
-- [ ] Durable peak identity, uncertainty, exclusion, model, and provenance.
+**Reconciliation, 2026-09-14 (verified against the code before building).**
+This item's first two boxes were NOT stale — but neither was the gap in the
+physics, which already existed and was already golden. The map:
+
+- **Williamson-Hall — present and correct, end to end.**
+  `calc/reductions.py::williamson_hall` implements the uniform-strain model
+  (β·cosθ vs 4·sinθ, K factor, instrumental broadening subtracted in
+  quadrature with MATLAB's 1e-16 clamp), exposed by
+  `routes/reductions.py::williamson_hall_route` (POST
+  `/api/reductions/williamson-hall`), wrapped by `lib/api/reductions.ts`, and
+  driven by `components/workshops/reductions/{useWilliamsonHall.ts,
+  WilliamsonHallSection.tsx}`. No formula was added or changed by this work.
+- **The gap was WIRING plus DATA MODEL, not UI and not physics.**
+  `useWilliamsonHall.ts`'s own header stated it: the Peaks workshop's fitted
+  peaks "live only in ITS OWN component state, never published to the store,
+  so there is nothing durable to prefill from without new cross-workshop
+  plumbing". `usePeaks.ts` held the fit in `useState<MultiFitResult>` and
+  cleared it on every dataset change; the user retyped every 2θ/FWHM by hand.
+- **DATA MODEL, specifically.** `FittedPeak`/`MultiFitResult` (then in
+  `lib/types.ts`, now in `lib/peakTable.ts`) carried center/fwhm/height/bg/
+  eta/area/status/model and nothing else — no stable id, no uncertainty, no
+  exclusion flag, no provenance — and `lib/workspaceSerialize.ts` /
+  `lib/workspaceDatasetParse.ts` named no peak field at all, so nothing about
+  a fit survived a save. That is what `Dataset.peakTable` now closes.
+- **Pawley is not "available capability".** `calc/pawley.py::pawley_refine`
+  is implemented and invariant-tested, but has no route, no API wrapper and no
+  UI, and its inputs (whole pattern + a `phase_info` unit cell) are not
+  derivable from a peak table — so it got its own box below rather than a
+  wire-up here.
+- **Uncertainties are modelled, not measured.** Neither fit engine returns a
+  covariance, and `williamson_hall` accepts no weights; the columns are
+  durable, the numbers are a separate box that needs a MATLAB golden first.
+- Boxes 3-5 ("Manual peak edits and reviewed batch recipe",
+  "Technique-specific plot recipe…", "Validate on representative owner
+  instruments/phases") were checked and are genuinely NOT shipped; left
+  untouched.
+
+- [x] Connect peak results to Williamson-Hall. **(2026-09-14)** One "Use
+  fitted peaks" action fills the Williamson-Hall peak list from the active
+  dataset's durable peak table, honouring the per-peak `excluded` flags and
+  adopting the wavelength recorded at fit time. Tests:
+  `WilliamsonHallSection.test.tsx`'s "Williamson-Hall — Use fitted peaks
+  (P2.1)" suite — "one click fills the table from the fitted peaks instead of
+  manual entry", "omits peaks excluded in the Peaks workshop, and says so"
+  (asserts the API call carries only the included peaks), "adopts the
+  wavelength the pattern was measured at", "names the provenance of the loaded
+  rows", "drops the provenance line the moment a row is edited by hand".
+- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
+  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
+  in `routes/`, no `lib/api` wrapper, no UI (a case-insensitive grep for
+  "pawley" over `src/quantized/routes/` and all of `frontend/src` returns
+  nothing). It is also NOT a peak-table consumer — it refines a unit cell
+  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
+  cell, so the missing piece is a route + phase-cell entry point, not the
+  wiring this item shipped.
+- [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
+  **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
+  `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,
+  `center`/`fwhm`/`height` with `centerErr`/`fwhmErr`/`heightErr` slots, the
+  per-row `model`, a user-controlled `excluded` flag, and a
+  `PeakTableProvenance` naming the source dataset id/name, the fit method and
+  its parameters, R²/RMSE, the instrument wavelength and the fit instant. It
+  hangs off `Dataset.peakTable` (additive-optional, absent = no table, no
+  `WORKSPACE_VERSION` bump) and round-trips the `.dwk`. Tests:
+  `lib/peakTable.test.ts` (24 cases incl. id uniqueness, exclusion carry-over
+  across a re-fit, sanitizer fail-soft), `store/peakTables.test.ts`,
+  `lib/workspace.test.ts`'s "workspace durable peak table
+  (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)" save→reopen suite, and
+  `PeaksPanel.test.tsx`'s "durable table exclusion column (P2.1)".
+- [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
+  `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
+  `*Err` columns above are always null today; `calc/reductions.
+  williamson_hall` likewise takes no weights. Filling either in is new
+  numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
+  deliberately not invented here.
 - [ ] Manual peak edits and reviewed batch recipe.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.

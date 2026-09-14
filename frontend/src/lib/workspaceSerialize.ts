@@ -17,6 +17,7 @@ import type { FigureDocument } from "./figureDocument";
 import type { PageDocument } from "./pageDocument";
 import type { PipelineStep } from "./pipeline";
 import type { SavedPlotSpec } from "./plotspec";
+import { serializePeakTable } from "./peakTable";
 import type { PlotRecipe } from "./plotRecipe";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
@@ -214,6 +215,12 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
+      // Audit P2.1: the durable fitted-peak table, additive-optional (absent =
+      // no table, so a pre-P2.1 doc round-trips byte-identically). Copied
+      // through lib/peakTable's own serializer for the same reason `savedRois`
+      // goes through `serializeRois` — a live store object must never be
+      // aliased into the saved doc.
+      ...(d.peakTable ? { peakTable: serializePeakTable(d.peakTable) } : {}),
       // ORIGIN_FILE_DECODE_PLAN #38: EVERY explicit export path resolves
       // every pending dataset FIRST, and aborts with a named status/toast
       // if a book can't be fetched rather than exporting the preview —

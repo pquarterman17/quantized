@@ -20,6 +20,7 @@ import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { baseColumns } from "./formula";
+import { sanitizePeakTable } from "./peakTable";
 import { applyComputedColumnsExtras } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
 import type {
@@ -237,6 +238,12 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
     if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
     ds.fitSpec = spec;
   }
+  // Durable fitted-peak table (audit P2.1). Additive-optional exactly like
+  // `fitSpec` above: absent (every pre-P2.1 `.dwk`) means the dataset simply
+  // has no peak table, and a malformed record degrades to that same "none"
+  // rather than throwing — `sanitizePeakTable` owns every rule.
+  const peakTable = sanitizePeakTable(dd.peakTable);
+  if (peakTable) ds.peakTable = peakTable;
   // Lazy per-book reference (#38) — only ever present in an autosave
   // snapshot (a real "Save workspace" export always resolves it first);
   // validated the same defensive way as every other optional field here.

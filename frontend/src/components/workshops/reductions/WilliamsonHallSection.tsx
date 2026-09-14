@@ -1,7 +1,11 @@
-// Williamson-Hall section — view. A manually-editable peak table (2θ, FWHM)
-// plus instrument params (wavelength, K factor, instrumental broadening); the
+// Williamson-Hall section — view. An editable peak table (2θ, FWHM) plus
+// instrument params (wavelength, K factor, instrumental broadening); the
 // add/remove-row layout mirrors the reflectivity workshop's LayerTable. Thin —
 // logic lives in useWilliamsonHall.
+//
+// "Use fitted peaks" (audit P2.1) fills the table from the active dataset's
+// durable peak table instead of making the user retype the Peaks workshop's
+// results; the provenance line under it names what was loaded.
 
 import { DataTable } from "../../primitives/DataTable";
 import { IconButton } from "../../primitives/IconButton";
@@ -22,6 +26,10 @@ export default function WilliamsonHallSection() {
     busy,
     error,
     canCompute,
+    fittedPeakCount,
+    fittedExcludedCount,
+    fittedSource,
+    loadFittedPeaks,
     addRow,
     removeRow,
     updateRow,
@@ -34,6 +42,23 @@ export default function WilliamsonHallSection() {
 
   return (
     <div style={{ marginTop: 10 }}>
+      {fittedPeakCount > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <Button size="sm" onClick={loadFittedPeaks}>
+            Use fitted peaks ({fittedPeakCount})
+          </Button>
+          {fittedExcludedCount > 0 && (
+            <span className="qzk-ds-meta" style={{ marginLeft: 8, color: "var(--text-faint)" }}>
+              {fittedExcludedCount} excluded in the Peaks workshop
+            </span>
+          )}
+        </div>
+      )}
+      {fittedSource && (
+        <div className="qzk-ds-meta" style={{ marginBottom: 8, color: "var(--text-faint)" }}>
+          {fittedSource}
+        </div>
+      )}
       <div className="qzk-ds-meta" style={{ display: "grid", gridTemplateColumns: ROW_COLS, gap: 6 }}>
         <span>2θ (°)</span>
         <span>FWHM (°)</span>
@@ -50,8 +75,17 @@ export default function WilliamsonHallSection() {
             alignItems: "center",
           }}
         >
-          <NumberField value={row.twoTheta} width={90} onChange={(v) => updateRow(i, { twoTheta: Number(v) || 0 })} />
+          {/* The column headers are a grid row, not <label>s, so each field
+              names itself — the only way a screen reader (or a test) can tell
+              row 3's FWHM from row 4's. */}
           <NumberField
+            aria-label={`peak ${i + 1} 2θ`}
+            value={row.twoTheta}
+            width={90}
+            onChange={(v) => updateRow(i, { twoTheta: Number(v) || 0 })}
+          />
+          <NumberField
+            aria-label={`peak ${i + 1} FWHM`}
             value={row.fwhm}
             width={90}
             step={0.001}
@@ -78,7 +112,13 @@ export default function WilliamsonHallSection() {
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           Wavelength (Å)
         </label>
-        <NumberField value={wavelength} width={88} step={0.0001} onChange={(v) => setWavelength(Number(v) || 0)} />
+        <NumberField
+          aria-label="Wavelength (Å)"
+          value={wavelength}
+          width={88}
+          step={0.0001}
+          onChange={(v) => setWavelength(Number(v) || 0)}
+        />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>
           K factor
         </label>

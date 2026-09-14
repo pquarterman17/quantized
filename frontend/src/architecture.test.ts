@@ -515,7 +515,15 @@ const TS_MODULE_PINS: Record<string, number> = {
   // (see lib/workbooks.ts's `deriveWorkbooks`/`reconcileWorkbookRefs`, the
   // new pure module that derives/repairs it — not yet wired into the store
   // or .dwk; that's PR A2).
-  "/lib/types.ts": 1053,
+  // 1053 -> 1008 (2026-09-14, PRIMARY_SOFTWARE_AUDIT_PLAN P2.1): the four
+  // /api/peaks wire types (Peak/FittedPeak/MultiFitResult/SinglePeakFit) — a
+  // self-contained leaf block, the same shape as the Reductions extraction
+  // above — moved verbatim to the new lib/peakTable.ts, which is now the single
+  // home for the peak contract because P2.1's durable `PeakTable` is built from
+  // and rehydrated into exactly those shapes. Re-exported from types.ts, so no
+  // importer changed. Funds this item's own `Dataset.peakTable` field and
+  // ratchets down by the balance.
+  "/lib/types.ts": 1009,
   "/lib/plotspec.ts": 893,
   // originFigures.ts GRADUATED 2026-08-30 (pin was 793; BUNDLE_HEADROOM
   // slice 1): 793 -> 208 lines. The apply-only half — legend/annotation/
@@ -1530,6 +1538,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   source: "re-import source path descriptor, not channel-indexed",
   versionOf: "a dataset id, not channel-indexed",
   workbookId: "Library organization only, not channel-indexed",
+  peakTable:
+    "fitted-peak records in the dataset's own x/y UNITS (2-theta, FWHM, intensity) plus a provenance record -- it stores no channel index at all, so a column removal cannot leave it pointing at the wrong one",
 };
 
 const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
