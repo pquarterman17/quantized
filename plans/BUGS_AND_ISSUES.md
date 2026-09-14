@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-14  
+**Updated:** 2026-09-14 (BUG-012..BUG-015 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -36,6 +36,10 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
+| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `it.fails` D1, not fixed |
+| BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `it.fails` D2, not fixed |
+| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `it.fails` D3, not fixed |
+| BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `it.fails` D4, not fixed |
 
 ---
 
@@ -3041,6 +3045,500 @@ commit closes it:
 
 ---
 
+## BUG-012 — a saved figure's x-axis break reaches export/reopen but never renders on screen
+
+**Priority:** P2 — the document and the export are correct and agree with each
+other; only the live canvas disagrees with both. No data is lost or altered,
+but a user who reopens their own saved figure sees a plot that silently
+stopped matching what they exported, with no indication anything is wrong —
+exactly the kind of screen/export mismatch the P4.2 matrix exists to catch.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the composition/fallback
+chain, not inferred — see Confirmed implementation evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D1.
+
+#### User-visible problem
+
+A user draws an x-axis break on a plot (the store's `breakAtGaps` action),
+saves the workspace, and reopens it (or exports the figure without
+reopening). The `FigureDocument` faithfully carries the break —
+`plot.axisBreaks.x` round-trips through save/reopen, and an export of that
+document draws the break — but the on-screen canvas, after a reopen, renders
+the series as one continuous, unbroken line. The exported figure and the
+reopened document both say "this plot has a break here"; the screen the user
+is actually looking at does not show one.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/figureDocument.ts:44`, `:179-182`, `:295`, `:426` —
+  `FigureDocument.plot.axisBreaks` (`{x, y, y2}`) is the canonical, persisted
+  home for break ranges; `axisBreaks.x` round-trips through
+  `createFigureDocument` and the parse/validate path (`axisBreaks()` at
+  `:295`, consumed at `:426`) unchanged.
+- `frontend/src/lib/figureSpec.ts:376` — `buildFigureSpecFromDocument` reads
+  `document.plot.axisBreaks.x` into `extras.xBreaks`, and `:177` folds it into
+  `overrides.x_breaks` on the wire `FigureSpec` — every export of a document
+  with a break draws it.
+- `frontend/src/store/useApp.ts:539`, `:1359-1390` — the ONLY code path that
+  ever makes the CANVAS draw a break is the `breakAtGaps` store action, which
+  builds a transient panel arrangement held in `AppState.composition`
+  (`store/useApp.ts:371`) — a live-session render cache, not a field on
+  `FigureDocument` and never persisted.
+- `frontend/src/components/Stage/useEffectiveComposition.ts:33-41` — the ONE
+  hook `PlotStage.tsx` (`:135`) and `MultiPanelStage.tsx` read for "what
+  panels are actually showing." Its own header explains the fallback
+  contract: when the transient `composition` is `null` — exactly the state
+  right after a workspace reopen, since `composition` is never serialized —
+  it falls back to `facetCompositionFromBinding(active, facetKey, xKey,
+  yKeys)`, a DURABLE fallback keyed on `facetKey` only. There is no
+  equivalent durable fallback keyed on `document.plot.axisBreaks.x`, so a
+  reopened document with a break renders as an ordinary, unbroken single
+  panel until the user re-applies `breakAtGaps` by hand.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:269-274`,
+  `it.fails("D1: a document's x-breaks reach export/reopen but never the
+  screen", ...)` — asserts `projectScreen(document, dataset).xBreaks` equals
+  `projectExport(document, dataset).xBreaks` on the `break` fixture; fails
+  today (screen: `[]`, export/reopen: `[[2, 3]]`). The surrounding matrix's
+  own narrowed-equality table (`regressionMatrix.test.ts:90-93`,
+  `DIVERGENT.break`, `legs: ["export", "reopen"]`) exists specifically to
+  carve this field out of the main screen≡export/reopen assertions so the
+  divergence stays visible rather than silently passing.
+
+#### Why this priority
+
+P2 as filed. The evidence supports keeping it there rather than raising to
+P1/P0: nothing is corrupted (the document and export both hold the correct,
+complete break data — `axisBreaks.x` is never lost, only unrendered), and the
+mismatch has a workaround (re-apply `breakAtGaps` after every reopen).
+Priority is capped below P1 because a break is a presentation aid, not a
+value the analysis reads — but the fact that this happens on EVERY reopen of
+EVERY document with a break, unconditionally and with no error or notice,
+argues for keeping it toward the upper end of P2 rather than P3.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — the `break` fixture in
+  `frontend/src/lib/regressionMatrixFixtures.testkit.ts` (a `FigureDocument`
+  with `plot.axisBreaks.x: [[2, 3]]`).
+- [x] Exact actions recorded — reopen (`reopenProject`) or export
+  (`projectExport`) a document carrying `plot.axisBreaks.x`, then compare
+  against the live screen projection (`projectScreen`).
+- [x] Actual result recorded — export and reopen both carry
+  `xBreaks: [[2, 3]]`; the screen projection carries `xBreaks: []`.
+- [x] Expected result recorded — the screen should render the same break the
+  document persists and the export draws.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it.fails("D1: a document's x-breaks reach export/reopen but never the
+  screen", ...)`.
+
+#### Fix checklist
+
+- [ ] Give `useEffectiveComposition`'s durable fallback a break-aware branch
+  (an `axisBreaks`-driven composition builder analogous to
+  `facetCompositionFromBinding`), or otherwise make a reopened document
+  re-derive the same panel arrangement `breakAtGaps` would have produced live.
+- [ ] Confirm `MultiPanelStage.tsx`'s panel-break render path can consume
+  that fallback exactly as it consumes a freshly-applied `breakAtGaps`
+  composition — no separate render branch.
+- [ ] Add a regression test at the DOM/render layer (not only the structural
+  payload) that a workspace SAVE → RELOAD round-trip shows the break on
+  screen, per this repo's "test at the layer the user experiences" discipline.
+- [ ] Flip `regressionMatrix.test.ts`'s D1 `it.fails` to a passing `it`, and
+  drop the `break` fixture's `DIVERGENT` narrowing
+  (`regressionMatrix.test.ts:90-93`) once the screen leg agrees again.
+
+#### Acceptance criteria
+
+- [ ] A figure with a saved x-axis break renders the break on screen
+  immediately after a workspace reopen, with no user action required.
+- [ ] `projectScreen(document, dataset).xBreaks` equals
+  `projectExport(document, dataset).xBreaks` for the `break` fixture — the
+  exact assertion `regressionMatrix.test.ts`'s D1 test makes.
+- [ ] The fix does not change `breakAtGaps`'s existing live-session
+  behavior — applying a break interactively during the same session still
+  works exactly as before.
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: —
+
+---
+
+## BUG-013 — a waterfall view's offset never reaches the export wire
+
+**Priority:** P2 — a whole view TYPE mis-exports (overlaid instead of
+staggered curves), with a workaround (manually offset before export, or
+accept the wrong figure) but no data loss.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the compose pipeline and
+the `FigureSpec` wire contract, not inferred — see Confirmed implementation
+evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D2.
+
+#### User-visible problem
+
+A user turns on a waterfall view (`view.waterfall`, a positive offset
+fraction), which visibly staggers every series vertically on screen so
+overlapping curves become readable. Exporting that same view — to PDF/SVG,
+or via Copy figure — produces a figure with every series drawn at its
+ORIGINAL, un-offset position: the export looks like the waterfall was never
+applied, even though the screen the user is looking at clearly shows it.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/plotdata.ts:364` (`DisplayCompose.waterfall: number`) and
+  `:377-382` (`composeDisplayPayload`) — the FIRST step of the canonical
+  on-screen compose pipeline is `applyWaterfall(payload, o.waterfall)`
+  (`:521`, "Vertically offset each series for a waterfall view"), so every
+  on-screen render of a waterfall view is offset before anything else runs.
+- `frontend/src/lib/api/figures.ts` — the `FigureSpec` interface (`:43` on,
+  the wire contract every export/reopen path serializes to) has no
+  `waterfall` field anywhere; a whole-file grep finds exactly one `waterfall`
+  mention (`:117`), an unrelated comment about a still-unbuilt 2-D/
+  heatmap/surface figure type.
+- `frontend/src/lib/figureSpec.ts` (`buildFigureSpecForView`, lines 136-395 —
+  the ONE function every export path routes through, per the module's own
+  header) never reads or applies `st.waterfall` anywhere in its body —
+  confirmed by grep, zero `waterfall` references in the file.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:282-287`,
+  `it.fails("D2: the waterfall offset the canvas applies is absent from the
+  export wire", ...)` — asserts `projectExport(document,
+  dataset).waterfallOffset` equals `projectScreen(...).waterfallOffset` on
+  the `waterfall` fixture. The matrix's own `DIVERGENT.waterfall` table entry
+  (`regressionMatrix.test.ts:90-93`, `legs: ["export"]`) exempts ONLY the
+  export leg — reopen restores the raw `view.waterfall` fraction from the
+  document and the canvas re-applies it identically, so it is specifically
+  the wire spec sent to export that never carries the offset.
+
+#### Why this priority
+
+P2 as filed. Matches the evidence: this is substantial friction (an entire
+view type exports wrong) with a workaround (manual offset, or accepting the
+wrong exported figure), not data loss or a scientifically incorrect stored
+value — the document and the live data are both untouched, only the exported
+RENDERING is wrong.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — the `waterfall` fixture in
+  `frontend/src/lib/regressionMatrixFixtures.testkit.ts`, a `FigureDocument`
+  whose `view.waterfall` is a positive fraction.
+- [x] Exact actions recorded — export the document (`projectExport`) and
+  compare its `waterfallOffset` to the live screen projection
+  (`projectScreen`).
+- [x] Actual result recorded — the screen's `waterfallOffset` is `> 0`
+  (`regressionMatrix.test.ts:203-205`); the exported `FigureSpec` carries no
+  waterfall field at all, so `projectExport(...).waterfallOffset` is `0`.
+- [x] Expected result recorded — the exported figure should offset each
+  series by the same fraction the canvas shows.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it.fails("D2: the waterfall offset the canvas applies is absent from the
+  export wire", ...)`.
+
+#### Fix checklist
+
+- [ ] Decide where the offset should be applied for export: pre-apply it to
+  the wire dataset's Y values inside `buildFigureSpecForView` (mirroring
+  `lib/plotdata.ts`'s `applyWaterfall` math, no backend contract change), OR
+  add a `waterfall` field to `FigureSpec` and apply the offset server-side in
+  `routes/export_figures.py`.
+- [ ] Whichever shape is chosen, use the SAME offset formula
+  `applyWaterfall` uses, so screen and export can never numerically disagree
+  even though they apply it at different points in the pipeline.
+- [ ] Confirm reopen continues to round-trip `view.waterfall` unchanged (it
+  already does; the fix must not regress that leg).
+- [ ] Flip `regressionMatrix.test.ts`'s D2 `it.fails` to a passing `it`, and
+  drop the `waterfall` fixture's export-only `DIVERGENT` narrowing
+  (`regressionMatrix.test.ts:90-93`) once the export leg agrees.
+
+#### Acceptance criteria
+
+- [ ] Exporting a waterfall view produces a PDF/SVG with each series
+  visibly offset by the same amount the on-screen canvas shows.
+- [ ] `projectExport(document, dataset).waterfallOffset` equals
+  `projectScreen(document, dataset).waterfallOffset` for the `waterfall`
+  fixture — the exact assertion D2's test makes.
+- [ ] The reopen leg is unaffected —
+  `projectReopen(...).waterfallOffset` continues to equal the screen's.
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: —
+
+---
+
+## BUG-014 — a renamed legend loses its unit on screen but keeps it on export
+
+**Priority:** P3 — cosmetic only: the figure and its data are correct on
+both legs, the legend wording simply disagrees between screen and export.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading both the frontend label
+builder and the backend's label formatting, not inferred — see Confirmed
+implementation evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D3.
+
+#### User-visible problem
+
+A user renames a series' legend label — for example to "Loop 1" — on a
+channel whose unit is "au". On screen, the legend shows exactly "Loop 1" and
+nothing else: a rename fully replaces the displayed label, unit included.
+Exporting the same figure shows "Loop 1 (au)" instead — the backend
+re-appends the channel's unit to the rename, producing a label the user
+never asked for and does not see on screen.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/uplotOpts.ts:694` (`seriesLabels?: (string |
+  undefined)[]` on the opts builder's args) and `:907` — the on-screen
+  legend label is built as `args.seriesLabels?.[i] ?? (s.unit ? `${s.label}
+  (${s.unit})` : s.label)`. An explicit rename supplies a value at
+  `seriesLabels[i]`, which REPLACES the whole label — unit included — via the
+  `??` short-circuit; there is no code path that re-appends a unit onto a
+  rename.
+- `frontend/src/lib/figureSpec.ts:200-204` — the wire `dataset` sent to
+  export only rewrites `data.labels[ch]` to the raw rename text
+  (`st.seriesLabels[ch] ?? label`): this changes the CHANNEL LABEL the
+  backend receives, not a fully-resolved legend string with a unit already
+  decided.
+- `src/quantized/routes/export_figures.py:234` and `:267` (inside
+  `_figure_series`, part of `_resolve_figure`'s codepath) — every exported
+  series name is unconditionally built as `f"{s.label} ({s.unit})" if
+  s.unit else s.label`: the backend always re-appends the channel's OWN unit
+  to whatever label string it receives, with no way to mark a label as
+  "already complete, do not append a unit."
+- Net effect: a rename lands on `dataset.labels[ch]` (becomes `s.label`
+  server-side) and is then unit-appended a SECOND time by the backend,
+  producing "Loop 1 (au)", while the screen shows exactly "Loop 1".
+- Test: `frontend/src/lib/regressionMatrix.test.ts:296-314`,
+  `it.fails("D3: a legend rename keeps its unit on export but loses it on
+  screen", ...)` — builds a document with `view.seriesLabels: { 0: "Loop
+  1" }` on a channel with unit "au" and asserts
+  `projectExport(renamed, dataset).series[0].label` equals
+  `projectScreen(renamed, dataset).series[0].label`; fails today ("Loop 1
+  (au)" on export vs "Loop 1" on screen).
+
+#### Why this priority
+
+P3 as filed. The evidence supports keeping it there: the plot itself is
+correct on both legs (same data, same series, same colours), only the legend
+STRING differs — a wording/polish mismatch, not a data or scientific
+correctness issue, and not something that could plausibly be mistaken for a
+different measurement.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a `FigureDocument` with
+  `view.seriesLabels: { 0: "Loop 1" }` on a channel whose unit is "au",
+  built inline in the D3 test (`regressionMatrix.test.ts:296-310`).
+- [x] Exact actions recorded — rename series 0's legend label, then compare
+  `projectScreen(...).series[0].label` to `projectExport(...).series[0]
+  .label`.
+- [x] Actual result recorded — screen: "Loop 1"; export: "Loop 1 (au)".
+- [x] Expected result recorded — the exported legend label should match the
+  renamed on-screen label exactly.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it.fails("D3: a legend rename keeps its unit on export but loses it on
+  screen", ...)`.
+
+#### Fix checklist
+
+- [ ] Decide the contract: either the frontend sends the FULLY-RESOLVED
+  legend string (unit included or not, exactly as the screen shows it) and
+  the backend stops unconditionally appending a unit, or the backend learns
+  to distinguish "raw channel label, append the unit" from "user-supplied
+  legend text, use verbatim."
+- [ ] Whichever shape is chosen, thread a rename through distinctly from an
+  un-renamed channel label so `_resolve_figure`'s unit-appending format
+  (`routes/export_figures.py:234`, `:267`) applies only to the latter.
+- [ ] Confirm an UN-renamed series (no `seriesLabels` entry) still gets its
+  unit appended on export exactly as today — the common case must not
+  regress.
+- [ ] Flip `regressionMatrix.test.ts`'s D3 `it.fails` to a passing `it`.
+
+#### Acceptance criteria
+
+- [ ] A series renamed on screen exports with the identical legend text, no
+  unit re-appended.
+- [ ] An un-renamed series continues to export with its unit appended
+  exactly as before (no regression).
+- [ ] `projectExport(renamed, dataset).series[0].label` equals
+  `projectScreen(renamed, dataset).series[0].label` — the exact assertion
+  D3's test makes.
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: —
+
+---
+
+## BUG-015 — hiding a series shifts later series' export palette colour, not the canvas'
+
+**Priority:** P2 — a visible, wrong-looking export (recoloured series) with a
+workaround (temporarily un-hide, export, re-hide, or manually recolour after
+export), no data loss. Matches the same class of bug `SeriesCycle` was
+already built to fix for the live Stage export — this is that fix not
+reaching a saved document's export path.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the canvas display-list
+builder, the export channel filter, and `buildExportStyles`, not inferred —
+see Confirmed implementation evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D4.
+
+#### User-visible problem
+
+A user hides the first of two plotted series (via the legend). On screen,
+the second series keeps its ORIGINAL palette colour — hiding a series never
+reflows the colours of the series still visible. Exporting the same figure
+(PDF/SVG) recolours the second series as if it were now first in line: the
+exported colour does not match what the user sees on screen.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/uplotOpts.ts:1309` (`const show = !args.hidden?.[i];`)
+  and the surrounding series builder (e.g. `:1329`) — a hidden series stays
+  IN the canvas' display list at its ORIGINAL index with `show: false`;
+  every later series' colour call (`seriesColor(i, style)`) still uses the
+  untouched, original index `i`, so hiding never shifts anyone's colour on
+  screen.
+- `frontend/src/lib/figureSpec.ts:195` (`const plotted =
+  displayChannels.filter((ch) => !st.hiddenChannels.includes(ch));`) — the
+  export wire's channel list DROPS hidden channels entirely, so the second
+  series shifts to index 0 in the filtered list sent to export.
+- `frontend/src/lib/exportStyles.ts:25-40` (`buildExportStyles`) — colours
+  each entry by `pos = cycle?.[i] ?? i` (`:40`), where `i` is the index into
+  the ALREADY-FILTERED `plotted` array; with `cycle: null` (the common case
+  for a saved document — see below), `pos` is simply the filtered position,
+  so the remaining series is coloured as though it were first.
+- `frontend/src/lib/figureSpec.ts:382` (`buildFigureSpecFromDocument`) never
+  sets `extras.autoSeriesStyles`, so `buildFigureSpecForView`'s
+  `seriesCycle` (`figureSpec.ts:253-262`, gated on `extras.autoSeriesStyles`)
+  is `null` for every saved-document export — the positional correction
+  `SeriesCycle` provides is opt-in only for the LIVE Stage export
+  (`buildStageFigureSpec`) per `figureSpec.ts:226-249`'s own doc and
+  `exportStyles.ts:31-38`'s comment, and never reaches a saved document's
+  export path.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:324-342`,
+  `it.fails("D4: hiding a series shifts the palette position of later
+  series on export only", ...)` — builds a document with `yKeys: [0, 1]`,
+  `hiddenChannels: [0]`, and asserts `projectExport(hidden,
+  dataset).series[0].color` equals `projectScreen(hidden,
+  dataset).series[0].color`; fails today (export colours the remaining
+  series by its filtered position 0, screen keeps it at its original
+  position 1).
+
+#### Why this priority
+
+P2 as filed. Matches the evidence: substantial, visible friction (an
+exported figure's series colours do not match the legend/screen the user
+authored it against) with a workaround, not data loss — and the audit's own
+framing that this is a recurrence of a class of bug already fixed once
+elsewhere (`SeriesCycle` for the live Stage export) supports treating it as
+more than cosmetic polish.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a `FigureDocument` with
+  `yKeys: [0, 1]`, `hiddenChannels: [0]`, built inline in the D4 test
+  (`regressionMatrix.test.ts:325-338`).
+- [x] Exact actions recorded — hide the first of two series, then compare
+  `projectScreen(...).series[0].color` (the remaining, second series) to
+  `projectExport(...).series[0].color`.
+- [x] Actual result recorded — screen keeps the second series' original
+  palette colour (its original position, 1); export recolours it as if it
+  were the first series (filtered position 0).
+- [x] Expected result recorded — the exported figure's series colours
+  should match the screen's, hidden series or not.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it.fails("D4: hiding a series shifts the palette position of later
+  series on export only", ...)`.
+
+#### Fix checklist
+
+- [ ] Give `buildFigureSpecFromDocument`'s export path the same positional
+  correction `SeriesCycle`/`extras.autoSeriesStyles` already provides the
+  live Stage export (`figureSpec.ts:253-262`), so `buildExportStyles`'s
+  `pos` is computed from the UNFILTERED display index, not the filtered
+  `plotted` index.
+- [ ] Confirm the fix does not also turn on the (opt-in) auto dash/marker
+  CYCLE feature itself for saved documents — only the palette-POSITION
+  correction, not `autoSeriesStyles`'s wider styling behaviour, should apply
+  universally.
+- [ ] Add a case with more than one hidden series (e.g. hiding series 0 of
+  three) to confirm the fix generalizes past the two-series minimal repro.
+- [ ] Flip `regressionMatrix.test.ts`'s D4 `it.fails` to a passing `it`.
+
+#### Acceptance criteria
+
+- [ ] Hiding a series on screen and exporting the figure produces the SAME
+  palette colour for every remaining series as the screen shows.
+- [ ] `projectExport(hidden, dataset).series[0].color` equals
+  `projectScreen(hidden, dataset).series[0].color` — the exact assertion
+  D4's test makes.
+- [ ] An export with NO hidden series is byte-identical to before the fix
+  (no regression to the common, all-visible case).
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: —
+
+---
+
 ## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
 
 **Priority:** P3 — nothing is lost or corrupted, and screen and export AGREE
@@ -3319,3 +3817,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
