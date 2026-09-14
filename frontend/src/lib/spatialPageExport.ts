@@ -50,6 +50,7 @@ import { displayPositions } from "./seriesStyleCycle";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
+import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
 import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
@@ -213,8 +214,6 @@ function spatialPanelFigure(
     // backend auto-derives it the same way it does for the single-figure
     // route (calc's _figure_series: a lone y2 series -> "label (unit)").
     ...secondaryAxisWire(y2Axis),
-    // P3.3 residual close: SpatialPageAppearance.greyscale's own doc.
-    ...(appearance?.greyscale ? { greyscale: true } : {}),
   };
 }
 
@@ -264,7 +263,7 @@ export function buildSpatialPageRequest(
   }
   const { rows, cols } = spatialGridSize(panels);
   const { width_in, height_in } = pageSizeInches(pageSetup);
-  return {
+  const spec: FigurePageSpec = {
     rows,
     cols,
     panels: panelSpecs,
@@ -272,4 +271,10 @@ export function buildSpatialPageRequest(
     width_in,
     height_in,
   };
+  // P3.3 residual close: the ONE construction site for the page-wide
+  // greyscale choice (lib/pageGreyscale.ts's own doc) -- rather than this
+  // path spreading the wire literal itself, which is how it and the two
+  // PageDocument-rooted paths (panelResolve.ts, usePagePreviewExport.ts)
+  // would drift.
+  return withPageGreyscale(spec, appearance?.greyscale);
 }

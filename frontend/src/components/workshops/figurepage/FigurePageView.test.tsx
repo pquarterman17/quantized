@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { GREYSCALE_FIELD } from "../../../lib/exportFigureCommand";
 import FigurePageView from "./FigurePageView";
 import { useFigurePage } from "./useFigurePage";
 
@@ -105,20 +106,20 @@ beforeEach(() => {
 describe("FigurePageView page-wide greyscale control (P3.3)", () => {
   it("offers a Greyscale checkbox beside the format/style/DPI controls", () => {
     renderView();
-    const box = screen.getByLabelText("Greyscale");
+    const box = screen.getByLabelText(GREYSCALE_FIELD.label);
     expect(box).toHaveProperty("type", "checkbox");
     expect(box).not.toBeChecked();
   });
 
   it("ticking it turns the page-wide option on", () => {
     renderView();
-    fireEvent.click(screen.getByLabelText("Greyscale"));
+    fireEvent.click(screen.getByLabelText(GREYSCALE_FIELD.label));
     expect(setGreyscale).toHaveBeenCalledWith(true);
   });
 
   it("reflects a page that already has greyscale on, and unticking turns it off", () => {
     renderView({ greyscale: true });
-    const box = screen.getByLabelText("Greyscale");
+    const box = screen.getByLabelText(GREYSCALE_FIELD.label);
     expect(box).toBeChecked();
     fireEvent.click(box);
     expect(setGreyscale).toHaveBeenCalledWith(false);

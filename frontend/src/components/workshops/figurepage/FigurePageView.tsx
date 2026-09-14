@@ -36,6 +36,7 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select } from "../../primitives";
 import RichLabelInput from "../../primitives/RichLabelInput";
+import { GREYSCALE_FIELD } from "../../../lib/exportFigureCommand";
 import { PAGE_LABEL_FORMATS, PAGE_LABEL_POSITIONS } from "../../../lib/figurepage";
 import type { PanelSource } from "../../../lib/figurepageActions";
 import { PAGE_RESIZE_MODES } from "../../../lib/pageDocument";
@@ -215,9 +216,19 @@ export default function FigurePageView() {
           <NumberField value={p.dpi} onChange={(v) => p.setDpi(Number(v) || 300)} width={90} />
           {/* P3.3: page-wide print-safe output — one page setting applied to
               every panel, and to the PREVIEW as well as the export/copy, so
-              what is on screen is what is exported (usePagePreviewExport). */}
-          <Checkbox checked={p.greyscale} onChange={p.setGreyscale}>
-            Greyscale
+              what is on screen is what is exported (usePagePreviewExport).
+              Label reused from GREYSCALE_FIELD (lib/exportFigureCommand.ts)
+              so it can't drift from the single-figure/spatial-page dialogs;
+              the HINT is deliberately its own text, not that field's — the
+              single-figure hint says "the on-screen plot stays coloured",
+              which is false here: this composer's preview is itself a
+              server render, so ticking it turns the preview grey too. */}
+          <Checkbox
+            checked={p.greyscale}
+            onChange={p.setGreyscale}
+            title="The preview above, and every export or copy of this page, render in greyscale — not just the saved file"
+          >
+            {GREYSCALE_FIELD.label}
           </Checkbox>
 
           {/* Per-panel overrides for the selected slot */}

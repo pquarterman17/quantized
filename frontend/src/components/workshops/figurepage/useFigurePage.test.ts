@@ -1206,6 +1206,34 @@ describe("useFigurePage page-wide greyscale (P3.3)", () => {
     expect("greyscale" in result.current.pageDocument.output).toBe(false);
   });
 
+  // Review nit (round 2, 2026-09-14): "does not read as dirty" was pinned only
+  // by a hand-built mirror in lib/pageDocument.test.ts that re-implements
+  // setGreyscale(false)'s delete inline -- it never exercises the real hook.
+  // This asserts `dirty` after a REAL toggle on the REAL hook, with
+  // setDpi(600)/setDpi(300) as a parity control: an ordinary output field
+  // must dirty/clean in exactly the same way, or greyscale would be getting
+  // special-cased dirty tracking rather than the shared additive-field rule.
+  it("dirty toggles on a real greyscale flip exactly like an ordinary field (setDpi parity control)", () => {
+    const seeded = win({ id: "w1", title: "Loop A", view: { ...defaultPlotView(), yKeys: [1] } });
+    useApp.setState({ plotWindows: [seeded], editableFigures: [seeded.document!], pages: [], pageDocSeed: null });
+
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    act(() => result.current.save());
+    expect(result.current.dirty).toBe(false);
+
+    act(() => result.current.setGreyscale(true));
+    expect(result.current.dirty).toBe(true);
+    act(() => result.current.setGreyscale(false));
+    expect(result.current.dirty).toBe(false);
+
+    // Parity control -- setDpi dirties/cleans exactly the same way.
+    act(() => result.current.setDpi(600));
+    expect(result.current.dirty).toBe(true);
+    act(() => result.current.setDpi(300));
+    expect(result.current.dirty).toBe(false);
+  });
+
   // Persistence: the flag rides the saved PageDocument, so a page reopened
   // from the Library remembers it (and Library's own export-without-reopening
   // reads the same saved field — PagesSection.test.tsx pins that half).

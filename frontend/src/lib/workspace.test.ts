@@ -1243,7 +1243,10 @@ describe("workspace pages (FIGURE_AUTHORING_WORKFLOW_PLAN F3.1)", () => {
         { figureId: "figure-1", label: "(i)", title: null },
         { figureId: null, label: null, title: null },
       ],
-      output: { format: "svg", stylePreset: "aps", dpi: 600, labelFormat: "A)", labelPos: "outside" },
+      output: {
+        format: "svg", stylePreset: "aps", dpi: 600, labelFormat: "A)", labelPos: "outside",
+        greyscale: true,
+      },
     });
     const loaded = parseWorkspace(
       serializeWorkspace({ datasets, editableFigures: [figure], pages: [page] }),

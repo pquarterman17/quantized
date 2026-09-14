@@ -347,6 +347,12 @@ describe("output.greyscale (P3.3 — additive, absent === off)", () => {
     }
   });
 
+  // Kept alongside the real-hook parity test in useFigurePage.test.ts ("dirty
+  // toggles on a real greyscale flip exactly like an ordinary field"): this
+  // one is a fast unit-level pin on `pageDocumentDirty` itself (the pure
+  // comparison contract), built from hand-constructed objects rather than a
+  // rendered hook -- the hook-level test is what actually proves the real
+  // `setGreyscale` wiring produces this same shape.
   it("a page whose greyscale was turned on and off again is not dirty against the saved copy", () => {
     const saved = createPageDocument({ id: "p1", name: "Results" });
     const toggledOn: PageDocument = { ...saved, output: { ...saved.output, greyscale: true } };

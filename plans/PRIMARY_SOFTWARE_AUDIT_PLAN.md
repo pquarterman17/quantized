@@ -3691,9 +3691,10 @@ covers a much smaller subset and guards focus on Analyze.
       (`components/workshops/figurepage/`, its own export path with no modal
       dialog) and Library's export-a-saved-page-without-reopening
       (`components/Library/PagesSection.tsx`) now offer it. Greyscale is a
-      PAGE-WIDE output setting on those paths: `PageOutputSettings.greyscale` (`lib/pageDocument.ts`), ADDITIVE
-      (absent === off, no schema version bump — the same convention
-      `createdAt`/`modifiedAt` use, and unlike `layout`'s v1->v2, since an
+      PAGE-WIDE output setting on those paths: `PageOutputSettings.greyscale`
+      (`lib/pageDocument.ts`), ADDITIVE (absent === off, no schema version
+      bump — the same convention `createdAt`/`modifiedAt` use, and unlike
+      `layout`'s v1->v2, since an
       older build ignoring the field still renders exactly what it always
       did). `sanitizeOutput` keeps only a literal `true`, and the composer's
       setter DELETES the key when unticked, so "off" has one canonical shape:
@@ -3721,9 +3722,9 @@ covers a much smaller subset and guards focus on Analyze.
       export request, and its ABSENCE when the page never turned it on), and
       `pageDocument.test.ts` (a pre-P3.3 document loads unchanged with the key
       absent; a saved `greyscale: true` survives the JSON round trip; `false`
-      and junk both load as absent). The review also
-      found and fixed a vector-only defect: error-bar CAPS (`capsize=2`) kept
-      a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
+      and junk both load as absent). The spatial close's review (2026-09-13)
+      also found and fixed a vector-only defect: error-bar CAPS (`capsize=2`)
+      kept a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
       (invisible in raster only because the cap glyph's fill path happens to
       be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
       face/edge colour explicitly from the series' own (now grey) colour.
@@ -4052,7 +4053,7 @@ Original acceptance criteria (unchanged):
   of the surface was neither wired NOR named. The full residual — every
   `postDownload`/`postBlob` call with no `signal` and no `pendingOps` entry
   — stays uncancelled and untracked: `components/workshops/figurepage/
-  usePagePreviewExport.ts:188,219` (the Figure Page composer's OWN export +
+  usePagePreviewExport.ts:204,235` (the Figure Page composer's OWN export +
   clipboard copy — the longest render in the app, and the most-requested
   cancel target of anything on this list), `components/workshops/
   figurebuilder/previewExport.ts:53,77`, `components/Library/
