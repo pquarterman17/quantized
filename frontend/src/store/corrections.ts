@@ -67,12 +67,11 @@ type SliceGet = () => AppState;
 // to the re-derived dataset — same reasoning the excludedRows guard uses — and
 // leave overlays for OTHER datasets untouched. The owning workshop recomputes
 // on its next run.
+const OVERLAY_FIELDS = ["fitOverlay", "peakOverlay", "baselineOverlay", "derivOverlay"] as const;
+
 export function clearOverlaysFor(s: AppState, id: string): Partial<AppState> {
   const p: Partial<AppState> = {};
-  if (s.fitOverlay?.datasetId === id) p.fitOverlay = null;
-  if (s.peakOverlay?.datasetId === id) p.peakOverlay = null;
-  if (s.baselineOverlay?.datasetId === id) p.baselineOverlay = null;
-  if (s.derivOverlay?.datasetId === id) p.derivOverlay = null;
+  for (const k of OVERLAY_FIELDS) if (s[k]?.datasetId === id) p[k] = null;
   return p;
 }
 
@@ -92,10 +91,18 @@ export function rowsChangedGuard(
   id: string,
   rowsChanged: boolean,
   priorExcludedRows: number[] | undefined,
-): { datasetPatch: { excludedRows?: undefined }; statePatch: Partial<AppState>; statusMessage?: string } {
+): {
+  datasetPatch: { excludedRows?: undefined; peakTable?: undefined };
+  statePatch: Partial<AppState>;
+  statusMessage?: string;
+} {
   if (!rowsChanged) return { datasetPatch: {}, statePatch: {} };
   return {
-    datasetPatch: { excludedRows: undefined },
+    // `peakTable` (audit P2.1, review round 2) joins excludedRows for the same
+    // reason the overlays do: a row-count change means the fitted peaks were
+    // measured from data that no longer exists. See lib/peakTable.ts's
+    // INVALIDATION header for why the durable fingerprint is the other half.
+    datasetPatch: { excludedRows: undefined, peakTable: undefined },
     statePatch: clearOverlaysFor(s, id),
     statusMessage: priorExcludedRows?.length
       ? "Row exclusions cleared: a trim changed the row count, so the saved row indices no longer apply."
@@ -197,7 +204,11 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
             datasets: s.datasets.map((d) => {
               if (d.id !== id) return d;
               const patch = recomputeFromBaseOrEmpty(corrected, d.formulas);
-              return { ...d, ...patch, raw, corrections: params, bgRef, ...guard.datasetPatch };
+              // peakTable: any correction re-derives the numbers the fit was
+              // measured from — an xOff shifts every 2-theta with the row count
+              // unchanged, so `guard.datasetPatch` alone would keep a table
+              // whose centers are all off by the offset just applied.
+              return { ...d, ...patch, raw, corrections: params, bgRef, peakTable: undefined, ...guard.datasetPatch };
             }),
             ...guard.statePatch,
           };

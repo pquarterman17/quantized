@@ -18,7 +18,7 @@
 // toggle rides the same rule so a fit and the review of its peaks behave alike.
 
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
-import { peakTableFromFit, withPeakExcluded } from "../lib/peakTableFit";
+import { peakDataFingerprint, peakTableFromFit, withPeakExcluded, xChannelIdentity } from "../lib/peakTableFit";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
 import { useApp } from "./useApp";
 
@@ -40,7 +40,7 @@ export function publishFitResult(
   datasetId: string,
   result: MultiFitResult,
   method: "simultaneous" | "independent",
-  opts: { bgDegree: number; linkMode: string; constrain: boolean },
+  opts: { bgDegree: number; linkMode: string; constrain: boolean; xKey: number | null },
 ): void {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds) return;
@@ -56,6 +56,15 @@ export function publishFitResult(
         linkMode: opts.linkMode,
         constrain: opts.constrain,
         wavelengthA: wavelengthFromMetadata(ds.data.metadata),
+        // Review round 2: both halves of "does this table still describe the
+        // live data" are stamped HERE, from the same live `ds` the exclusions
+        // are read from — the x axis the fit ran on (so Williamson-Hall can
+        // refuse a q/d-spacing table) and a digest of the data itself (so
+        // every reader can tell a stale fit from a current one). The digest is
+        // taken from `ds.data`, not from the pruned fit input, because that is
+        // what every reader has in hand later.
+        ...xChannelIdentity(ds.data, opts.xKey),
+        fingerprint: peakDataFingerprint(ds.data),
       },
       ds.peakTable ?? null,
     ),

@@ -23,6 +23,36 @@
 // later is an additive backend change rather than another `.dwk` migration;
 // P2.1's plan entry records the numerics as the next box.
 //
+// INVALIDATION (review round 2, 2026-09-14). A durable record of a fit is a
+// LIE the moment the data it was fit from changes, so `PeakTableProvenance`
+// carries a `fingerprint` — a cheap, deterministic digest of the dataset's own
+// numbers (lib/peakTableFit's `peakDataFingerprint`). Every reader compares it
+// against the LIVE data before using the table: the Peaks workshop refuses to
+// rehydrate a table that no longer matches, and Williamson-Hall's "Use fitted
+// peaks" is disabled with the reason instead of quietly loading 2-theta values
+// measured from data the user has since replaced. The store also clears the
+// table outright wherever it already clears `fitSpec` for the same reason
+// (store/reimport.ts, store/corrections.ts, store/cellEdit.ts); the fingerprint
+// is the DURABLE half — it survives a `.dwk` reopen, which an in-memory stale
+// list cannot, and it catches any future data-writing path that forgets to
+// clear. This is deliberately NOT a node in lib/recalc.ts's dependency graph:
+// that graph exists to mark artifacts an EXECUTOR can re-derive automatically
+// (`store/recalcDatasets.ts`, `store/recalcFits.ts`), and re-deriving a peak
+// table means re-issuing a peak search plus a user-chosen model/background/
+// link mode — a deliberate action, not a recompute. Its only writer,
+// `touchDataset`, also returns early when `recalcMode` is "off", so a
+// graph-based invalidation would silently not happen for anyone who turned
+// recalc off.
+//
+// A DUPLICATE DOES NOT CARRY THE TABLE, deliberately (review round 2).
+// `store/useApp.ts`'s `duplicateDataset` makes an INDEPENDENT dataset "for
+// trying different corrections/formulas" (its own doc) and carries no derived
+// analysis at all — not `fitSpec`, not `excludedRows`, not `filter`. Carrying
+// the table would also carry a provenance record naming the SOURCE dataset's
+// id and name, which the `.dwk` sanitizer would accept verbatim: a traceability
+// claim about a dataset the rows did not come from. Re-fitting the copy is one
+// click, and it is the honest one.
+//
 // WHAT LIVES WHERE. This file is the CONTRACT (the types) plus the `.dwk`
 // sanitize/serialize pair, and nothing else — it is imported by the EAGER
 // workspace path (lib/workspaceDatasetParse.ts, lib/workspaceSerialize.ts), so
@@ -141,6 +171,22 @@ export interface PeakTableProvenance {
    *  Frozen here so a downstream reduction uses the wavelength THIS pattern was
    *  measured at, not whatever is typed in a panel later. */
   wavelengthA: number | null;
+  /** The x channel the fit RAN on, as the user sees it — its label and unit
+   *  text ONLY, never a column index (architecture.test.ts's
+   *  `DATASET_CHANNEL_REMAP_EXCLUDED` entry for `peakTable` says this record
+   *  stores no channel index at all, and that has to stay true). Recorded
+   *  because `center`/`fwhm` are in whatever units that channel carries, so a
+   *  consumer that needs 2-theta in degrees — Williamson-Hall — can refuse a
+   *  table fit on a q or d-spacing axis instead of silently reading Å⁻¹ as
+   *  degrees. `""` means the file recorded none, which reads as "unknown". */
+  xLabel: string;
+  xUnit: string;
+  /** Digest of the DATA this fit was measured from (lib/peakTableFit's
+   *  `peakDataFingerprint`), or null for a record written before this field
+   *  existed — "unknown", which reads as "still valid", the same fail-soft
+   *  contract `sanitizePeakTable` applies everywhere else. See the module
+   *  header for what compares it and why it is not a recalc-graph node. */
+  fingerprint: string | null;
   /** ISO-8601 instant the fit completed. */
   fittedAt: string;
 }
@@ -160,6 +206,14 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
+/** "a string, or the absent-field default" — the coercion every text field in
+ *  this sanitizer needs. One helper rather than six inline `typeof` ternaries:
+ *  this module is paid for in the EAGER bundle (see the module header), and
+ *  the six call sites below cost measurably less through it. */
+function str(v: unknown): string {
+  return typeof v === "string" ? v : "";
+}
+
 function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -171,7 +225,7 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   // that would quietly enter a Williamson-Hall fit.
   if (center === null || fwhm === null || height === null) return null;
   return {
-    id: typeof o.id === "string" && o.id ? o.id : `peak-restored-${index}`,
+    id: str(o.id) || `peak-restored-${index}`,
     center,
     centerErr: num(o.centerErr),
     fwhm,
@@ -181,8 +235,8 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
     area: num(o.area) ?? 0,
     bg: num(o.bg) ?? 0,
     eta: num(o.eta),
-    model: typeof o.model === "string" ? o.model : "",
-    status: typeof o.status === "string" ? o.status : "",
+    model: str(o.model),
+    status: str(o.status),
     excluded: o.excluded === true,
   };
 }
@@ -212,11 +266,11 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
     peaks,
     provenance: {
       datasetId: p.datasetId,
-      datasetName: typeof p.datasetName === "string" ? p.datasetName : "",
+      datasetName: str(p.datasetName),
       method,
-      model: typeof p.model === "string" ? p.model : "",
+      model: str(p.model),
       bgDegree: num(p.bgDegree) ?? 0,
-      linkMode: typeof p.linkMode === "string" ? p.linkMode : "",
+      linkMode: str(p.linkMode),
       constrain: p.constrain === true,
       bgCoeffs: Array.isArray(p.bgCoeffs)
         ? p.bgCoeffs.filter((c): c is number => typeof c === "number" && Number.isFinite(c))
@@ -224,7 +278,10 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
       R2: num(p.R2),
       rmse: num(p.rmse),
       wavelengthA: num(p.wavelengthA),
-      fittedAt: typeof p.fittedAt === "string" ? p.fittedAt : "",
+      xLabel: str(p.xLabel),
+      xUnit: str(p.xUnit),
+      fingerprint: str(p.fingerprint) || null,
+      fittedAt: str(p.fittedAt),
     },
   };
 }

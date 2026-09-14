@@ -11,6 +11,7 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
 import { defaultDenseChannels } from "../lib/plotdata";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
+import { peakDataFingerprint, peakTableFromFit } from "../lib/peakTableFit";
 import type { DataStruct, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
@@ -1120,5 +1121,86 @@ describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
       "danger",
     );
     expect(useApp.getState().datasets[0].data).toEqual(raw);
+  });
+});
+
+describe("reimportDataset — the durable peak table (audit P2.1, review round 2)", () => {
+  const fittedFor = (data: DataStruct) =>
+    peakTableFromFit(
+      {
+        peaks: [
+          { center: 20, fwhm: 0.2, height: 20, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Gaussian" },
+        ],
+        bgCoeffs: [1, 0],
+        R2: 0.99,
+        rmse: 0.1,
+        nPeaks: 1,
+        model: "Gaussian",
+      },
+      {
+        datasetId: "d1",
+        datasetName: "sample.dat",
+        method: "simultaneous" as const,
+        bgDegree: 1,
+        linkMode: "None",
+        constrain: false,
+        wavelengthA: null,
+        fingerprint: peakDataFingerprint(data),
+      },
+    );
+
+  it("clears it on a COLUMN-changing re-import, exactly where fitSpec is cleared", async () => {
+    vi.mocked(importFile).mockResolvedValue({
+      time: [1, 2, 3],
+      values: [[10, 1], [20, 2], [30, 3]],
+      labels: ["m", "extra"],
+      units: ["emu", ""],
+      metadata: {},
+    });
+    // A saved fitSpec gives this dataset a downstream dependency, so the
+    // reimport confirms first (see the fitSpec test above) — the user says yes.
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    useApp.setState({
+      datasets: [
+        baseDataset({
+          peakTable: fittedFor(raw),
+          fitSpec: { model: "Linear", xKey: null, yKey: 0, params: [1, 2] },
+        }),
+      ],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.fitSpec).toBeUndefined();
+    expect(ds.peakTable).toBeUndefined();
+  });
+
+  it("keeps it when the re-imported file is byte-identical — the fingerprint still matches", async () => {
+    // A re-measure that produced the same numbers is not a reason to make the
+    // user re-fit; "invalidate on any reimport" would be the lazy answer.
+    vi.mocked(importFile).mockResolvedValue({ ...raw });
+    const table = fittedFor(raw);
+    useApp.setState({ datasets: [baseDataset({ peakTable: table })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.peakTable?.peaks[0].center).toBe(20);
+    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds.data));
+  });
+
+  it("a same-shape re-measure keeps the record but the fingerprint reports it stale", async () => {
+    // Column-identical, values different: nothing CLEARS it (the column guard
+    // does not fire), so the fingerprint is the only thing standing between the
+    // user and a Williamson-Hall fit over peaks that are no longer there.
+    vi.mocked(importFile).mockResolvedValue(fresh); // same columns, new values
+    useApp.setState({ datasets: [baseDataset({ peakTable: fittedFor(raw) })] });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.peakTable).toBeDefined();
+    expect(ds.peakTable?.provenance.fingerprint).not.toBe(peakDataFingerprint(ds.data));
   });
 });

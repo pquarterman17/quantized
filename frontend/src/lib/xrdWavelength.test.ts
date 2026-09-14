@@ -7,17 +7,25 @@ describe("wavelengthFromMetadata", () => {
     expect(wavelengthFromMetadata({ wavelength_a: 1.5406 })).toBe(1.5406);
   });
 
-  it("reads io/xrd_csv.py's two Kα1 spellings", () => {
-    expect(wavelengthFromMetadata({ k_alpha1: 0.7093 })).toBe(0.7093);
-    expect(wavelengthFromMetadata({ kAlpha1: 0.5594 })).toBe(0.5594);
+  it("reads io/_xrdml_scan.py's `wavelength_a` the same way", () => {
+    expect(wavelengthFromMetadata({ wavelength_a: 0.7093 })).toBe(0.7093);
+  });
+
+  it("ignores `k_alpha1`/`kAlpha1` — NO parser writes either (review round 2)", () => {
+    // io/xrd_csv.py:285 reads them in the ASCII EXPORTER's header writer and
+    // io/xrdml.py:86 is an XML element name; neither is a metadata key any
+    // importer emits. Reading them here was dead code that made the module
+    // header's key list wrong.
+    expect(wavelengthFromMetadata({ k_alpha1: 0.7093 })).toBeNull();
+    expect(wavelengthFromMetadata({ kAlpha1: 0.5594 })).toBeNull();
   });
 
   it("reads io/bruker_raw.py's `alpha_average`", () => {
     expect(wavelengthFromMetadata({ alpha_average: 1.5418 })).toBe(1.5418);
   });
 
-  it("prefers an explicit Kα1 over the Kα1/Kα2 average", () => {
-    expect(wavelengthFromMetadata({ alpha_average: 1.5418, k_alpha1: 1.5406 })).toBe(1.5406);
+  it("prefers the explicit Kα1 (`wavelength_a`) over the Kα1/Kα2 average", () => {
+    expect(wavelengthFromMetadata({ alpha_average: 1.5418, wavelength_a: 1.5406 })).toBe(1.5406);
   });
 
   it("accepts a numeric string (some headers round-trip as text)", () => {
@@ -42,7 +50,7 @@ describe("wavelengthFromMetadata", () => {
   });
 
   it("still accepts the shortest lab anode line at the floor (W Kα1)", () => {
-    expect(wavelengthFromMetadata({ k_alpha1: 0.209 })).toBe(0.209);
+    expect(wavelengthFromMetadata({ wavelength_a: 0.209 })).toBe(0.209);
   });
 
   it("falls through a rejected key to a plausible later one", () => {

@@ -6,7 +6,7 @@ import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { createPageDocument } from "./pageDocumentActions";
-import type { PeakTable } from "./peakTable";
+import { serializePeakTable, type PeakTable } from "./peakTable";
 import { peakTableFromFit, withPeakExcluded } from "./peakTableFit";
 import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
@@ -2540,11 +2540,31 @@ describe("workspace durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =
     expect(loaded.datasets[0].peakTable).toBeUndefined();
   });
 
-  it("does not alias the live record into the saved doc", () => {
+  it("routes the saved table through serializePeakTable's defensive copy", () => {
+    // Was "does not alias the live record into the saved doc" — VACUOUS, and
+    // the review round proved it: `serializeWorkspace` returns a JSON STRING,
+    // so `JSON.parse` of it can never alias anything, and replacing
+    // `serializePeakTable` with `(t) => t` left the old assertion green. The
+    // copy is what has to hold, so assert it on the helper the writer calls.
+    const t = table();
+    const copy = serializePeakTable(t);
+    expect(copy).toEqual(t);
+    expect(copy).not.toBe(t);
+    expect(copy.peaks[0]).not.toBe(t.peaks[0]);
+    expect(copy.provenance.bgCoeffs).not.toBe(t.provenance.bgCoeffs);
+    copy.peaks[0].center = 999;
+    copy.provenance.bgCoeffs.push(99);
+    expect(t.peaks[0].center).toBe(30.1);
+    expect(t.provenance.bgCoeffs).toEqual([5, 0]);
+  });
+
+  it("a table whose fingerprint no longer matches still round-trips verbatim", () => {
+    // The `.dwk` layer stores; the READERS decide (lib/peakTable.ts's
+    // INVALIDATION header). Saving must never quietly drop a stale table, or
+    // reopening would lose the record the user can still see and re-fit.
     const ds = makeDataset("a", "film");
-    ds.peakTable = table();
-    const doc = JSON.parse(ser([ds]));
-    doc.datasets[0].peakTable.peaks[0].center = 999;
-    expect(ds.peakTable.peaks[0].center).toBe(30.1);
+    ds.peakTable = { ...table(), provenance: { ...table().provenance, fingerprint: "fp-stale" } };
+    const [restored] = parse(ser([ds]));
+    expect(restored.peakTable?.provenance.fingerprint).toBe("fp-stale");
   });
 });

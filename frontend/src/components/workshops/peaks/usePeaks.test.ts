@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { fetchBookData } from "../../../lib/api";
 import { askParams } from "../../overlays/ParamDialog";
-import { peakTableFromFit } from "../../../lib/peakTableFit";
+import { peakDataFingerprint, peakTableFromFit } from "../../../lib/peakTableFit";
 import type { Annotation, DataStruct, MultiFitResult, Peak, SinglePeakFit } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
@@ -1062,6 +1062,49 @@ describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =>
     await waitFor(() => expect(result.current.fitResult).not.toBeNull());
     expect(result.current.fitResult).toEqual(fitted(1.02));
     expect(fitMultiPeak).not.toHaveBeenCalled();
+  });
+
+  it("does NOT rehydrate a table whose data moved under it (review round 2)", async () => {
+    const saved = peakTableFromFit(fitted(1.02), {
+      datasetId: "d1",
+      datasetName: "x.dat",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: null,
+      fingerprint: peakDataFingerprint({ ...DATA, values: [[9], [9], [9], [9], [9], [9]] }),
+    });
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: saved }],
+      activeId: "d1",
+      peakOverlay: null,
+    });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    // Detection ran over the live data; the stale fit is NOT presented.
+    expect(result.current.fitResult).toBeNull();
+    // The record itself survives — it is the store's, not this hook's, to drop.
+    expect(result.current.peakTable).toBe(saved);
+  });
+
+  it("a cell edit re-runs detection and does not bring the pre-edit fit back", async () => {
+    // Through the REAL store action, not a setState stub: `setCellValue` drops
+    // the table, and even if it had not, the fingerprint no longer matches.
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    expect(result.current.fitResult?.peaks[0].center).toBe(1.02);
+    expect(findPeaks).toHaveBeenCalledTimes(1);
+
+    act(() => useApp.getState().setCellValue("d1", 1, 0, 500));
+
+    await waitFor(() => expect(vi.mocked(findPeaks).mock.calls.length).toBe(2));
+    await waitFor(() => expect(result.current.fitResult).toBeNull());
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 
   it("toggleExcluded marks the peak by its durable id and un-marks it again", async () => {

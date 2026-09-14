@@ -18,10 +18,10 @@
 // not passed on — `calc.reductions.williamson_hall` takes no weights, so
 // feeding it any would be new, ungoldened numerics. See P2.1's plan entry.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { williamsonHall } from "../../../lib/api/reductions";
-import { includedPeaks } from "../../../lib/peakTableFit";
+import { includedPeaks, peakTableMatchesData, peakTableXIsDegrees } from "../../../lib/peakTableFit";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
 import { useActiveDataset } from "../../../store/useApp";
 
@@ -52,12 +52,21 @@ export interface WilliamsonHallState {
   fittedExcludedCount: number;
   /** Where the loaded rows came from, once `loadFittedPeaks` has run: the
    *  provenance the Peaks workshop recorded with the fit. Null until then, and
-   *  cleared the moment a row is edited by hand (the rows are then no longer
-   *  what the fit produced). */
+   *  cleared the moment a row or the wavelength is edited by hand (the rows are
+   *  then no longer what the fit produced). */
   fittedSource: string | null;
+  /** Why "Use fitted peaks" must NOT be taken, or null when it is safe (review
+   *  round 2). Two refusals, both about the table describing something other
+   *  than the reduction's own inputs: the data moved under the fit
+   *  (`peakTableMatchesData`), or it was fit on an axis that is not 2-theta in
+   *  degrees (`peakTableXIsDegrees` — a q axis in Å⁻¹ passes `canCompute`'s
+   *  `0 < 2θ < 180` check and yields a plausible-looking grain size). Rendered
+   *  next to the disabled button so the refusal is never silent. */
+  fittedBlockedReason: string | null;
   /** Replace the rows with the active dataset's INCLUDED fitted peaks, and
    *  adopt the fit's wavelength when the instrument metadata carried one. A
-   *  no-op when there is no table or every peak in it is excluded. */
+   *  no-op when there is no table, every peak in it is excluded, or
+   *  `fittedBlockedReason` is set. */
   loadFittedPeaks: () => void;
   addRow: () => void;
   removeRow: (index: number) => void;
@@ -71,15 +80,26 @@ export interface WilliamsonHallState {
 
 export function useWilliamsonHall(): WilliamsonHallState {
   const [rows, setRows] = useState<WHPeakRow[]>([emptyRow(), emptyRow()]);
-  const [wavelength, setWavelength] = useState(1.5406);
+  const [wavelength, setWavelengthRaw] = useState(1.5406);
   const [kFactor, setKFactor] = useState(0.9);
   const [instrumentalBroadening, setInstrumentalBroadening] = useState(0);
   const [result, setResult] = useState<WilliamsonHallResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fittedSource, setFittedSource] = useState<string | null>(null);
-  const table = useActiveDataset()?.peakTable ?? null;
+  const active = useActiveDataset();
+  const table = active?.peakTable ?? null;
   const included = table ? includedPeaks(table) : [];
+  // Memoized on the table + the data identity: `peakDataFingerprint` walks
+  // every value, and this hook re-renders on every keystroke in every field.
+  const data = active?.data;
+  const fittedBlockedReason = useMemo(() => {
+    if (!table || !data) return null;
+    if (!peakTableMatchesData(table, data)) return "fitted before the data changed — re-fit in the Peaks workshop";
+    if (!peakTableXIsDegrees(table))
+      return `fit on ${table.provenance.xLabel || "a non-2θ axis"} (${table.provenance.xUnit}), not 2θ in degrees`;
+    return null;
+  }, [table, data]);
 
   const canCompute =
     rows.length >= 2 &&
@@ -103,14 +123,32 @@ export function useWilliamsonHall(): WilliamsonHallState {
     setRows((r) => r.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  // Any hand edit of the WAVELENGTH invalidates the provenance label too
+  // (review round 2): `loadFittedPeaks` adopts the fit's wavelength as part of
+  // the same action, so a typed-over value means the inputs are no longer the
+  // fit's — exactly the rule addRow/removeRow/updateRow already follow. The
+  // load path below writes through `setWavelengthRaw` so it does not clear the
+  // label it is in the middle of setting.
+  const setWavelength = (v: number): void => {
+    setFittedSource(null);
+    setWavelengthRaw(v);
+  };
+
   function loadFittedPeaks(): void {
-    if (!table || included.length === 0) return;
+    if (!table || included.length === 0 || fittedBlockedReason) return;
     setRows(included.map((p) => ({ twoTheta: p.center, fwhm: p.fwhm })));
     // The wavelength the pattern was MEASURED at beats whatever is currently
     // typed in the panel; absent metadata leaves the field alone rather than
     // guessing Cu Kα over someone's Mo source.
-    if (table.provenance.wavelengthA != null) setWavelength(table.provenance.wavelengthA);
+    if (table.provenance.wavelengthA != null) setWavelengthRaw(table.provenance.wavelengthA);
     setError(null);
+    // Review round 2: the previous result must go with the inputs it was
+    // computed from. Every row, the wavelength and the provenance caption all
+    // change in this one click, and the result block renders on `result !=
+    // null` — so without this the old grain size stays on screen captioned by
+    // the NEW provenance line, which is the exact untraceable pairing this
+    // feature exists to remove.
+    setResult(null);
     const { datasetName, model, method } = table.provenance;
     const excluded = table.peaks.length - included.length;
     setFittedSource(
@@ -159,6 +197,7 @@ export function useWilliamsonHall(): WilliamsonHallState {
     fittedPeakCount: included.length,
     fittedExcludedCount: table ? table.peaks.length - included.length : 0,
     fittedSource,
+    fittedBlockedReason,
     loadFittedPeaks,
     addRow,
     removeRow,

@@ -124,10 +124,25 @@ export default function PeaksPanel() {
 
   // The durable table (audit P2.1) is index-aligned with `fitResult.peaks` —
   // one is built from the other (lib/peakTable) — so row i's `excluded` flag
-  // and durable id come from `peakTable.peaks[i]`. Guarded with `?.` rather
-  // than asserted: the fit result is set a tick before the store write lands.
+  // and durable id come from `peakTable.peaks[i]`.
+  //
+  // PAIRED, NOT ASSUMED (review round 2). `peakTable` is a REACTIVE store read
+  // while `fitResult` is local state written inside usePeaks' effect, so on a
+  // dataset switch the paint that happens BEFORE that effect has dataset B's
+  // table beside dataset A's fitted rows. Positional `peakTable?.peaks[i]`
+  // then handed row i of A's numbers B's durable id and `excluded` flag — one
+  // frame, but a click in it would have excluded a peak in the wrong table.
+  // Require the table to be THIS dataset's and to have the same row count
+  // before pairing at all; otherwise no checkbox renders for that one frame,
+  // which is the honest answer rather than a wrong one.
+  const entries =
+    peakTable &&
+    peakTable.provenance.datasetId === active?.id &&
+    peakTable.peaks.length === (fitResult?.peaks.length ?? -1)
+      ? peakTable.peaks
+      : null;
   const fitRows = (fitResult?.peaks ?? []).map((p, i) => {
-    const entry = peakTable?.peaks[i];
+    const entry = entries?.[i];
     return [
       i + 1,
       fmtNum(p.center),
@@ -143,14 +158,23 @@ export default function PeaksPanel() {
           aria-label={`include peak ${i + 1}`}
           checked={!entry.excluded}
           // The row itself is a selection target (PeakTable's onSelect); without
-          // this, ticking a box would also move the peak selection.
+          // this, ticking a box would also move the peak selection. KEYBOARD
+          // TOO (review round 2): the row's own onKeyDown calls
+          // `preventDefault()` on " "/"Enter" and selects, so Space on a
+          // focused checkbox cancelled the browser's own toggle AND moved the
+          // selection — the box was a Tab stop that did nothing except the one
+          // thing the mouse path is careful to prevent. Stopping the key here
+          // leaves the native activation (which fires onChange) untouched.
           onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            if (e.key === " " || e.key === "Enter") e.stopPropagation();
+          }}
           onChange={(e) => toggleExcluded(entry.id, !e.target.checked)}
         />
       ) : null,
     ];
   });
-  const excludedCount = peakTable?.peaks.filter((p) => p.excluded).length ?? 0;
+  const excludedCount = entries?.filter((p) => p.excluded).length ?? 0;
 
   const faint = { color: "var(--text-faint)" } as const;
 

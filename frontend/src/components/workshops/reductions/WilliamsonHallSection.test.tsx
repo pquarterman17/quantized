@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { williamsonHall } from "../../../lib/api/reductions";
 import type { MultiFitResult, PeakTable } from "../../../lib/peakTable";
-import { peakTableFromFit, withPeakExcluded } from "../../../lib/peakTableFit";
+import { peakDataFingerprint, peakTableFromFit, withPeakExcluded } from "../../../lib/peakTableFit";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ReductionsPanel from "./ReductionsPanel";
@@ -148,5 +148,86 @@ describe("Williamson-Hall — Use fitted peaks (P2.1)", () => {
     for (const p of t.peaks) t = withPeakExcluded(t, p.id, true);
     mount(t);
     expect(screen.queryByRole("button", { name: /Use fitted peaks/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Williamson-Hall — a table that no longer describes the data (review round 2)", () => {
+  const fittedOn = (data: DataStruct, over: Partial<Parameters<typeof peakTableFromFit>[1]> = {}): PeakTable =>
+    peakTableFromFit(FIT, {
+      datasetId: "d1",
+      datasetName: "film.xrdml",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: 1.5406,
+      xLabel: "2Theta",
+      xUnit: "deg",
+      fingerprint: peakDataFingerprint(data),
+      ...over,
+    });
+
+  it("loads normally while the fingerprint still matches the live data", () => {
+    mount(fittedOn(scan));
+    const btn = screen.getByRole("button", { name: "Use fitted peaks (3)" });
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    expect(fieldValue("peak 1 2θ")).toBe("30.1");
+  });
+
+  it("disables the action, and says why, once the data moved under the fit", () => {
+    // Fit on one pattern, then the store holds a DIFFERENT one — exactly what
+    // an xOff correction or a re-measure leaves behind.
+    mount(fittedOn({ ...scan, time: [10.5, 20.5, 30.5] }));
+    const btn = screen.getByRole("button", { name: "Use fitted peaks (3)" });
+    expect(btn).toBeDisabled();
+    expect(screen.getByText(/fitted before the data changed/)).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(fieldValue("peak 1 2θ")).toBe("0"); // nothing loaded
+  });
+
+  it("refuses a table fit on a q axis, which `0 < 2θ < 180` would have waved through", () => {
+    mount(fittedOn(scan, { xLabel: "q", xUnit: "1/A" }));
+    expect(screen.getByRole("button", { name: "Use fitted peaks (3)" })).toBeDisabled();
+    expect(screen.getByText(/not 2θ in degrees/)).toBeInTheDocument();
+  });
+
+  it("still loads a table whose x unit the file never recorded", () => {
+    mount(fittedOn(scan, { xLabel: "", xUnit: "" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));
+    expect(fieldValue("peak 1 2θ")).toBe("30.1");
+  });
+});
+
+describe("Williamson-Hall — the previous result never outlives its inputs (review round 2)", () => {
+  it("clears the result when one click swaps every input", async () => {
+    mount(table());
+    // A hand-entered fit first: two rows, a real result on screen.
+    fireEvent.change(screen.getByLabelText("peak 1 2θ"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("peak 1 FWHM"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("peak 2 2θ"), { target: { value: "20" } });
+    fireEvent.change(screen.getByLabelText("peak 2 FWHM"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    await screen.findByText("Grain size");
+    expect(screen.getByText(/^42\b.*nm$/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));
+
+    // Without setResult(null) the old number stayed on screen directly under
+    // the NEW provenance caption — a result captioned by inputs it was not
+    // computed from.
+    expect(screen.queryByText(/^42\b.*nm$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Grain size")).not.toBeInTheDocument();
+    expect(screen.getByText(/3 fitted peaks from film.xrdml/)).toBeInTheDocument();
+    expect(williamsonHall).toHaveBeenCalledTimes(1);
+  });
+
+  it("a hand-typed wavelength drops the provenance line, like every other hand edit", () => {
+    mount(table());
+    fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));
+    expect(screen.getByText(/3 fitted peaks from film.xrdml/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Wavelength (Å)"), { target: { value: "0.7093" } });
+    expect(screen.queryByText(/fitted peaks from film.xrdml/)).not.toBeInTheDocument();
+    expect(fieldValue("Wavelength (Å)")).toBe("0.7093");
   });
 });

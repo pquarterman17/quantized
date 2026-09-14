@@ -23,7 +23,7 @@ import { selectedFitData } from "../../../lib/fitselection";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import type { PeakTable } from "../../../lib/peakTable";
-import { peakTableToFitResult } from "../../../lib/peakTableFit";
+import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
 import { peakOverlayArray } from "../../../lib/plotdata";
 import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
@@ -161,13 +161,7 @@ export function usePeaks(): PeaksState {
     let cancelled = false;
     setPeaks([]);
     setError(null);
-    // Restoring the saved table is what makes the fitted-peak table durable: a
-    // reopened project shows the fit it was saved with, losslessly (every field
-    // MultiFitResult carries lives in the table or its provenance). Read
-    // through `getState` on purpose — as a DEPENDENCY it would re-arm this
-    // effect on the publish below and re-run the peak search after every fit.
-    const saved = useApp.getState().datasets.find((d) => d.id === activeId)?.peakTable;
-    setFitResult(saved ? peakTableToFitResult(saved) : null);
+    setFitResult(null);
     setFitError(null);
     if (!activeId) {
       setPeakOverlay(null);
@@ -181,6 +175,17 @@ export function usePeaks(): PeaksState {
         // pending).
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
+        // Restoring the saved table is what makes the fitted-peak table durable:
+        // a reopened project shows the fit it was saved with, losslessly. Read
+        // through `getState` on purpose — as a DEPENDENCY it would re-arm this
+        // effect on the publish below and re-run the search after every fit.
+        // Review round 2: restore it ONLY while it still describes this data
+        // (lib/peakTable.ts's INVALIDATION header) — rehydrating a fit of data
+        // the user has since corrected, re-imported or typed over is what made
+        // this effect RE-PRESENT a stale fit after every edit. Compared against
+        // the RESOLVED `ds`, never a still-pending preview (not staleness).
+        const saved = useApp.getState().datasets.find((d) => d.id === activeId)?.peakTable;
+        if (saved && peakTableMatchesData(saved, ds.data)) setFitResult(peakTableToFitResult(saved));
         const { x, y, fullX } = peakInputs(ds, xKey, yKeys, seriesOrder);
         const res = await findPeaks({ x, y });
         if (cancelled) return;
@@ -242,7 +247,7 @@ export function usePeaks(): PeaksState {
         setFitResult(res);
         // P2.1: the fit becomes this dataset's durable peak table (survives a
         // panel close, a dataset switch, and a `.dwk` save/reopen).
-        publishFitResult(ds.id, res, "simultaneous", opts);
+        publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: st.xKey });
         overlayFitted(ds, res.peaks, fullX);
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
@@ -299,7 +304,7 @@ export function usePeaks(): PeaksState {
         // P2.1, same as fitTogether — but only when something was actually fit:
         // a cancel that produced zero peaks must not replace a good saved table
         // with an empty one.
-        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", opts);
+        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", { ...opts, xKey: st.xKey });
         if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
         // A deliberate cancel with zero completed peaks isn't a failure to report.
         if (fitted.length === 0 && !cancelled) {

@@ -2689,9 +2689,11 @@ physics, which already existed and was already golden. The map:
   rows", "drops the provenance line the moment a row is edited by hand".
 - [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
   tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
-  in `routes/`, no `lib/api` wrapper, no UI (a case-insensitive grep for
-  "pawley" over `src/quantized/routes/` and all of `frontend/src` returns
-  nothing). It is also NOT a peak-table consumer — it refines a unit cell
+  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
+  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
+  and over `frontend/src` returns exactly one hit — a doc comment in
+  `lib/peakTableFit.ts` naming a future entry point, added by this item).
+  It is also NOT a peak-table consumer — it refines a unit cell
   against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
   cell, so the missing piece is a route + phase-cell entry point, not the
   wiring this item shipped.
@@ -2709,6 +2711,118 @@ physics, which already existed and was already golden. The map:
   `lib/workspace.test.ts`'s "workspace durable peak table
   (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)" save→reopen suite, and
   `PeaksPanel.test.tsx`'s "durable table exclusion column (P2.1)".
+**Review round, 2026-09-14 (adversarial re-read of the two boxes above).**
+The physics held exactly — `git diff` over `src/quantized/` is empty, and the
+one-click path sends the byte-identical request the manual path sends — but the
+DURABILITY half did not. Three confirmed defects, three plausible, seven nits;
+all thirteen closed in one commit, with the findings recorded here because every
+one of them was a claim this plan had already ticked.
+
+- **The table was durable but never INVALIDATED.** `Dataset.peakTable` survived
+  every change to the data it was fit from: an `applyCorrections` xOff moved
+  `data.time` to `[10.5, 20.5, …]` while `peaks[0].center` stayed `20.0`; a
+  column-changing `reimportDataset` cleared `fitSpec` and kept the table
+  verbatim; a `setCellValue` re-ran detection and the panel effect then
+  RESTORED the pre-edit fit over the changed data. Williamson-Hall's "Use
+  fitted peaks" would then load centers and widths measured from data that no
+  longer exists, under a provenance line asserting they came from this dataset.
+  FIXED two ways, both needed: `PeakTableProvenance.fingerprint` — a
+  deterministic digest of the dataset's numbers (`lib/peakTableFit.ts`'s
+  `peakDataFingerprint`: row/column counts, the x channel's first/last/min/max,
+  FNV-1a over every value's float bytes) stamped at publish time and compared
+  on every read — plus outright clears wherever `fitSpec` already clears
+  (`store/reimport.ts`'s column branch, `store/corrections.ts`'s
+  `applyCorrections` and `rowsChangedGuard`, `store/cellEdit.ts`'s
+  `setCellValue`). The Peaks workshop refuses to rehydrate a mismatched table
+  and Williamson-Hall disables the action with the reason. Deliberately NOT a
+  `peaks:<id>` node in `lib/recalc.ts`: that graph marks artifacts an EXECUTOR
+  re-derives automatically (`recalcDatasets.ts`/`recalcFits.ts`), a peak table
+  has none — re-deriving it means a new peak search plus a user-chosen model —
+  and its only writer, `touchDataset`, returns early when `recalcMode` is
+  "off". The fingerprint also survives a `.dwk` reopen, which no in-memory
+  stale list does.
+- **The "incl." checkbox was not keyboard-operable**, and the one keystroke a
+  user would try did what the mouse path is careful to prevent: the enclosing
+  `<tr>` handles `" "`/`"Enter"` with `preventDefault()` + select, so Space on a
+  focused box cancelled the browser's own toggle AND moved the row selection.
+  FIXED with an `onKeyDown` stopper beside the existing `onClick` one.
+- **"Use fitted peaks" left the previous result on screen**, newly captioned by
+  the fresh provenance line — a number computed from inputs that had just been
+  replaced wholesale. FIXED: `loadFittedPeaks` clears the result, and a
+  hand-typed wavelength now drops the provenance line like every other edit.
+- **No x-channel identity was recorded**, so a q-axis pattern in Å⁻¹ loaded
+  silently into the 2θ column and produced a plausible grain size (`canCompute`
+  only checks `0 < 2θ < 180`). FIXED: the provenance records the x label and
+  unit — TEXT, never a column index, so `architecture.test.ts`'s
+  `DATASET_CHANNEL_REMAP_EXCLUDED` reason stays true — and the reduction
+  refuses anything whose unit is present and not degrees. An unrecorded unit
+  still loads; most XRD files carry none.
+- **Exclusion carry-over across a re-fit was positional** with only a length
+  guard, and `fitEach` publishes only the SUCCESSES — so an N-of-M run whose
+  success count merely happened to match carried the user's exclusions onto
+  different physical peaks. FIXED: matched by nearest centre within half the
+  smaller FWHM, each prior exclusion claiming at most one row, unmatched
+  exclusions dropped.
+- **`lib/xrdWavelength.ts` documented four metadata keys; two are dead.**
+  Measured over `src/quantized/io/`: `wavelength_a` (xrdml, `_xrdml_scan`) and
+  `alpha_average` (bruker_raw) are written; `k_alpha1`/`kAlpha1` are written by
+  no parser (`xrd_csv.py:285` is the ASCII EXPORTER reading them back out, and
+  `xrdml.py:86` is an XML element name), so the stated "explicit Kα1 beats the
+  average" preference could never fire. FIXED in the frontend: the dead keys
+  are gone and the preference now names `wavelength_a`, which IS the Kα1 line.
+  The Bruker half stays open — `bruker_raw.py` documents `alpha1` at byte 624
+  and emits only `alpha_average` (Cu: 1.5418 vs 1.540598, +0.08 % into
+  `D = Kλ/intercept`), so every Bruker RAW pattern still adopts the average;
+  decoding byte 624 is a backend change and is the box below.
+- **Nits, all closed:** `lib/workspace.test.ts`'s "does not alias the live
+  record" was vacuous (`serializeWorkspace` returns a JSON STRING, so
+  `serializePeakTable = (t) => t` left it green) and now asserts the copy on the
+  helper itself; the `lib/types.ts` pin comment said `1053 -> 1008` above a pin
+  of 1009 (`wc -l` vs the split-length convention) and now says 1009; the Pawley
+  grep claim above is corrected to its measured one hit; `PeaksPanel`'s fitted
+  rows no longer pair a reactive `peakTable` read with local `fitResult` state
+  positionally across a dataset switch; and `duplicateDataset` still does NOT
+  carry the table — documented in `lib/peakTable.ts`'s header, because a
+  duplicate is an INDEPENDENT dataset that carries no derived analysis at all
+  (not `fitSpec`, not `excludedRows`) and the copied provenance would name the
+  SOURCE dataset's id.
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| 1 | `peakTableMatchesData` always true | `peakTable.test.ts` "does NOT match once a value changed"; `usePeaks.test.ts` "does NOT rehydrate a table whose data moved under it"; `PeaksPanel.test.tsx` "does NOT re-present a saved fit…"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" |
+| 2 | drop the checkbox `onKeyDown` stopper | `PeaksPanel.test.tsx` "Space on a focused checkbox…", "Enter on a focused checkbox…" |
+| 3 | `loadFittedPeaks` keeps the previous result | `WilliamsonHallSection.test.tsx` "clears the result when one click swaps every input" |
+| 4 | `peakTableXIsDegrees` always true | `peakTable.test.ts` "refuses a reciprocal-space or real-space axis"; `WilliamsonHallSection.test.tsx` "refuses a table fit on a q axis…" |
+| 5 | exclusion carry-over back to positional | `peakTable.test.ts` "carries an exclusion onto the peak at the same CENTRE…", "drops an exclusion whose peak the re-fit no longer found", "refuses to carry an exclusion onto a centre that moved…" |
+| 6 | `applyCorrections` keeps the table | `corrections.test.ts` "drops a fit measured from data the correction just re-derived" |
+| 7 | `rowsChangedGuard` keeps the table | `corrections.test.ts` "names peakTable alongside excludedRows on a row-count change" |
+| 8 | column-changing reimport keeps the table | `reimport.test.ts` "clears it on a COLUMN-changing re-import…" |
+| 9 | `setCellValue` keeps the table | `cellEdit.test.ts` "drops a fit measured from the value that was just typed over"; `usePeaks.test.ts` "a cell edit re-runs detection and does not bring the pre-edit fit back" |
+| 10 | `setWavelength` stops clearing `fittedSource` | `WilliamsonHallSection.test.tsx` "a hand-typed wavelength drops the provenance line…" |
+| 11 | `serializePeakTable = (t) => t` | `workspace.test.ts` "routes the saved table through serializePeakTable's defensive copy" (the vacuous predecessor stayed GREEN under this exact mutation) |
+| 12 | `xrdWavelength` reads `k_alpha1` again | `xrdWavelength.test.ts` "ignores `k_alpha1`/`kAlpha1` — NO parser writes either" |
+| 13 | `PeaksPanel` pairs the table positionally again | `PeaksPanel.test.tsx` "renders no checkbox rather than a MISPAIRED one…" |
+| 14 | `publishFitResult` stamps no fingerprint / x identity | `peakTables.test.ts` "stamps a fingerprint of the LIVE data…", "names the x axis from the time column's Origin metadata…", "names the x axis from the PLOTTED column…" |
+
+**Gate (2026-09-14).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,118 tests passed**; `uv run pytest -q tests/test_repo_integrity.py`
+**12 passed**. Backend untouched (`git diff --stat -- src` empty). Eager bundle,
+exact bytes on clean `npm ci` builds either side: **919,781 -> 919,693, a delta
+of -88 B** against a 920,400 budget left where it was (headroom 619 -> 707 B) —
+everything new is in the lazy-only `lib/peakTableFit.ts`, and the eager
+additions are funded by a shared `str()` coercion in `lib/peakTable.ts` and by
+folding `clearOverlaysFor`'s four identical `if`s into one typed loop.
+
+- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+  documented Kα1-over-average preference can fire for Bruker patterns.
+  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
+  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
+  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
+  Backend change; needs a golden RAW fixture.
 - [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
   `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
   `*Err` columns above are always null today; `calc/reductions.

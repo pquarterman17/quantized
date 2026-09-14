@@ -8,10 +8,14 @@ import {
 } from "./peakTable";
 import {
   includedPeaks,
+  peakDataFingerprint,
   peakTableFromFit,
+  peakTableMatchesData,
   peakTableToFitResult,
+  peakTableXIsDegrees,
   withPeakExcluded,
 } from "./peakTableFit";
+import type { DataStruct } from "./types";
 
 function fitResult(centers: number[]): MultiFitResult {
   return {
@@ -83,6 +87,22 @@ describe("peakTableFromFit", () => {
       fittedAt: "2026-09-14T12:00:00.000Z",
     });
     expect(t.provenance.bgCoeffs).toEqual([5, 0]);
+    // Unknown by default — an omitted source field must never be invented.
+    expect(t.provenance.xLabel).toBe("");
+    expect(t.provenance.xUnit).toBe("");
+    expect(t.provenance.fingerprint).toBeNull();
+  });
+
+  it("records the x-axis identity and the data fingerprint when the caller supplies them", () => {
+    const t = peakTableFromFit(fitResult([30.1]), {
+      ...SOURCE,
+      xLabel: "2Theta",
+      xUnit: "deg",
+      fingerprint: "fp-abc",
+    });
+    expect(t.provenance.xLabel).toBe("2Theta");
+    expect(t.provenance.xUnit).toBe("deg");
+    expect(t.provenance.fingerprint).toBe("fp-abc");
   });
 
   it("carries the user's exclusions across a re-fit of the same peak count", () => {
@@ -94,11 +114,145 @@ describe("peakTableFromFit", () => {
     expect(refit.peaks[0].id).not.toBe(first.peaks[0].id);
   });
 
-  it("abandons the exclusion mapping when the peak count changed", () => {
+  it("carries an exclusion onto the peak at the same CENTRE, not the same ROW", () => {
+    // The reviewer's measured hole: `fitEach` publishes only the SUCCESSES, so
+    // an N-of-M re-fit can land the SAME ROW COUNT on different physical peaks.
+    // Here the user excluded 43.2 (row 1 of two); the re-fit drops 30.1 and
+    // gains 55.0, so row 1 is now 55.0. Positional carry-over excluded the
+    // wrong peak in silence.
+    const first = peakTableFromFit(fitResult([30.1, 43.2]), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[1].id, true);
+    const refit = peakTableFromFit(fitResult([43.2, 55.0]), SOURCE, marked);
+    expect(refit.peaks.map((p) => [p.center, p.excluded])).toEqual([
+      [43.2, true],
+      [55.0, false],
+    ]);
+  });
+
+  it("keeps carrying exclusions when the peak count CHANGES (identity, not length)", () => {
     const first = peakTableFromFit(fitResult([30.1, 43.2]), SOURCE);
     const marked = withPeakExcluded(first, first.peaks[0].id, true);
     const refit = peakTableFromFit(fitResult([30.1, 43.2, 55.0]), SOURCE, marked);
-    expect(refit.peaks.map((p) => p.excluded)).toEqual([false, false, false]);
+    expect(refit.peaks.map((p) => p.excluded)).toEqual([true, false, false]);
+  });
+
+  it("drops an exclusion whose peak the re-fit no longer found", () => {
+    const first = peakTableFromFit(fitResult([30.1, 43.2]), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[0].id, true);
+    const refit = peakTableFromFit(fitResult([43.2, 55.0]), SOURCE, marked);
+    expect(refit.peaks.map((p) => p.excluded)).toEqual([false, false]);
+  });
+
+  it("refuses to carry an exclusion onto a centre that moved more than half a FWHM", () => {
+    // fitResult()'s first peak has FWHM 0.2, so the tolerance is 0.1.
+    const first = peakTableFromFit(fitResult([30.1]), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[0].id, true);
+    expect(peakTableFromFit(fitResult([30.19]), SOURCE, marked).peaks[0].excluded).toBe(true);
+    expect(peakTableFromFit(fitResult([30.25]), SOURCE, marked).peaks[0].excluded).toBe(false);
+  });
+
+  it("never gives two exclusions the same row", () => {
+    const first = peakTableFromFit(fitResult([30.1, 30.15]), SOURCE);
+    let marked = withPeakExcluded(first, first.peaks[0].id, true);
+    marked = withPeakExcluded(marked, first.peaks[1].id, true);
+    // Only one row survives the re-fit; the second exclusion finds it taken.
+    const refit = peakTableFromFit(fitResult([30.12]), SOURCE, marked);
+    expect(refit.peaks.map((p) => p.excluded)).toEqual([true]);
+  });
+});
+
+// ── Data fingerprint + x-axis identity (review round 2) ───────────────────
+
+const scan = (over: Partial<DataStruct> = {}): DataStruct => ({
+  time: [10, 20, 30, 40],
+  values: [[1], [9], [2], [1]],
+  labels: ["I"],
+  units: ["cps"],
+  metadata: {},
+  ...over,
+});
+
+describe("peakDataFingerprint", () => {
+  it("is deterministic for identical data and equal across separate objects", () => {
+    expect(peakDataFingerprint(scan())).toBe(peakDataFingerprint(scan()));
+  });
+
+  it("changes when a single measured value is edited", () => {
+    expect(peakDataFingerprint(scan({ values: [[1], [500], [2], [1]] }))).not.toBe(
+      peakDataFingerprint(scan()),
+    );
+  });
+
+  it("changes when the x channel is shifted, with the row count unchanged", () => {
+    // The xOff-correction case: every 2-theta moves, nothing else does.
+    expect(peakDataFingerprint(scan({ time: [10.5, 20.5, 30.5, 40.5] }))).not.toBe(
+      peakDataFingerprint(scan()),
+    );
+  });
+
+  it("changes when rows are added or removed", () => {
+    expect(peakDataFingerprint(scan({ time: [10, 20, 30], values: [[1], [9], [2]] }))).not.toBe(
+      peakDataFingerprint(scan()),
+    );
+  });
+
+  it("changes when a column is added", () => {
+    expect(
+      peakDataFingerprint(scan({ values: [[1, 0], [9, 0], [2, 0], [1, 0]], labels: ["I", "b"] })),
+    ).not.toBe(peakDataFingerprint(scan()));
+  });
+
+  it("does not confuse NaN with 0, or -0 with 0", () => {
+    const zero = peakDataFingerprint(scan({ values: [[0], [0], [0], [0]] }));
+    expect(peakDataFingerprint(scan({ values: [[NaN], [NaN], [NaN], [NaN]] }))).not.toBe(zero);
+    expect(peakDataFingerprint(scan({ values: [[-0], [-0], [-0], [-0]] }))).not.toBe(zero);
+  });
+
+  it("ignores labels/units/metadata — a rename is not a data change", () => {
+    expect(peakDataFingerprint(scan({ labels: ["counts"], units: ["a.u."], metadata: { k: 1 } }))).toBe(
+      peakDataFingerprint(scan()),
+    );
+  });
+});
+
+describe("peakTableMatchesData", () => {
+  const fitted = (data: DataStruct): PeakTable =>
+    peakTableFromFit(fitResult([30.1]), { ...SOURCE, fingerprint: peakDataFingerprint(data) });
+
+  it("matches the data it was fit from", () => {
+    expect(peakTableMatchesData(fitted(scan()), scan())).toBe(true);
+  });
+
+  it("does NOT match once a value changed", () => {
+    expect(peakTableMatchesData(fitted(scan()), scan({ values: [[1], [500], [2], [1]] }))).toBe(false);
+  });
+
+  it("treats a record with no fingerprint as unknown, which reads as still valid", () => {
+    // A pre-round-2 `.dwk` must still show the fit it was saved with.
+    expect(peakTableFromFit(fitResult([30.1]), SOURCE).provenance.fingerprint).toBeNull();
+    expect(peakTableMatchesData(peakTableFromFit(fitResult([30.1]), SOURCE), scan())).toBe(true);
+  });
+});
+
+describe("peakTableXIsDegrees", () => {
+  const withUnit = (xUnit: string): PeakTable =>
+    peakTableFromFit(fitResult([30.1]), { ...SOURCE, xLabel: "2Theta", xUnit });
+
+  it("accepts degrees in the spellings real files use", () => {
+    for (const u of ["deg", "Deg", "degrees", "°", " ° "]) {
+      expect(peakTableXIsDegrees(withUnit(u))).toBe(true);
+    }
+  });
+
+  it("accepts an unrecorded unit — most XRD files carry none", () => {
+    expect(peakTableXIsDegrees(withUnit(""))).toBe(true);
+    expect(peakTableXIsDegrees(peakTableFromFit(fitResult([30.1]), SOURCE))).toBe(true);
+  });
+
+  it("refuses a reciprocal-space or real-space axis", () => {
+    for (const u of ["1/A", "Å⁻¹", "nm", "1/nm"]) {
+      expect(peakTableXIsDegrees(withUnit(u))).toBe(false);
+    }
   });
 });
 
@@ -192,6 +346,33 @@ describe("sanitizePeakTable", () => {
     delete doc.peaks[1].id;
     const t = sanitizePeakTable(doc);
     expect(t?.peaks[1].id).toBe("peak-restored-1");
+  });
+});
+
+describe("sanitizePeakTable — the round-2 provenance fields", () => {
+  it("round-trips the x identity and the fingerprint", () => {
+    const t = peakTableFromFit(fitResult([30.1, 43.2]), {
+      ...SOURCE,
+      xLabel: "2Theta",
+      xUnit: "deg",
+      fingerprint: "fp-abc",
+    });
+    const back = sanitizePeakTable(JSON.parse(JSON.stringify(serializePeakTable(t))));
+    expect(back?.provenance.xLabel).toBe("2Theta");
+    expect(back?.provenance.xUnit).toBe("deg");
+    expect(back?.provenance.fingerprint).toBe("fp-abc");
+  });
+
+  it("degrades a missing or non-string fingerprint to null, not to a match", () => {
+    const doc = JSON.parse(
+      JSON.stringify(peakTableFromFit(fitResult([30.1]), { ...SOURCE, fingerprint: "fp-abc" })),
+    ) as { provenance: Record<string, unknown> };
+    delete doc.provenance.fingerprint;
+    expect(sanitizePeakTable(doc)?.provenance.fingerprint).toBeNull();
+    doc.provenance.fingerprint = 7;
+    expect(sanitizePeakTable(doc)?.provenance.fingerprint).toBeNull();
+    doc.provenance.xUnit = 7;
+    expect(sanitizePeakTable(doc)?.provenance.xUnit).toBe("");
   });
 });
 

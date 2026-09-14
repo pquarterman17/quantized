@@ -235,6 +235,11 @@ export function applyReimportMerge(
               // `recomputeStaleFits`, and have its saved `params` silently
               // overwritten with a fit of the wrong column.
               fitSpec: undefined,
+              // Audit P2.1 review round 2: the durable fitted-peak table is
+              // the same category — it records peaks measured from the columns
+              // this re-import just replaced, and there is no honest
+              // re-derivation (a re-fit is a user action, not a recompute).
+              peakTable: undefined,
             }
           : {}),
       };

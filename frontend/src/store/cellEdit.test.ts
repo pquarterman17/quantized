@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
 import { recomputeFromBase } from "../lib/formulaInputs";
+import { peakTableFromFit } from "../lib/peakTableFit";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { resetBookTransportForTests } from "../lib/bookData";
 
@@ -938,5 +939,47 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     useApp.setState({ datasets: [resolved] } as unknown as Parameters<typeof useApp.setState>[0]);
     useApp.getState().insertRows("p1", 1, 1);
     expect(useApp.getState().datasets[0].data.time).toHaveLength(13);
+  });
+});
+
+describe("setCellValue — the durable peak table (audit P2.1, review round 2)", () => {
+  it("drops a fit measured from the value that was just typed over", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "film",
+          data: { time: [1, 2, 3], values: [[10], [20], [30]], labels: ["m"], units: [""], metadata: {} },
+          peakTable: peakTableFromFit(
+            {
+              peaks: [
+                { center: 2, fwhm: 0.2, height: 20, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Gaussian" },
+              ],
+              bgCoeffs: [1, 0],
+              R2: 0.99,
+              rmse: 0.1,
+              nPeaks: 1,
+              model: "Gaussian",
+            },
+            {
+              datasetId: "d1",
+              datasetName: "film",
+              method: "simultaneous" as const,
+              bgDegree: 1,
+              linkMode: "None",
+              constrain: false,
+              wavelengthA: null,
+            },
+          ),
+        },
+      ],
+      activeId: "d1",
+    });
+
+    useApp.getState().setCellValue("d1", 1, 0, 500);
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.values[1][0]).toBe(500);
+    expect(ds.peakTable).toBeUndefined();
   });
 });

@@ -260,7 +260,10 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         } else {
           data = { ...d.data, values: patchCell(d.data.values, row, col, value) };
         }
-        return recomputeAfterCellEdit({ ...d, data }, row);
+        // peakTable (audit P2.1 review round 2): a typed-over value is a
+        // change to the data any saved fit was measured from, so the durable
+        // table goes with it — the same rule store/corrections.ts applies.
+        return recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row);
       }),
     }));
     get().recordMacro(

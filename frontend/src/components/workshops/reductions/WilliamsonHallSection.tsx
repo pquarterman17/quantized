@@ -5,7 +5,10 @@
 //
 // "Use fitted peaks" (audit P2.1) fills the table from the active dataset's
 // durable peak table instead of making the user retype the Peaks workshop's
-// results; the provenance line under it names what was loaded.
+// results; the provenance line under it names what was loaded. It is DISABLED,
+// with the reason spelled out beside it, when the hook refuses the table —
+// the data moved under the fit, or the fit ran on an axis that is not 2-theta
+// in degrees (useWilliamsonHall's `fittedBlockedReason`).
 
 import { DataTable } from "../../primitives/DataTable";
 import { IconButton } from "../../primitives/IconButton";
@@ -29,6 +32,7 @@ export default function WilliamsonHallSection() {
     fittedPeakCount,
     fittedExcludedCount,
     fittedSource,
+    fittedBlockedReason,
     loadFittedPeaks,
     addRow,
     removeRow,
@@ -44,10 +48,17 @@ export default function WilliamsonHallSection() {
     <div style={{ marginTop: 10 }}>
       {fittedPeakCount > 0 && (
         <div style={{ marginBottom: 8 }}>
-          <Button size="sm" onClick={loadFittedPeaks}>
+          <Button size="sm" disabled={fittedBlockedReason != null} onClick={loadFittedPeaks}>
             Use fitted peaks ({fittedPeakCount})
           </Button>
-          {fittedExcludedCount > 0 && (
+          {/* The refusal is named, never silent: a greyed button with no
+              reason is indistinguishable from a broken one. */}
+          {fittedBlockedReason != null && (
+            <span className="qzk-ds-meta" style={{ marginLeft: 8, color: "var(--text-faint)" }}>
+              {fittedBlockedReason}
+            </span>
+          )}
+          {fittedBlockedReason == null && fittedExcludedCount > 0 && (
             <span className="qzk-ds-meta" style={{ marginLeft: 8, color: "var(--text-faint)" }}>
               {fittedExcludedCount} excluded in the Peaks workshop
             </span>

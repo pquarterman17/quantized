@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { MultiFitResult } from "../lib/peakTable";
-import { includedPeaks } from "../lib/peakTableFit";
+import { includedPeaks, peakDataFingerprint, peakTableMatchesData } from "../lib/peakTableFit";
 import type { DataStruct } from "../lib/types";
 import { publishFitResult, publishPeakTable, setPeakExcluded } from "./peakTables";
 import { useApp } from "./useApp";
@@ -26,7 +26,7 @@ const RESULT: MultiFitResult = {
   model: "Gaussian",
 };
 
-const OPTS = { bgDegree: 1, linkMode: "None", constrain: false };
+const OPTS = { bgDegree: 1, linkMode: "None", constrain: false, xKey: null };
 
 beforeEach(() => {
   useApp.setState({
@@ -108,5 +108,50 @@ describe("publishPeakTable", () => {
     const t = useApp.getState().datasets[0].peakTable!;
     publishPeakTable("d1", { ...t, peaks: [t.peaks[0]] });
     expect(useApp.getState().datasets[0].peakTable?.peaks).toHaveLength(1);
+  });
+});
+
+describe("publishFitResult — the round-2 provenance (data fingerprint + x axis)", () => {
+  it("stamps a fingerprint of the LIVE data, so the table can be told stale later", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const ds = useApp.getState().datasets[0];
+    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds.data));
+    expect(peakTableMatchesData(ds.peakTable!, ds.data)).toBe(true);
+    // Edit one measured value and the SAME table no longer describes it.
+    expect(peakTableMatchesData(ds.peakTable!, { ...ds.data, values: [[1], [500], [2]] })).toBe(false);
+  });
+
+  it("names the x axis from the time column's Origin metadata when nothing is plotted", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "film.xrdml",
+          data: data({ x_column_long: "2Theta", x_column_unit: "deg" }),
+        },
+      ],
+      activeId: "d1",
+    });
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const prov = useApp.getState().datasets[0].peakTable!.provenance;
+    expect(prov.xLabel).toBe("2Theta");
+    expect(prov.xUnit).toBe("deg");
+  });
+
+  it("names the x axis from the PLOTTED column when one is chosen", () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "rsm.xrdml",
+          data: { ...data(), labels: ["q"], units: ["1/A"] },
+        },
+      ],
+      activeId: "d1",
+    });
+    publishFitResult("d1", RESULT, "simultaneous", { ...OPTS, xKey: 0 });
+    const prov = useApp.getState().datasets[0].peakTable!.provenance;
+    expect(prov.xLabel).toBe("q");
+    expect(prov.xUnit).toBe("1/A");
   });
 });
