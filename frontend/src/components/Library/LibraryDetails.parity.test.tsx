@@ -538,11 +538,13 @@ describe("LibraryDetails — L1.4 inline rename under virtualization", () => {
   });
 });
 
-// REVIEW ROUND (2026-09-13, finding 3): useDetailsDragDrop.ts is shared
-// verbatim with the Tile workspace (useTileDragDrop.ts is a re-export), so
-// the fix belongs here too and this is the Details half of the same proof —
-// see LibraryTiles.parity.test.tsx's "drag under virtualization" block for
-// the Tiles half and the fuller regression writeup.
+// REVIEW ROUND (2026-09-13, finding 3; 2026-09-14, finding 1):
+// useDetailsDragDrop.ts is shared verbatim with the Tile workspace
+// (useTileDragDrop.ts is a re-export) — its file header is the authoritative
+// contract for what ends a drag and why. This is the Details half of the
+// survives-the-scroll proof; LibraryTiles.parity.test.tsx's "drag under
+// virtualization" block is the Tiles half and also covers the
+// abandoned-drag (no-drop) case this file does not repeat.
 describe("LibraryDetails — L1.4 drag survives its source scrolling out of the window", () => {
   it("a drag whose SOURCE row scrolls out of the virtualized window still completes when dropped on a folder", () => {
     applyToStore(() =>

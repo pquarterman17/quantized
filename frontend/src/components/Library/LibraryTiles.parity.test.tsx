@@ -358,16 +358,11 @@ describe("LibraryTiles — L1.4 drop target parity", () => {
   });
 });
 
-// REVIEW ROUND (2026-09-13, finding 3): the prior version of this block
-// asserted the OPPOSITE of what is asserted below — that a drag whose source
-// scrolled out of the window "cancelled cleanly". That was the regression:
-// cancelling on unmount meant `legalDrag` (which requires `activeDrag !=
-// null`) went false the moment the source scrolled away, so every folder
-// silently refused a drop that, before the drag/drop commit, would have
-// completed. The contract is now the opposite — the drag SURVIVES its
-// source's unmount, and only a real terminal signal (a `drop` that commits
-// a move, or a `dragend` with nothing to drop on) ends it. Folder tiles
-// stand in for worksheet tiles here because a worksheet tile no longer has a
+// REVIEW ROUND (2026-09-13, finding 3; 2026-09-14, finding 1): the drag
+// survives its source's unmount, and the terminal signals that DO end it are
+// exactly the ones documented in useDetailsDragDrop.ts's file header — that
+// comment is the authoritative contract; nothing here restates it. Folder
+// tiles stand in for worksheet tiles because a worksheet tile no longer has a
 // grip in Tiles at all (finding 5, above) — folders and workbooks are the
 // only kinds with a reachable target to prove survival against.
 describe("LibraryTiles — L1.4 drag under virtualization", () => {
@@ -436,29 +431,75 @@ describe("LibraryTiles — L1.4 drag under virtualization", () => {
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
   });
 
-  it("a drag that ends with no drop clears activeDrag through the document-level dragend catch, even after its source unmounted", () => {
+  it("an abandoned drag is NOT ended by a dragend at its (detached) source, but IS ended by the next pointermove", () => {
+    applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
+    render(<LibraryWorkspace onClose={vi.fn()} />);
+
+    const source = gripOf("folder:vf0");
+    fireDrag(source, "dragstart", transfer(FOLDER_DND, "vf0"));
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // A real drag fires `dragover` continuously over whatever is under the
+    // pointer, valid drop target or not. This is what tells the container's
+    // guarded pointermove catch (useDetailsDragDrop.ts's file header, THIRD
+    // review round) that the drag is genuinely under way, before it will
+    // treat a later pointermove as the end signal.
+    const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    fireDrag(scroller, "dragover", transfer(FOLDER_DND, "vf0"));
+
+    act(() => {
+      scroller.scrollTop = SCROLL_PAST_END;
+      fireEvent.scroll(scroller);
+    });
+    expect(tileFor("folder:vf0")).toBeNull(); // the source tile is really gone
+
+    // What a real browser actually does with an abandoned drag: it fires
+    // `dragend` at the SOURCE element, not at `document`. Firing it here (at
+    // the now-detached grip) instead of at `document` — the opposite of what
+    // the second review round's test did — is the measured behaviour: the
+    // event has no ancestor chain left to bubble through, so the container's
+    // capture listener never runs, and every legal folder tile is left
+    // glowing with the stale `drop-candidate` cue.
+    act(() => {
+      fireDrag(source, "dragend", transfer(FOLDER_DND, "vf0"));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+    expect(tileFor("folder:vtarget").className).toMatch(/\bdrop-candidate\b/);
+
+    // The browser suppresses `pointermove` for the dragging pointer for the
+    // whole operation; its first delivery afterwards is therefore the one
+    // signal that needs no live source node at all.
+    act(() => {
+      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
+    });
+    expect(useApp.getState().activeDrag).toBeNull();
+    expect(tileFor("folder:vtarget").className).not.toMatch(/\bdrop-candidate\b/);
+  });
+
+  it("a pointermove delivered before any dragover is observed does NOT end the drag (guards the drag-start interleave)", () => {
     applyToStore(() => useApp.setState({ folders: seedVirtualizedFolders() }));
     render(<LibraryWorkspace onClose={vi.fn()} />);
 
     fireDrag(gripOf("folder:vf0"), "dragstart", transfer(FOLDER_DND, "vf0"));
     expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
 
+    // No dragover/drag has fired yet — a pointermove here must be ignored,
+    // or a drag would clear itself on its own first frame.
+    act(() => {
+      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
+    });
+    expect(useApp.getState().activeDrag).toEqual({ kind: "folder", id: "vf0" });
+
+    // Once a dragover has been observed, the SAME pointermove signal does end
+    // the drag (the previous test proves this end to end). Fired on the
+    // scroller, not a folder tile, since "vtarget" is not yet in the
+    // rendered window here — a real drag fires dragover over whatever is
+    // under the pointer regardless.
     const scroller = document.querySelector(".qzk-library-workspace") as HTMLElement;
+    fireDrag(scroller, "dragover", transfer(FOLDER_DND, "vf0"));
     act(() => {
-      scroller.scrollTop = SCROLL_PAST_END;
-      fireEvent.scroll(scroller);
+      fireEvent(document, new Event("pointermove", { bubbles: true, cancelable: true }));
     });
-    expect(tileFor("folder:vf0")).toBeNull(); // no element left to fire dragend on
-
-    // A real browser still ends the drag operation even though its source
-    // node is detached — the terminal signal is caught at `document` instead
-    // of relying on the (now-gone) source's own onDragEnd.
-    act(() => {
-      const evt = new Event("dragend", { bubbles: true, cancelable: true });
-      Object.defineProperty(evt, "dataTransfer", { value: transfer(FOLDER_DND, "vf0"), configurable: true });
-      document.dispatchEvent(evt);
-    });
-
     expect(useApp.getState().activeDrag).toBeNull();
   });
 });

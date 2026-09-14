@@ -49,21 +49,58 @@
 // cancelled the drag right there (a per-row effect that cleared `activeDrag`
 // on unmount if the node owned it), which meant every folder silently
 // refused the drop the instant its source scrolled out of view. The cancel
-// now lives ONCE at the CONTAINER (`useDetailsDragDropContext`, called once
-// per table/grid, never per row) instead: `document`-level `dragend` and
-// `drop` listeners, installed only while a drag is in flight, are the single
-// terminal signal that ends it, regardless of whether the row that started
-// it is still mounted. They are registered on the CAPTURE phase, not bubble
-// — a legal drop's own handler calls `event.stopPropagation()` once it
-// commits the move (so a refused, ancestor-scoped drop target never sees a
-// drop meant for a more specific one), which would stop a bubble-phase
-// document listener from ever running for the success case. Capture runs
+// moved ONCE to the CONTAINER (`useDetailsDragDropContext`, called once per
+// table/grid, never per row): CAPTURE-phase `document` `dragend` and `drop`
+// listeners, installed only while a drag is in flight. Capture (not bubble)
+// matters — a legal drop's own handler calls `event.stopPropagation()` once
+// it commits the move (so a refused, ancestor-scoped drop target never sees
+// a drop meant for a more specific one), which would stop a bubble-phase
+// document listener from ever running for the success case; capture runs
 // top-down, before that target is even reached, so it cannot be skipped by
-// anything a descendant's handler does later in the same dispatch. Neither
-// listener decides legality — the specific target's own `legalDrag` check
-// already closed over the pre-clear `activeDrag` value by the time this
-// callback fires — they only clear the published drag once the operation is
-// over.
+// anything a descendant's handler does later in the same dispatch.
+//
+// That `dragend`/`drop` catch covers a drag whose relevant element — the
+// drop target (a `drop` always fires on a live, visible target), or a
+// source whose own row/tile is still mounted (its `dragend` bubbles like any
+// other) — is attached to `document`. It does NOT cover a `dragend` fired at
+// a source that has since unmounted: a detached node's event has no
+// ancestor chain left to bubble through, so it never reaches `document` at
+// all. An abandoned drag (released over nothing, after its source scrolled
+// out) therefore still leaked `activeDrag` — the cosmetic version of the
+// original bug, a stale drop-candidate cue on every legal folder until the
+// next `dragstart` — which the round-2 fix and its own test did not
+// actually prove closed (that test dispatched `dragend` AT `document`,
+// begging the question it was meant to settle).
+//
+// THIRD review round (2026-09-14, finding 1): a second, independent terminal
+// signal that needs no live source element at all. Per the HTML Standard, a
+// user agent suppresses `pointermove` (and `mousemove`) for the dragging
+// pointer for as long as an HTML5 drag-and-drop operation is under way; the
+// first `pointermove` delivered afterwards is therefore the browser telling
+// us the operation ended, regardless of which element the source used to be.
+// A CAPTURE-phase `pointermove` listener on `document`, live only while
+// `activeDrag != null`, clears it on that first delivery. Guarded: a
+// `pointermove` that arrives before the browser has actually entered the
+// suppressed state (immediately at `dragstart`, on a browser where the two
+// events can still interleave) must not be mistaken for the end signal, or
+// every drag would clear itself on its own first frame. The guard is the
+// cheap, conservative rule the round-2 review itself proposed: track whether
+// a `dragover` (or the source's own periodic `drag` event) has been seen
+// since this drag started — either one fires only while a drag is genuinely
+// in progress, over WHATEVER is under the pointer, valid target or not — and
+// treat `pointermove` as terminal only once one has. This cannot be verified
+// against a real browser here: jsdom, which every test in this repo runs
+// under, implements no drag-and-drop suppression at all — it only dispatches
+// whichever events a test fires by hand — so the guard is documented from
+// the HTML Standard's drag-and-drop section, not measured against a real
+// Chromium/Firefox drag. The two `document`-level catches are therefore
+// complementary, not redundant: `dragend`/`drop` end a drag whose relevant
+// element is still attached; the guarded `pointermove` ends one whose source
+// is not, with no dependency on any element surviving at all. Neither one
+// decides legality — the specific target's own `legalDrag` check already
+// closed over the pre-clear `activeDrag` value by the time either callback
+// fires (see the note at `legalDrag`'s definition below) — they only clear
+// the published drag once the operation is over.
 
 import { useEffect, useState } from "react";
 
@@ -112,14 +149,12 @@ export interface DetailsDragDropContext {
  *  (architecture.test.ts's getState()-in-render ratchet). The two move
  *  actions are stable identities, so they add no rerenders.
  *
- *  Also owns the CONTAINER-level drag-end catch (see the file header, finding
- *  3): while `activeDrag` is non-null, one CAPTURE-phase `dragend` and one
- *  CAPTURE-phase `drop` listener sit on `document` and clear it
- *  unconditionally, before any specific row/tile even sees the event. The
- *  per-row `onDragEnd` still fires too when its element survives, but this is
- *  the one path that also covers a source whose row/tile has unmounted, or a
- *  browser that never delivers the terminal event anywhere but the document
- *  root. */
+ *  Also owns the CONTAINER-level terminal-signal catch — see the file header
+ *  above (findings 3 and 1) for the full contract: two independent
+ *  CAPTURE-phase `document` listener sets, live only while `activeDrag` is
+ *  non-null, clear it unconditionally before any specific row/tile even sees
+ *  the event. The per-row `onDragEnd` still fires too when its element
+ *  survives; it is redundant with, not a third mechanism alongside, these. */
 export function useDetailsDragDropContext(): DetailsDragDropContext {
   const setActiveDrag = useLibraryStore((s) => s.setActiveDrag);
   const activeDrag = useLibraryStore((s) => s.activeDrag);
@@ -136,9 +171,28 @@ export function useDetailsDragDropContext(): DetailsDragDropContext {
     // committed move's `event.stopPropagation()` can never suppress it.
     document.addEventListener("dragend", clear, true);
     document.addEventListener("drop", clear, true);
+
+    // THIRD review round, finding 1: a `dragend`/`drop` fired at an element
+    // still attached to `document` is not the only way this drag can end —
+    // see the file header for the unmounted-source gap and why a guarded
+    // `pointermove` closes it.
+    let dragInProgress = false;
+    const noteDragInProgress = (): void => {
+      dragInProgress = true;
+    };
+    const onPointerMove = (): void => {
+      if (dragInProgress) clear();
+    };
+    document.addEventListener("dragover", noteDragInProgress, true);
+    document.addEventListener("drag", noteDragInProgress, true);
+    document.addEventListener("pointermove", onPointerMove, true);
+
     return () => {
       document.removeEventListener("dragend", clear, true);
       document.removeEventListener("drop", clear, true);
+      document.removeEventListener("dragover", noteDragInProgress, true);
+      document.removeEventListener("drag", noteDragInProgress, true);
+      document.removeEventListener("pointermove", onPointerMove, true);
     };
   }, [activeDrag, setActiveDrag]);
 
@@ -201,6 +255,11 @@ export function useDetailsDragDrop(node: LibraryNode, ctx: DetailsDragDropContex
   // walks up from THIS folder and returns true the moment it meets the
   // dragged id, so the identity case (dropped on itself) is already covered
   // and needs no separate clause.
+  // `legalDrag` is a RENDER-TIME closure over `activeDrag`, and a committed
+  // drop's correctness depends on that: the container-level catch (file
+  // header) nulls the store before this target's own `onDrop` runs, so if
+  // this ever became a live `getState()` read instead, every legal drop
+  // would incorrectly refuse itself.
   const legalDrag =
     activeDrag != null
     && (activeDrag.kind === "workbook"

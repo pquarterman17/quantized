@@ -872,11 +872,14 @@ Library presentation without changing organization or duplicating objects.
     `LibraryTree`/`LibraryDetails`, so `LibraryTile.tsx`,
     `useDetailsDragDrop.ts` and the Tiles-scoped `shell.css` rules are all
     reached exclusively through those seams — the eager-bundle metric cannot
-    see a duplicated hook, or this fix, either way. Measured directly: this
-    review round's real parent (`git rev-parse HEAD~1` = `0931637d`) builds to
-    916,112 B eager; this round's own tree ALSO measures 916,112 B eager —
-    0 B delta, exactly as the lazy-loading argument predicts, not a
-    coincidence. Gate: `tsc -b --force` and `eslint --max-warnings=0` clean;
+    see a duplicated hook, or this fix, either way. Measured directly against
+    this round's real parent, `git rev-parse HEAD~1` = `1e0c0e7f` (test/e2e-
+    only; the two commits between it and the `0931637d` figure first cited
+    here — `9c5b382b`, `1e0c0e7f` — touch no eager app code, so the number is
+    unchanged either way): 916,112 B eager; this round's own tree ALSO
+    measures 916,112 B eager — 0 B delta, exactly as the lazy-loading
+    argument predicts, not a coincidence. Gate: `tsc -b --force` and
+    `eslint --max-warnings=0` clean;
     scoped `vitest run src/components/Library src/architecture.test.ts` 36
     files / 533 tests, all green; `LibraryTiles.parity.test.tsx` now 26 tests
     (was 24 — net +2: -2 worksheet-drag tests, +2 worksheet-no-grip tests,
@@ -888,6 +891,57 @@ Library presentation without changing organization or duplicating objects.
     effect alongside the fix, re-enabling the worksheet grip, and reverting
     the `pointer-events` rule each broke the specific test(s) written against
     it and only those, then were restored.
+  - [x] **Tiles drag/drop — adversarial review, ROUND 2 (2026-09-14).** One
+    finding against the round above; the rest of that round's five findings
+    and the sabotage table were reconfirmed, not reopened.
+    **F1 (CONFIRMED):** the `dragend`/`drop` document-level catch cannot see
+    an ABANDONED drag (released over nothing) whose source was unmounted by
+    virtualization — a detached node's event has no ancestor chain left to
+    bubble through `document` — so `activeDrag` leaked and every legal folder
+    kept its `drop-candidate` cue until the next `dragstart`. The round-1 test
+    that claimed to prove this closed was circular: it dispatched `dragend`
+    AT `document` directly, assuming the very retargeting in question.
+    **Fix:** a second, independent terminal signal that needs no live source
+    element — a CAPTURE-phase `pointermove` listener on `document`, live only
+    while a drag is in flight, clears it on its first delivery (browsers
+    suppress `pointermove` for the dragging pointer for the whole operation,
+    per the HTML Standard, so the first one afterwards is the browser saying
+    the operation ended). Guarded against a `pointermove` that might
+    interleave with `dragstart` itself: it is honoured as a terminal signal
+    only after a `dragover` (or the source's own `drag` event) has been seen
+    for this drag, the cheap rule the round-1 review itself proposed. Full
+    contract now lives ONCE, in `useDetailsDragDrop.ts`'s file header; the
+    `useDetailsDragDropContext` doc block and both parity test files' block
+    comments were collapsed to one-line pointers at it (N4) instead of a
+    fifth restatement. **Test:** the circular test was rewritten in
+    `LibraryTiles.parity.test.tsx` to fire `dragend` at the SOURCE element
+    itself after it unmounts (asserting `activeDrag` survives — the measured
+    browser behaviour) and only then fire a `pointermove` on `document`
+    (asserting it clears, and the stale cue is gone); a second test locks the
+    guard (a `pointermove` with no preceding `dragover` does NOT clear).
+    Sabotage: removing the `pointermove` listener entirely fails exactly the
+    2 tests that depend on it; removing the guard (clearing on ANY
+    `pointermove`) fails exactly the 1 guard test. **N1 taken:** one line at
+    `legalDrag`'s definition (`useDetailsDragDrop.ts`) states it is a
+    render-time closure the container catch's null-then-drop ordering depends
+    on for correctness, not just for the getState()-in-render ratchet.
+    **F2 (bundle mislabel, again):** the paragraph above (round 1's own
+    fix) had named `0931637d` as ITS parent's `HEAD~1`, when the real one was
+    `1e0c0e7f` — corrected in place above. This round's real parent is
+    `e31f4b5b` (`git rev-parse HEAD~1`, verified — not a name taken from any
+    brief). Measured directly: `e31f4b5b` builds to 916,111 B eager; this
+    round's own tree measures 916,111 B eager too — 0 B delta, same
+    lazy-loading argument as before (the Library is reached only through
+    `App.tsx`'s and `Library.tsx`'s lazy seams, so nothing in this fix is
+    eager either). **Gate:** `tsc -b --force` and
+    `eslint --max-warnings=0` clean; scoped `vitest run
+    src/components/Library src/architecture.test.ts` 36 files / 536 tests,
+    all green — `LibraryTiles.parity.test.tsx` 27 (was 26; net +1 is this
+    round's own change: one circular test replaced by the rewritten test plus
+    the new guard test); the other +2 tests since round 1's reported 533 are
+    `LibraryDetails.scale.test.tsx`/`LibraryTree.scale.test.tsx` landing in
+    unrelated intervening commits, not this fix. `uv run pytest -q
+    tests/test_repo_integrity.py` 12 passed.
   - [x] Booking (2026-08-15 retrospective audit) — **CLOSED, day-5
     reconciliation (2026-08-19):** artifact-row context menus and registry
     Delete actions had no owning slice as of 2026-08-15; PR E-b2 (merged
