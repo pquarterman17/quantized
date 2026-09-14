@@ -4550,8 +4550,51 @@ next eager feature cannot land without it.)
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels.
-- [ ] Screen/export/reopen structural and visual equivalence.
+- [x] ~~Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels~~
+  SHIPPED 2026-09-14 (tests only): eight committed figure goldens plus a
+  page golden under `frontend/src/lib/__fixtures__/regressionMatrix/` (`plain`, `errors`,
+  `group`, `facet`, `y2`, `break`, `waterfall`, `decor`, `page`), each the
+  canonical structural projection of a deterministic TS-built fixture
+  (`lib/regressionMatrixFixtures.testkit.ts`). **2-D could not be built and is
+  deliberately absent:** this repo has no first-class 2-D/heatmap FIGURE —
+  `/api/export/map-figure` has no frontend wrapper at all (stated in
+  `lib/api/figures.ts`), `PLOT_MARKS` has no 2-D member, and `FigureDocument`
+  therefore cannot express one, so it has no place on the document path the
+  three legs share. How to add a fixture: add a builder, list it in
+  `MATRIX_FIXTURES`, regenerate its golden (see `regressionMatrix.test.ts`'s
+  "REGENERATING THE GOLDENS"), commit the JSON.
+- [x] ~~Screen/export/reopen structural and visual equivalence~~ STRUCTURAL
+  HALF SHIPPED 2026-09-14
+  (tests only — no production code changed): `frontend/src/lib/
+  regressionMatrix.test.ts` asserts SCREEN ≡ EXPORT ≡ REOPEN on one canonical
+  structural payload for every fixture, where screen reads the real uPlot
+  options object (`lib/uplotOpts.ts`'s `buildOpts` over `usePlotPayload`'s own
+  pipeline), export reads the real `FigureSpec`
+  (`buildFigureSpecFromDocument`), and reopen reads the FigureDocument that
+  comes back out of `serializeWorkspace` -> `parseWorkspace`; the page leg adds
+  `buildPageSpecFromDocument` vs `resolvePagePanel`/`pagePanelLabels`.
+  Extractors: `lib/regressionMatrix.testkit.ts` (payload + shared helpers),
+  `lib/regressionMatrixLegs.testkit.ts` (the three legs),
+  `lib/regressionMatrixPage.testkit.ts` (the page). The VISUAL half of this
+  box's original wording is NOT covered and is re-booked as its own open box
+  below rather than quietly counted as done.
+  **Four divergences found, each pinned as a documented `it.fails` and none
+  fixed here** (all in `regressionMatrix.test.ts`'s "divergences found" block):
+  D1 a document's `plot.axisBreaks.x` reaches the export wire and survives
+  reopen but NOTHING on screen renders it (`useEffectiveComposition`'s durable
+  fallback covers `facetKey` only; the on-screen break is the transient
+  `composition` from `breakAtGaps`); D2 the canvas offsets every series by
+  `view.waterfall` while `FigureSpec` has no waterfall field, so the export
+  draws un-offset curves; D3 a legend rename replaces the whole on-screen label
+  but only `dataset.labels[ch]` on the wire, so the exported legend re-appends
+  the unit ("Loop 1 (au)"); D4 hiding a series shifts later series' palette
+  positions on export (`buildExportStyles` with `cycle: null` over the
+  hidden-FILTERED list) but not on the canvas.
+- [ ] Visual (rendered-output) equivalence for the same nine fixtures — the
+  half of the box above that 2026-09-14's structural matrix did not cover.
+  Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`
+  on ONE A8 fixture; the screen canvas has no rendered-output comparison at
+  all.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED

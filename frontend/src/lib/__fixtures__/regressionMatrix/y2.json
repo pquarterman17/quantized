@@ -1,0 +1,85 @@
+{
+  "mode": "flat",
+  "xBinding": null,
+  "series": [
+    {
+      "channel": 0,
+      "label": "Signal (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": "#7fb3ff",
+      "width": 2,
+      "dash": null,
+      "marker": null,
+      "step": null,
+      "fill": null
+    },
+    {
+      "channel": 8,
+      "label": "Temp (K)",
+      "unit": "K",
+      "axis": 1,
+      "color": "#ffb37f",
+      "width": 1,
+      "dash": null,
+      "marker": null,
+      "step": null,
+      "fill": null
+    }
+  ],
+  "errors": [
+    [],
+    []
+  ],
+  "grouping": {
+    "channel": null,
+    "levelOrder": null,
+    "levelLabels": null
+  },
+  "facet": {
+    "channel": null,
+    "panels": null
+  },
+  "y2Positions": [
+    1
+  ],
+  "xBreaks": [],
+  "waterfallOffset": 0,
+  "axes": {
+    "x": {
+      "label": "Index",
+      "scale": "linear",
+      "limits": [
+        0,
+        5
+      ]
+    },
+    "y": {
+      "label": "Signal (au)",
+      "scale": "linear",
+      "limits": [
+        -1,
+        4
+      ]
+    },
+    "y2": {
+      "label": "Temperature (K)",
+      "scale": "linear",
+      "limits": [
+        270,
+        310
+      ]
+    }
+  },
+  "decor": {
+    "legend": {
+      "show": true,
+      "position": "nw",
+      "title": null
+    },
+    "annotations": [],
+    "shapes": [],
+    "refLines": [],
+    "regionShades": []
+  }
+}
