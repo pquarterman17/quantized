@@ -11,7 +11,50 @@ import { APP_VERSION, BUILD_SHA } from "../lib/buildInfo";
 import { hasDesktopShell } from "../lib/desktopBridge";
 import { buildDiagnostics, type DiagnosticsSnapshot } from "../lib/diagnostics";
 import { isKnownStorageKey } from "../lib/storageKeys";
+import { useAutosaveStatus } from "./autosaveStatus";
+import { usePendingOps } from "./pendingOps";
+import { useRecoveryChoice } from "./recoveryChoice";
+import { recentNotificationMarks } from "./toasts";
 import { useApp } from "./useApp";
+
+type BackendInfo = DiagnosticsSnapshot["backend"];
+
+/** What a backend that did not answer looks like. Also the value used when no
+ *  probe was made at all — the report says "unreachable" either way, which is
+ *  the honest reading for a consumer: this SPA could not name a server. */
+const BACKEND_UNREACHABLE: BackendInfo = { reachable: false, app: null, version: null };
+
+/** Give up after this long. The user is waiting on a clipboard write; a
+ *  hung backend must not hold the whole bundle hostage. */
+const BACKEND_PROBE_MS = 1500;
+
+/** Ask the server who it is. `/api/health` (src/quantized/app.py) already
+ *  serves `{status, app, version}` for the launcher's identity handshake, so
+ *  no new route is needed — this is the same fetch, read for its version.
+ *  Fetched directly rather than through `lib/api.ts`'s `health()` because
+ *  that wrapper's return type discards everything but `status`. */
+export async function probeBackend(): Promise<BackendInfo> {
+  try {
+    const res = await Promise.race([
+      fetch("/api/health"),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), BACKEND_PROBE_MS)),
+    ]);
+    if (!res?.ok) return BACKEND_UNREACHABLE;
+    const body = (await res.json()) as { app?: string; version?: string };
+    return { reachable: true, app: body.app ?? null, version: body.version ?? null };
+  } catch {
+    // Offline, blocked, a file:// page, or no fetch at all — all of which are
+    // "could not name a server", and none of which should fail the bundle.
+    return BACKEND_UNREACHABLE;
+  }
+}
+
+/** Whole seconds since `at`, or null when there is no such moment. Clamped at
+ *  zero so a clock that stepped backwards reads as "just now" rather than
+ *  printing a negative age. */
+function ageSec(at: number | null, now: number): number | null {
+  return at === null ? null : Math.max(0, Math.round((now - at) / 1000));
+}
 
 /** Byte sizes of this app's own persisted slots. Keys and sizes only — a
  *  value is measured and immediately discarded, never included.
@@ -67,11 +110,15 @@ function osReduceMotion(): boolean {
   }
 }
 
-export function collectDiagnostics(): DiagnosticsSnapshot {
+export function collectDiagnostics(backend: BackendInfo = BACKEND_UNREACHABLE): DiagnosticsSnapshot {
   const s = useApp.getState();
   const slots = storageSlots();
   const rows = s.datasets.map((d) => d.data.time.length);
   const cols = s.datasets.map((d) => d.data.labels.length);
+  const now = Date.now();
+  const health = useAutosaveStatus.getState().health;
+  const marks = recentNotificationMarks();
+  const errors = marks.filter((m) => m.kind === "danger");
 
   return {
     takenAt: new Date().toISOString(),
@@ -113,10 +160,27 @@ export function collectDiagnostics(): DiagnosticsSnapshot {
     },
     storage: slots.known,
     otherStorage: slots.other,
+    backend,
+    session: {
+      lastAutosaveAgeSec: ageSec(health.savedAt, now),
+      // `error` is the failure REASON; only whether it is set crosses into the
+      // bundle. See lib/diagnostics.ts's header for that decision.
+      autosaveFailing: health.error !== null,
+      autosaveGenerations: health.count,
+      recoveryPromptOpen: useRecoveryChoice.getState().pending !== null,
+      pendingOps: usePendingOps.getState().ops.length,
+      notifications: {
+        total: marks.length,
+        errors: errors.length,
+        lastErrorAgeSec: ageSec(errors.length ? errors[errors.length - 1].at : null, now),
+      },
+    },
   };
 }
 
-/** The text a user copies. */
-export function diagnosticsText(): string {
-  return buildDiagnostics(collectDiagnostics());
+/** The text a user copies. Async only because of the backend probe — the
+ *  collector itself is synchronous, so a caller that cannot await (or does
+ *  not care which server answered) can still call `collectDiagnostics()`. */
+export async function diagnosticsText(): Promise<string> {
+  return buildDiagnostics(collectDiagnostics(await probeBackend()));
 }

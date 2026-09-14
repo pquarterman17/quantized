@@ -145,7 +145,10 @@ export default function ReportPanel() {
     try {
       await reportExport(entry.report, format, entry.name);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "report export failed", "danger");
+      toast(
+        `could not export the report as ${format} — ${e instanceof Error ? e.message : "unknown error"}; nothing was saved`,
+        "danger",
+      );
     } finally {
       setRunningFormat(null);
     }

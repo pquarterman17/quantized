@@ -154,7 +154,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
           // the build over the size ratchet, which is precisely the case
           // check-bundle-size.mjs tells you to solve this way.
           const { diagnosticsText } = await import("../store/diagnostics");
-          const text = diagnosticsText();
+          const text = await diagnosticsText();
           if (await copyText(text)) {
             s().setStatus("diagnostics copied — no dataset names, paths, or values included");
             toast("diagnostics copied to the clipboard", "ok");

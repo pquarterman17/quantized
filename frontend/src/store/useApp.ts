@@ -1709,7 +1709,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
       toast(`merged ${picks.length} datasets`, "ok");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "merge failed";
+      const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`; // P3.4 error audit 2026-09-14: `addDataset` runs after the throwing call, so "nothing was added" holds
       get().setStatus(msg);
       toast(msg, "danger");
     }

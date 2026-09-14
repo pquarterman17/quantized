@@ -1101,4 +1101,24 @@ describe("reimportDataset — source unavailable (PR I requirement 4)", () => {
     expect(useApp.getState().datasets[0].data).toEqual(raw);
     expect(useApp.getState().history).toHaveLength(0);
   });
+
+  // P3.4 error-quality audit (2026-09-14). Re-import exists to OVERWRITE data
+  // the user already has, so "failed" alone leaves the one question that
+  // matters unanswered: is what I had still there? It is — `applyReimportMerge`
+  // is the last statement of the try block, so any throw lands before the
+  // store is touched — and the message now says so.
+  it("a failed re-import says the dataset is unchanged, and it really is", async () => {
+    const { hasDesktopShell } = await import("../lib/desktopBridge");
+    vi.mocked(hasDesktopShell).mockReturnValue(false);
+    vi.mocked(importFile).mockRejectedValue(new Error("unsupported format"));
+
+    useApp.setState({ datasets: [baseDataset()] });
+    await useApp.getState().reimportDataset("d1");
+
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringMatching(/re-import .* failed: unsupported format — the dataset is unchanged/),
+      "danger",
+    );
+    expect(useApp.getState().datasets[0].data).toEqual(raw);
+  });
 });

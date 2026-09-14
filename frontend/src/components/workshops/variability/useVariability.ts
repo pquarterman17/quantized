@@ -232,7 +232,7 @@ export function useVariability(): VariabilityState {
       addReport(title, report, active.id);
       setStatus(`emitted ${title} report`);
     } catch (e) {
-      toast(errMsg(e, "report failed"), "danger");
+      toast(`could not add to report — ${errMsg(e, "unknown error")}`, "danger");
     } finally {
       setReportBusy(false);
     }

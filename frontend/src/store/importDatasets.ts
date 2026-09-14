@@ -448,7 +448,10 @@ async function runImport<T>(
   // caller that has its own `withHistoryBatch` wrapped around this call, per
   // `ImportPathsOptions.presentOutcome`'s own doc.
   if (added > 0 && presentOutcome) await presentBatchOutcome(get, added, createdIds, targetFolderId);
-  if (lastError) toast(`${lastError}${hint}`, "danger");
+  // P3.4 error-quality audit (2026-09-14): the toast carries the "whether data
+  // changed" fact too. The status line said "imported 3/5 — failed …" while the
+  // toast — what actually appears over the stage — named only the broken file.
+  if (lastError) toast(`imported ${added}/${items.length} — failed ${lastError}${hint}`, "danger");
   return createdIds;
 }
 

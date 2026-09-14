@@ -41,6 +41,48 @@ interface ToastsState {
   dismiss: (id: number) => void;
 }
 
+/** P3.4 diagnostics — one content-free mark per notification.
+ *
+ *  WHAT IS DELIBERATELY NOT RECORDED: the message text. "Recent errors" is on
+ *  P3.4's diagnostic-bundle wish list, and the obvious implementation — keep
+ *  the last N `msg` strings — would quietly undo the one promise the bundle
+ *  makes. Toast text in this app routinely embeds exactly what the bundle
+ *  withholds: a dataset name (`re-import "<name>" failed`), a column label
+ *  (`"<label>" isn't categorical`), an absolute source path
+ *  (`source unavailable — "<name>" (<path>)`) and a file basename. A ring of
+ *  those pasted into a public issue is a ring of unpublished sample names.
+ *
+ *  The kind and the time still answer the triage question the bundle is for —
+ *  "were errors firing when this happened, and how recently?" — and cannot
+ *  leak, by construction rather than by review. The text itself stays where
+ *  the user can read it and choose to quote it: the toast and the status line.
+ */
+export interface NotificationMark {
+  kind: ToastKind;
+  /** Epoch ms. Rendered as an age, never as a wall-clock time. */
+  at: number;
+}
+
+/** How many marks to keep. Enough to cover the burst around a failure without
+ *  being an unbounded session-long log. */
+const MARKS_MAX = 50;
+
+// Module-level rather than zustand state on purpose: nothing renders from it
+// (a subscriber would re-render on every toast for no visual reason), and the
+// one consumer — store/diagnostics.ts — reads it imperatively when the user
+// asks for a bundle.
+let marks: NotificationMark[] = [];
+
+/** Oldest-first, capped at `MARKS_MAX`. */
+export function recentNotificationMarks(): readonly NotificationMark[] {
+  return marks;
+}
+
+/** Test seam — the ring is module state, so it outlives a store reset. */
+export function resetNotificationMarks(): void {
+  marks = [];
+}
+
 // Monotonic id (no Date.now/Math.random → deterministic in tests).
 let seq = 0;
 /** How long a toast lingers before auto-dismiss. */
@@ -55,6 +97,7 @@ export const useToasts = create<ToastsState>((set, get) => ({
   toasts: [],
   push: (msg, kind = "info", opts) => {
     const id = ++seq;
+    marks = [...marks, { kind, at: Date.now() }].slice(-MARKS_MAX);
     set((s) => ({
       toasts: [...s.toasts, { id, msg, kind, action: opts?.action }].slice(-MAX),
     }));

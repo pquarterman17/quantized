@@ -4090,8 +4090,116 @@ Original acceptance criteria (unchanged):
   plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
   is NOT on this list: it carries its own explicit `.catch` with a
   fire-and-forget rationale, so its failure is a deliberate silent no-op.)
-- [ ] Errors say what failed, whether data changed, and next action.
-- [ ] Copyable diagnostic bundle excludes raw/private data by default.
+- [~] Errors say what failed, whether data changed, and next action.
+  **Audited 2026-09-14** — the whole user-facing failure surface, not a sample.
+  Measured by `grep` over `frontend/src` excluding tests: **132** single-line
+  `toast(…, "danger")` call sites (plus two whose kind is conditional —
+  `components/Library/folderOps.ts:187`, `components/workshops/pipeline/
+  useTemplates.ts:157`), and **83** failure `setStatus(` sites, of which 34 sit
+  beside a toast built from the same `msg` variable (this codebase's
+  established shape — one message, one status line, one toast; see
+  `store/workbookTransfer.ts`'s `fail()`) and **49** are status-line-only.
+
+  Rubric, because "all three facts in every message" would be noise in most of
+  them:
+  - **(a) what failed** — the message names the OPERATION, not only the
+    underlying error. A bare `e.message` FAILS this: `lib/api/http.ts`'s
+    `ensureOk` throws the backend's `detail` or, failing that, the status line,
+    and `fetch` itself throws `TypeError: Failed to fetch` — so the user can be
+    shown "500 Internal Server Error" with no hint of what they had clicked.
+  - **(b) whether data changed** — required EXPLICITLY where the operation's
+    target is data or a file the user ALREADY HAS (save over a project,
+    re-import over a dataset, a batch that is part-way through), i.e. where
+    "did I just lose or half-change what I had?" is the question the message
+    leaves open. Satisfied structurally, and not demanded in the text, for a
+    precondition refusal (nothing was attempted) or an operation that can only
+    add (a failed merge creates nothing) or only read (export, copy, report,
+    preview). One sharper line inside the save flow: only the path where the
+    write was actually ATTEMPTED (`store/workspaceIO.ts:444`) leaves the
+    "is my existing file damaged?" question open; the gates that refuse before
+    the write — `:77/:95` (books still loading), `:212/:241/:257/:297`
+    (backend refusal), `:368/:381` (read-only / offline), `:429/:440` (lock
+    lost) — answer it by saying the save was refused.
+  - **(c) next action** — required where the user can do something. Recorded
+    EXCEPTION class: a transient backend or chunk-load failure whose only
+    remedy is retry, raised from a control still on screen — the affordance IS
+    the next action, and "try again" appended to forty messages is noise
+    rather than guidance.
+
+  Every site was classified against that rubric. The ones that FAILED are
+  listed below; the rest pass through its structural clauses — refusals that
+  are themselves the instruction ("select at least 2 datasets first", "Find
+  (or fit) peaks before labeling.", `store/figureLifecycle.ts`'s "publication
+  figure was not found; no editable copy created"), and read-only failures
+  that name the operation ("export page failed: …", "clipboard image
+  unavailable — use Save as PNG or Export figure"). Two sites already carried
+  all three facts and were used as the model for the fixes:
+  `store/reimportAllRun.ts:410` ("reimport all: N problems — nothing changed")
+  and `components/Stage/worksheet/useWorksheetBlockOps.ts:165` ("clipboard
+  unavailable — nothing was cut").
+
+  FIXED this pass — message text only; no flow, no control flow, no new state.
+  Each says a fact the code already guaranteed and simply did not voice:
+
+  | Site | Missing | Now says / test |
+  |---|---|---|
+  | `store/importDatasets.ts:451` | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
+  | `store/workspaceIO.ts:444` | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
+  | `store/reimport.ts:326` | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the LAST statement of the `try`, so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
+  | `store/useApp.ts:1712` | (a), (b) | `could not merge the selected datasets: <why> — nothing was added` (was a bare `e.message`). `addDataset` runs after the throwing call. |
+  | `store/dataIntake.ts:174` | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
+  | 9 × "Add to report" — `components/Stage/useGadgetChip.ts`, `components/workshops/{variability,peaks/PeaksPanel,curvefit,tabulate,peakwizard,statschooser,fityx,distribution}` | (a) | `could not add to report — <why>` (all nine were a bare `e.message`, so an HTTP failure reported itself without ever mentioning reports). |
+  | `components/workshops/report/ReportPanel.tsx:148` | (a), (b) | `could not export the report as <format> — <why>; nothing was saved`. |
+
+  REMAINING — not reachable by a message edit, so this box stays open:
+  - `components/workshops/roicuts/useRoiBatch.ts:265` — "batch failed: …" is
+    the OUTER catch of a loop that has already landed `newIds` datasets. It can
+    honestly claim neither "nothing changed" nor a count without the flow
+    handing it the partial outcome.
+  - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
+    raised from inside `withHistoryBatch`, where some annotations may already
+    have been added; same shape, same reason it is not a rename.
+  - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
+    "recalculation failed" say nothing about which worksheets took the new
+    values and which kept the old ones.
+  All three need the operation to report its own partial outcome — a flow
+  change, and the shape `store/reimportAllRun.ts:410` already has.
+- [x] Copyable diagnostic bundle excludes raw/private data by default.
+  **Verified shipped 2026-09-14** (it landed with #267/#268 and their
+  follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
+  → `commands/uiCommands.ts` → `store/diagnostics.ts` (the impure collector,
+  dynamically imported so none of it is on the eager path) → `lib/diagnostics.ts`
+  (a pure renderer over an explicit `DiagnosticsSnapshot`). The exclusion is
+  STRUCTURAL rather than filtered: a field absent from that type cannot be
+  collected, and `lib/storageKeys.ts` plus the storage-key ratchet in
+  `architecture.test.ts` stop even a `localStorage` KEY name from becoming a
+  back door. Tests: `store/diagnostics.test.ts` › "omits the dataset name,
+  column label, path and both kinds of cell value" — a real store holding a
+  distinctive numeric value, a distinctive TEXT cell, a collaborator's compound
+  as a column label and an absolute source path, none of which (nor the
+  directory part, nor the basename) reaches the output — with "still describes
+  THAT dataset by shape, so the exclusion test is not vacuous" as its
+  non-vacuity companion; `components/Shell/copyDiagnosticsMenu.test.tsx`
+  asserts both properties of the bytes that actually reach the clipboard when
+  the REAL Help menu item is clicked (neither pure-module test would catch a
+  command wired to `JSON.stringify(useApp.getState())`); `lib/diagnostics.test.ts`
+  holds the renderer's own redaction and usefulness cases.
+  EXTENDED the same day, since a bundle that cannot say what state the session
+  was in is half a bug report: the backend identity from `/api/health`
+  (`{app, version}` — the launcher's existing handshake route, so no new
+  endpoint; "unreachable" when nothing answers, which is itself an answer), and
+  a Session-health section — autosave ok/FAILING, generations kept,
+  last-autosave age, whether a recovery prompt is open, operations in flight,
+  and notification counts with the age of the last error.
+  DELIBERATE DEVIATION, recorded because it is the interesting half: the last N
+  toast/status MESSAGES are NOT included, and neither is the autosave failure
+  reason. Message text in this app IS project content — the audit table above
+  is the evidence, message after message embedding a dataset name, a column
+  label or an absolute source path. `store/toasts.ts` therefore keeps a
+  content-free ring of `{kind, at}` marks, which answers the triage question
+  ("were errors firing, and how recently?") and cannot leak by construction
+  rather than by review. The wording stays on screen, where the user can read
+  it and quote it deliberately.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
   write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
   (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"

@@ -2097,7 +2097,12 @@ describe("useApp pasteDataFromClipboard (gap #47 — structured clipboard paste)
     await useApp.getState().pasteDataFromClipboard();
 
     expect(useApp.getState().datasets).toHaveLength(before);
-    expect(useApp.getState().status).toBe("no data rows found");
+    // The backend's own reason survives verbatim; the P3.4 error-quality audit
+    // (2026-09-14) wrapped it so the message also names the operation and says
+    // nothing was added — the fact this test's own `toHaveLength` checks.
+    expect(useApp.getState().status).toContain("no data rows found");
+    expect(useApp.getState().status).toMatch(/pasted text/i);
+    expect(useApp.getState().status).toMatch(/nothing was added/i);
   });
 });
 

@@ -6,7 +6,7 @@
 // the degraded environment: an insecure context, a browser without the async
 // clipboard, a stale chunk after a deploy.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildAppActions } from "../appCommands";
 import { useApp } from "../store/useApp";
@@ -26,6 +26,13 @@ function copyDiagnostics() {
 beforeEach(() => {
   vi.clearAllMocks();
   useApp.setState({ datasets: [], folders: [], workbooks: [], status: "" });
+  // The bundle probes `/api/health` for the backend version. Stub it so no
+  // test here depends on what happens to be listening on the test machine.
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no backend in tests")));
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe("copy diagnostics — failure paths", () => {

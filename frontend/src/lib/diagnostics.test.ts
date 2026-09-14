@@ -55,6 +55,15 @@ const SNAP: DiagnosticsSnapshot = {
     { key: "qz.prefs", bytes: 512 },
   ],
   otherStorage: { slots: 0, bytes: 0 },
+  backend: { reachable: true, app: "quantized", version: "0.23.2" },
+  session: {
+    lastAutosaveAgeSec: 12,
+    autosaveFailing: false,
+    autosaveGenerations: 3,
+    recoveryPromptOpen: false,
+    pendingOps: 1,
+    notifications: { total: 9, errors: 2, lastErrorAgeSec: 41 },
+  },
 };
 
 describe("diagnostics bundle — redaction", () => {
@@ -138,6 +147,41 @@ describe("diagnostics bundle — usefulness", () => {
       otherStorage: { slots: 3, bytes: 8192 },
     });
     expect(withOther).toContain("3 slots, 8192 bytes");
+  });
+
+  it("names the backend that answered, so a version mismatch is visible", () => {
+    // A desktop launch pairs a bundled SPA with a bundled backend; when the
+    // two disagree the symptom ("the button does nothing") names neither.
+    expect(text).toMatch(/backend\s+quantized 0\.23\.2/);
+  });
+
+  it("says so plainly when no backend answered", () => {
+    const offline = buildDiagnostics({ ...SNAP, backend: { reachable: false, app: null, version: null } });
+    expect(offline).toMatch(/backend\s+unreachable/);
+    // Never "null"/"undefined" dressed up as a version.
+    expect(offline).not.toContain("null");
+  });
+
+  it("reports session health as states, counts and ages", () => {
+    expect(text).toMatch(/autosave\s+ok/);
+    expect(text).toMatch(/last autosave\s+12 s ago/);
+    expect(text).toMatch(/generations kept\s+3/);
+    expect(text).toMatch(/operations in flight\s+1/);
+    expect(text).toMatch(/notifications\s+9/);
+    expect(text).toMatch(/of those, errors\s+2/);
+    expect(text).toMatch(/last error\s+41 s ago/);
+  });
+
+  it("shouts when autosave is failing, since that changes how a report reads", () => {
+    const failing = buildDiagnostics({
+      ...SNAP,
+      session: { ...SNAP.session, autosaveFailing: true, lastAutosaveAgeSec: null },
+    });
+    expect(failing).toMatch(/autosave\s+FAILING/);
+    // "never" rather than an age nobody can interpret, and no NaN from the
+    // arithmetic that would otherwise run on a null.
+    expect(failing).toMatch(/last autosave\s+never/);
+    expect(failing).not.toContain("NaN");
   });
 
   it("is stable and copy-pasteable plain text", () => {

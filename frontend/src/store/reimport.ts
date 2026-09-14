@@ -322,8 +322,15 @@ async function runReimport(
     toast(`re-imported "${ds.name}"`, "ok");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "error";
+    // P3.4 error-quality audit (2026-09-14): "the dataset is unchanged" is
+    // literally true here — `applyReimportMerge` is the LAST statement in the
+    // try above, so any throw (fetch, resolve, or merge) happens before the
+    // store is touched. Saying it matters more for re-import than for most
+    // failures: the operation's whole purpose is to overwrite data the user
+    // already has, so "failed" alone leaves them unsure whether they still
+    // have it.
     get().setStatus(`re-import failed: ${msg}`);
-    toast(`re-import "${ds.name}" failed: ${msg}`, "danger");
+    toast(`re-import "${ds.name}" failed: ${msg} — the dataset is unchanged`, "danger");
   }
 }
 
