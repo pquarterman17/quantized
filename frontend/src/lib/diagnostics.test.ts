@@ -155,6 +155,29 @@ describe("diagnostics bundle — usefulness", () => {
     expect(text).toMatch(/backend\s+quantized 0\.23\.2/);
   });
 
+  it("strips control characters from the echoed backend identity (P3.4 review round, nit 7)", () => {
+    // `app`/`version` are server-generated constants for the real backend,
+    // but the fetch is same-origin-relative — whatever process answers
+    // /api/health controls these two strings. Pasted verbatim with no clamp,
+    // a value containing a newline could break this report's column layout
+    // or forge a section heading; this asserts it cannot.
+    const hostile = buildDiagnostics({
+      ...SNAP,
+      backend: { reachable: true, app: "quantized\n## Session health", version: "1\t0\r0" },
+    });
+    // The injected control characters became single spaces — the "backend"
+    // row stays exactly one line, and no raw tab or carriage return survives
+    // anywhere in the report.
+    expect(hostile).toMatch(/^backend\s+quantized ## Session health 1 0 0$/m);
+    expect(hostile).not.toContain("\t");
+    expect(hostile).not.toContain("\r");
+    // Same total line count as the well-behaved baseline report: an
+    // unsanitized embedded "\n" would have split the backend row into an
+    // EXTRA line, growing the count and letting the injected text land at
+    // the start of its own line rather than inside the "backend" value.
+    expect(hostile.split("\n")).toHaveLength(text.split("\n").length);
+  });
+
   it("says so plainly when no backend answered", () => {
     const offline = buildDiagnostics({ ...SNAP, backend: { reachable: false, app: null, version: null } });
     expect(offline).toMatch(/backend\s+unreachable/);

@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { TOAST_ACTION_TTL, TOAST_TTL, notifyMigrationWarnings, toast, useToasts } from "./toasts";
+import {
+  TOAST_ACTION_TTL,
+  TOAST_TTL,
+  notificationCounts,
+  notifyMigrationWarnings,
+  resetNotificationCountsForTests,
+  toast,
+  useToasts,
+} from "./toasts";
 
 describe("toasts store", () => {
   beforeEach(() => {
@@ -125,5 +133,46 @@ describe("notifyMigrationWarnings (BUG-010 review F6/F7)", () => {
     expect(useToasts.getState().toasts).toHaveLength(1); // outlives the default TTL
     vi.advanceTimersByTime(TOAST_ACTION_TTL - TOAST_TTL);
     expect(useToasts.getState().toasts).toHaveLength(0); // gone once TOAST_ACTION_TTL elapses
+  });
+});
+
+// P3.4 review round (2026-09-14, finding 1): notificationCounts() used to be
+// DERIVED from a bounded {kind, at}[] ring (MARKS_MAX = 50) — a burst of
+// "ok"/"info" toasts could evict an earlier "danger" one out of the window,
+// so "errors" and "lastErrorAt" would silently go back to zero/null even
+// though an error really had fired. These are now monotonic counters,
+// incremented once per push and never trimmed, so neither figure can be
+// evicted by later, unrelated traffic.
+describe("notificationCounts (P3.4 diagnostics, monotonic counters)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    useToasts.setState({ toasts: [] });
+    resetNotificationCountsForTests();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("a danger toast survives 50 later ok toasts — still reports 1 error and a real last-error age", () => {
+    toast("the thing that broke", "danger");
+    vi.advanceTimersByTime(5000);
+    for (let i = 0; i < 50; i++) toast(`ok ${i}`, "ok");
+    const { totalCount, errorCount, lastErrorAt } = notificationCounts();
+    expect(totalCount).toBe(51);
+    expect(errorCount).toBe(1);
+    expect(lastErrorAt).not.toBeNull();
+    // The danger toast fired 5 s before the last read — a ring that evicted
+    // it would report `null` here (renders "last error never" in the bundle)
+    // instead of a real, non-zero age.
+    expect(Date.now() - (lastErrorAt as number)).toBeGreaterThanOrEqual(5000);
+  });
+
+  it("500 pushes report a total of 500, not a windowed sample of 50", () => {
+    for (let i = 0; i < 500; i++) toast(`t${i}`, "info");
+    expect(notificationCounts().totalCount).toBe(500);
+  });
+
+  it("resetNotificationCountsForTests clears all three fields", () => {
+    toast("x", "danger");
+    resetNotificationCountsForTests();
+    expect(notificationCounts()).toEqual({ totalCount: 0, errorCount: 0, lastErrorAt: null });
   });
 });

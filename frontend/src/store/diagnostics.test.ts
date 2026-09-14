@@ -9,14 +9,15 @@
 // label, an absolute project path, real measurements — and asserts none of it
 // reaches the text a user copies.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { DataStruct, Dataset } from "../lib/types";
 import { useAutosaveStatus } from "./autosaveStatus";
+import { recordBackendHealth, resetBackendHealthForTests } from "./backendHealth";
 import { collectDiagnostics, diagnosticsText } from "./diagnostics";
 import { beginOp, endOp } from "./pendingOps";
 import { useRecoveryChoice, type RecoveryPrompt } from "./recoveryChoice";
-import { resetNotificationMarks, toast } from "./toasts";
+import { resetNotificationCountsForTests, toast } from "./toasts";
 import { useApp } from "./useApp";
 
 const SECRET_NAME = "UNPUBLISHED-LaSrMnO3-batch7";
@@ -35,22 +36,19 @@ const data: DataStruct = {
   metadata: { sourcePath: SECRET_PATH },
 };
 
-/** No test in this file should reach the network: the collector probes
- *  `/api/health` for the backend version, and an unmocked fetch would make
- *  the result depend on whatever is listening on the test machine. */
+/** No test in this file should reach the network: the collector no longer
+ *  probes `/api/health` itself (P3.4 review round, 2026-09-14) — it reads
+ *  `store/backendHealth.ts`'s cached value, which App.tsx's startup effect
+ *  would normally populate. Tests that care about the backend field call
+ *  `recordBackendHealth` directly, the same way App.tsx would after its
+ *  probe settles. */
 beforeEach(() => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ status: "ok", app: "quantized", version: "9.9.9-test" }),
-    }),
-  );
+  resetBackendHealthForTests();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
-  resetNotificationMarks();
+  resetNotificationCountsForTests();
+  resetBackendHealthForTests();
   useAutosaveStatus.setState({ health: { savedAt: null, error: null, count: 0 } });
   useRecoveryChoice.setState({ pending: null });
 });
@@ -85,7 +83,7 @@ beforeEach(() => {
 
 describe("collected diagnostics never carry project content", () => {
   it("omits the dataset name, column label, path and both kinds of cell value", async () => {
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).not.toContain(SECRET_NAME);
     expect(text).not.toContain(SECRET_LABEL);
     expect(text).not.toContain(SECRET_PATH);
@@ -105,14 +103,14 @@ describe("collected diagnostics never carry project content", () => {
     // emitted nothing at all would pass every one of them. The same text that
     // is asserted to contain none of the secrets must be asserted to contain
     // what was DERIVED from the very dataset holding them.
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).toContain("3 rows × 2 columns");
     expect(text).toMatch(/datasets\s+1/);
     expect(text).toMatch(/with formulas\s+1/);
   });
 
   it("names a stored slot but never its contents", async () => {
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).toContain("qz.prefs");
     expect(text).not.toContain("embargoed");
   });
@@ -121,7 +119,7 @@ describe("collected diagnostics never carry project content", () => {
     // The namespace prefix is not a safety property: a composed key makes the
     // KEY itself project content. Before the allowlist this section printed
     // every `qz.` key verbatim, so this exact string reached the bundle.
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).not.toContain(SECRET_NAME);
     expect(text).not.toContain("qz.figure.");
   });
@@ -142,7 +140,7 @@ describe("collected diagnostics never carry project content", () => {
     // what an unwired global would produce.
     expect(snap.build.version).toBeTruthy();
     expect(snap.build.sha).toBeTruthy();
-    expect(await diagnosticsText()).not.toContain("undefined");
+    expect(diagnosticsText()).not.toContain("undefined");
   });
 
   it("still reports the shape that makes a bug report useful", () => {
@@ -162,7 +160,7 @@ describe("collected diagnostics never carry project content", () => {
     const snap = collectDiagnostics();
     expect(snap.workspace.largestDatasetRows).toBe(0);
     expect(snap.workspace.largestDatasetColumns).toBe(0);
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).not.toContain("Infinity");
     expect(text).not.toContain("NaN");
   });
@@ -175,7 +173,7 @@ describe("session health reaches the bundle as state, never as message text", ()
     // along: every one of these messages embeds project content.
     toast(`re-import "${SECRET_NAME}" failed: ${SECRET_PATH}`, "danger");
     toast("saved", "ok");
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).toMatch(/notifications\s+2/);
     expect(text).toMatch(/of those, errors\s+1/);
     expect(text).toMatch(/last error\s+\d+ s ago/);
@@ -190,7 +188,7 @@ describe("session health reaches the bundle as state, never as message text", ()
     useAutosaveStatus.setState({
       health: { savedAt: null, error: `quota exceeded writing ${SECRET_PATH}`, count: 2 },
     });
-    const text = await diagnosticsText();
+    const text = diagnosticsText();
     expect(text).toMatch(/autosave\s+FAILING/);
     expect(text).toMatch(/generations kept\s+2/);
     expect(text).not.toContain(SECRET_PATH);
@@ -203,7 +201,7 @@ describe("session health reaches the bundle as state, never as message text", ()
     // the reason only the count crosses over.
     const op = beginOp(`Importing 1/1: ${SECRET_PATH}…`);
     try {
-      const text = await diagnosticsText();
+      const text = diagnosticsText();
       expect(text).toMatch(/recovery prompt open\s+yes/);
       expect(text).toMatch(/operations in flight\s+1/);
       expect(text).not.toContain(SECRET_PATH);
@@ -212,13 +210,18 @@ describe("session health reaches the bundle as state, never as message text", ()
     }
   });
 
-  it("names the backend that answered the health probe", async () => {
-    expect(await diagnosticsText()).toMatch(/backend\s+quantized 9\.9\.9-test/);
+  it("names the backend the app's own startup probe found", () => {
+    // App.tsx calls lib/api.ts's health() once at mount and hands the result
+    // to recordBackendHealth; this simulates that settling before the click.
+    recordBackendHealth({ reachable: true, app: "quantized", version: "9.9.9-test" });
+    expect(diagnosticsText()).toMatch(/backend\s+quantized 9\.9\.9-test/);
   });
 
-  it("says 'unreachable' rather than failing when no backend answers", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
-    const text = await diagnosticsText();
+  it("says 'unreachable' when the startup probe failed or has not answered yet", () => {
+    // resetBackendHealthForTests() in beforeEach already leaves this at its
+    // default — the same state as a fresh session before App.tsx's health()
+    // has settled, or after it rejected. No network access happens here.
+    const text = diagnosticsText();
     expect(text).toMatch(/backend\s+unreachable/);
     // The rest of the report must still be there — an offline backend is a
     // thing to REPORT, not a reason to have no report.

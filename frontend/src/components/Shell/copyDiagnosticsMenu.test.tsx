@@ -45,10 +45,11 @@ function copied(): string {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(copyText).mockResolvedValue(true);
-  // No network from a unit test: the bundle probes /api/health for the
-  // backend version, and an unstubbed fetch would make this depend on
-  // whatever is listening on the machine running it.
-  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no backend in tests")));
+  // P3.4 review round (2026-09-14): the command no longer probes /api/health
+  // itself — it reads store/backendHealth.ts's cached value synchronously,
+  // and this test never mounts App.tsx (only MenuBar), so that cache stays
+  // at its default "unreachable" throughout. No fetch stub is needed; none
+  // of these assertions depend on the backend field.
   useApp.setState({
     datasets: [{ id: "d1", name: SECRET_NAME, data, sourcePath: SECRET_PATH } as Dataset],
     activeId: "d1",
@@ -98,5 +99,22 @@ describe("Help ▸ Copy diagnostics", () => {
     const text = copied();
     expect(text).toContain("3 rows × 2 columns");
     expect(text).toMatch(/datasets\s+1/);
+  });
+
+  it("completes the clipboard write without awaiting any network call (P3.4 review round F3)", async () => {
+    // A `fetch` that never resolves stands in for a hung/slow backend — the
+    // same shape App.tsx's own startup `health()` probe would take if the
+    // server never answered. Before this fix, the command awaited a fresh
+    // `/api/health` probe (up to 1.5 s) on every click; that awaited fetch
+    // sat directly between the click and `navigator.clipboard.writeText`,
+    // which can drop the transient user-activation the Clipboard API
+    // requires (see store/backendHealth.ts's header). The command now reads
+    // a cached value synchronously and never calls `fetch` at all, so a
+    // hung `fetch` must not be able to stall it.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    await clickCopyDiagnostics();
+    const text = copied();
+    expect(text).toContain("# Quantized diagnostics");
+    expect(text).toMatch(/backend\s+unreachable/);
   });
 });

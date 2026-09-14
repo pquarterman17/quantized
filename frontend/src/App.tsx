@@ -20,6 +20,7 @@ import {
   saveLibraryViewMode,
   type LibraryViewMode,
 } from "./lib/libraryViewPrefs";
+import { BACKEND_UNREACHABLE, recordBackendHealth } from "./store/backendHealth";
 import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
@@ -61,9 +62,18 @@ export default function App() {
   };
 
   useEffect(() => {
+    // P3.4 review round (2026-09-14): also cache the identity for
+    // `store/backendHealth.ts` — the diagnostics bundle reads it back
+    // synchronously at click time instead of re-probing `/api/health` itself.
     health()
-      .then(() => setStatus("backend ready"))
-      .catch(() => setStatus("offline — demo mode"));
+      .then((info) => {
+        recordBackendHealth({ reachable: true, app: info.app ?? null, version: info.version ?? null });
+        setStatus("backend ready");
+      })
+      .catch(() => {
+        recordBackendHealth(BACKEND_UNREACHABLE);
+        setStatus("offline — demo mode");
+      });
   }, [setStatus]);
 
   // P1.3 wave 3, Lane D: load the GLOBAL-scope Plot Recipe cache once at

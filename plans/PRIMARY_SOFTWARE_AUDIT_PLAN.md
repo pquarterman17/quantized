@@ -4091,14 +4091,35 @@ Original acceptance criteria (unchanged):
   is NOT on this list: it carries its own explicit `.catch` with a
   fire-and-forget rationale, so its failure is a deliberate silent no-op.)
 - [~] Errors say what failed, whether data changed, and next action.
-  **Audited 2026-09-14** — the whole user-facing failure surface, not a sample.
-  Measured by `grep` over `frontend/src` excluding tests: **132** single-line
-  `toast(…, "danger")` call sites (plus two whose kind is conditional —
-  `components/Library/folderOps.ts:187`, `components/workshops/pipeline/
-  useTemplates.ts:157`), and **83** failure `setStatus(` sites, of which 34 sit
-  beside a toast built from the same `msg` variable (this codebase's
-  established shape — one message, one status line, one toast; see
-  `store/workbookTransfer.ts`'s `fail()`) and **49** are status-line-only.
+  **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
+  intended as the whole user-facing failure surface, not a sample; the first
+  pass fell short of that by construction (below), fixed in this pass.
+  A single-line `grep` over `frontend/src` excluding tests found **132**
+  `toast(…, "danger")` call sites. That grep structurally cannot see a call
+  wrapped across lines — and this pass's own `ReportPanel.tsx` fix (below) is
+  exactly that shape — so it is not "the whole surface" on its own. A
+  brace-matched scan (walks `toast(` to its matching close-paren; written for
+  this pass, kept under the scratchpad rather than the repo) found **7** more,
+  for **139** total. Two of the seven have a conditional kind
+  (`components/Library/folderOps.ts:183`, `components/workshops/pipeline/
+  useTemplates.ts:153`); the other five were unlisted before this pass —
+  `store/figureLifecycle.ts:289`, `store/dataIntake.ts:101`,
+  `lib/plotSelectedTogether.ts:57`, `commands/projectLockCommands.ts:40`, and
+  `components/workshops/report/ReportPanel.tsx:148` (this pass's own fix,
+  listed in the FIXED table below) — with rubric verdicts for the first four
+  added below.
+
+  Separately, **263** total `setStatus(` sites. **83** ("of which 34 sit
+  beside a toast built from the same `msg` variable — this codebase's
+  established shape, one message/one status line/one toast, see
+  `store/workbookTransfer.ts`'s `fail()` — and 49 status-line-only") is a
+  CLASSIFICATION against the rubric below, not a grep figure — the previous
+  wording of this box implied it had the same "measured by grep" provenance
+  as the 132/139, which is not reproducible with one grep. The reproducible
+  grep bounds it is built from: **60** `setStatus(` sites whose own line
+  carries failure wording (`fail|error|could not|unable|refus|cannot|
+  unavailable|invalid|nothing`, case-insensitive) and **26** inside a
+  brace-matched `catch` block.
 
   Rubric, because "all three facts in every message" would be noise in most of
   them:
@@ -4138,16 +4159,39 @@ Original acceptance criteria (unchanged):
   and `components/Stage/worksheet/useWorksheetBlockOps.ts:165` ("clipboard
   unavailable — nothing was cut").
 
+  Four more, brought in by the brace-matched re-scan above (multi-line, so the
+  original single-line grep missed them) — all PASS, added here rather than
+  to the FIXED table:
+  - `store/figureLifecycle.ts:289` — "the plot changed while previewing —
+    Cancel and reopen Publication Preview to pick up the changes." Names the
+    state (the preview target changed) and the recovery (Cancel + reopen);
+    the session's draft is untouched, satisfying (b) structurally the same
+    way a precondition refusal does.
+  - `lib/plotSelectedTogether.ts:57` — "need at least N plottable datasets to
+    overlay…". A precondition refusal (nothing was attempted) that is itself
+    the instruction, same class as "select at least 2 datasets first".
+  - `commands/projectLockCommands.ts:40` — "Take Over Editing is not
+    available — the other instance is still responding" / "nothing to take
+    over — this project is not locked by another instance". Both branches are
+    precondition refusals naming the reason; nothing is attempted either way.
+  - `store/dataIntake.ts:101` — "couldn't load full data for "<name>" —
+    <why>". Names the operation (loading that dataset's full data); falls
+    under the recorded retry exception for (c) since `ensureBookData` is
+    re-triggered the next time the pending dataset is touched. NOTE: this
+    site's message embeds the dataset NAME — evidence for, not against, the
+    toast-ring redaction rationale in the diagnostics-bundle box below,
+    which is exactly why that ring never recorded message text.
+
   FIXED this pass — message text only; no flow, no control flow, no new state.
   Each says a fact the code already guaranteed and simply did not voice:
 
   | Site | Missing | Now says / test |
   |---|---|---|
-  | `store/importDatasets.ts:451` | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
-  | `store/workspaceIO.ts:444` | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
-  | `store/reimport.ts:326` | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the LAST statement of the `try`, so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
+  | `store/importDatasets.ts:456` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
+  | `store/workspaceIO.ts:451-452` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
+  | `store/reimport.ts:335` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the last STORE-MUTATING statement of the `try` (the comment originally said "the LAST statement", which is wrong — a `setStatus`/`toast` follow it; neither touches the store), so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
   | `store/useApp.ts:1712` | (a), (b) | `could not merge the selected datasets: <why> — nothing was added` (was a bare `e.message`). `addDataset` runs after the throwing call. |
-  | `store/dataIntake.ts:174` | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
+  | `store/dataIntake.ts:175-177` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
   | 9 × "Add to report" — `components/Stage/useGadgetChip.ts`, `components/workshops/{variability,peaks/PeaksPanel,curvefit,tabulate,peakwizard,statschooser,fityx,distribution}` | (a) | `could not add to report — <why>` (all nine were a bare `e.message`, so an HTTP failure reported itself without ever mentioning reports). |
   | `components/workshops/report/ReportPanel.tsx:148` | (a), (b) | `could not export the report as <format> — <why>; nothing was saved`. |
 
@@ -4195,11 +4239,114 @@ Original acceptance criteria (unchanged):
   toast/status MESSAGES are NOT included, and neither is the autosave failure
   reason. Message text in this app IS project content — the audit table above
   is the evidence, message after message embedding a dataset name, a column
-  label or an absolute source path. `store/toasts.ts` therefore keeps a
-  content-free ring of `{kind, at}` marks, which answers the triage question
-  ("were errors firing, and how recently?") and cannot leak by construction
-  rather than by review. The wording stays on screen, where the user can read
-  it and quote it deliberately.
+  label or an absolute source path. `store/toasts.ts` therefore keeps three
+  content-free, monotonic counters (`totalCount`/`errorCount`/`lastErrorAt`,
+  corrected from a bounded `{kind, at}` ring in the 2026-09-14 review round
+  below — a ring is a window, not a total, and could under-report both), which
+  answer the triage question ("were errors firing, and how recently?") and
+  cannot leak by construction rather than by review. The wording stays on
+  screen, where the user can read it and quote it deliberately.
+
+  **Review round, 2026-09-14** (a later pass over the same-day P3.4
+  diagnostics-bundle commit): adversarial review found 2 CONFIRMED issues, 1
+  PLAUSIBLE, and 8 nits, all fixed in one follow-up commit. Findings and
+  fixes:
+  1. **CONFIRMED — the notification ring could under-report both counts.**
+     `store/toasts.ts`'s old `{kind, at}[]` ring evicted past `MARKS_MAX = 50`
+     entries; a `"danger"` push followed by 50 later `"ok"`/`"info"` pushes
+     evicted it, so `errors`/`lastErrorAgeSec` read `0`/`never` even though an
+     error really had fired, and a 500-push burst reported `total 50` with no
+     way to tell "exactly 50" from "500, 449 evicted". Fixed: `totalCount`,
+     `errorCount`, `lastErrorAt` are monotonic scalars incremented once per
+     `push` and never trimmed; the ring is gone (nothing else read it).
+     `lib/diagnostics.ts`'s doc updated to match (the `NotificationMark`
+     reference no longer exists).
+  2. **CONFIRMED — the danger-toast census was grep-shaped and missed 5
+     multi-line sites (139 real total, not 132).** A single-line `grep` for
+     `toast(…, "danger")` cannot see a call wrapped across lines, and this
+     same commit's own `ReportPanel.tsx` fix was exactly that shape. A
+     brace-matched scan (kept under the scratchpad, not the repo) found 132
+     single-line + 7 multi-line = 139 sites; 2 of the 7 were already noted
+     (conditional kind); the other 5 — `store/figureLifecycle.ts:289`,
+     `store/dataIntake.ts:101`, `lib/plotSelectedTogether.ts:57`,
+     `commands/projectLockCommands.ts:40`, and this commit's own
+     `ReportPanel.tsx:148` — are now in the audit table above with rubric
+     verdicts (all PASS). The "83 failure `setStatus(` sites" figure was also
+     presented as "measured by grep" when it is a classification; the box
+     above now says so and gives the reproducible grep bounds (263 total / 60
+     failure-worded / 26 in catch blocks).
+  3. **PLAUSIBLE — an awaited network probe sat between the click and the
+     clipboard write.** `diagnosticsText()` used to `await probeBackend()` (a
+     fresh `/api/health` fetch, up to 1.5 s) on every "Copy diagnostics"
+     click — the same hazard `lib/clipboard.ts` already documents for the
+     PNG-copy path (an awaited round-trip can drop the transient
+     user-activation `navigator.clipboard.writeText` requires), and one that
+     degrades exactly when the backend is slow or hung, i.e. the situation
+     this bundle exists to report. Fixed: `App.tsx`'s existing startup
+     `health()` call now also records the result into a new, deliberately
+     tiny `store/backendHealth.ts` module (kept separate from
+     `store/diagnostics.ts` so `App.tsx` does not drag that whole
+     dynamically-imported chunk into the eager bundle); `collectDiagnostics`/
+     `diagnosticsText` read it back synchronously and `probeBackend` plus its
+     1.5 s timeout are deleted outright — no sync fallback needed one, since
+     the startup probe already runs before any click is possible. `lib/api.ts`'s
+     `health()` return type widened from `{status}` to `{status, app?,
+     version?}` so `App.tsx` has the data to record.
+  4. NITs fixed: control characters stripped/length-clamped from the echoed
+     backend `app`/`version` (`lib/diagnostics.ts`'s new `sanitizeServerString`
+     — these are server-generated but same-origin-relative, and the sibling
+     `fermiviewer` answers the same shape on the same default port);
+     `store/reimport.ts`'s comment corrected from "the LAST statement" to "the
+     last STORE-MUTATING statement" (a `setStatus`/`toast` actually follow it);
+     `resetNotificationMarks` renamed `resetNotificationCountsForTests` to
+     match the repo's `…ForTests` convention (`store/windowHydration.ts`,
+     `store/packProject.ts`, `store/originApplyLibs.ts`); `store/importDatasets.ts`'s
+     danger toast now reuses `summary` instead of re-interpolating the same
+     string; the four fix-table line refs that had drifted onto comments were
+     re-pointed at the actual message/toast lines (all four; `useApp.ts`,
+     `ReportPanel.tsx` and the three REMAINING refs already landed exactly,
+     confirmed unchanged). Not fixed, with reasons: the `age()`/`takenAt`
+     privacy-vs-readability wording (kept `takenAt` at full precision — several
+     tests pin the literal ISO string, and reducing it would be a real behavior
+     change, not a nit — so the comment was reworded to drop the privacy claim
+     instead); `probeBackend`'s missing `AbortController`/`clearTimeout` is
+     moot, since finding 3 deletes the function entirely; a BUG-009-style reset
+     ratchet for `store/backendHealth.ts`'s new module state was considered and
+     NOT added — the precedent (`architecture.test.ts`'s "pending-guard suites
+     must reset the book-transport record", ~line 1390) exists to catch a
+     specific POISONING failure mode (a stale failure record misdirecting a
+     LATER test's assertion), which this module cannot produce: its only state
+     is a redacted `{reachable, app, version}` triple with no failure-message
+     path, and every test that touches it already resets it in `beforeEach`/
+     `afterEach`. Generalizing that ratchet to "any module state" would be new
+     test infrastructure, not a cheap nit.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1a | `store/toasts.ts`: cap `totalCount` at 50 (re-introduce ring-style eviction) | caught — `toasts.test.ts`'s "500 pushes report a total of 500" AND "a danger toast survives 50 later ok toasts" both fail |
+  | 1b | (same file) — confirms both new tests are load-bearing, not just one | see above |
+  | 2 | n/a — finding 2 is a documentation/census fix, nothing to sabotage in code | — |
+  | 3 | `commands/uiCommands.ts`: reinsert `await fetch("/api/health")` before building the diagnostics text | caught — `copyDiagnosticsMenu.test.tsx`: 3 of 4 tests fail, including the new "completes the clipboard write without awaiting any network call" test (the 4th, "carries none of the workspace's names/values/paths", passes VACUOUSLY on an empty copied string — the same shape the review's own S2 sabotage found) |
+  | nit (dedup) | `store/importDatasets.ts`: revert the toast to the pre-fix `` toast(`${lastError}${hint}`) `` | caught — `importDatasets.test.ts`'s "the failure toast carries the imported count, not just the failure" |
+  | nit (control chars) | `lib/diagnostics.ts`: make `sanitizeServerString` a no-op | caught — `diagnostics.test.ts`'s "strips control characters from the echoed backend identity" |
+
+  Gate: `npx tsc -b --force` clean; `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — 99 files, 1941 passed, 0
+  failed; `uv run pytest -q tests/test_repo_integrity.py` — 12 passed.
+  `store/useApp.ts` untouched (2321 lines, exactly its pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does): this commit's parent (`git rev-parse HEAD~1`
+  = `a7e158bc`, matching the commit this review round repairs) measured
+  **917,224 B** in a scratch worktree (`npm ci`'d node_modules); this commit
+  (HEAD) measured **917,385 B** — **+161 B**, from the comment/doc growth and
+  the `sanitizeServerString` call plus the `backendHealth.ts` module (tiny;
+  most of its lines are comments, stripped by minification). `EAGER_JS_BUDGET`
+  is 920,400 B (`check-bundle-size.mjs`), unchanged — the commit lands 3,015 B
+  under budget, no pin edit owed.
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
   write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
   (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"

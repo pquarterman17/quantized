@@ -80,7 +80,7 @@ export interface DiagnosticsSnapshot {
    *  a whole class of reports. Server-generated constants, never user data. */
   backend: { reachable: boolean; app: string | null; version: string | null };
   /** How this session is doing right now: states, counts and ages only — no
-   *  message text (see `store/toasts.ts`'s `NotificationMark` for why the
+   *  message text (see `store/toasts.ts`'s counter header for why the
    *  obvious "last N messages" would undo this module's whole promise, and
    *  `session.autosaveFailing` below for the same decision about the autosave
    *  reason string). */
@@ -95,7 +95,10 @@ export interface DiagnosticsSnapshot {
     recoveryPromptOpen: boolean;
     /** Operations registered in `store/pendingOps.ts` right now. */
     pendingOps: number;
-    /** Notifications raised this session, by outcome. */
+    /** Notifications raised this session, by outcome — true cumulative
+     *  counts (`store/toasts.ts`'s monotonic counters), never a windowed or
+     *  evicted sample: "total 50" always means exactly 50, not "at least the
+     *  last 50 of some larger number". */
     notifications: { total: number; errors: number; lastErrorAgeSec: number | null };
   };
 }
@@ -112,9 +115,27 @@ function section(title: string, rows: readonly (readonly [string, string])[]): s
 
 const yesNo = (b: boolean): string => (b ? "yes" : "no");
 
-/** Ages, never timestamps: "41 s ago" answers the triage question without
- *  pinning down when someone was at their desk, and stays readable when the
- *  report is pasted a day later. */
+/** `backend.app`/`backend.version` are server-generated constants for THIS
+ *  app's backend, but the fetch that fills them is same-origin-relative —
+ *  whatever process is actually serving the SPA answers `/api/health`, and
+ *  `store/backendHealth.ts`'s header notes the sibling `fermiviewer` serves
+ *  the same shape on the same default port. Pasted verbatim with no clamp,
+ *  a value containing e.g. `"\n## Session health"` could break this report's
+ *  column layout or forge a section heading. Strip control characters
+ *  (newlines included) and cap the length — the identity string is still
+ *  legible; it just cannot rewrite the report around it. */
+function sanitizeServerString(v: string): string {
+  return v.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 64);
+}
+
+/** Ages, never timestamps: "41 s ago" answers the triage question ("how long
+ *  ago did this happen relative to the report?") and stays readable when the
+ *  report is pasted a day later — a raw timestamp reads as "when" only next
+ *  to `taken at` (below), and goes stale for that purpose the moment the
+ *  report is no longer fresh. (Not a privacy property: `taken at` already
+ *  prints the exact wall-clock moment, so every age here is trivially
+ *  reconstructible relative to it — readability, not concealment, is the
+ *  reason.) */
 const age = (seconds: number | null): string => (seconds === null ? "never" : `${seconds} s ago`);
 
 /** Render a plain-text diagnostic bundle. Deterministic: the same snapshot
@@ -138,7 +159,9 @@ export function buildDiagnostics(s: DiagnosticsSnapshot): string {
       [
         "backend",
         s.backend.reachable
-          ? `${s.backend.app ?? "unknown app"} ${s.backend.version ?? "unknown version"}`
+          ? `${s.backend.app ? sanitizeServerString(s.backend.app) : "unknown app"} ${
+              s.backend.version ? sanitizeServerString(s.backend.version) : "unknown version"
+            }`
           : "unreachable",
       ],
     ]),
