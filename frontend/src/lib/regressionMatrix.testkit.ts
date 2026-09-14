@@ -50,14 +50,23 @@
 //     undefined, so `seriesColor` would return one shared fallback for every
 //     position and the comparison would be vacuous — `installSeriesPalette()`
 //     installs a distinct literal per position so a position skew is visible.
+//     The colour EQUALITY is itself conditional: `lib/contrastColor.ts`'s
+//     `resolveDrawColor` substitutes the ink token for any stroke below
+//     MIN_CONTRAST (2.2) against the canvas background, and only the canvas
+//     applies it — a series styled `#000000` draws `#eee` on screen and
+//     exports `#000000`, correctly (the export canvas is white). Both
+//     `TEST_SERIES_PALETTE` and `FIXTURE_COLORS` are therefore chosen LIGHT so
+//     the substitution never fires and the two legs are comparing the same
+//     quantity. That asymmetry is real and out of this matrix's scope; a
+//     fixture using a dark colour would have to model it explicitly.
 //   * GROUP mode: the backend expands `group_col` into one series per level
 //     itself, so the export wire carries the BASE channels while the canvas
 //     already carries the expanded ones. The screen leg therefore collapses its
-//     display series back to first-occurrence-per-channel (lossless for
-//     width/dash/marker/step/fill — `usePlotPayload` gives every level of a
-//     channel that channel's one style) and `color` is not compared: the two
-//     paths legitimately colour by different position spaces. Level identity
-//     moves into `grouping` instead.
+//     display series back to first-occurrence-per-channel, and `styleComparable`
+//     is FALSE for this mode — see its doc and BUG-016: the backend's
+//     `group_col` branch drops `series_styles` outright, so comparing them
+//     leg-to-leg compared a field the renderer never reads. Level identity
+//     moves into `grouping`; the styling divergence is pinned by its own test.
 //   * FACET mode: per-series styling is ignored by faceted plots on BOTH screen
 //     and export (FEATURE-001, `plans/BUGS_AND_ISSUES.md`), so every leg reports
 //     `null` styling for a faceted figure and the panel partition is compared
@@ -66,6 +75,31 @@
 //     the backend's own "derive `label (unit)` from the data" fallback (which
 //     `lib/uplotOpts.ts` mirrors exactly — see `routes/export_figures.py`'s
 //     `_resolve_figure`) is not what is under test here.
+//
+// KNOWN LIMITS OF THE LEG-VS-LEG EVIDENCE (recorded 2026-09-14 by review,
+// deliberately NOT papered over — a doc-promise audit of "no leg calls
+// another, so an equality between two legs is evidence about the product"):
+//   * SHARED INPUT, not independent evidence, for two fields. `mode` is
+//     `figureMode(document)` on all three legs, so it can never differ. The
+//     FACET PARTITION is `facetPayloads(...)` on the screen and reopen legs and
+//     `lib/figureSpecFacets.ts` maps that same primitive straight onto the
+//     wire — measured: sabotaging `lib/facet.ts`'s panel label fails the golden
+//     and the facet non-vacuity test but leaves `screen ≡ export` green. The
+//     COMMITTED GOLDEN is what actually backstops those two fields; the
+//     leg-to-leg equality is a consistency check on top of it.
+//   * THE SCREEN LEG IS A MIRROR of `components/Stage/usePlotPayload.ts`'s
+//     pipeline (`effectiveChannels` -> `buildColumns` -> `categoricalXPayload`
+//     -> `applyGroupSplit` -> `composeDisplayPayload`), not the hook itself, so
+//     "reorder the hook and the matrix still passes" is a real hole. It is a
+//     mirror rather than a `renderHook(usePlotPayload)` call because the hook
+//     delivers its payload through an ASYNC `fetchPlot` state transition (which
+//     also applies `dropTrailingEmptyRows`, a step this mirror omits — a no-op
+//     for every matrix fixture, none of which has trailing empty rows) and
+//     `projectScreen` is a synchronous function called ~20 times across the
+//     suite. Driving the real hook is the honest upgrade if this leg ever
+//     disagrees with the canvas; until then the mirror's fidelity is asserted
+//     by reading nothing back out of it — every compared value comes from the
+//     real `buildOpts` options object it feeds.
 
 import { groupLevelLabel, levelOrderFor } from "./categorical";
 import { facetPayloads } from "./facet";
@@ -159,7 +193,11 @@ export interface CanonicalPage {
  *  `data-theme` as dark), and `lib/contrastColor.ts`'s `resolveDrawColor`
  *  substitutes the ink token for any stroke that would be invisible there — a
  *  dark palette would collapse every screen-leg colour onto one value and make
- *  the comparison vacuous in exactly the way this palette exists to prevent. */
+ *  the comparison vacuous in exactly the way this palette exists to prevent.
+ *
+ *  DISJOINT from `regressionMatrixFixtures.testkit.ts`'s `FIXTURE_COLORS` (see
+ *  its doc): an explicit `SeriesStyle.color` that happens to equal the palette
+ *  slot it sits in proves nothing about the override being honoured. */
 export const TEST_SERIES_PALETTE = [
   "#7fb3ff", "#ffb37f", "#8fe08f", "#d9a3ff",
   "#ffd27f", "#7fe0e0", "#ff9fd0", "#c9c9c9",
@@ -197,14 +235,24 @@ export function figureMode(document: FigureDocument): CanonicalFigure["mode"] {
   return "flat";
 }
 
-/** FEATURE-001: faceted plots ignore per-series styling on BOTH paths. */
+/** Per-series styling is a comparable property of a FLAT figure only.
+ *
+ *  FACET (FEATURE-001): faceted plots ignore per-series styling on BOTH paths,
+ *  so screen and export genuinely agree by both ignoring it.
+ *
+ *  GROUP (BUG-016, narrowed 2026-09-14): the two paths do NOT agree, and this
+ *  returning `false` records that rather than hiding it. `routes/
+ *  export_figures.py`'s `group_col` branch (`:81-85` documents the choice,
+ *  `:236-238` implements it) returns `_ResolvedFigure(..., None, ...)` — every
+ *  per-series style is dropped from a grouped export and matplotlib's default
+ *  cycle takes over — while the canvas gives every level of a channel that
+ *  channel's one style. The wire still CARRIES `series_styles`; it is simply
+ *  never read on this branch, so comparing that field leg-to-leg was false
+ *  comfort (a grouped red/dashed/3px figure draws as three red dashed curves
+ *  on screen and three default-coloured solid ones in the PDF, and the
+ *  comparison passed). The divergence itself is pinned by
+ *  `regressionMatrix.test.ts`'s BUG-016 test, not swept under this flag. */
 export function styleComparable(mode: CanonicalFigure["mode"]): boolean {
-  return mode !== "facet";
-}
-
-/** GROUP mode colours by different position spaces on the two paths — see the
- *  module header. Everything else about the style still compares. */
-export function colorComparable(mode: CanonicalFigure["mode"]): boolean {
   return mode === "flat";
 }
 

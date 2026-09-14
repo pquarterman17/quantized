@@ -23,7 +23,8 @@
 
 import type { FigurePageSpec } from "./api/figurePage";
 import type { FigureDocument } from "./figureDocument";
-import type { PageDocument } from "./pageDocument";
+import type { PageLabelFormat } from "./figurepage";
+import type { PageDocument, PagePanel } from "./pageDocument";
 import { pagePanelLabels, resolvePagePanel } from "./pageDocumentActions";
 import type { CanonicalPage } from "./regressionMatrix.testkit";
 
@@ -67,7 +68,7 @@ export function projectScreenPage(page: PageDocument, figures: readonly FigureDo
  *  backend reconstructs from `row`/`col` is the thing being compared, not the
  *  array index. `label` is projected back to its override form (`undefined` on
  *  the wire = "let the renderer auto-label", i.e. a null override). */
-export function projectExportPage(spec: FigurePageSpec, page: PageDocument): CanonicalPage {
+export function projectExportPage(spec: FigurePageSpec): CanonicalPage {
   const slots: CanonicalPage["panels"] = Array.from(
     { length: spec.rows * spec.cols },
     (_unused, i) => ({
@@ -78,6 +79,16 @@ export function projectExportPage(spec: FigurePageSpec, page: PageDocument): Can
       figure: null,
     }),
   );
+  // The same slot list in `PagePanel` shape, so the resolved label sequence
+  // below is computed from the WIRE and nothing else (see `resolvedLabels`).
+  // `figureId` here is only "is this slot filled?" for `pagePanelLabels`; the
+  // wire carries no figure id, and the identity actually compared is the
+  // `filename` stem placed in `panels[].figure`.
+  const wireSlots: PagePanel[] = Array.from({ length: spec.rows * spec.cols }, () => ({
+    figureId: null,
+    label: null,
+    title: null,
+  }));
   for (const panel of spec.panels) {
     const i = panel.row * spec.cols + panel.col;
     if (i < 0 || i >= slots.length) continue;
@@ -88,16 +99,27 @@ export function projectExportPage(spec: FigurePageSpec, page: PageDocument): Can
       title: panel.title ?? null,
       figure: panel.figure.filename ?? null,
     };
+    wireSlots[i] = {
+      figureId: panel.figure.filename ?? `slot-${i}`,
+      label: panel.label ?? null,
+      title: panel.title ?? null,
+    };
   }
   return {
     rows: spec.rows,
     cols: spec.cols,
     panels: slots,
     // The wire deliberately carries only the OVERRIDE labels; the auto "(a)"
-    // sequence is the renderer's job (`label_format`). Projecting the resolved
-    // sequence from the same source the composer uses keeps the three legs
-    // comparing the same quantity rather than the wire's narrower encoding.
-    resolvedLabels: pagePanelLabels(page.panels, page.output.labelFormat),
+    // sequence is the renderer's job, driven by `label_format`. This leg
+    // therefore resolves the sequence from the WIRE'S OWN `label_format` and
+    // `panels[].label`, never from the PageDocument the screen leg reads —
+    // that is what makes the comparison evidence about the product.
+    // (Corrected 2026-09-14: it used to call `pagePanelLabels(page.panels,
+    // page.output.labelFormat)`, the screen leg's identical call on the screen
+    // leg's identical input, so `spec.label_format` was read by no leg at all
+    // and a wire that labelled every panel "(i)/(ii)/(iii)" still matched a
+    // composer showing "(a)/(b)/(c)".)
+    resolvedLabels: pagePanelLabels(wireSlots, (spec.label_format ?? "(a)") as PageLabelFormat),
     layout: {
       linkX: spec.link_x ?? false,
       linkY: spec.link_y ?? false,

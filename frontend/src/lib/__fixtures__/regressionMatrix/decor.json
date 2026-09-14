@@ -7,7 +7,7 @@
       "label": "Signal (au)",
       "unit": "au",
       "axis": 0,
-      "color": "#7fb3ff",
+      "color": "#ffe066",
       "width": 2,
       "dash": [
         8,
@@ -25,7 +25,7 @@
       "label": "Reference (au)",
       "unit": "au",
       "axis": 0,
-      "color": "#ffb37f",
+      "color": "#66ffd9",
       "width": 1,
       "dash": [
         2,

@@ -4797,10 +4797,10 @@ next eager feature cannot land without it.)
   `lib/api/figures.ts`), `PLOT_MARKS` has no 2-D member, and `FigureDocument`
   therefore cannot express one, so it has no place on the document path the
   three legs share. How to add a fixture: add a builder, list it in
-  `MATRIX_FIXTURES`, regenerate its golden (see `regressionMatrix.test.ts`'s
-  "REGENERATING THE GOLDENS"), commit the JSON.
-- [x] ~~Screen/export/reopen structural and visual equivalence~~ STRUCTURAL
-  HALF SHIPPED 2026-09-14
+  `MATRIX_FIXTURES`, regenerate with `node
+  frontend/scripts/freeze-regression-matrix.mjs` (added 2026-09-14; `--check`
+  diffs without writing), commit the JSON.
+- [x] ~~Screen/export/reopen STRUCTURAL equivalence~~ SHIPPED 2026-09-14
   (tests only — no production code changed): `frontend/src/lib/
   regressionMatrix.test.ts` asserts SCREEN ≡ EXPORT ≡ REOPEN on one canonical
   structural payload for every fixture, where screen reads the real uPlot
@@ -4810,22 +4810,73 @@ next eager feature cannot land without it.)
   comes back out of `serializeWorkspace` -> `parseWorkspace`; the page leg adds
   `buildPageSpecFromDocument` vs `resolvePagePanel`/`pagePanelLabels`.
   Extractors: `lib/regressionMatrix.testkit.ts` (payload + shared helpers),
-  `lib/regressionMatrixLegs.testkit.ts` (the three legs),
-  `lib/regressionMatrixPage.testkit.ts` (the page). The VISUAL half of this
-  box's original wording is NOT covered and is re-booked as its own open box
-  below rather than quietly counted as done.
-  **Four divergences found, each pinned as a documented `it.fails` and none
-  fixed here** (all in `regressionMatrix.test.ts`'s "divergences found" block):
-  D1 a document's `plot.axisBreaks.x` reaches the export wire and survives
-  reopen but NOTHING on screen renders it (`useEffectiveComposition`'s durable
-  fallback covers `facetKey` only; the on-screen break is the transient
-  `composition` from `breakAtGaps`); D2 the canvas offsets every series by
-  `view.waterfall` while `FigureSpec` has no waterfall field, so the export
-  draws un-offset curves; D3 a legend rename replaces the whole on-screen label
-  but only `dataset.labels[ch]` on the wire, so the exported legend re-appends
-  the unit ("Loop 1 (au)"); D4 hiding a series shifts later series' palette
-  positions on export (`buildExportStyles` with `cycle: null` over the
-  hidden-FILTERED list) but not on the canvas.
+  `lib/regressionMatrixLegs.testkit.ts` (screen + export),
+  `lib/regressionMatrixReopen.testkit.ts` (reopen),
+  `lib/regressionMatrixPage.testkit.ts` (the page). The box's wording was
+  narrowed from "structural **and visual** equivalence" to "STRUCTURAL
+  equivalence" on 2026-09-14 so the strike-through matches the delivered scope;
+  the visual half is its own open box below.
+  **Five divergences found, each filed as a bug and pinned by a test asserting
+  BOTH concrete values, none fixed here** (all in `regressionMatrix.test.ts`'s
+  "divergences found" block): D1/BUG-012 a document's `plot.axisBreaks.x`
+  reaches the export wire and survives reopen but NOTHING on screen renders it
+  (`PlotView`, the canvas's whole input, has no break field;
+  `useEffectiveComposition`'s durable fallback covers `facetKey` only and the
+  on-screen break is the transient `composition` from `breakAtGaps`);
+  D2/BUG-013 the canvas offsets every series by `view.waterfall` (measured
+  0.8125 on the fixture) while `FigureSpec` has no waterfall field, so the
+  export draws un-offset curves; D3/BUG-014 a legend rename replaces the whole
+  on-screen label but only `dataset.labels[ch]` on the wire, so the exported
+  legend re-appends the unit ("Loop 1 (au)"); D4/BUG-015 hiding a series shifts
+  later series' palette positions on export (`buildExportStyles` with
+  `cycle: null` over the hidden-FILTERED list) but not on the canvas;
+  D5/BUG-016 a grouped figure's per-series styling reaches the canvas (every
+  level drawn dashed) but `routes/export_figures.py:236-238` drops
+  `series_styles` on the `group_col` branch, so the exported curves are solid
+  and default-coloured.
+
+  **Review round 2026-09-14 (findings closed, tests/fixtures/plans only).** An
+  adversarial review of the matrix found three load-bearing comparisons that
+  were vacuous or false comfort, and eight nits; all are closed here.
+  (1) `FIXTURE_COLORS` — the only fixture with explicit `SeriesStyle.color`
+  overrides — was byte-identical to the first two `TEST_SERIES_PALETTE` slots,
+  so "the override wins" was indistinguishable from "the palette was used";
+  the colours are now disjoint (`#ffe066`/`#66ffd9`/`#ff8fa3`/`#b0ff7f`, all
+  clearing `resolveDrawColor`'s MIN_CONTRAST on the pinned dark theme by 8.7x
+  or more), `decor.json` is regenerated, and the `decor` test asserts both
+  `=== FIXTURE_COLORS[0]` and `!== TEST_SERIES_PALETTE[0]`.
+  (2) `projectExportPage` resolved its panel labels by calling
+  `pagePanelLabels(page.panels, page.output.labelFormat)` — the screen leg's
+  own call on the screen leg's own input — so `spec.label_format` was read by
+  no leg at all; it now rebuilds the slot list from `spec.panels` at
+  `row*cols+col` and resolves from `spec.label_format`, and the `page`
+  parameter is gone.
+  (3) GROUP mode compared `spec.series_styles`, a wire field the renderer
+  provably never reads on that branch, which both gave false comfort and hid
+  D5; `styleComparable("group")` is now `false` (facet's treatment, with the
+  `export_figures.py` citation) and the divergence is BUG-016 with its own
+  test. Nits closed: the five `it.fails` pins became explicit
+  `DIVERGENCE (BUG-01x): …` tests asserting both concrete values and their
+  difference (an `it.fails` passes on any throw); the two wrong fixture counts
+  in the fixtures header (eight figures + page = nine goldens); a committed
+  regeneration script, `frontend/scripts/freeze-regression-matrix.mjs`
+  (`--check` diffs without writing) replacing the "temporarily add a test that
+  writes the JSON" ritual, verified to reproduce the seven unchanged goldens
+  byte-identically; `reopenProject` widened to round-trip ALL four page
+  figures instead of panel 0 only; the module-scope `function document(...)`
+  in the fixtures testkit renamed to `makeFigure` (and the reopen leg split
+  into its own module, the legs testkit having been at 486/500); and two
+  KNOWN-LIMIT notes recorded in the testkit header — colour equality is
+  conditional on contrast-safe colours because of `resolveDrawColor`, and the
+  facet partition plus `mode` are shared-input rather than independent
+  evidence, as is the screen leg's hand-written mirror of `usePlotPayload`
+  (driving the real hook was measured as not cheap: it delivers its payload
+  through an async `fetchPlot` state transition, while `projectScreen` is a
+  synchronous function called ~20 times across the suite).
+  Sabotage-verified: dropping `style?.color` in `seriesStyleCycle.ts` and
+  forcing `label_format: "roman"` in `panelResolve.ts` — both of which the
+  matrix passed before this round — now fail named tests, as do the four
+  product-code mutations the original commit recorded.
 - [ ] Visual (rendered-output) equivalence for the same nine fixtures — the
   half of the box above that 2026-09-14's structural matrix did not cover.
   Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`

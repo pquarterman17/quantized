@@ -8,11 +8,8 @@
       "unit": "au",
       "axis": 0,
       "color": null,
-      "width": 2,
-      "dash": [
-        8,
-        4
-      ],
+      "width": null,
+      "dash": null,
       "marker": null,
       "step": null,
       "fill": null

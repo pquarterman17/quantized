@@ -1,4 +1,5 @@
-// P4.2 canonical plot/project regression matrix — the TEN canonical figures.
+// P4.2 canonical plot/project regression matrix — the EIGHT canonical figures
+// plus the multi-panel page (NINE committed goldens in all).
 //
 // Built programmatically (no recorded JSON input) so they are deterministic on
 // every platform, from ONE small dataset whose channels cover every binding the
@@ -7,8 +8,8 @@
 // fixture, not the fixture itself — see `regressionMatrix.test.ts`.
 //
 // HOW TO ADD A FIXTURE: add a builder below, add its name to `MATRIX_FIXTURES`,
-// then run the golden writer described in `regressionMatrix.test.ts`'s header
-// and commit the new `<name>.json`.
+// then run `node scripts/freeze-regression-matrix.mjs` (from `frontend/`) and
+// commit the new `<name>.json`.
 //
 // THE ONE FIXTURE THAT COULD NOT BE BUILT — "2-D". This repo has no first-class
 // 2-D/heatmap FIGURE. `/api/export/map-figure` (contour/heatmap/surface) exists
@@ -17,8 +18,9 @@
 // member, and `FigureDocument` therefore has no representation for one — so a
 // 2-D figure cannot be expressed on the document path the other three legs
 // share. The map view is a separate, non-document surface (`lib/mapdata.ts`,
-// `lib/mapRender.ts`). Documented gap, not a silent omission; the matrix ships
-// nine fixtures plus the page.
+// `lib/mapRender.ts`). Documented gap, not a silent omission: `MATRIX_FIXTURES`
+// holds EIGHT figure fixtures and the page fixture below makes NINE committed
+// goldens.
 
 import {
   createFigureDocument,
@@ -30,12 +32,25 @@ import type { PageDocument } from "./pageDocument";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
 
+// Explicit per-series stroke overrides for the `decor` fixture.
+//
+// DISJOINT FROM `TEST_SERIES_PALETTE` BY CONSTRUCTION (review 2026-09-14).
+// These used to be the palette's own first two slots, which made "the explicit
+// `SeriesStyle.color` override wins" indistinguishable from "the palette slot
+// was used": dropping `style?.color` in `lib/seriesStyleCycle.ts` left the
+// whole matrix green. `regressionMatrix.test.ts`'s `decor` non-vacuity test now
+// asserts both halves (`=== FIXTURE_COLORS[0]` AND
+// `!== TEST_SERIES_PALETTE[0]`), which only bites while these two lists stay
+// disjoint. Keep them so.
+//
 // Light, well-separated strokes: `lib/contrastColor.ts`'s `resolveDrawColor`
 // substitutes a stroke that would be invisible on the canvas background, and
 // jsdom reports the DARK theme (`document.documentElement.dataset.theme` is
 // unset, and `uplotOpts`' `appThemeIsDark` treats anything but "light" as
-// dark), so every literal colour here is chosen to clear MIN_CONTRAST there.
-export const FIXTURE_COLORS = ["#7fb3ff", "#ffb37f", "#8fe08f", "#d9a3ff"] as const;
+// dark), so every literal colour here clears MIN_CONTRAST (2.2) there by a
+// wide margin — measured contrast against `DARK_BG_LUMINANCE`: 14.4, 15.1,
+// 8.7, 15.6.
+export const FIXTURE_COLORS = ["#ffe066", "#66ffd9", "#ff8fa3", "#b0ff7f"] as const;
 
 const ROWS = 6;
 
@@ -96,7 +111,11 @@ function baseView(overrides: Partial<PlotView> = {}): PlotView {
 
 type FixtureExtras = Omit<CreateFigureDocumentInput, "id" | "name" | "datasetId" | "view">;
 
-function document(id: string, view: PlotView, extra: FixtureExtras = {}): FigureDocument {
+/** Named `makeFigure`, never `document`: a module-scope `function document`
+ *  shadows the DOM global for this whole file, and its sibling
+ *  `installSeriesPalette` (`regressionMatrix.testkit.ts`) depends on the real
+ *  one. Same reason the legs testkit renamed its own `document` parameters. */
+function makeFigure(id: string, view: PlotView, extra: FixtureExtras = {}): FigureDocument {
   return createFigureDocument({
     id,
     name: `matrix ${id}`,
@@ -107,16 +126,16 @@ function document(id: string, view: PlotView, extra: FixtureExtras = {}): Figure
   });
 }
 
-// ── the nine single-figure fixtures ─────────────────────────────────────────
+// ── the eight single-figure fixtures ────────────────────────────────────────
 
 export function plainFigure(): FigureDocument {
-  return document("plain", baseView());
+  return makeFigure("plain", baseView());
 }
 
 /** Symmetric Y (channel 2 -> series 0), ASYMMETRIC Y (channels 3/4 -> series
  *  1), and an X error (channel 5, target -1 = the plot's x axis). */
 export function errorsFigure(): FigureDocument {
-  return document("errors", baseView(), {
+  return makeFigure("errors", baseView(), {
     errors: [
       { channel: 2, target: 0, axis: "y", side: "both" },
       { channel: 3, target: 1, axis: "y", side: "+" },
@@ -127,12 +146,16 @@ export function errorsFigure(): FigureDocument {
 }
 
 /** One Y channel split by the categorical "Batch" column, whose explicit
- *  `level_order` is [C, A, B] rather than the ascending default. The channel
- *  carries an explicit dash so the grouped legs still compare a real per-series
- *  style (the backend expands the levels itself, but the STYLE it expands is
- *  the one this fixture pins). */
+ *  `level_order` is [C, A, B] rather than the ascending default.
+ *
+ *  The channel carries an explicit dash NOT because the grouped legs compare
+ *  styling — they deliberately do not, `styleComparable("group")` is false —
+ *  but because it is what BUG-016's divergence test measures: the canvas draws
+ *  every level dashed while `routes/export_figures.py`'s `group_col` branch
+ *  drops `series_styles` entirely. Removing the dash would make that test
+ *  vacuous. */
 export function groupFigure(): FigureDocument {
-  return document(
+  return makeFigure(
     "group",
     baseView({ yKeys: [0], seriesStyles: { 0: { width: 2, line: "dashed" } } }),
     { groupKey: 6 },
@@ -140,11 +163,11 @@ export function groupFigure(): FigureDocument {
 }
 
 export function facetFigure(): FigureDocument {
-  return document("facet", baseView(), { facetKey: 7 });
+  return makeFigure("facet", baseView(), { facetKey: 7 });
 }
 
 export function y2Figure(): FigureDocument {
-  return document(
+  return makeFigure(
     "y2",
     baseView({
       yKeys: [0, 8],
@@ -158,11 +181,11 @@ export function y2Figure(): FigureDocument {
 }
 
 export function breakFigure(): FigureDocument {
-  return document("break", baseView({ yKeys: [0] }), { axisBreaks: { x: [[2, 3]] } });
+  return makeFigure("break", baseView({ yKeys: [0] }), { axisBreaks: { x: [[2, 3]] } });
 }
 
 export function waterfallFigure(): FigureDocument {
-  return document("waterfall", baseView({ waterfall: 0.25 }));
+  return makeFigure("waterfall", baseView({ waterfall: 0.25 }));
 }
 
 /** Annotations + shapes + reference lines + region shade + legend title, plus
@@ -180,7 +203,7 @@ export function decorFigure(): FigureDocument {
     },
     1: { color: FIXTURE_COLORS[1], width: 1, line: "dotted", step: "post" },
   };
-  return document(
+  return makeFigure(
     "decor",
     baseView({
       seriesStyles: styles,

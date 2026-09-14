@@ -12,10 +12,16 @@ settings, axis labels/limits/scales, and decorations.
   `../../regressionMatrix.testkit.ts`, `../../regressionMatrixLegs.testkit.ts`
   and `../../regressionMatrixPage.testkit.ts`.
 * `../../regressionMatrix.test.ts` asserts screen ≡ export ≡ reopen for each
-  fixture AND equality with the golden here, and documents the four screen/
-  export divergences the matrix found.
+  fixture AND equality with the golden here, and pins the five screen/export
+  divergences the matrix found (BUG-012 … BUG-016).
 
-**Adding a fixture / regenerating:** see the headers of
-`regressionMatrixFixtures.testkit.ts` ("HOW TO ADD A FIXTURE") and
-`regressionMatrix.test.ts` ("REGENERATING THE GOLDENS"). Never refresh a golden
-just because a test went red — read the diff first.
+**Regenerating:** `cd frontend && node scripts/freeze-regression-matrix.mjs`
+rewrites every file here from the TS builders; `--check` diffs without writing
+and exits non-zero if any golden is stale. Eight figure goldens plus
+`page.json` — nine in all.
+
+**Adding a fixture:** see `regressionMatrixFixtures.testkit.ts`'s
+"HOW TO ADD A FIXTURE", then run the script above and commit the new
+`<name>.json`.
+
+Never refresh a golden just because a test went red — read the diff first.
