@@ -2562,12 +2562,25 @@ PR A acceptance gates:
 
 ## Acceptance scenarios
 
-- [ ] Import three CSV files together: one folder may contain three distinct
-  workbooks, each retaining its own source provenance.
-- [ ] Expand a workbook without changing the current plot.
-- [ ] Double-click a new workbook: its first worksheet opens.
-- [ ] Return after opening another child: double-click reopens the remembered
-  child.
+- [x] Import three CSV files together: one folder may contain three distinct
+  workbooks, each retaining its own source provenance. 2026-09-14: new test
+  `store/importWorkbooks.test.ts` "importing three plain files together into
+  one folder creates three distinct workbooks, each with its own source
+  path" (sabotaged `lib/workbooks.ts`'s `node.source = first.source` line,
+  confirmed 2/15 file tests fail, restored).
+- [x] Expand a workbook without changing the current plot. 2026-09-14: proven
+  by the existing `components/Library/WorkbookRow.test.tsx` "clicking the
+  disclosure caret expands without selecting or opening" (asserts
+  `expandedWorkbookIds`/`librarySelection`/`activeId` before+after a real
+  `fireEvent.click` on `.qzk-group-caret`).
+- [x] Double-click a new workbook: its first worksheet opens. 2026-09-14:
+  proven by the existing `components/Library/WorkbookRow.test.tsx`
+  "double-click opens the first worksheet for a workbook with no remembered
+  child" (asserts `activeId` becomes the source-order-first worksheet).
+- [x] Return after opening another child: double-click reopens the remembered
+  child. 2026-09-14: proven by the existing
+  `components/Library/WorkbookRow.test.tsx` "double-click reopens the
+  remembered child, not the first worksheet".
 - [ ] Right-click a recognized XYXYXY workbook and Quick Plot: three correctly
   paired editable series are created.
 - [ ] Right-click a recognized shared-X worksheet with Y error columns: errors
@@ -2576,10 +2589,24 @@ PR A acceptance gates:
   Configure Quick Plot remains available.
 - [ ] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template
   is left behind.
-- [ ] Switch Tree -> Tiles -> Details: selection and active content remain
-  stable, with no duplicated Library objects.
-- [ ] Save/reopen a migrated legacy workspace: workbook membership and source
-  provenance remain intact.
+- [x] Switch Tree -> Tiles -> Details: selection and active content remain
+  stable, with no duplicated Library objects. 2026-09-14: the existing
+  `components/Library/Library.test.tsx` "selection remains stable across
+  Tree -> Tiles -> Details..." proved the SELECTION half only (never set an
+  active plot, never checked the store's own object ids) — new test in the
+  same file, "the active plot and the model's own object ids are unchanged
+  across Tree -> Tiles -> Details", closes both gaps (sabotaged
+  `components/Library/useLibraryViewTransition.ts`'s `changeMode` to clear
+  `activeId` on every switch, confirmed exactly that new test fails, 22/23
+  others still pass, restored).
+- [x] Save/reopen a migrated legacy workspace: workbook membership and source
+  provenance remain intact. 2026-09-14: proven by the existing
+  `lib/workspaceMigration.test.ts` describe "workspace migration —
+  save/reopen a migrated legacy Origin workbook (LIBRARY_WORKBOOK_UX_PLAN
+  acceptance scenario)", specifically "save (re-serialize) then reopen
+  (re-parse) preserves that workbook's membership and provenance exactly"
+  (asserts workbook id/membership/`originBook` identical after a real
+  serialize->parse round trip of a v1 legacy multi-sheet Origin document).
 
 ## Owner decisions
 

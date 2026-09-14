@@ -474,6 +474,58 @@ describe("Library — Tree -> Tiles -> Details selection continuity (LIBRARY_WOR
     expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
     expect(screen.getAllByText("beta.csv")).toHaveLength(1);
   });
+
+  // The test above proves the SELECTION half; this one closes the two gaps
+  // the acceptance scenario's own wording also names: the ACTIVE plot
+  // (`activeId`, not only `selectedIds`) surviving the same switch, and the
+  // MODEL itself (every store collection's own id set) never growing or
+  // reshuffling as a side effect of a view-mode change -- the concrete shape
+  // "no duplicated Library objects" takes at the store layer, as opposed to
+  // the rendered-DOM-count check above.
+  it("the active plot and the model's own object ids are unchanged across Tree -> Tiles -> Details", () => {
+    const dataset = { ...dsWith("beta.csv"), workbookId: "w1" };
+    useApp.setState({
+      datasets: [dataset],
+      workbooks: [{ id: "w1", name: "Run" }],
+      expandedWorkbookIds: ["w1"],
+      originFigures: [],
+      editableFigures: [],
+      figureDocs: [],
+      pages: [],
+      reports: [],
+      revealTarget: null,
+      workbookLastChild: {},
+      figurePageOpen: false,
+      cmdkOpen: false,
+      confirmRemove: false,
+    });
+    render(<AppLibraryHarness />);
+
+    // Tree: double-click OPENS the worksheet, so both the selection and the
+    // active plot now name "beta.csv" -- the "active content" half of the
+    // scenario the click-only test above never exercises.
+    fireEvent.doubleClick(screen.getByText("beta.csv").closest("[data-ds-id]")!);
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+    expect(useApp.getState().activeId).toBe("beta.csv");
+
+    const modelIds = (s: ReturnType<typeof useApp.getState>) => ({
+      datasetIds: s.datasets.map((d) => d.id).sort(),
+      workbookIds: s.workbooks.map((w) => w.id).sort(),
+      folderIds: s.folders.map((f) => f.id).sort(),
+    });
+    const before = modelIds(useApp.getState());
+
+    fireEvent.click(screen.getByRole("button", { name: "Tiles" }));
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+    expect(useApp.getState().activeId).toBe("beta.csv");
+    expect(modelIds(useApp.getState())).toEqual(before); // no object created/duplicated by mounting Tiles
+
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(useApp.getState().selectedIds).toEqual(["beta.csv"]);
+    expect(useApp.getState().activeId).toBe("beta.csv");
+    expect(modelIds(useApp.getState())).toEqual(before); // still exactly the same ids back on one panel
+    expect(screen.getAllByText("beta.csv")).toHaveLength(1);
+  });
 });
 
 // FU-2 (provenance-disclosure follow-ups): OriginFidelitySection used to hold
