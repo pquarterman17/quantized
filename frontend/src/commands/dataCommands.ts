@@ -5,14 +5,40 @@
 // whose `group` is "Data". Behavior is unchanged — this is a verbatim move.
 
 import type { StoreGet } from "../lib/exportActive";
-import {
-  runJoinWorksheets,
-  runStackWorksheet,
-  runTransposeWorksheet,
-  runUnstackWorksheet,
-} from "../lib/worksheetTransformCommands";
 import type { Action } from "../store/commands";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
+import { runLazy } from "./fileCommands";
+
+/** The four worksheet-reshape commands (transpose / stack / unstack / join)
+ *  behind ONE dynamic `import()`. This module was
+ *  `lib/worksheetTransformCommands.ts`'s ONLY importer, so the static import
+ *  that used to sit above was the whole reason the reshape front end — four
+ *  `ParamDialog` field builders, the column-option and derived-dataset
+ *  helpers — sat in the eager chunk for four Data-menu entries that run only
+ *  on a click. (The reshape MATH behind them, `lib/worksheetTransforms.ts`,
+ *  was already deferred one level further in by that module; this defers the
+ *  layer that was still eager. Measured: 919,781 -> 917,136 B eager.)
+ *
+ *  Only the `run` body moves: every command's id/label/description/keywords
+ *  stays in the eager list below, so the ⌘K palette, the Data menu and Help
+ *  search list and search these exactly as before — the metadata-eager /
+ *  handler-lazy split `plans/BUNDLE_HEADROOM.md` slice 2 describes.
+ *
+ *  `runLazy` (commands/fileCommands.ts, the shape every lazy export command
+ *  already uses) gives the click-to-chunk-loaded window a pendingOps busy
+ *  entry and toasts a chunk-load failure instead of leaving the rejection
+ *  unhandled; it rethrows, so the trailing `.catch` here is what keeps THAT
+ *  rejection handled without double-reporting. */
+function runWorksheetTransform(
+  s: StoreGet,
+  pick: (m: typeof import("../lib/worksheetTransformCommands")) => (s: StoreGet) => void,
+): void {
+  void runLazy("Loading worksheet reshape…", () => import("../lib/worksheetTransformCommands"))
+    .then((m) => pick(m)(s))
+    .catch(() => {
+      /* runLazy already toasted the load failure */
+    });
+}
 
 /** Build the Data-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -55,10 +81,10 @@ export function buildDataCommands(s: StoreGet): Action[] {
       description: "Create a derived dataset by mathematically combining two existing datasets.",
       run: () => s().setDatasetMathOpen(true),
     },
-    { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", run: () => runTransposeWorksheet(s) },
-    { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide", run: () => runStackWorksheet(s) },
-    { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", description: "Pivot category and value columns into separate columns in a wide worksheet.", keywords: "jmp unstack pivot wide long reshape", run: () => runUnstackWorksheet(s) },
-    { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", description: "Combine two datasets by matching values in selected key columns.", keywords: "jmp join merge key combine", run: () => runJoinWorksheets(s) },
+    { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", run: () => runWorksheetTransform(s, (m) => m.runTransposeWorksheet) },
+    { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide", run: () => runWorksheetTransform(s, (m) => m.runStackWorksheet) },
+    { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", description: "Pivot category and value columns into separate columns in a wide worksheet.", keywords: "jmp unstack pivot wide long reshape", run: () => runWorksheetTransform(s, (m) => m.runUnstackWorksheet) },
+    { id: "join-by-key", group: "Data", section: "Combine & split", label: "Join datasets by key…", description: "Combine two datasets by matching values in selected key columns.", keywords: "jmp join merge key combine", run: () => runWorksheetTransform(s, (m) => m.runJoinWorksheets) },
     {
       id: "tabulate",
       group: "Data",

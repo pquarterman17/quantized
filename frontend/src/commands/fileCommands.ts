@@ -65,6 +65,13 @@ function rejectIfImportRunning(): boolean {
  *  so THAT rejection doesn't itself go unhandled; a success from the
  *  module's own body never reaches this catch, so it can't double-toast a
  *  failure exportActive already reported through its own status/toast. */
+// 2026-09-14: now shared beyond this module — `commands/dataCommands.ts`
+// (worksheet reshapes) and `commands/plotCommands.ts` (Page setup) wrap their
+// own chunk-deferred `run` bodies in it, for the identical reason. It stays
+// here rather than moving to a neutral module because both importers are
+// already eagerly reachable through `appCommands.ts`, so the import moves no
+// chunk boundary (measured), and moving an exported helper that
+// `fileCommands.test.ts` pins directly would be churn with no benefit.
 // N3 (2026-09-13 round-2 review): `label` is the pendingOps busy text
 // ("Loading CSV export…"), already gerund-shaped — appending "failed to
 // load" to it read as "Loading CSV export failed to load", doubling "load".

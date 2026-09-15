@@ -4934,6 +4934,33 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 boundary before adding substantial UI" item below is now IMMINENT: the
 next eager feature cannot land without it.)
 
+**2026-09-14 — lazy-seam diet, `EAGER_JS_BUDGET` unmoved at 920,400 B.**
+Headroom was under 1 kB again (919,781 B on the branch tip `4aafd3a3`).
+Four modules left the eager entry graph behind dynamic `import()` seams —
+`lib/worksheetTransformCommands.ts` (the four Data-menu reshapes),
+`components/Library/OriginSavedPreviewWindow.tsx` (with
+`overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`, which nothing else
+eager reached), `lib/workbookTransfer.ts` (the Copy/Paste/Duplicate core,
+whose four callers were already `async`, so no signature changed) and
+`lib/pageSetupCommand.ts`. Measured cumulatively with `npm run build` after
+`npm ci` and a `node_modules/.vite` wipe, summed exactly as
+`check-bundle-size.mjs` sums: **919,781 → 910,172 B, −9,609 B**, leaving
+10.2 kB of headroom and staying well clear of the
+`EAGER_JS_BUDGET - SLACK` floor (880,400 B) that would force a lower pin.
+This is `plans/BUNDLE_HEADROOM.md` slice 2's shape (metadata eager, handler
+lazy), not its whole scope — the command *metadata* stays eager, so the
+palette, menus and Help search are untouched. A fifth seam
+(`lib/originTemplate.ts` behind the "Import Origin template…" picker) was
+built, measured at **+219 B** — Rollup's new chunk boundary cost more than
+the ~1 kB of modules it moved — and **reverted**, the same way the
+2026-09-09 `DatasetRowPreview` split was. Seams rejected without building,
+on this file's and `check-bundle-size.mjs`'s own recorded grounds:
+`lib/contextActions.ts` / `PlotContextMenu` (right-click latency),
+the command registry itself (first press of every shortcut),
+`lib/openWorkspaceCommand.ts` (its `openFilePicker()` must stay in the
+click's own task or a browser blocks the dialog) and every first-paint
+Library section.
+
 - [ ] Characterization tests before moves.
 - [ ] Split one owned domain per PR with unchanged behavior/contracts.
 - [ ] Generate clients/types where it reduces drift.

@@ -2226,6 +2226,106 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
 });
 
 // ---------------------------------------------------------------------------
+// Lazy action seams (bundle diet, 2026-09-14 — 919,781 -> 910,172 B eager).
+//
+// Four modules were taken out of the eager entry graph because every entry
+// point into them is a user action that happens long after first paint: the
+// four Data-menu worksheet reshapes, the Page setup dialog, the workbook
+// Copy/Paste/Duplicate core, and the saved-Origin-preview window behind
+// FigureRow's "▣". Each is now reached through a dynamic `import()` from the
+// one file that used to import it statically.
+//
+// This is the same guard `LAZY`/`LAZY_IMPORTERS` above gives the Origin-apply
+// split, and it exists for the same reason: Rollup ships a module to wherever
+// ANY of its importers' chunks land, so ONE value import from an eagerly
+// reachable file silently folds the whole seam back into the entry chunk.
+// `scripts/check-bundle-size.mjs` would eventually notice as a budget failure,
+// but only once the headroom is gone and without naming the cause; this names
+// it at the import site.
+//
+// TYPE-ONLY imports are deliberately allowed: `import type`/`export type` is
+// erased before the bundler sees it, and `store/workbookTransfer.ts` keeps one
+// (`TransferExistingIds`/`TransferIdGenerators`) precisely because it costs
+// nothing. A `typeof import("…")` type alias is likewise invisible here — it
+// is not a `from "…"` clause at all.
+describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)", () => {
+  const SEAMS = [
+    {
+      module: "/lib/worksheetTransformCommands.ts",
+      loader: "/commands/dataCommands.ts",
+      call: 'import("../lib/worksheetTransformCommands")',
+    },
+    {
+      module: "/lib/pageSetupCommand.ts",
+      loader: "/commands/plotCommands.ts",
+      call: 'import("../lib/pageSetupCommand")',
+    },
+    {
+      module: "/lib/workbookTransfer.ts",
+      loader: "/store/workbookTransfer.ts",
+      call: 'import("../lib/workbookTransfer")',
+    },
+    {
+      module: "/components/Library/OriginSavedPreviewWindow.tsx",
+      loader: "/components/Library/FigureRow.tsx",
+      call: 'import("./OriginSavedPreviewWindow")',
+    },
+  ];
+
+  /** Drop `import type … from "…"` / `export type … from "…"` clauses, which
+   *  carry no runtime edge, so only VALUE imports are searched. */
+  const valueImportsOnly = (src: string): string =>
+    src.replace(/\b(?:import|export)\s+type\s[\s\S]*?\bfrom\s*["'][^"']+["']/g, "");
+
+  it("scans the modules it claims to", () => {
+    // A guard whose subject has been renamed away passes vacuously.
+    const paths = sources().map(([p]) => p);
+    for (const { module, loader } of SEAMS) {
+      expect(paths.some((p) => p.endsWith(module)), `${module} not found`).toBe(true);
+      expect(paths.some((p) => p.endsWith(loader)), `${loader} not found`).toBe(true);
+    }
+  });
+
+  /** Resolve a relative import specifier against the importing module's own
+   *  path, so `./workbookTransfer` from `./store/useApp.ts` is not confused
+   *  with `../lib/workbookTransfer` — the false positive the first version of
+   *  this guard reported (two different modules, same basename). */
+  const resolveFrom = (importer: string, spec: string): string | null => {
+    if (!spec.startsWith(".")) return null;
+    const parts = importer.split("/").slice(0, -1).concat(spec.split("/"));
+    const out: string[] = [];
+    for (const part of parts) {
+      if (part === "." || part === "") continue;
+      if (part === "..") out.pop();
+      else out.push(part);
+    }
+    return `/${out.join("/")}`;
+  };
+
+  it("no module value-imports a seam module statically", () => {
+    const targets = new Set(SEAMS.map((s) => s.module.replace(/\.tsx?$/, "")));
+    const offenders = sources().flatMap(([p, src]) => {
+      const hits = [...valueImportsOnly(src).matchAll(/\bfrom\s*["']([^"']+)["']/g)]
+        .map((m) => resolveFrom(p, m[1]))
+        .filter((r): r is string => r !== null && targets.has(r));
+      return hits.length ? [`${p} -> ${hits.join(", ")}`] : [];
+    });
+    expect(
+      offenders,
+      "these modules are chunk-deferred — reach them through the dynamic import() in their loader, not a static one",
+    ).toEqual([]);
+  });
+
+  it("each loader reaches its seam through a dynamic import()", () => {
+    for (const { module, loader, call } of SEAMS) {
+      const found = sources().find(([p]) => p.endsWith(loader));
+      expect(found, `${loader} not found`).toBeDefined();
+      expect(found?.[1] ?? "", `${loader} must dynamically import ${module}`).toContain(call);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // File-URL-to-path guard (#269 follow-up review: Windows build SHA).
 //
 // `new URL(".", import.meta.url).pathname` is a URL component, not a

@@ -9,13 +9,29 @@
 
 import { askParams } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "../lib/exportActive";
-import { runPageSetupDialog } from "../lib/pageSetupCommand";
 import { plotInNewWindow } from "../lib/plotInNewWindow";
 import { plotSelectedTogether } from "../lib/plotSelectedTogether";
 import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
+import { runLazy } from "./fileCommands";
+
+/** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
+ *  `ParamDialog` builder and its confirm handler, reachable from nothing else
+ *  in the entry graph — it only runs when the user picks "Page setup…". Its
+ *  `run` body goes behind a dynamic `import()` (the metadata above it stays
+ *  eager, so the menu, ⌘K and Help still list and search it unchanged), using
+ *  the same `runLazy` wrapper the lazy export commands use: a pendingOps busy
+ *  entry for the fetch, and a danger toast instead of an unhandled rejection
+ *  if the chunk cannot load. Measured: 910,631 -> 910,172 B eager. */
+function openPageSetup(s: StoreGet): void {
+  void runLazy("Loading page setup…", () => import("../lib/pageSetupCommand"))
+    .then((m) => m.runPageSetupDialog(s))
+    .catch(() => {
+      /* runLazy already toasted the load failure */
+    });
+}
 
 /** Build the Plot- and Insert-group curated palette actions against the
  *  live store handle (`useApp.getState`) — store setters are stable, so
@@ -145,7 +161,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       label: "Page setup…",
       description: "Set publication-page dimensions and margins for layout and export.",
       keywords: "page size margins width height print export #54",
-      run: () => void runPageSetupDialog(s),
+      run: () => openPageSetup(s),
     },
     {
       id: "statMode",

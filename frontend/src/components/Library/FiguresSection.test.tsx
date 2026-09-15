@@ -197,7 +197,13 @@ describe("FiguresSection", () => {
     expect(useApp.getState().graphBuilderSeed?.zones.y).toEqual([{ datasetId: "d1", channel: 0 }]);
   });
 
-  it("opens the file-saved Origin preview in a comparison window", () => {
+  // `async` + `findBy*` for the FIRST appearance only: FigureRow renders the
+  // preview window through `lazy()` (it is chunk-deferred — see that file's
+  // note), so the first open in a test file resolves one microtask later.
+  // Every later assertion stays synchronous, including the SECOND open below:
+  // once the lazy component has resolved it mounts without suspending, which
+  // is exactly the behaviour being asserted.
+  it("opens the file-saved Origin preview in a comparison window", async () => {
     useApp.setState({
       originFigures: [{
         id: "preview", stem: "XAS", datasetId: "d1", siblingIds: ["d1"],
@@ -215,7 +221,7 @@ describe("FiguresSection", () => {
     render(<FiguresSection />);
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
-    const image = screen.getByAltText(/Saved Origin preview of GraphPreview/);
+    const image = await screen.findByAltText(/Saved Origin preview of GraphPreview/);
     expect(image).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
     expect(screen.getByText("200 × 155 PNG")).toBeInTheDocument();
     expect(screen.getByText("Exact graph-page attribution")).toBeInTheDocument();
@@ -230,7 +236,7 @@ describe("FiguresSection", () => {
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
   });
 
-  it("keeps the preview available but disables restore when the editable binding is unresolved", () => {
+  it("keeps the preview available but disables restore when the editable binding is unresolved", async () => {
     useApp.setState({
       originFigures: [{
         id: "unresolved-preview", stem: "XAS", datasetId: null, siblingIds: [],
@@ -248,7 +254,7 @@ describe("FiguresSection", () => {
     });
     render(<FiguresSection />);
     fireEvent.click(screen.getByRole("button", { name: "Open saved Origin preview for comparison" }));
-    expect(screen.getByRole("button", { name: "Restore editable graph on Stage" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Restore editable graph on Stage" })).toBeDisabled();
     expect(screen.getByAltText(/Saved Origin preview of UnresolvedPreview/)).toBeInTheDocument();
   });
 
