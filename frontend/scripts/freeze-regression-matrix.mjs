@@ -24,16 +24,38 @@
 // Node API with `include` pointed back at THIS file, and the `VITEST` branch
 // below is the body that then runs inside jsdom. One file, no throwaway test,
 // no second config.
+//
+// WHY `--check` TRAVELS AS AN ENV VAR, NOT `process.argv` (bug found
+// 2026-09-15: `--check` re-froze the goldens and exited 0 every time). The
+// test BODY below does not run in this process — `startVitest` runs it in a
+// separate forked/threaded worker from its pool, with the worker's OWN
+// `argv` (vitest's, not ours), so `process.argv.includes("--check")` inside
+// the `VITEST` branch always read false and silently took the WRITE path.
+// A Node worker (fork or `worker_threads`) inherits a COPY of `process.env`
+// taken at spawn time, so setting `FREEZE_CHECK` here, before `startVitest`
+// spawns the pool, is what actually crosses that boundary.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FRONTEND = join(HERE, "..");
-const FIXTURE_DIR = join(FRONTEND, "src", "lib", "__fixtures__", "regressionMatrix");
+// `FREEZE_REGRESSION_MATRIX_FIXTURE_DIR` is a test-only escape hatch (see
+// `src/lib/freezeRegressionMatrixCheck.test.ts`) so the --check/write guard
+// can run against a throwaway directory instead of the real committed
+// goldens; unset in every normal invocation. It reaches the worker the same
+// way `FREEZE_CHECK` does — inherited at fork time, computed identically in
+// both processes — so no separate threading is needed here.
+const FIXTURE_DIR =
+  process.env.FREEZE_REGRESSION_MATRIX_FIXTURE_DIR ??
+  join(FRONTEND, "src", "lib", "__fixtures__", "regressionMatrix");
 const SELF = "scripts/freeze-regression-matrix.mjs";
-const CHECK = process.argv.includes("--check");
+// Inside the vitest worker (`process.env.VITEST`), trust ONLY the env var the
+// entry point threaded through — that worker's `process.argv` cannot carry
+// `--check` (see the comment block above). Outside it, `process.argv` is the
+// one true source.
+const CHECK = process.env.VITEST ? process.env.FREEZE_CHECK === "1" : process.argv.includes("--check");
 
 /** The exact on-disk form of every golden: 2-space JSON, one trailing LF. */
 function serialize(value) {
@@ -62,6 +84,11 @@ if (process.env.VITEST) {
       }
       frozen.set("page", serialize(projectScreenPage(pageFixture(figures), figures)));
 
+      if (!CHECK) {
+        // Write mode may target a fixture dir that doesn't exist yet (a
+        // brand-new checkout, or the guard test's throwaway directory).
+        mkdirSync(FIXTURE_DIR, { recursive: true });
+      }
       for (const [name, text] of frozen) {
         const path = join(FIXTURE_DIR, `${name}.json`);
         let current = null;
@@ -77,22 +104,31 @@ if (process.env.VITEST) {
         }
         writeFileSync(path, text);
         written += 1;
-        // eslint-disable-next-line no-console
         console.log(`wrote ${name}.json`);
       }
       if (!CHECK && written === 0) {
-        // eslint-disable-next-line no-console
         console.log(`all ${frozen.size} goldens already byte-identical`);
       }
     } finally {
       restore();
     }
     // In --check mode a stale golden is a FAILURE, so the script's exit code
-    // means something to CI or to a reviewer.
+    // means something to CI or to a reviewer. Name every stale file BEFORE
+    // the assertion throws, so the list survives even if a caller only reads
+    // stdout/stderr rather than the (also non-zero) exit code.
+    if (CHECK && stale.length > 0) {
+      console.error(`stale golden(s): ${stale.map((name) => `${name}.json`).join(", ")}`);
+    }
     expect(stale).toEqual([]);
   });
 } else {
   const { startVitest } = await import("vitest/node");
+  // Thread `--check` to the worker that will actually run the `VITEST`
+  // branch above — see the module-scope comment on `CHECK` for why this,
+  // and not argv, is what the worker can see.
+  if (CHECK) {
+    process.env.FREEZE_CHECK = "1";
+  }
   const vitest = await startVitest("test", [], {
     watch: false,
     root: FRONTEND,
@@ -101,7 +137,6 @@ if (process.env.VITEST) {
   await vitest?.close();
   const failed = vitest?.state.getCountOfFailedTests() ?? 1;
   if (failed > 0) {
-    // eslint-disable-next-line no-console
     console.error(
       CHECK
         ? "goldens are STALE — run `node scripts/freeze-regression-matrix.mjs` and review the diff"
