@@ -23,10 +23,12 @@
 // later is an additive backend change rather than another `.dwk` migration;
 // P2.1's plan entry records the numerics as the next box.
 //
-// INVALIDATION (review round 2, 2026-09-14). A durable record of a fit is a
-// LIE the moment the data it was fit from changes, so `PeakTableProvenance`
-// carries a `fingerprint` — a cheap, deterministic digest of the dataset's own
-// numbers (lib/peakTableFit's `peakDataFingerprint`). Every reader compares it
+// INVALIDATION (review rounds 2 and 3, 2026-09-15). A durable record of a fit
+// is a LIE the moment the data it was fit from changes, so
+// `PeakTableProvenance` carries a `fingerprint` — a cheap, deterministic digest
+// of the dataset's ANALYSIS VIEW: its x and value numbers, its column labels
+// and units, and its row state (lib/peakTableFit's `peakDataFingerprint`, whose
+// own header states the exact composition). Every reader compares it
 // against the LIVE data before using the table: the Peaks workshop refuses to
 // rehydrate a table that no longer matches, and Williamson-Hall's "Use fitted
 // peaks" is disabled with the reason instead of quietly loading 2-theta values
@@ -178,7 +180,9 @@ export interface PeakTableProvenance {
    *  because `center`/`fwhm` are in whatever units that channel carries, so a
    *  consumer that needs 2-theta in degrees — Williamson-Hall — can refuse a
    *  table fit on a q or d-spacing axis instead of silently reading Å⁻¹ as
-   *  degrees. `""` means the file recorded none, which reads as "unknown". */
+   *  degrees. `xUnit === ""` means the file recorded no unit — very common in
+   *  XRD — and is then decided on `xLabel` evidence alone; see
+   *  `peakTableXIsDegrees` for the exact two-clause rule. */
   xLabel: string;
   xUnit: string;
   /** Digest of the DATA this fit was measured from (lib/peakTableFit's

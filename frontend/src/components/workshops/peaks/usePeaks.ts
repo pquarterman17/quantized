@@ -19,14 +19,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
-import { selectedFitData } from "../../../lib/fitselection";
-import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
 import type { PeakTable } from "../../../lib/peakTable";
 import { peakTableMatchesData, peakTableToFitResult } from "../../../lib/peakTableFit";
 import { peakOverlayArray } from "../../../lib/plotdata";
-import { analysisData, rowStateIdentity } from "../../../lib/rowstate";
+import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
+import { peakInputs } from "./peakInputs";
 import { finiteRange } from "./peakRanges";
 import { askParams } from "../../overlays/ParamDialog";
 import { publishFitResult, setPeakExcluded } from "../../../store/peakTables";
@@ -107,24 +106,6 @@ export interface PeaksState {
   labelPeaks: (selectedIndices?: ReadonlySet<number>) => Promise<void>;
 }
 
-/** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
- *  analysis view (audit P1 #1), so peaks track what the user sees and excluded/
- *  filtered rows (#50/#53) don't produce or bias peaks. `fullX` is the same
- *  channel's FULL column, for aligning marker overlays to the full-length plot
- *  x. Falls back to the first channel when nothing is plotted. */
-export function peakInputs(
-  ds: Dataset,
-  xKey: number | null,
-  yKeys: number[] | null,
-  seriesOrder: number[] | null,
-): { x: number[]; y: number[]; fullX: number[] } {
-  const fullX = fullPlottedX(ds.data, xKey);
-  const sel = selectedFitData(ds, xKey, yKeys, seriesOrder);
-  if (sel) return { x: sel.x, y: sel.y, fullX };
-  const d = analysisData(ds) ?? ds.data;
-  return { x: d.time, y: d.values.map((row) => row[0]), fullX };
-}
-
 function seedsFrom(peaks: Peak[]): PeakSeed[] {
   return peaks.map((p) => ({ center: p.center, fwhm: p.fwhm, height: p.height }));
 }
@@ -185,7 +166,7 @@ export function usePeaks(): PeaksState {
         // this effect RE-PRESENT a stale fit after every edit. Compared against
         // the RESOLVED `ds`, never a still-pending preview (not staleness).
         const saved = useApp.getState().datasets.find((d) => d.id === activeId)?.peakTable;
-        if (saved && peakTableMatchesData(saved, ds.data)) setFitResult(peakTableToFitResult(saved));
+        if (saved && peakTableMatchesData(saved, ds)) setFitResult(peakTableToFitResult(saved));
         const { x, y, fullX } = peakInputs(ds, xKey, yKeys, seriesOrder);
         const res = await findPeaks({ x, y });
         if (cancelled) return;
@@ -239,7 +220,7 @@ export function usePeaks(): PeaksState {
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds) return;
         const st = useApp.getState();
-        const { x, y, fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+        const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const res = await fitMultiPeak({
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
@@ -247,7 +228,7 @@ export function usePeaks(): PeaksState {
         setFitResult(res);
         // P2.1: the fit becomes this dataset's durable peak table (survives a
         // panel close, a dataset switch, and a `.dwk` save/reopen).
-        publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: st.xKey });
+        publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: xKeyUsed });
         overlayFitted(ds, res.peaks, fullX);
       } catch (e: unknown) {
         setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
@@ -278,7 +259,7 @@ export function usePeaks(): PeaksState {
         const ds = await useApp.getState().resolveDataset(active.id);
         if (!ds) return;
         const st = useApp.getState();
-        const { x, y, fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+        const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const fitted: FittedPeak[] = [];
         for (let i = 0; i < peaks.length; i++) {
           if (cancelled) break;
@@ -304,7 +285,7 @@ export function usePeaks(): PeaksState {
         // P2.1, same as fitTogether — but only when something was actually fit:
         // a cancel that produced zero peaks must not replace a good saved table
         // with an empty one.
-        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", { ...opts, xKey: st.xKey });
+        if (fitted.length > 0) publishFitResult(ds.id, result, "independent", { ...opts, xKey: xKeyUsed });
         if (fitted.length > 0) overlayFitted(ds, fitted, fullX);
         // A deliberate cancel with zero completed peaks isn't a failure to report.
         if (fitted.length === 0 && !cancelled) {

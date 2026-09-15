@@ -57,10 +57,12 @@ export interface WilliamsonHallState {
   fittedSource: string | null;
   /** Why "Use fitted peaks" must NOT be taken, or null when it is safe (review
    *  round 2). Two refusals, both about the table describing something other
-   *  than the reduction's own inputs: the data moved under the fit
+   *  than the reduction's own inputs: the dataset moved under the fit
    *  (`peakTableMatchesData`), or it was fit on an axis that is not 2-theta in
-   *  degrees (`peakTableXIsDegrees` — a q axis in Å⁻¹ passes `canCompute`'s
-   *  `0 < 2θ < 180` check and yields a plausible-looking grain size). Rendered
+   *  degrees (`peakTableXIsDegrees` — a q axis passes `canCompute`'s
+   *  `0 < 2θ < 180` check and yields a plausible-looking grain size; round 3
+   *  made that check an exact unit match plus label evidence for a unit-less
+   *  column, so a `q`/`""` axis is refused and a `degC` one is too). Rendered
    *  next to the disabled button so the refusal is never silent. */
   fittedBlockedReason: string | null;
   /** Replace the rows with the active dataset's INCLUDED fitted peaks, and
@@ -90,16 +92,24 @@ export function useWilliamsonHall(): WilliamsonHallState {
   const active = useActiveDataset();
   const table = active?.peakTable ?? null;
   const included = table ? includedPeaks(table) : [];
-  // Memoized on the table + the data identity: `peakDataFingerprint` walks
+  // Memoized on the table + the DATASET identity: `peakDataFingerprint` walks
   // every value, and this hook re-renders on every keystroke in every field.
-  const data = active?.data;
+  // The dataset (not just `active.data`) is the right key now that the digest
+  // covers the analysis view — a row exclusion changes `active`, not
+  // `active.data`, and it does move the fit's real input.
   const fittedBlockedReason = useMemo(() => {
-    if (!table || !data) return null;
-    if (!peakTableMatchesData(table, data)) return "fitted before the data changed — re-fit in the Peaks workshop";
+    if (!table || !active) return null;
+    // NIT 4: name the REMEDY, not the cause. The digest is deliberately
+    // conservative (adding a computed column invalidates too), so "the data
+    // changed" can read as wrong to a user who only added a column; what is
+    // always true is that this table can no longer be trusted as a
+    // measurement of these rows, and that re-fitting is the one fix.
+    if (!peakTableMatchesData(table, active))
+      return "this dataset has changed since the fit — re-fit the peaks in the Peaks workshop";
     if (!peakTableXIsDegrees(table))
-      return `fit on ${table.provenance.xLabel || "a non-2θ axis"} (${table.provenance.xUnit}), not 2θ in degrees`;
+      return `fit on ${table.provenance.xLabel || "a non-2θ axis"} (${table.provenance.xUnit || "no unit recorded"}), not 2θ in degrees`;
     return null;
-  }, [table, data]);
+  }, [table, active]);
 
   const canCompute =
     rows.length >= 2 &&

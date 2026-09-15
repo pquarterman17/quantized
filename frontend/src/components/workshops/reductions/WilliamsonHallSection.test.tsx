@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { williamsonHall } from "../../../lib/api/reductions";
 import type { MultiFitResult, PeakTable } from "../../../lib/peakTable";
 import { peakDataFingerprint, peakTableFromFit, withPeakExcluded } from "../../../lib/peakTableFit";
-import type { DataStruct } from "../../../lib/types";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ReductionsPanel from "./ReductionsPanel";
 
@@ -43,6 +43,10 @@ const FIT: MultiFitResult = {
   model: "Gaussian",
 };
 
+/** A table as the Peaks workshop really stamps one for an XRD pattern: the x
+ *  identity recorded (round 3 requires 2θ evidence — an axis with neither a
+ *  degree unit nor a 2θ label is refused, and is covered on its own below) and
+ *  no fingerprint, i.e. the "unknown = still valid" `.dwk` case. */
 function table(): PeakTable {
   return peakTableFromFit(FIT, {
     datasetId: "d1",
@@ -52,12 +56,14 @@ function table(): PeakTable {
     linkMode: "None",
     constrain: false,
     wavelengthA: 1.5406,
+    xLabel: "2-Theta",
+    xUnit: "deg",
   });
 }
 
-function mount(peakTable?: PeakTable): void {
+function mount(peakTable?: PeakTable, over: Partial<Dataset> = {}): void {
   useApp.setState({
-    datasets: [{ id: "d1", name: "film.xrdml", data: scan, ...(peakTable ? { peakTable } : {}) }],
+    datasets: [{ id: "d1", name: "film.xrdml", data: scan, ...(peakTable ? { peakTable } : {}), ...over }],
     activeId: "d1",
     reductionsOpen: true,
     reductionsMethod: "williamson-hall",
@@ -151,8 +157,12 @@ describe("Williamson-Hall — Use fitted peaks (P2.1)", () => {
   });
 });
 
-describe("Williamson-Hall — a table that no longer describes the data (review round 2)", () => {
-  const fittedOn = (data: DataStruct, over: Partial<Parameters<typeof peakTableFromFit>[1]> = {}): PeakTable =>
+describe("Williamson-Hall — a table that no longer describes the data (review rounds 2 and 3)", () => {
+  const fittedOn = (
+    data: DataStruct,
+    over: Partial<Parameters<typeof peakTableFromFit>[1]> = {},
+    dsOver: Partial<Dataset> = {},
+  ): PeakTable =>
     peakTableFromFit(FIT, {
       datasetId: "d1",
       datasetName: "film.xrdml",
@@ -161,9 +171,9 @@ describe("Williamson-Hall — a table that no longer describes the data (review 
       linkMode: "None",
       constrain: false,
       wavelengthA: 1.5406,
-      xLabel: "2Theta",
+      xLabel: "2-Theta",
       xUnit: "deg",
-      fingerprint: peakDataFingerprint(data),
+      fingerprint: peakDataFingerprint({ id: "d1", name: "film.xrdml", data, ...dsOver }),
       ...over,
     });
 
@@ -181,9 +191,18 @@ describe("Williamson-Hall — a table that no longer describes the data (review 
     mount(fittedOn({ ...scan, time: [10.5, 20.5, 30.5] }));
     const btn = screen.getByRole("button", { name: "Use fitted peaks (3)" });
     expect(btn).toBeDisabled();
-    expect(screen.getByText(/fitted before the data changed/)).toBeInTheDocument();
+    // Round 3 NIT 4: the note names the REMEDY, not just the cause.
+    expect(screen.getByText(/re-fit the peaks in the Peaks workshop/)).toBeInTheDocument();
     fireEvent.click(btn);
     expect(fieldValue("peak 1 2θ")).toBe("0"); // nothing loaded
+  });
+
+  it("disables the action once a ROW IS EXCLUDED under the fit (round 3 CONFIRMED 4)", () => {
+    // The fit ran on all three rows; the live dataset now analyses two. The
+    // raw `data` is untouched, so only an analysis-view digest catches this.
+    mount(fittedOn(scan), { excludedRows: [1] });
+    expect(screen.getByRole("button", { name: "Use fitted peaks (3)" })).toBeDisabled();
+    expect(screen.getByText(/re-fit the peaks in the Peaks workshop/)).toBeInTheDocument();
   });
 
   it("refuses a table fit on a q axis, which `0 < 2θ < 180` would have waved through", () => {
@@ -192,8 +211,20 @@ describe("Williamson-Hall — a table that no longer describes the data (review 
     expect(screen.getByText(/not 2θ in degrees/)).toBeInTheDocument();
   });
 
-  it("still loads a table whose x unit the file never recorded", () => {
-    mount(fittedOn(scan, { xLabel: "", xUnit: "" }));
+  it("refuses a UNIT-LESS q axis — the case round 2 left open (CONFIRMED 2)", () => {
+    mount(fittedOn(scan, { xLabel: "q", xUnit: "" }));
+    expect(screen.getByRole("button", { name: "Use fitted peaks (3)" })).toBeDisabled();
+    expect(screen.getByText(/fit on q \(no unit recorded\), not 2θ in degrees/)).toBeInTheDocument();
+  });
+
+  it("refuses a Celsius axis, which `includes(\"deg\")` used to wave through", () => {
+    mount(fittedOn(scan, { xLabel: "Temperature", xUnit: "degC" }));
+    expect(screen.getByRole("button", { name: "Use fitted peaks (3)" })).toBeDisabled();
+    expect(screen.getByText(/fit on Temperature \(degC\), not 2θ in degrees/)).toBeInTheDocument();
+  });
+
+  it("still loads a unit-less table whose LABEL names the 2θ axis", () => {
+    mount(fittedOn(scan, { xLabel: "2θ", xUnit: "" }));
     fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));
     expect(fieldValue("peak 1 2θ")).toBe("30.1");
   });

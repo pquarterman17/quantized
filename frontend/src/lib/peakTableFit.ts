@@ -17,7 +17,8 @@
 // path needs in ./peakTable instead.
 
 import { PEAK_TABLE_VERSION, type MultiFitResult, type PeakTable, type PeakTableEntry } from "./peakTable";
-import type { DataStruct } from "./types";
+import { analysisData } from "./rowstate";
+import type { DataStruct, Dataset } from "./types";
 
 let _peakSeq = 0;
 
@@ -51,75 +52,118 @@ export interface PeakTableSource {
 
 // ── Data fingerprint (review round 2, 2026-09-14) ─────────────────────
 // See lib/peakTable.ts's module header for WHY a durable fit needs one and why
-// it is not a recalc-graph node. WHAT it digests: the dataset's own numbers —
-// row count, column count, the x (time) channel's first/last/min/max, and an
-// FNV-1a hash over the raw float bytes of every value column.
+// it is not a recalc-graph node. WHAT it digests, in ONE FNV-1a pass over
+// `analysisData(ds) ?? ds.data` — the dataset's ANALYSIS VIEW, i.e. the rows a
+// fit actually runs on (both `lib/fitselection`'s `selectedFitData` and the
+// Peaks workshop's `peakInputs` fallback read that view, never the raw data):
+//   • every x (time) value, byte for byte;
+//   • every value column's numbers, byte for byte;
+//   • every column LABEL and UNIT;
+//   • the kept row count, the column count, and the RAW row count — so a
+//     change to the exclusion list or the local filter moves the digest even
+//     in the degenerate case where the kept rows would hash the same.
 //
 // EVERY value column, not just the one the fit ran on: that needs no channel
 // INDEX in the record (which would falsify architecture.test.ts's
 // `DATASET_CHANNEL_REMAP_EXCLUDED` reason for `peakTable`), it survives a
 // column reorder without a remap rule of its own, and it is strictly more
 // conservative — the worst it can do is ask the user to re-fit after an edit
-// to a column the fit never read. It deliberately does NOT digest row state
-// (`excludedRows`/`filter`): those select a SUBSET of unchanged measurements
-// and the Peaks workshop already re-runs detection on them.
+// to a column the fit never read.
 //
-// FNV-1a over the IEEE-754 bytes, the same construction lib/jitter.ts uses for
-// its (non-exported, UTF-8) hash: 32-bit, allocation-free per value, and exact
-// — NaN and -0 hash to stable values distinct from 0 rather than collapsing
-// the way `String(v)` would.
+// ROUND 3 (2026-09-15) widened it three ways, each closing a MEASURED hole:
+//   • the x channel was reduced to four order statistics (length/first/last/
+//     min/max), so an interior 2θ edit — a bulk paste into the x column via
+//     `store/cellEdit.setCellBlock` — was invisible to it. Hashing the whole
+//     column costs one pass (it replaces the min/max loop) and makes the
+//     store-side clears belt-and-braces rather than load-bearing.
+//   • labels/units were not digested, so correcting a mis-imported unit from
+//     "" to "1/A" in the Inspector left the table offered to Williamson-Hall
+//     under the unit it had been fit with.
+//   • the digest was taken from `ds.data` while the fit ran on the analysis
+//     view, so toggling a row exclusion moved the fit's real input with the
+//     digest still saying "valid". Digesting the view closes that, and needs
+//     no separate row-state stamp beyond the raw row count above.
+//
+// FNV-1a over the IEEE-754 bytes (and UTF-16 code units for text), the same
+// construction lib/jitter.ts uses for its (non-exported, UTF-8) hash: 32-bit,
+// allocation-free per value, and exact — NaN and -0 hash to stable values
+// distinct from 0 rather than collapsing the way `String(v)` would.
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 
-/** A digest of `data`'s numeric content — see the block comment above. Pure
- *  and deterministic: the same DataStruct always yields the same string, and
- *  any edit to any measured value changes it. */
-export function peakDataFingerprint(data: DataStruct): string {
-  const view = new DataView(new ArrayBuffer(8));
-  let h = FNV_OFFSET_BASIS >>> 0;
-  for (const row of data.values) {
-    for (const v of row) {
-      view.setFloat64(0, v);
-      for (let i = 0; i < 8; i++) {
-        h = Math.imul(h ^ view.getUint8(i), FNV_PRIME) >>> 0;
-      }
-    }
-  }
-  const x = data.time;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const v of x) {
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  const cols = data.values[0]?.length ?? 0;
-  return `1:${x.length}:${data.values.length}:${cols}:${x[0]}:${x[x.length - 1]}:${lo}:${hi}:${h}`;
+function fnvFloat(h: number, view: DataView, v: number): number {
+  view.setFloat64(0, v); // big-endian by default, read byte by byte — platform-independent
+  let acc = h;
+  for (let i = 0; i < 8; i++) acc = Math.imul(acc ^ view.getUint8(i), FNV_PRIME) >>> 0;
+  return acc;
 }
 
-/** Does `table` still describe `data`? A record with NO fingerprint (written
+/** Fold one string in, then a terminator so `["ab"]` and `["a","b"]` differ. */
+function fnvText(h: number, s: string): number {
+  let acc = h;
+  for (let i = 0; i < s.length; i++) acc = Math.imul(acc ^ s.charCodeAt(i), FNV_PRIME) >>> 0;
+  return Math.imul(acc ^ 0xff, FNV_PRIME) >>> 0;
+}
+
+/** A digest of `ds`'s ANALYSIS VIEW — see the block comment above. Pure and
+ *  deterministic: the same dataset always yields the same string, and any edit
+ *  to any measured value, column label, column unit or row-state changes it.
+ *
+ *  The `2:` prefix is the digest's OWN version. A fingerprint written by the
+ *  round-2 composition reads as a mismatch under this one, which asks for a
+ *  re-fit — the safe direction — rather than trusting a digest whose fields
+ *  meant something else. */
+export function peakDataFingerprint(ds: Dataset): string {
+  const data = analysisData(ds) ?? ds.data;
+  const view = new DataView(new ArrayBuffer(8));
+  let h = FNV_OFFSET_BASIS >>> 0;
+  for (const v of data.time) h = fnvFloat(h, view, v);
+  for (const row of data.values) {
+    for (const v of row) h = fnvFloat(h, view, v);
+  }
+  for (const s of data.labels) h = fnvText(h, s);
+  for (const s of data.units) h = fnvText(h, s);
+  const cols = data.values[0]?.length ?? 0;
+  return `2:${data.time.length}:${data.values.length}:${cols}:${ds.data.time.length}:${h}`;
+}
+
+/** Does `table` still describe `ds`? A record with NO fingerprint (written
  *  before the field existed, or by a caller that could not supply one) is
  *  "unknown", and unknown reads as YES — the same additive-optional, fail-soft
  *  contract `sanitizePeakTable` applies to every other field, so reopening a
  *  pre-round-2 `.dwk` still shows its saved fit. */
-export function peakTableMatchesData(table: PeakTable, data: DataStruct): boolean {
+export function peakTableMatchesData(table: PeakTable, ds: Dataset): boolean {
   const fp = table.provenance.fingerprint;
-  return fp === null || fp === peakDataFingerprint(data);
+  return fp === null || fp === peakDataFingerprint(ds);
 }
 
+// ── The "x is 2θ in degrees" rule (review round 3) ────────────────────────
+// Williamson-Hall reads `PeakTableEntry.center` AS 2-theta in degrees, so a
+// table fit on a q or d-spacing axis must be refused. The EXACT rule, two
+// clauses, no others:
+//   1. a PRESENT unit passes only on an EXACT match (trimmed, lower-cased)
+//      against DEGREE_UNITS below. Exact, not substring: round 2 shipped
+//      `u.includes("deg") || u.includes("°")`, which passed `degC` and `°C`
+//      — a magnetometry M(T) curve in Celsius between 0 and 180 also clears
+//      the reduction's `0 < 2θ < 180` check, so that was a real wrong answer.
+//   2. an EMPTY unit passes only on LABEL evidence: `xLabel` matching
+//      TWO_THETA_LABEL ("2Theta", "2-theta", "2 θ", "two_theta", …). A great
+//      many XRD files record no unit at all, so refusing every unit-less axis
+//      would break the common case; but a unit-less q column ("q", "Q") then
+//      carries no 2θ evidence at all and is refused — the hole round 2
+//      measured end to end (a q pattern producing a plausible grain size).
+// Real XRD files clear clause 1 without needing clause 2: `io/_xrdml_scan.py`
+// writes `x_column_name: "2-Theta"` AND `x_column_unit: "deg"`, and
+// `xChannelIdentity` below records both.
+const DEGREE_UNITS = new Set(["deg", "°", "degree", "degrees"]);
+const TWO_THETA_LABEL = /2\s*-?\s*(theta|θ)|two[_ -]?theta/i;
+
 /** Is the axis this table was fit on 2-theta in DEGREES — i.e. may a consumer
- *  that reads `center` as 2-theta (Williamson-Hall) use it?
- *
- *  The rule is the UNIT TEXT, because that is the only x-convention signal the
- *  app records: "deg" or "°" (case-insensitive) passes, and an EMPTY unit
- *  passes too — a great many XRD files carry no unit string at all, and
- *  refusing every one of them would break the feature for the common case
- *  while proving nothing. Anything else present and non-degree ("1/A",
- *  "Å⁻¹", "nm") is a q/d-spacing axis and is refused: the reviewer's
- *  measured hole was a q-axis pattern loading into the 2-theta column and
- *  producing a plausible-looking grain size. */
+ *  that reads `center` as 2-theta (Williamson-Hall) use it? The exact rule is
+ *  in the block comment above. */
 export function peakTableXIsDegrees(table: PeakTable): boolean {
   const u = table.provenance.xUnit.trim().toLowerCase();
-  return u === "" || u.includes("deg") || u.includes("°");
+  return u === "" ? TWO_THETA_LABEL.test(table.provenance.xLabel) : DEGREE_UNITS.has(u);
 }
 
 /** The x channel's label/unit as the user sees it, for
@@ -158,11 +202,24 @@ export function xChannelIdentity(
  *  a peak that is gone cannot stay excluded, and guessing a neighbour for it is
  *  the exact failure this replaces. Ids are still minted fresh: a re-fit is a
  *  new measurement of the same peak, and reusing an id would claim the two rows
- *  are the same record. */
+ *  are the same record.
+ *
+ *  ROUND 3: the match must be MUTUALLY nearest (`isMutuallyNearest`). Nearest-
+ *  from-the-exclusion's-side alone let a VANISHED excluded peak inherit onto
+ *  the neighbour the user deliberately KEPT — measured at Kα1/Kα2 spacing
+ *  (old `[20.00 excluded, 20.20 kept]`, re-fit finds only `[20.20]`: 20.20 is
+ *  0.20° from the exclusion, inside a 0.25° tolerance, so it was excluded and
+ *  silently dropped out of Williamson-Hall). Under the OLD positional rule the
+ *  length change abandoned the mapping, so for that shape nearest-only was a
+ *  regression. Mutual nearest is exactly what separates "the same peak" from
+ *  "its neighbour", and a TIE (two prior peaks equidistant — the merged-peak
+ *  case) resolves to NOT carrying: an ambiguous inheritance that silently
+ *  drops a peak from a reduction is worse than a checkbox the user re-ticks. */
 function carriedExclusions(result: MultiFitResult, prior: PeakTable | null | undefined): boolean[] {
   const flags = result.peaks.map(() => false);
+  const priorPeaks = prior?.peaks ?? [];
   const taken = new Set<number>();
-  for (const old of prior?.peaks ?? []) {
+  for (const old of priorPeaks) {
     if (!old.excluded) continue;
     let best = -1;
     let bestGap = Infinity;
@@ -173,10 +230,10 @@ function carriedExclusions(result: MultiFitResult, prior: PeakTable | null | und
       // Half the SMALLER FWHM: two peaks closer than that are not resolvable
       // as separate peaks anyway, and the wider one must not swallow a
       // neighbour just because it is broad.
-      if (gap <= Math.min(Math.abs(p.fwhm), Math.abs(old.fwhm)) / 2 && gap < bestGap) {
-        best = i;
-        bestGap = gap;
-      }
+      if (gap > Math.min(Math.abs(p.fwhm), Math.abs(old.fwhm)) / 2 || gap >= bestGap) continue;
+      if (!isMutuallyNearest(priorPeaks, old, p.center)) continue;
+      best = i;
+      bestGap = gap;
     }
     if (best >= 0) {
       taken.add(best);
@@ -184,6 +241,20 @@ function carriedExclusions(result: MultiFitResult, prior: PeakTable | null | und
     }
   }
   return flags;
+}
+
+/** Is `old` the prior table's own nearest peak to `center`? Checked against
+ *  the WHOLE prior table, excluded rows included — a new peak that sits closer
+ *  to some other row of the table the user was looking at is that row's
+ *  re-measurement, not this exclusion's. Equidistant counts as "no" (see
+ *  `carriedExclusions`'s tie rule). */
+function isMutuallyNearest(
+  priorPeaks: readonly PeakTableEntry[],
+  old: PeakTableEntry,
+  center: number,
+): boolean {
+  const gap = Math.abs(old.center - center);
+  return !priorPeaks.some((q) => q !== old && Math.abs(q.center - center) <= gap);
 }
 
 /** Build a durable table from a fit result. `keepExclusionsFrom` carries the

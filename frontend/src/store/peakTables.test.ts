@@ -115,10 +115,15 @@ describe("publishFitResult — the round-2 provenance (data fingerprint + x axis
   it("stamps a fingerprint of the LIVE data, so the table can be told stale later", () => {
     publishFitResult("d1", RESULT, "simultaneous", OPTS);
     const ds = useApp.getState().datasets[0];
-    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds.data));
-    expect(peakTableMatchesData(ds.peakTable!, ds.data)).toBe(true);
+    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds));
+    expect(peakTableMatchesData(ds.peakTable!, ds)).toBe(true);
     // Edit one measured value and the SAME table no longer describes it.
-    expect(peakTableMatchesData(ds.peakTable!, { ...ds.data, values: [[1], [500], [2]] })).toBe(false);
+    expect(peakTableMatchesData(ds.peakTable!, { ...ds, data: { ...ds.data, values: [[1], [500], [2]] } })).toBe(
+      false,
+    );
+    // Round 3: excluding a row moves the fit's real input (the analysis view)
+    // without touching `ds.data` at all — the digest must see that too.
+    expect(peakTableMatchesData(ds.peakTable!, { ...ds, excludedRows: [1] })).toBe(false);
   });
 
   it("names the x axis from the time column's Origin metadata when nothing is plotted", () => {

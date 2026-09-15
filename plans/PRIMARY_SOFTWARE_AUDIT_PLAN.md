@@ -2729,7 +2729,8 @@ one of them was a claim this plan had already ticked.
   FIXED two ways, both needed: `PeakTableProvenance.fingerprint` — a
   deterministic digest of the dataset's numbers (`lib/peakTableFit.ts`'s
   `peakDataFingerprint`: row/column counts, the x channel's first/last/min/max,
-  FNV-1a over every value's float bytes) stamped at publish time and compared
+  FNV-1a over every value's float bytes — *this composition was widened in
+  round 2 below*) stamped at publish time and compared
   on every read — plus outright clears wherever `fitSpec` already clears
   (`store/reimport.ts`'s column branch, `store/corrections.ts`'s
   `applyCorrections` and `rowsChangedGuard`, `store/cellEdit.ts`'s
@@ -2756,7 +2757,11 @@ one of them was a claim this plan had already ticked.
   unit — TEXT, never a column index, so `architecture.test.ts`'s
   `DATASET_CHANNEL_REMAP_EXCLUDED` reason stays true — and the reduction
   refuses anything whose unit is present and not degrees. An unrecorded unit
-  still loads; most XRD files carry none.
+  still loads; most XRD files carry none. *(That last rule was the round-1
+  fix's weak point and was replaced in round 2 below: a substring test passed
+  `degC`, and "an unrecorded unit still loads" re-admitted the very q-axis
+  case this box exists to refuse, because a unit-less q CSV is the common
+  spelling of it.)*
 - **Exclusion carry-over across a re-fit was positional** with only a length
   guard, and `fitEach` publishes only the SUCCESSES — so an N-of-M run whose
   success count merely happened to match carried the user's exclusions onto
@@ -2816,6 +2821,144 @@ of -88 B** against a 920,400 budget left where it was (headroom 619 -> 707 B) �
 everything new is in the lazy-only `lib/peakTableFit.ts`, and the eager
 additions are funded by a shared `str()` coercion in `lib/peakTable.ts` and by
 folding `clearOverlaysFor`'s four identical `if`s into one typed loop.
+
+**Review round 2, 2026-09-15 (adversarial re-review of the fix commit above).**
+The round-1 CONFIRMEDs 2 and 3 were re-probed and are genuinely closed, and the
+backend is still untouched. Four new CONFIRMEDs and five nits, all closed in one
+commit; the theme is that round 1's invalidation was right in shape and too
+narrow in every detail that had been reduced to a summary statistic.
+
+- **The bulk sibling of the fixed cell writer did not clear, and the digest
+  could not see the write either.** `setCellValue` got `peakTable: undefined`;
+  `setCellBlock` twenty lines below — reachable from the same worksheet by
+  PASTING instead of typing — did not, and the fingerprint reduced the x
+  channel to `length/first/last/min/max`, so an INTERIOR 2θ paste changed
+  nothing it could see. Measured through the real panel and the real store:
+  after `setCellBlock("d1", [{row: 3, col: -1, value: 3.4}], "paste")` the
+  table was still present, `peakTableMatchesData` still returned **true**, and
+  the Peaks workshop re-presented the pre-paste fit over the moved abscissa.
+  FIXED both ways: `setCellBlock` and `setCategoricalCell` (the third cell
+  writer, safe only because a level code lands in `values`) now clear like
+  `setCellValue`, and the digest hashes the whole x column.
+- **The x-axis rule still passed a q axis whenever the unit string was
+  EMPTY**, which is the common spelling of the case round 1 set out to refuse
+  (a unit-less CSV) — probed end to end: `xLabel: "q"`, `xUnit: ""`, button
+  enabled, `two_theta_deg: [2.15, 3.04]` posted. The same expression's
+  `includes("deg")`/`includes("°")` also passed `degC` and `°C`, i.e. a
+  magnetometry M(T) curve in Celsius, whose 0..180 range clears `canCompute`
+  too. FIXED, and THE EXACT RULE IS NOW THIS, in `peakTableXIsDegrees`:
+  1. the unit is trimmed and lower-cased; a PRESENT unit passes only on an
+     EXACT match against `{"deg", "°", "degree", "degrees"}` — exact, never
+     substring, so `degC`/`°C`/`deg C`/`degrees C` are refused;
+  2. an EMPTY unit passes only on LABEL evidence — `xLabel` matching
+     `/2\s*-?\s*(theta|θ)|two[_ -]?theta/i`, i.e. `2Theta`, `2-Theta`,
+     `2 theta`, `2θ`, `two_theta`, `Two Theta`. A unit-less `q`/`Q`/`d` axis,
+     and a record naming no axis at all, are refused.
+  Real files clear clause 1 without needing clause 2 (`io/_xrdml_scan.py`
+  writes `x_column_name: "2-Theta"` AND `x_column_unit: "deg"`).
+- **Nearest-centre exclusion carry-over inherited an exclusion onto a peak the
+  user had explicitly KEPT.** Measured at Kα1/Kα2 spacing (0.20° apart, FWHM
+  0.50°, tolerance 0.25°): old table `[20.00 EXCLUDED, 20.20 INCLUDED]`, re-fit
+  finds only `[20.20]`, and the surviving peak — the one the user kept — came
+  back excluded and dropped silently out of Williamson-Hall. Under the OLD
+  positional rule the 2→1 length change abandoned the mapping, so for this
+  shape round 1 was a regression. FIXED: the match must be MUTUALLY nearest —
+  an old exclusion may claim a new row only when no other row of the whole
+  prior table (excluded or not) is as close to that row's centre. A tie (the
+  merged-peak case: 30.0 excluded + 30.1 kept re-fit as one 30.05) resolves to
+  NOT carrying, because an ambiguous inheritance that silently drops a peak
+  from a reduction is worse than a checkbox the user re-ticks.
+- **A row-state change moved the fit's real input while the digest said "still
+  valid".** The digest was taken from `ds.data`; the fit runs on
+  `analysisData(ds)` (`selectedFitData`, and `peakInputs`'s fallback). Probed:
+  fit over 6 rows, set `excludedRows = [3]`, detection re-ran on the 5-row
+  subset and the same effect rehydrated the 6-row fit over it. The header's
+  stated reason ("those select a SUBSET of unchanged measurements and the Peaks
+  workshop already re-runs detection on them") did not survive the measurement,
+  because re-running DETECTION never refreshes the FIT. FIXED by taking the
+  digest over the analysis view on both sides.
+- **The digest was widened ONCE, and that one edit retires three findings**
+  (the interior-x hole, this row-state hole, and the nit below about a stale
+  unit). It is now a single FNV-1a pass over `analysisData(ds) ?? ds.data`
+  covering: every x value's float bytes, every value column's float bytes,
+  every column label and unit (UTF-16 code units, each terminated so `["ab"]`
+  and `["a","b"]` differ), plus the kept row count, the column count and the
+  RAW row count in the prefix. The four x order statistics are gone — the
+  whole-column hash replaces them and the min/max loop, so this is not a second
+  pass (round-2 NIT 5's concern). The prefix is versioned `2:`; a round-1
+  fingerprint therefore reads as a mismatch, which asks for a re-fit — the safe
+  direction — rather than trusting a digest whose fields meant something else.
+- **Nits, all closed.** (2) `publishFitResult` stamped `st.xKey` while
+  `peakInputs` falls back to `data.time` whenever `effectiveChannels(...)[0]`
+  is undefined (`lib/fitselection.ts:48-49`), so the provenance could name a
+  channel the fit never touched; `peakInputs` now returns the `xKeyUsed` it
+  actually took and that is what is stamped. (3) closed by the digest above.
+  (4) the Williamson-Hall refusal now names the REMEDY ("this dataset has
+  changed since the fit — re-fit the peaks in the Peaks workshop") rather than
+  a cause that reads as wrong to a user who only added a computed column; the
+  q-axis note spells an empty unit as "no unit recorded" instead of "()".
+  (5) closed by hashing the x column in the one pass. (1) was the commit
+  trailer, which is this session's standing convention, not a code finding.
+  `peakInputs` moved to its own `components/workshops/peaks/peakInputs.ts` so
+  `usePeaks.ts` did not grow toward its ceiling (497 -> 478 by the split rule).
+
+**Invalidation completeness, as it now stands** — every store path that writes
+a dataset's numbers: (a) clears the table, (b) carries it and the fingerprint
+REJECTS at read time, (c) carries it and it still matches.
+
+| Path | Site | Verdict |
+|---|---|---|
+| `applyCorrections` | `corrections.ts:211` | **(a)** unconditional |
+| `rowsChangedGuard` (trims, derived recompute) | `corrections.ts:105` | **(a)** |
+| column-changing `reimportDataset` | `reimport.ts:242` | **(a)** |
+| same-shape `reimportDataset` | `reimport.ts:177` | **(b)** — correctly KEPT when the bytes are identical |
+| `setCellValue` | `cellEdit.ts:273` | **(a)** |
+| `setCellBlock` (value cells AND the x column) | `cellEdit.ts:341` | **(a)** — round 2's fix |
+| `setCategoricalCell` | `cellEdit.ts:397` | **(a)** — round 2's fix |
+| `insertRows` / `deleteRows` | `cellEdit.ts:149-212` | (b) |
+| `addFormula` / `removeFormula` | `computedColumns.ts` | (b) |
+| `recomputeStaleDatasets`, derived-sheet branch | `recalcDatasets.ts:94-104` | (a) on a row-count change, else (b) |
+| `recomputeStaleDatasets`, bgRef branch | `recalcDatasets.ts:110+` | (a) — delegates to `applyCorrections` |
+| `levelOrder` / `recode` | `levelOrder.ts:274`, `recode.ts` | (b) |
+| `splitDatasetByColumn`, `mergeSelected`, `duplicateDataset`, `createDerivedWorksheet` | `split.ts:153`, `useApp.ts:1731`, `derivedWorksheets.ts` | whitelist constructions — no table carried |
+| `setDatasetFilter` / row-exclusion toggle | `rowState.ts` | **(b)** — was (c); closed by digesting the analysis view |
+| a column RENAME or unit correction (Inspector) | — | **(b)** — was uncaught; closed by digesting labels/units |
+
+No (c) rows remain. Readers are all gated exactly as round 1 left them, except
+that `publishFitResult`'s unchecked read into the exclusion matcher is now safe
+for the neighbour case as well (the mutual-nearest rule above).
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| S1 | x column no longer hashed (round-1 order statistics) | `peakTable.test.ts` "changes when an INTERIOR x value moves and the extremes do not", "changes when the x channel is shifted…", "does NOT match once an interior x cell is pasted over"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" (4) |
+| S2 | labels/units no longer hashed | `peakTable.test.ts` "changes when a column LABEL or UNIT is corrected", "does NOT match once a column is renamed", "does not split labels ambiguously…" (3) |
+| S3 | digest the RAW data, not `analysisData` | `peakTable.test.ts` "changes when a row is EXCLUDED…", "does NOT match once a row is excluded"; `peakTables.test.ts` "stamps a fingerprint of the LIVE data…"; `usePeaks.test.ts` "does NOT re-present the fit once a ROW IS EXCLUDED"; `WilliamsonHallSection.test.tsx` "disables the action once a ROW IS EXCLUDED…" (5) |
+| S4 | drop `fnvText`'s string terminator | `peakTable.test.ts` "does not split labels ambiguously — ['ab'] and ['a','b'] differ" |
+| S5 | fold `ds.id` into the digest (non-data input) | `peakTable.test.ts` "still matches a structurally IDENTICAL re-import of the same numbers" |
+| S6 | `setCellBlock` stops clearing | `cellEdit.test.ts` "setCellBlock drops it too — a PASTE is the bulk sibling of typing", "…for a VALUE-column paste as well" (2) |
+| S7 | `setCategoricalCell` stops clearing | `cellEdit.test.ts` "setCategoricalCell drops it — a level code IS a number in `values`" |
+| S8 | drop the mutual-nearest guard (nearest-only again) | `peakTable.test.ts` "does NOT inherit a vanished exclusion onto the neighbour the user KEPT", "does NOT inherit onto a peak that MERGED an excluded and a kept one" (2) |
+| S9 | mutual-nearest never holds (the over-correction) | `peakTable.test.ts` 6 carry-over tests incl. "still carries when the excluded peak IS the nearest prior row"; `peakTables.test.ts` "re-fitting keeps the exclusions the user set…" (7) |
+| S10 | unit test back to `includes("deg")`/`includes("°")` | `peakTable.test.ts` "refuses a unit that merely CONTAINS a degree spelling (degC, °C)"; `WilliamsonHallSection.test.tsx` "refuses a Celsius axis…" (2) |
+| S11 | an empty unit always passes (round-1 rule) | `peakTable.test.ts` "refuses a unit-less axis with no 2θ evidence in its label"; `WilliamsonHallSection.test.tsx` "refuses a UNIT-LESS q axis…" (2) |
+| S12 | an empty unit always refused (over-correction) | `peakTable.test.ts` "accepts an unrecorded unit only on 2θ LABEL evidence…"; `WilliamsonHallSection.test.tsx` "still loads a unit-less table whose LABEL names the 2θ axis" (2) |
+| S13 | stamp the plotted `xKey` again, not `xKeyUsed` | `usePeaks.test.ts` "stamps the x axis the fit RAN on, not the plotted one" |
+| S14 | refusal text stops naming the remedy | `WilliamsonHallSection.test.tsx` "disables the action, and says why…", "disables the action once a ROW IS EXCLUDED…" (2) |
+
+**Gate (2026-09-15).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,147 tests passed**; `uv run pytest -q
+tests/test_repo_integrity.py` **12 passed**; `node scripts/check-bundle-size.mjs`
+OK. Backend untouched. Eager bundle, exact bytes on clean `npm ci` builds either
+side (`ff45a200` -> this commit): **919,693 -> 919,674, a delta of −19 B**
+against the 920,400 budget left where it was (headroom 707 -> 726 B). The two
+new eager `peakTable: undefined` clears in `store/cellEdit.ts` cost 34 B and are
+funded by hoisting that file's twice-spelled paste-skip reason into one
+`PASTE_SKIP_REASON` constant (−53 B, measured); everything else new is in the
+lazy-only `lib/peakTableFit.ts` and the lazy peaks/reductions workshops.
 
 - [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
   documented Kα1-over-average preference can fire for Bruker patterns.

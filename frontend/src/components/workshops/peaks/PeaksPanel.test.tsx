@@ -561,7 +561,11 @@ describe("PeaksPanel — durable table exclusion column (P2.1)", () => {
       linkMode: "None",
       constrain: false,
       wavelengthA: null,
-      fingerprint: peakDataFingerprint({ ...DATA, values: [[1], [5], [2], [6], [2], [99]] }),
+      fingerprint: peakDataFingerprint({
+        id: "d1",
+        name: "x.dat",
+        data: { ...DATA, values: [[1], [5], [2], [6], [2], [99]] },
+      }),
     });
     useApp.setState({
       datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: saved }],

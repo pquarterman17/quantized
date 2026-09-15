@@ -15,7 +15,7 @@ import {
   peakTableXIsDegrees,
   withPeakExcluded,
 } from "./peakTableFit";
-import type { DataStruct } from "./types";
+import type { DataStruct, Dataset } from "./types";
 
 function fitResult(centers: number[]): MultiFitResult {
   return {
@@ -35,6 +35,13 @@ function fitResult(centers: number[]): MultiFitResult {
     nPeaks: centers.length,
     model: "Gaussian",
   };
+}
+
+/** `fitResult` with one FWHM for every peak — the carry-over tolerance is half
+ *  the smaller FWHM, so the Kα1/Kα2 cases below need to set it explicitly. */
+function wide(centers: number[], fwhm: number): MultiFitResult {
+  const r = fitResult(centers);
+  return { ...r, peaks: r.peaks.map((p) => ({ ...p, fwhm })) };
 }
 
 const SOURCE = {
@@ -151,6 +158,38 @@ describe("peakTableFromFit", () => {
     expect(peakTableFromFit(fitResult([30.25]), SOURCE, marked).peaks[0].excluded).toBe(false);
   });
 
+  it("does NOT inherit a vanished exclusion onto the neighbour the user KEPT", () => {
+    // Round 3 CONFIRMED 3, at Kα1/Kα2 spacing: 0.20° apart, FWHM 0.50°, so the
+    // half-FWHM tolerance is 0.25° and the surviving 20.20 peak sits INSIDE
+    // it. Nearest-from-the-exclusion's-side alone therefore excluded the peak
+    // the user deliberately kept, and `includedPeaks` dropped it out of
+    // Williamson-Hall in silence. 20.20's own nearest prior peak is the 20.20
+    // row, not the excluded 20.00 one, so the match is not mutual.
+    const first = peakTableFromFit(wide([20.0, 20.2], 0.5), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[0].id, true);
+    const refit = peakTableFromFit(wide([20.2], 0.5), SOURCE, marked);
+    expect(refit.peaks.map((p) => [p.center, p.excluded])).toEqual([[20.2, false]]);
+  });
+
+  it("does NOT inherit onto a peak that MERGED an excluded and a kept one", () => {
+    // 30.0 (excluded) + 30.1 (kept) re-fit as one 30.05 peak: equidistant from
+    // both, so the inheritance is ambiguous and is not made.
+    const first = peakTableFromFit(wide([30.0, 30.1], 0.5), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[0].id, true);
+    const refit = peakTableFromFit(wide([30.05], 0.6), SOURCE, marked);
+    expect(refit.peaks.map((p) => p.excluded)).toEqual([false]);
+  });
+
+  it("still carries when the excluded peak IS the nearest prior row", () => {
+    // The positive control for the mutual-nearest guard: same spacing and
+    // tolerance as the two cases above, but the peak that survives is the
+    // EXCLUDED one, so the match is mutual and the exclusion is kept.
+    const first = peakTableFromFit(wide([20.0, 20.2], 0.5), SOURCE);
+    const marked = withPeakExcluded(first, first.peaks[0].id, true);
+    const refit = peakTableFromFit(wide([20.01], 0.5), SOURCE, marked);
+    expect(refit.peaks.map((p) => [p.center, p.excluded])).toEqual([[20.01, true]]);
+  });
+
   it("never gives two exclusions the same row", () => {
     const first = peakTableFromFit(fitResult([30.1, 30.15]), SOURCE);
     let marked = withPeakExcluded(first, first.peaks[0].id, true);
@@ -161,15 +200,22 @@ describe("peakTableFromFit", () => {
   });
 });
 
-// ── Data fingerprint + x-axis identity (review round 2) ───────────────────
+// ── Data fingerprint + x-axis identity (review rounds 2 and 3) ────────────
 
-const scan = (over: Partial<DataStruct> = {}): DataStruct => ({
-  time: [10, 20, 30, 40],
-  values: [[1], [9], [2], [1]],
-  labels: ["I"],
-  units: ["cps"],
-  metadata: {},
-  ...over,
+/** A minimal Dataset around a DataStruct — `peakDataFingerprint` digests the
+ *  dataset's ANALYSIS VIEW, so it takes the dataset, not the raw struct. */
+const scan = (over: Partial<DataStruct> = {}, ds: Partial<Dataset> = {}): Dataset => ({
+  id: "d1",
+  name: "film.xrdml",
+  data: {
+    time: [10, 20, 30, 40],
+    values: [[1], [9], [2], [1]],
+    labels: ["I"],
+    units: ["cps"],
+    metadata: {},
+    ...over,
+  },
+  ...ds,
 });
 
 describe("peakDataFingerprint", () => {
@@ -187,6 +233,14 @@ describe("peakDataFingerprint", () => {
     // The xOff-correction case: every 2-theta moves, nothing else does.
     expect(peakDataFingerprint(scan({ time: [10.5, 20.5, 30.5, 40.5] }))).not.toBe(
       peakDataFingerprint(scan()),
+    );
+  });
+
+  it("changes when an INTERIOR x value moves and the extremes do not", () => {
+    // Round 3 CONFIRMED 1: the round-2 digest reduced x to length/first/last/
+    // min/max, so pasting over one interior 2-theta cell was invisible to it.
+    expect(peakDataFingerprint(scan({ time: [10, 21, 30, 40] }))).not.toBe(
+      peakDataFingerprint(scan({ time: [10, 20, 30, 40] })),
     );
   });
 
@@ -208,23 +262,62 @@ describe("peakDataFingerprint", () => {
     expect(peakDataFingerprint(scan({ values: [[-0], [-0], [-0], [-0]] }))).not.toBe(zero);
   });
 
-  it("ignores labels/units/metadata — a rename is not a data change", () => {
-    expect(peakDataFingerprint(scan({ labels: ["counts"], units: ["a.u."], metadata: { k: 1 } }))).toBe(
-      peakDataFingerprint(scan()),
+  it("changes when a column LABEL or UNIT is corrected (round 3 NIT 3)", () => {
+    // The unit is what Williamson-Hall reads to decide the axis is 2-theta, so
+    // correcting a mis-imported `""` to `1/A` must invalidate the table.
+    expect(peakDataFingerprint(scan({ labels: ["counts"] }))).not.toBe(peakDataFingerprint(scan()));
+    expect(peakDataFingerprint(scan({ units: ["a.u."] }))).not.toBe(peakDataFingerprint(scan()));
+  });
+
+  it("does not split labels ambiguously — ['ab'] and ['a','b'] differ", () => {
+    const two = scan({ values: [[1, 0], [9, 0], [2, 0], [1, 0]], labels: ["a", "b"], units: ["", ""] });
+    const one = scan({ values: [[1, 0], [9, 0], [2, 0], [1, 0]], labels: ["ab", ""], units: ["", ""] });
+    expect(peakDataFingerprint(two)).not.toBe(peakDataFingerprint(one));
+  });
+
+  it("ignores metadata — a sidecar note is not a measurement", () => {
+    expect(peakDataFingerprint(scan({ metadata: { k: 1 } }))).toBe(peakDataFingerprint(scan()));
+  });
+
+  it("changes when a row is EXCLUDED — the fit's real input is the analysis view", () => {
+    // Round 3 CONFIRMED 4: the fit runs on `analysisData(ds)`, so a row
+    // exclusion moves its input while the raw `ds.data` is untouched.
+    expect(peakDataFingerprint(scan({}, { excludedRows: [2] }))).not.toBe(peakDataFingerprint(scan()));
+    // And a DIFFERENT row excluded is a different view again.
+    expect(peakDataFingerprint(scan({}, { excludedRows: [2] }))).not.toBe(
+      peakDataFingerprint(scan({}, { excludedRows: [1] })),
     );
   });
 });
 
 describe("peakTableMatchesData", () => {
-  const fitted = (data: DataStruct): PeakTable =>
-    peakTableFromFit(fitResult([30.1]), { ...SOURCE, fingerprint: peakDataFingerprint(data) });
+  const fitted = (ds: Dataset): PeakTable =>
+    peakTableFromFit(fitResult([30.1]), { ...SOURCE, fingerprint: peakDataFingerprint(ds) });
 
   it("matches the data it was fit from", () => {
     expect(peakTableMatchesData(fitted(scan()), scan())).toBe(true);
   });
 
+  it("still matches a structurally IDENTICAL re-import of the same numbers", () => {
+    // The same-shape reimport path keeps the table; identical bytes must keep
+    // it USABLE, or every re-import would demand a pointless re-fit.
+    expect(peakTableMatchesData(fitted(scan()), scan({}, { id: "d1-reimported" }))).toBe(true);
+  });
+
   it("does NOT match once a value changed", () => {
     expect(peakTableMatchesData(fitted(scan()), scan({ values: [[1], [500], [2], [1]] }))).toBe(false);
+  });
+
+  it("does NOT match once an interior x cell is pasted over", () => {
+    expect(peakTableMatchesData(fitted(scan()), scan({ time: [10, 21, 30, 40] }))).toBe(false);
+  });
+
+  it("does NOT match once a column is renamed", () => {
+    expect(peakTableMatchesData(fitted(scan()), scan({ labels: ["counts"] }))).toBe(false);
+  });
+
+  it("does NOT match once a row is excluded", () => {
+    expect(peakTableMatchesData(fitted(scan()), scan({}, { excludedRows: [2] }))).toBe(false);
   });
 
   it("treats a record with no fingerprint as unknown, which reads as still valid", () => {
@@ -235,18 +328,38 @@ describe("peakTableMatchesData", () => {
 });
 
 describe("peakTableXIsDegrees", () => {
-  const withUnit = (xUnit: string): PeakTable =>
-    peakTableFromFit(fitResult([30.1]), { ...SOURCE, xLabel: "2Theta", xUnit });
+  const withUnit = (xUnit: string, xLabel = "2Theta"): PeakTable =>
+    peakTableFromFit(fitResult([30.1]), { ...SOURCE, xLabel, xUnit });
 
   it("accepts degrees in the spellings real files use", () => {
-    for (const u of ["deg", "Deg", "degrees", "°", " ° "]) {
+    for (const u of ["deg", "Deg", "degree", "degrees", "°", " ° "]) {
       expect(peakTableXIsDegrees(withUnit(u))).toBe(true);
     }
   });
 
-  it("accepts an unrecorded unit — most XRD files carry none", () => {
-    expect(peakTableXIsDegrees(withUnit(""))).toBe(true);
-    expect(peakTableXIsDegrees(peakTableFromFit(fitResult([30.1]), SOURCE))).toBe(true);
+  it("refuses a unit that merely CONTAINS a degree spelling (degC, °C)", () => {
+    // Round 3 CONFIRMED 2: `includes("deg")`/`includes("°")` passed a
+    // magnetometry M(T) curve in Celsius, whose 0..180 range also clears the
+    // reduction's own `0 < 2θ < 180` check.
+    for (const u of ["degC", "°C", "degF", "deg C", "degrees C"]) {
+      expect(peakTableXIsDegrees(withUnit(u))).toBe(false);
+    }
+  });
+
+  it("accepts an unrecorded unit only on 2θ LABEL evidence — most XRD files carry none", () => {
+    for (const label of ["2Theta", "2-Theta", "2 theta", "2θ", "two_theta", "Two Theta"]) {
+      expect(peakTableXIsDegrees(withUnit("", label))).toBe(true);
+    }
+  });
+
+  it("refuses a unit-less axis with no 2θ evidence in its label", () => {
+    // The case round 2 measured end to end: a unit-less q CSV loaded into the
+    // 2-theta column and produced a plausible-looking grain size.
+    for (const label of ["q", "Q", "d", "d-spacing", ""]) {
+      expect(peakTableXIsDegrees(withUnit("", label))).toBe(false);
+    }
+    // ... including a record that names no axis at all.
+    expect(peakTableXIsDegrees(peakTableFromFit(fitResult([30.1]), SOURCE))).toBe(false);
   });
 
   it("refuses a reciprocal-space or real-space axis", () => {

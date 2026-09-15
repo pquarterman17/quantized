@@ -1145,7 +1145,7 @@ describe("reimportDataset — the durable peak table (audit P2.1, review round 2
         linkMode: "None",
         constrain: false,
         wavelengthA: null,
-        fingerprint: peakDataFingerprint(data),
+        fingerprint: peakDataFingerprint({ id: "d1", name: "sample.dat", data }),
       },
     );
 
@@ -1187,7 +1187,7 @@ describe("reimportDataset — the durable peak table (audit P2.1, review round 2
 
     const ds = useApp.getState().datasets[0];
     expect(ds.peakTable?.peaks[0].center).toBe(20);
-    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds.data));
+    expect(ds.peakTable?.provenance.fingerprint).toBe(peakDataFingerprint(ds));
   });
 
   it("a same-shape re-measure keeps the record but the fingerprint reports it stale", async () => {
@@ -1201,6 +1201,6 @@ describe("reimportDataset — the durable peak table (audit P2.1, review round 2
 
     const ds = useApp.getState().datasets[0];
     expect(ds.peakTable).toBeDefined();
-    expect(ds.peakTable?.provenance.fingerprint).not.toBe(peakDataFingerprint(ds.data));
+    expect(ds.peakTable?.provenance.fingerprint).not.toBe(peakDataFingerprint(ds));
   });
 });

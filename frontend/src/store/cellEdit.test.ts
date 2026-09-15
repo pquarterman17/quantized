@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "./useApp";
 import { recomputeFromBase } from "../lib/formulaInputs";
+import type { PeakTable } from "../lib/peakTable";
 import { peakTableFromFit } from "../lib/peakTableFit";
-import type { ComputedColumn, Dataset } from "../lib/types";
+import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { resetBookTransportForTests } from "../lib/bookData";
 
 const ds = (): Dataset => ({
@@ -942,44 +943,90 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
   });
 });
 
-describe("setCellValue — the durable peak table (audit P2.1, review round 2)", () => {
-  it("drops a fit measured from the value that was just typed over", () => {
+describe("the cell writers and the durable peak table (audit P2.1, review rounds 2 and 3)", () => {
+  const savedTable = (): PeakTable =>
+    peakTableFromFit(
+      {
+        peaks: [
+          { center: 2, fwhm: 0.2, height: 20, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Gaussian" },
+        ],
+        bgCoeffs: [1, 0],
+        R2: 0.99,
+        rmse: 0.1,
+        nPeaks: 1,
+        model: "Gaussian",
+      },
+      {
+        datasetId: "d1",
+        datasetName: "film",
+        method: "simultaneous" as const,
+        bgDegree: 1,
+        linkMode: "None",
+        constrain: false,
+        wavelengthA: null,
+      },
+    );
+
+  const mountFitted = (over: Partial<DataStruct> = {}): void => {
     useApp.setState({
       datasets: [
         {
           id: "d1",
           name: "film",
-          data: { time: [1, 2, 3], values: [[10], [20], [30]], labels: ["m"], units: [""], metadata: {} },
-          peakTable: peakTableFromFit(
-            {
-              peaks: [
-                { center: 2, fwhm: 0.2, height: 20, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Gaussian" },
-              ],
-              bgCoeffs: [1, 0],
-              R2: 0.99,
-              rmse: 0.1,
-              nPeaks: 1,
-              model: "Gaussian",
-            },
-            {
-              datasetId: "d1",
-              datasetName: "film",
-              method: "simultaneous" as const,
-              bgDegree: 1,
-              linkMode: "None",
-              constrain: false,
-              wavelengthA: null,
-            },
-          ),
+          data: {
+            time: [1, 2, 3],
+            values: [[10], [20], [30]],
+            labels: ["m"],
+            units: [""],
+            metadata: {},
+            ...over,
+          },
+          peakTable: savedTable(),
         },
       ],
       activeId: "d1",
     });
+  };
+
+  it("drops a fit measured from the value that was just typed over", () => {
+    mountFitted();
 
     useApp.getState().setCellValue("d1", 1, 0, 500);
 
     const ds = useApp.getState().datasets[0];
     expect(ds.data.values[1][0]).toBe(500);
+    expect(ds.peakTable).toBeUndefined();
+  });
+
+  it("setCellBlock drops it too — a PASTE is the bulk sibling of typing", () => {
+    // Round 3 CONFIRMED 1: this path is one keystroke from the one above and
+    // did not clear. Measured then: an interior x paste left the table
+    // present AND matching, so the Peaks workshop re-presented the pre-paste
+    // fit over the moved abscissa.
+    mountFitted();
+
+    useApp.getState().setCellBlock("d1", [{ row: 1, col: -1, value: 3.4 }], "paste");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.time).toEqual([1, 3.4, 3]);
+    expect(ds.peakTable).toBeUndefined();
+  });
+
+  it("setCellBlock drops it for a VALUE-column paste as well", () => {
+    mountFitted();
+
+    useApp.getState().setCellBlock("d1", [{ row: 2, col: 0, value: 999 }], "paste");
+
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+  });
+
+  it("setCategoricalCell drops it — a level code IS a number in `values`", () => {
+    mountFitted({ labels: ["phase"], cat_levels: { 0: ["A", "B"] }, values: [[0], [1], [0]] });
+
+    useApp.getState().setCategoricalCell("d1", 1, 0, "A");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.values[1][0]).toBe(0);
     expect(ds.peakTable).toBeUndefined();
   });
 });

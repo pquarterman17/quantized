@@ -60,11 +60,14 @@ export function publishFitResult(
         // live data" are stamped HERE, from the same live `ds` the exclusions
         // are read from — the x axis the fit ran on (so Williamson-Hall can
         // refuse a q/d-spacing table) and a digest of the data itself (so
-        // every reader can tell a stale fit from a current one). The digest is
-        // taken from `ds.data`, not from the pruned fit input, because that is
-        // what every reader has in hand later.
+        // every reader can tell a stale fit from a current one). Round 3: the
+        // digest is taken from the DATASET, so `peakDataFingerprint` hashes
+        // the analysis view the fit actually ran on, and `opts.xKey` is the
+        // channel `peakInputs` really used — not the plotted one it may have
+        // fallen back from (lib/fitselection's `selectedFitData` returns null
+        // when no y channel is effective, and the fit then runs on `time`).
         ...xChannelIdentity(ds.data, opts.xKey),
-        fingerprint: peakDataFingerprint(ds.data),
+        fingerprint: peakDataFingerprint(ds),
       },
       ds.peakTable ?? null,
     ),

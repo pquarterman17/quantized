@@ -1073,7 +1073,11 @@ describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =>
       linkMode: "None",
       constrain: false,
       wavelengthA: null,
-      fingerprint: peakDataFingerprint({ ...DATA, values: [[9], [9], [9], [9], [9], [9]] }),
+      fingerprint: peakDataFingerprint({
+        id: "d1",
+        name: "x.dat",
+        data: { ...DATA, values: [[9], [9], [9], [9], [9], [9]] },
+      }),
     });
     useApp.setState({
       datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: saved }],
@@ -1086,6 +1090,58 @@ describe("usePeaks durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =>
     expect(result.current.fitResult).toBeNull();
     // The record itself survives — it is the store's, not this hook's, to drop.
     expect(result.current.peakTable).toBe(saved);
+  });
+
+  it("does NOT re-present the fit once a ROW IS EXCLUDED (round 3 CONFIRMED 4)", async () => {
+    // The fit ran on the analysis view; excluding a row changes that view
+    // while `ds.data` is untouched. Detection re-runs on the new subset, and
+    // the very same effect used to rehydrate the OLD subset's fit over it.
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    expect(result.current.fitResult?.peaks[0].center).toBe(1.02);
+    act(() => {
+      useApp.setState({ datasets: [{ ...useApp.getState().datasets[0], excludedRows: [3] }] });
+    });
+    await waitFor(() => expect(vi.mocked(findPeaks).mock.calls.length).toBe(2));
+    expect(result.current.fitResult).toBeNull();
+    // The record itself survives — it is the store's, not this hook's, to drop.
+    expect(result.current.peakTable).not.toBeNull();
+  });
+
+  it("stamps the x axis the fit RAN on, not the plotted one (round 3 NIT 2)", async () => {
+    // With no effective y channel, `selectedFitData` returns null and
+    // `peakInputs` fits on the TIME axis — so the provenance must name the
+    // time column, never `labels[xKey]`/`units[xKey]` of a channel the fit
+    // never touched.
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "x.dat",
+          data: {
+            ...DATA,
+            labels: ["q"],
+            units: ["1/A"],
+            metadata: { x_column_name: "2-Theta", x_column_unit: "deg" },
+          },
+        },
+      ],
+      xKey: 0,
+      yKeys: [],
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue(fitted(1.02));
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+    await act(async () => {
+      await result.current.fitTogether(OPTS);
+    });
+    const prov = useApp.getState().datasets[0].peakTable?.provenance;
+    expect(prov?.xLabel).toBe("2-Theta");
+    expect(prov?.xUnit).toBe("deg");
   });
 
   it("a cell edit re-runs detection and does not bring the pre-edit fit back", async () => {
