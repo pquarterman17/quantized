@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-14 (BUG-015 fixed; BUG-016 filed; BUG-012..BUG-015 divergence tests renamed)  
+**Updated:** 2026-09-14 (BUG-012 and BUG-015 fixed; BUG-016 filed; BUG-012..BUG-015 divergence tests renamed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -36,7 +36,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
-| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-012)` test, not fixed |
+| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-014)` test, not fixed |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
@@ -3046,13 +3046,22 @@ commit closes it:
 
 ---
 
-## BUG-012 — a saved figure's x-axis break reaches export/reopen but never renders on screen
+## ~~BUG-012 — a saved figure's x-axis break reaches export/reopen but never renders on screen~~ **FIXED 2026-09-14**
 
-**Priority:** P2 — the document and the export are correct and agree with each
-other; only the live canvas disagrees with both. No data is lost or altered,
-but a user who reopens their own saved figure sees a plot that silently
-stopped matching what they exported, with no indication anything is wrong —
-exactly the kind of screen/export mismatch the P4.2 matrix exists to catch.
+**Priority:** P2 — the document and the export were correct and agreed with
+each other; only the live canvas disagreed with both. No data was lost or
+altered, but a user who reopened their own saved figure saw a plot that
+silently stopped matching what they exported, with no indication anything was
+wrong — exactly the kind of screen/export mismatch the P4.2 matrix exists to
+catch.
+
+**State:** FIXED 2026-09-14. `Stage/useEffectiveComposition`'s durable
+fallback now derives the paneled break from the document's canonical
+`plot.axisBreaks.x` through `lib/facet.durableComposition`, which wraps the
+SAME `breakCompositionFromBreaks` builder the live `breakAtGaps` gesture
+constructs its arrangement with — one construction site, so a reopened figure
+cannot panel differently from the one the user drew. See the Completion
+record.
 
 **Reported:** 2026-09-14, by the P4.2 canonical regression matrix
 (`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
@@ -3062,7 +3071,7 @@ report.
 **Investigated:** root cause confirmed by reading the composition/fallback
 chain, not inferred — see Confirmed implementation evidence below.
 
-**Suggested implementation owner/model:** Unassigned.
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-14.
 
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
 plot/project regression matrix"), divergence D1.
@@ -3078,7 +3087,7 @@ the series as one continuous, unbroken line. The exported figure and the
 reopened document both say "this plot has a break here"; the screen the user
 is actually looking at does not show one.
 
-#### Confirmed implementation evidence
+#### Confirmed implementation evidence (as filed — the state BEFORE the fix)
 
 - `frontend/src/lib/figureDocument.ts:44`, `:179-182`, `:295`, `:426` —
   `FigureDocument.plot.axisBreaks` (`{x, y, y2}`) is the canonical, persisted
@@ -3148,45 +3157,101 @@ argues for keeping it toward the upper end of P2 rather than P3.
 
 #### Fix checklist
 
-- [ ] Give `useEffectiveComposition`'s durable fallback a break-aware branch
+- [x] Give `useEffectiveComposition`'s durable fallback a break-aware branch
   (an `axisBreaks`-driven composition builder analogous to
   `facetCompositionFromBinding`), or otherwise make a reopened document
   re-derive the same panel arrangement `breakAtGaps` would have produced live.
-- [ ] Confirm `MultiPanelStage.tsx`'s panel-break render path can consume
+  **Done:** `lib/facet.breakCompositionFromBreaks` is that builder and is the
+  ONE construction site — `store/useApp.ts`'s `breakAtGaps` builds its live
+  arrangement with it too (net-zero lines; that file sits on its size pin) —
+  and `lib/facet.durableComposition` wraps it together with the facet fallback
+  so the PRECEDENCE has a single definition as well. No new persisted field:
+  the ranges are read from the canonical `plot.axisBreaks.x` the export path
+  already uses.
+- [x] Confirm `MultiPanelStage.tsx`'s panel-break render path can consume
   that fallback exactly as it consumes a freshly-applied `breakAtGaps`
-  composition — no separate render branch.
-- [ ] Add a regression test at the DOM/render layer (not only the structural
+  composition — no separate render branch. **Done** — it consumes the
+  `Composition` prop, so one break-mode branch renders both; pinned at the DOM
+  layer by `MultiPanelStage.test.tsx`'s "renders one uPlot per segment from
+  the document alone, with no live gesture". One gate change was required: the
+  mount predicate (now the shared `multiPanelShowing`, which
+  `useLiveSnapshotPublish`'s `altModeShowing` also calls instead of restating
+  it) treats a break arrangement as its own explicit intent, because an
+  AUTHORED break has no `stackMode` toggle to restore the way the
+  `breakAtGaps` gesture does.
+- [x] Add a regression test at the DOM/render layer (not only the structural
   payload) that a workspace SAVE → RELOAD round-trip shows the break on
   screen, per this repo's "test at the layer the user experiences" discipline.
-- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-012): a saved x-break reaches export and reopen; the
-  screen has no field to render it from", ...)` — delete the two divergent
-  pins (`screen` `[]` and the `PlotView` rebuild) and the `.not.toEqual`,
-  leaving `expect(projectScreen(...).xBreaks).toEqual(projectExport(...)
-  .xBreaks)`, and rename the test to what then holds. The fix makes the
-  current assertion RED; it is not an `it.fails` that would silently become
-  an "unexpected pass".
-- [ ] Drop the `break` fixture's `DIVERGENT` narrowing
-  (`regressionMatrix.test.ts:108-110`) once the screen leg agrees again.
+  **Done** — the DOM case above renders the real component through the real
+  hook from a reopened-shaped store and asserts each panel's x SLICE, not just
+  the panel count (the plain per-channel stack would also make two).
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — it is
+  now `it("BUG-012: a saved x-break reaches export, reopen AND the screen it
+  is drawn on", ...)`, asserting `projectScreen(...).xBreaks` equals both
+  other legs' `[[2, 3]]`. The screen leg MEASURES that value from the panel
+  geometry the shared derivation produces (`screenXBreaks`), so the equality
+  is still evidence about the product; the `PlotView`-cannot-carry-a-break
+  pins are kept, because that is still true and is exactly why the fix reads
+  the document instead.
+- [x] Drop the `break` fixture's `DIVERGENT` narrowing — done; `break` now
+  compares field-for-field like `plain`, and its committed golden gained
+  `"xBreaks": [[2, 3]]` — the only golden that changed, every other one
+  byte-identical after a full regeneration.
 
 #### Acceptance criteria
 
-- [ ] A figure with a saved x-axis break renders the break on screen
+- [x] A figure with a saved x-axis break renders the break on screen
   immediately after a workspace reopen, with no user action required.
-- [ ] `projectScreen(document, dataset).xBreaks` equals
+- [x] `projectScreen(document, dataset).xBreaks` equals
   `projectExport(document, dataset).xBreaks` for the `break` fixture — the
   equality BUG-012's divergence test is inverted into.
-- [ ] The fix does not change `breakAtGaps`'s existing live-session
+- [x] The fix does not change `breakAtGaps`'s existing live-session
   behavior — applying a break interactively during the same session still
-  works exactly as before.
+  works exactly as before: the action's own store tests are unchanged and
+  green, the live `composition` still wins over both durable bindings (pinned
+  by a test), and the shared builder keeps the action's "fewer than two panels
+  is not a break" refusal.
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- Date: 2026-09-14
+- PR/commit: `fix(stage): BUG-012 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `45f43070`).
+- Code: `lib/facet.ts` (`breakCompositionFromBreaks`, `durableComposition`),
+  `components/Stage/useEffectiveComposition.ts` (the durable fallback plus the
+  shared `multiPanelShowing` mount predicate),
+  `components/Stage/PlotStage.tsx` and
+  `components/Stage/useLiveSnapshotPublish.ts` (both now ask that ONE
+  predicate, and PlotStage threads the ONE composition instead of two panel
+  arrays), `store/useApp.ts` (`breakAtGaps` builds through the shared builder,
+  net-zero lines), `lib/regressionMatrixLegs.testkit.ts` (the screen leg
+  measures its breaks off the rendered arrangement).
+- Automated tests: `components/Stage/useEffectiveComposition.test.tsx` (new —
+  fallback, drift guard against the live gesture, precedence, no-break
+  document, the two-panel refusal, and the mount predicate),
+  `components/Stage/MultiPanelStage.test.tsx` (new DOM case),
+  `store/plotRecipes.test.ts` (new — a recipe's captured break ranges rebuild
+  panels end to end), `lib/regressionMatrix.test.ts` (divergence inverted,
+  narrowing dropped), plus the regenerated `break.json` golden.
+- Agent verification: `tsc -b --force`, `eslint src --max-warnings=0`, and
+  `vitest run src/lib src/store src/components/Stage src/architecture.test.ts`
+  all green; every new test sabotage-verified (remove the break fallback → the
+  hook, DOM and matrix tests all fail; make the live gesture's build drift
+  from the shared builder → only the drift guard fails; drop the break clause
+  from the mount predicate → only the mount test fails; flip the facet/break
+  precedence → only the precedence test fails).
+- Owner verification: open — a real reopened figure on screen.
+- Notes: PRECEDENCE, defined and tested: when a figure carries BOTH a facet
+  binding and saved breaks, the facet grid wins — mirroring the export path,
+  where `routes/export_figures.py` branches on `if req.facets:` before the
+  flat renderer is reached and `calc/figure_facets.render_facets_figure`
+  honors a narrow override subset that excludes `x_breaks`. Also worth
+  recording: the live `breakAtGaps` gesture writes NO durable field of its own
+  (it only sets the transient `composition`), so the break this fix restores
+  is always an AUTHORED one — the Figure Builder's breaks panel or a plot
+  recipe, the only writers of `plot.axisBreaks.x`. The report's narrative of a
+  `breakAtGaps` gesture surviving save/reopen was therefore never reachable;
+  everything else in it reproduced exactly.
 
 ---
 

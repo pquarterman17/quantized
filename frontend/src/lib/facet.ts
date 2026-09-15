@@ -24,7 +24,7 @@
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { sliceRowSidecars } from "./rowSidecars";
-import { facetComposition, type Composition } from "./composition";
+import { breakComposition, facetComposition, type Composition } from "./composition";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
@@ -223,4 +223,58 @@ export function facetCompositionFromBinding(
 ): Composition | null {
   if (facetKey == null || !dataset) return null;
   return facetComposition(facetPayloads(analysisData(dataset) ?? dataset.data, facetKey, xKey, yKeys));
+}
+
+/** Rebuild a live paneled-x-break `Composition` from the durable break
+ *  ranges a figure persists (`FigureDocument.plot.axisBreaks.x`) -- the break
+ *  counterpart of `facetCompositionFromBinding` above, and the ONE place a
+ *  break arrangement is ever constructed (BUG-012): the store's live
+ *  `breakAtGaps` gesture and `useEffectiveComposition`'s durable fallback
+ *  both call THIS, so a reopened document panels exactly the way the live
+ *  gesture did instead of the two builds drifting apart. Same
+ *  `breakPayloads` call over the dataset's ANALYSIS view (row
+ *  exclusion/filter, guards #50/#53) as `facetCompositionFromBinding` makes
+ *  for facets, so a restored break honors whatever rows are currently in
+ *  play.
+ *
+ *  Returns null (an ordinary plot) when there are no breaks, no bound
+ *  dataset, or fewer than TWO panels survive -- `breakAtGaps`' own "not
+ *  enough data on both sides of a break to panel" refusal, kept here so the
+ *  durable fallback cannot render a one-panel "break" the live gesture would
+ *  have declined. Never throws. */
+export function breakCompositionFromBreaks(
+  dataset: Dataset | null | undefined,
+  breaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  if (!breaks?.length || !dataset) return null;
+  const panels = breakPayloads(analysisData(dataset) ?? dataset.data, xKey, yKeys, breaks);
+  return panels.length >= 2 ? breakComposition(panels) : null;
+}
+
+/** The arrangement a SAVED figure shows on screen when the live render cache
+ *  (`AppState.composition`) is gone -- the ONE durable derivation, shared by
+ *  `Stage/useEffectiveComposition`'s fallback and by the P4.2 regression
+ *  matrix's screen leg, so "what the canvas draws" has a single definition
+ *  including its PRECEDENCE.
+ *
+ *  Precedence when a figure carries BOTH a facet binding and saved breaks:
+ *  the facet grid wins. That mirrors the EXPORT path, where
+ *  `routes/export_figures.py` branches on `if req.facets:` before the flat
+ *  renderer is reached at all, and `calc/figure_facets.render_facets_figure`
+ *  honors only the narrow override subset a facet grid can show (`x_breaks`
+ *  is not in it) -- so screen and export resolve that combination the same
+ *  way instead of each picking a side. */
+export function durableComposition(
+  dataset: Dataset | null | undefined,
+  facetKey: number | null,
+  xBreaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  return (
+    facetCompositionFromBinding(dataset, facetKey, xKey, yKeys) ??
+    breakCompositionFromBreaks(dataset, xBreaks, xKey, yKeys)
+  );
 }

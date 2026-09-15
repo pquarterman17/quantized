@@ -11,14 +11,15 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { facetPanelsOf } from "../lib/composition";
-import { facetCompositionFromBinding } from "../lib/facet";
+import { breakPanelsOf, facetPanelsOf } from "../lib/composition";
+import { durableComposition, facetCompositionFromBinding } from "../lib/facet";
 import { buildFigureSpecFromDocument, buildStageFigureSpec } from "../lib/figureSpec";
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import type { Dataset } from "../lib/types";
 import { useGlobalPlotRecipes } from "./globalPlotRecipes";
+import { withPlotWindowDocument } from "./windowDocuments";
 import { metaFor } from "../lib/recipeIndex";
 import { useApp } from "./useApp";
 
@@ -63,6 +64,10 @@ function resetStore(datasets: Dataset[] = [dataset("d1")]) {
 }
 
 beforeEach(() => resetStore());
+
+/** The break the BUG-012 block at the bottom of this file authors and then
+ *  expects back, verbatim, on the applied figure. */
+const BREAK_RANGES: [number, number][] = [[10, 20]];
 
 /** Create + focus a real plot window bound to `datasetId` via the actual
  *  store actions -- `saveAsPlotRecipe` reads the focused-window facade
@@ -1020,5 +1025,46 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
     // measured: dropping `view.annotations`/`view.shapes` in `serializeWorkspace`
     // makes this fail, as it should.)
     expect(reopenedSpec).toEqual(stageSpec);
+  });
+});
+
+// BUG-012: the BREAK half of the same GAP note the facet block above closed.
+// `visual.axisBreaks` was always captured and always re-applied onto the new
+// figure's document — but until the durable fallback existed, nothing turned
+// it back into panels on screen, so "the recipe restores the break" stopped at
+// the document. `lib/facet.durableComposition` is what the focused Stage
+// derives from those same hydrated fields.
+describe("applyPlotRecipe rebuilds a live paneled x-break (BUG-012)", () => {
+  it("re-applies the captured break ranges onto the target figure AND they rebuild panels", async () => {
+    const winId = focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    // Author a break the way the Figure Builder's breaks panel does — onto the
+    // document's canonical `plot.axisBreaks.x`, through the declared document
+    // write chokepoint (never a raw `{ ...w, document }`).
+    useApp.setState((s) => ({
+      plotWindows: s.plotWindows.map((w) => {
+        if (w.id !== winId || w.kind !== "plot" || !w.document) return w;
+        const plot = { ...w.document.plot, axisBreaks: { ...w.document.plot.axisBreaks, x: BREAK_RANGES } };
+        return withPlotWindowDocument(w, { ...w.document, plot });
+      }),
+    }));
+
+    const id = (await useApp.getState().saveAsPlotRecipe("Broken XRD", "d1"))!;
+    const recipe = useApp.getState().plotRecipes.find((r) => r.id === id)!;
+    expect(recipe.visual.axisBreaks.x).toEqual(BREAK_RANGES);
+
+    const d2: Dataset = dataset("d2");
+    useApp.setState({ datasets: [dataset("d1"), d2], plotRecipes: useApp.getState().plotRecipes });
+    expect(await useApp.getState().applyPlotRecipe(id, "d2")).toBe(true);
+
+    const s = useApp.getState();
+    const focused = s.plotWindows.find((w) => w.id === s.focusedWindowId);
+    const applied = focused?.kind === "plot" ? focused.document : undefined;
+    expect(applied?.plot.axisBreaks.x).toEqual(BREAK_RANGES);
+
+    // 2theta is 10 | 20, 30 around the [10, 20] break — the SAME derivation
+    // `Stage/useEffectiveComposition` runs on the focused facade.
+    const rebuilt = durableComposition(d2, s.facetKey, applied?.plot.axisBreaks.x, s.xKey, s.yKeys);
+    expect(breakPanelsOf(rebuilt)).toHaveLength(2);
+    expect(breakPanelsOf(rebuilt)?.map((p) => p.xRange)).toEqual([[10, 10], [20, 30]]);
   });
 });

@@ -10,7 +10,9 @@ import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
+import { createFigureDocument } from "../../lib/figureDocument";
 import type { SpatialPanel } from "../../lib/multipanel";
+import { defaultPlotView } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import RealMultiPanelStage from "./MultiPanelStage";
@@ -615,5 +617,43 @@ describe("MultiPanelStage — shared-x flush stacking (item B)", () => {
       const fn = panel.opts.axes[0].values as (u: unknown, s: unknown[]) => unknown[];
       expect(fn(null, [1, 2, 3])).not.toEqual(["", "", ""]);
     }
+  });
+});
+
+// BUG-012: the DOM half of the durable x-break fallback. The store is shaped
+// like a just-reopened workspace — the focused window's document carries
+// `plot.axisBreaks.x`, `composition` is null — and the component under test is
+// the SAME wrapper every test above uses, i.e. the real
+// `useEffectiveComposition` feeding the real `MultiPanelStage`. Before the fix
+// this rendered ONE panel (an unbroken line); the paneled-break unit coverage
+// lives in `useEffectiveComposition.test.tsx`.
+describe("MultiPanelStage — a reopened document's saved x-break (BUG-012)", () => {
+  it("renders one uPlot per segment from the document alone, with no live gesture", async () => {
+    useApp.setState({
+      plotWindows: [
+        {
+          id: "w1", kind: "plot", title: "", datasetId: "d1",
+          geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "normal",
+          bg: "theme", linkGroup: null, pinned: false, view: defaultPlotView(),
+          document: createFigureDocument({
+            id: "fig-w1", name: "w1", datasetId: "d1", view: defaultPlotView(),
+            axisBreaks: { x: [[1, 2]] },
+          }),
+        },
+      ],
+      focusedWindowId: "w1",
+      composition: null,
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    // Non-vacuous: the plain per-channel stack ALSO makes two panels here (two
+    // channels, stackMode on), so the count alone proves nothing. A break
+    // panel is an x-SLICE carrying every channel — DATA's x is 0,1 | 2,3
+    // around the [1, 2] break — while a stack panel carries the full x with
+    // one channel. Assert the slicing.
+    const [left, right] = created as { data: number[][] }[];
+    expect(left.data[0]).toEqual([0, 1]);
+    expect(right.data[0]).toEqual([2, 3]);
+    expect(left.data).toHaveLength(3); // x + both channels, not one
   });
 });

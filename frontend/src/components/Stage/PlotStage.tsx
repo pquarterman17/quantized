@@ -10,7 +10,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
-import { facetPanelsOf, spatialPanelsOf } from "../../lib/composition";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -33,7 +32,7 @@ const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
 const StatStage = lazy(() => import("./StatStage"));
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
-import { useEffectiveComposition } from "./useEffectiveComposition";
+import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
 import { useGadgetChip } from "./useGadgetChip";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload } from "./usePlotPayload";
@@ -128,13 +127,13 @@ export default function PlotStage() {
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
-  // The panel arrangement (#54 pass A): a spatial/facet arrangement is its own
-  // explicit-intent gate (0/1 plotted channels can still show one). Durable-
-  // fallback-aware (F4.4 K1) -- see useEffectiveComposition's doc; also fed
-  // to MultiPanelStage as a prop below (L4 -- one derivation, not two).
+  // The panel arrangement (#54 pass A): a spatial/facet/break arrangement is
+  // its own explicit-intent gate (0/1 plotted channels can still show one).
+  // Durable-fallback-aware (F4.4 K1, BUG-012) -- see useEffectiveComposition's
+  // doc; also fed to MultiPanelStage as a prop below (L4 -- one derivation,
+  // not two) and to the snapshot publish, which asks the SAME
+  // `multiPanelShowing` predicate this file's mount gate below does.
   const composition = useEffectiveComposition(active);
-  const spatialPanels = spatialPanelsOf(composition);
-  const facetPanels = facetPanelsOf(composition);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
@@ -238,8 +237,7 @@ export default function PlotStage() {
     statMode,
     stackMode,
     plottedCount: plotted.length,
-    spatialPanels,
-    facetPanels,
+    composition,
     displayPayload,
     styleList,
     labelList,
@@ -253,10 +251,7 @@ export default function PlotStage() {
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
   if (polarMode && active) return <PolarStage />;
   if (statMode && active) return <Suspense fallback={null}><StatStage /></Suspense>;
-  if (
-    stackMode &&
-    (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
-  )
+  if (multiPanelShowing(composition, stackMode, plotted.length))
     return <Suspense fallback={null}><MultiPanelStage composition={composition} /></Suspense>; // L4: prop, not re-derived
 
   return (

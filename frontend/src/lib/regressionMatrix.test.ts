@@ -17,10 +17,16 @@
 // for the wrong reason, and a real fix would flip them to an unexplained
 // "unexpected pass". As written, fixing the bug turns the divergence assertion
 // red and the fix INVERTS it (`.not.toEqual` becomes `.toEqual`, the two
-// pinned values become one) — which is exactly what D2 and D4 below now are.
-//   D1 / BUG-012 x-breaks  — a document's `plot.axisBreaks.x` reaches the
-//                  export wire and survives reopen, but `PlotView` — the whole
-//                  input the canvas is built from — has no field for it.
+// pinned values become one) — which is exactly what D1, D2 and D4 below now are.
+//   D1 / BUG-012 x-breaks  — FIXED 2026-09-14. A document's
+//                  `plot.axisBreaks.x` reached the export wire and survived
+//                  reopen, but nothing on screen rendered it: `PlotView` — the
+//                  whole input the canvas is built from — has no field for it.
+//                  `useEffectiveComposition`'s durable fallback now derives the
+//                  paneled arrangement from the DOCUMENT's canonical field with
+//                  the same builder `breakAtGaps` uses, so the `break` fixture
+//                  is a full member of the matrix above (screen ≡ export ≡
+//                  reopen) and the pin below is the inverted equality.
 //   D2 / BUG-013 waterfall — FIXED 2026-09-14. The canvas offsets every series
 //                  by `view.waterfall`; `FigureSpec` carried no waterfall field
 //                  at all, so the export drew the un-offset curves. The wire
@@ -111,14 +117,14 @@ const GOLDENS: Record<MatrixFixtureName, unknown> = {
  *  pins each divergence's two CONCRETE values, so this table can never be
  *  quietly widened to make a regression go away.
  *
- *  `break` spoils BOTH comparisons because the screen is the odd leg out (it
- *  renders nothing from `axisBreaks.x`). `waterfall` used to narrow the export
- *  comparison too (BUG-013); it is a full member of the matrix since the wire
- *  grew `waterfall_offsets`. */
+ *  `break` USED to spoil both comparisons — the screen was the odd leg out,
+ *  rendering nothing from `axisBreaks.x` (BUG-012) — and `waterfall` used to
+ *  narrow the export comparison (BUG-013). Both are fixed, so no fixture
+ *  carries any narrowing today and every one compares field-for-field like
+ *  `plain`; the table stays so a future divergence has one honest place to
+ *  be recorded. */
 type Leg = "export" | "reopen";
-const DIVERGENT: Partial<Record<MatrixFixtureName, { field: keyof CanonicalFigure; legs: Leg[] }>> = {
-  break: { field: "xBreaks", legs: ["export", "reopen"] },
-};
+const DIVERGENT: Partial<Record<MatrixFixtureName, { field: keyof CanonicalFigure; legs: Leg[] }>> = {};
 
 function without(figure: CanonicalFigure, field: keyof CanonicalFigure): Partial<CanonicalFigure> {
   const copy: Partial<CanonicalFigure> = { ...figure };
@@ -323,27 +329,30 @@ describe("P4.2 regression matrix: multi-panel page", () => {
 //
 // Each test is named for the bug it reproduces, so `plans/BUGS_AND_ISSUES.md`
 // and the suite refer to each other by the same string.
-describe("P4.2 regression matrix: divergences found (D4 since FIXED, see below)", () => {
+describe("P4.2 regression matrix: divergences found (D1 and D4 since FIXED, see below)", () => {
   const dataset = matrixDataset();
 
-  // BUG-012 (D1). `FigureDocument.plot.axisBreaks.x` is the canonical home for
-  // elided x-ranges. `buildFigureSpecFromDocument` emits it as
-  // `overrides.x_breaks` and `parseWorkspace` restores it, but nothing on the
-  // canvas reads it: a plot window's live view is ONLY
-  // `figureDocumentToPlotView(window.document)` (`store/windowDocuments.ts`),
-  // and `PlotView` has no break field — the on-screen paneled break is a
-  // TRANSIENT `composition` built by the store's `breakAtGaps` action, and
-  // `useEffectiveComposition`'s durable fallback covers `facetKey` only.
-  it("DIVERGENCE (BUG-012): a saved x-break reaches export and reopen; the screen has no field to render it from", () => {
+  // BUG-012 (D1, FIXED 2026-09-14). `FigureDocument.plot.axisBreaks.x` is the
+  // canonical home for elided x-ranges. `buildFigureSpecFromDocument` emits it
+  // as `overrides.x_breaks` and `parseWorkspace` restores it; the canvas now
+  // renders it too, through `useEffectiveComposition`'s durable fallback
+  // (`lib/facet.breakCompositionFromBreaks` — the same builder the store's
+  // live `breakAtGaps` gesture constructs its arrangement with). A plot
+  // window's live view is still ONLY
+  // `figureDocumentToPlotView(window.document)` (`store/windowDocuments.ts`)
+  // and `PlotView` still has no break field — deliberately: the fix reads the
+  // DOCUMENT's canonical field rather than adding a second persisted home for
+  // the same ranges.
+  it("BUG-012: a saved x-break reaches export, reopen AND the screen it is drawn on", () => {
     const figure = matrixFixture("break");
     expect(projectExport(figure, dataset).xBreaks).toEqual([[2, 3]]);
     expect(projectReopen(reopenProject(figure, dataset)).xBreaks).toEqual([[2, 3]]);
-    expect(projectScreen(figure, dataset).xBreaks).toEqual([]);
+    expect(projectScreen(figure, dataset).xBreaks).toEqual([[2, 3]]);
 
-    // Why the screen leg has nothing to read: round-tripping the document
-    // through the canvas's ENTIRE input (`figureDocumentToPlotView`) and back
-    // loses the break. If `PlotView` carried it, the rebuilt document below
-    // would carry it too.
+    // The screen leg's value is MEASURED from the panel geometry it renders
+    // (`screenXBreaks`), not read off the document — `PlotView` still cannot
+    // carry a break, which is why the arrangement has to be derived from the
+    // document's own canonical field.
     const rebuilt = createFigureDocument({
       id: figure.id,
       name: figure.name,
@@ -352,7 +361,7 @@ describe("P4.2 regression matrix: divergences found (D4 since FIXED, see below)"
     });
     expect(figure.plot.axisBreaks.x).toEqual([[2, 3]]);
     expect(rebuilt.plot.axisBreaks.x).toEqual([]);
-    expect(projectScreen(figure, dataset).xBreaks).not.toEqual(
+    expect(projectScreen(figure, dataset).xBreaks).toEqual(
       projectExport(figure, dataset).xBreaks,
     );
   });

@@ -18,6 +18,7 @@
 import type uPlot from "uplot";
 
 import { groupLevelLabel, levelOrderFor } from "./categorical";
+import { breakPanelsOf } from "./composition";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import {
   figureDocumentToPlotView,
@@ -25,6 +26,7 @@ import {
 } from "./figureDocument";
 import type { FigureSpec } from "./api/figures";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "./figureSpec";
+import { durableComposition } from "./facet";
 import { markerDecision } from "./markers";
 import { channelModelingType } from "./modeling";
 import { applyGroupSplit, groupSplitChannelMap } from "./plotGroupSplit";
@@ -35,6 +37,7 @@ import {
   effectiveChannels,
   type PlotPayload,
 } from "./plotdata";
+import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";
 import { buildOpts } from "./uplotOpts";
 import type { AxisScale, Dataset, DataStruct, SeriesStyle, StepMode } from "./types";
@@ -220,6 +223,24 @@ export function screenDrawnStyles(
   }));
 }
 
+/** The x-ranges the SCREEN actually elides — MEASURED off the panel
+ *  arrangement the Stage renders, not read back off the document. The
+ *  arrangement comes from `lib/facet.durableComposition` — the SAME function
+ *  (precedence included) `Stage/useEffectiveComposition`'s durable fallback
+ *  derives the canvas's arrangement with, so this leg cannot claim a break the
+ *  canvas would not draw. Each adjacent panel pair's `[previous panel's max
+ *  x, next panel's min x]` IS the gap that arrangement leaves out. `[]` when nothing panels the
+ *  x axis — an ordinary single-panel plot, or a facet grid, which shares one
+ *  x domain and elides nothing (the same combination the export path
+ *  resolves in favour of the facets). */
+function screenXBreaks(figure: FigureDocument, dataset: Dataset, view: PlotView): [number, number][] {
+  const composition = durableComposition(
+    dataset, figure.bindings.facetKey, figure.plot.axisBreaks.x, view.xKey, view.yKeys,
+  );
+  const panels = breakPanelsOf(composition) ?? [];
+  return panels.slice(1).map((p, i): [number, number] => [panels[i].xRange[1], p.xRange[0]]);
+}
+
 export function projectScreen(figure: FigureDocument, dataset: Dataset): CanonicalFigure {
   const { mode, view, data, groupCol, plotted, split, display, styleList, spans, opts } =
     renderScreen(figure, dataset);
@@ -271,12 +292,9 @@ export function projectScreen(figure: FigureDocument, dataset: Dataset): Canonic
     grouping: groupingOf(data, groupCol),
     facet: facetOf(data, figure.bindings.facetKey, view.xKey, view.yKeys),
     y2Positions: series.flatMap((s, i) => (s.axis === 1 ? [i] : [])),
-    // DIVERGENCE (documented in regressionMatrix.test.ts): NOTHING on screen
-    // renders `FigureDocument.plot.axisBreaks.x`. The on-screen paneled break is
-    // a transient `composition` built by the store's `breakAtGaps` action, and
-    // `useEffectiveComposition`'s durable fallback covers `facetKey` only — so
-    // the screen leg has no artifact carrying a break at all.
-    xBreaks: [],
+    // BUG-012 (fixed): the screen's own paneled-break arrangement, measured
+    // from the panel geometry it renders — see `screenXBreaks` above.
+    xBreaks: screenXBreaks(figure, dataset, view),
     waterfallOffset: measureWaterfall(split, display),
     axes: {
       x: { label: axisLabelOf(opts.axes?.[0]?.label), scale: scaleOf(opts.scales?.x?.distr), limits: rangeOf(opts.scales?.x) },

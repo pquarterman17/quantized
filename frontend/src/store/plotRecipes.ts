@@ -55,16 +55,15 @@
 // write chokepoint (architecture.test.ts's "FigureDocument write
 // chokepoint (F1)") -- this module never assigns `.document` directly.
 //
-// GAP (documented, not a bug -- NARROWED to spatial/break by F4.4,
-// 2026-08-23): `resolved.visual.compositionKind` records which arrangement
-// was active at capture time. FACET now round-trips with zero rebuild code
-// in this module -- see `store/plotRecipeApply.ts`'s `applyResolvedRecipe`
-// doc for how. SPATIAL/BREAK remain a real gap: their panels need inputs
-// this resolve step genuinely can't produce (per-panel placement, break
-// ranges) and have no bindings-owned carrier the way facet now does -- see
-// `lib/plotRecipe.ts`'s header for why their panels are deliberately
-// uncaptured. A later slice with those inputs can read `compositionKind`
-// and rebuild via `spatialComposition`/`breakComposition` (lib/composition.ts).
+// GAP (documented, not a bug -- narrowed to spatial/break by F4.4 2026-08-23,
+// then to SPATIAL alone by BUG-012 2026-09-14): `compositionKind` records
+// which arrangement was active at capture time. FACET rebuilds with zero code
+// in this module (see `store/plotRecipeApply.ts`'s `applyResolvedRecipe`
+// doc), and so do AUTHORED break ranges -- captured `visual.axisBreaks` ->
+// the applied document's `plot.axisBreaks.x`, rebuilt by
+// `lib/facet.durableComposition`. SPATIAL is a real gap: per-panel placement
+// is an input this resolve step can't produce and has no bindings-owned carrier
+// (`lib/plotRecipe.ts`'s header says why those panels stay uncaptured).
 //
 // PERSISTENCE: `plotRecipes` lives in memory only this lane (the
 // `store/quickPlotTemplates.ts` PR-H two-commit precedent) -- `setPlotRecipes`

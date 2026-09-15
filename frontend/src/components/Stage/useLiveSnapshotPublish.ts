@@ -8,12 +8,12 @@
 
 import { useEffect, useMemo } from "react";
 import type { ColorScatterSpec } from "../../lib/colorscatter";
-import type { FacetPanel } from "../../lib/facet";
-import type { SpatialPanel } from "../../lib/multipanel";
+import type { Composition } from "../../lib/composition";
 import type { PlotPayload } from "../../lib/plotdata";
 import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
+import { multiPanelShowing } from "./useEffectiveComposition";
 
 export interface LiveSnapshotArgs {
   active: Dataset | null;
@@ -21,8 +21,12 @@ export interface LiveSnapshotArgs {
   statMode: boolean;
   stackMode: boolean;
   plottedCount: number;
-  spatialPanels: SpatialPanel[] | null;
-  facetPanels: FacetPanel[] | null;
+  /** The arrangement PlotStage derived ONCE (`useEffectiveComposition`) and
+   *  hands both to `MultiPanelStage` and to this hook — never re-derived
+   *  here, and never split back into per-kind panel arrays: `altModeShowing`
+   *  below asks the same `multiPanelShowing` predicate PlotStage's own mount
+   *  gate does, so the two cannot disagree about what is on screen. */
+  composition: Composition | null;
   displayPayload: PlotPayload | null;
   // Matches usePlotPayload's own return type exactly (each `| undefined`
   // while the payload is still being composed) — PlotStage passes these
@@ -42,22 +46,24 @@ export interface LiveSnapshotArgs {
 /** Whether an alternate render mode (polar/stats/multi-panel stack) is
  *  ACTUALLY showing right now — the XY bundle `usePlotPayload` computed
  *  isn't what's on screen then, so the snapshot publish below must no-op
- *  instead of freezing the wrong thing. Also gates PlotStage's own early
- *  returns to the alternate-mode components. */
+ *  instead of freezing the wrong thing. The multi-panel half is
+ *  `multiPanelShowing` (`useEffectiveComposition.ts`), the SAME predicate
+ *  PlotStage's own early return to `MultiPanelStage` calls — it used to be
+ *  restated here from the panel arrays PlotStage passed in, which is a
+ *  divergence waiting to happen (BUG-012 added a break clause to it). */
 function altModeShowing(
-  a: Pick<LiveSnapshotArgs, "active" | "polarMode" | "statMode" | "stackMode" | "plottedCount" | "spatialPanels" | "facetPanels">,
+  a: Pick<LiveSnapshotArgs, "active" | "polarMode" | "statMode" | "stackMode" | "plottedCount" | "composition">,
 ): boolean {
   return (
     (!!a.active && (a.polarMode || a.statMode)) ||
-    (a.stackMode && (a.plottedCount >= 2 || (a.spatialPanels?.length ?? 0) >= 2 || (a.facetPanels?.length ?? 0) >= 1))
+    multiPanelShowing(a.composition, a.stackMode, a.plottedCount)
   );
 }
 
 /** Runs the publish effect (cleared on unmount — the Plot tab switching
  *  away). PlotStage's own early-return gates to the alternate-mode
- *  components recompute this same condition inline from `nPlotted`/
- *  `spatialPanels`/`facetPanels` directly — this hook doesn't need to hand
- *  it back out. */
+ *  components call `multiPanelShowing` on the same `composition` it passes
+ *  in here — this hook doesn't need to hand its answer back out. */
 export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   const alt = altModeShowing(args);
   const { displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, seriesCycle } = args;

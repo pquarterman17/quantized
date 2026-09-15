@@ -100,8 +100,8 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
-import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
+import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
+import { breakCompositionFromBreaks, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
@@ -1373,8 +1373,8 @@ export const useApp = create<AppState>((set, get) => ({
       toast("no large x-gaps found to break at", "danger");
       return;
     }
-    const panels = breakPayloads(data, xKey, yKeys, useBreaks);
-    if (panels.length < 2) {
+    const composition = breakCompositionFromBreaks(ds, useBreaks, xKey, yKeys);
+    if (compositionPanelCount(composition) < 2) {
       toast("not enough data on both sides of a break to panel", "danger");
       return;
     }
@@ -1386,7 +1386,7 @@ export const useApp = create<AppState>((set, get) => ({
     // this, a later focus round-trip resurrects the REPLACED facet grid
     // instead of this break arrangement (`useEffectiveComposition`'s
     // fallback reads facetKey whenever `composition` itself is null again).
-    set({ stackMode: true, composition: breakComposition(panels), facetKey: null });
+    set({ stackMode: true, composition, facetKey: null });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).

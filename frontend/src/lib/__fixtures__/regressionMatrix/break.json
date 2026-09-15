@@ -28,7 +28,12 @@
     "panels": null
   },
   "y2Positions": [],
-  "xBreaks": [],
+  "xBreaks": [
+    [
+      2,
+      3
+    ]
+  ],
   "waterfallOffset": 0,
   "axes": {
     "x": {
