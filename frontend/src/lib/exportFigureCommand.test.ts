@@ -368,7 +368,10 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.x_key).toBe(1);
     expect(body.y_keys).toEqual([0]);
-    expect(body.dataset.labels).toEqual(["Measured signal", "B", "C"]);
+    // BUG-014: the rename rides its own per-series presentation field; the wire
+    // dataset keeps the DATA's labels so the backend cannot re-append the unit.
+    expect(body.series_styles?.[0]?.legend).toBe("Measured signal");
+    expect(body.dataset.labels).toEqual(["A", "B", "C"]);
     // The imported workbook itself remains untouched.
     expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B", "C"]);
   });

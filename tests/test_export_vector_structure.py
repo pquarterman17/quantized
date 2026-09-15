@@ -476,3 +476,89 @@ def test_waterfall_offsets_leave_the_legend_and_axis_labels_alone() -> None:
     svg = resp.content.decode("utf-8", "ignore")
     assert _legend_entries(svg) == _LEGEND_ENTRIES[:2]
     assert "Field" in svg and "Signal" in svg and "Stagger" in svg
+
+
+# ---------------------------------------------------------------------------
+# Legend renames (BUG-014): `series_styles[i].legend` is used VERBATIM
+# ---------------------------------------------------------------------------
+
+
+def _renamed_payload(legends: list[str | None]) -> dict[str, Any]:
+    """The fixture figure with a per-series legend override on some series.
+
+    The override rides the SAME per-series presentation list colour/width/dash
+    already ride, and the wire ``dataset`` keeps the DATA's labels and units --
+    which is the whole point of BUG-014: the renderer must not re-derive
+    "label (unit)" from those bytes once the user has renamed the series.
+    """
+    payload = _fixture_payload("svg")
+    payload["overrides"] = {"legend": {"show": True, "loc": "upper right"}}
+    payload["series_styles"] = [
+        None if legend is None else {"legend": legend} for legend in legends
+    ]
+    return payload
+
+
+def test_a_renamed_series_renders_its_legend_text_exactly() -> None:
+    # "Loop 1", not "Loop 1 (au)": the channel's own unit is NOT appended to a
+    # user-supplied legend, which is what the on-screen legend does too.
+    resp = client.post("/api/export/figure", json=_renamed_payload(["Loop 1", None, None]))
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Loop 1", "Series B (au)", "Series C (au)"]
+    # The dataset the request carried still names the channel "Series A"; only
+    # the presentation field changed.
+    assert _renamed_payload(["Loop 1", None, None])["dataset"]["labels"][0] == "Series A"
+
+
+def test_an_unrenamed_series_still_gets_its_unit_appended() -> None:
+    # The common case must not regress: with no `legend` anywhere the legend is
+    # byte-for-byte the pre-BUG-014 one.
+    resp = client.post("/api/export/figure", json=_renamed_payload([None, None, None]))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == _LEGEND_ENTRIES
+
+
+def test_a_renamed_solo_series_titles_its_axis_with_the_same_text() -> None:
+    # ``soloLabel`` on screen reads the RESOLVED legend, so the auto-derived
+    # y-axis title of a single-series figure has to read the rename too --
+    # otherwise the axis says "Series A (au)" under a legend saying "Loop 1".
+    payload = _renamed_payload(["Loop 1"])
+    payload["y_keys"] = [0]
+    payload["error_spans"] = [None]
+    payload.pop("y_label")
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Loop 1"]
+    assert "Loop 1" in svg
+    assert "Series A" not in svg
+
+
+def test_a_non_string_legend_degrades_instead_of_422ing_the_export() -> None:
+    # Same degrade-gracefully contract as every other key in that loose dict.
+    payload = _renamed_payload([None, None, None])
+    payload["series_styles"] = [{"legend": 7}, None, None]
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert _legend_entries(resp.content.decode("utf-8", "ignore")) == _LEGEND_ENTRIES
+
+
+def test_a_grouped_export_folds_the_rename_into_its_per_level_labels() -> None:
+    # The group branch expands each channel into one series per level, so a
+    # rename cannot name a finished series there; it replaces the CHANNEL-label
+    # half of "{label} ({group}={level})". Grouped export parity as a whole is
+    # BUG-016 -- this only pins that the rename still reaches that branch.
+    payload = _renamed_payload(["Loop 1", None, None])
+    payload["y_keys"] = [0]
+    payload["error_spans"] = [None]
+    payload["group_col"] = 2
+    payload["dataset"]["values"] = [
+        [row[0], row[1], float(i % 2)] for i, row in enumerate(payload["dataset"]["values"])
+    ]
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert _legend_entries(resp.content.decode("utf-8", "ignore")) == [
+        "Loop 1 (Series C=0) (au)",
+        "Loop 1 (Series C=1) (au)",
+    ]

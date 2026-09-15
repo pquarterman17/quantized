@@ -283,10 +283,17 @@ describe("4. Series display: order, hidden, labels, style alignment", () => {
     expect(body.y_keys).toEqual([3, 1, 0]);
   });
 
-  it("seriesLabels rename the request-local dataset.labels without mutating the imported workbook", async () => {
+  // BUG-014: a rename is a PRESENTATION choice, so it rides its own per-series
+  // field and the wire dataset keeps the DATA's labels and units. It used to be
+  // written onto `dataset.labels[ch]`, which the backend then appended the
+  // channel's unit to a second time.
+  it("seriesLabels ride series_styles[i].legend and leave the wire dataset's own labels alone", async () => {
     useApp.setState({ seriesLabels: { 0: "Measured signal" } });
     const body = await exportBody();
-    expect(body.dataset.labels).toEqual(["Measured signal", "B", "C", "D"]);
+    expect(body.dataset.labels).toEqual(["A", "B", "C", "D"]);
+    expect(body.series_styles?.[0]?.legend).toBe("Measured signal");
+    // Only the renamed channel carries one.
+    expect(body.series_styles?.[1]?.legend).toBeUndefined();
     expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B", "C", "D"]);
   });
 

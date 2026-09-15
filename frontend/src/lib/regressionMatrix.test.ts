@@ -387,24 +387,32 @@ describe("P4.2 regression matrix: divergences found (D1 and D4 since FIXED, see 
     );
   });
 
-  // BUG-014 (D3). A legend rename (`view.seriesLabels[ch]`) REPLACES the whole
-  // on-screen label in `lib/uplotOpts.ts` (`args.seriesLabels?.[i] ??
-  // "label (unit)"`), but on the wire it only replaces `dataset.labels[ch]`
-  // (`lib/figureSpec.ts`) and leaves `dataset.units[ch]` alone, and the backend
-  // still appends the unit (`routes/export_figures.py`'s `_resolve_figure`:
-  // `f"{s.label} ({s.unit})"`).
-  it('DIVERGENCE (BUG-014): a renamed series reads "Loop 1" on screen and "Loop 1 (au)" in the export', () => {
+  // BUG-014 (D3), FIXED 2026-09-15 — this is the divergence assertion INVERTED.
+  // A legend rename (`view.seriesLabels[ch]`) REPLACES the whole on-screen
+  // label in `lib/uplotOpts.ts` (`args.seriesLabels?.[i] ?? "label (unit)"`).
+  // It used to reach the wire as a rewritten `dataset.labels[ch]` with
+  // `dataset.units[ch]` untouched beside it, and the backend re-joined the two
+  // (`f"{s.label} ({s.unit})"`), so "Loop 1" exported as "Loop 1 (au)". The
+  // rename now rides its own per-series presentation field,
+  // `series_styles[i].legend`, which `calc.figure_labels.series_display_name`
+  // uses VERBATIM.
+  it("BUG-014: a renamed series reads the SAME legend text on screen and in the export", () => {
     const renamed = renamedFigure();
     expect(projectScreen(renamed, dataset).series[0].label).toBe("Loop 1");
-    expect(projectExport(renamed, dataset).series[0].label).toBe("Loop 1 (au)");
-    // The wire's own bytes, not the projection's reading of them: the rename
-    // lands on the label and the unit survives beside it, which is exactly what
-    // the backend re-joins.
-    const spec = buildFigureSpecFromDocument(renamed, dataset, renamed.name);
-    expect(spec.dataset.labels[0]).toBe("Loop 1");
-    expect(spec.dataset.units[0]).toBe("au");
-    expect(projectExport(renamed, dataset).series[0].label).not.toBe(
+    expect(projectExport(renamed, dataset).series[0].label).toBe(
       projectScreen(renamed, dataset).series[0].label,
+    );
+    // The wire's own bytes, not the projection's reading of them: the DATA's
+    // label and unit are both intact — a rename is a presentation choice, not
+    // a data edit — and the rename itself is the presentation field.
+    const spec = buildFigureSpecFromDocument(renamed, dataset, renamed.name);
+    expect(spec.dataset.labels[0]).toBe("Signal");
+    expect(spec.dataset.units[0]).toBe("au");
+    expect(spec.series_styles?.[0]?.legend).toBe("Loop 1");
+    // Non-vacuous: the derived form the backend would otherwise compose from
+    // those same bytes is a DIFFERENT string, which is what the bug shipped.
+    expect(projectScreen(renamed, dataset).series[0].label).not.toBe(
+      `${spec.dataset.labels[0]} (${spec.dataset.units[0]})`,
     );
   });
 
@@ -421,13 +429,17 @@ describe("P4.2 regression matrix: divergences found (D1 and D4 since FIXED, see 
     // Both legs draw exactly the two survivors (channels 1 and 2).
     expect(projectScreen(hidden, dataset).series.map((s) => s.channel)).toEqual([1, 2]);
     expect(projectExport(hidden, dataset).series.map((s) => s.channel)).toEqual([1, 2]);
-    // Non-vacuous: slots 1 and 2 are the survivors' ORIGINAL positions, and
-    // they are different paints from slots 0 and 1, which the filtered index
-    // would have given them.
+    // The screen leg paints the survivors on slots 1 and 2 — their ORIGINAL
+    // positions, not the 0 and 1 the filtered index would give them. That
+    // measured pin is what makes the leg-to-leg equality below non-vacuous.
     expect(projectScreen(hidden, dataset).series.map((s) => s.color)).toEqual([
       TEST_SERIES_PALETTE[1],
       TEST_SERIES_PALETTE[2],
     ]);
+    // A FIXTURE guard, not a product one (review NIT 5): it only says the
+    // palette installed above gives slots 0-2 three distinct paints, so the
+    // pin one line up could have failed. It compares two literal constants
+    // and can never see a product regression.
     expect([TEST_SERIES_PALETTE[1], TEST_SERIES_PALETTE[2]]).not.toEqual([
       TEST_SERIES_PALETTE[0],
       TEST_SERIES_PALETTE[1],

@@ -208,6 +208,7 @@ def build_grouped_series(
     x_key: int | str | None,
     y_keys: Sequence[int | str],
     group_col: int | str,
+    y_legends: Sequence[str | None] | None = None,
 ) -> PlotData:
     """Faithful port of the frontend's ``lib/plotspec.ts`` ``buildXY``
     colour split (GUI_INTERACTION #12 Slice 5): each ``y_keys`` channel
@@ -233,7 +234,11 @@ def build_grouped_series(
         layer's existing NaN -> null conversion covers this series the
         same way it covers every other one; this pure layer stays NaN,
         like :func:`build_series`).
-      - Label: ``f"{y_label} ({group_label}={level})"`` -- ``level`` is the
+      - Label: ``f"{y_label} ({group_label}={level})"`` -- where
+        ``y_label`` is the channel's own label unless ``y_legends`` supplies
+        a per-``y_keys`` legend override for it (BUG-014's presentation
+        field, aligned 1:1 with ``y_keys``; ``None``/absent entries keep the
+        channel label, which is every pre-BUG-014 request). ``level`` is the
         RAW numeric group value (see :func:`_format_level`), never a
         resolved category text label -- UNLESS ``group_col`` is a P1.4
         categorical channel (:func:`quantized.datastruct.is_categorical`),
@@ -273,9 +278,10 @@ def build_grouped_series(
     group_is_categorical = is_categorical(ds, gi)
 
     series: list[PlotSeries] = []
-    for yk in y_keys:
+    for k, yk in enumerate(y_keys):
         yi = _resolve(ds, yk)
-        y_label = ds.labels[yi]
+        legend = y_legends[k] if y_legends is not None and k < len(y_legends) else None
+        y_label = ds.labels[yi] if legend is None else legend
         y_unit = ds.units[yi]
         y_vals = ds.values[:, yi]
         for lvl in levels:

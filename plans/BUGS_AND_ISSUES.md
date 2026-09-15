@@ -38,7 +38,7 @@ This is a working document, not a claim that every observation is already reprod
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
-| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-014)` test, not fixed |
+| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
 
@@ -3463,7 +3463,7 @@ RENDERING is wrong.
 
 ---
 
-## BUG-014 — a renamed legend loses its unit on screen but keeps it on export
+## ~~BUG-014 — a renamed legend loses its unit on screen but keeps it on export~~ **FIXED 2026-09-15**
 
 **Priority:** P3 — cosmetic only: the figure and its data are correct on
 both legs, the legend wording simply disagrees between screen and export.
@@ -3477,7 +3477,7 @@ report.
 builder and the backend's label formatting, not inferred — see Confirmed
 implementation evidence below.
 
-**Suggested implementation owner/model:** Unassigned.
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-15.
 
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
 plot/project regression matrix"), divergence D3.
@@ -3492,6 +3492,12 @@ re-appends the channel's unit to the rename, producing a label the user
 never asked for and does not see on screen.
 
 #### Confirmed implementation evidence
+
+(As FILED, 2026-09-14, before the fix. The line numbers and the three code
+shapes named below — `seriesLabels?.[i] ?? …`, the `dataset.labels[ch]`
+rewrite, and the unconditional `f"{s.label} ({s.unit})"` — describe the code
+the bug was found in; the Completion record names what replaced them. Kept
+verbatim as the record of the finding.)
 
 - `frontend/src/lib/uplotOpts.ts:694` (`seriesLabels?: (string |
   undefined)[]` on the opts builder's args) and `:907` — the on-screen
@@ -3550,39 +3556,124 @@ different measurement.
 
 #### Fix checklist
 
-- [ ] Decide the contract: either the frontend sends the FULLY-RESOLVED
-  legend string (unit included or not, exactly as the screen shows it) and
-  the backend stops unconditionally appending a unit, or the backend learns
-  to distinguish "raw channel label, append the unit" from "user-supplied
-  legend text, use verbatim."
-- [ ] Whichever shape is chosen, thread a rename through distinctly from an
-  un-renamed channel label so `_resolve_figure`'s unit-appending format
-  (`routes/export_figures.py:234`, `:267`) applies only to the latter.
-- [ ] Confirm an UN-renamed series (no `seriesLabels` entry) still gets its
+- [x] Decide the contract: **the backend learns to distinguish "raw channel
+  label, append the unit" from "user-supplied legend text, use verbatim."**
+  The frontend does NOT send a fully-resolved string in `dataset.labels`: a
+  rename is a presentation choice, not a data edit, so the wire `dataset`
+  now carries the DATA's own labels and units (any data-table/CSV consumer
+  of the same spec still sees the real column names) and the rename rides
+  its own optional field, `series_styles[i].legend` — the EXISTING per-series
+  presentation object, aligned 1:1 with `y_keys` exactly as
+  `color`/`width`/`line`/`marker` already are. Additive and optional: a
+  request with no rename is byte-identical to before.
+- [x] Whichever shape is chosen, thread a rename through distinctly from an
+  un-renamed channel label so the unit-appending format applies only to the
+  latter. The composition moved into the pure layer as
+  `calc.figure_labels.series_display_name(label, unit, legend)` — legend
+  verbatim when present, `"label (unit)"` otherwise — and
+  `routes/export_figures_labels.py` (a new route-layer sibling) reads the
+  loose `legend` key off the wire and applies it to the series names AND to
+  the auto-derived solo-axis titles, which `uplotOpts`' `soloLabel` also
+  reads off the resolved legend.
+- [x] Confirm an UN-renamed series (no `seriesLabels` entry) still gets its
   unit appended on export exactly as today — the common case must not
-  regress.
-- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
-  `it('DIVERGENCE (BUG-014): a renamed series reads "Loop 1" on screen and
-  "Loop 1 (au)" in the export', ...)` — delete the export-side "Loop 1 (au)"
-  pin and the `.not.toBe`, leaving
-  `expect(projectExport(...).series[0].label).toBe(projectScreen(...)
-  .series[0].label)`, and rename the test. The fix makes the current
-  assertion RED, not an "unexpected pass".
+  regress. `tests/test_export_vector_structure.py`'s
+  `test_an_unrenamed_series_still_gets_its_unit_appended` renders the real
+  SVG and reads the legend group's `<text>` entries.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — the
+  export-side "Loop 1 (au)" pin and the `.not.toBe` are gone, replaced by the
+  screen-equals-export equality, and the test is renamed to drop the
+  `DIVERGENCE` prefix. It is kept non-vacuous by pinning the wire's own bytes
+  (`dataset.labels[0] === "Signal"`, `units[0] === "au"`,
+  `series_styles[0].legend === "Loop 1"`) and asserting the screen's text
+  differs from the `"label (unit)"` the backend would otherwise compose from
+  them.
 
 #### Acceptance criteria
 
-- [ ] A series renamed on screen exports with the identical legend text, no
-  unit re-appended.
-- [ ] An un-renamed series continues to export with its unit appended
+- [x] A series renamed on screen exports with the identical legend text, no
+  unit re-appended — measured in the rendered SVG, not only on the wire
+  (`test_a_renamed_series_renders_its_legend_text_exactly`: the legend group
+  reads `["Loop 1", "Series B (au)", "Series C (au)"]`).
+- [x] An un-renamed series continues to export with its unit appended
   exactly as before (no regression).
-- [ ] `projectExport(renamed, dataset).series[0].label` equals
+- [x] `projectExport(renamed, dataset).series[0].label` equals
   `projectScreen(renamed, dataset).series[0].label` — the equality
   BUG-014's divergence test is inverted into.
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
+- PR/commit: `fix(export): BUG-014 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `50b30a04`). The wire gains ONE optional field,
+  `series_styles[i].legend`; `FigureRequest.series_styles` is a list of loose
+  dicts by design ("a bad/unrecognized value in ANY of these keys degrades
+  gracefully"), so `frontend/api/openapi.json` and
+  `frontend/src/lib/api/schema.d.ts` are BYTE-IDENTICAL after regenerating
+  them (`uv run python tools/dump_openapi.py`, `npm run api:types`) — the
+  schema never enumerated those keys. No persisted contract changed either:
+  a rename still lives in `view.seriesLabels`, `sanitizeExportSeriesStyles`
+  deliberately does NOT restore a `legend` from a saved
+  `publication.seriesStyles`, and no document version moved.
+- Module-ceiling work this required: `frontend/src/lib/figureSpec.ts` was at
+  499 of 500 lines, so the per-series half was extracted to
+  `frontend/src/lib/figureSpecSeries.ts` (display/plotted/position
+  resolution, the legend overlay, the `series_styles` assembly and
+  `exportErrorSpans`) with its own `figureSpecSeries.test.ts`;
+  `src/quantized/routes/export_figures.py` was at 499, so label resolution
+  moved to `routes/export_figures_labels.py` and `_tick_fmt` moved beside
+  its own `TickFormatSpec` in `routes/export_figures_schema.py`. No pin was
+  raised and no comment shaved.
+- Known limit: the `group_col` branch expands each channel into one series
+  PER LEVEL, so a rename cannot name a finished series there. It replaces the
+  channel-label half of `build_grouped_series`' `"{label} ({group}={level})"`
+  template instead (new optional `y_legends` argument), which reproduces the
+  pre-fix wire byte-for-byte — grouped export parity as a whole stays
+  BUG-016. Facet panels ship FINISHED series strings that no per-series field
+  on the request can reach, so their labels are still resolved client-side
+  from a request-local relabelled copy; only the `dataset` that rides the
+  wire changed.
+- Automated tests: `tests/test_export_vector_structure.py` — five new
+  structural tests reading the rendered SVG's legend group (rename verbatim;
+  un-renamed unchanged; a renamed SOLO series' auto-derived axis title;
+  a non-string `legend` degrading instead of 422ing; the grouped branch).
+  `frontend/src/lib/figureSpecSeries.test.ts` — new file, 15 tests.
+  `frontend/src/lib/figureSpec.test.ts` — the rename/blank-rename wire tests,
+  the updated byte/deep-equal wire shape, and the publication-styles branches.
+  `frontend/src/lib/regressionMatrix.test.ts` — the inverted BUG-014 test.
+  `frontend/src/lib/exportParity.test.ts` and `exportFigureCommand.test.ts` —
+  the two pre-existing "rename rewrites `dataset.labels`" pins, rewritten to
+  the honest wire.
+- Agent verification: sabotage table (each reverted in turn, then restored) —
+  (a) `withSeriesLegends` returning `styles` unchanged → 11 failures across
+  `figureSpecSeries.test.ts`, `figureSpec.test.ts`, `regressionMatrix.test.ts`,
+  `exportParity.test.ts` and `exportFigureCommand.test.ts`; (b)
+  `series_display_name` ignoring its `legend` argument → 2 backend failures
+  (`test_a_renamed_series_renders_its_legend_text_exactly`,
+  `test_a_renamed_solo_series_titles_its_axis_with_the_same_text`);
+  (c) the grouped branch ignoring `y_legends` → 1 backend failure
+  (`test_a_grouped_export_folds_the_rename_into_its_per_level_labels`);
+  (d) `solo_axis_label` recomposing from the channel instead of the resolved
+  name → 1 backend failure (the solo-axis test).
+  Gate: `uv run ruff check src tests tools`; `uv run mypy src` (296 files);
+  `uv run pytest -q tests/test_openapi_snapshot.py tests/test_repo_integrity.py
+  tests/test_export_vector_structure.py tests/test_api_export.py
+  tests/test_calc_figure.py`; `npx tsc -b --force`;
+  `npx eslint src --max-warnings=0`;
+  `npx vitest run src/lib src/architecture.test.ts`;
+  `node scripts/freeze-regression-matrix.mjs --check` clean (the canonical
+  payload is unchanged — the goldens are SCREEN projections and no fixture is
+  renamed); `node scripts/check-bundle-size.mjs` green.
+- Bundle (measured): parent `50b30a04` **919,877 B** eager -> this commit
+  **919,877 B**, a **+0 B** delta — the per-file eager byte list is identical
+  entry for entry. The split did NOT grow the eager graph:
+  `lib/figureSpecSeries.ts` lands in the same lazy `figureSpec` chunk its
+  caller does (that chunk grew 6.64 kB -> 7.34 kB). Both builds were run
+  after `npm ci`, with vite's transform cache cleared, and
+  `node scripts/check-bundle-size.mjs` reports 898.3 kB eager of the 898.8 kB
+  budget, unmoved.
+- Owner verification: pending — rename a series' legend on screen, export the
+  figure, and confirm the PDF's legend reads exactly what the on-screen
+  legend reads.
 - Agent verification: —
 - Owner verification: —
 - Notes: —
@@ -3596,6 +3687,17 @@ workaround (temporarily un-hide, export, re-hide, or manually recolour after
 export), no data loss. Matches the same class of bug `SeriesCycle` was
 already built to fix for the live Stage export — this is that fix not
 reaching a saved document's export path.
+
+**Scope correction (2026-09-15, review NIT 4):** "a saved document's export
+path" UNDER-STATES it. `store/prefs.ts:105` defaults `autoSeriesStyles` to
+`false`, and the positional correction was gated on that preference, so the
+LIVE Stage export (Copy figure / Copy figure (vector) / Export figure…) was
+equally broken for every user who never turned it on — which is the default.
+Measured on the fix commit's own parent: Stage export, `hiddenChannels: [1]`,
+cycle OFF → parent `#8fe08f`, fixed `#d9a3ff` (the screen's slot). The fix
+covers that path too, at the same chokepoint and by the same mechanism (it
+derives `positions` in `buildFigureSpecForView`, which BOTH entry points route
+through), so no separate change was needed for it.
 
 **Reported:** 2026-09-14, by the P4.2 canonical regression matrix
 (`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
@@ -3617,7 +3719,10 @@ A user hides the first of two plotted series (via the legend). On screen,
 the second series keeps its ORIGINAL palette colour — hiding a series never
 reflows the colours of the series still visible. Exporting the same figure
 (PDF/SVG) recolours the second series as if it were now first in line: the
-exported colour does not match what the user sees on screen.
+exported colour does not match what the user sees on screen. This is true of
+BOTH export paths — a saved document's, and the live Stage export with the
+`autoSeriesStyles` preference off, i.e. its default (see the scope
+correction above).
 
 #### Confirmed implementation evidence
 
@@ -3772,12 +3877,41 @@ more than cosmetic polish.
   src/components/workshops/figurepage` (73 files, 1236 tests);
   `node scripts/freeze-regression-matrix.mjs --check` clean;
   `node scripts/check-bundle-size.mjs` green.
+- Bundle (measured 2026-09-15, review NIT 5 — the number the record was
+  missing): parent `e479f5da` **919,781 B** eager -> this commit `ebefa693`
+  **919,781 B**, a **+0 B** delta. Both built after `npm ci` in a scratch
+  worktree, with vite's transform cache cleared between them; the two builds
+  really are different trees (every content hash moved, and the LAZY
+  `figureSpec` chunk grew 6.57 kB -> 6.60 kB) — the eager graph simply did not
+  gain a byte, because `exportStyles.ts`'s added statement lives in a lazy
+  chunk and no eager import was added.
 - Owner verification: pending — export a figure with a series hidden and
-  confirm the PDF's colours match the legend on screen.
+  confirm the PDF's colours match the legend on screen. Worth doing from the
+  LIVE Stage (Copy figure / Export figure…) as well as from a saved document:
+  both were broken and both are fixed (see the scope correction above).
 - Notes: the REOPEN leg of the regression matrix (`lib/regressionMatrixReopen
   .testkit.ts`) carried the same skew in its own projection and was corrected
   to the unfiltered display position; it is a testkit, not product code, but
   the `hidden` fixture's `screen ≡ reopen` is what now holds it there.
+- Review follow-up (2026-09-15, NIT 1 — landed with the BUG-014 commit): as
+  shipped on 2026-09-14 the positions were `displayChannels.indexOf(ch)`, i.e.
+  slots in THIS REQUEST's display list, which is the canvas' list only while
+  `seriesStyleCycle.displayListsAgree` holds. `buildFigureSpecFromDocument`
+  passes `allowExplicitXAsY: true` unconditionally, so a channel used as both
+  X and Y stays in the export's list while the canvas always drops it, and the
+  two index spaces then differ — making the comment's "the canvas' own display
+  list" false in exactly the case the surrounding block names as the
+  exception. The positions are now resolved against the CANVAS list itself
+  (`lib/figureSpecSeries.ts`'s `resolveDisplaySeries`), so the claim is true on
+  every branch; a channel the canvas never draws is parked past the end of that
+  list rather than stealing a drawn channel's slot. Two further nits from the
+  same round landed with it: `indexOf` collapsed a duplicated `yKeys` channel
+  onto one palette slot (the slots now come from a per-channel queue, so each
+  occurrence gets its own, as `uplotOpts`' index-keyed `seriesColor` does), and
+  `exportStyles.ts` regained its `?? i` guard for a short `positions` array.
+  Pinned by `figureSpecSeries.test.ts`, by colour assertions beside
+  `figureSpec.test.ts`'s x-as-y cycle test, and by a ragged-positions test in
+  `exportStyles.test.ts`.
 
 ---
 

@@ -48,7 +48,11 @@ export function buildExportStyles(
     // plans/BUGS_AND_ISSUES.md; this is the shape that avoids repeating it).
     const st = resolveSeriesStyle(seriesStyles[ch], i, cycle ? pos : null);
     const spec: ExportSeriesStyle = {};
-    const hex = resolveToHex(seriesColor(pos[i], st)); // palette-by-position or override
+    // `?? i` keeps a short/ragged `positions` degrading to the plotted index
+    // instead of `seriesColor(undefined)` indexing SERIES_VARS[NaN] and
+    // painting every such series the hardcoded fallback. Defensive only: the
+    // one non-null producer builds it with `plotted.length` entries.
+    const hex = resolveToHex(seriesColor(pos[i] ?? i, st)); // palette-by-position or override
     if (hex) spec.color = hex;
     if (st?.width != null) spec.width = st.width;
     if (st?.line) spec.line = st.line;

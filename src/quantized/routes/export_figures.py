@@ -31,7 +31,13 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
-from quantized.routes.export_figures_schema import FigureFacet, TickFormatSpec
+from quantized.routes.export_figures_labels import (
+    derived_axis_label,
+    series_legends,
+    series_names,
+    solo_axis_label,
+)
+from quantized.routes.export_figures_schema import FigureFacet, TickFormatSpec, _tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -241,15 +247,19 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
                 "series to the primary axis first"
             )
         y_keys = list(req.y_keys) if req.y_keys is not None else list(range(ds.n_channels))
-        grouped = build_grouped_series(ds, req.x_key, y_keys, req.group_col)
-        x_label = req.x_label
-        if x_label is None:
-            x_label = (
-                f"{grouped.x_label} ({grouped.x_unit})" if grouped.x_unit else grouped.x_label
-            )
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
+        # BUG-014: a legend rename rides `series_styles[i].legend`, aligned to
+        # `y_keys`. This branch expands each y channel into one series PER
+        # LEVEL, so the override cannot name a finished series name the way it
+        # does on the flat path -- it replaces the CHANNEL-label half of
+        # `build_grouped_series`' own `"{y_label} ({group}={level})"` template,
+        # which is byte-for-byte what the pre-BUG-014 wire produced (the rename
+        # used to arrive as a rewritten `dataset.labels[ch]`). Grouped export
+        # parity as a whole is BUG-016, not this fix.
+        grouped = build_grouped_series(
+            ds, req.x_key, y_keys, req.group_col, series_legends(req.series_styles, len(y_keys))
+        )
+        x_label = derived_axis_label(req.x_label, grouped.x_label, grouped.x_unit)
+        y_label = req.y_label if req.y_label is not None else ""
         g_series: list[tuple[str, Any]] = [
             (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in grouped.series
         ]
@@ -266,37 +276,22 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         y_log=req.y_log,
     )
     plot = build_series(ds, state)
-    x_label = req.x_label
-    if x_label is None:
-        x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-    primary_only = [s for s in plot.series if s.axis == 0]
-    y2_only = [s for s in plot.series if s.axis == 1]
-    y_label = req.y_label
-    if y_label is None:
-        y_label = ""
-        if len(primary_only) == 1:
-            only = primary_only[0]
-            y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-    y2_label = req.y2_label
-    if y2_label is None:
-        y2_label = ""
-        if len(y2_only) == 1:
-            only = y2_only[0]
-            y2_label = f"{only.label} ({only.unit})" if only.unit else only.label
+    # BUG-014: the per-series legend override (`series_styles[i].legend`) is
+    # used VERBATIM where present, so a renamed series exports with exactly
+    # the text the screen shows instead of the channel's unit being appended
+    # to it a second time. A solo axis title reads the SAME resolved name --
+    # `uplotOpts.buildOpts`' `soloLabel` reads the resolved legend too.
+    names = series_names(plot.series, series_legends(req.series_styles, len(plot.series)))
+    x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
+    y_label = solo_axis_label(req.y_label, names, plot.series, 0)
+    y2_label = solo_axis_label(req.y2_label, names, plot.series, 1)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
-        [(f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series],
+        [(name, s.values) for name, s in zip(names, plot.series, strict=True)],
         req.waterfall_offsets,
     )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
     y2_mask = [s.axis == 1 for s in plot.series]
     return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label)
-
-
-def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
-    """``TickFormatSpec`` (route-layer pydantic) -> the plain mapping
-    ``calc.figure_ticks.axis_tick_formatter`` expects (calc/ never imports
-    pydantic — see the layering guard)."""
-    return spec.model_dump() if spec is not None else None
 
 
 def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:

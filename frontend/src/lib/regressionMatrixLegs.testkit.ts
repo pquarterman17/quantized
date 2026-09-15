@@ -340,7 +340,11 @@ export function projectExportSpec(spec: FigureSpec, figure: FigureDocument): Can
     const st = styles[i] ?? undefined;
     return {
       channel: ch,
-      label: displayLabel(ds.labels, ds.units, ch),
+      // BUG-014: a legend rename rides its own per-series presentation field
+      // and the renderer uses it VERBATIM (`calc.figure_labels
+      // .series_display_name`); the wire's `dataset` keeps the DATA's own
+      // labels and units, so the derived form has to be read from them.
+      label: st?.legend ?? displayLabel(ds.labels, ds.units, ch),
       unit: ds.units[ch] ?? "",
       axis: y2.has(ch) ? 1 : 0,
       color: comparableStyle ? (st?.color ?? "") : null,

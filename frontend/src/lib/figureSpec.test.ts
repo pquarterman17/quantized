@@ -12,6 +12,7 @@ import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFro
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
 import { applyWaterfall, buildColumns } from "./plotdata";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { analysisData } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
@@ -106,7 +107,9 @@ describe("FigureDocument FigureSpec adapter", () => {
     const spec = buildFigureSpec(get, dataset, "device", opts);
 
     const expected = {
-      dataset: { ...data, labels: ["group", "left trace", "right", "plus", "minus", "x error"] },
+      // BUG-014: the wire dataset keeps the DATA's labels — the rename on
+      // channel 1 rides `series_styles[1].legend` below, not `labels[1]`.
+      dataset: data,
       x_key: undefined,
       y_keys: [2, 1],
       x_scale: "log",
@@ -130,7 +133,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       y_label: "Y",
       series_styles: [
         { color: "#8b5cf6" },
-        { color: "#123456", width: 3, marker: true, marker_size: 7 },
+        { color: "#123456", width: 3, marker: true, marker_size: 7, legend: "left trace" },
       ],
       overrides: {
         legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Signals" },
@@ -254,14 +257,28 @@ describe("FigureDocument FigureSpec adapter", () => {
     const absent = createFigureDocument(base);
     expect(buildFigureSpecFromDocument(absent, dataset, "absent").series_styles).toHaveLength(1);
 
+    // BUG-014: `richView()` renames channel 1, and a rename must reach the
+    // renderer on EVERY branch — so the two "no styles" shapes materialize a
+    // legend-only list instead of dropping it. `unnamed` is the same document
+    // with no rename, which is what pins the original no-styles wire shapes.
+    const unnamed = { ...base, view: { ...base.view, seriesLabels: {} } };
+
     const nullStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: null } });
-    expect(buildFigureSpecFromDocument(nullStyles, dataset, "null")).not.toHaveProperty("series_styles");
+    expect(buildFigureSpecFromDocument(nullStyles, dataset, "null").series_styles).toEqual([
+      { legend: "left trace" },
+    ]);
+    const nullNoRename = createFigureDocument({ ...unnamed, publication: { overrides: null, seriesStyles: null } });
+    expect(buildFigureSpecFromDocument(nullNoRename, dataset, "null")).not.toHaveProperty("series_styles");
 
     // Nit 4 (round-4 review): the `[]` half of the exact-array branch ships
     // `series_styles: []` on the wire — pinned here, not just at
     // `documentPinsSeriesStyles([])` in seriesStyleCycle.test.ts.
-    const emptyStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    const emptyStyles = createFigureDocument({ ...unnamed, publication: { overrides: null, seriesStyles: [] } });
     expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([]);
+    const emptyRenamed = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    expect(buildFigureSpecFromDocument(emptyRenamed, dataset, "empty").series_styles).toEqual([
+      { legend: "left trace" },
+    ]);
 
     const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
     const publication = createFigureDocument({
@@ -278,8 +295,52 @@ describe("FigureDocument FigureSpec adapter", () => {
       margins: { left: 0.33, right: 0.2, top: 0.1, bottom: 0.3 },
       ticks: { dir: "in", minor: true },
     });
-    expect(spec.series_styles).toEqual(exactStyles);
+    // The saved array rides verbatim, with only the rename laid over it — and
+    // the document's own copy is never touched (BUG-014's overlay is a
+    // per-request presentation pass, not an edit).
+    expect(spec.series_styles).toEqual([{ ...exactStyles[0], legend: "left trace" }]);
     expect(spec.series_styles).not.toBe(exactStyles);
+    expect(exactStyles[0]).not.toHaveProperty("legend");
+  });
+
+  // BUG-014. A rename used to be written onto the wire's `dataset.labels[ch]`,
+  // which the backend then appended `dataset.units[ch]` to a second time, so
+  // "Loop 1" exported as "Loop 1 (au)" while the screen showed "Loop 1".
+  it("carries a legend rename as its own presentation field, leaving the data's labels and units alone", () => {
+    const renamed = createFigureDocument({
+      id: "renamed",
+      name: "Renamed",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1, 2], seriesLabels: { 1: "Loop 1" } },
+    });
+    const spec = buildFigureSpecFromDocument(renamed, dataset, "renamed");
+
+    expect(spec.y_keys).toEqual([1, 2]);
+    expect(spec.series_styles?.[0]?.legend).toBe("Loop 1");
+    // The un-renamed channel carries NO legend, so the backend keeps deriving
+    // "label (unit)" for it — the common case must not change.
+    expect(spec.series_styles?.[1]?.legend).toBeUndefined();
+    // The data's own labels and units reach the backend untouched.
+    expect(spec.dataset.labels).toEqual(data.labels);
+    expect(spec.dataset.units).toEqual(data.units);
+    // ...and the source document/dataset are not mutated either.
+    expect(dataset.data.labels[1]).toBe("signal");
+    expect(renamed.plot.view.seriesLabels).toEqual({ 1: "Loop 1" });
+  });
+
+  // An EMPTY rename is a real choice (a blank legend entry) — `uplotOpts`'
+  // `args.seriesLabels?.[i] ?? …` only falls back on undefined, so the screen
+  // blanks the label. The wire has to be able to say that too.
+  it("carries an EMPTY legend rename verbatim rather than falling back to the derived label", () => {
+    const blanked = createFigureDocument({
+      id: "blanked",
+      name: "Blanked",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1], seriesLabels: { 1: "" } },
+    });
+    expect(buildFigureSpecFromDocument(blanked, dataset, "blanked").series_styles).toEqual([
+      { color: "#8b5cf6", legend: "" },
+    ]);
   });
 
   it("rejects a mismatched live dataset and resolves frozen documents from their snapshot", () => {
@@ -1019,6 +1080,67 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
     // The export really does keep channel 1 — that is the divergence, not a typo.
     expect(spec.y_keys).toEqual([1, 2, 3]);
     expect(lines(spec)).toEqual([undefined, undefined, undefined]);
+  });
+
+  // BUG-015 review round: the CYCLE is refused above, but the palette POSITIONS
+  // are not opt-in and are applied on this branch too. They are resolved against
+  // the list the CANVAS builds (`effectiveChannels(…, xKey, …)` = [2, 3], x
+  // always dropped), so channels 2 and 3 keep the canvas' own slots 0 and 1 —
+  // not the [0, 1, 2] this request's own list would have given them. Channel 1
+  // is drawn only by the export, so it has no canvas slot at all and is parked
+  // past the end (slot 2).
+  it("ON: the X-as-Y branch colours the canvas' channels by the CANVAS' slots", () => {
+    const restore = installSeriesPalette();
+    try {
+      const xAsY = createFigureDocument({
+        id: "xasy-colors",
+        name: "XasY",
+        datasetId: dataset.id,
+        view: { ...defaultPlotView(), xKey: 1, yKeys: [1, 2, 3] },
+      });
+      const spec = buildFigureSpecFromDocument(xAsY, dataset, "xasy", { autoSeriesStyles: true });
+      expect(spec.y_keys).toEqual([1, 2, 3]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[2], // channel 1: parked — the canvas never draws it
+        TEST_SERIES_PALETTE[0], // channel 2: the canvas' first slot
+        TEST_SERIES_PALETTE[1], // channel 3: the canvas' second slot
+      ]);
+      // Non-vacuous: this is NOT the request's own display order, which is what
+      // an `indexOf` into the unfiltered export list would have produced.
+      expect((spec.series_styles ?? []).map((s) => s?.color)).not.toEqual([
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+        TEST_SERIES_PALETTE[2],
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  // NIT 2 of the BUG-015 review: `indexOf` gave two occurrences of the same
+  // channel ONE slot, where the canvas (`seriesColor(i, …)`, keyed by array
+  // index) gives them distinct ones. The load sanitizer does not dedupe
+  // `yKeys`, so a hand-edited document can carry one.
+  it("a channel plotted TWICE takes two distinct palette slots, as the canvas does", () => {
+    const restore = installSeriesPalette();
+    try {
+      const dupe = createFigureDocument({
+        id: "dupe",
+        name: "Dupe",
+        datasetId: dataset.id,
+        view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1, 1, 2] },
+      });
+      const spec = buildFigureSpecFromDocument(dupe, dataset, "dupe");
+      expect(spec.y_keys).toEqual([0, 1, 1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+        TEST_SERIES_PALETTE[2],
+        TEST_SERIES_PALETTE[3],
+      ]);
+    } finally {
+      restore();
+    }
   });
 
   // The one case where `buildStageFigureSpec`'s OWN exact-styles refusal is load

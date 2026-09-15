@@ -260,4 +260,23 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
     expect(out.map((s) => s?.marker)).toEqual([undefined, undefined, undefined]);
     expect(out.map((s) => s?.marker_shape)).toEqual([undefined, undefined, undefined]);
   });
+
+  // NIT 3 of the BUG-015 review: a positions array shorter than `plotted`
+  // degrades to the plotted index instead of `seriesColor(undefined)` indexing
+  // SERIES_VARS[NaN] and painting every uncovered series one hardcoded colour.
+  // Defensive only — the one non-null producer builds it with `plotted.length`
+  // entries — so it is pinned here rather than through a real view.
+  it("a SHORT positions array degrades to the plotted index, not to one fallback paint", () => {
+    const root = document.documentElement;
+    const paint = ["#ffcccc", "#ccffcc", "#ccccff"];
+    paint.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    try {
+      const short = buildExportStyles([0, 1, 2], {}, [0]).map((s) => s?.color);
+      expect(short).toEqual(paint);
+      // Non-vacuous: the ragged entries are distinct paints, not one repeat.
+      expect(new Set(short).size).toBe(3);
+    } finally {
+      paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
+  });
 });

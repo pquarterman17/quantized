@@ -11,11 +11,16 @@ classes are pure data shape with no route logic of their own: ``FigureFacet``/
 none of the three is ever imported anywhere else in the codebase (only
 ``FigureRequest`` itself crosses the ``routes.export_page`` boundary), so this
 split changes no call site outside ``export_figures.py``.
+
+``_tick_fmt``, ``TickFormatSpec``'s one conversion into the plain mapping
+``calc.figure_ticks`` expects, moved here with it (BUG-014, which added a
+label-resolution sibling to ``export_figures.py`` and needed the room). ``routes.export_page``,
+its other caller, imports it from here directly.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -54,3 +59,10 @@ class TickFormatSpec(BaseModel):
 
     mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
     digits: float = 2
+
+
+def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
+    """``TickFormatSpec`` (route-layer pydantic) -> the plain mapping
+    ``calc.figure_ticks.axis_tick_formatter`` expects (calc/ never imports
+    pydantic — see the layering guard)."""
+    return spec.model_dump() if spec is not None else None

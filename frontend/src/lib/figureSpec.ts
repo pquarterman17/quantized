@@ -25,13 +25,15 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import type { ErrorPair } from "./api";
 import type { FigureSpec } from "./api/figures";
-import { buildErrorSpans } from "./errorbars";
-import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
 import { resolveFacetsOrThrow } from "./figureSpecFacets";
+import {
+  exportErrorSpans,
+  resolveDisplaySeries,
+  resolveSeriesPresentation,
+} from "./figureSpecSeries";
 import {
   compactOverrides,
   gateY2Overrides,
@@ -39,7 +41,6 @@ import {
   type FigureOverrides,
 } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
-import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
 import { pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
@@ -180,25 +181,32 @@ function buildFigureSpecForView(
 
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend
   // entries are both visible-state decisions. Multi-X Origin books also
-  // require the live xKey instead of silently falling back to time.
-  // The UNFILTERED display list is kept: it is the canvas' own index space
-  // (`usePlotPayload` leaves a hidden series in `payload.series` with
-  // `show:false`), and P3.3's dash/marker cycle plus the series palette are
-  // both resolved against it below so the export cannot land a channel on a
-  // different display position than the screen did.
-  const displayChannels = effectiveChannels(
-    data,
-    st.yKeys,
-    extras.allowExplicitXAsY && st.yKeys !== null ? null : st.xKey,
+  // require the live xKey instead of silently falling back to time. The
+  // UNFILTERED display list, the hidden-filtered `y_keys`, and each survivor's
+  // slot in the CANVAS' own index space are resolved together by
+  // `lib/figureSpecSeries.ts` -- see `resolveDisplaySeries`' doc for why the
+  // positions come from the canvas' list rather than this request's.
+  const { displayChannels, plotted, positions } = resolveDisplaySeries(data, {
+    yKeys: st.yKeys,
+    xKey: st.xKey,
+    seriesOrder: st.seriesOrder,
+    hiddenChannels: st.hiddenChannels,
     channelRoles,
-    st.seriesOrder,
-  );
-  const plotted = displayChannels.filter((ch) => !st.hiddenChannels.includes(ch));
+    allowExplicitXAsY: extras.allowExplicitXAsY,
+  });
 
-  // Legend renames / decoded Origin captions are channel-keyed. Apply them to a
-  // request-local DataStruct label copy so the backend series builder and legend
-  // path both see the same display names without mutating the imported workbook.
-  const dataset = Object.keys(st.seriesLabels).length
+  // Legend renames / decoded Origin captions are channel-keyed, and BUG-014
+  // moved them off `dataset.labels` and onto their own per-series
+  // presentation field (`series_styles[i].legend`, assembled below): the wire
+  // dataset now carries the DATA's labels and units, so the backend can render
+  // a rename verbatim instead of appending the channel's unit to it a second
+  // time, and any data-table/CSV consumer of this same spec still sees the
+  // real column names. FACETS are the one place a rename is still resolved
+  // client-side: a facet panel ships FINISHED series strings
+  // (`FigureFacetSeries.label`) that no per-series field on this request can
+  // reach, so they are built from a request-local relabelled copy -- the
+  // imported workbook itself is never mutated either way.
+  const facetData = Object.keys(st.seriesLabels).length
     ? {
         ...data,
         labels: data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
@@ -207,7 +215,7 @@ function buildFigureSpecForView(
 
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
-  const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
+  const facets = resolveFacetsOrThrow(facetData, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
 
   // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
   // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`
@@ -221,7 +229,7 @@ function buildFigureSpecForView(
   // silently re-scoping it. `pruneToLiveDataset` is a no-op (`=== data`
   // fast-path) for a frozen/document-only call (`extras.liveDataset` absent),
   // so that case is byte-identical to before this fix.
-  const wireDataset = facets === undefined ? pruneToLiveDataset(dataset, extras.liveDataset) : dataset;
+  const wireDataset = facets === undefined ? pruneToLiveDataset(data, extras.liveDataset) : data;
 
   // P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`). OPT-IN, in two
   // senses: `extras.autoSeriesStyles` is passed by the LIVE stage export
@@ -251,12 +259,15 @@ function buildFigureSpecForView(
   // `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and
   // the PDF drew all three solid.
   //
-  // The POSITIONS are not part of that opt-in and never were (BUG-015): they
-  // are just where each surviving channel sits in the canvas' own display
-  // list, and `buildExportStyles` colours by them ALWAYS. Deriving them only
-  // when the cycle was on is what let a saved document — which never opts in —
-  // recolour a figure the moment one series was hidden.
-  const positions = plotted.map((ch) => displayChannels.indexOf(ch));
+  // The POSITIONS above are not part of that opt-in and never were (BUG-015):
+  // they are each surviving channel's slot in the CANVAS' display list, and
+  // `buildExportStyles` colours by them ALWAYS. Deriving them only when the
+  // cycle was on is what let a saved document — which never opts in — recolour
+  // a figure the moment one series was hidden. They come from the canvas' own
+  // list even in the `allowExplicitXAsY` case this predicate refuses the cycle
+  // for, so a channel the canvas does draw keeps the canvas' paint there too;
+  // only the extra X-as-Y curve, which the canvas never draws at all, has no
+  // true slot (`resolveDisplaySeries` parks it past the end).
   const seriesCycle =
     extras.autoSeriesStyles &&
     overlayExportsSeriesStyles({
@@ -299,6 +310,14 @@ function buildFigureSpecForView(
     minorTicks: st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis),
   });
 
+  // The legend overrides, aligned 1:1 with `plotted` (= the wire's `y_keys`)
+  // like every other per-series list here. `undefined` = not renamed, which is
+  // every channel of every figure that predates BUG-014.
+  const legends = plotted.map((ch) => st.seriesLabels[ch]);
+  const seriesPresentation = resolveSeriesPresentation(
+    plotted, st.seriesStyles, positions, seriesCycle === true, legends, extras.publicationSeriesStyles,
+  );
+
   return {
     dataset: wireDataset,
     x_key: st.xKey ?? undefined,
@@ -323,11 +342,11 @@ function buildFigureSpecForView(
     title: o.title,
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
-    ...(extras.publicationSeriesStyles === undefined
-      ? { series_styles: buildExportStyles(plotted, st.seriesStyles, positions, seriesCycle) }
-      : extras.publicationSeriesStyles === null
-        ? {}
-        : { series_styles: structuredClone(extras.publicationSeriesStyles) }),
+    // BUG-014: the legend renames are laid OVER whichever per-series list this
+    // request carries — a built one, or a document's saved publication styles
+    // — so a rename reaches the renderer on every branch, including the one
+    // that otherwise omits `series_styles` entirely.
+    ...(seriesPresentation === null ? {} : { series_styles: seriesPresentation }),
     // MAIN #36: the SAME spans the canvas draws, so a PDF cannot quietly
     // understate the uncertainty the screen showed. Built from `wireDataset`,
     // not the raw `data`, so a pruned row's magnitude can never outnumber
@@ -475,25 +494,4 @@ export function buildStageFigureSpec(
       })
     : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
-}
-
-/** Project the canvas error spans onto the export wire shape.
- *
- *  `buildErrorSpans` keys by uPlot COLUMN (0 = x, p+1 = the p-th series); the
- *  renderer wants one entry per plotted SERIES, so this re-indexes rather than
- *  letting the two conventions meet in the route — where the off-by-one would
- *  show up as error bars on the wrong curve. */
-export function exportErrorSpans(
-  data: DataStruct,
-  plotted: number[],
-  roles: readonly ErrorBinding[],
-): ({ x?: ErrorPair; y?: ErrorPair } | null)[] {
-  const byCol = buildErrorSpans(data, plotted, roles);
-  return plotted.map((_ch, p) => {
-    const spans = byCol.get(p + 1);
-    if (!spans?.length) return null;
-    const out: { x?: ErrorPair; y?: ErrorPair } = {};
-    for (const s of spans) out[s.axis] = { plus: s.plus, minus: s.minus };
-    return out;
-  });
 }
