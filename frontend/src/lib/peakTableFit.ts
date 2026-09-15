@@ -59,9 +59,14 @@ export interface PeakTableSource {
 //   • every x (time) value, byte for byte;
 //   • every value column's numbers, byte for byte;
 //   • every column LABEL and UNIT;
-//   • the kept row count, the column count, and the RAW row count — so a
-//     change to the exclusion list or the local filter moves the digest even
-//     in the degenerate case where the kept rows would hash the same.
+//   • four numbers folded into the prefix (not hashed): the kept row count
+//     (`data.time.length`), the kept row count AGAIN (`data.values.length` —
+//     `DataStruct.values` is row-major, so this always equals the first
+//     field; the redundancy costs nothing and cannot cause a false match),
+//     the column count (`cols`), and the RAW row count
+//     (`ds.data.time.length`, before exclusion/filter) — so a change to the
+//     exclusion list or the local filter moves the digest even in the
+//     degenerate case where the kept rows would hash the same.
 //
 // EVERY value column, not just the one the fit ran on: that needs no channel
 // INDEX in the record (which would falsify architecture.test.ts's
@@ -86,8 +91,18 @@ export interface PeakTableSource {
 //
 // FNV-1a over the IEEE-754 bytes (and UTF-16 code units for text), the same
 // construction lib/jitter.ts uses for its (non-exported, UTF-8) hash: 32-bit,
-// allocation-free per value, and exact — NaN and -0 hash to stable values
-// distinct from 0 rather than collapsing the way `String(v)` would.
+// allocation-free per value, and exact — NaN and -0 each hash to a value
+// distinct from 0 rather than collapsing the way `String(v)` would. That
+// stability is PER BIT PATTERN, not per NaN in the abstract: JS NaN has more
+// than one IEEE-754 encoding, and three are reachable here — `0/0` (and
+// `NaN`/`parseFloat("x")`/`Number("abc")`) is `7ff8000000000000`,
+// `0*Infinity` (and `Infinity-Infinity`/`Math.sqrt(-1)`) is
+// `fff8000000000000`, and `Math.log(-1)` (and `Math.asin(2)`) is
+// `7ff4000000000000` — so two cells that are both "NaN" can digest
+// differently if a value is re-minted by a different code path. Harmless in
+// the fail-safe direction only (a false MISMATCH costs a redundant re-fit
+// prompt, never a false match), never checked for a false match: a cell is
+// always minted by one code path and re-minted the same way.
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 
@@ -152,6 +167,13 @@ export function peakTableMatchesData(table: PeakTable, ds: Dataset): boolean {
 //      would break the common case; but a unit-less q column ("q", "Q") then
 //      carries no 2θ evidence at all and is refused — the hole round 2
 //      measured end to end (a q pattern producing a plausible grain size).
+//      Clause 2 is POSITIVE EVIDENCE ONLY — it does not check the label for a
+//      conflicting unit, so e.g. `xUnit: ""`, `xLabel: "2 Theta (rad)"` also
+//      passes. Not reachable through any shipped parser: `io/spc.py` is the
+//      only writer that emits an empty unit, and it never writes a 2θ label;
+//      `io/delimited.py`'s `_extract_units` lifts a parenthesized unit like
+//      `(rad)` out of the header text into `xUnit` itself, so that case hits
+//      clause 1 (and is refused there) before clause 2 ever sees it.
 // Real XRD files clear clause 1 without needing clause 2: `io/_xrdml_scan.py`
 // writes `x_column_name: "2-Theta"` AND `x_column_unit: "deg"`, and
 // `xChannelIdentity` below records both.

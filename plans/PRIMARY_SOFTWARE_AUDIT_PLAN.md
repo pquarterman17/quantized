@@ -2922,7 +2922,7 @@ REJECTS at read time, (c) carries it and it still matches.
 | `levelOrder` / `recode` | `levelOrder.ts:274`, `recode.ts` | (b) |
 | `splitDatasetByColumn`, `mergeSelected`, `duplicateDataset`, `createDerivedWorksheet` | `split.ts:153`, `useApp.ts:1731`, `derivedWorksheets.ts` | whitelist constructions — no table carried |
 | `setDatasetFilter` / row-exclusion toggle | `rowState.ts` | **(b)** — was (c); closed by digesting the analysis view |
-| a column RENAME or unit correction (Inspector) | — | **(b)** — was uncaught; closed by digesting labels/units |
+| same-shape `reimportDataset` with changed headers (labels/units) | `reimport.ts:177` | **(b)** — was uncaught; closed by digesting labels/units. (No in-app path writes labels/units today — `grep -rn "renameColumn\|setColumnLabel\|setColumnUnit\|setColumnMeta"` over `frontend/src` is 0 hits, and `components/Inspector/ChannelsCard.tsx` renders `labels`/`units` read-only; this row names the real path a re-read of a file whose headers changed while the shape did not.) |
 
 No (c) rows remain. Readers are all gated exactly as round 1 left them, except
 that `publishFitResult`'s unchecked read into the exclusion matcher is now safe
@@ -2959,6 +2959,23 @@ new eager `peakTable: undefined` clears in `store/cellEdit.ts` cost 34 B and are
 funded by hoisting that file's twice-spelled paste-skip reason into one
 `PASTE_SKIP_REASON` constant (−53 B, measured); everything else new is in the
 lazy-only `lib/peakTableFit.ts` and the lazy peaks/reductions workshops.
+
+**Review round 3, 2026-09-15 (adversarial re-review of the round-2 fix commit,
+`b8cb5e16`).** Verdict **CLEAN** — 0 confirmed defects; every round-2 CONFIRMED
+and NIT re-probed through the real store and re-verified closed. Seven nits
+(documentation/plan accuracy or pre-existing, none behavioural): NITs 1, 2, 3,
+5 and 6 were closed in this same commit (the invalidation-table row above now
+names the real `reimportDataset` path instead of a nonexistent Inspector
+rename/unit-correction UI; the digest-prefix comment names all four emitted
+fields; the x-axis rule documents clause 2 as positive-evidence-only; the NaN-
+hash header now states the "stable, distinct from 0" guarantee is per bit
+pattern, fail-safe direction only; `peakInputs.ts`'s `fullX` doc now says
+exactly what it returns on each branch instead of "the same x channel"). NIT 4
+(the `.dwk` round trip losing `-0`/`NaN`, pre-existing and outside this
+commit's diff) is filed as **BUG-017** in `plans/BUGS_AND_ISSUES.md` rather
+than fixed here. NIT 7 (the commit trailer) is this session's standing
+attribution convention, not a code finding, and is not actionable from inside
+a plan edit.
 
 - [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
   documented Kα1-over-average preference can fire for Bruker patterns.

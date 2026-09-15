@@ -12,8 +12,14 @@ import type { Dataset } from "../../../lib/types";
 export interface PeakInputs {
   x: number[];
   y: number[];
-  /** The same x channel's FULL column, for aligning marker overlays to the
-   *  full-length plot x (which keeps excluded/filtered rows as gaps). */
+  /** The PLOTTED x channel's full column (`fullPlottedX(ds.data, xKey)` —
+   *  keyed by the requested `xKey`, NOT by `xKeyUsed` below), for aligning
+   *  marker overlays to the full-length plot x (which keeps excluded/
+   *  filtered rows as gaps). These two differ in exactly the fallback branch
+   *  `xKeyUsed` documents: when `selectedFitData` returns null and `x`/`y`
+   *  fall back to the time axis, `fullX` is still `xKey`'s column (or `time`
+   *  only if `xKey` itself was null/out of range) — it does not also fall
+   *  back. The overlay follows the plot, not the fit's axis. */
   fullX: number[];
   /** The x channel `x` was actually taken from — `null` means the time axis.
    *  NOT necessarily the `xKey` that was asked for: `selectedFitData` returns

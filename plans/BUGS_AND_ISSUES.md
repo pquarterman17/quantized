@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-15 (UX-003 filed from the `b749f804` bundle-diet review round)  
+**Updated:** 2026-09-15 (BUG-017 filed; UX-003 filed from the `b749f804` bundle-diet review round)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -42,6 +42,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
+| BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Unassigned | Found by the P2.1 round-3 review (pre-existing, outside that commit); reproduced by a probe against the real code 2026-09-15 (`dataset 0 ("scan.dat") has an invalid data structure`), not yet fixed |
 
 ---
 
@@ -4097,6 +4098,192 @@ channels) exists.
 
 ---
 
+## BUG-017 — a dataset with a NaN or ±Infinity cell cannot be reopened after Save
+
+**Priority:** P1 — data loss: the affected dataset's `.dwk` cannot be reopened
+at all, and the failure takes the WHOLE workspace down with it (one bad
+dataset refuses every dataset in the file). No workaround inside the app once
+saved; only recovery is hand-editing the JSON or restoring an older save.
+
+**Reported:** 2026-09-15, by the round-3 adversarial review of the P2.1
+peak-table digest work (`b8cb5e16`) — found while measuring the digest's
+`.dwk` round trip (`xrd_review3.md` NIT 4) as a durability side-check, not a
+peak-table defect. Pre-existing and outside that commit's diff; recorded here
+rather than against the peak-table entry.
+
+**Investigated:** root cause confirmed by probe (below), not inferred.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P2.1 (found via its
+round-3 review; the peak-table fingerprint is a downstream SYMPTOM, not the
+cause — see the `-0` half below).
+
+#### User-visible problem
+
+A dataset containing a `NaN` cell (reachable today by `insertRows`, whose
+blank rows are minted as `Number.NaN` — see evidence) or a `±Infinity` cell
+(reachable by any correction/formula that can produce one, e.g. a divide by
+zero) is saved successfully, but the saved `.dwk` can never be opened again:
+`parseWorkspaceDataset` throws `dataset N ("<name>") has an invalid data
+structure` for THAT dataset, and `parseWorkspace` has no per-dataset recovery
+— the exception propagates out of the whole load, so every OTHER dataset in
+the same workspace file also fails to open. The user's only path back into
+their project is hand-editing the saved JSON. Separately, a cell holding `-0`
+silently becomes `0` on reopen — not a throw, but a silent value change and,
+for a dataset with a durable peak table (`PRIMARY_SOFTWARE_AUDIT_PLAN` P2.1),
+enough to flip `peakTableMatchesData` to false and discard an otherwise-valid
+saved fit for no user-visible reason.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/workspaceSerialize.ts:198` — `serializeWorkspace`'s
+  per-dataset map does `data: d.data` **inline**, with no replacer. The whole
+  document is then handed to a single `JSON.stringify` elsewhere in the same
+  function, and `JSON.stringify` turns `NaN`/`Infinity`/`-Infinity` into
+  `null` and leaves `-0` indistinguishable from `0` (`JSON.stringify(-0)` is
+  the string `"0"`) — neither is a bug in this file, but this is the one place
+  a dataset's numeric payload crosses the JSON boundary with no NaN/±Infinity/
+  -0 handling of its own.
+- `frontend/src/lib/workspaceDatasetParse.ts:38-40` — `isNumberArray`:
+  `Array.isArray(v) && v.every((x) => typeof x === "number")`. A `null` in the
+  array (what a serialized NaN/±Infinity cell becomes) fails `typeof x ===
+  "number"`, so any row or value column that held one is rejected.
+- `frontend/src/lib/workspaceDatasetParse.ts:75-108` (`isDataStruct`,
+  `parseWorkspaceDataset`) — `isDataStruct` calls `isNumberArray` on `time`
+  and (transitively, per row) on `values`; when it returns false,
+  `parseWorkspaceDataset` throws `` `dataset ${i} ("${String(dd.name ??
+  "")}") has an invalid data structure` `` (`:107`). This is a per-dataset
+  parse called from `parseWorkspace`'s `o.datasets.map(...)` with no
+  try/catch around each entry, so the thrown error aborts the `.map` and the
+  whole `parseWorkspace` call.
+- `frontend/src/store/cellEdit.ts:129-131` (`insertRows`) —
+  `` const blankRow = () => d.data.labels.map(() => Number.NaN); `` mints a
+  `NaN` in every value column for each inserted blank row, and the same
+  function pads `time` with `Number.NaN` too (`padRows(d.data.time, span,
+  Number.NaN)`). So a plain "insert a row" followed by "save" is enough to
+  reach the bug with no error-path or malformed-import involved.
+- **Probe, run end to end against the real code** (`serializeWorkspace` ->
+  `JSON.parse`/`JSON.stringify` -> `parseWorkspace`, a minimal one-dataset,
+  one-column workspace, 2026-09-15):
+  - a `NaN` cell: `parseWorkspace` **throws** exactly
+    `dataset 0 ("scan.dat") has an invalid data structure`, and the workspace
+    fails to load.
+  - a `-0` cell: parses without error; the round-tripped value reads back as
+    `0` (`Object.is(v, -0)` is false) — a silent, non-throwing change.
+  These match `xrd_review3.md`'s independent measurement
+  (`peakTableMatchesData` -> false for the `-0` case; the identical throw
+  message for the `NaN` case) — same bug, found by two different probes.
+
+#### Why this priority
+
+P1, not P2: this is category "the project cannot be reopened", the same class
+BUG-011 (Pack Project shipping preview rows) and the P0/P1 entries in this
+file reserve for actual data loss, and it needs no rare input — inserting a
+row is a normal, common action, and `insertRows`'s blank cells are `NaN` by
+construction, not by user error. It differs from the peak-table digest's
+`-0` half (recorded as fail-safe in `xrd_review3.md` NIT 4, and left there
+rather than duplicated here): the NaN half is not fail-safe, it is a hard
+failure that blocks reopening the file.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a one-dataset workspace,
+  one value column, three rows.
+- [x] Exact actions recorded — `insertRows` a blank row (or otherwise write a
+  `NaN`/`±Infinity` cell), `serializeWorkspace`, round-trip through
+  `JSON.parse(JSON.stringify(...))` (what a real Save/Open does via the file
+  on disk), `parseWorkspace` the result.
+- [x] Actual result recorded — `parseWorkspace` throws `dataset 0
+  ("scan.dat") has an invalid data structure`; the entire workspace fails to
+  open. Separately, a `-0` cell parses but reads back as `0`.
+- [x] Expected result recorded — the workspace should reopen with the
+  dataset's `NaN`/`±Infinity`/`-0` cells intact, exactly as saved.
+- [x] Reproduced by an agent — probe above, run against the real
+  `serializeWorkspace`/`parseWorkspace` (see Confirmed implementation
+  evidence); not yet added as a committed regression test (this entry is a
+  plans-only filing, per the P2.1 review round that found it).
+
+#### Investigation
+
+- [x] Likely owning components/modules identified —
+  `lib/workspaceSerialize.ts`, `lib/workspaceDatasetParse.ts`.
+- [x] Root cause confirmed rather than inferred — the probe above, plus the
+  cited `isNumberArray`/`JSON.stringify` behavior.
+- [ ] Related workflows and persistence paths checked — only `.dwk` save/load
+  was probed; `lib/originBookRoles.ts`/pack-project export and any other path
+  that serializes `Dataset.data` to JSON should be checked for the same hole
+  before this is called fully scoped.
+- [x] Existing plan overlap reconciled — this is the pre-existing bug
+  `xrd_review3.md` NIT 4 named and deliberately did not fix as part of the
+  P2.1 peak-table digest work; filed here instead of folded into that entry.
+
+#### Implementation
+
+- [ ] Minimal safe behavior defined — a JSON replacer/reviver pair at the
+  `Dataset.data` serialization boundary: the replacer maps `NaN`/`Infinity`/
+  `-Infinity` (and, if `-0` is to round-trip exactly, `-0`) to sentinel
+  strings no real measurement collides with (e.g. `"__NaN__"`,
+  `"__+Inf__"`, `"__-Inf__"`, `"__-0__"`), and the reviver maps them back
+  before `isNumberArray`/`isDataStruct` ever see the array. Prefer fixing it
+  at the `JSON.stringify`/`JSON.parse` call sites in
+  `workspaceSerialize.ts`/`workspace.ts` over widening `isNumberArray` to
+  accept `null`, since `null` must stay a real rejection for genuinely
+  malformed data.
+- [ ] Failure and ambiguous-data behavior defined — a `.dwk` written BEFORE
+  this fix has already lost the distinction between `NaN` and `null` (both
+  serialize to JSON `null` today); decide whether an old file's `null` cell
+  is read back as `NaN` (matches the more common cause) or `0`, and document
+  the choice — this is a one-way compatibility decision, not a bug in the
+  fix.
+- [ ] Data integrity and backward compatibility considered — the sentinel
+  scheme must not collide with a legitimate string cell in a text column
+  (`textColumns.ts`'s sidecar), and must version cleanly against a workspace
+  saved by an older build that never wrote sentinels.
+- [ ] UI wording/tooltips/accessibility included where relevant — if a
+  dataset still fails to parse after the fix (a genuinely corrupt file),
+  `parseWorkspace`'s per-dataset throw should probably become a per-dataset
+  skip-with-warning (reusing BUG-010's `notifyMigrationWarnings` toast
+  convention) rather than aborting the whole workspace — a broader change,
+  worth deciding alongside this fix since the NaN case is the first concrete
+  motivation for it.
+
+#### Tests and acceptance
+
+- [ ] Regression test fails before the fix and passes afterward — a
+  `.dwk` round-trip test (`workspaceSerialize`/`workspace` parse pair) with a
+  `NaN` cell must load without throwing and recover the original `NaN`; the
+  same for `Infinity`/`-Infinity`; a `-0` cell must recover `Object.is(v,
+  -0) === true`, not silently become `0`.
+- [ ] A VERSIONED round-trip test: a workspace document written by the OLD
+  (pre-fix) serializer — i.e. a real `null` cell with no sentinel — must
+  still load (per whatever compatibility decision Implementation above
+  records), so the fix does not itself become a second "can't reopen an old
+  save" regression.
+- [ ] `insertRows`' blank rows specifically (the concrete, common trigger)
+  must survive a save/reopen round trip — a `cellEdit.test.ts` or
+  `workspace.test.ts` case that inserts a row, serializes, and reparses.
+- [ ] Relevant focused tests pass — `workspaceSerialize.test.ts`,
+  `workspaceDatasetParse` coverage (currently exercised only via
+  `workspace.test.ts`), `cellEdit.test.ts`.
+- [ ] Type-check/build/repository gates pass —
+  `npx tsc -b --force`, `npx eslint src --max-warnings=0`, the vitest files
+  above, `src/architecture.test.ts`.
+- [ ] Agent verifies acceptance criteria.
+- [ ] Owner verifies when required.
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: probe run 2026-09-15 (see Confirmed implementation
+  evidence) — reproduces both halves against the real code; no regression
+  test committed yet.
+- Owner verification: —
+- Notes: —
+
+---
+
 ## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
 
 **Priority:** P3 — nothing is lost or corrupted, and screen and export AGREE
@@ -4487,3 +4674,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
 | 2026-09-14 | Claude (agent) | Filed BUG-016 (P2): a grouped figure's per-series styling reaches the canvas — `plotGroupSplit.ts`'s channel map gives every level its source channel's style and `buildOpts` applies it — but `routes/export_figures.py`'s `group_col` branch (`:81-85` documents the choice, `:236-238` returns `_ResolvedFigure(..., None, ...)`) drops `series_styles` outright, so the exported curves are solid, default-width and default-coloured. Found by the 2026-09-14 adversarial review round of the P4.2 regression matrix, which showed the matrix's own GROUP style comparison was reading a wire field the renderer never consults. Same round: renamed BUG-012..BUG-015's reproducing tests (the five bare `it.fails` pins became explicit `DIVERGENCE (BUG-01x)` tests asserting BOTH concrete values and their difference) and updated each entry's fix checklist to say the fix INVERTS the assertion rather than flipping an `it.fails`. Not fixed here — tests/fixtures/plans only, no product code touched | Design-time finding, code-read and file:line-cited, and measured on both paths (canvas: three levels at `dash: [8, 4]`, `width: 2`; resolver: `styles=None` under `group_col`). Reproducing test: `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` (new this round). `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; `npx vitest run src/lib/regressionMatrix.test.ts src/lib/figureSpec.a8.test.ts src/architecture.test.ts` |
 | 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |
+| 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
