@@ -17,13 +17,18 @@
 // for the wrong reason, and a real fix would flip them to an unexplained
 // "unexpected pass". As written, fixing the bug turns the divergence assertion
 // red and the fix INVERTS it (`.not.toEqual` becomes `.toEqual`, the two
-// pinned values become one) — which is exactly what D4 below now is.
+// pinned values become one) — which is exactly what D2 and D4 below now are.
 //   D1 / BUG-012 x-breaks  — a document's `plot.axisBreaks.x` reaches the
 //                  export wire and survives reopen, but `PlotView` — the whole
 //                  input the canvas is built from — has no field for it.
-//   D2 / BUG-013 waterfall — the canvas offsets every series by
-//                  `view.waterfall`; `FigureSpec` has no waterfall field at
-//                  all, so the export draws the un-offset curves.
+//   D2 / BUG-013 waterfall — FIXED 2026-09-14. The canvas offsets every series
+//                  by `view.waterfall`; `FigureSpec` carried no waterfall field
+//                  at all, so the export drew the un-offset curves. The wire
+//                  now carries `waterfall_offsets` (resolved by
+//                  `lib/waterfallOffset.ts`, applied by
+//                  `calc.plotting.apply_waterfall_offsets`), the `waterfall`
+//                  fixture is a full member of the matrix above, and the pin
+//                  below is the inverted equality.
 //   D3 / BUG-014 rename    — a legend rename replaces the whole on-screen label
 //                  (unit and all) but only `dataset.labels[ch]` on the wire, so
 //                  the exported legend reads "Loop 1 (au)".
@@ -107,13 +112,12 @@ const GOLDENS: Record<MatrixFixtureName, unknown> = {
  *  quietly widened to make a regression go away.
  *
  *  `break` spoils BOTH comparisons because the screen is the odd leg out (it
- *  renders nothing from `axisBreaks.x`); `waterfall` spoils only the export
- *  comparison, since reopen restores the offset exactly as the canvas applies
- *  it. */
+ *  renders nothing from `axisBreaks.x`). `waterfall` used to narrow the export
+ *  comparison too (BUG-013); it is a full member of the matrix since the wire
+ *  grew `waterfall_offsets`. */
 type Leg = "export" | "reopen";
 const DIVERGENT: Partial<Record<MatrixFixtureName, { field: keyof CanonicalFigure; legs: Leg[] }>> = {
   break: { field: "xBreaks", legs: ["export", "reopen"] },
-  waterfall: { field: "waterfallOffset", legs: ["export"] },
 };
 
 function without(figure: CanonicalFigure, field: keyof CanonicalFigure): Partial<CanonicalFigure> {
@@ -353,22 +357,22 @@ describe("P4.2 regression matrix: divergences found (D4 since FIXED, see below)"
     );
   });
 
-  // BUG-013 (D2). `composeDisplayPayload` offsets every series by
+  // BUG-013 (D2), FIXED. `composeDisplayPayload` offsets every series by
   // `view.waterfall` (`lib/plotdata.ts`'s `applyWaterfall`, a fraction of the
-  // y-range), and the offset round-trips through the document. `FigureSpec` has
-  // NO waterfall field (see its interface in `lib/api/figures.ts`), and
-  // `buildFigureSpecForView` does not pre-apply the offset to the wire dataset
-  // — so exporting a waterfall view produces the overlaid, un-offset curves.
-  it("DIVERGENCE (BUG-013): the canvas offsets a waterfall by 0.8125; the export wire has no waterfall field at all", () => {
+  // y-range); `FigureSpec` now carries that same resolved offset per plotted
+  // series (`waterfall_offsets`, built by `lib/waterfallOffset.ts` from the
+  // SAME display list and the SAME unpruned values), so the exported figure
+  // staggers by exactly what the screen shows.
+  it("BUG-013: the export wire carries the canvas' 0.8125 waterfall offset", () => {
     const figure = matrixFixture("waterfall");
     expect(projectScreen(figure, dataset).waterfallOffset).toBeCloseTo(0.8125, 10);
-    expect(projectExport(figure, dataset).waterfallOffset).toBe(0);
-    // Not a projection artefact: the wire itself has no field of that meaning,
-    // and the first series' first value reaches it unshifted.
+    // The wire is HONEST about it: the offset is its own field and the dataset
+    // values reach the backend un-shifted (`2.25`, row 1 of channel 1), so any
+    // data-table/CSV path sharing this spec still sees the real numbers.
     const spec = buildFigureSpecFromDocument(figure, dataset, figure.name);
-    expect(Object.keys(spec).filter((k) => /water|offset|stagger/i.test(k))).toEqual([]);
+    expect(spec.waterfall_offsets).toEqual([0, 0.8125]);
     expect(spec.dataset.values[1][1]).toBe(2.25);
-    expect(projectExport(figure, dataset).waterfallOffset).not.toBeCloseTo(
+    expect(projectExport(figure, dataset).waterfallOffset).toBeCloseTo(
       projectScreen(figure, dataset).waterfallOffset,
       10,
     );

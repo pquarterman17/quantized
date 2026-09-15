@@ -557,7 +557,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // fetch, composition, and the cross-panel handoffs.
   "/lib/roiMath.ts": 664,
   "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
-  "/lib/plotdata.ts": 658,
+  // 658 -> 650 (2026-09-14, BUG-013): `applyWaterfall`'s span/step scan moved
+  // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
+  // reads it too — so the canvas and the exported figure resolve the same step
+  // from one implementation. A ratchet, not a bump: 11 lines freed, 1 spent.
+  "/lib/plotdata.ts": 650,
   // Unchanged at 648 (BUG-009): its hand-rolled `pendingGuard` became a one-line
   // call to `store/pendingEdit.refusePendingEdit`, and dropping the duplicate paid
   // for the import exactly — net zero, so there is no ratchet to record here.

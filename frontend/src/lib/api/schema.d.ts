@@ -6427,6 +6427,8 @@ export interface components {
              * @default false
              */
             transparent?: boolean;
+            /** Waterfall Offsets */
+            waterfall_offsets?: number[] | null;
             /** Width In */
             width_in?: number | null;
             x_fmt?: components["schemas"]["TickFormatSpec"] | null;

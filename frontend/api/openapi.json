@@ -3755,6 +3755,20 @@
             "title": "Transparent",
             "type": "boolean"
           },
+          "waterfall_offsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waterfall Offsets"
+          },
           "width_in": {
             "anyOf": [
               {

@@ -132,6 +132,16 @@ export interface FigureSpec {
   x_label?: string;
   y_label?: string;
   series_styles?: (ExportSeriesStyle | null)[];
+  /** BUG-013: the waterfall view's per-plotted-series vertical offset, in Y
+   *  data units, aligned to `y_keys`. RESOLVED client-side
+   *  (`lib/waterfallOffset.ts` — it is a fraction of a y-range the wire cannot
+   *  reconstruct) and simply added to each series by
+   *  `calc.plotting.apply_waterfall_offsets`, so the
+   *  exported curves stagger exactly as the canvas draws them while `dataset`
+   *  keeps the true, un-shifted values. Omitted for a view with no waterfall,
+   *  and for the `group_col`/`facets` shapes whose renderer cannot align a
+   *  `y_keys`-keyed list. */
+  waterfall_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
   filename?: string;

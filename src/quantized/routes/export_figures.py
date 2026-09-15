@@ -159,6 +159,21 @@ class FigureRequest(BaseModel):
     # unrecognized value in ANY of these keys degrades gracefully (dropped,
     # rendered with matplotlib's default) rather than 422ing the whole export.
     series_styles: list[dict[str, Any] | None] | None = None
+    # BUG-013 (waterfall export parity): per-plotted-series vertical offset in
+    # Y data units, aligned to `y_keys` -- the stagger a waterfall view draws
+    # on screen, which used to reach no export path at all (the exported figure
+    # overlaid the curves the canvas had separated). RESOLVED client-side
+    # (`frontend/src/lib/waterfallOffset.ts`) rather than re-derived here,
+    # because the fraction the user sets is a share of the CANVAS y-range --
+    # a range that includes hidden series and excluded rows this request never
+    # receives; see `calc.plotting.apply_waterfall_offsets`. `dataset` keeps
+    # the true, un-shifted values. None/absent = today's byte-identical render.
+    # UNUSED on the `group_col` branch (the per-level series it synthesizes do
+    # not align 1:1 with `y_keys`, the same reason `series_styles` is
+    # documented as unapplied there) and on the `facets` branch (which renders
+    # from its own panel payloads); the client omits it for both rather than
+    # sending an offset the renderer would mis-apply.
+    waterfall_offsets: list[float] | None = None
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
@@ -195,6 +210,10 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     ``req.y_keys`` (``calc.plotting.validate_y2_subset``, mapped to a 422 by
     every caller's existing ``except (ValueError, ...)`` handler).
 
+    ``req.waterfall_offsets`` (BUG-013) shifts each resolved series up by its
+    own offset (``calc.plotting.apply_waterfall_offsets``), so every caller of
+    this helper exports the waterfall stagger the canvas shows.
+
     ``req.group_col`` (GUI_INTERACTION #12 Slice 5) switches to the grouped
     resolve path (``calc.plotting.build_grouped_series``): every ``y_keys``
     channel becomes one series per group level instead of one series per
@@ -204,6 +223,7 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     sound semantic to invent for the combination)."""
     from quantized.calc.plotting import (
         PlotState,
+        apply_waterfall_offsets,
         build_grouped_series,
         build_series,
         resolve_style_channels,
@@ -263,9 +283,10 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         if len(y2_only) == 1:
             only = y2_only[0]
             y2_label = f"{only.label} ({only.unit})" if only.unit else only.label
-    series: list[tuple[str, Any]] = [
-        (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-    ]
+    series: list[tuple[str, Any]] = apply_waterfall_offsets(
+        [(f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series],
+        req.waterfall_offsets,
+    )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
     y2_mask = [s.axis == 1 for s in plot.series]
     return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label)

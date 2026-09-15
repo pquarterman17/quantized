@@ -11,6 +11,7 @@ import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
+import { applyWaterfall, buildColumns } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
@@ -1264,5 +1265,102 @@ describe("greyscale (print-safe) export option (P3.3)", () => {
     const off = buildFigureSpecFromDocument(document, dataset, "device", {});
     expect(on.greyscale).toBe(true);
     expect("greyscale" in off).toBe(false);
+  });
+});
+
+// BUG-013: a waterfall view's per-series stagger reaches the export wire.
+// Every expected number here is derived by RUNNING the canvas' own
+// `applyWaterfall` on the same columns, never hardcoded — so the wire is
+// pinned to the renderer the user actually looks at, and a change to either
+// one that the other does not follow turns these red.
+describe("FigureSpec waterfall_offsets (BUG-013)", () => {
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "" };
+  /** The canvas' own offset for display column `position` (0-based among the
+   *  value columns) of `channels`, at `fraction`. */
+  function canvasOffset(channels: number[], fraction: number, position: number): number {
+    const before = buildColumns(data, null, null, channels);
+    const after = applyWaterfall(before, fraction);
+    const col = position + 1;
+    const b = before.data[col] as (number | null)[];
+    const a = after.data[col] as (number | null)[];
+    return (a[0] as number) - (b[0] as number);
+  }
+
+  it("emits the canvas' offset per plotted series", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+    // Non-vacuous: the stagger is a real, growing shift, and the first series
+    // stays put (the canvas anchors display position 0).
+    const offsets = spec.waterfall_offsets ?? [];
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBeGreaterThan(0);
+    expect(offsets[2]).toBeCloseTo(2 * offsets[1], 12);
+  });
+
+  it("leaves the wire dataset un-shifted — the offset is render metadata, not data", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.dataset.values).toEqual(data.values);
+  });
+
+  it("is ABSENT from the wire for a view with no waterfall", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3] });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  it("is ABSENT for a single plotted series — nothing to stagger against", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  it("a HIDDEN series keeps its stagger slot, exactly as the canvas payload does", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      hiddenChannels: [1],
+      waterfall: 0.25,
+    });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    // Two series ride the wire, but they are DISPLAY positions 1 and 2 — the
+    // hidden channel still occupies slot 0 on the canvas (BUG-015's rule).
+    expect(spec.y_keys).toEqual([2, 3]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+  });
+
+  it("is ABSENT for a grouped request — the backend synthesizes per-level series", () => {
+    const document = createFigureDocument({
+      id: "wf-group",
+      name: "Grouped waterfall",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], waterfall: 0.25 },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    expect(spec.group_col).toBe(0);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  it("is ABSENT for a faceted request — the panels carry their own resolved y", () => {
+    const document = createFigureDocument({
+      id: "wf-facet",
+      name: "Faceted waterfall",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], waterfall: 0.25 },
+      facetKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    expect(spec.facets?.length).toBeGreaterThan(0);
+    expect("waterfall_offsets" in spec).toBe(false);
   });
 });

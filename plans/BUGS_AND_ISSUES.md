@@ -37,7 +37,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-012)` test, not fixed |
-| BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-013)` test, not fixed |
+| BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Unassigned | Found by the P4.2 regression matrix (`1593cdee`); reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-014)` test, not fixed |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
@@ -3190,7 +3190,7 @@ argues for keeping it toward the upper end of P2 rather than P3.
 
 ---
 
-## BUG-013 — a waterfall view's offset never reaches the export wire
+## ~~BUG-013 — a waterfall view's offset never reaches the export wire~~ **FIXED 2026-09-14**
 
 **Priority:** P2 — a whole view TYPE mis-exports (overlaid instead of
 staggered curves), with a workaround (manually offset before export, or
@@ -3220,6 +3220,10 @@ ORIGINAL, un-offset position: the export looks like the waterfall was never
 applied, even though the screen the user is looking at clearly shows it.
 
 #### Confirmed implementation evidence
+
+*As filed (2026-09-14, before the fix) — kept verbatim as the record of what
+was measured. Every line-numbered claim below describes the PRE-FIX tree; see
+the Completion record for what the code does now.*
 
 - `frontend/src/lib/plotdata.ts:364` (`DisplayCompose.waterfall: number`) and
   `:377-382` (`composeDisplayPayload`) — the FIRST step of the canonical
@@ -3276,43 +3280,121 @@ RENDERING is wrong.
 
 #### Fix checklist
 
-- [ ] Decide where the offset should be applied for export: pre-apply it to
-  the wire dataset's Y values inside `buildFigureSpecForView` (mirroring
-  `lib/plotdata.ts`'s `applyWaterfall` math, no backend contract change), OR
-  add a `waterfall` field to `FigureSpec` and apply the offset server-side in
-  `routes/export_figures.py`.
-- [ ] Whichever shape is chosen, use the SAME offset formula
-  `applyWaterfall` uses, so screen and export can never numerically disagree
-  even though they apply it at different points in the pipeline.
-- [ ] Confirm reopen continues to round-trip `view.waterfall` unchanged (it
-  already does; the fix must not regress that leg).
-- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-013): the canvas offsets a waterfall by 0.8125; the
-  export wire has no waterfall field at all", ...)` — delete the export-side
-  `0` pin, the wire-shape pins and the `.not.toBeCloseTo`, leaving the single
-  `expect(projectExport(...).waterfallOffset).toBeCloseTo(projectScreen(...)
-  .waterfallOffset, 10)`, and rename the test. The fix makes the current
-  assertion RED, not an "unexpected pass".
-- [ ] Drop the `waterfall` fixture's export-only `DIVERGENT` narrowing
-  (`regressionMatrix.test.ts:108-110`) once the export leg agrees.
+- [x] Decide where the offset should be applied for export — a THIRD shape,
+  chosen over both options as filed: the wire carries `waterfall_offsets`, a
+  per-plotted-series shift in Y DATA UNITS (not the raw fraction), resolved
+  client-side and simply ADDED to each series by the backend. Rationale, in
+  full, in `frontend/src/lib/waterfallOffset.ts`'s header: a server-side
+  `fraction × y-range` cannot reproduce the canvas' number, because the range
+  the canvas measures includes hidden series (filtered out of `y_keys`),
+  excluded/filter-dropped rows (`applyWaterfall` runs BEFORE
+  `maskExcludedPayload`, while `pruneToLiveDataset` strips them from the wire
+  `dataset`) and, for a decimated fetch, extremes the wire never sees — so
+  option (B)-style re-derivation would have re-opened this very divergence the
+  moment a user hid a series. Pre-applying the offset to `dataset.values`
+  (option A as filed) was rejected for the opposite reason: it lies on the
+  wire. The chosen shape keeps `dataset` truthful and declares the offset
+  beside it.
+- [x] Whichever shape is chosen, use the SAME offset formula `applyWaterfall`
+  uses — enforced by CONSTRUCTION, not by duplication: the span/step scan moved
+  out of `applyWaterfall` into `lib/waterfallOffset.waterfallStep`, which both
+  the canvas and the wire builder call. Per-series indices are the UNFILTERED
+  display positions `lib/figureSpec.ts` already derives for BUG-015's colours.
+- [x] Confirm reopen continues to round-trip `view.waterfall` unchanged — the
+  reopen leg is untouched and `screen ≡ reopen` still passes for the fixture.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — now
+  `it("BUG-013: the export wire carries the canvas' 0.8125 waterfall offset")`,
+  a single `toBeCloseTo` equality plus the two honesty pins (the offset rides
+  its own field; `spec.dataset.values[1][1]` is still the raw `2.25`).
+- [x] Drop the `waterfall` fixture's export-only `DIVERGENT` narrowing — the
+  table now lists `break` only.
 
 #### Acceptance criteria
 
-- [ ] Exporting a waterfall view produces a PDF/SVG with each series
-  visibly offset by the same amount the on-screen canvas shows.
-- [ ] `projectExport(document, dataset).waterfallOffset` equals
+- [x] Exporting a waterfall view produces a PDF/SVG with each series
+  visibly offset by the same amount the on-screen canvas shows —
+  `tests/test_export_vector_structure.py`'s
+  `test_waterfall_offsets_shift_each_series_by_its_own_amount` measures each
+  series line's position in the RENDERED axes (hit-map pixel box converted
+  back to data units) and finds the requested shift; its sibling
+  `..._widen_the_autoscaled_axis_to_fit_the_stagger` proves the axis range
+  grows to fit the offsets, as the canvas autoscale does.
+- [x] `projectExport(document, dataset).waterfallOffset` equals
   `projectScreen(document, dataset).waterfallOffset` for the `waterfall`
   fixture — the equality BUG-013's divergence test is inverted into.
-- [ ] The reopen leg is unaffected —
+- [x] The reopen leg is unaffected —
   `projectReopen(...).waterfallOffset` continues to equal the screen's.
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- PR/commit: fixed 2026-09-14 on `claude/repo-evaluation-l7y7k9`, one commit
+  `fix(export): BUG-013 — carry the waterfall stagger to the export wire`
+  (parent `ebefa693`). Nine files:
+  `frontend/src/lib/waterfallOffset.ts` (new — `waterfallStep` +
+  `waterfallWire`), `lib/plotdata.ts` (`applyWaterfall` now calls the shared
+  step; 11 lines freed, so the `architecture.test.ts` pin ratchets 658 → 650),
+  `lib/figureSpec.ts` (+3 lines: the spread that emits the field),
+  `lib/api/figures.ts` + `lib/figureContract.ts` (the wire field and its
+  `derived("plot.waterfall.verticalOffset")` classification — the `satisfies
+  FieldContractMap<FigureSpec>` guard forces every new spec field to be
+  classified), `src/quantized/calc/plotting.py` (`apply_waterfall_offsets`),
+  `src/quantized/routes/export_figures.py` (`FigureRequest.waterfall_offsets`,
+  applied in the shared `_figure_series` — so `/figure`, `/figure-hitmap` and
+  the page-panel route in `routes/export_page.py` all honour it), plus the
+  regenerated `frontend/api/openapi.json` / `lib/api/schema.d.ts`.
+- Automated tests: `frontend/src/lib/waterfallOffset.test.ts` (new, 9 tests —
+  step math, canvas/wire agreement column by column, the four refusals, and
+  the DISPLAY-position rule for a hidden series);
+  `lib/figureSpec.test.ts`'s `FigureSpec waterfall_offsets (BUG-013)` block
+  (7 tests, every expected number derived by RUNNING `applyWaterfall`, never
+  hardcoded); `lib/regressionMatrix.test.ts`'s inverted
+  `BUG-013: the export wire carries the canvas' 0.8125 waterfall offset` plus
+  the now-unnarrowed `waterfall > screen ≡ export`;
+  `tests/test_calc_plotting.py`'s four `apply_waterfall_offsets` tests,
+  including `test_apply_waterfall_offsets_matches_the_canvas_golden` — the
+  CROSS-LANGUAGE pin, whose dataset/offsets/shifted values are the same
+  literals `waterfallOffset.test.ts` pins from the real canvas implementation,
+  compared at 1e-12; `tests/test_export_vector_structure.py`'s four new
+  route-level structural tests.
+- Agent verification: sabotage table (mutation → tests that turned red):
+  (1) `waterfallWire` returns `{}` unconditionally → 7 red, incl.
+  `figureSpec.test.ts > … > emits the canvas' offset per plotted series`,
+  `… > a HIDDEN series keeps its stagger slot`,
+  `regressionMatrix.test.ts > … > waterfall > screen ≡ export` and the
+  inverted BUG-013 pin, and 3 in `waterfallOffset.test.ts`;
+  (2) `apply_waterfall_offsets` returns its input unchanged → 4 red
+  (`test_apply_waterfall_offsets_matches_the_canvas_golden`,
+  `…_degrades_on_a_short_or_bad_offset_list`,
+  `test_waterfall_offsets_shift_each_series_by_its_own_amount`,
+  `…_widen_the_autoscaled_axis_to_fit_the_stagger`);
+  (3) the route passes `None` instead of `req.waterfall_offsets` → the two
+  `test_export_vector_structure.py` waterfall tests red, proving the thin
+  adapter itself is covered and not just `calc/`.
+  Gate: `ruff check src tests tools` clean; `mypy src` clean (295 files);
+  `pytest` — 62 passed across
+  `test_export_vector_structure/test_calc_plotting/test_openapi_snapshot/test_repo_integrity`,
+  324 passed + 1 skipped across
+  `test_api_export/test_api_export_page/test_calc_figure/test_calc_figure_page`;
+  `tsc -b --force` and `eslint src --max-warnings=0` clean;
+  `vitest run src/lib src/architecture.test.ts` — 5221 passed, 0 failed;
+  `node scripts/freeze-regression-matrix.mjs --check` clean and no committed
+  golden changed (they are the SCREEN projection, which this fix does not
+  touch). Eager bundle measured on a `npm ci`-fresh build of each tree:
+  919,781 B at `ebefa693` → 919,966 B here, **+185 B**, still inside the
+  898.8 kB budget (0.4 kB spare). No budget move.
+- Owner verification: pending.
+- Notes: two DOCUMENTED residuals, both inherited rather than introduced. A
+  `group_col` request omits the field (the backend synthesizes one series per
+  level, which does not align 1:1 with `y_keys` — the same reason
+  `series_styles` is documented as unapplied there; see BUG-016), and a
+  `facets` request omits it (that branch renders from its own resolved panel
+  payloads, per `FigureRequest.facets`' own contract). Omitting is the honest
+  response: the renderer never receives an offset it would mis-apply. Both
+  combinations already export unstyled today. Also: the matrix's screen leg
+  measures the offset of the second DISPLAYED series while the export leg
+  reads the second PLOTTED one; the two index spaces coincide for every
+  fixture (none both hides a series and sets a waterfall), and the export leg
+  says so in place.
 
 ---
 

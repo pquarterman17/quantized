@@ -370,9 +370,15 @@ export function projectExportSpec(spec: FigureSpec, figure: FigureDocument): Can
     facet: facetOf(ds, figure.bindings.facetKey, view.xKey, view.yKeys, spec.facets ?? null),
     y2Positions: series.flatMap((s, i) => (s.axis === 1 ? [i] : [])),
     xBreaks: (overrides?.x_breaks ?? []).map((r) => [r[0], r[1]] as [number, number]),
-    // The export wire has NO waterfall field at all (`FigureSpec`), so an
-    // exported figure never carries the offset the canvas applies.
-    waterfallOffset: 0,
+    // BUG-013 (fixed): read straight off the WIRE FIELD — `waterfall_offsets`
+    // carries the per-series stagger in Y data units, resolved by
+    // `lib/waterfallOffset.ts`; `dataset.values` stay un-shifted on purpose.
+    // Index 1 is the SECOND plotted series, which is what the screen leg's
+    // `measureWaterfall` measures (`split`/`display` column 2). The two index
+    // spaces coincide for every matrix fixture (none hides a series AND sets a
+    // waterfall); a fixture that did both would compare the second PLOTTED
+    // series here against the second DISPLAYED one there.
+    waterfallOffset: spec.waterfall_offsets?.[1] ?? 0,
     axes: {
       x: { label: spec.x_label ?? null, scale: spec.x_scale ?? "linear", limits: limitsOf(overrides?.x_lim as [number, number] | undefined) },
       y: { label: spec.y_label ?? null, scale: spec.y_scale ?? "linear", limits: limitsOf(overrides?.y_lim as [number, number] | undefined) },

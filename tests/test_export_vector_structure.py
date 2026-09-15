@@ -32,6 +32,10 @@ What is compared, and how:
     the SVG; its absence means the export silently dropped the uncertainty.
   * ANNOTATIONS -- each annotation's text appears exactly once, standalone
     (not swallowed into the legend or a tick label).
+  * WATERFALL (BUG-013) -- a `waterfall_offsets` request really shifts each
+    series line by its own amount, measured from the hit-map's own series
+    pixel boxes converted back to data units, and widens the autoscaled
+    y-axis to fit the stagger.
   * PANEL PLACEMENT -- a 2x2 page's four ``axes_N`` groups' own background-
     patch pixel rects tile a 2x2 grid in row-major order, and each panel's
     own title text lands inside the geometrically-correct ``axes_N`` block.
@@ -58,6 +62,7 @@ import math
 import re
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -378,3 +383,96 @@ def test_page_2x2_panels_tile_the_grid_in_row_major_order() -> None:
     assert "Panel B" in blocks[2]
     assert "Panel C" in blocks[3]
     assert "Panel D" in blocks[4]
+
+
+# ---------------------------------------------------------------------------
+# Waterfall: the per-series stagger the canvas draws reaches the render
+# (BUG-013). Read STRUCTURALLY -- where the series line actually lands in the
+# rendered Axes, recovered from the hit-map's own pixel boxes + the axis
+# limits the renderer set, never re-derived from the request.
+# ---------------------------------------------------------------------------
+
+_WATERFALL_YLIM = [-2.0, 5.0]
+
+
+def _waterfall_payload(offsets: list[float] | None, *, fixed_ylim: bool = True) -> dict[str, Any]:
+    """Two series (sin, cos -- both inside [-1, 1]) so a stagger is
+    unambiguous. With ``fixed_ylim`` the y-range is pinned wide enough for
+    both renders, which makes the two pixel boxes directly comparable."""
+    payload: dict[str, Any] = {
+        "dataset": _dataset(),
+        "y_keys": [0, 1],
+        "fmt": "png",
+        "filename": "waterfall",
+    }
+    if fixed_ylim:
+        payload["overrides"] = {"y_lim": _WATERFALL_YLIM}
+    if offsets is not None:
+        payload["waterfall_offsets"] = offsets
+    return payload
+
+
+def _series_data_span(hitmap: dict[str, Any], index: int) -> tuple[float, float]:
+    """(y_min, y_max) of series ``index`` in DATA units, converted from the
+    hit-map's pixel box with the axes rect + ``ylim`` the renderer reported."""
+    axes = hitmap["axes"]
+    box = next(e for e in hitmap["elements"] if e["id"] == f"series:{index}")
+    lo, hi = axes["ylim"]
+    span_px = axes["y1"] - axes["y0"]
+
+    def to_data(py: float) -> float:
+        return hi - (py - axes["y0"]) / span_px * (hi - lo)
+
+    return to_data(box["y1"]), to_data(box["y0"])
+
+
+def _hitmap(payload: dict[str, Any]) -> dict[str, Any]:
+    resp = client.post("/api/export/figure-hitmap", json=payload)
+    assert resp.status_code == 200, resp.text
+    return dict(resp.json())
+
+
+def test_waterfall_offsets_shift_each_series_by_its_own_amount() -> None:
+    plain = _hitmap(_waterfall_payload(None))
+    staggered = _hitmap(_waterfall_payload([0.0, 2.0]))
+    # Both renders share the same fixed y-range, so a pixel box is directly
+    # comparable; the stroke-width padding cancels in the DIFFERENCE.
+    for index, want_shift in ((0, 0.0), (1, 2.0)):
+        before = _series_data_span(plain, index)
+        after = _series_data_span(staggered, index)
+        assert after[0] - before[0] == pytest.approx(want_shift, abs=0.05)
+        assert after[1] - before[1] == pytest.approx(want_shift, abs=0.05)
+
+
+def test_waterfall_offsets_are_absent_by_default() -> None:
+    """Omitting the field renders exactly what it always did -- the offsets
+    are opt-in, so no existing export moves."""
+    plain = _hitmap(_waterfall_payload(None))
+    explicit_zero = _hitmap(_waterfall_payload([0.0, 0.0]))
+    for index in (0, 1):
+        assert _series_data_span(explicit_zero, index) == pytest.approx(
+            _series_data_span(plain, index), abs=1e-9
+        )
+
+
+def test_waterfall_offsets_widen_the_autoscaled_axis_to_fit_the_stagger() -> None:
+    """The canvas autoscales over the OFFSET values, so the vector export must
+    too -- otherwise the staggered curves are drawn off the top of the axes."""
+    plain = _hitmap(_waterfall_payload(None, fixed_ylim=False))
+    staggered = _hitmap(_waterfall_payload([0.0, 3.0], fixed_ylim=False))
+    assert plain["axes"]["ylim"][1] < 2.0  # sin/cos alone
+    assert staggered["axes"]["ylim"][1] > 3.0  # the shifted cos is inside the axes
+
+
+def test_waterfall_offsets_leave_the_legend_and_axis_labels_alone() -> None:
+    payload = _waterfall_payload([0.0, 2.0])
+    payload["fmt"] = "svg"
+    payload["title"] = "Stagger"
+    payload["x_label"] = "Field"
+    payload["y_label"] = "Signal"
+    payload["overrides"] = {"y_lim": _WATERFALL_YLIM, "legend": {"show": True}}
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == _LEGEND_ENTRIES[:2]
+    assert "Field" in svg and "Signal" in svg and "Stagger" in svg

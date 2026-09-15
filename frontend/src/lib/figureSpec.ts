@@ -50,6 +50,7 @@ import { viewOverrides } from "./figureViewOverrides";
 import { overlayExportsSeriesStyles, windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
+import { waterfallWire } from "./waterfallOffset";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -337,6 +338,8 @@ function buildFigureSpecForView(
     overrides: gatedOverrides,
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
     ...(o.greyscale ? { greyscale: true } : {}),
+    // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
+    ...waterfallWire(data, displayChannels, positions, st.waterfall, extras.groupKey, facets),
     filename: extras.filename ?? stem,
   };
 }
