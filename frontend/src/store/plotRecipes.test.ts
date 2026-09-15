@@ -993,8 +993,11 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
     expect(stageSpec.y_scale).toBe("log");
     expect(stageSpec.x_key).toBe(0);
     expect(stageSpec.y_keys).toEqual([1]);
-    expect(stageSpec.dataset.labels).toContain("Corrected intensity");
-    expect(stageSpec.series_styles).toEqual([{ color: "#336699", width: 2.5 }]);
+    // BUG-014: a legend rename is presentation, not data — the wire dataset
+    // keeps the imported label and the rename rides `series_styles[i].legend`.
+    expect(stageSpec.dataset.labels).toContain("Intensity");
+    expect(stageSpec.dataset.labels).not.toContain("Corrected intensity");
+    expect(stageSpec.series_styles).toEqual([{ color: "#336699", width: 2.5, legend: "Corrected intensity" }]);
     expect(stageSpec.overrides).toMatchObject({
       x_lim: [10, 30],
       y_lim: [100, 300],
