@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-14 (BUG-012 and BUG-015 fixed; BUG-016 filed; BUG-012..BUG-015 divergence tests renamed)  
+**Updated:** 2026-09-15 (UX-003 filed from the `b749f804` bundle-diet review round)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -41,6 +41,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
+| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
 
 ---
 
@@ -4301,6 +4302,115 @@ ratchet tighter than it has been all session. Full rationale in
 
 ---
 
+## UX-003 — a failed lazy chunk load unmounts the React root: 17 `lazy()` sites, no error boundary
+
+**Priority:** P3 — recoverable by reloading the page, and it needs a chunk
+fetch to fail (offline right after a deploy, or a stale cached `index.html`
+referencing a since-rotated hash); but when it does happen the whole app
+goes blank with no message at all
+**State:** Open
+**Reported:** 2026-09-15 by agent (adversarial review of the `b749f804` bundle diet)
+**Investigated:** measured, not fixed — see below
+**Suggested implementation owner/model:** Unassigned
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 (the lazy-seam
+diet), `plans/BUNDLE_HEADROOM.md` slice 2
+
+#### User-visible problem
+
+Every code-split panel in the app is reached through React's
+`lazy()` + `<Suspense>`. If the chunk behind one cannot be fetched, the lazy
+component's promise rejects, and React propagates that rejection up looking
+for an error boundary. There is none: measured 2026-09-15,
+`grep -rln "componentDidCatch|getDerivedStateFromError|ErrorBoundary" frontend/src`
+returns **0 files**, against **17** `= lazy(` sites in nine modules
+(`main.tsx`, `App.tsx`, `AppOverlays.tsx`, `components/Library/Library.tsx`,
+`components/Library/FigureRow.tsx`, `components/Stage/Stage.tsx`,
+`components/Stage/PlotStage.tsx`, `components/windows/WindowCanvas.tsx`,
+`components/windows/DocumentWindow.tsx`).
+
+So the failure mode is: the user clicks something that opens a lazy panel,
+the fetch fails, and **the entire React root unmounts** — a blank window,
+no toast, no status line, no console error the user would ever see. The
+project state is not lost on disk, but everything unsaved in memory is, and
+the only recovery is a page reload. React additionally caches the rejected
+payload for that `lazy()` component, so even if the root survived, the next
+gesture would not retry.
+
+This is a whole CLASS, not one panel. It is filed now because the
+2026-09-14 bundle diet's commit body claimed "chunk-load failures are
+reported, never silent" and "a failed load is never cached, so the next
+gesture retries" without qualification. Both are true of the three seams
+that go through `commands/fileCommands.ts`'s `runLazy` or
+`store/workbookTransfer.ts`'s own `fail()`; **neither is true of any
+`lazy()`-shaped seam**, including that commit's own
+`components/Library/OriginSavedPreviewWindow.tsx`. The claims were narrowed
+in both plans on 2026-09-15; the missing boundary itself was deliberately
+NOT added in that review round, because a root error boundary is a design
+decision about what the app shows and offers when a subtree dies, not a
+one-line patch to slip into a bundle-diet follow-up.
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — any project; the Library
+  figure row's saved-Origin preview ("▣") is the cheapest lazy trigger
+- [x] Exact actions recorded — make the chunk unfetchable (DevTools offline,
+  or delete the built chunk from `src/quantized/web/assets/`), then click a
+  control whose panel is `lazy()`
+- [x] Actual result recorded — measured in a scratch spec at `b749f804`
+  (`vi.mock` of the lazy module throwing, then clicking "▣" on a
+  `saved_preview` row): root HTML length after the click **0**, row present
+  **false**, toasts **0**, `console.error` lines **0**
+- [ ] Expected result recorded — owner call: the decision below
+- [x] Reproduced by an agent
+
+#### Investigation
+
+- [x] Likely owning components/modules identified — the nine modules listed
+  above; a fix belongs at/near `src/main.tsx`'s root render and each
+  `<Suspense>` boundary, not in any individual panel
+- [x] Root cause confirmed rather than inferred — measured, both halves
+  (0 boundaries, 17 sites) counted by grep on 2026-09-15
+- [ ] Related workflows and persistence paths checked — in particular
+  whether autosave (`useWorkspaceAutosave`) has already written before a
+  root unmount, i.e. how much is actually lost
+- [ ] Existing plan overlap reconciled — P4.1 will keep ADDING `lazy()`
+  seams for bundle headroom, so this grows with every future slice
+
+#### Implementation
+
+- [ ] Minimal safe behavior defined — owner call between: (a) one root
+  boundary that shows a "something went wrong, reload" panel; (b) a boundary
+  per `<Suspense>` so only the failing panel dies and the rest of the app
+  keeps working; (c) (b) plus a Retry that remounts with a fresh `lazy()`,
+  which is the only way to defeat React's cached rejection
+- [ ] Failure and ambiguous-data behavior defined — a boundary must not
+  swallow non-chunk errors into a generic message that hides a real bug
+- [ ] Data integrity and backward compatibility considered — whether the
+  boundary should force an autosave before showing its fallback
+- [ ] UI wording/tooltips/accessibility included where relevant
+
+#### Tests and acceptance
+
+- [ ] Regression test fails before the fix and passes afterward — a spec
+  that makes one `lazy()` chunk reject and asserts the root is still mounted
+- [ ] Relevant focused tests pass
+- [ ] Type-check/build/repository gates pass
+- [ ] Agent verifies acceptance criteria
+- [ ] Owner verifies when required
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: filed by the 2026-09-15 review round of `b749f804`; that round
+  narrowed the two over-broad claims in the plans and left the boundary
+  itself to this item.
+
+---
+
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -4376,3 +4486,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
 | 2026-09-14 | Claude (agent) | Filed BUG-016 (P2): a grouped figure's per-series styling reaches the canvas — `plotGroupSplit.ts`'s channel map gives every level its source channel's style and `buildOpts` applies it — but `routes/export_figures.py`'s `group_col` branch (`:81-85` documents the choice, `:236-238` returns `_ResolvedFigure(..., None, ...)`) drops `series_styles` outright, so the exported curves are solid, default-width and default-coloured. Found by the 2026-09-14 adversarial review round of the P4.2 regression matrix, which showed the matrix's own GROUP style comparison was reading a wire field the renderer never consults. Same round: renamed BUG-012..BUG-015's reproducing tests (the five bare `it.fails` pins became explicit `DIVERGENCE (BUG-01x)` tests asserting BOTH concrete values and their difference) and updated each entry's fix checklist to say the fix INVERTS the assertion rather than flipping an `it.fails`. Not fixed here — tests/fixtures/plans only, no product code touched | Design-time finding, code-read and file:line-cited, and measured on both paths (canvas: three levels at `dash: [8, 4]`, `width: 2`; resolver: `styles=None` under `group_col`). Reproducing test: `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` (new this round). `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; `npx vitest run src/lib/regressionMatrix.test.ts src/lib/figureSpec.a8.test.ts src/architecture.test.ts` |
+| 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |

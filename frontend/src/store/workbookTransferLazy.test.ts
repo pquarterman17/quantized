@@ -148,4 +148,107 @@ describe("workbook transfer — chunk-deferred core", () => {
     await useApp.getState().copyWorkbookToClipboard("w1");
     expect(written).not.toBeNull();
   });
+
+  // 2026-09-15 review, finding 9: `duplicateWorkbook` is `transferCore`'s
+  // third caller and had no chunk-load coverage, though Copy and Paste did.
+  it("refuses a duplicate whose core will not load, leaving the project untouched", async () => {
+    const before = useApp.getState();
+    vi.doMock("../lib/workbookTransfer", () => {
+      throw new Error("network error");
+    });
+
+    expect(await useApp.getState().duplicateWorkbook("w1")).toBeNull();
+
+    expect(useApp.getState().status).toMatch(/^duplicate "run1" failed: /);
+    expect(dangerToasts()).toEqual([useApp.getState().status]);
+    expect(useApp.getState().workbooks).toBe(before.workbooks);
+    expect(useApp.getState().datasets).toBe(before.datasets);
+    expect(useApp.getState().history).toBe(before.history);
+  });
+});
+
+// 2026-09-15 review, finding 1. Copy is the ONE action in this slice that
+// cannot simply `await` the core: `navigator.clipboard.write` has to be
+// reached inside the click's own task, or the transient user activation is
+// spent and the write is refused (`qz --desktop`'s WKWebView is strictest
+// about this). `store/workbookTransfer.ts`'s `buildForCopy` and
+// `lib/clipboard.ts`'s `copyTextAsync` exist for that, and this is the spec
+// that holds it: the chunk is deliberately GATED, so "the write happened
+// first" is proved rather than assumed.
+describe("Copy workbook — the clipboard write keeps the user gesture", () => {
+  /** jsdom ships no ClipboardItem; this one just remembers its values so the
+   *  `write` stub can read them the way a real browser reads a promise value. */
+  class FakeClipboardItem {
+    constructor(public readonly items: Record<string, Promise<string> | string>) {}
+  }
+
+  const setClipboard = (value: unknown): void => {
+    // `writable: true` matters: this file's own beforeEach re-installs the
+    // clipboard with Object.assign, which throws on a non-writable property.
+    Object.defineProperty(navigator, "clipboard", { value, configurable: true, writable: true });
+  };
+  const originalClipboard = navigator.clipboard;
+  const originalClipboardItem = (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem;
+
+  afterEach(() => {
+    setClipboard(originalClipboard);
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = originalClipboardItem;
+  });
+
+  it("calls write() before the core chunk resolves, and writes the real package", async () => {
+    let releaseCore!: () => void;
+    const coreGate = new Promise<void>((resolve) => (releaseCore = resolve));
+    let coreResolved = false;
+    vi.doMock("../lib/workbookTransfer", async () => {
+      await coreGate;
+      coreResolved = true;
+      return await vi.importActual<typeof import("../lib/workbookTransfer")>("../lib/workbookTransfer");
+    });
+
+    const values: (Promise<string> | string)[] = [];
+    const write = vi.fn(async (items: FakeClipboardItem[]) => {
+      for (const item of items) values.push(...Object.values(item.items));
+      for (const value of values) await value;
+    });
+    setClipboard({ write });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+
+    const copying = useApp.getState().copyWorkbookToClipboard("w1");
+
+    // THE assertion. Not one `await` has run since the "click", and the core
+    // import is provably still in flight — yet the clipboard write has
+    // already started, holding the gesture. Awaiting the chunk before
+    // touching the clipboard (the shape this seam first shipped with) makes
+    // this expectation fail.
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(coreResolved).toBe(false);
+
+    releaseCore();
+    await copying;
+
+    expect(coreResolved).toBe(true);
+    expect(JSON.parse(String(await values[0]))).toMatchObject({ workbook: { name: "run1" } });
+    expect(useApp.getState().status).toBe('copied "run1" (1 worksheet)');
+    expect(dangerToasts()).toEqual([]);
+  });
+
+  it("reports the BUILD's own refusal, not 'clipboard unavailable', when the core will not load", async () => {
+    const write = vi.fn(async (items: FakeClipboardItem[]) => {
+      for (const item of items) for (const value of Object.values(item.items)) await value;
+    });
+    setClipboard({ write });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+    vi.doMock("../lib/workbookTransfer", () => {
+      throw new Error("network error");
+    });
+
+    await useApp.getState().copyWorkbookToClipboard("w1");
+
+    // The write WAS attempted (that is the whole point), but its value promise
+    // rejected, so the specific reason — not the fallback wording — is shown.
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().status).toMatch(/^copy "run1" failed: /);
+    expect(useApp.getState().status).not.toMatch(/clipboard unavailable/);
+    expect(dangerToasts()).toEqual([useApp.getState().status]);
+  });
 });

@@ -196,15 +196,47 @@ ride-along.
    cut to unblock, but it is well short of the 25-40 kB this file's own history
    calls healthy. Slices 2 and 3 stay on the table.
 
-### Slice 2 — command metadata vs. handlers
+### Slice 2 — command metadata vs. handlers — **PARTIALLY DONE**
 
-**Upper bound 22,347 B · measured net eager delta: TBD · HIGHER risk**
+**Upper bound 22,347 B · measured so far −3,104 B of it · HIGHER risk**
+
+**2026-09-14 (`b749f804`), the first two data points, both exactly this
+slice's shape** — the `run` body behind a dynamic `import()`, the metadata
+(id/label/description/keywords/section) left eager so the palette, the menus
+and Help search are untouched:
+
+| seam | module deferred | loader | measured eager delta |
+|---|---|---|---:|
+| worksheet reshapes | `lib/worksheetTransformCommands.ts` | `commands/dataCommands.ts` | **−2,645 B** |
+| Page setup | `lib/pageSetupCommand.ts` | `commands/plotCommands.ts` | **−459 B** |
+
+Both were measured cumulatively with `npm run build` after `npm ci` and a
+`node_modules/.vite` wipe, on `4aafd3a3` (919,781 → 917,136 → … → 910,631 →
+910,172 B across the four seams of that commit; the two rows above are the
+reshape and Page-setup steps of that chain). `commands/plotCommands.ts` is in
+this slice's own table above (6,626 B) and `commands/dataCommands.ts` is the
+same axis — the Data-menu half of what `fileCommands`/`analysisCommands`
+represent. The remaining bulk (`fileCommands` + `analysisCommands`, and the
+rest of `plotCommands`) is untouched, so the slice stays open.
+
+The Page-setup row is also the honest scale check this slice's own text asks
+for: −459 B for one command's handler says the prize really is the handlers'
+TRANSITIVE imports, not the command files' own bytes.
+
+**Not in this slice, and not anywhere else yet: a root error boundary.** The
+17 `lazy()` sites in `frontend/src` have none (measured 2026-09-15), so a
+failed chunk load at a `Suspense` boundary unmounts the React root. Every
+`lazy()`-shaped seam added here inherits that. It is a separate task, filed
+as `plans/BUGS_AND_ISSUES.md` UX-003 — do not treat "the seam reports its
+load failures" as true of `lazy()`-shaped seams.
 
 Especially loose: the metadata (id, label, section, keywords) and the dispatch
 seam must stay eager for the palette to list and search commands at all. The
 real prize is the handlers' TRANSITIVE imports, which this attribution
 credits to those modules rather than to the command files — so the bound says
-little about the achievable number. Spike before scheduling.
+little about the achievable number. (The spike this line asked for is the
+table above; it landed at −3,104 B for two handlers, so the bound remains a
+poor predictor and the rest still needs measuring one seam at a time.)
 
 `fileCommands` + `analysisCommands` + `plotCommands` = 22,347 B. The earlier
 rejection ("a dynamic import in front of the FIRST PRESS of every keyboard

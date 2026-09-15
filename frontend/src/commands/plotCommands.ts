@@ -15,7 +15,7 @@ import { cycleAxisScale, cycleTickMode } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { useRecipeManager } from "../store/recipeManager";
 import { toast } from "../store/toasts";
-import { runLazy } from "./fileCommands";
+import { onLoadFailure, runLazy } from "./fileCommands";
 
 /** `lib/pageSetupCommand.ts` is the Page Setup dialog's seven-field
  *  `ParamDialog` builder and its confirm handler, reachable from nothing else
@@ -24,13 +24,16 @@ import { runLazy } from "./fileCommands";
  *  eager, so the menu, ⌘K and Help still list and search it unchanged), using
  *  the same `runLazy` wrapper the lazy export commands use: a pendingOps busy
  *  entry for the fetch, and a danger toast instead of an unhandled rejection
- *  if the chunk cannot load. Measured: 910,631 -> 910,172 B eager. */
+ *  if the chunk cannot load. Measured: 910,631 -> 910,172 B eager.
+ *
+ *  `onLoadFailure` is `.then`'s SECOND argument, not a trailing `.catch`: it
+ *  must cover the LOAD only, so a rejection from `runPageSetupDialog` itself
+ *  still surfaces instead of vanishing. */
 function openPageSetup(s: StoreGet): void {
-  void runLazy("Loading page setup…", () => import("../lib/pageSetupCommand"))
-    .then((m) => m.runPageSetupDialog(s))
-    .catch(() => {
-      /* runLazy already toasted the load failure */
-    });
+  void runLazy("Loading page setup…", () => import("../lib/pageSetupCommand")).then(
+    (m) => m.runPageSetupDialog(s),
+    onLoadFailure,
+  );
 }
 
 /** Build the Plot- and Insert-group curated palette actions against the

@@ -2272,10 +2272,37 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     },
   ];
 
+  /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
+   *  type-clause stripper below used an unbounded `[\s\S]*?`, so an `import
+   *  type` mentioned inside a COMMENT started a match that ate forward to the
+   *  next real `from "…"` and deleted a genuine value import. Measured: a
+   *  `// we deliberately keep an import type here` line above a real static
+   *  import blinded the guard completely. The `[^:]` guard keeps `https://…`
+   *  inside a string from being mistaken for a line comment. */
+  const stripComments = (src: string): string =>
+    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+
   /** Drop `import type … from "…"` / `export type … from "…"` clauses, which
-   *  carry no runtime edge, so only VALUE imports are searched. */
+   *  carry no runtime edge, so only VALUE imports are searched. Anchored to a
+   *  statement start and stopped at the first `;`, so it cannot run past the
+   *  clause it matched. `import { type A, b }` is NOT a type-only clause and
+   *  is deliberately left in place — it does carry a runtime edge. */
   const valueImportsOnly = (src: string): string =>
-    src.replace(/\b(?:import|export)\s+type\s[\s\S]*?\bfrom\s*["'][^"']+["']/g, "");
+    stripComments(src).replace(/^[ \t]*(?:import|export)\s+type\s[^;]*?\bfrom\s*["'][^"']+["']/gm, "");
+
+  /** Every STATIC value-import specifier in a module: the `from "…"` clauses
+   *  AND bare side-effect `import "…"` (2026-09-15 review, finding 6 — a bare
+   *  import has no `from`, yet folds the module into the importer's chunk just
+   *  the same, so the old `from`-only scan let `import "./workbookTransfer";`
+   *  through). Dynamic `import("…")` is `import(`, never `import "`, so it is
+   *  correctly not matched here. */
+  const staticSpecifiers = (src: string): string[] => {
+    const v = valueImportsOnly(src);
+    return [
+      ...[...v.matchAll(/\bfrom\s*["']([^"']+)["']/g)].map((m) => m[1]),
+      ...[...v.matchAll(/(?:^|[\s;}])import\s*["']([^"']+)["']/gm)].map((m) => m[1]),
+    ];
+  };
 
   it("scans the modules it claims to", () => {
     // A guard whose subject has been renamed away passes vacuously.
@@ -2305,14 +2332,91 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("no module value-imports a seam module statically", () => {
     const targets = new Set(SEAMS.map((s) => s.module.replace(/\.tsx?$/, "")));
     const offenders = sources().flatMap(([p, src]) => {
-      const hits = [...valueImportsOnly(src).matchAll(/\bfrom\s*["']([^"']+)["']/g)]
-        .map((m) => resolveFrom(p, m[1]))
+      const hits = staticSpecifiers(src)
+        .map((spec) => resolveFrom(p, spec))
         .filter((r): r is string => r !== null && targets.has(r));
       return hits.length ? [`${p} -> ${hits.join(", ")}`] : [];
     });
     expect(
       offenders,
       "these modules are chunk-deferred — reach them through the dynamic import() in their loader, not a static one",
+    ).toEqual([]);
+  });
+
+  // The two blind spots the 2026-09-15 review measured in the first version of
+  // this scanner. Both are asserted on synthetic sources, because both were
+  // LATENT — no shipped module triggers either today, so a corpus-wide
+  // assertion would pass with the bug still present.
+  it("is not blinded by a comment that merely mentions an import type clause", () => {
+    // The two cases the review measured against the original unanchored
+    // `[\s\S]*?` — each returned [] where a real value import was present.
+    const withLineComment = '// we deliberately keep an import type here\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    const withDocComment = '/** see export type re-exports */\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    // And the case that ANCHORING alone does not fix: a commented-out clause
+    // that starts its own line and has no `from` of its own, so the scan runs
+    // on into the next real import and eats it. Only stripping comments first
+    // holds this one.
+    const withCommentedOutClause = '/*\nimport type Foo\n*/\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    expect(staticSpecifiers(withLineComment)).toEqual(["../lib/workbookTransfer"]);
+    expect(staticSpecifiers(withDocComment)).toEqual(["../lib/workbookTransfer"]);
+    expect(staticSpecifiers(withCommentedOutClause)).toEqual(["../lib/workbookTransfer"]);
+  });
+
+  it("sees a bare side-effect import, and still ignores a real type-only one", () => {
+    expect(staticSpecifiers('import "./workbookTransfer";\n')).toEqual(["./workbookTransfer"]);
+    expect(staticSpecifiers('import type { TransferIdGenerators } from "../lib/workbookTransfer";\n')).toEqual([]);
+    // A dynamic import is the SANCTIONED shape and must never be reported.
+    expect(staticSpecifiers('const m = await import("../lib/workbookTransfer");\n')).toEqual([]);
+  });
+
+  /** Modules that are not seams themselves but were dragged OUT of the eager
+   *  graph BY one — seam 2's measured −4,675 B is mostly these two, which
+   *  `OriginSavedPreviewWindow` was the only eagerly-reachable importer of.
+   *  ~40 lazily-reached workshop panels import them, so the static-import
+   *  grep above cannot hold this line; REACHABILITY can (2026-09-15 review,
+   *  finding 7). Without it, one eager importer silently folds 4.7 kB back
+   *  into the entry chunk and only the bundle budget would ever notice —
+   *  the exact failure this describe block exists to prevent. */
+  const DRAGGED_OUT = ["/components/overlays/ToolWindow.tsx", "/lib/workshopHelp.ts"];
+
+  /** The eager chunk's module set, computed the way Rollup computes it: walk
+   *  STATIC value imports from the app entry, stop at every dynamic
+   *  `import()`. Unresolvable specifiers (bare packages, CSS, assets) are
+   *  skipped — they cannot reach an `src/` module anyway. */
+  const eagerlyReachable = (): Set<string> => {
+    const byPath = new Map(sources().map(([p, src]) => [p.replace(/^\./, ""), src]));
+    const resolve = (importer: string, spec: string): string | null => {
+      const base = resolveFrom(importer, spec);
+      if (base === null) return null;
+      for (const c of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) {
+        if (byPath.has(c)) return c;
+      }
+      return null;
+    };
+    const seen = new Set(["/main.tsx"]);
+    const queue = ["/main.tsx"];
+    while (queue.length > 0) {
+      const cur = queue.shift() as string;
+      for (const spec of staticSpecifiers(byPath.get(cur) ?? "")) {
+        const next = resolve(cur, spec);
+        if (next !== null && !seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return seen;
+  };
+
+  it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
+    const eager = eagerlyReachable();
+    // Vacuity guard: a walk that stalls at the entry would pass everything.
+    // Measured 2026-09-15 on this tree: 377 of 898 source modules are eager.
+    expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
+    expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
+    expect(
+      [...SEAMS.map((s) => s.module), ...DRAGGED_OUT].filter((m) => eager.has(m)),
+      "these ship inside a lazy seam's chunk; a static import from an eagerly reachable module folds them back into the entry chunk",
     ).toEqual([]);
   });
 

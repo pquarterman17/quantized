@@ -7,7 +7,7 @@
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
-import { runLazy } from "./fileCommands";
+import { onLoadFailure, runLazy } from "./fileCommands";
 
 /** The four worksheet-reshape commands (transpose / stack / unstack / join)
  *  behind ONE dynamic `import()`. This module was
@@ -27,17 +27,19 @@ import { runLazy } from "./fileCommands";
  *  `runLazy` (commands/fileCommands.ts, the shape every lazy export command
  *  already uses) gives the click-to-chunk-loaded window a pendingOps busy
  *  entry and toasts a chunk-load failure instead of leaving the rejection
- *  unhandled; it rethrows, so the trailing `.catch` here is what keeps THAT
- *  rejection handled without double-reporting. */
+ *  unhandled; it rethrows, so `onLoadFailure` as `.then`'s SECOND argument is
+ *  what keeps THAT rejection handled without double-reporting. It is passed
+ *  as the second argument rather than as a trailing `.catch` deliberately —
+ *  a trailing `.catch` would also swallow anything `pick(m)(s)` throws, which
+ *  before this seam existed crashed loudly out of the React event handler. */
 function runWorksheetTransform(
   s: StoreGet,
   pick: (m: typeof import("../lib/worksheetTransformCommands")) => (s: StoreGet) => void,
 ): void {
-  void runLazy("Loading worksheet reshape…", () => import("../lib/worksheetTransformCommands"))
-    .then((m) => pick(m)(s))
-    .catch(() => {
-      /* runLazy already toasted the load failure */
-    });
+  void runLazy("Loading worksheet reshape…", () => import("../lib/worksheetTransformCommands")).then(
+    (m) => pick(m)(s),
+    onLoadFailure,
+  );
 }
 
 /** Build the Data-group curated palette actions against the live store

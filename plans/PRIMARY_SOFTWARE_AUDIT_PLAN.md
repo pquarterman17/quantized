@@ -5104,6 +5104,32 @@ the command registry itself (first press of every shortcut),
 click's own task or a browser blocks the dialog) and every first-paint
 Library section.
 
+**2026-09-15 review round — two narrower claims and the trees the numbers
+were measured on.** *Failure reporting:* seams 1, 3 and 4 do report a
+chunk-load failure and do retry on the next gesture — the reshape and
+Page-setup commands through `runLazy`'s danger toast, Copy/Paste/Duplicate
+through that slice's own status line + toast. **Seam 2 does neither.**
+`FigureRow`'s `lazy()` + `Suspense` inherits what all 17 `lazy()` sites in
+`frontend/src` already do: measured 2026-09-15, there is no error boundary
+anywhere under `frontend/src` (0 files match
+`componentDidCatch|getDerivedStateFromError|ErrorBoundary`), so a failed
+chunk unmounts the React root with no toast and no status, and React caches
+the rejected payload so the next gesture does not retry. That is a
+pre-existing class the seam is merely consistent with, not something it
+introduced; it is filed as `plans/BUGS_AND_ISSUES.md` **UX-003** and a root
+error boundary is its own task, deliberately not done here. *Measurement
+trees:* both absolutes above (919,781 and 910,172 B) were measured on
+`4aafd3a3`, an ANCESTOR of the commit that landed the work (`b749f804`,
+whose real parent is `50b30a04`, five commits later). The **−9,609 B delta**
+is the load-bearing figure; `EAGER_JS_BUDGET` was not edited, so nothing in
+the repo depends on those absolutes — re-measure them on the branch before
+the pin is next touched. Also closed that round: `copyTextAsync`
+(`lib/clipboard.ts`) so seam 3's Copy starts its clipboard write inside the
+click's own task instead of after the chunk `await` (the same
+user-activation rule `openWorkspaceCommand` was rejected on), and the
+two-argument `.then(onRun, onLoadFailure)` form at every `runLazy` call site
+so a loaded handler's own throw is no longer swallowed with the load's.
+
 - [ ] Characterization tests before moves.
 - [ ] Split one owned domain per PR with unchanged behavior/contracts.
 - [ ] Generate clients/types where it reduces drift.

@@ -125,3 +125,99 @@ describe("Plot ▸ Page setup — chunk-deferred handler", () => {
     expect(askParamsMock).not.toHaveBeenCalled();
   });
 });
+
+// 2026-09-15 review, finding 9: only `transpose` had chunk-load coverage, and
+// nothing covered retry. The other three reshapes share `runWorksheetTransform`
+// with it, so these are cheap — and they are what keeps the shared wrapper's
+// refusal wording from silently drifting per command.
+describe("the other three worksheet reshapes report a chunk that will not load", () => {
+  it.each([
+    ["stack-columns", "runStackWorksheet"],
+    ["unstack-columns", "runUnstackWorksheet"],
+    ["join-by-key", "runJoinWorksheets"],
+  ])("%s", async (id) => {
+    vi.doMock("../lib/worksheetTransformCommands", () => {
+      throw new Error("network error");
+    });
+    findCommand(id).run();
+
+    await vi.waitFor(() =>
+      expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true),
+    );
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(askParamsMock).not.toHaveBeenCalled();
+  });
+
+  it("retries after a failed load instead of staying broken", async () => {
+    askParamsMock.mockResolvedValue({ confirm: true });
+    vi.doMock("../lib/worksheetTransformCommands", () => {
+      throw new Error("network error");
+    });
+    findCommand("transpose").run();
+    await vi.waitFor(() =>
+      expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true),
+    );
+    expect(useApp.getState().datasets).toHaveLength(1);
+
+    // A rejected dynamic import is not cached, so the next gesture refetches.
+    vi.doUnmock("../lib/worksheetTransformCommands");
+    vi.resetModules();
+    findCommand("transpose").run();
+    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
+  });
+});
+
+// 2026-09-15 review, finding 2. A trailing `.catch` sits AFTER `.then`, so it
+// also swallows whatever the loaded handler throws: measured on this very
+// seam, a handler that threw produced no toast, no status and no console
+// error, where the same throw before the body moved behind an `import()`
+// propagated out of `run()` as a loud React event-handler error. The fix is
+// the two-argument `.then(onRun, onLoadFailure)`; these two tests are the pair
+// that distinguishes it from the trailing-`.catch` shape, which passes the
+// second one and fails the first.
+describe("a chunk-deferred handler's OWN failure is not swallowed with the load's", () => {
+  /** Capture the process-level unhandled rejection a handler throw must still
+   *  produce. Vitest's own listener is stood down for the duration and put
+   *  back afterwards, so an expected rejection cannot fail the run. */
+  async function unhandledRejectionFrom(run: () => void): Promise<unknown> {
+    const prior = process.listeners("unhandledRejection");
+    process.removeAllListeners("unhandledRejection");
+    let captured: unknown;
+    const capture = (reason: unknown): void => {
+      captured = reason;
+    };
+    process.on("unhandledRejection", capture);
+    try {
+      run();
+      // Node decides a rejection is unhandled once the microtask queue has
+      // drained, i.e. no earlier than the next macrotask turn.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return captured;
+    } finally {
+      process.off("unhandledRejection", capture);
+      for (const listener of prior) process.on("unhandledRejection", listener);
+    }
+  }
+
+  it("lets a throw from the loaded handler surface as a rejection", async () => {
+    const boom = new Error("BOOM from the handler");
+    vi.doMock("../lib/worksheetTransformCommands", () => ({
+      runTransposeWorksheet: () => {
+        throw boom;
+      },
+    }));
+
+    expect(await unhandledRejectionFrom(() => findCommand("transpose").run())).toBe(boom);
+    // ...and it is NOT mis-reported as a chunk-load failure.
+    expect(dangerToasts()).toEqual([]);
+  });
+
+  it("still handles a chunk-load failure itself — toasted, and no unhandled rejection", async () => {
+    vi.doMock("../lib/worksheetTransformCommands", () => {
+      throw new Error("network error");
+    });
+
+    expect(await unhandledRejectionFrom(() => findCommand("transpose").run())).toBeUndefined();
+    expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true);
+  });
+});

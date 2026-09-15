@@ -116,6 +116,42 @@ export async function copyImageAsync(pending: Promise<Blob | null>, signal?: Abo
   }
 }
 
+/** Write text the caller is still BUILDING, without losing the user gesture —
+ *  `copyText`'s counterpart to `copyImageAsync`, and it exists for the same
+ *  MAIN #35 reason. `store/workbookTransfer.ts`'s Copy has to `await` a
+ *  dynamic `import()` of its package builder before it has any text at all;
+ *  doing that BEFORE touching the clipboard drops the transient user
+ *  activation the Clipboard API requires, and the copy then fails reporting
+ *  "clipboard unavailable" when the clipboard was fine. The spec allows a
+ *  `ClipboardItem` value to be a promise, so handing the still-pending text
+ *  straight to the constructor keeps the write inside the originating
+ *  gesture while the chunk and the package are still in flight.
+ *
+ *  The capability gate is `clipboardImageSupported()`: despite its name it
+ *  tests exactly `navigator.clipboard.write` + `ClipboardItem`, which is the
+ *  same pair a promise-valued TEXT write needs.
+ *
+ *  Fallback — an engine with no `ClipboardItem`, or one that refuses a promise
+ *  value — awaits the text and calls `copyText`. That path RE-OPENS the very
+ *  window this function exists to close (the gesture can be spent before the
+ *  write), so on those engines the behaviour degrades to "might lose the
+ *  gesture", not to "never copies". Resolves false if both routes fail. */
+export async function copyTextAsync(pending: Promise<string>): Promise<boolean> {
+  if (clipboardImageSupported()) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending })]);
+      return true;
+    } catch {
+      /* promise-valued ClipboardItem unsupported, or the text never built */
+    }
+  }
+  try {
+    return await copyText(await pending);
+  } catch {
+    return false;
+  }
+}
+
 /** Synchronous capability check for the async Clipboard image API — the exact
  *  condition copyImage gates on above, exposed so the plot toolbar (#7) can
  *  disable its "Copy Image" button with a reason instead of clicking through
