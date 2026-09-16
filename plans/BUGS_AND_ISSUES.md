@@ -4594,7 +4594,9 @@ failure that blocks reopening the file.
 - [x] Related workflows and persistence paths checked (2026-09-16) — every
   site that JSON-encodes a `DataStruct`'s numeric cells was enumerated by
   grepping `JSON.stringify` across `frontend/src/lib` and `frontend/src/store`
-  and reading each hit. Exactly three encode dataset cells:
+  and reading each hit. Exactly three encode dataset cells for PERSISTENCE
+  (narrowed from an earlier "every JSON boundary" framing — see the fourth,
+  non-persistence site below, missed by this same grep-and-read pass):
   - `lib/workspaceSerialize.ts:281`'s `JSON.stringify(doc, null, 2)` — the
     `.dwk` Save/Save As path AND, through the same function, `lib/autosave.ts`
     (localStorage/IndexedDB generations) and
@@ -4620,6 +4622,26 @@ failure that blocks reopening the file.
     alone deliberately: it is a fail-soft path with its own versioned
     document contract, so changing its wire is a separate, versioned decision
     rather than the same edit.
+  - **FOURTH SITE, missed by the original "exactly three" count, benign by
+    contract:** `lib/api/http.ts:58` (`fetchJSON`, plus the same
+    `JSON.stringify(body)` shape at `:142` `postBlob` and `:165`
+    `postDownload`) stringifies request bodies carrying a full `dataset:
+    DataStruct` — routed there by `lib/api/plot.ts`, `lib/api/rsm.ts`,
+    `lib/api/figures.ts` and `lib/api.ts` via `lib/api/datasetCache.ts`. This
+    is a LIVE REQUEST wire, not a persistence boundary, which is why "every
+    JSON boundary" (the commit subject, unchanged — see Completion record)
+    overclaimed scope that "every persistence boundary" would not have: it
+    is inside the same grepped tree and does encode dataset cells, yet
+    appeared in neither the "exactly three" list nor the "checked and NOT
+    affected" list below. The consequence is benign: the backend documents
+    `null` as its own non-finite wire form
+    (`src/quantized/routes/_payload.py`'s module docstring), and
+    `DataStruct.create`'s `np.asarray(..., dtype=float)` turns a JSON `None`
+    back into `nan` (measured: `np.asarray([1,None,3],dtype=float)` ->
+    `[1. nan 3.]`), so the API round trip is NaN-safe and lossy only for
+    `±Infinity`/`-0` — the same shape as the `figureDocument` residual below.
+    Not fixed here (not a persistence path, and not part of this fix's
+    scope); recorded as a residual for the same reason `figureDocument` is.
   - Checked and NOT affected (no DataStruct cells cross them):
     `lib/plotRecipe.ts:260`, `lib/plotspec.ts:792`,
     `lib/pageDocumentActions.ts:198`, `lib/panelwindow.ts:117`,
@@ -4666,8 +4688,10 @@ failure that blocks reopening the file.
   round-trips exactly. Recorded in the code at
   `lib/workspaceDatasetParse.ts`'s cell-check comment and pinned by the test
   "still REFUSES a pre-fix null cell rather than guessing which value it was".
-- [x] Data integrity and backward compatibility considered — three
-  directions, each pinned by a test:
+- [x] Data integrity and backward compatibility considered — four
+  directions; three pinned directly by a test, the fourth (no collision)
+  argued structurally and cross-checked by an existing test rather than a
+  dedicated one:
   - **New code, old file:** a `.dwk` with no sentinels decodes by reference
     and parses exactly as before (test: "parses a pre-fix .dwk (plain
     numbers, no sentinels) exactly as before").
@@ -4677,7 +4701,12 @@ failure that blocks reopening the file.
     one it walked before — byte-identical output, no `WORKSPACE_VERSION`
     bump, no new field (tests: "returns the input array/struct/dataset by
     reference…" and "writes a finite dataset's payload with the exact bytes
-    it had before").
+    it had before"). "Byte-identical" is scoped to ORDINARY data: a dataset
+    that legitimately holds a `-0` cell DOES change the saved bytes (`0` ->
+    `"-0"`) the moment this fix lands, same as a NaN/±Infinity cell does —
+    that is the fix working as intended (a `-0` was previously silently lost,
+    per the peak-fingerprint symptom above), not a regression, but it means
+    "byte-identical" is not universal and should not be read as such.
   - **Old build, new file:** an old build cannot be changed, so what it DOES
     was measured and pinned instead — its `isNumberArray` (`typeof x ===
     "number"`) fails on a sentinel string, so `isDataStruct` fails and it
@@ -4686,8 +4715,17 @@ failure that blocks reopening the file.
     this fix: loud, never a silently wrong number (test: "makes an OLD build
     refuse a sentinel-bearing .dwk loudly instead of corrupting it", which
     runs the pre-fix predicate verbatim against real new-serializer output).
-  - No collision with `textColumns.ts`'s sidecar: that sidecar lives under
-    `metadata`, which this encoding does not touch at all.
+  - **No collision** with a legitimate text cell (sentinels only ever appear
+    inside `time`/`values`, which are numeric by contract — text lives in the
+    `metadata` row sidecars, `lib/rowSidecars.ts`/`textColumns.ts`, never in
+    `values`) has no test of its own, but is cross-checked by the strict
+    rejection the decoder already needs for a different reason: "accepts a
+    number or the four sentinels, and rejects null and other strings"
+    (`nonFiniteCells.test.ts` ~line 99) asserts `isWireCellArray([1, "nan",
+    3])` and `isWireCellArray([1, "0", 3])` are both `false` — any string
+    that ISN'T exactly one of the four sentinels fails closed rather than
+    being silently accepted as data, which is the property that makes a real
+    string cell impossible to confuse with a sentinel.
 - [x] UI wording/tooltips/accessibility included where relevant — **RULING:
   a malformed dataset entry STILL takes the whole workspace down**; it does
   NOT degrade to a per-dataset skip-with-warning through BUG-010's
@@ -4696,10 +4734,15 @@ failure that blocks reopening the file.
   invisible in the Library, and the user's very next Save would write the
   workspace WITHOUT it — turning a fully recoverable file into a permanent
   loss. Refusing to open leaves the file on disk untouched and names the
-  offending dataset. What this fix changes is that the throw is now
-  unreachable for any file the app itself wrote: the ordinary
-  NaN/±Infinity/-0 cells parse correctly, so the refusal is reserved for
-  genuinely malformed structure. Recorded in
+  offending dataset. What this fix changes is narrower than "unreachable for
+  any file the app itself wrote": the ordinary NaN/±Infinity/-0 cell VALUES
+  this app writes are unreachable through this throw from this commit on,
+  but a pre-fix save with a non-finite cell still refuses (its `null`
+  predates the fix), and a hole/explicit `undefined` in a values row would
+  still serialize to `null` and still refuse — no known app path mints one
+  today (the three cell writers in `store/cellEdit.ts` are bounds-guarded,
+  and `padRows`/`insertBlanks`/`blankRow` all build with `Array.from`), so
+  that is a latent edge, not a live one. Recorded in
   `parseWorkspaceDataset`'s doc comment ("WHY A MALFORMED ENTRY STILL TAKES
   THE WHOLE WORKSPACE DOWN").
 
@@ -4745,13 +4788,22 @@ failure that blocks reopening the file.
 #### Completion record
 
 - PR/commit: `fix(workspace): BUG-017 — round-trip NaN/±Infinity/-0 cells
-  through every JSON boundary` (2026-09-16).
-- Automated tests: `frontend/src/lib/nonFiniteCells.test.ts` — 17 specs
-  (encoder/decoder contract; byte-identity for ordinary data; the
-  `insertRows` NaN round trip and its whole-workspace half; ±Infinity; `-0`
-  via `Object.is`; `raw`; pre-fix document compatibility both ways; two
-  autosave specs; the workbook Copy/Paste package; the `peakDataFingerprint`
-  survival check).
+  through every JSON boundary` (2026-09-16). That subject is the commit's own
+  immutable wording; scope note (2026-09-16 review round): it covers every
+  PERSISTENCE JSON boundary (`.dwk`/autosave/Pack Project and workbook
+  transfer) — a fourth JSON boundary, `lib/api/http.ts`'s live request
+  bodies, is a separate, benign-by-contract residual, not covered by this
+  commit — see the Investigation section's fourth-site bullet.
+- Automated tests: `frontend/src/lib/nonFiniteCells.test.ts` — 18 specs as of
+  the 2026-09-16 review round (17 from the original fix, encoder/decoder
+  contract; byte-identity for ordinary data; the `insertRows` NaN round trip
+  and its whole-workspace half; ±Infinity; `-0` via `Object.is`; `raw` through
+  the `.dwk` path; pre-fix document compatibility both ways; two autosave
+  specs; the workbook Copy/Paste package; the `peakDataFingerprint` survival
+  check; plus one added by that review round, closing a test gap it found:
+  `raw` with a NaN and a `-0` through the workbook-transfer package
+  specifically — `encodeDatasetCells`'s `raw` branch was unguarded by any of
+  the original 17, sabotage-verified, see that round's notes below).
 - Agent verification: 2026-09-16 — the original probe's two symptoms are
   both gone (the NaN case now reopens; the `-0` case now reads back
   `Object.is(v, -0) === true`), and every new spec was sabotage-verified by
@@ -4761,7 +4813,36 @@ failure that blocks reopening the file.
   `lib/figureDocument.ts:442`'s frozen figure snapshot is lossy for
   `±Infinity` (both become `NaN`) and `-0` (becomes `+0`) but never throws;
   see the Investigation section's third bullet for why it is a separate,
-  versioned decision.
+  versioned decision. A second, benign residual recorded by the 2026-09-16
+  review round: `lib/api/http.ts`'s live request bodies (see the
+  Investigation section's fourth-site bullet).
+- **2026-09-16 review round (test gap + doc corrections):** re-read the
+  landed commit (`0565b674`, parent `2d8b9b57` — NOT the `56bb3599` the
+  original commit body measured against, which was `d3de75e2`'s parent
+  before this fix was rebased onto `2d8b9b57` for landing) and closed five
+  items: (1) added the `raw`-through-workbook-transfer test above, sabotage-
+  verified (`encodeDatasetCells` ignoring `raw` → that one new test fails;
+  the pre-existing `.dwk`-path `raw` test is unaffected by this specific
+  sabotage because `serializeWorkspace` never calls `encodeDatasetCells` — it
+  calls `encodeDataStruct` directly on `data`/`raw` — so only the branch this
+  round actually guards, the workbook-transfer path, needed a new test); (2)
+  reworded the "unreachable for any file the app itself wrote" overclaim in
+  both this entry and `workspaceDatasetParse.ts`'s doc comment (see above and
+  that file's `parseWorkspaceDataset` doc); (3) added the missed fourth
+  JSON-encode site (`lib/api/http.ts`) to the Investigation enumeration and
+  narrowed "every JSON boundary" to "every persistence boundary" in this
+  entry's own wording (the commit subject itself is unchanged, per the note
+  above); (4) reworded "four properties/three directions, each pinned by a
+  test" to name the no-collision property as argued-and-cross-checked rather
+  than independently pinned; (5) noted that a `-0` cell changes saved bytes
+  (in contract) and re-measured the eager bundle pair for the actual landed
+  parent: **911,982 B at `2d8b9b57`** (this fix's real `HEAD~1`, built with
+  `rm -rf node_modules/.vite && npm run build` in a scratch worktree) **->
+  912,846 B at `0565b674` (+864 B)**, 7,554 B under the unmoved 920,400 B
+  budget — the delta matches the commit body's own `+864 B` exactly (the
+  absolute totals differ only because the commit body measured against
+  `56bb3599`, an ancestor of the actual parent `2d8b9b57`, not because the
+  fix's own footprint changed).
 
 ---
 

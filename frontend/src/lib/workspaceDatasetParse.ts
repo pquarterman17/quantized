@@ -117,10 +117,20 @@ function isWireDataStruct(v: unknown): v is WireDataStruct {
  *  making a recoverable file permanently lossy. Refusing to open is
  *  recoverable (the file on disk is untouched, and the error names the
  *  dataset); silently dropping a worksheet is not. What BUG-017 changed is
- *  that the ordinary NaN/±Infinity/-0 cells this app itself writes now parse
- *  correctly, so no file WE wrote can reach this throw — it is reserved for
- *  genuinely malformed structure (hand-edited JSON, truncated file, a `null`
- *  cell from a pre-fix save). */
+ *  that the ordinary NaN/±Infinity/-0 cell VALUES this app writes now parse
+ *  correctly — that is scoped to cell values written FROM THIS COMMIT ON, not
+ *  to "any file the app wrote": a pre-fix save with a non-finite cell (its
+ *  `null` predates this fix) still refuses, by the ruling above, exactly as
+ *  it always did. A hole or explicit `undefined` in a `values` row would
+ *  ALSO still serialize to `null` and still refuse — `encodeCells` cannot see
+ *  either (`Array.prototype.some`/`map` skip holes, and `encodeCell` has no
+ *  branch for `undefined`) — but no known app path mints one: the three cell
+ *  writers in `store/cellEdit.ts` are bounds-guarded, and `padRows`/
+ *  `insertBlanks`/`blankRow` all build with `Array.from`, which never leaves
+ *  a hole. That makes the row-hole case a LATENT edge, not a live one, unlike
+ *  the cell-value case this fix actually closes. The throw remains reserved
+ *  for genuinely malformed structure: hand-edited JSON, a truncated file, a
+ *  pre-fix `null` cell, or a row hole/`undefined`. */
 export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string): Dataset {
   if (typeof d !== "object" || d === null) {
     throw new Error(`dataset ${i} is invalid`);

@@ -299,6 +299,41 @@ describe("workbook Copy/Paste transfer package", () => {
     expect(parsed.pkg.datasets[0].data.values[1][0]).toBeNaN();
     expect(parsed.pkg.datasets[0].data.time[0]).toBe(-Infinity);
   });
+
+  // Regression: `encodeDatasetCells` (the function this package's build step
+  // maps over every member dataset) encodes `data` AND `raw` — but unlike
+  // `serializeWorkspace`'s `.dwk` path, which calls `encodeDataStruct` on
+  // `data`/`raw` separately and inline, this is the ONE call site that could
+  // silently ignore `raw` and still leave every OTHER spec in this file
+  // green (sabotage-verified: see the BUG-017 entry). A dropped-then-decoded
+  // `raw` fails `isWireDataStruct` on the way back in and is fail-closed
+  // (workspaceDatasetParse.ts drops it with no error, per that module's
+  // doc), so the failure mode is silent data loss, not a throw — this test
+  // exists specifically to keep that branch guarded.
+  it("carries the same encoding through a dataset's base-only `raw`", () => {
+    const data = finiteData();
+    const raw = finiteData();
+    raw.values[2][0] = Number.NaN;
+    raw.time[0] = -0;
+    const member = ds({ data, raw, workbookId: "wb1" });
+    const state = {
+      workbooks: [{ id: "wb1", name: "book", kind: "origin" as const }],
+      datasets: [member],
+      editableFigures: [],
+      reports: [],
+      quickPlotTemplates: [],
+    };
+
+    const built = buildTransferPackage("wb1", state as never);
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const parsed = parseTransferPackage(built.text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    expect(parsed.pkg.datasets[0].raw?.values[2][0]).toBeNaN();
+    expect(Object.is(parsed.pkg.datasets[0].raw?.time[0], -0)).toBe(true);
+  });
 });
 
 describe("peak-table fingerprint survives the -0 round trip", () => {
