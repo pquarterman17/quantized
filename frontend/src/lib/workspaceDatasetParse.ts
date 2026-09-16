@@ -9,13 +9,15 @@
 // that funding move, not either feature — see the callers for those.
 //
 // `parseWorkspaceDataset` is the exact body that used to live inline in
-// `parseWorkspace`'s `o.datasets.map(...)` callback; `isNumberArray`,
-// `isDataStruct`, and `parsePending` are its private helpers. Nothing here
+// `parseWorkspace`'s `o.datasets.map(...)` callback; `isWireDataStruct` and
+// `parsePending` are its private helpers (the third, `isNumberArray`, became
+// lib/nonFiniteCells' `isWireCellArray` under BUG-017). Nothing here
 // depends on `parseWorkspace`'s surrounding scope — each dataset entry is
 // validated independently from its raw JSON plus its own array index (used
 // only for a stable fallback id/name and in error messages).
 
 import { sanitizeDataStruct } from "./categorical";
+import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFiniteCells";
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
@@ -29,16 +31,21 @@ import type {
   ComputedColumn,
   CorrectionParams,
   Dataset,
-  DataStruct,
   FitSpec,
   FitWeighting,
   ModelingType,
   WeightMode,
 } from "./types";
 
-function isNumberArray(v: unknown): v is number[] {
-  return Array.isArray(v) && v.every((x) => typeof x === "number");
-}
+// BUG-017: the per-cell check is `isWireCellArray` (lib/nonFiniteCells.ts),
+// which accepts a number OR exactly the four sentinel strings `"NaN"`,
+// `"Infinity"`, `"-Infinity"` and `"-0"` — the values `JSON.stringify` cannot
+// represent, and which `lib/workspaceSerialize.ts` now writes in that form. It
+// is deliberately NOT widened to accept `null`: a pre-fix `.dwk` wrote NaN,
+// +Infinity and -Infinity all as the SAME `null`, so the original value is not
+// recoverable from one, and `null` is equally what genuinely corrupt input
+// looks like. Rejecting it keeps that a real rejection rather than a guess
+// (the ruling BUG-017's Implementation box asked for).
 
 /** Validate a persisted `Dataset.pending` (#38) — a stale/hand-edited value
  *  degrades to "not pending" (the dataset then just shows whatever rows its
@@ -72,14 +79,17 @@ function parsePending(v: unknown): BookSource | null {
   return null;
 }
 
-/** Structural check that `v` is a DataStruct (time/values/labels/units/metadata) -- `cat_levels` is repaired separately by `sanitizeDataStruct`, not gated here. */
-function isDataStruct(v: unknown): v is DataStruct {
+/** Structural check that `v` is a SERIALIZED DataStruct (time/values/labels/
+ *  units/metadata, cells in wire form) -- `cat_levels` is repaired separately
+ *  by `sanitizeDataStruct`, not gated here. Callers pair it with
+ *  `decodeDataStruct` (BUG-017) to recover the in-memory `DataStruct`. */
+function isWireDataStruct(v: unknown): v is WireDataStruct {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
-    isNumberArray(o.time) &&
+    isWireCellArray(o.time) &&
     Array.isArray(o.values) &&
-    o.values.every((row) => isNumberArray(row)) &&
+    o.values.every((row) => isWireCellArray(row)) &&
     Array.isArray(o.labels) &&
     o.labels.every((s) => typeof s === "string") &&
     Array.isArray(o.units) &&
@@ -97,19 +107,32 @@ function isDataStruct(v: unknown): v is DataStruct {
  *  `projectDir` (P1.7 PR 3) is the `.dwk`'s own directory, when the caller
  *  knows one — threaded straight through to `parseDatasetSource` so a
  *  packed project's `kind: "bundle"` sources can resolve; see that
- *  function's doc for what happens when it's absent. */
+ *  function's doc for what happens when it's absent.
+ *
+ *  WHY A MALFORMED ENTRY STILL TAKES THE WHOLE WORKSPACE DOWN (BUG-017's
+ *  second ruling, decided 2026-09-16). The alternative — skip the bad
+ *  dataset and report it through BUG-010's `migrationWarnings` toast — was
+ *  considered and REJECTED: a skipped dataset is invisible in the library,
+ *  and the user's very next "Save" would write the workspace WITHOUT it,
+ *  making a recoverable file permanently lossy. Refusing to open is
+ *  recoverable (the file on disk is untouched, and the error names the
+ *  dataset); silently dropping a worksheet is not. What BUG-017 changed is
+ *  that the ordinary NaN/±Infinity/-0 cells this app itself writes now parse
+ *  correctly, so no file WE wrote can reach this throw — it is reserved for
+ *  genuinely malformed structure (hand-edited JSON, truncated file, a `null`
+ *  cell from a pre-fix save). */
 export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string): Dataset {
   if (typeof d !== "object" || d === null) {
     throw new Error(`dataset ${i} is invalid`);
   }
   const dd = d as Record<string, unknown>;
-  if (!isDataStruct(dd.data)) {
+  if (!isWireDataStruct(dd.data)) {
     throw new Error(`dataset ${i} ("${String(dd.name ?? "")}") has an invalid data structure`);
   }
   const ds: Dataset = {
     id: typeof dd.id === "string" ? dd.id : `ws-${i}`,
     name: typeof dd.name === "string" ? dd.name : `dataset ${i + 1}`,
-    data: sanitizeDataStruct(dd.data),
+    data: sanitizeDataStruct(decodeDataStruct(dd.data)),
   };
   if (dd.corrections && typeof dd.corrections === "object") {
     ds.corrections = dd.corrections as CorrectionParams;
@@ -150,8 +173,8 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
   // down to the expected base width when `raw` is too WIDE; a `raw`
   // that's already base-only (the common case) or narrower than expected
   // (nothing to invent) passes through untouched.
-  if (isDataStruct(dd.raw)) {
-    const raw = sanitizeDataStruct(dd.raw);
+  if (isWireDataStruct(dd.raw)) {
+    const raw = sanitizeDataStruct(decodeDataStruct(dd.raw));
     const expectedWidth = ds.data.labels.length - (ds.formulas?.length ?? 0);
     ds.raw = raw.labels.length > expectedWidth ? baseColumns(raw, raw.labels.length - expectedWidth) : raw;
   }

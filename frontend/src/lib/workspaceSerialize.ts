@@ -36,6 +36,7 @@ import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
+import { encodeDataStruct, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
@@ -88,8 +89,16 @@ function serializeDatasetSource(source: DatasetSource, projectDir: string | unde
 
 /** A serialized dataset entry — `Dataset` with its `source` field widened to
  *  `SerializedSource` (the on-disk `kind: "path"` | `kind: "bundle"` union,
- *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`. */
-type SerializedDataset = Omit<Dataset, "source"> & { source?: SerializedSource };
+ *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`, and its two
+ *  DataStruct-valued fields widened to `WireDataStruct` (BUG-017 — a cell
+ *  JSON cannot represent is written as a sentinel string; see
+ *  lib/nonFiniteCells.ts for the encoding and why it costs an ordinary
+ *  document nothing). */
+type SerializedDataset = Omit<Dataset, "source" | "data" | "raw"> & {
+  source?: SerializedSource;
+  data: WireDataStruct;
+  raw?: WireDataStruct;
+};
 
 /** A serialized workbook entry — `WorkbookNode` with its `source` field
  *  (PR 3 review finding #4) widened the same way `SerializedDataset` widens
@@ -196,8 +205,14 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
-      data: d.data,
-      ...(d.raw ? { raw: d.raw } : {}),
+      // BUG-017: `data`/`raw` cross the JSON boundary through
+      // lib/nonFiniteCells' encoder, which maps the four values
+      // `JSON.stringify` cannot round-trip (NaN, ±Infinity, -0) to sentinel
+      // strings and returns the SAME object untouched for every other
+      // dataset — so a workspace of ordinary finite data still serializes
+      // byte-for-byte as it did before.
+      data: encodeDataStruct(d.data),
+      ...(d.raw ? { raw: encodeDataStruct(d.raw) } : {}),
       ...(d.corrections ? { corrections: d.corrections } : {}),
       ...(d.bgRef ? { bgRef: d.bgRef } : {}),
       ...(d.notes ? { notes: d.notes } : {}),
