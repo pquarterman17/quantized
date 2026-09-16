@@ -153,6 +153,7 @@ export default function PlotStage() {
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
 
   const {
+    payload,
     displayPayload,
     plotted,
     styleList,
@@ -238,6 +239,7 @@ export default function PlotStage() {
     stackMode,
     plottedCount: plotted.length,
     composition,
+    payload,
     displayPayload,
     styleList,
     labelList,

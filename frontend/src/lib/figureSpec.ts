@@ -32,6 +32,7 @@ import { resolveFacetsOrThrow } from "./figureSpecFacets";
 import {
   exportErrorSpans,
   resolveDisplaySeries,
+  resolveSeriesCycle,
   resolveSeriesPresentation,
 } from "./figureSpecSeries";
 import {
@@ -48,10 +49,10 @@ import { pruneToLiveDataset } from "./rowstate";
 // re-exported: a barrel here would make every importer of this module pull the
 // projection in whether it uses it or not.
 import { viewOverrides } from "./figureViewOverrides";
-import { overlayExportsSeriesStyles, windowCyclesSeriesStyles } from "./seriesStyleCycle";
+import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
-import { waterfallWire } from "./waterfallOffset";
+import { readLiveWaterfallSpan, waterfallWire } from "./waterfallOffset";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -88,6 +89,12 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
    *  document's styles the RAW user styles and stops it disagreeing with itself
    *  when the preference is later flipped. */
   autoSeriesStyles?: boolean;
+  /** BUG-013 review round: the y-span the LIVE canvas measured its waterfall
+   *  stagger from, when there is one on screen. Passed only by
+   *  `buildStageFigureSpec`, which reads it from `waterfallOffset.
+   *  readLiveWaterfallSpan`; absent everywhere else, and the step is then
+   *  measured over the full DataStruct. See that module's header. */
+  waterfallSpan?: number | null;
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -119,7 +126,7 @@ export function buildFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extras: { autoSeriesStyles?: boolean } = {},
+  extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null } = {},
 ): FigureSpec {
   const raw = s();
   // R7: `raw` is the live singleton, which a refocus-mid-export race can
@@ -129,6 +136,7 @@ export function buildFigureSpec(
   return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
     liveDataset: ds,
     autoSeriesStyles: extras.autoSeriesStyles,
+    waterfallSpan: extras.waterfallSpan,
   });
 }
 
@@ -164,6 +172,9 @@ function buildFigureSpecForView(
      *  Builder's window-target preview/Export. Absent everywhere else on
      *  purpose — see `seriesCycle` below. */
     autoSeriesStyles?: boolean;
+    /** BUG-013 review round: the LIVE canvas' measured waterfall y-span —
+     * see `FigureDocumentRenderOpts.waterfallSpan`. */
+    waterfallSpan?: number | null;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
@@ -231,59 +242,16 @@ function buildFigureSpecForView(
   // so that case is byte-identical to before this fix.
   const wireDataset = facets === undefined ? pruneToLiveDataset(data, extras.liveDataset) : data;
 
-  // P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`). OPT-IN, in two
-  // senses: `extras.autoSeriesStyles` is passed by the LIVE stage export
-  // (`buildStageFigureSpec`) and by nothing else — a saved document, a Figure
-  // Page panel, a Figure Builder preview and a graph template all render
-  // uncycled, which is what keeps a persisted `publication.seriesStyles` array
-  // the user's RAW styles and makes a document authored with the preference on
-  // reopen identically with it off. And `overlayExportsSeriesStyles` refuses the
-  // views this route cannot style series-by-series anyway (`group_col` and
-  // `facets` are documented as ignoring `series_styles` in
-  // `routes/export_figures.py`; `stackMode` is the screen-only panel split that
-  // this single-figure request does not reproduce) — the SAME predicate
-  // `PlotStage.tsx` gates its canvas on, so the two cannot disagree about which
-  // views cycle. Positions come from the UNFILTERED display list so a hidden
-  // series does not shift every later channel's dash (and colour) by one.
-  // (No separate `facets === undefined` clause: `facets` is non-undefined only
-  // when `st.facetKey` is set, which the predicate below already refuses. A
-  // clause no sabotage can make fail is dead code, not defence in depth.)
-  //
-  // ONE more refusal rides the SAME predicate, and it is about the display list
-  // rather than the view: `seriesStyleCycle.displayListsAgree` (folded into
-  // `overlayExportsSeriesStyles`) refuses an X channel that is also in `yKeys`,
-  // because `allowExplicitXAsY` keeps it in `displayChannels` AS a Y series
-  // while the canvas' own call (`usePlotPayload.fetchChannels`) always drops it.
-  // It lived HERE as a local `xAlsoPlotted` test, which is why it was a
-  // divergence rather than a refusal: the canvases could not see it, so with
-  // `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and
-  // the PDF drew all three solid.
-  //
-  // The POSITIONS above are not part of that opt-in and never were (BUG-015):
-  // they are each surviving channel's slot in the CANVAS' display list, and
-  // `buildExportStyles` colours by them ALWAYS. Deriving them only when the
-  // cycle was on is what let a saved document — which never opts in — recolour
-  // a figure the moment one series was hidden. They come from the canvas' own
-  // list even in the `allowExplicitXAsY` case this predicate refuses the cycle
-  // for, so a channel the canvas does draw keeps the canvas' paint there too;
-  // only the extra X-as-Y curve, which the canvas never draws at all, has no
-  // true slot (`resolveDisplaySeries` parks it past the end).
-  const seriesCycle =
-    extras.autoSeriesStyles &&
-    overlayExportsSeriesStyles({
-      // `extras.groupKey` is what actually rides the wire; `st.groupKey` is the
-      // view's own binding, which the plain live entry point does NOT forward —
-      // a grouped view exported through it already renders an ungrouped overlay
-      // while the screen shows one series per level, so either being set is
-      // enough to refuse.
-      groupKey: extras.groupKey ?? st.groupKey,
-      facetKey: st.facetKey,
-      stackMode: st.stackMode,
-      polarMode: st.polarMode,
-      statMode: st.statMode,
-      xKey: st.xKey,
-      yKeys: st.yKeys,
-    });
+  // P3.3 auto dash/marker cycle + the view it is decided from — resolved by
+  // `figureSpecSeries.resolveSeriesCycle`, whose doc carries the whole rule.
+  // `cycleView` is reused verbatim by the waterfall wire below, so the two
+  // fields of this spec that depend on "is this canvas reproducible
+  // series-for-series?" ask about one object rather than two.
+  const { view: cycleView, cycle: seriesCycle } = resolveSeriesCycle(
+    st,
+    extras.groupKey,
+    extras.autoSeriesStyles,
+  );
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -358,7 +326,14 @@ function buildFigureSpecForView(
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
     ...(o.greyscale ? { greyscale: true } : {}),
     // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
-    ...waterfallWire(data, displayChannels, positions, st.waterfall, extras.groupKey, facets),
+    ...waterfallWire({
+      data,
+      displayChannels,
+      positions,
+      fraction: st.waterfall,
+      view: cycleView,
+      span: extras.waterfallSpan,
+    }),
     filename: extras.filename ?? stem,
   };
 }
@@ -407,6 +382,7 @@ export function buildFigureSpecFromDocument(
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
       autoSeriesStyles: overrides.autoSeriesStyles,
+      waterfallSpan: overrides.waterfallSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );
@@ -480,6 +456,17 @@ export function buildStageFigureSpec(
   // `document.publication`) would otherwise cycle while the canvas — which reads
   // the pin straight off the focused window — refuses.
   const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document);
+  // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
+  // waterfall stagger from — the one thing about this export that cannot be
+  // re-derived from `ds`, because a committed zoom on a server-decimated
+  // dataset narrows the canvas' own payload to the visible x-window while `ds`
+  // still holds every row (see lib/waterfallOffset.ts's header). Read at
+  // command time from the module-scope seam `Stage/useLiveSnapshotPublish`
+  // writes, the same shape `lib/plotsnapshot.ts` uses for the display bundle,
+  // and keyed by dataset so the documented refocus race below cannot stagger
+  // one dataset by another's span. `null` (no XY canvas on screen, or one
+  // showing a different dataset) falls back to the full DataStruct.
+  const waterfallSpan = readLiveWaterfallSpan(ds.id);
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -490,8 +477,9 @@ export function buildStageFigureSpec(
         yLabel: o.yLabel,
         filename: null,
         autoSeriesStyles,
+        waterfallSpan,
         greyscale: o.greyscale,
       })
-    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles });
+    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }

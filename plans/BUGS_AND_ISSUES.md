@@ -3396,7 +3396,9 @@ RENDERING is wrong.
 
 - PR/commit: fixed 2026-09-14 on `claude/repo-evaluation-l7y7k9`, one commit
   `fix(export): BUG-013 — carry the waterfall stagger to the export wire`
-  (parent `ebefa693`). Nine files:
+  (`50b30a04`, parent `ff45a200` — corrected 2026-09-16, review NIT 7: the
+  originally recorded `ebefa693` is the pre-cherry-pick commit and is not in
+  this branch's history). Nine files:
   `frontend/src/lib/waterfallOffset.ts` (new — `waterfallStep` +
   `waterfallWire`), `lib/plotdata.ts` (`applyWaterfall` now calls the shared
   step; 11 lines freed, so the `architecture.test.ts` pin ratchets 658 → 650),
@@ -3446,9 +3448,11 @@ RENDERING is wrong.
   `vitest run src/lib src/architecture.test.ts` — 5221 passed, 0 failed;
   `node scripts/freeze-regression-matrix.mjs --check` clean and no committed
   golden changed (they are the SCREEN projection, which this fix does not
-  touch). Eager bundle measured on a `npm ci`-fresh build of each tree:
-  919,781 B at `ebefa693` → 919,966 B here, **+185 B**, still inside the
-  898.8 kB budget (0.4 kB spare). No budget move.
+  touch). Eager bundle measured on a `npm ci`-fresh build of each tree, on the
+  BRANCH (corrected 2026-09-16, review NIT 7 — the figures first recorded here
+  were measured against `ebefa693`, an ancestor this branch does not contain):
+  **919,693 B** at `ff45a200` → **919,877 B** at `50b30a04`, a **+184 B**
+  delta, 523 B inside the then-current 920,400 B budget. No budget move.
 - Owner verification: pending.
 - Notes: two DOCUMENTED residuals, both inherited rather than introduced. A
   `group_col` request omits the field (the backend synthesizes one series per
@@ -3462,6 +3466,128 @@ RENDERING is wrong.
   reads the second PLOTTED one; the two index spaces coincide for every
   fixture (none both hides a series and sets a waterfall), and the export leg
   says so in place.
+
+#### Review round — 2026-09-16 (`fix(export): BUG-013 review round …`)
+
+An adversarial review of `50b30a04` returned **2 CONFIRMED, 1 CONFIRMED-narrow
+and 5 NITs**. All eight are addressed here; three of them changed behaviour.
+
+- **CONFIRMED 1 — offsets were emitted for `stackMode`/`polarMode`/`statMode`,
+  where the canvas staggers nothing.** A regression this fix introduced, not an
+  inherited residual: `PlotStage` early-returns to `MultiPanelStage`/
+  `PolarStage`/`StatStage` before the XY overlay exists, and
+  `useMultiPanelStage` never calls `composeDisplayPayload` at all, so a user who
+  left the waterfall slider up and switched to stacked panels got an export
+  staggered in a way the screen never was. Reproduced on BOTH entry points
+  (`stackMode` is a canonical binding, so it round-trips through a document):
+  offsets `[0, 74.75, 149.5]` for all three modes from `buildFigureSpec`, and
+  the same list from `buildFigureSpecFromDocument`. `waterfallWire` now asks the
+  predicate the canvases ask — `seriesStyleCycle.overlayModesMatchTheCanvas`,
+  the view-mode half of `overlayExportsSeriesStyles`, split out so each clause
+  still has exactly one definition. It subsumes the old hand-rolled `groupKey`/
+  `facets` refusals.
+  **Deliberate narrowing, against the review's suggested one-liner:** the
+  waterfall asks the MODE half only, not `displayListsAgree`. That clause exists
+  because the dash/marker/colour CYCLE is keyed by positions the two sides derive
+  independently; the waterfall's positions are the ones BUG-014 already resolves
+  against the canvas' own channel list, so folding it in would have exported the
+  two real series of an X-as-Y view OVERLAID — re-opening this very bug for a
+  view whose stagger is otherwise reproduced exactly. See finding 3.
+- **CONFIRMED 2 — the step was resolved from the full dataset; the canvas
+  resolves it from the fetched payload.** Fixed by the review's option (a), the
+  "by construction" one, because the plumbing turned out to be cheap:
+  `usePlotPayload` ALREADY returns the raw pre-compose `payload`
+  (`PlotPayloadResult.payload`), so the focused Stage's own publish effect
+  (`Stage/useLiveSnapshotPublish`, which already no-ops in the alternate render
+  modes and clears on unmount) now also publishes that payload's y-span through a
+  module-scope seam in `lib/waterfallOffset.ts` — the same imperative-ref shape
+  `lib/plotsnapshot.ts` uses for the display bundle, keyed by dataset id so
+  `exportActive`'s documented refocus race cannot stagger one dataset by
+  another's span. `buildStageFigureSpec` reads it at command time and threads it
+  through both branches. The SPAN travels rather than the step, so a request
+  whose `waterfall` fraction differs from the live view's still scales the
+  canvas' measured range correctly.
+  Measured, driving the real hook with `fetchPlot` mocked at the network
+  boundary (20 000 rows, excursion in rows `[0,100)`, `xLim [5000,6000]`,
+  `waterfall 0.25`): screen shift **0.25**, export offset **0.25** on BOTH the
+  live-view fallback and the canonical-document path. Before: 0.25 vs 495.25.
+  **Option (b) — filtering the wire's rows to `st.xLim` — was NOT shipped, on
+  either path, because it would create two NEW divergences.** The canvas windows
+  its payload only when `shouldRefetchWindow(xLim, baseDecimated)` holds
+  (`lib/plotDecimate.ts:383`), i.e. only for a SERVER-DECIMATED base: (i) a
+  dataset under `DECIMATE_MIN_POINTS` with axis limits set keeps drawing from the
+  full payload, so a windowed wire would disagree with it; and (ii)
+  `components/windows/BackgroundPlotWindow.tsx:164-188` does not pass `xLim` to
+  `usePlotPayload` at ALL, so a background window — and the Figure Builder
+  window-target preview built from its document — never windows, and a windowed
+  wire would disagree there too. `components/windows/PanelCell.tsx` likewise
+  passes no `xLim`. Option (a) has no such blind spot: every canvas that exists
+  publishes the span it actually measured.
+  The commit-body rationale that cited **decimation** as a reason to resolve
+  client-side was inverted and has been corrected in
+  `lib/waterfallOffset.ts`'s header: min/max bucket decimation PRESERVES each
+  series' extremes by construction (`calc/decimate.py`), so that case was never a
+  divergence; the windowed re-fetch is what trims, and it is what the seam fixes.
+- **Finding 3 (narrow) — the `allowExplicitXAsY` one-slot shift: CLOSED by
+  BUG-014, verified by probe, now pinned.** Probed against this branch's tip
+  (`7dfcde07`) with `xKey:0, yKeys:[0,1,2], waterfall:0.25`: the canvas draws
+  channels `[1,2]` at offsets `[0, 74.75]`, and the wire emits
+  `[149.5, 0, 74.75]` for `y_keys [0,1,2]` — every channel the canvas draws now
+  lands on the canvas' own offset, and only the extra X-as-Y curve (which the
+  canvas never draws) sits on the parked slot past the end. `resolveDisplaySeries`
+  resolving positions against the CANVAS list is what closed it. A new test pins
+  the offset and the palette colour TOGETHER, since they are the same position
+  and pinning one alone would let them drift apart again.
+- **NIT 4 — module ceilings.** Both files named were at or one line under their
+  limit. `lib/figureSpec.ts` **498 → 486** (architecture-test metric,
+  `split("\n").length`, ceiling 500): the P3.3 cycle derivation and its rationale
+  moved to `lib/figureSpecSeries.resolveSeriesCycle`, which now returns the
+  `CycleView` the waterfall wire reuses — one object, asked twice.
+  `routes/export_figures.py` **494 → 485** (`splitlines()`, ceiling 500): the two
+  new field-doc strings live in `routes/export_figures_schema.py`, the sibling
+  that exists for exactly this reason. Both are ≥ 14 lines under.
+- **NIT 5 — the NaN guard.** `applyWaterfall` used `fraction <= 0` and
+  `waterfallWire` used `!(fraction > 0)`, so a hand-built view with a NaN
+  fraction made the canvas NaN every value column while the wire quietly omitted
+  the field. Both now call `waterfallOffset.waterfallApplies`.
+- **NIT 6 — the wire field's doc reached no generated artefact.**
+  `waterfall_offsets` and `series_styles` are now documented with
+  `Field(description=…)`, so `frontend/api/openapi.json` and `lib/api/schema.d.ts`
+  carry the contract. `series_styles` mattered most: it is a loose
+  `dict[str, Any]` whose keys — BUG-014's `legend` among them — can be described
+  nowhere else. Regenerated with `tools/dump_openapi.py` + `npm run api:types`.
+- **NIT 7 — the completion record's coordinates.** Corrected above: parent
+  `ff45a200` (not the pre-cherry-pick `ebefa693`), and the bundle figures
+  re-stated as measured on this branch.
+- **NIT 8 — the commit trailer.** Unchanged: it is this session's prescribed
+  attribution line, not an ad-hoc choice. Flagged for the owner rather than
+  silently rewritten.
+
+Sabotage table (mutation → tests that turned red):
+
+| # | Mutation | Red |
+|---|---|---|
+| 1 | `waterfallWire` drops the mode predicate (keeps only `groupKey`) | 6 — `waterfallOffset.test.ts` "emits nothing for a grouped or faceted request" + "…for a stacked, polar or statistics view"; `figureSpec.test.ts` "is ABSENT for a faceted request" + the three "is ABSENT for a `<mode>` view" |
+| 2 | `waterfallWire` ignores the published span | 3 — `waterfallOffset.test.ts` "uses the published span instead of re-measuring the DataStruct"; both `waterfallExportSpan.test.ts` parity cases |
+| 3 | the publish effect measures `displayPayload` (post-waterfall) instead of `payload` | 3 — `useLiveSnapshotPublish.test.ts` "is measured BEFORE the waterfall is applied"; both parity cases |
+| 4 | `waterfallApplies` becomes `!(fraction <= 0)` (NaN passes) | 2 — `waterfallOffset.test.ts` "refuses zero, negative and NaN fractions" + "so a NaN fraction leaves the canvas payload untouched AND the wire empty" |
+| 5 | `readLiveWaterfallSpan` drops the dataset-id guard | 2 — `waterfallOffset.test.ts` "the seam hands back a span only for the dataset it was measured from"; `useLiveSnapshotPublish.test.ts` "is refused for a DIFFERENT dataset" |
+| 6 | `resolveDisplaySeries` positions against the REQUEST's list, not the canvas' | 2 — `figureSpec.test.ts` "the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots" + the existing P3.3 colour sibling |
+| 7 | `waterfall_offsets` loses its `Field(description=…)` | 1 — `tests/test_openapi_snapshot.py::test_committed_openapi_json_matches_live_schema` |
+
+Gate (all foreground): `ruff check src tests tools` clean; `mypy src` clean
+(296 files); `pytest -q` over
+`test_openapi_snapshot/test_repo_integrity/test_export_vector_structure/test_calc_plotting/test_api_export`
+— **188 passed, 1 skipped**; `tsc -b --force` and `eslint src --max-warnings=0`
+clean; `vitest run src/lib src/components/Stage src/store src/architecture.test.ts`
+— **7755 passed, 1 failed**, the single failure being
+`store/plotRecipes.test.ts > keeps Stage, Figure Builder, reopen, export, and
+clipboard on one canonical spec`, a BUG-014 leftover pre-existing on this
+commit's parent and already fixed later on the branch by `950b3a9b`;
+`freeze-regression-matrix.mjs --check` clean, no committed golden changed;
+`check-bundle-size.mjs` OK. Eager bundle, both trees built after `npm ci`:
+**910,528 B** at `7dfcde07` → **911,045 B** here, **+517 B**, 9,355 B inside the
+920,400 B budget. No budget move.
 
 ---
 

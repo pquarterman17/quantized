@@ -24,7 +24,59 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-__all__ = ["FigureFacet", "FigureFacetSeries", "TickFormatSpec"]
+__all__ = [
+    "SERIES_STYLES_DOC",
+    "WATERFALL_OFFSETS_DOC",
+    "FigureFacet",
+    "FigureFacetSeries",
+    "TickFormatSpec",
+]
+
+# ── FigureRequest field descriptions ────────────────────────────────────────
+# Two of ``FigureRequest``'s fields are documented through ``Field(
+# description=...)`` rather than a ``#`` comment, because a comment reaches no
+# generated artefact: the OpenAPI entry (and so ``lib/api/schema.d.ts``) carried
+# a bare "Series Styles"/"Waterfall Offsets" title and nothing else. That matters
+# most for ``series_styles``, a loose ``dict[str, Any]`` whose KEYS -- BUG-014's
+# ``legend`` among them -- can be described nowhere but the field's own
+# description. (BUG-013 review round, NIT 6.) The strings live here for the same
+# reason the models above do: ``export_figures.py``'s 500-line ceiling.
+
+SERIES_STYLES_DOC = (
+    "Per-series style, aligned to the plotted `y_keys` order. Keys: "
+    "`color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a "
+    "`MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, "
+    'falling back to "o" -- before it existed all eight on-screen marker '
+    "shapes exported as filled circles while the canvas drew them correctly); "
+    '`fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` '
+    "(channel indices, MAIN #14 -- resolved against `dataset` by "
+    "`calc.plotting.resolve_style_channels`, called from `_figure_series`); "
+    '`step` ("pre"/"post"/"mid", GAP_PLOTTYPES\' Graph Builder step mark -> '
+    "matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename "
+    "for that series, rendered verbatim instead of having the channel's unit "
+    "appended to it a second time. An entry is a loose dict (never a strict "
+    "pydantic sub-model): a bad or unrecognized value in ANY key degrades "
+    "gracefully -- dropped, or rendered with matplotlib's default -- rather "
+    "than 422ing the whole export."
+)
+
+WATERFALL_OFFSETS_DOC = (
+    "Per-plotted-series vertical offset in Y data units, aligned to `y_keys`: "
+    "the stagger a waterfall view draws on screen, which used to reach no "
+    "export path at all (the exported figure overlaid the curves the canvas "
+    "had separated). RESOLVED client-side "
+    "(`frontend/src/lib/waterfallOffset.ts`) rather than re-derived here, "
+    "because the fraction the user sets is a share of the CANVAS y-range -- a "
+    "range that includes hidden series and excluded rows this request never "
+    "receives, and that a zoomed canvas measures over only the rows it "
+    "fetched. `dataset` keeps the true, un-shifted values; None/absent renders "
+    "exactly as it did before the field existed. UNUSED on the `group_col` "
+    "branch (the per-level series it synthesizes do not align 1:1 with "
+    "`y_keys`, the same reason `series_styles` is unapplied there) and on the "
+    "`facets` branch (which renders from its own panel payloads); the client "
+    "omits it for both rather than sending an offset the renderer would "
+    "mis-apply. See `calc.plotting.apply_waterfall_offsets`."
+)
 
 
 class FigureFacetSeries(BaseModel):

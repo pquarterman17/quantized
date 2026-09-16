@@ -13,6 +13,7 @@ import type { PlotPayload } from "../../lib/plotdata";
 import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
+import { publishLiveWaterfallSpan, waterfallSpan } from "../../lib/waterfallOffset";
 import { multiPanelShowing } from "./useEffectiveComposition";
 
 export interface LiveSnapshotArgs {
@@ -28,6 +29,13 @@ export interface LiveSnapshotArgs {
    *  gate does, so the two cannot disagree about what is on screen. */
   composition: Composition | null;
   displayPayload: PlotPayload | null;
+  /** The RAW fetched payload, pre-compose (`usePlotPayload`'s own `payload`).
+   *  Published as a y-span, not a bundle: `displayPayload` above has already
+   *  had the waterfall ADDED to it (and then been masked and overlaid), so the
+   *  span the canvas staggered by is no longer recoverable from it. See
+   *  `lib/waterfallOffset.ts`'s header for why the export needs this number
+   *  rather than re-measuring the DataStruct. */
+  payload: PlotPayload | null;
   // Matches usePlotPayload's own return type exactly (each `| undefined`
   // while the payload is still being composed) — PlotStage passes these
   // straight through from that hook.
@@ -67,6 +75,20 @@ function altModeShowing(
 export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   const alt = altModeShowing(args);
   const { displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, seriesCycle } = args;
+  // BUG-013 review round: the y-span the canvas measured its waterfall stagger
+  // from — `payload.data[0]` is x, the rest are the value columns
+  // `applyWaterfall` scans. Recomputed here rather than returned by
+  // `usePlotPayload` so the hook's three call sites (only ONE of which is the
+  // focused Stage) cannot each publish a competing span.
+  const datasetId = args.active?.id ?? null;
+  const rawPayload = args.payload;
+  const span = useMemo(
+    () =>
+      rawPayload
+        ? waterfallSpan((rawPayload.data as unknown as (number | null)[][]).slice(1))
+        : null,
+    [rawPayload],
+  );
   // P3.3: the bundle carries the RESOLVED styles — the cycle applied, not the
   // cycle itself. A snapshot window has no export and no live view; its whole
   // contract (this module's header, and `plotsnapshot.ts`'s) is "freezes exactly
@@ -89,4 +111,11 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
     );
     return () => publishLivePlotSnapshot(null);
   }, [displayPayload, resolvedStyles, labelList, errorBars, plotted, colorByColumns, hidden, alt]);
+  // Same gate, own effect: the span survives a compose the bundle publish
+  // re-runs for (an overlay, a brush) without re-deriving, and clears on the
+  // same unmount/alternate-mode transitions.
+  useEffect(() => {
+    publishLiveWaterfallSpan(span != null && !alt ? { datasetId, span } : null);
+    return () => publishLiveWaterfallSpan(null);
+  }, [span, datasetId, alt]);
 }

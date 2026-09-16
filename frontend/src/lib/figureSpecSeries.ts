@@ -13,6 +13,8 @@ import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
+import type { PlotView } from "./plotview";
+import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
 
 /** The three display lists a figure request needs, resolved together. */
@@ -100,6 +102,73 @@ export function resolveDisplaySeries(data: DataStruct, v: DisplaySeriesInput): D
     positions.push(slot);
   }
   return { displayChannels, plotted, positions };
+}
+
+/** A request's answer to "does this view's canvas reproduce series-for-series?"
+ *  — the `CycleView` the question is asked about, and the answer for THIS
+ *  request. Both halves are returned because the view is asked twice: once for
+ *  the P3.3 dash/marker cycle, once for BUG-013's waterfall offsets. */
+export interface SeriesCycleDecision {
+  view: CycleView;
+  cycle: boolean;
+}
+
+/**
+ * Resolve a request's P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`).
+ *
+ * OPT-IN, in two senses. `autoSeriesStyles` is passed by the LIVE stage export
+ * (`figureSpec.buildStageFigureSpec`) and by nothing else — a saved document, a
+ * Figure Page panel, a Figure Builder preview and a graph template all render
+ * uncycled, which is what keeps a persisted `publication.seriesStyles` array the
+ * user's RAW styles and makes a document authored with the preference on reopen
+ * identically with it off. And `overlayExportsSeriesStyles` refuses the views
+ * this route cannot style series-by-series anyway (`group_col` and `facets` are
+ * documented as ignoring `series_styles` in `routes/export_figures.py`;
+ * `stackMode` is the screen-only panel split that this single-figure request
+ * does not reproduce) — the SAME predicate `PlotStage.tsx` gates its canvas on,
+ * so the two cannot disagree about which views cycle. Positions come from the
+ * UNFILTERED display list so a hidden series does not shift every later
+ * channel's dash (and colour) by one. (No separate `facets === undefined`
+ * clause: `facets` is non-undefined only when `st.facetKey` is set, which the
+ * predicate already refuses. A clause no sabotage can make fail is dead code,
+ * not defence in depth.)
+ *
+ * ONE more refusal rides the SAME predicate, and it is about the display list
+ * rather than the view: `seriesStyleCycle.displayListsAgree` (folded into
+ * `overlayExportsSeriesStyles`) refuses an X channel that is also in `yKeys`,
+ * because `allowExplicitXAsY` keeps it in `displayChannels` AS a Y series while
+ * the canvas' own call (`usePlotPayload.fetchChannels`) always drops it. It
+ * lived inside `figureSpec.ts` as a local `xAlsoPlotted` test, which is why it
+ * was a divergence rather than a refusal: the canvases could not see it, so with
+ * `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and the
+ * PDF drew all three solid.
+ *
+ * The POSITIONS `resolveDisplaySeries` returns are not part of that opt-in and
+ * never were (BUG-015): they are each surviving channel's slot in the CANVAS'
+ * display list, and `buildExportStyles` colours by them ALWAYS. Deriving them
+ * only when the cycle was on is what let a saved document — which never opts in
+ * — recolour a figure the moment one series was hidden.
+ *
+ * `groupKey` is what actually rides the wire; `st.groupKey` is the view's own
+ * binding, which the plain live entry point does NOT forward — a grouped view
+ * exported through it already renders an ungrouped overlay while the screen
+ * shows one series per level, so either being set is enough to refuse.
+ */
+export function resolveSeriesCycle(
+  st: PlotView,
+  groupKey: number | null | undefined,
+  autoSeriesStyles: boolean | undefined,
+): SeriesCycleDecision {
+  const view: CycleView = {
+    groupKey: groupKey ?? st.groupKey,
+    facetKey: st.facetKey,
+    stackMode: st.stackMode,
+    polarMode: st.polarMode,
+    statMode: st.statMode,
+    xKey: st.xKey,
+    yKeys: st.yKeys,
+  };
+  return { view, cycle: autoSeriesStyles === true && overlayExportsSeriesStyles(view) };
 }
 
 /**

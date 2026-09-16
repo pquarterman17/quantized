@@ -167,13 +167,33 @@ export function displayListsAgree(v: CycleView): boolean {
  *  them through `windowCyclesSeriesStyles` below — so they cannot drift into
  *  disagreement about which views cycle. */
 export function overlayExportsSeriesStyles(v: CycleView): boolean {
+  return overlayModesMatchTheCanvas(v) && displayListsAgree(v);
+}
+
+/** The VIEW-MODE half of `overlayExportsSeriesStyles` above, on its own.
+ *
+ *  Split out for `lib/waterfallOffset.waterfallWire` (BUG-013 review round),
+ *  which needs the five mode refusals — a `group_col` split, a `facets` grid,
+ *  and the three modes that replace the XY canvas outright — for exactly the
+ *  reasons spelled out above, but NOT `displayListsAgree`:
+ *
+ *    - the dash/marker/colour cycle is keyed by a display POSITION the two
+ *      sides derive independently, so an X channel that is also in `yKeys`
+ *      slides every later series one slot and both sides must refuse;
+ *    - the waterfall's positions are the ones `figureSpecSeries.
+ *      resolveDisplaySeries` resolves against the CANVAS' own channel list
+ *      (BUG-014), so every channel the canvas draws already lands on the slot
+ *      the canvas staggered it into. Only the extra X-as-Y curve — which the
+ *      canvas never draws at all — has no true slot, and it is parked past the
+ *      end exactly as its colour already is. Refusing the whole field there
+ *      would export the two REAL series overlaid, re-opening BUG-013 for a
+ *      view whose stagger is otherwise reproduced exactly.
+ *
+ *  Both clauses still have exactly one definition, so the two predicates
+ *  cannot drift; they differ only in which of the two questions they ask. */
+export function overlayModesMatchTheCanvas(v: CycleView): boolean {
   return (
-    v.groupKey === null &&
-    v.facetKey === null &&
-    !v.stackMode &&
-    !v.polarMode &&
-    !v.statMode &&
-    displayListsAgree(v)
+    v.groupKey === null && v.facetKey === null && !v.stackMode && !v.polarMode && !v.statMode
   );
 }
 

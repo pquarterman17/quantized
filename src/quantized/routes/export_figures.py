@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
@@ -37,7 +37,13 @@ from quantized.routes.export_figures_labels import (
     series_names,
     solo_axis_label,
 )
-from quantized.routes.export_figures_schema import FigureFacet, TickFormatSpec, _tick_fmt
+from quantized.routes.export_figures_schema import (
+    SERIES_STYLES_DOC,
+    WATERFALL_OFFSETS_DOC,
+    FigureFacet,
+    TickFormatSpec,
+    _tick_fmt,
+)
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -152,34 +158,19 @@ class FigureRequest(BaseModel):
     title: str = ""  # optional figure title
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
-    # Per-series style (aligned to the plotted y_keys order): color/width/line/
-    # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}`) and MAIN
-    # #14's `color_by`/`colormap` (channel indices — resolved against `dataset`
-    # by `calc.plotting.resolve_style_channels`, called from `_figure_series`),
-    # and GAP_PLOTTYPES's `step` ("pre"/"post"/"mid" — the Graph Builder "step"
-    # mark; mapped to matplotlib's `drawstyle` by `calc.figure._plot_kwargs`).
-    # `marker_shape` (a `MarkerShape` name -> `_plot_kwargs`'s `_MARKER` table,
-    # falling back to "o"); before it existed all eight on-screen marker shapes
-    # exported as filled circles while the canvas drew them correctly.
-    # An entry is a loose dict (never a strict pydantic sub-model): a bad/
-    # unrecognized value in ANY of these keys degrades gracefully (dropped,
-    # rendered with matplotlib's default) rather than 422ing the whole export.
-    series_styles: list[dict[str, Any] | None] | None = None
-    # BUG-013 (waterfall export parity): per-plotted-series vertical offset in
-    # Y data units, aligned to `y_keys` -- the stagger a waterfall view draws
-    # on screen, which used to reach no export path at all (the exported figure
-    # overlaid the curves the canvas had separated). RESOLVED client-side
-    # (`frontend/src/lib/waterfallOffset.ts`) rather than re-derived here,
-    # because the fraction the user sets is a share of the CANVAS y-range --
-    # a range that includes hidden series and excluded rows this request never
-    # receives; see `calc.plotting.apply_waterfall_offsets`. `dataset` keeps
-    # the true, un-shifted values. None/absent = today's byte-identical render.
-    # UNUSED on the `group_col` branch (the per-level series it synthesizes do
-    # not align 1:1 with `y_keys`, the same reason `series_styles` is
-    # documented as unapplied there) and on the `facets` branch (which renders
-    # from its own panel payloads); the client omits it for both rather than
-    # sending an offset the renderer would mis-apply.
-    waterfall_offsets: list[float] | None = None
+    # Two FIELD DOCS, not `#` comments (BUG-013 review round, NIT 6): a `#`
+    # comment reaches no generated artefact, so an OpenAPI consumer saw a bare
+    # "Waterfall Offsets"/"Series Styles" title -- and `series_styles` is a
+    # loose dict whose keys (BUG-014's `legend` among them) can be documented
+    # nowhere else. The strings live in `export_figures_schema` for the same
+    # reason that module holds `FigureRequest`'s wire models: this file's
+    # 500-line ceiling. See there for the text.
+    series_styles: list[dict[str, Any] | None] | None = Field(
+        default=None, description=SERIES_STYLES_DOC
+    )
+    waterfall_offsets: list[float] | None = Field(
+        default=None, description=WATERFALL_OFFSETS_DOC
+    )
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None

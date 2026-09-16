@@ -18,26 +18,51 @@
 //   * EXCLUDED / filter-dropped rows are still in the payload when the offset is
 //     computed (`composeDisplayPayload` runs `applyWaterfall` BEFORE
 //     `maskExcludedPayload`), but `pruneToLiveDataset` strips them from the wire
-//     `dataset`;
-//   * a decimated fetch can trim the extremes the span is measured from.
+//     `dataset`.
 // A server-side `fraction * span` would therefore disagree with the screen the
 // moment a user hides a series or excludes a row — re-opening the very bug.
-// Resolving the offsets HERE, from the same display list and the same unpruned
-// values the canvas uses, makes the two numerically identical by construction.
-// It also keeps the wire honest: `dataset` still carries the true data (an
-// exported data table or CSV built from the same spec is unaffected); the
-// offset is declared as render metadata beside it.
+// Resolving the offsets HERE, from the same display list the canvas uses, makes
+// the two numerically identical. It also keeps the wire honest: `dataset` still
+// carries the true data (an exported data table or CSV built from the same spec
+// is unaffected); the offset is declared as render metadata beside it.
+//
+// WHICH ROWS THE SPAN IS MEASURED OVER (BUG-013 review round). The canvas does
+// NOT scan the whole DataStruct: `applyWaterfall` scans `payload.data`, the rows
+// the fetch returned. Those are the same rows for an ordinary plot, and for a
+// server-DECIMATED one too (min/max bucketing keeps each series' own extremes by
+// construction — `src/quantized/calc/decimate.py`), but they are NOT the same
+// once a committed zoom triggers `usePlotPayload`'s windowed re-fetch: that asks
+// for `[x_min, x_max]` only (`routes/plot.py` windows before it decimates), so a
+// large excursion outside the visible window is in the DataStruct and not in the
+// payload. Measured: 20 000 rows with the excursion in rows [0,100) and
+// `xLim [5000,6000]` staggered by 0.25 on screen and by 499.75 on the wire.
+// The fix is `publishLiveWaterfallSpan` below — the focused canvas publishes the
+// span it actually measured, and `figureSpec.buildStageFigureSpec` reads it back
+// at export time, so that export uses the canvas' own number rather than a
+// second derivation of it. A render with NO live canvas behind it (a Figure Page
+// panel, a graph template, a saved Library figure) has no published span and
+// falls back to the full DataStruct, which is what its own canvas-less
+// `buildColumns` would measure anyway.
 
+import { overlayModesMatchTheCanvas, type CycleView } from "./seriesStyleCycle";
 import type { DataStruct } from "./types";
 
-/** The per-index vertical step of a waterfall: `fraction` of the combined
- *  y-range of `columns` (every plotted VALUE column, x excluded). A degenerate
- *  range (no finite values, or a single repeated value) falls back to a span of
- *  1, so the offset is still visible — the canvas' long-standing behaviour. */
-export function waterfallStep(
-  columns: readonly (readonly (number | null)[])[],
-  fraction: number,
-): number {
+/** Is there a stagger to apply at all? THE shared guard: `applyWaterfall` and
+ *  `waterfallWire` both ask this one function, so the canvas cannot stagger a
+ *  view the wire refuses (or the reverse). Written as `> 0` rather than
+ *  `!(<= 0)` so a NaN fraction — unreachable from a PARSED document
+ *  (`lib/plotview.ts`'s `num()` rejects every non-finite number) but reachable
+ *  from a hand-built view object — is refused by BOTH sides instead of one
+ *  early-returning while the other NaNs every value column. */
+export function waterfallApplies(fraction: number): boolean {
+  return fraction > 0;
+}
+
+/** The combined y-range of `columns` (every plotted VALUE column, x excluded)
+ *  — the span a waterfall step is a fraction of. A degenerate range (no finite
+ *  values, or a single repeated value) falls back to 1, so the offset is still
+ *  visible — the canvas' long-standing behaviour. */
+export function waterfallSpan(columns: readonly (readonly (number | null)[])[]): number {
   let lo = Infinity;
   let hi = -Infinity;
   for (const col of columns) {
@@ -48,48 +73,84 @@ export function waterfallStep(
       }
     }
   }
-  return fraction * (hi > lo ? hi - lo : 1);
+  return hi > lo ? hi - lo : 1;
+}
+
+/** The per-index vertical step of a waterfall: `fraction` of `waterfallSpan`. */
+export function waterfallStep(
+  columns: readonly (readonly (number | null)[])[],
+  fraction: number,
+): number {
+  return fraction * waterfallSpan(columns);
+}
+
+// ── The live-canvas seam (BUG-013 review round) ─────────────────────────────
+// A module-scope ref, the same shape `lib/plotsnapshot.ts` uses for the composed
+// display bundle: an imperative write from a `PlotStage` effect (via
+// `Stage/useLiveSnapshotPublish`, which already owns that effect and already
+// no-ops in the alternate render modes), read back by the export at command
+// time. Not store state — publishing must cause no re-render.
+
+let _liveSpan: { datasetId: string | null; span: number } | null = null;
+
+/** Publish (or clear, with null) the y-span the focused XY canvas measured its
+ *  waterfall stagger from. The ONLY writer is `Stage/useLiveSnapshotPublish`. */
+export function publishLiveWaterfallSpan(v: { datasetId: string | null; span: number } | null): void {
+  _liveSpan = v;
+}
+
+/** The focused canvas' span for `datasetId`, or null when no XY canvas is
+ *  showing that dataset. The id check is the guard for `exportActive`'s
+ *  documented refocus race (`figureSpec.buildStageFigureSpec`): a span measured
+ *  from a DIFFERENT dataset's payload must never silently stagger this one. */
+export function readLiveWaterfallSpan(datasetId: string): number | null {
+  return _liveSpan && _liveSpan.datasetId === datasetId ? _liveSpan.span : null;
 }
 
 /** The `waterfall_offsets` half of a `FigureSpec`, or `{}` when the view has no
  *  waterfall (so an ordinary export's wire is byte-identical to before).
  *
  *  `displayChannels` is the UNFILTERED display list — the canvas' own index
- *  space, the same one `lib/figureSpec.ts` resolves series colours against
- *  (BUG-015) — and `positions` is each PLOTTED series' slot in it, so a hidden
- *  series reserves its stagger step exactly as it does on screen. Every plotted
- *  series is offset, secondary-axis ones included: `applyWaterfall` shifts every
- *  value column of the payload, and the y2 columns are in it.
+ *  space, the same one `lib/figureSpecSeries.ts` resolves series colours
+ *  against (BUG-015) — and `positions` is each PLOTTED series' slot in it, so a
+ *  hidden series reserves its stagger step exactly as it does on screen. Every
+ *  plotted series is offset, secondary-axis ones included: `applyWaterfall`
+ *  shifts every value column of the payload, and the y2 columns are in it.
  *
- *  REFUSED for the two request shapes whose renderer cannot align a list keyed
- *  by `y_keys`: a `group_col` split (the backend expands each channel into one
- *  synthetic series per level — the same reason `series_styles` is documented as
- *  unapplied there) and a resolved `facets` grid (which renders from its own
- *  panel payloads and ignores the flat `dataset` fields). Omitting the field is
- *  the honest response: the renderer never receives an offset it would silently
- *  mis-apply. Both combinations already export unstyled today; see BUG-013's
- *  completion record. */
-export function waterfallWire(
-  data: DataStruct,
-  displayChannels: readonly number[],
-  positions: readonly number[],
-  fraction: number,
-  groupKey: number | null | undefined,
-  facets: readonly unknown[] | undefined,
-): { waterfall_offsets?: number[] } {
+ *  REFUSED for every view whose canvas is not the plain single-panel XY overlay
+ *  this field is keyed to, through the SAME predicate the canvases and the
+ *  series-style cycle ask (`seriesStyleCycle.overlayModesMatchTheCanvas`):
+ *  a `group_col` split and a resolved `facets` grid, whose renderers cannot
+ *  align a list keyed by `y_keys` at all (the backend expands each channel into
+ *  one synthetic series per level; the facet branch renders from its own panel
+ *  payloads) — and `stackMode`/`polarMode`/`statMode`, where the XY canvas is
+ *  replaced outright and NOTHING is staggered on screen, so emitting offsets
+ *  staggered an export the user's screen never did. Omitting the field is the
+ *  honest response: the renderer never receives an offset it would mis-apply.
+ *
+ *  `span` is the canvas' own measured y-range when a live XY canvas published
+ *  one for this request (see `readLiveWaterfallSpan`); absent, the span is
+ *  measured over the full DataStruct. */
+export function waterfallWire(args: {
+  data: DataStruct;
+  displayChannels: readonly number[];
+  positions: readonly number[];
+  fraction: number;
+  view: CycleView;
+  span?: number | null;
+}): { waterfall_offsets?: number[] } {
   // `< 2` mirrors `applyWaterfall`'s `payload.data.length <= 2` (x + one value
-  // column): a single series has nothing to be staggered against. The
-  // group/facet refusals ride the same guard — see this function's doc.
-  // `!(fraction > 0)` rather than `<= 0` so a NaN fraction from a corrupt
-  // document is refused here too, instead of reaching the arithmetic below.
-  if (!(fraction > 0) || displayChannels.length < 2 || groupKey != null || facets) return {};
-  const step = waterfallStep(
-    displayChannels.map((ch) => data.values.map((row) => row[ch])),
-    fraction,
-  );
+  // column): a single series has nothing to be staggered against.
+  if (!waterfallApplies(args.fraction) || args.displayChannels.length < 2) return {};
+  if (!overlayModesMatchTheCanvas(args.view)) return {};
+  const span =
+    args.span != null && Number.isFinite(args.span)
+      ? args.span
+      : waterfallSpan(args.displayChannels.map((ch) => args.data.values.map((row) => row[ch])));
+  const step = args.fraction * span;
   // A zero step (an all-equal column set at a vanishing fraction) is no
   // stagger at all. An overflow to Infinity needs no guard here: the backend
   // skips any non-finite offset (`calc.plotting.apply_waterfall_offsets`).
   if (!step) return {};
-  return { waterfall_offsets: positions.map((p) => p * step) };
+  return { waterfall_offsets: args.positions.map((p) => p * step) };
 }

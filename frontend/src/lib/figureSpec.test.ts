@@ -1485,4 +1485,75 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
     expect(spec.facets?.length).toBeGreaterThan(0);
     expect("waterfall_offsets" in spec).toBe(false);
   });
+
+  // BUG-013 review round, finding 1. `stackMode`/`polarMode`/`statMode` each
+  // REPLACE the XY canvas (`PlotStage` early-returns to MultiPanelStage /
+  // PolarStage / StatStage before the overlay is built) and none of them
+  // staggers anything — `useMultiPanelStage` never calls
+  // `composeDisplayPayload` at all. Emitting offsets there staggered an export
+  // the screen had not: a NEW divergence, not an inherited one. Both entry
+  // points are exercised because `stackMode` is a canonical binding
+  // (`figureContract.ts`), so it round-trips through a document too.
+  const MODES = ["stackMode", "polarMode", "statMode"] as const;
+  for (const mode of MODES) {
+    it(`is ABSENT for a ${mode} view — that canvas staggers nothing`, () => {
+      const view = { ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25, [mode]: true };
+      const live = buildFigureSpec((() => view) as never, dataset, "device", opts);
+      expect("waterfall_offsets" in live).toBe(false);
+
+      const document = createFigureDocument({
+        id: `wf-${mode}`,
+        name: `Waterfall ${mode}`,
+        datasetId: dataset.id,
+        view,
+      });
+      const fromDoc = buildFigureSpecFromDocument(document, dataset, "device");
+      expect("waterfall_offsets" in fromDoc).toBe(false);
+    });
+  }
+
+  it("still rides a PLAIN overlay — the mode refusals are not a blanket off switch", () => {
+    // Non-vacuous companion to the six assertions above: with every mode off,
+    // the same view still carries the field.
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    expect(buildFigureSpec(view as never, dataset, "device", opts).waterfall_offsets).toHaveLength(3);
+  });
+
+  // BUG-013 review round, finding 3 — CLOSED by BUG-014 rather than by a
+  // refusal, and pinned here so it stays closed. When an explicitly selected X
+  // channel is ALSO in `yKeys`, the export draws a curve the canvas does not;
+  // the review measured every REAL series landing one stagger slot late. It no
+  // longer does, because `resolveDisplaySeries` resolves positions against the
+  // CANVAS' channel list — so the offset and the palette colour of each drawn
+  // channel now agree with the canvas, and only the extra X-as-Y curve (which
+  // the canvas never draws) sits on a parked slot. Both are asserted together:
+  // they are the same position, and pinning one without the other would let the
+  // two drift apart again.
+  it("the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots", () => {
+    const restore = installSeriesPalette();
+    try {
+      const document = createFigureDocument({
+        id: "wf-x-as-y",
+        name: "X as Y waterfall",
+        datasetId: dataset.id,
+        view: { ...defaultPlotView(), xKey: 0, yKeys: [0, 1, 2], waterfall: 0.25 },
+      });
+      const spec = buildFigureSpecFromDocument(document, dataset, "device");
+      expect(spec.y_keys).toEqual([0, 1, 2]);
+      // The canvas draws channels 1 and 2 only (x is always dropped), at
+      // display slots 0 and 1 — derived by running `applyWaterfall` on exactly
+      // that list, never hardcoded.
+      const canvas = [canvasOffset([1, 2], 0.25, 0), canvasOffset([1, 2], 0.25, 1)];
+      const offsets = spec.waterfall_offsets ?? [];
+      expect([offsets[1], offsets[2]]).toEqual(canvas);
+      expect(offsets[0]).toBeCloseTo(2 * canvas[1], 12); // parked past the canvas list
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[2],
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+      ]);
+    } finally {
+      restore();
+    }
+  });
 });

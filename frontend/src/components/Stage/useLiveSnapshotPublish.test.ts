@@ -12,11 +12,15 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { useLiveSnapshotPublish, type LiveSnapshotArgs } from "./useLiveSnapshotPublish";
 import { publishLivePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
+import { publishLiveWaterfallSpan, readLiveWaterfallSpan } from "../../lib/waterfallOffset";
 import { displayPositions } from "../../lib/seriesStyleCycle";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { SeriesStyle } from "../../lib/types";
 
-afterEach(() => publishLivePlotSnapshot(null));
+afterEach(() => {
+  publishLivePlotSnapshot(null);
+  publishLiveWaterfallSpan(null);
+});
 
 const payload: PlotPayload = {
   data: [
@@ -42,6 +46,7 @@ const args = (
   stackMode: false,
   plottedCount: 2,
   composition: null,
+  payload,
   displayPayload: payload,
   styleList,
   labelList: [undefined, undefined],
@@ -86,5 +91,51 @@ describe("useLiveSnapshotPublish — the cycle is RESOLVED into the frozen bundl
       useLiveSnapshotPublish({ ...args([undefined, undefined], displayPositions(true, 2)), polarMode: true }),
     );
     expect(readLivePlotSnapshot()).toBeNull();
+    // BUG-013 review round: the waterfall span rides the SAME gate, so an
+    // export taken while polar/stat/stacked is showing cannot pick up a span
+    // measured for a canvas that is not on screen.
+    expect(readLiveWaterfallSpan("d1")).toBeNull();
+  });
+});
+
+// BUG-013 review round. The span the export reads back must be measured from
+// the RAW fetched payload — the rows the canvas' own `applyWaterfall` scanned —
+// and must be keyed by the dataset it came from.
+describe("useLiveSnapshotPublish — the live waterfall span", () => {
+  it("publishes the y-span of the raw payload's value columns, keyed by dataset", () => {
+    renderHook(() => useLiveSnapshotPublish(args([undefined, undefined], null)));
+    // Value columns are [10,20,30] and [1,2,3] -> combined range 30 - 1 = 29.
+    expect(readLiveWaterfallSpan("d1")).toBeCloseTo(29, 12);
+  });
+
+  it("is refused for a DIFFERENT dataset — the refocus race must not cross spans", () => {
+    renderHook(() => useLiveSnapshotPublish(args([undefined, undefined], null)));
+    expect(readLiveWaterfallSpan("d2")).toBeNull();
+  });
+
+  it("is measured BEFORE the waterfall is applied, not from the composed payload", () => {
+    // The composed payload the snapshot bundle carries is already staggered, so
+    // measuring THAT would feed the export a span that grows with the stagger.
+    // Hand the hook a `displayPayload` whose second column is shifted far past
+    // the raw one and check the published span still describes the RAW rows.
+    const composed: PlotPayload = {
+      ...payload,
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+        [1001, 1002, 1003],
+      ] as PlotPayload["data"],
+    };
+    renderHook(() =>
+      useLiveSnapshotPublish({ ...args([undefined, undefined], null), displayPayload: composed }),
+    );
+    expect(readLiveWaterfallSpan("d1")).toBeCloseTo(29, 12);
+  });
+
+  it("clears on unmount, so a closed Plot tab leaves no stale span behind", () => {
+    const { unmount } = renderHook(() => useLiveSnapshotPublish(args([undefined, undefined], null)));
+    expect(readLiveWaterfallSpan("d1")).toBeCloseTo(29, 12);
+    unmount();
+    expect(readLiveWaterfallSpan("d1")).toBeNull();
   });
 });
