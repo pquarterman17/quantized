@@ -38,7 +38,7 @@ This is a working document, not a claim that every observation is already reprod
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-15** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
-| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted |
+| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
@@ -3821,12 +3821,20 @@ different measurement.
 - [x] A series renamed on screen exports with the identical legend text, no
   unit re-appended — measured in the rendered SVG, not only on the wire
   (`test_a_renamed_series_renders_its_legend_text_exactly`: the legend group
-  reads `["Loop 1", "Series B (au)", "Series C (au)"]`).
+  reads `["Loop 1", "Series B (au)", "Series C (au)"]`). True on EVERY branch
+  as of the review round: the flat/solo/y2 paths since 2026-09-15, the FACET
+  panels since 2026-09-16 (they shipped `"Loop 1 (au)"` until then — see the
+  review round below), the `group_col` branch by the documented substitution
+  (the rename replaces the channel-label half of the per-level template).
+  ONE residual, pinned rather than fixed: an EMPTY rename — see the review
+  round's finding 4.
 - [x] An un-renamed series continues to export with its unit appended
   exactly as before (no regression).
 - [x] `projectExport(renamed, dataset).series[0].label` equals
   `projectScreen(renamed, dataset).series[0].label` — the equality
-  BUG-014's divergence test is inverted into.
+  BUG-014's divergence test is inverted into. The FACET leg of the same
+  equality (`projectExport(...).facet` vs `projectScreen(...).facet`) is
+  pinned alongside it as of the review round.
 
 #### Completion record
 
@@ -3856,9 +3864,10 @@ different measurement.
   template instead (new optional `y_legends` argument), which reproduces the
   pre-fix wire byte-for-byte — grouped export parity as a whole stays
   BUG-016. Facet panels ship FINISHED series strings that no per-series field
-  on the request can reach, so their labels are still resolved client-side
-  from a request-local relabelled copy; only the `dataset` that rides the
-  wire changed.
+  on the request can reach, so their labels are resolved client-side —
+  **originally from a request-local relabelled copy of the DataStruct, which
+  re-created this very bug inside the facet branch** (`"Loop 1 (au)"`) and
+  was corrected in the review round below.
 - Automated tests: `tests/test_export_vector_structure.py` — five new
   structural tests reading the rendered SVG's legend group (rename verbatim;
   un-renamed unchanged; a renamed SOLO series' auto-derived axis title;
@@ -3890,20 +3899,159 @@ different measurement.
   `node scripts/freeze-regression-matrix.mjs --check` clean (the canonical
   payload is unchanged — the goldens are SCREEN projections and no fixture is
   renamed); `node scripts/check-bundle-size.mjs` green.
-- Bundle (measured): parent `50b30a04` **919,877 B** eager -> this commit
-  **919,877 B**, a **+0 B** delta — the per-file eager byte list is identical
-  entry for entry. The split did NOT grow the eager graph:
-  `lib/figureSpecSeries.ts` lands in the same lazy `figureSpec` chunk its
-  caller does (that chunk grew 6.64 kB -> 7.34 kB). Both builds were run
-  after `npm ci`, with vite's transform cache cleared, and
-  `node scripts/check-bundle-size.mjs` reports 898.3 kB eager of the 898.8 kB
-  budget, unmoved.
+- Bundle (measured): parent `50b30a04` **919,877 B** eager -> **919,877 B**,
+  a **+0 B** delta — the per-file eager byte list is identical entry for
+  entry. The split did NOT grow the eager graph: `lib/figureSpecSeries.ts`
+  lands in the same lazy `figureSpec` chunk its caller does (that chunk grew
+  6.64 kB -> 7.34 kB). Both builds were run after `npm ci`, with vite's
+  transform cache cleared, and `node scripts/check-bundle-size.mjs` reports
+  898.3 kB eager of the 898.8 kB budget, unmoved.
+  **Those two numbers are the ORIGINAL commit's pair (`bdf3b32a` on top of
+  `50b30a04`).** What landed on `claude/repo-evaluation-l7y7k9` is a
+  cherry-pick, `7dfcde07`, whose real parent is `3804e643`; re-measuring
+  `3804e643..7dfcde07` will not reproduce them, and nothing was re-measured
+  for the cherry-pick. The +0 B claim itself still holds structurally (no
+  eager module gains an import, `figureSpecSeries.ts` is reached only from
+  the already-lazy `figureSpec.ts`, and no ratchet pin moved).
 - Owner verification: pending — rename a series' legend on screen, export the
   figure, and confirm the PDF's legend reads exactly what the on-screen
-  legend reads.
-- Agent verification: —
-- Owner verification: —
+  legend reads. Worth doing on a FACETED view too (the review round's
+  finding 2).
 - Notes: —
+
+#### Adversarial review round (2026-09-16)
+
+An adversarial review of `7dfcde07` returned 2 CONFIRMED + 6 NITs; the
+root-cause fix itself was measured correct on fourteen view configurations
+and nothing was reverted. Closed by
+`fix(export): close the BUG-014 review — facet panels honour a legend rename
+verbatim on screen and export`, on top of `da00c042`:
+
+- **Finding 1 (CONFIRMED) — the recorded frontend gate could not see the
+  suite it broke.** The gate line above reads `npx vitest run src/lib
+  src/architecture.test.ts`; that glob excludes `src/store` **structurally**,
+  and `frontend/src/store/plotRecipes.test.ts` was RED at `7dfcde07`
+  (`expected [ '2theta', 'Intensity', 'Ierr' ] to include 'Corrected
+  intensity'` at `:996` — the spec still asserted the pre-fix wire, where a
+  rename rewrote `dataset.labels`). So a green scoped gate was recorded on a
+  tree whose `npm test` was red. It was repaired two commits later by
+  `950b3a9b`, which re-points that spec at the honest wire and is strictly
+  stronger (it pins the positive, the negative, and the whole style object
+  including `legend`). Standing correction, now in `agent_rules.md`: any
+  change to the export WIRE must include `src/store` in the vitest scope.
+- **Finding 2 (CONFIRMED) — the FACET branch still exported the bug's exact
+  string; fixed.** With `facetKey` bound and `seriesLabels: {1: "Loop 1"}` on
+  a unit-`au` channel, facet EXPORT panels read `Loop 1 (au)` (the panel label
+  was composed as `${relabelled} (${unit})` from a request-local relabelled
+  DataStruct) while facet SCREEN panels read `Signal (au)` (the grid's
+  `buildOpts` call passed no `seriesLabels` at all) — three different strings
+  for one series. Pre-existing, not a regression, but the acceptance criteria
+  above were ticked without a carve-out and nothing tested it. Both legs now
+  apply ONE rule, `lib/figureSpecSeries.ts`'s new `seriesDisplayLabel(label,
+  unit, legend)` (rename verbatim, else `"label (unit)"` — the same rule
+  `uplotOpts.buildOpts` and `calc.figure_labels.series_display_name` apply):
+  `lib/figureSpecFacets.ts` takes the channel-keyed renames and composes with
+  it, the relabelled `facetData` copy in `lib/figureSpec.ts` is deleted, and
+  `Stage/useMultiPanelStage.ts` passes the store's `seriesLabels` into the
+  facet grid. `lib/facet.ts`'s `FacetPanel` now carries `channels` (the
+  dataset channel behind each payload series) because the default
+  (`yKeys === null`) channel list is resolved per row-slice and can differ
+  panel to panel, so neither consumer can reconstruct it from the binding.
+  Tests at both layers: `lib/figureSpecFacets.test.ts` (new file, 8 tests) and
+  `Stage/MultiPanelStage.test.tsx`'s "a legend rename reaches every facet
+  panel's legend, verbatim" (which reads the label real `buildOpts` put on the
+  real uPlot options), plus a facet row in `regressionMatrix.test.ts`'s
+  BUG-014 test asserting the two legs' facet projections are EQUAL.
+- **Finding 3 (NIT) — `lib/spatialPageExport.ts` shipped decoded Origin
+  captions as `dataset.labels`; fixed the same way.** Measured on the wire
+  the builder produced: `_figure_series` resolved
+  `['Decoded caption (au)', '_nolegend_ (au)']` before and
+  `['Decoded caption', '_nolegend_']` after. **The `(au)` suffix disappearing
+  IS the BUG-014 rule applied consistently** — a decoded caption is
+  presentation, so the unit is not re-appended to it. The `_nolegend_`
+  sentinel still suppresses by its leading `_` either way, and the wire
+  `dataset` now keeps the workbook's own column names (which is what that
+  function's `fallbackYLabel` already read).
+- **Finding 4 (NIT) — RESIDUAL, pinned not fixed: an EMPTY rename.** `""` is
+  honoured verbatim on the wire and by `series_display_name`, but matplotlib
+  drops a zero-length label from the legend exactly as it drops a leading-`_`
+  one, so the series loses its legend ROW on export while uPlot still draws a
+  blank row with its swatch on screen. "Identical text on both legs"
+  therefore degenerates to "blank row vs no row" for `""` alone. Pinned by
+  `test_an_empty_rename_drops_the_series_from_the_rendered_legend`
+  (measured: `['Series B (au)', 'Series C (au)']`). Deliberately NOT papered
+  over with a `" "`: which leg should move is the owner's call, and a space
+  would silently change what the user typed. (The pre-fix wire rendered
+  `" (au)"` here, so this is a change from one divergence to another.)
+- **Finding 5 (NIT) — stale `FigureRequest` field docs.** The
+  `series_styles` description already gained `legend` in `da00c042`
+  (BUG-013's own review round moved it to `export_figures_schema.py` as a
+  `Field(description=...)`). Left to fix and fixed here: `group_col`'s
+  comment claiming "`series_styles` is not applied in this path either" (its
+  STYLE keys are not; its `legend` key IS), the same claim echoed inside
+  `WATERFALL_OFFSETS_DOC`, and `FigureFacet`'s docstring, which pointed at
+  `lib/figureSpec.ts` for a builder that now lives in `figureSpecFacets.ts`
+  and said nothing about a panel label being FINISHED text. Comment/
+  description-only; `frontend/api/openapi.json` and
+  `frontend/src/lib/api/schema.d.ts` regenerated and committed (the two
+  `Field(description=...)` strings do reach the generated artefacts).
+- **Finding 6 (NIT) — a fixture assertion posing as a product one.**
+  `test_a_renamed_series_renders_its_legend_text_exactly`'s last line rebuilt
+  `_renamed_payload(...)` and asserted a property of the fixture helper. It
+  now hoists the payload it actually POSTs, asserts the label AND unit on
+  that object before the request, and adds `"Series A" not in svg` — so the
+  test can only pass if the rename reached the renderer through the
+  presentation field.
+- **Finding 7 (NIT) — an untested behavioural claim, now pinned.**
+  "`sanitizeExportSeriesStyles` deliberately does not restore a `legend`"
+  appears in the code comment, the commit body and this entry, but the
+  allowlist dropped it only incidentally. `publicationStyles.test.ts` now
+  pins both halves (a legend beside a valid key is stripped; an entry whose
+  only key is a legend becomes `null`).
+- **Finding 8 (NIT) — record hygiene.** The bundle pair's parent is corrected
+  above, and the duplicated empty `Agent verification` / `Owner verification`
+  / `Notes` template rows are removed.
+- Module ceilings this round: `Stage/useMultiPanelStage.ts` sat exactly on its
+  791-line pin, so the facet render leg was extracted to the new
+  `Stage/facetGridRender.ts` (`renderFacetGrid` + `resizeFacetGrid`); the pin
+  ratchets DOWN to 787. `lib/figureSpec.ts` 483, `lib/figureSpecFacets.ts`
+  104, `lib/figureSpecSeries.ts` 280, `lib/spatialPageExport.ts` 287,
+  `routes/export_figures.py` 491, `routes/export_figures_schema.py` 126 —
+  all under 500, none pinned, no pin raised.
+- Agent verification (review round): sabotage table, each reverted with
+  `git checkout --` and the worktree verified clean afterwards —
+
+  | sabotage | failing tests |
+  |---|---|
+  | `figureSpecFacets.ts` composes ``` `${label} (${unit})` ``` again instead of `seriesDisplayLabel` | 5 — `figureSpecFacets.test.ts` ×4, `regressionMatrix.test.ts`'s BUG-014 facet row |
+  | `facetGridRender.ts` passes `seriesLabels: undefined` to `buildOpts` | 1 — `MultiPanelStage.test.tsx` "a legend rename reaches every facet panel's legend, verbatim" |
+  | `facet.ts` returns an EMPTY `FacetPanel.channels` | 11 — `figureSpecFacets.test.ts` ×6, `regressionMatrix.test.ts` ×3 (incl. the committed `facet` golden), `MultiPanelStage.test.tsx` ×2 |
+  | `spatialPageExport.ts` builds no `legends` at all | 1 — `spatialPageExport.test.ts` "carries decoded partial legend entries as presentation…" |
+  | `publicationStyles.ts` restores a string `legend` | 1 — `publicationStyles.test.ts` "deliberately does NOT restore a legend…" |
+  | `series_display_name` uses `if legend:` (drops `""`) | 1 — `test_an_empty_rename_drops_the_series_from_the_rendered_legend` |
+  | `series_display_name` ignores `legend` entirely | 3 — the renamed, renamed-solo-axis and empty-rename tests |
+
+  Gate: `uv run ruff check src tests tools` (All checks passed);
+  `uv run mypy src` (296 files, no issues);
+  `uv run pytest -q` over `test_export_vector_structure.py`,
+  `test_api_export*.py`, `test_api_report_export.py`,
+  `test_io_report_export.py`, `test_repo_integrity.py`,
+  `test_openapi_snapshot.py`, `test_calc_figure.py` → **298 passed, 1
+  skipped**; `npx tsc -b --force` (exit 0);
+  `npx eslint src --max-warnings=0` (exit 0);
+  `npx vitest run src/lib src/store src/components/Stage
+  src/architecture.test.ts` → **406 files, 7779 tests, 0 failed** (the
+  `src/store` scope finding 1 says was missing, included deliberately);
+  `node scripts/freeze-regression-matrix.mjs --check` → 1 test passed (the
+  `facet` golden is unchanged — no fixture carries a rename).
+- Bundle (measured, review round): parent `da00c042` **911,488 B** eager ->
+  this commit **911,526 B**, **+38 B** (one new eagerly-reachable module
+  boundary, `Stage/facetGridRender.ts`, split out of a file that was already
+  eager; no new module enters the eager graph). `node
+  scripts/check-bundle-size.mjs` reports 890.2 kB of the 898.8 kB budget, up
+  from 890.1 kB — 8.7 kB of headroom, budget unmoved. Both builds ran in the
+  same worktree with `node_modules/.vite` cleared, against a `node_modules`
+  installed by `npm ci` from the same (unchanged) lockfile.
 
 ---
 

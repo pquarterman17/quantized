@@ -26,13 +26,23 @@
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { sliceRowSidecars } from "./rowSidecars";
 import { breakComposition, facetComposition, type Composition } from "./composition";
-import { buildColumns, type PlotPayload } from "./plotdata";
+import { buildColumns, defaultDenseChannels, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
 export interface FacetPanel {
   label: string;
   payload: PlotPayload;
+  /** The dataset channel index behind each `payload.series` entry, in the
+   *  same order. Carried rather than re-derived because the per-panel list
+   *  is `yChannels ?? defaultDenseChannels(<this panel's rows>, xKey)` --
+   *  the default (null `yChannels`) case can legitimately differ panel to
+   *  panel, so a caller cannot reconstruct it from the binding alone. Both
+   *  consumers of a channel-keyed per-series override need it (BUG-014): the
+   *  facet grid's own `seriesLabels` on screen
+   *  (`Stage/facetGridRender.ts`) and the facet export's panel labels
+   *  (`lib/figureSpecFacets.ts`). */
+  channels: number[];
 }
 
 export interface FacetSlice {
@@ -79,10 +89,18 @@ export function facetPayloads(
   xKey: number | null,
   yChannels: number[] | null,
 ): FacetPanel[] {
-  return facetSlices(data, facetCol).map((s) => ({
-    label: s.label,
-    payload: buildColumns(s.data, null, xKey, yChannels),
-  }));
+  return facetSlices(data, facetCol).map((s) => {
+    // Resolve the channel list HERE and hand the same array to
+    // `buildColumns`, so `channels[i]` is the channel behind
+    // `payload.series[i]` by construction rather than by a matching rule two
+    // callers would have to keep in sync.
+    const channels = yChannels ?? defaultDenseChannels(s.data, xKey);
+    return {
+      label: s.label,
+      payload: buildColumns(s.data, null, xKey, channels),
+      channels,
+    };
+  });
 }
 
 /** Union x-domain across a set of facet panels — the min/max of every panel's

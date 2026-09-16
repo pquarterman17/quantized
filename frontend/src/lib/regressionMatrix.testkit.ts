@@ -102,6 +102,7 @@
 //     real `buildOpts` options object it feeds.
 
 import { groupLevelLabel, levelOrderFor } from "./categorical";
+import { seriesDisplayLabel } from "./figureSpecSeries";
 import { facetPayloads } from "./facet";
 import type { ErrorSpan } from "./errorbars";
 import type { FigureDocument } from "./figureDocument";
@@ -327,6 +328,7 @@ export function facetOf(
   xKey: number | null,
   yKeys: number[] | null,
   wire?: readonly { label: string; series: readonly { label: string }[] }[] | null,
+  seriesLabels: Record<number, string> = {},
 ): CanonicalFigure["facet"] {
   if (channel === null) return { channel: null, panels: null };
   if (wire) {
@@ -336,7 +338,13 @@ export function facetOf(
     channel,
     panels: facetPayloads(data, channel, xKey, yKeys).map((p) => ({
       label: p.label,
-      series: p.payload.series.map((s) => (s.unit ? `${s.label} (${s.unit})` : s.label)),
+      // BUG-014 (review round): the real facet grid feeds `buildOpts` the
+      // panel's channel-keyed renames, so the SCREEN projection has to apply
+      // the same rule the canvas does -- otherwise a renamed facet panel would
+      // compare "Signal (au)" (here) against "Loop 1" (the wire) and the
+      // leg-to-leg equality would report a divergence that no longer exists.
+      // `seriesDisplayLabel` is that one rule, shared with the export builder.
+      series: p.payload.series.map((s, i) => seriesDisplayLabel(s.label, s.unit, seriesLabels[p.channels[i]])),
     })),
   };
 }

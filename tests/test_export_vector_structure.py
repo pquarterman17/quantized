@@ -502,13 +502,19 @@ def _renamed_payload(legends: list[str | None]) -> dict[str, Any]:
 def test_a_renamed_series_renders_its_legend_text_exactly() -> None:
     # "Loop 1", not "Loop 1 (au)": the channel's own unit is NOT appended to a
     # user-supplied legend, which is what the on-screen legend does too.
-    resp = client.post("/api/export/figure", json=_renamed_payload(["Loop 1", None, None]))
+    payload = _renamed_payload(["Loop 1", None, None])
+    # The request POSTED below still names the channel "Series A" and carries
+    # its unit -- the rename reaches the renderer through the presentation
+    # field alone, so "Loop 1" in the legend can only have come from there.
+    assert payload["dataset"]["labels"][0] == "Series A"
+    assert payload["dataset"]["units"][0] == "au"
+    resp = client.post("/api/export/figure", json=payload)
     assert resp.status_code == 200, resp.text
     svg = resp.content.decode("utf-8", "ignore")
     assert _legend_entries(svg) == ["Loop 1", "Series B (au)", "Series C (au)"]
-    # The dataset the request carried still names the channel "Series A"; only
-    # the presentation field changed.
-    assert _renamed_payload(["Loop 1", None, None])["dataset"]["labels"][0] == "Series A"
+    # ... and the un-renamed "Series A (au)" the same bytes would otherwise
+    # compose appears nowhere in the rendered figure.
+    assert "Series A" not in svg
 
 
 def test_an_unrenamed_series_still_gets_its_unit_appended() -> None:
@@ -532,6 +538,31 @@ def test_a_renamed_solo_series_titles_its_axis_with_the_same_text() -> None:
     svg = resp.content.decode("utf-8", "ignore")
     assert _legend_entries(svg) == ["Loop 1"]
     assert "Loop 1" in svg
+    assert "Series A" not in svg
+
+
+def test_an_empty_rename_drops_the_series_from_the_rendered_legend() -> None:
+    # RESIDUAL DIVERGENCE, pinned deliberately rather than "fixed" (BUG-014
+    # review round, NIT 4). An empty rename is honoured VERBATIM on the wire
+    # and by `series_display_name` -- but matplotlib treats a zero-length
+    # label the way it treats a leading "_" and omits the artist from the
+    # legend entirely, so the series loses its ROW here while uPlot still
+    # draws a blank row with its swatch on screen. "Identical text" therefore
+    # degenerates to "blank row vs no row" for `""` alone.
+    #
+    # Not papered over with a " ": which of the two legs should move is a
+    # product decision, and a space would silently change what the user typed.
+    # The pre-BUG-014 wire rendered " (au)" here, so this is a change from one
+    # divergence to another, and the point of this test is that the change is
+    # a chosen, visible one.
+    payload = _renamed_payload(["", None, None])
+    assert payload["series_styles"][0] == {"legend": ""}
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Series B (au)", "Series C (au)"]
+    # Specifically NOT the derived label: the empty override was honoured, it
+    # just left matplotlib nothing to draw.
     assert "Series A" not in svg
 
 

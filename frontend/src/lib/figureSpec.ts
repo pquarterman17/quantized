@@ -213,20 +213,17 @@ function buildFigureSpecForView(
   // a rename verbatim instead of appending the channel's unit to it a second
   // time, and any data-table/CSV consumer of this same spec still sees the
   // real column names. FACETS are the one place a rename is still resolved
-  // client-side: a facet panel ships FINISHED series strings
+  // client-side -- a facet panel ships FINISHED series strings
   // (`FigureFacetSeries.label`) that no per-series field on this request can
-  // reach, so they are built from a request-local relabelled copy -- the
-  // imported workbook itself is never mutated either way.
-  const facetData = Object.keys(st.seriesLabels).length
-    ? {
-        ...data,
-        labels: data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
-      }
-    : data;
-
+  // reach -- so `st.seriesLabels` is handed to the panel builder itself and
+  // applied by the SAME rule the flat path and the canvas use
+  // (`figureSpecSeries.seriesDisplayLabel`: rename verbatim, no unit
+  // re-appended). It used to arrive as a request-local relabelled copy of
+  // `data`, which re-created BUG-014's own symptom inside the facet branch.
+  //
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
-  const facets = resolveFacetsOrThrow(facetData, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
+  const facets = resolveFacetsOrThrow(data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels);
 
   // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
   // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`

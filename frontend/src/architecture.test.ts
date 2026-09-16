@@ -536,7 +536,7 @@ const TS_MODULE_PINS: Record<string, number> = {
   // dash/marker cycle paid for itself — the per-cell styles/labels/legend
   // derivation moved to `lib/multipanel.spatialCellStyling`, where the spatial
   // EXPORT's own channel list already lives, so the two cannot drift.
-  "/components/Stage/useMultiPanelStage.ts": 791,
+  "/components/Stage/useMultiPanelStage.ts": 787,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the

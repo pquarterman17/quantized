@@ -40,7 +40,7 @@ function spatial(): SpatialPanel {
   };
 }
 
-const facet = (): FacetPanel => ({ label: "a", payload: payload() });
+const facet = (): FacetPanel => ({ label: "a", payload: payload(), channels: [0] });
 const brk = (): BreakPanel => ({ payload: payload(), xRange: [0, 1] });
 
 describe("composition constructors", () => {

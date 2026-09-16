@@ -200,6 +200,7 @@ describe("suggestBreaks", () => {
 describe("sharedXDomain", () => {
   const panel = (xs: (number | null)[]): FacetPanel => ({
     label: "l",
+    channels: [0],
     payload: {
       data: [xs, xs.map(() => 1)] as PlotPayload["data"],
       series: [{ label: "y", unit: "", axis: 0 }],

@@ -87,7 +87,12 @@ describe("buildSpatialPageRequest", () => {
     expect(fig.x_step).toBe(0.5);
   });
 
-  it("preserves only decoded partial legend entries and never mutates the workbook labels", () => {
+  // BUG-014 review round: the decoded caption is PRESENTATION and rides
+  // `series_styles[i].legend`, so the wire dataset keeps the workbook's own
+  // column names (it used to ship `["a", "Measured", "_nolegend_"]` as
+  // `dataset.labels`, which the backend then re-composed as
+  // "Measured (au)" -- BUG-014's symptom on this builder).
+  it("carries decoded partial legend entries as presentation, leaving the data labels real", () => {
     const dataset = ds();
     const p = panel({
       seriesLabels: { 1: "Measured" },
@@ -99,15 +104,27 @@ describe("buildSpatialPageRequest", () => {
       new Map([["ds1", dataset]]),
       defaultPageSetup(),
     )!.panels[0].figure;
-    expect(fig.dataset).not.toBe(dataset);
-    expect(fig.dataset.labels).toEqual(["a", "Measured", "_nolegend_"]);
+    expect(fig.dataset).toBe(dataset);
+    expect(fig.dataset.labels).toEqual(["a", "b", "c"]);
     expect(dataset.labels).toEqual(["a", "b", "c"]);
+    // `y_keys` is [1, 2] here, so entry 0 is the captioned channel and entry 1
+    // is the uncaptioned one matplotlib suppresses by its leading "_".
+    expect(fig.series_styles?.map((st) => st?.legend)).toEqual(["Measured", "_nolegend_"]);
     expect(fig.overrides?.legend).toEqual({
       show: true,
       loc: "axes",
       anchor: [0.2, 0.3],
       title: "SLD",
     });
+  });
+
+  it("adds no legend field at all when the panel decoded no captions", () => {
+    const fig = buildSpatialPageRequest(
+      [panel()],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    for (const st of fig.series_styles ?? []) expect(st == null || !("legend" in st)).toBe(true);
   });
 
   it("does not invent a legend when the panel has no decoded legend content", () => {

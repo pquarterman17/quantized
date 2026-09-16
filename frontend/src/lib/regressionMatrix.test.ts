@@ -37,15 +37,16 @@
 //                  `calc.plotting.apply_waterfall_offsets`), the `waterfall`
 //                  fixture is a full member of the matrix above, and the pin
 //                  below is the inverted equality.
-//   D3 / BUG-014 rename    — FIXED 2026-09-15. A legend rename replaced the
-//                  whole on-screen label (unit and all) but only
-//                  `dataset.labels[ch]` on the wire, which the backend re-joined
-//                  with the untouched unit, so the exported legend read
-//                  "Loop 1 (au)". The rename now rides its own per-series
-//                  PRESENTATION field (`series_styles[i].legend`, used verbatim
-//                  by `calc.figure_labels.series_display_name`) with the data's
-//                  own label/unit left intact, and the pin below is the
-//                  inverted equality.
+//   D3 / BUG-014 rename    — FIXED 2026-09-15, facet branch 2026-09-16. A
+//                  legend rename replaces the whole on-screen label (unit and
+//                  all) but used to reach the wire as a rewritten
+//                  `dataset.labels[ch]` with the unit still beside it, so the
+//                  exported legend read "Loop 1 (au)". It now rides
+//                  `series_styles[i].legend`, used verbatim; a FACET panel
+//                  (which ships finished strings) composes the same rule
+//                  client-side in `lib/figureSpecFacets.ts` and its screen grid
+//                  feeds `buildOpts` the same renames. The pin below is the
+//                  inverted equality, on both the flat and the facet leg.
 //   D4 / BUG-015 hidden    — FIXED 2026-09-14. Hiding a series used to shift
 //                  every later series' palette colour on the exported figure
 //                  but not on the canvas; `lib/figureSpec.ts` now derives the
@@ -86,6 +87,7 @@ import {
   FIXTURE_COLORS,
   MATRIX_FIXTURES,
   matrixDataset,
+  facetFigure,
   matrixFixture,
   pageFigures,
   pageFixture,
@@ -498,6 +500,27 @@ describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIX
     );
   });
 
+  // BUG-014, FACET branch (review round, 2026-09-16). A facet panel ships a
+  // FINISHED series string, so the rename could not ride `series_styles`
+  // there; it used to be resolved from a request-local relabelled DataStruct
+  // as `${rename} (${unit})` — the bug's exact string — while the facet grid
+  // on screen showed no rename at all. Both legs now apply the one rule.
+  it("BUG-014 (facets): a renamed series reads the SAME text in every facet panel, screen and export", () => {
+    const renamedFacet = facetRenamedFigure();
+    const screen = projectScreen(renamedFacet, dataset).facet;
+    const wire = projectExport(renamedFacet, dataset).facet;
+    expect(screen.panels?.length).toBeGreaterThan(1);
+    // Every panel's first series is the renamed channel, verbatim.
+    expect(screen.panels?.map((p) => p.series[0])).toEqual(
+      screen.panels?.map(() => "Loop 1"),
+    );
+    expect(wire).toEqual(screen);
+    // Non-vacuous: the string the bug shipped appears in neither leg, and the
+    // un-renamed channel beside it still carries its own derived form.
+    expect(JSON.stringify([screen, wire])).not.toContain("Loop 1 (au)");
+    expect(screen.panels?.[0].series[1]).toBe("Reference (au)");
+  });
+
   // BUG-015 (D4), FIXED 2026-09-14 — this is the divergence assertion INVERTED.
   // The canvas keeps a hidden series in its display list with `show:false`, so
   // later series keep their palette POSITION; the export wire drops hidden
@@ -574,6 +597,19 @@ describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIX
     expect(drawn.map((s) => s.dash)).not.toEqual(exportedDashes);
   });
 });
+
+/** The `facet` fixture's binding with the SAME rename on channel 0 — the
+ *  branch that reproduced BUG-014's string until the review round. */
+function facetRenamedFigure(): FigureDocument {
+  const base = facetFigure();
+  return createFigureDocument({
+    id: "facet-rename",
+    name: "facet rename",
+    datasetId: "matrix-ds",
+    view: { ...figureDocumentToPlotView(base), seriesLabels: { 0: "Loop 1" } },
+    facetKey: base.bindings.facetKey,
+  });
+}
 
 /** A one-channel figure whose only series is renamed (BUG-014). */
 function renamedFigure(): FigureDocument {

@@ -3490,7 +3490,7 @@ describe("useApp breakAtGaps (gap #21 last residual)", () => {
   it("clears a prior facet arrangement AND its durable facetKey binding (F4.4 review L1)", () => {
     useApp.setState({
       composition: facetComposition([
-        { label: "x", payload: { data: [[0]], series: [], xLabel: "", xUnit: "" } },
+        { label: "x", payload: { data: [[0]], series: [], xLabel: "", xUnit: "" }, channels: [] },
       ]),
       facetKey: 0, // a real facetByColumn always sets this alongside composition
     });

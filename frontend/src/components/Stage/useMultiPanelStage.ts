@@ -38,7 +38,6 @@ import {
 } from "../../lib/plotDecimate";
 import {
   breakPanelWidths,
-  cellSize,
   facetGridSize,
   panelHeights,
   spatialGridSize,
@@ -64,6 +63,7 @@ import { buildOpts } from "../../lib/uplotOpts";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { Readout } from "../../lib/uplotTools";
 import type { Accent, PlotTool, Theme } from "../../store/useApp";
+import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
 import type { SpatialLegendEntry } from "./SpatialPanelLegend";
 
 /** The focused stage's uPlot cursor-sync group (all its panels crosshair
@@ -72,6 +72,10 @@ import type { SpatialLegendEntry } from "./SpatialPanelLegend";
  *  stays the opt-in item-13 XY feature). */
 export const MULTIPANEL_SYNC_KEY = "qz-multipanel";
 const GRID_GAP = 8;
+/** Stable "no renames" default: a fresh `{}` in the destructuring default
+ *  would be referentially new on every render and re-run the render effect
+ *  (which depends on `seriesLabels`) for nothing. */
+const EMPTY_LABELS: Record<number, string> = {};
 const BREAK_GLYPH_W = 20;
 
 /** The visual seam between adjacent x-break panels: diagonal hash lines via a
@@ -143,6 +147,12 @@ export interface MultiPanelStageParams {
   defaultTrace?: DefaultTrace;
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
+  /** Per-channel legend renames, keyed by dataset channel index (BUG-014).
+   *  Facet-grid mode only — the plain stack mode gives each series its own
+   *  panel title-less single-series plot and never showed a legend rename
+   *  either way. A background window passes nothing (it renders the stack
+   *  mode only), so it defaults to "no renames". */
+  seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
   autoSeriesStyles?: boolean;
   xKey: number | null;
@@ -197,6 +207,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     defaultTrace,
     refLines,
     seriesStyles,
+    seriesLabels = EMPTY_LABELS,
     autoSeriesStyles = false,
     xKey,
     yKeys,
@@ -617,46 +628,30 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       }
       destroyAll();
       host.replaceChildren();
-      const w = host.clientWidth || 600;
-      const h = host.clientHeight || 400;
-      const { cellW, cellH } = cellSize(w, h, facetGrid, GRID_GAP);
-      // Same x-zoom/pan sync idiom as the plain per-channel stack below (one
-      // shared hook instance for the whole panel set — the x axis means the
-      // same thing in every facet panel too).
-      const onSetScale = xZoomSyncHook(() => plotsRef.current);
-      fPanels.forEach((p) => {
-        const div = document.createElement("div");
-        host.appendChild(div);
-        const opts = buildOpts(p.payload, {
-          width: cellW,
-          height: cellH,
-          yScale,
-          xScale,
-          xLim: facetXLim,
-          xFmt,
-          yFmt,
-          showGrid,
-          axisBox: showAxisBox,
-          fontSize,
-          baseLineWidth,
-          defaultTrace,
-          tool,
-          onReadout: setReadout,
-          title: p.label,
-          bg,
-          linearPaths: LINEAR_PATHS,
-          pointsPaths: POINTS_PATHS,
-        });
-        opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
-        opts.hooks = { setScale: [onSetScale] };
-        plotsRef.current.push(new uPlot(opts, p.payload.data, div));
+      const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
+      plotsRef.current = renderFacetGrid(host, {
+        panels: fPanels,
+        // BUG-014: the grid used to pass NO renames at all, so a renamed
+        // series read its derived "label (unit)" in every facet panel while
+        // the flat plot read the rename. `buildOpts` applies these the same
+        // way the flat path does, and `lib/figureSpecFacets.ts` applies the
+        // SAME map on the export side -- so screen and export agree.
+        seriesLabels,
+        grid: facetGrid,
+        gap: GRID_GAP,
+        syncKey,
+        // Same x-zoom/pan sync idiom as the plain per-channel stack below (one
+        // shared hook instance for the whole panel set — the x axis means the
+        // same thing in every facet panel too).
+        onSetScale: xZoomSyncHook(() => plotsRef.current),
+        box,
+        cell: {
+          yScale, xScale, xLim: facetXLim, xFmt, yFmt, showGrid,
+          axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
+          tool, onReadout: setReadout, bg,
+        },
       });
-      const ro = new ResizeObserver(() => {
-        const width = host.clientWidth || w;
-        const height = host.clientHeight || h;
-        const { cellW: cw, cellH: ch } = cellSize(width, height, facetGrid, GRID_GAP);
-        plotsRef.current.forEach((u) => u.setSize({ width: cw, height: ch }));
-      });
+      const ro = new ResizeObserver(() => resizeFacetGrid(host, plotsRef.current, facetGrid, GRID_GAP, box));
       ro.observe(host);
       return () => {
         ro.disconnect();
@@ -753,6 +748,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     defaultTrace,
     refLines,
     styleList,
+    seriesLabels,
     autoSeriesStyles,
     errorBarsList,
     tool,

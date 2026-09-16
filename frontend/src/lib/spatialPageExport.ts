@@ -46,6 +46,7 @@ import {
   secondaryAxisWire,
 } from "./axisspec";
 import { buildExportStyles } from "./exportStyles";
+import { withSeriesLegends } from "./figureSpecSeries";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
@@ -163,17 +164,17 @@ function spatialPanelFigure(
   const y2Set = new Set(y2Axis?.keys ?? []);
   const decodedLabels = panel.seriesLabels ?? {};
   const hasLegend = Object.keys(decodedLabels).length > 0 || !!panel.legendTitle;
-  // Matplotlib suppresses labels beginning with "_". For a partial decoded
-  // Origin legend this preserves ONLY proven entries instead of inventing
-  // captions for the remaining curves. This is a request-local copy.
-  const exportDataset = hasLegend
-    ? {
-        ...dataset,
-        labels: dataset.labels.map((label, ch) =>
-          plotted.includes(ch) ? (decodedLabels[ch] ?? "_nolegend_") : label,
-        ),
-      }
-    : dataset;
+  // BUG-014 review round: a decoded Origin caption is PRESENTATION, so it
+  // rides `series_styles[i].legend` (used verbatim by
+  // `calc.figure_labels.series_display_name`) instead of being written over
+  // `dataset.labels` -- which is the same double-composition BUG-014 fixed on
+  // the single-figure path ("Decoded caption" came back as "Decoded caption
+  // (au)"). The wire dataset now keeps the DATA's own column names, which is
+  // also what this function's own `fallbackYLabel` has always read.
+  // Matplotlib suppresses labels beginning with "_": `_nolegend_` for a
+  // channel the decode did NOT caption preserves ONLY proven entries instead
+  // of inventing captions for the remaining curves.
+  const legends = hasLegend ? plotted.map((ch) => decodedLabels[ch] ?? "_nolegend_") : [];
   // The single-channel Y-label fallback derives from the PRIMARY axis only
   // (mirrors calc.figure._figure_series' own `primary_only` derivation) — a
   // panel with exactly one primary channel plus a y2 overlay must not
@@ -187,7 +188,7 @@ function spatialPanelFigure(
       : dataset.labels[only];
   const minorTicks = panel.xLog || panel.yLog || secondaryAxisIsLog(y2Axis);
   return {
-    dataset: exportDataset,
+    dataset,
     x_key: panel.xKey ?? undefined,
     y_keys: plotted,
     x_log: panel.xLog,
@@ -203,12 +204,14 @@ function spatialPanelFigure(
     // No `positions`: this `plotted` is `spatialPlottedChannels(panel)`, the
     // SAME hidden-filtered list the cell canvas draws from, so plotted order IS
     // display order here (unlike `figureSpec.ts` — BUG-015).
-    series_styles: buildExportStyles(
-      plotted,
-      panel.seriesStyles ?? {},
-      null,
-      appearance?.autoSeriesStyles ?? false,
-    ),
+    // `?? undefined` is a type bridge only: `withSeriesLegends` propagates a
+    // NULL base (a document that omits `series_styles`), and this path's base
+    // is always `buildExportStyles`' array, so the branch is unreachable here.
+    series_styles:
+      withSeriesLegends(
+        buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+        legends,
+      ) ?? undefined,
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
       y2Plotted: y2Axis !== null,
       minorTicks,

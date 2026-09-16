@@ -88,6 +88,11 @@ beforeEach(() => {
     // expecting plain-stack mode gets a resurrected facet grid instead
     // (`MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback).
     facetKey: null,
+    // Same shared-singleton reset reasoning as `facetKey` above: the
+    // BUG-014 facet-rename tests below set `seriesLabels`, and a later test
+    // asserting derived labels must not inherit it (`yKeys` is already reset
+    // above for the same reason).
+    seriesLabels: {},
     showLegend: true,
     showAxisBox: false,
     plotTemplate: "screen",
@@ -137,6 +142,71 @@ describe("MultiPanelStage — mode regressions", () => {
     expect(expected).toBeGreaterThan(0);
     render(<MultiPanelStage />);
     await waitFor(() => expect(created.length).toBe(expected));
+  });
+
+  // BUG-014 (review round), SCREEN half. Before this, the facet branch called
+  // `buildOpts` with NO `seriesLabels` at all, so a renamed channel read its
+  // derived "Signal (au)" in every facet panel while the flat plot beside it
+  // read "Loop 1" -- and the facet EXPORT produced a third string again
+  // ("Loop 1 (au)", BUG-014's own symptom). The export half is pinned in
+  // `lib/figureSpecFacets.test.ts`; this asserts the string the real
+  // `buildOpts` puts on the real uPlot options object.
+  it("a legend rename reaches every facet panel's legend, verbatim", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 100],
+        [1, 200],
+        [2, 300],
+        [2, 400],
+      ],
+      labels: ["batch", "Signal"],
+      units: ["", "au"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: UNITS }],
+      activeId: "d1",
+      yKeys: [1],
+      seriesLabels: { 1: "Loop 1" },
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    const expected = facetPanelsOf(useApp.getState().composition)?.length ?? 0;
+    expect(expected).toBe(2);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(expected));
+    const labels = (created as { opts: { series: { label?: string }[] } }[]).map(
+      (panel) => panel.opts.series[1].label,
+    );
+    expect(labels).toEqual(["Loop 1", "Loop 1"]);
+  });
+
+  it("a facet panel with NO rename still reads its derived 'label (unit)'", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 100],
+        [1, 200],
+        [2, 300],
+        [2, 400],
+      ],
+      labels: ["batch", "Signal"],
+      units: ["", "au"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: UNITS }],
+      activeId: "d1",
+      yKeys: [1],
+      seriesLabels: {},
+    });
+    useApp.getState().facetByColumn("d1", 0);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created.length).toBe(2));
+    const labels = (created as { opts: { series: { label?: string }[] } }[]).map(
+      (panel) => panel.opts.series[1].label,
+    );
+    expect(labels).toEqual(["Signal (au)", "Signal (au)"]);
   });
 
   // FIGURE_AUTHORING_WORKFLOW_PLAN F4.4: `composition` (the immediate render

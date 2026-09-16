@@ -24,6 +24,18 @@ describe("sanitizeExportSeriesStyles", () => {
     expect(out).toEqual([null, null]);
   });
 
+  // BUG-014: `legend` is a presentation value that lives in `view.seriesLabels`
+  // and is re-laid onto every export request. Restoring it here would give a
+  // saved document a SECOND, stale source of legend text that the rename UI
+  // cannot reach. Pinned because three places claim it in prose (the code
+  // comment, the commit body and the BUG-014 entry) and the allowlist would
+  // otherwise drop it only incidentally.
+  it("deliberately does NOT restore a legend from a saved publication style", () => {
+    expect(sanitizeExportSeriesStyles([{ color: "#fff", legend: "X" }])).toEqual([{ color: "#fff" }]);
+    // An entry whose ONLY key is a legend has no valid fields left at all.
+    expect(sanitizeExportSeriesStyles([{ legend: "X" }])).toEqual([null]);
+  });
+
   // ── GAP_PLOTTYPES: Graph Builder "step" mark export parity ──────────────
   it("captures a valid step value", () => {
     for (const step of ["pre", "post", "mid"] as const) {

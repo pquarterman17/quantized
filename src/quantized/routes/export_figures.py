@@ -90,14 +90,19 @@ class FigureRequest(BaseModel):
     # lands on the PRIMARY axis (`buildXY` never assigns `axis: 1` to a
     # grouped series), so combining `group_col` with `y2_keys` is rejected
     # (422) rather than inventing a secondary-axis semantic for it -- see
-    # `_figure_series`. `series_styles` is not applied in this path either
-    # (it's 1:1-with-`y_keys`, which doesn't align with the synthetic
-    # per-level series) -- matplotlib's default color cycle takes over,
-    # exactly like the screen, which never assigns per-level colors either.
+    # `_figure_series`. `series_styles`' STYLE keys are not applied in this
+    # path either (they're 1:1-with-`y_keys`, which doesn't align with the
+    # synthetic per-level series) -- matplotlib's default color cycle takes
+    # over, exactly like the screen, which never assigns per-level colors
+    # either. Its `legend` key IS applied (BUG-014): being a LABEL rather than
+    # a stroke, it replaces the channel-label half of `build_grouped_series`'
+    # `"{label} ({group}={level})"` template, which is byte-for-byte what the
+    # pre-BUG-014 wire produced. See `_figure_series`' own grouped branch.
     group_col: int | None = None
     # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
     # multiples panel per facet-column level, RESOLVED client-side
-    # (`lib/facet.facetPayloads`) rather than a raw column index -- so this
+    # (`lib/facet.facetPayloads`, wrapped by `lib/figureSpecFacets.ts`)
+    # rather than a raw column index -- so this
     # route never re-derives level ordering/binning and can never disagree
     # with what Stage showed on screen. None/absent (default) = today's
     # single-panel behaviour, byte-identical; most other fields on this

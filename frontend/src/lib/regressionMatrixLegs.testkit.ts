@@ -290,7 +290,7 @@ export function projectScreen(figure: FigureDocument, dataset: Dataset): Canonic
     series,
     errors,
     grouping: groupingOf(data, groupCol),
-    facet: facetOf(data, figure.bindings.facetKey, view.xKey, view.yKeys),
+    facet: facetOf(data, figure.bindings.facetKey, view.xKey, view.yKeys, null, view.seriesLabels),
     y2Positions: series.flatMap((s, i) => (s.axis === 1 ? [i] : [])),
     // BUG-012 (fixed): the screen's own paneled-break arrangement, measured
     // from the panel geometry it renders — see `screenXBreaks` above.
