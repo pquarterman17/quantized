@@ -391,7 +391,17 @@ export function projectExportSpec(spec: FigureSpec, figure: FigureDocument): Can
     grouping: groupingOf(ds, spec.group_col ?? null),
     facet: facetOf(ds, figure.bindings.facetKey, view.xKey, view.yKeys, spec.facets ?? null),
     y2Positions: series.flatMap((s, i) => (s.axis === 1 ? [i] : [])),
-    xBreaks: (overrides?.x_breaks ?? []).map((r) => [r[0], r[1]] as [number, number]),
+    // A FACETED figure never draws a broken axis, so this reports none for
+    // one (BUG-012 review NIT 14): `routes/export_figures.py` branches on
+    // `if req.facets:` before the flat renderer is reached at all, and
+    // `calc/figure_facets.render_facets_figure` applies only
+    // `lim_keys=("x_lim",)` of the overrides — `x_breaks` is not in that
+    // subset. `lib/figureSpec.ts` still puts the ranges on the wire (the
+    // document owns them and a later un-facet must not lose them), so reading
+    // the field raw reported a break the renderer never draws and disagreed
+    // with the screen leg's facet-beats-break precedence
+    // (`lib/facet.durableComposition`) on any figure carrying both.
+    xBreaks: spec.facets ? [] : (overrides?.x_breaks ?? []).map((r) => [r[0], r[1]] as [number, number]),
     // BUG-013 (fixed): read straight off the WIRE FIELD — `waterfall_offsets`
     // carries the per-series stagger in Y data units, resolved by
     // `lib/waterfallOffset.ts`; `dataset.values` stay un-shifted on purpose.

@@ -16,6 +16,7 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -613,5 +614,45 @@ describe("WindowCanvas — restored facet with <2 plotted channels mounts the gr
     // Still the single-maximized-window path (never PlotWindowFrame chrome).
     expect(container.querySelector(".qzk-plotwin")).toBeNull();
     expect(container.querySelector(".qzk-stage")).not.toBeNull();
+  });
+});
+
+// BUG-012 review F5. BUG-012 made the FOCUSED window rebuild a paneled break
+// from its document; `BackgroundPlotWindow` kept its own local gate, which
+// had no break clause and only ever built the FACET half of the durable
+// fallback. So a workspace reopened with several break figures drew the break
+// in one window and BUG-012's original symptom -- one continuous line -- in
+// every other one, and which window that was changed as focus moved. Both
+// sides now derive through `lib/facet.durableComposition` and mount through
+// the shared `multiPanelShowing`, so this asserts the UNFOCUSED window panels
+// too. Same harness as the K1 block above.
+describe("WindowCanvas — a reopened break panels in BACKGROUND windows too (BUG-012 review F5)", () => {
+  it("two windows reopened with saved x-breaks: BOTH render one uPlot per segment, stackMode off", async () => {
+    const withBreak = (id: string): PlotWindow => {
+      const w = win({ id, winState: "normal" });
+      return {
+        ...w,
+        document: createFigureDocument({
+          id: `fig-${id}`,
+          name: id,
+          datasetId: "d1",
+          view: w.view,
+          // x = 0,1 | 2,3 (the dataset's `.time`) -> two panels per window.
+          axisBreaks: { x: [[1, 2]] },
+        }),
+      };
+    };
+    useApp.setState({
+      plotWindows: [withBreak("w1"), withBreak("w2")],
+      focusedWindowId: "w1",
+      // Exactly a reopen: no live render cache, and the stack toggle is OFF.
+      composition: null,
+      facetKey: null,
+      stackMode: false,
+    });
+    render(<WindowCanvas />);
+    // 2 panels in the focused window + 2 in the background one. Before the
+    // fix this settled at 3 (the background window drew a single plain plot).
+    await waitFor(() => expect(created.length).toBe(4));
   });
 });

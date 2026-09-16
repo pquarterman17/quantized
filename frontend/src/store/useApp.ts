@@ -50,7 +50,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
+import { clearFocusedXBreaks, rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -101,7 +101,7 @@ import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
-import { breakCompositionFromBreaks, facetPayloads, suggestBreaks } from "../lib/facet";
+import { breakCompositionFromData, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
@@ -1373,7 +1373,7 @@ export const useApp = create<AppState>((set, get) => ({
       toast("no large x-gaps found to break at", "danger");
       return;
     }
-    const composition = breakCompositionFromBreaks(ds, useBreaks, xKey, yKeys);
+    const composition = breakCompositionFromData(data, useBreaks, xKey, yKeys);
     if (compositionPanelCount(composition) < 2) {
       toast("not enough data on both sides of a break to panel", "danger");
       return;
@@ -1904,7 +1904,7 @@ export const useApp = create<AppState>((set, get) => ({
   // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
   // rebuilds it from `facetKey` whenever `composition` is null.
   setStackMode: (stackMode) => (
-    get().recordHistory("change plot layout"), set({ stackMode, composition: null, facetKey: null })
+    get().recordHistory("change plot layout"), set((s) => ({ stackMode, composition: null, facetKey: null, plotWindows: clearFocusedXBreaks(s.plotWindows, s.focusedWindowId) })) // review F3: clears the AUTHORED break too
   ),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).

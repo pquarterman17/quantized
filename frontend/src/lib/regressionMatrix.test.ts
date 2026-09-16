@@ -17,7 +17,9 @@
 // for the wrong reason, and a real fix would flip them to an unexplained
 // "unexpected pass". As written, fixing the bug turns the divergence assertion
 // red and the fix INVERTS it (`.not.toEqual` becomes `.toEqual`, the two
-// pinned values become one) — which is exactly what D1, D2 and D4 below now are.
+// pinned values become one) — which is exactly what D1, D2, D3 and D4 below
+// now are. Keep this list and the "divergences found" describe title in step:
+// the two drifted apart once already (BUG-013's fix updated one, not the other).
 //   D1 / BUG-012 x-breaks  — FIXED 2026-09-14. A document's
 //                  `plot.axisBreaks.x` reached the export wire and survived
 //                  reopen, but nothing on screen rendered it: `PlotView` — the
@@ -35,9 +37,15 @@
 //                  `calc.plotting.apply_waterfall_offsets`), the `waterfall`
 //                  fixture is a full member of the matrix above, and the pin
 //                  below is the inverted equality.
-//   D3 / BUG-014 rename    — a legend rename replaces the whole on-screen label
-//                  (unit and all) but only `dataset.labels[ch]` on the wire, so
-//                  the exported legend reads "Loop 1 (au)".
+//   D3 / BUG-014 rename    — FIXED 2026-09-15. A legend rename replaced the
+//                  whole on-screen label (unit and all) but only
+//                  `dataset.labels[ch]` on the wire, which the backend re-joined
+//                  with the untouched unit, so the exported legend read
+//                  "Loop 1 (au)". The rename now rides its own per-series
+//                  PRESENTATION field (`series_styles[i].legend`, used verbatim
+//                  by `calc.figure_labels.series_display_name`) with the data's
+//                  own label/unit left intact, and the pin below is the
+//                  inverted equality.
 //   D4 / BUG-015 hidden    — FIXED 2026-09-14. Hiding a series used to shift
 //                  every later series' palette colour on the exported figure
 //                  but not on the canvas; `lib/figureSpec.ts` now derives the
@@ -65,6 +73,8 @@ import y2Golden from "./__fixtures__/regressionMatrix/y2.json";
 
 import { buildPageSpecFromDocument } from "../components/workshops/figurepage/panelResolve";
 import { useApp } from "../store/useApp";
+import { breakPanelsOf } from "./composition";
+import { durableComposition } from "./facet";
 import {
   createFigureDocument,
   figureDocumentToPlotView,
@@ -122,7 +132,15 @@ const GOLDENS: Record<MatrixFixtureName, unknown> = {
  *  narrow the export comparison (BUG-013). Both are fixed, so no fixture
  *  carries any narrowing today and every one compares field-for-field like
  *  `plain`; the table stays so a future divergence has one honest place to
- *  be recorded. */
+ *  be recorded.
+ *
+ *  KEPT, NOT DELETED (BUG-012 review NIT 8), because the alternative is that
+ *  the next person to find a divergence has to re-derive both the narrowing
+ *  shape and the rule that the concrete values get pinned separately — the
+ *  thing this table exists to stop being re-litigated. With the table empty
+ *  the `else` branch below is unreachable, so `without()` is exercised
+ *  directly by its own test at the end of this file instead of being dead
+ *  code nothing has ever run. */
 type Leg = "export" | "reopen";
 const DIVERGENT: Partial<Record<MatrixFixtureName, { field: keyof CanonicalFigure; legs: Leg[] }>> = {};
 
@@ -329,7 +347,7 @@ describe("P4.2 regression matrix: multi-panel page", () => {
 //
 // Each test is named for the bug it reproduces, so `plans/BUGS_AND_ISSUES.md`
 // and the suite refer to each other by the same string.
-describe("P4.2 regression matrix: divergences found (D1 and D4 since FIXED, see below)", () => {
+describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIXED, see below)", () => {
   const dataset = matrixDataset();
 
   // BUG-012 (D1, FIXED 2026-09-14). `FigureDocument.plot.axisBreaks.x` is the
@@ -364,6 +382,70 @@ describe("P4.2 regression matrix: divergences found (D1 and D4 since FIXED, see 
     expect(projectScreen(figure, dataset).xBreaks).toEqual(
       projectExport(figure, dataset).xBreaks,
     );
+  });
+
+  /** The `break` fixture with its endpoints moved OFF the sample grid. */
+  const offGridBreakFigure = (): FigureDocument =>
+    createFigureDocument({
+      id: "break-off-grid",
+      name: "break off-grid",
+      datasetId: "matrix-ds",
+      view: figureDocumentToPlotView(matrixFixture("break")),
+      axisBreaks: { x: [[2.2, 2.8]] },
+    });
+
+  // BUG-012 review F2. The committed `break` fixture elides `[2, 3]` — both
+  // endpoints are sample points (x runs 0..5 in steps of 1), which is the ONE
+  // shape in which "the segment's own data extent" and "the break bound"
+  // coincide. Every `suggestBreaks` output has that shape by construction
+  // (`[finite[i], finite[i + 1]]`), so the live `breakAtGaps` gesture never
+  // exposed the difference — but the Figure Builder's breaks panel and a plot
+  // recipe, the only writers of `plot.axisBreaks.x`, do not constrain the
+  // values at all. Measured before the fix: screen elided `(2, 3)` with panel
+  // widths 2 : 2 while the export elided `(2.2, 2.8)` with widths 2.2 : 2.2.
+  it("BUG-012 review F2: a break whose endpoints are NOT data points elides the same range on every leg", () => {
+    const offGrid = offGridBreakFigure();
+    expect(projectExport(offGrid, dataset).xBreaks).toEqual([[2.2, 2.8]]);
+    expect(projectReopen(reopenProject(offGrid, dataset)).xBreaks).toEqual([[2.2, 2.8]]);
+    expect(projectScreen(offGrid, dataset).xBreaks).toEqual([[2.2, 2.8]]);
+
+    // …and the PANEL RANGES themselves, which is the quantity the two legs
+    // actually disagreed on (`xBreaks` only measures the interior pair). This
+    // list IS `calc/figure_break.render_breaks_impl`'s `bounds`: `lo` starts
+    // at the data min (0), each break contributes `(lo, b0)` and sets
+    // `lo = b1`, and the last panel runs to the data max (5). Each exported
+    // panel gets it as `ax.set_xlim(lo, hi)` and is sized by `hi - lo`.
+    const panels = breakPanelsOf(
+      durableComposition(dataset, null, offGrid.plot.axisBreaks.x, null, [0]),
+    );
+    expect(panels?.map((p) => p.xRange)).toEqual([
+      [0, 2.2],
+      [2.8, 5],
+    ]);
+  });
+
+  // BUG-012 review NIT 14. Facet-beats-break was asserted on the screen leg
+  // only (`useEffectiveComposition.test.tsx`'s PRECEDENCE case); that the
+  // EXPORT resolves it the same way lived in prose. No fixture carried both,
+  // so this builds one: `facet`'s own view plus the `break` fixture's ranges.
+  it("BUG-012: facet beats break on the EXPORT leg too, not just on screen", () => {
+    const both = createFigureDocument({
+      id: "facet-and-break",
+      name: "facet+break",
+      datasetId: "matrix-ds",
+      view: figureDocumentToPlotView(matrixFixture("facet")),
+      facetKey: 7,
+      axisBreaks: { x: [[2, 3]] },
+    });
+    expect(projectExport(both, dataset)).toEqual(projectScreen(both, dataset));
+    // Non-vacuous: BOTH legs report a facet grid and NO break, and the wire
+    // still carries the ranges — the facet renderer simply never reads them
+    // (`calc/figure_facets` applies only `lim_keys=("x_lim",)`), which is
+    // exactly why the document may keep them.
+    expect(projectScreen(both, dataset).facet.panels).toHaveLength(2);
+    expect(projectScreen(both, dataset).xBreaks).toEqual([]);
+    expect(projectExport(both, dataset).xBreaks).toEqual([]);
+    expect(buildFigureSpecFromDocument(both, dataset, both.name).overrides?.x_breaks).toEqual([[2, 3]]);
   });
 
   // BUG-013 (D2), FIXED. `composeDisplayPayload` offsets every series by
@@ -511,3 +593,20 @@ function renamedFigure(): FigureDocument {
   });
 }
 
+
+// BUG-012 review NIT 8: `DIVERGENT` is empty today, so the narrowed-equality
+// `else` branch above never runs and `without()` would be code nothing has
+// ever executed — the next person to record a divergence would be the first
+// to find out whether it works. One synthetic entry, exercised directly.
+describe("the DIVERGENT narrowing machinery still works while the table is empty", () => {
+  it("without() drops exactly the named field and leaves the rest identical", () => {
+    const figure = projectScreen(matrixFixture("break"), matrixDataset());
+    const narrowed = without(figure, "xBreaks");
+    expect(figure.xBreaks).toEqual([[2, 3]]);
+    expect("xBreaks" in narrowed).toBe(false);
+    expect(narrowed).toEqual(without({ ...figure, xBreaks: [[9, 9]] }, "xBreaks"));
+    // …and narrowing on a DIFFERENT field still sees the break, so the helper
+    // is not simply dropping everything.
+    expect(without(figure, "waterfallOffset").xBreaks).toEqual([[2, 3]]);
+  });
+});

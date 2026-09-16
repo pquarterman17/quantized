@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-15 (BUG-017 filed; UX-003 filed from the `b749f804` bundle-diet review round)  
+**Updated:** 2026-09-16 (BUG-012 review round closed; BUG-013 review round closed; BUG-017 filed; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -36,7 +36,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
-| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering |
+| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-15** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
@@ -3218,7 +3218,13 @@ argues for keeping it toward the upper end of P2 rather than P3.
 
 - Date: 2026-09-14
 - PR/commit: `fix(stage): BUG-012 …` on `claude/repo-evaluation-l7y7k9`
-  (parent `45f43070`).
+  (parent `b749f804` — the cherry-pick's real parent on this branch; the
+  originally-recorded `45f43070` was stale), followed by
+  `fix(stage): BUG-012 review round …` (2026-09-15, the entry below).
+- Bundle: eager JS 910,263 → 910,547 B against a 920,400 B budget, measured
+  on this branch (`b749f804` → the BUG-012 commit). The commit message's own
+  `919,781 → 920,078` pair was measured on the pre-cherry-pick `45f43070` and
+  does not describe this branch.
 - Code: `lib/facet.ts` (`breakCompositionFromBreaks`, `durableComposition`),
   `components/Stage/useEffectiveComposition.ts` (the durable fallback plus the
   shared `multiPanelShowing` mount predicate),
@@ -3239,7 +3245,14 @@ argues for keeping it toward the upper end of P2 rather than P3.
   `vitest run src/lib src/store src/components/Stage src/architecture.test.ts`
   all green; every new test sabotage-verified (remove the break fallback → the
   hook, DOM and matrix tests all fail; make the live gesture's build drift
-  from the shared builder → only the drift guard fails; drop the break clause
+  from the shared builder → the drift guard fails, **and so do three
+  `store/useApp.test.ts` cases** in the `useApp breakAtGaps (gap #21 last
+  residual)` block — "auto-detects the gap, builds paneled segments, activates
+  the dataset, and turns on stack mode", "honors row exclusion (guard #11) —
+  an excluded row never enters a break panel" and "accepts an explicit breaks
+  override instead of auto-detecting". The original record said "only the
+  drift guard", which the 2026-09-15 review round re-measured as wrong (4
+  failures, not 1); drop the break clause
   from the mount predicate → only the mount test fails; flip the facet/break
   precedence → only the precedence test fails).
 - Owner verification: open — a real reopened figure on screen.
@@ -3254,6 +3267,92 @@ argues for keeping it toward the upper end of P2 rather than P3.
   recipe, the only writers of `plot.axisBreaks.x`. The report's narrative of a
   `breakAtGaps` gesture surviving save/reopen was therefore never reachable;
   everything else in it reproduced exactly.
+
+#### Review round — 2026-09-15
+
+An adversarial review of the fix commit confirmed the derivation and the
+shared-builder claim but found four behaviour defects and one coverage hole
+riding on top, all closed in `fix(stage): BUG-012 review round …`:
+
+- **F2 — screen and export elided DIFFERENT x-ranges** whenever the authored
+  break endpoints were not sample points. `lib/facet.breakPayloads` sized each
+  panel from the segment's own data extent; the export
+  (`calc/figure_break.render_breaks_impl`) sizes it from the BREAK BOUNDS
+  (`bounds`: data min → `b0`, `b1` → next `b0`, … → data max) and sets its
+  `width_ratios` from them. Measured on x = 0..5 with `axisBreaks.x =
+  [[2.2, 2.8]]`: screen panels `[0, 2]` / `[3, 5]` (elides `(2, 3)`, widths
+  2 : 2) vs export `[0, 2.2]` / `[2.8, 5]` (elides `(2.2, 2.8)`, widths
+  2.2 : 2.2). `BreakPanel.xRange` is now `[max(segment lo, data min),
+  min(segment hi, data max)]` — the same list, by construction. A **no-op for
+  every `suggestBreaks` output** (`[finite[i], finite[i + 1]]`, both endpoints
+  data points), so the live `breakAtGaps` gesture's panels are unchanged;
+  pinned by `facet.test.ts`'s "is a NO-OP for suggestBreaks' own output".
+- **F3 — the stack toggle could no longer switch an authored break off.**
+  `setStackMode(false)` cleared `composition` and `facetKey`, but the durable
+  fallback rebuilt the panels from `plot.axisBreaks.x` on the very next
+  render, so the control was inert and silently so. It now also clears the
+  FOCUSED document's `plot.axisBreaks.x` through the declared write chokepoint
+  (`store/windowDocuments.clearFocusedXBreaks` →
+  `withPlotWindowDocument`). A user action deleting a field; the persisted
+  `.dwk` contract for `plot.axisBreaks` is untouched.
+- **F4 — a stale break panelled a DIFFERENT dataset after a plain Library
+  click.** `createPlotWindowDocument` inherited `previous.plot.axisBreaks`
+  verbatim, while `datasetViewDefaults` nulls `facetKey` on a genuine switch
+  precisely because a channel-indexed binding cannot carry across datasets.
+  Measured: window on d1 with `[[2, 3]]`, `setActive("d3")` (unrelated, same
+  x range) → the stage panelled d3 at d1's gap, no gesture, no toggle. The two
+  genuine-dataset-switch rebind sites now pass `resetAxisBreaks`
+  (`focusedRebindPatch`, gated on the same `s.activeId !== id` test its
+  `viewPatch` uses, and `rebindWindow`'s background branch); re-activating the
+  already-active dataset keeps the break, as `breakAtGaps`' own trailing
+  `setActive` requires.
+- **F5 — background windows still drew a reopened break as one line.**
+  `BackgroundPlotWindow` built only the FACET half of the fallback and kept a
+  local `stackMode &&` gate with no break clause, so a workspace reopened with
+  several break figures showed the break in the focused window and BUG-012's
+  original symptom in every other one. It now derives through the shared
+  `durableComposition` and mounts through the shared `multiPanelShowing`.
+- **F1 — the hook's channel wiring was unpinned.** Every BUG-012 test ran
+  against a single-channel dataset with `xKey: null, yKeys: null`, so dropping
+  either from the hook's `durableComposition` call was invisible (measured:
+  both sabotages left the whole BUG-012 test set green). The fixture is now
+  two-channel with `xKey: 0, yKeys: [1, 0]`.
+
+Also closed in the same commit: direct unit coverage for both durable builders
+and the F2 cases in `lib/facet.test.ts` (there was none — they were reached
+only through the Stage hook, the DOM case and the matrix testkit); an
+`architecture.test.ts`-style ratchet, kept in `lib/facet.test.ts`, that
+`breakComposition(` is called from `lib/facet.ts` only (the "ONE construction
+site" invariant was a convention — reintroducing a second identical builder
+left 1236/1236 tests green); a facet+break assertion on the EXPORT leg, which
+needed the matrix's export leg to model `routes/export_figures.py`'s
+`if req.facets:` branch (the wire carries `x_breaks` for a faceted figure but
+`calc/figure_facets` applies only `lim_keys=("x_lim",)`, so reading the field
+raw claimed a break the renderer never draws); `breakAtGaps` computing
+`analysisData(ds)` once instead of twice (via `breakCompositionFromData`); a
+self-test for the now-unreachable `DIVERGENT`/`without()` narrowing machinery,
+which is KEPT rather than deleted so the next divergence has one documented
+place to be recorded; and the matrix header/describe-title drift about which
+divergences are fixed.
+
+**Residuals (measured, deliberately not fixed here):**
+
+- **Row exclusion can drop the SCREEN break while the export keeps it.**
+  `breakCompositionFromBreaks` refuses fewer than two surviving panels —
+  `breakAtGaps`' own refusal, and the right screen behaviour — but
+  `lib/figureSpec.ts:177` emits `overrides.x_breaks` whenever the document
+  carries any, with no equivalent test. Measured: excluding every row above
+  the break collapses the screen to an ordinary plot while an export of the
+  same document still draws a broken axis. Pinned as behaviour (not as a
+  divergence) by `facet.test.ts`'s "honors row exclusion (analysisData)". A
+  real fix belongs on the export side (`figureSpec`/the renderer), not here.
+- **⊞ "snapshot to new window" is a silent no-op for a reopened break
+  figure.** `altModeShowing` is true for any break composition, so
+  `publishLivePlotSnapshot(null)` runs and `snapshotToNewWindow()` returns
+  without a toast. Identical to facet, per-channel stack, polar and stat —
+  none is snapshottable, because the frozen-XY snapshot kind cannot represent
+  a multi-panel canvas — so this is correct for what is on screen; it is only
+  a NEW class of figure reaching it. A fix is a new snapshot kind, not a line.
 
 ---
 

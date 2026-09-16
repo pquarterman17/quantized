@@ -20,7 +20,8 @@
 // x-break render. Breaks are the opposite sharing axis from facets: facet
 // panels are independent row-slices that share ONE x-domain (`sharedXDomain`);
 // break panels are contiguous x-slices of the SAME series that share ONE
-// y-domain (`sharedYDomain`) and each keep their OWN local x-range.
+// y-domain (`sharedYDomain`) and each keep their OWN local x-range (the
+// break bounds clamped to the data extent -- see `BreakPanel.xRange`).
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { sliceRowSidecars } from "./rowSidecars";
@@ -129,10 +130,26 @@ export function suggestBreaks(xs: readonly number[], gapFactor = 4): [number, nu
 
 export interface BreakPanel {
   payload: PlotPayload;
-  /** This panel's OWN local x-domain (min/max of its finite x values within
-   *  the segment) — the per-panel `xLim` `MultiPanelStage` applies, since a
-   *  break panel's whole point is showing only its own x-slice, not the full
-   *  (elided-gap) span. */
+  /** This panel's x-domain — the per-panel `xLim` `MultiPanelStage` applies,
+   *  since a break panel's whole point is showing only its own x-slice, not
+   *  the full (elided-gap) span.
+   *
+   *  It is the panel's BREAK BOUNDS clamped to the data's own finite x extent
+   *  — `[max(segment lo, data min), min(segment hi, data max)]` — which is
+   *  exactly the `bounds` list the export renderer builds
+   *  (`calc/figure_break.render_breaks_impl`: `lo = data min`, then one
+   *  `(lo, b0)` per break with `lo = b1` after it, and a final `(lo, data
+   *  max)`; each panel then does `ax.set_xlim(lo, hi)`). Screen and export
+   *  therefore elide the SAME x-ranges and size their panels the same way.
+   *
+   *  It used to be the segment's own min/max data x instead (BUG-012 review
+   *  F2). That agrees with the bounds only when the authored break endpoints
+   *  are themselves data points — true for every `suggestBreaks` output
+   *  (`[finite[i], finite[i + 1]]`), and therefore for every live
+   *  `breakAtGaps` gesture, but NOT for a break typed into the Figure
+   *  Builder's breaks panel or carried by a plot recipe: an authored
+   *  `[[2.2, 2.8]]` over x = 0..5 elided `(2, 3)` on screen while the export
+   *  elided `(2.2, 2.8)`, with different panel width ratios to match. */
   xRange: [number, number];
 }
 
@@ -154,6 +171,13 @@ export function breakPayloads(
   if (breaks.length === 0) return [];
   const sorted = [...breaks].sort((a, b) => a[0] - b[0]);
   const xs = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  // The data extent the outermost bounds clamp to -- `render_breaks_impl`'s
+  // own `xlo`/`xhi` (the finite min/max of the WHOLE x column, not of any one
+  // segment). Unused when no row has a finite x: every segment is then empty
+  // and drops out below.
+  const finiteAll = xs.filter((v) => Number.isFinite(v));
+  const dataLo = finiteAll.length ? Math.min(...finiteAll) : -Infinity;
+  const dataHi = finiteAll.length ? Math.max(...finiteAll) : Infinity;
   const segments: [number, number][] = [];
   let prevHi = -Infinity;
   for (const [lo, hi] of sorted) {
@@ -176,8 +200,7 @@ export function breakPayloads(
       values: rows.map((r) => data.values[r]),
     };
     const payload = buildColumns(sliced, null, xKey, yChannels);
-    const finiteXs = rows.map((r) => xs[r]);
-    panels.push({ payload, xRange: [Math.min(...finiteXs), Math.max(...finiteXs)] });
+    panels.push({ payload, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)] });
   }
   return panels;
 }
@@ -248,8 +271,26 @@ export function breakCompositionFromBreaks(
   xKey: number | null,
   yKeys: number[] | null,
 ): Composition | null {
-  if (!breaks?.length || !dataset) return null;
-  const panels = breakPayloads(analysisData(dataset) ?? dataset.data, xKey, yKeys, breaks);
+  if (!dataset) return null;
+  return breakCompositionFromData(analysisData(dataset) ?? dataset.data, breaks, xKey, yKeys);
+}
+
+/** `breakCompositionFromBreaks` over a DataStruct that has already been
+ *  resolved to the analysis view — the ONE place `breakComposition` is ever
+ *  called (BUG-012 review NIT 13 ratchets that; `lib/facet.test.ts`'s
+ *  "single construction site" test greps for it). The store's `breakAtGaps`
+ *  action calls this directly because it has already computed
+ *  `analysisData(ds)` for its own gap detection, and re-deriving it inside
+ *  the builder scanned every row a second time (review NIT 17); every other
+ *  caller goes through `breakCompositionFromBreaks` above. */
+export function breakCompositionFromData(
+  data: DataStruct | null | undefined,
+  breaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  if (!breaks?.length || !data) return null;
+  const panels = breakPayloads(data, xKey, yKeys, breaks);
   return panels.length >= 2 ? breakComposition(panels) : null;
 }
 

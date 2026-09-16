@@ -22,12 +22,28 @@ import type { DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
 
+// TWO value channels, and the store below binds `xKey: 0` / `yKeys: [1, 0]`
+// (review F1). The hook's job is to thread BOTH of those into the shared
+// builder; with the single-channel `xKey: null, yKeys: null` fixture this
+// file started from, passing them or dropping them was indistinguishable —
+// sabotaging either wiring left every test here (and the DOM case, and the
+// matrix) green. Channel 0 is the x column (its own distinct value per row,
+// so the PRECEDENCE case below still faces one facet level per row) and
+// `yKeys` is deliberately NON-default and NON-ascending.
+//
 // x = 0,1,2 | 3,4,5 — a break at [2, 3] panels it into two contiguous halves.
 const DATA: DataStruct = {
-  time: [0, 1, 2, 3, 4, 5],
-  values: [[1], [2], [3], [4], [5], [6]],
-  labels: ["y"],
-  units: [""],
+  time: [50, 51, 52, 53, 54, 55], // deliberately NOT the x column: xKey is 0
+  values: [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 4],
+    [4, 5],
+    [5, 6],
+  ],
+  labels: ["x", "y"],
+  units: ["", ""],
   metadata: {},
 };
 
@@ -63,8 +79,8 @@ function reopenedWith(axisBreaks?: { x: [number, number][] }): void {
   useApp.setState({
     datasets: [{ id: "d1", name: "ds1", data: DATA }],
     activeId: "d1",
-    xKey: null,
-    yKeys: null,
+    xKey: 0,
+    yKeys: [1, 0],
     facetKey: null,
     stackMode: false,
     composition: null,
@@ -87,6 +103,12 @@ describe("useEffectiveComposition — the durable x-break fallback (BUG-012)", (
     expect(panels).toHaveLength(2);
     expect(panels?.[0].xRange).toEqual([0, 2]);
     expect(panels?.[1].xRange).toEqual([3, 5]);
+    // Review F1: the view's OWN channel binding is what the panels are built
+    // from — `xKey: 0` (so `x` is the axis the break is expressed in, not
+    // `.time`) and `yKeys: [1, 0]` (a non-default, non-ascending series list).
+    // Drop either from the hook's `durableComposition` call and this fails.
+    expect(panels?.[0].payload.data[0]).toEqual([0, 1, 2]);
+    expect(panels?.[0].payload.series.map((s) => s.label)).toEqual(["y", "x"]);
   });
 
   it("DRIFT GUARD: the fallback's arrangement is identical to the live breakAtGaps gesture's", () => {
@@ -130,6 +152,53 @@ describe("useEffectiveComposition — the durable x-break fallback (BUG-012)", (
     const live = useApp.getState().composition;
     expect(facetPanelsOf(live)).not.toBeNull();
     expect(effective()).toBe(live);
+  });
+});
+
+// BUG-012 review F3/F4: the two gestures that must be able to take an
+// authored break OFF the screen again. Both go through the document (the
+// canonical home the durable fallback reads), not through a second flag:
+// clearing the live `composition` alone is useless now that the fallback
+// rebuilds one from `plot.axisBreaks.x` on the very next render.
+describe("clearing an authored break (review F3/F4)", () => {
+  beforeEach(() => {
+    reopenedWith({ x: BREAKS });
+  });
+
+  it("F3: the stack toggle OFF returns a broken-axis figure to a plain XY plot", () => {
+    expect(breakPanelsOf(effective())).toHaveLength(2);
+    useApp.getState().setStackMode(false);
+    expect(effective()).toBeNull();
+    expect(useApp.getState().plotWindows[0].document?.plot.axisBreaks.x).toEqual([]);
+  });
+
+  it("F3: the toggle clears the FOCUSED window's break only", () => {
+    const other = { ...plotWindow({ x: BREAKS }), id: "w2" };
+    useApp.setState({ plotWindows: [...useApp.getState().plotWindows, other] });
+    useApp.getState().setStackMode(false);
+    const [focused, background] = useApp.getState().plotWindows;
+    expect(focused.document?.plot.axisBreaks.x).toEqual([]);
+    expect(background.document?.plot.axisBreaks.x).toEqual(BREAKS);
+  });
+
+  it("F4: a genuine dataset switch drops the break instead of panelling the new dataset at the old one's gap", () => {
+    // d3 is unrelated but shares the x range, so the `< 2 panels` refusal
+    // would NOT have saved it: before this, the stage panelled d3 at d1's gap
+    // with no gesture and no toggle.
+    useApp.setState({
+      datasets: [...useApp.getState().datasets, { id: "d3", name: "ds3", data: DATA }],
+    });
+    useApp.getState().setActive("d3");
+    expect(useApp.getState().plotWindows[0].document?.plot.axisBreaks.x).toEqual([]);
+    expect(effective()).toBeNull();
+  });
+
+  it("F4: re-activating the dataset the window is ALREADY on keeps the break", () => {
+    // `breakAtGaps`/`facetByColumn` end with exactly this call, and a plain
+    // Library click on the active row is the same gesture.
+    useApp.getState().setActive("d1");
+    expect(useApp.getState().plotWindows[0].document?.plot.axisBreaks.x).toEqual(BREAKS);
+    expect(breakPanelsOf(effective())).toHaveLength(2);
   });
 });
 

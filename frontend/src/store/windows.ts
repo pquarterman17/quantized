@@ -165,7 +165,7 @@ export function focusedRebindPatch(s: AppState, id: string): Partial<AppState> {
     // decision #4).
     plotWindows: s.plotWindows.map((w) =>
       w.id === s.focusedWindowId
-        ? syncPlotWindow(w, nextView, { datasetId: id, errors: ds?.errorRoles, resetErrors: true })
+        ? syncPlotWindow(w, nextView, { datasetId: id, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: s.activeId !== id }) // resetAxisBreaks (review F4, windowDocuments.ts): same genuine-switch test `viewPatch` uses
         : w,
     ),
     // setActive IS the plot-intent primitive (item 15's DatasetRow "Plot
@@ -494,7 +494,7 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
         set((st) => ({
           plotWindows: st.plotWindows.map((w) =>
             w.id === windowId
-              ? syncPlotWindow(w, reboundView, { datasetId, errors: ds?.errorRoles, resetErrors: true })
+              ? syncPlotWindow(w, reboundView, { datasetId, errors: ds?.errorRoles, resetErrors: true, resetAxisBreaks: true }) // this branch always applies datasetViewDefaults wholesale, so review F4's reset is unconditional
               : w,
           ),
           techniqueViewMemory: memory,
