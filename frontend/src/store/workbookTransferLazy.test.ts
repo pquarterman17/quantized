@@ -179,7 +179,7 @@ describe("Copy workbook — the clipboard write keeps the user gesture", () => {
   /** jsdom ships no ClipboardItem; this one just remembers its values so the
    *  `write` stub can read them the way a real browser reads a promise value. */
   class FakeClipboardItem {
-    constructor(public readonly items: Record<string, Promise<string> | string>) {}
+    constructor(public readonly items: Record<string, Promise<Blob | string> | Blob | string>) {}
   }
 
   const setClipboard = (value: unknown): void => {
@@ -205,7 +205,7 @@ describe("Copy workbook — the clipboard write keeps the user gesture", () => {
       return await vi.importActual<typeof import("../lib/workbookTransfer")>("../lib/workbookTransfer");
     });
 
-    const values: (Promise<string> | string)[] = [];
+    const values: (Promise<Blob | string> | Blob | string)[] = [];
     const write = vi.fn(async (items: FakeClipboardItem[]) => {
       for (const item of items) values.push(...Object.values(item.items));
       for (const value of values) await value;
@@ -227,7 +227,13 @@ describe("Copy workbook — the clipboard write keeps the user gesture", () => {
     await copying;
 
     expect(coreResolved).toBe(true);
-    expect(JSON.parse(String(await values[0]))).toMatchObject({ workbook: { name: "run1" } });
+    // `copyTextAsync` hands ClipboardItem a text/plain Blob, not a bare string
+    // (2026-09-15 review round 2, finding 3) — Blob is the value shape every
+    // engine with ClipboardItem accepts, and the string shape is the one an
+    // engine may refuse, sending Copy into its gesture-losing fallback.
+    const written = await values[0];
+    expect(written).toBeInstanceOf(Blob);
+    expect(JSON.parse(await (written as Blob).text())).toMatchObject({ workbook: { name: "run1" } });
     expect(useApp.getState().status).toBe('copied "run1" (1 worksheet)');
     expect(dangerToasts()).toEqual([]);
   });

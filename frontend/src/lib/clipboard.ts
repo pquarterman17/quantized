@@ -131,6 +131,16 @@ export async function copyImageAsync(pending: Promise<Blob | null>, signal?: Abo
  *  tests exactly `navigator.clipboard.write` + `ClipboardItem`, which is the
  *  same pair a promise-valued TEXT write needs.
  *
+ *  The value handed to `ClipboardItem` is a `Promise<Blob>`, not the bare
+ *  `Promise<string>` (2026-09-15 review round 2, finding 3). The spec allows
+ *  `DOMString or Blob`, but Blob is the shape every engine that has
+ *  `ClipboardItem` at all has accepted since it shipped, and it is what
+ *  `copyImage`/`copyImageAsync`/`copySvgAsync` above already pass. On an
+ *  engine that refuses the string shape the `catch` below would drop into the
+ *  gesture-losing fallback and this function would silently no-op its whole
+ *  reason for existing; wrapping costs one synchronous `.then` registration
+ *  and changes no timing (the write still starts in the caller's task).
+ *
  *  Fallback — an engine with no `ClipboardItem`, or one that refuses a promise
  *  value — awaits the text and calls `copyText`. That path RE-OPENS the very
  *  window this function exists to close (the gesture can be spent before the
@@ -138,8 +148,15 @@ export async function copyImageAsync(pending: Promise<Blob | null>, signal?: Abo
  *  gesture", not to "never copies". Resolves false if both routes fail. */
 export async function copyTextAsync(pending: Promise<string>): Promise<boolean> {
   if (clipboardImageSupported()) {
+    const asBlob = pending.then((text) => new Blob([text], { type: "text/plain" }));
+    // An engine whose write() resolves WITHOUT reading the value promise never
+    // attaches a handler to it, so a build failure would land as an unhandled
+    // rejection while the caller's own `await build` still reports the real
+    // reason (measured 2026-09-15, review round 2 finding 2). Same guard
+    // `copyImageAsync` uses above.
+    asBlob.catch(() => {});
     try {
-      await navigator.clipboard.write([new ClipboardItem({ "text/plain": pending })]);
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": asBlob })]);
       return true;
     } catch {
       /* promise-valued ClipboardItem unsupported, or the text never built */

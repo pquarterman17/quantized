@@ -179,7 +179,7 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
   /** Capture the process-level unhandled rejection a handler throw must still
    *  produce. Vitest's own listener is stood down for the duration and put
    *  back afterwards, so an expected rejection cannot fail the run. */
-  async function unhandledRejectionFrom(run: () => void): Promise<unknown> {
+  async function unhandledRejectionFrom(run: () => void, settled: () => boolean = () => false): Promise<unknown> {
     const prior = process.listeners("unhandledRejection");
     process.removeAllListeners("unhandledRejection");
     let captured: unknown;
@@ -190,8 +190,19 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
     try {
       run();
       // Node decides a rejection is unhandled once the microtask queue has
-      // drained, i.e. no earlier than the next macrotask turn.
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // drained, i.e. no earlier than the next macrotask turn — so one 50 ms
+      // turn is the FLOOR here, never the budget. `run()` must also resolve
+      // the seam's own dynamic `import()` first, and under a loaded parallel
+      // gate that alone can outlast a fixed 50 ms: measured 2026-09-15, both
+      // specs in this block failed once inside the scoped gate and passed in
+      // isolation, and shrinking this wait to 0 ms reproduces exactly that
+      // pair of failures on demand. Poll on the OUTCOME instead, keeping the
+      // 50 ms turn as the minimum so the "no rejection" case still gets a
+      // real settle window rather than an early exit.
+      const deadline = Date.now() + 5_000;
+      do {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } while (captured === undefined && !settled() && Date.now() < deadline);
       return captured;
     } finally {
       process.off("unhandledRejection", capture);
@@ -217,7 +228,14 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
       throw new Error("network error");
     });
 
-    expect(await unhandledRejectionFrom(() => findCommand("transpose").run())).toBeUndefined();
+    // The toast is this case's positive signal — waiting on it is what makes
+    // the `toBeUndefined()` an assertion about a SETTLED seam rather than
+    // about one that has not finished loading yet.
+    const reason = await unhandledRejectionFrom(
+      () => findCommand("transpose").run(),
+      () => dangerToasts().length > 0,
+    );
+    expect(reason).toBeUndefined();
     expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true);
   });
 });

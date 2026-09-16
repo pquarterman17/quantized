@@ -2277,10 +2277,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  type` mentioned inside a COMMENT started a match that ate forward to the
    *  next real `from "…"` and deleted a genuine value import. Measured: a
    *  `// we deliberately keep an import type here` line above a real static
-   *  import blinded the guard completely. The `[^:]` guard keeps `https://…`
-   *  inside a string from being mistaken for a line comment. */
+   *  import blinded the guard completely.
+   *
+   *  ONE left-to-right pass, string/template literals matched first and put
+   *  back verbatim, so whichever of `//`, `/*` or a quote comes first at a
+   *  given index wins (2026-09-15 review round 2, finding 1). The previous
+   *  two-pass form ran the BLOCK pass first, so a `//` line comment that
+   *  merely mentioned `/*` — this repo's headers are full of them, citing
+   *  paths like `lib/api/*` and `commands/*.ts` — opened a fake block comment
+   *  that ate forward to the next `*\/` and deleted every import in between.
+   *  Measured on this tree: 32 shipped modules / 56 distinct static import
+   *  specifiers invisible (including all five of `appCommands.ts`'s
+   *  `./commands/*` edges), and the eager walk below reported 378 modules
+   *  where the truth is 399. With this form the corpus has 0 false negatives
+   *  against `es-module-lexer` ground truth. Keeping the literals means the
+   *  scan never mistakes a `//` inside `"https://…"` for a comment, which is
+   *  what the old `[^:]` lookbehind-substitute was for. */
   const stripComments = (src: string): string =>
-    src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+    src.replace(
+      /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+      (_m, str: string | undefined) => str ?? "",
+    );
 
   /** Drop `import type … from "…"` / `export type … from "…"` clauses, which
    *  carry no runtime edge, so only VALUE imports are searched. Anchored to a
@@ -2295,7 +2312,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  import has no `from`, yet folds the module into the importer's chunk just
    *  the same, so the old `from`-only scan let `import "./workbookTransfer";`
    *  through). Dynamic `import("…")` is `import(`, never `import "`, so it is
-   *  correctly not matched here. */
+   *  correctly not matched here.
+   *
+   *  Two measured residual OVER-reports, both fail-safe (they can only add a
+   *  phantom edge, never hide a real one, so the guards below stay sound):
+   *  an import-looking string inside a TEMPLATE literal is counted (literals
+   *  are preserved verbatim by `stripComments`, by design — measured
+   *  `["./realA", "./fake", "./realB"]`), and an `import type` clause that is
+   *  not the first thing on its line is counted as a value import (measured
+   *  `import { b } from "x"; import type { A } from "y";` -> `["x", "y"]`;
+   *  the reverse order is handled correctly by the line anchor). Neither
+   *  fires anywhere on the current tree. */
   const staticSpecifiers = (src: string): string[] => {
     const v = valueImportsOnly(src);
     return [
@@ -2362,6 +2389,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     expect(staticSpecifiers(withCommentedOutClause)).toEqual(["../lib/workbookTransfer"]);
   });
 
+  it("is not blinded by a line comment that merely contains a block-comment opener", () => {
+    // The round-2 regression: with the block pass running first, this `//`
+    // line opened a fake block comment that ran to the next `*/` — i.e. to the
+    // end of the doc comment BELOW the import — and swallowed the import.
+    // This shape is everywhere in the repo's headers (`lib/api/*`,
+    // `commands/*.ts`, `/api/baseline/*`), which is why it was live on 32
+    // shipped modules and not latent like the two cases above.
+    const src = '// the loaders live in commands/*.ts\nimport { registerFileCommands } from "./commands/fileCommands";\n/** and then a doc comment closes the fake block */\n';
+    expect(staticSpecifiers(src)).toEqual(["./commands/fileCommands"]);
+    // …and a `//` inside a string is still not a comment.
+    expect(staticSpecifiers('const u = "https://example.com/x";\nimport { a } from "./realA";\n')).toEqual(["./realA"]);
+  });
+
   it("sees a bare side-effect import, and still ignores a real type-only one", () => {
     expect(staticSpecifiers('import "./workbookTransfer";\n')).toEqual(["./workbookTransfer"]);
     expect(staticSpecifiers('import type { TransferIdGenerators } from "../lib/workbookTransfer";\n')).toEqual([]);
@@ -2411,13 +2451,49 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
     const eager = eagerlyReachable();
     // Vacuity guard: a walk that stalls at the entry would pass everything.
-    // Measured 2026-09-15 on this tree: 377 of 898 source modules are eager.
+    // Measured 2026-09-15 on this tree: 399 of 900 source modules are eager.
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(
       [...SEAMS.map((s) => s.module), ...DRAGGED_OUT].filter((m) => eager.has(m)),
       "these ship inside a lazy seam's chunk; a static import from an eagerly reachable module folds them back into the entry chunk",
     ).toEqual([]);
+  });
+
+  /** The regression test the round-2 review asked for. A scanner whose
+   *  failures are CORPUS-shaped cannot be protected by synthetic sources
+   *  alone: every one of this block's synthetic assertions passed while the
+   *  two-pass stripper was silently deleting 56 real import edges. These
+   *  anchors are modules the walk provably reaches only if comment stripping
+   *  survives this repo's actual file headers — `appCommands.ts` opens with a
+   *  `//` line citing `commands/*.ts`, and the `lib/api/*.ts` modules open
+   *  with one citing a glob path of their own (`lib/api/*` in `http.ts`,
+   *  `/api/baseline/*` in `baseline.ts`, …). If the walk stops seeing them,
+   *  the two guards above go quiet on the whole command and api layers. */
+  it("the eager walk reaches the command and api layers (corpus anchor for the comment stripper)", () => {
+    const eager = eagerlyReachable();
+    const anchors = [
+      "/appCommands.ts",
+      "/commands/fileCommands.ts",
+      "/commands/dataCommands.ts",
+      "/commands/plotCommands.ts",
+      "/commands/uiCommands.ts",
+      "/commands/analysisCommands.ts",
+      "/lib/api.ts",
+      "/lib/api/http.ts",
+    ];
+    expect(
+      anchors.filter((a) => !eager.has(a)),
+      "these are eagerly reachable from main.tsx in the real graph; if the walk cannot see them the import scanner is being blinded by a comment",
+    ).toEqual([]);
+    // `appCommands.ts` statically imports all five command registries. A
+    // stripper that eats its header comment reports zero.
+    const appCommands = sources().find(([p]) => p.endsWith("/appCommands.ts"));
+    expect(appCommands, "src/appCommands.ts not found").toBeDefined();
+    expect(
+      staticSpecifiers(appCommands?.[1] ?? "").filter((s) => s.startsWith("./commands/")).length,
+      "appCommands.ts registers five command modules; a blinded scanner sees none of them",
+    ).toBeGreaterThanOrEqual(5);
   });
 
   it("each loader reaches its seam through a dynamic import()", () => {

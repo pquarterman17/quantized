@@ -91,11 +91,17 @@ export function runLazy<M>(label: string, load: () => Promise<M>): Promise<M> {
  *  trailing `.catch(() => {})`. A trailing `.catch` sits after `.then`, so it
  *  also swallows whatever the LOADED HANDLER throws — measured 2026-09-15 on
  *  the transpose seam: a handler that threw produced no toast, no status and
- *  no console error, where before the body moved behind an `import()` the same
- *  throw propagated out of `run()` as a loud React event-handler error. With
- *  the two-argument form a handler throw reaches neither this function nor
- *  `runLazy`'s catch; it surfaces as an unhandled rejection, exactly as it did
- *  before. */
+ *  no console error. With the two-argument form that throw reaches neither
+ *  this function nor `runLazy`'s catch, and surfaces as an unhandled
+ *  rejection — CONSOLE ONLY: `runAction` (`store/commands.ts`) never wraps
+ *  these (each seam's `run` is `() => void runLazy(…)`, so `result` is not
+ *  thenable) and `frontend/src` installs no `unhandledrejection` listener, so
+ *  no toast, no status, no `pendingOps` entry. Scoped 2026-09-15 (review
+ *  round 2, finding 4): that restores what 6 of the 7 seams did before
+ *  lazification — the five exports and Page setup already rejected
+ *  asynchronously — but the reshape seam (`dataCommands.ts`) threw
+ *  SYNCHRONOUSLY out of `run()` as a loud React event-handler error, louder
+ *  than this. Making it loud again is UX-003's call, not this helper's. */
 export const onLoadFailure = (): void => {
   /* runLazy already toasted the load failure */
 };
