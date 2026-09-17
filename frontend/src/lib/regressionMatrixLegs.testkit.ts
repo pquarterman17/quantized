@@ -271,14 +271,14 @@ export function projectScreen(figure: FigureDocument, dataset: Dataset): Canonic
         : String(s.label ?? ""),
       unit: display.series[p]?.unit ?? "",
       axis: s.scale === "y2" ? 1 : 0,
-      color: comparableStyle ? String(s.stroke ?? "") : null,
-      width: comparableStyle ? (s.width ?? null) : null,
-      dash: comparableStyle ? (s.dash ? [...s.dash] : null) : null,
-      marker: comparableStyle && shownMarker
+      color: comparableStyle.color ? String(s.stroke ?? "") : null,
+      width: comparableStyle.shape ? (s.width ?? null) : null,
+      dash: comparableStyle.shape ? (s.dash ? [...s.dash] : null) : null,
+      marker: comparableStyle.shape && shownMarker
         ? { shape: markerDecision(style, "Line").shape, size: points?.size ?? 5 }
         : null,
-      step: comparableStyle ? stepOf(s.paths) : null,
-      fill: comparableStyle && s.fillTo === 0 ? "under" : null,
+      step: comparableStyle.shape ? stepOf(s.paths) : null,
+      fill: comparableStyle.shape && s.fillTo === 0 ? "under" : null,
     });
     errors.push(allErrors[p] ?? []);
   }
@@ -347,14 +347,14 @@ export function projectExportSpec(spec: FigureSpec, figure: FigureDocument): Can
       label: st?.legend ?? displayLabel(ds.labels, ds.units, ch),
       unit: ds.units[ch] ?? "",
       axis: y2.has(ch) ? 1 : 0,
-      color: comparableStyle ? (st?.color ?? "") : null,
-      width: comparableStyle ? (st?.width ?? null) : null,
-      dash: comparableStyle ? dashOf(st?.line === "none" ? undefined : st?.line) : null,
-      marker: comparableStyle && st?.marker
+      color: comparableStyle.color ? (st?.color ?? "") : null,
+      width: comparableStyle.shape ? (st?.width ?? null) : null,
+      dash: comparableStyle.shape ? dashOf(st?.line === "none" ? undefined : st?.line) : null,
+      marker: comparableStyle.shape && st?.marker
         ? { shape: st.marker_shape ?? "circle", size: st.marker_size ?? 5 }
         : null,
-      step: comparableStyle ? (st?.step ?? null) : null,
-      fill: comparableStyle ? fillWire(st?.fill) : null,
+      step: comparableStyle.shape ? (st?.step ?? null) : null,
+      fill: comparableStyle.shape ? fillWire(st?.fill) : null,
     };
   });
 

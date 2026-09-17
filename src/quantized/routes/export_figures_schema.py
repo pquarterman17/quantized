@@ -57,7 +57,13 @@ SERIES_STYLES_DOC = (
     "appended to it a second time. An entry is a loose dict (never a strict "
     "pydantic sub-model): a bad or unrecognized value in ANY key degrades "
     "gracefully -- dropped, or rendered with matplotlib's default -- rather "
-    "than 422ing the whole export."
+    "than 422ing the whole export. Under `group_col` (BUG-016) each entry is "
+    "expanded onto the synthetic per-level series its channel produces, so "
+    "every level of a grouped channel draws with that channel's style, "
+    "exactly as the canvas draws it; `color_by`/`colormap` are dropped and a "
+    "`fill` reference is re-indexed there (see `calc.figure_group_styles`), "
+    "and a client that wants the levels to keep cycling colours omits `color` "
+    "rather than sending the channel's own palette slot."
 )
 
 WATERFALL_OFFSETS_DOC = (
@@ -72,8 +78,9 @@ WATERFALL_OFFSETS_DOC = (
     "fetched. `dataset` keeps the true, un-shifted values; None/absent renders "
     "exactly as it did before the field existed. UNUSED on the `group_col` "
     "branch (the per-level series it synthesizes do not align 1:1 with "
-    "`y_keys`, the same reason `series_styles`' style keys are unapplied "
-    "there -- its `legend` key is the one exception, BUG-014) and on the "
+    "`y_keys`, so a single offset per channel cannot say how far to stagger "
+    "each level -- unlike `series_styles`, which every level of a channel "
+    "shares and which IS expanded there, BUG-016) and on the "
     "`facets` branch (which renders from its own panel payloads); the client "
     "omits it for both rather than sending an offset the renderer would "
     "mis-apply. See `calc.plotting.apply_waterfall_offsets`."

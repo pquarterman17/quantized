@@ -276,11 +276,11 @@ function buildFigureSpecForView(
   });
 
   // The legend overrides, aligned 1:1 with `plotted` (= the wire's `y_keys`)
-  // like every other per-series list here. `undefined` = not renamed, which is
-  // every channel of every figure that predates BUG-014.
+  // like every other per-series list here; `undefined` = not renamed (BUG-014).
+  // The trailing `groupCol !== null` is BUG-016 — see `resolveSeriesPresentation`.
   const legends = plotted.map((ch) => st.seriesLabels[ch]);
   const seriesPresentation = resolveSeriesPresentation(
-    plotted, st.seriesStyles, positions, seriesCycle === true, legends, extras.publicationSeriesStyles,
+    plotted, st.seriesStyles, positions, seriesCycle === true, legends, extras.publicationSeriesStyles, groupCol !== null,
   );
 
   return {

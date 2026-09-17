@@ -130,7 +130,9 @@ export interface SeriesCycleDecision {
  * uncycled, which is what keeps a persisted `publication.seriesStyles` array the
  * user's RAW styles and makes a document authored with the preference on reopen
  * identically with it off. And `overlayExportsSeriesStyles` refuses the views
- * this route cannot style series-by-series anyway (`group_col` and `facets` are
+ * whose display positions this channel-aligned list cannot address (`group_col`
+ * expands each entry onto per-LEVEL series -- they inherit the channel's style
+ * since BUG-016, but a per-POSITION dash cycle has nowhere to ride; `facets` is
  * documented as ignoring `series_styles` in `routes/export_figures.py`;
  * `stackMode` is the screen-only panel split that this single-figure request
  * does not reproduce) — the SAME predicate `PlotStage.tsx` gates its canvas on,
@@ -246,7 +248,15 @@ export function seriesDisplayLabel(label: string, unit: string, legend: string |
  *  `undefined` derives them from the view, `null` omits styles entirely, and
  *  an array is sent verbatim (deep-copied — the document must not observe the
  *  legend overlay). `null` still yields a list when something WAS renamed: see
- *  `withSeriesLegends`. */
+ *  `withSeriesLegends`.
+ *
+ *  `grouped` (BUG-016) forwards "this request carries `group_col`" to
+ *  `buildExportStyles`, whose own doc carries the rule — a grouped request
+ *  sends no palette-derived colour, because the backend expands each entry onto
+ *  one series per LEVEL and the palette slot belongs to the level, not the
+ *  channel. It reaches only the DERIVED branch: a document's pinned
+ *  `publication` array is that document's final word on every field and ships
+ *  verbatim on every mode, as it did before. */
 export function resolveSeriesPresentation(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
@@ -254,10 +264,11 @@ export function resolveSeriesPresentation(
   cycle: boolean,
   legends: readonly (string | undefined)[],
   publication: (ExportSeriesStyle | null)[] | null | undefined,
+  grouped = false,
 ): (ExportSeriesStyle | null)[] | null {
   const base =
     publication === undefined
-      ? buildExportStyles(plotted, seriesStyles, positions, cycle)
+      ? buildExportStyles(plotted, seriesStyles, positions, cycle, grouped)
       : publication === null
         ? null
         : structuredClone(publication);

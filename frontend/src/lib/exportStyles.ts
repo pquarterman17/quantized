@@ -29,12 +29,30 @@ export type { ExportSeriesStyle } from "./publicationStyles";
  *  is cycling the same series at the same positions. It rides the SAME
  *  positions, so screen and PDF cannot disagree about which slot a series is
  *  in; `false` (the default) is byte-identical to what this function did
- *  before the cycle existed. */
+ *  before the cycle existed.
+ *
+ *  `grouped` (BUG-016) says this request carries `group_col`, so the backend
+ *  will expand every entry of this list onto one synthetic series PER LEVEL of
+ *  the group column (`calc.figure_group_styles`). Every other key survives that
+ *  expansion unchanged, because the canvas hands each level the SAME channel
+ *  style object (`Stage/usePlotPayload.ts`'s `styleList` over
+ *  `plotGroupSplit.groupSplitChannelMap`) -- but a PALETTE colour does not, and
+ *  that is the whole reason for this flag. `seriesColor` returns an explicit
+ *  `style.color` at every position and otherwise the palette slot at the
+ *  series' OWN display position, and a grouped canvas' display positions are
+ *  per-LEVEL: measured, a channel with no colour draws its three levels
+ *  `--series-1`, `--series-2`, `--series-3`. One channel-aligned entry cannot
+ *  say that, so a palette-derived colour is OMITTED rather than sent -- sending
+ *  it would paint every level the channel's one slot, which is neither what the
+ *  canvas draws nor what the pre-BUG-016 export did. With no `color` key
+ *  matplotlib's own cycle colours the levels, exactly as before. An EXPLICIT
+ *  colour IS still sent: the canvas gives that one to every level too. */
 export function buildExportStyles(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
   positions: readonly number[] | null = null,
   cycle = false,
+  grouped = false,
 ): (ExportSeriesStyle | null)[] {
   const pos: readonly number[] = positions ?? plotted.map((_ch, i) => i);
   return plotted.map((ch, i) => {
@@ -52,7 +70,10 @@ export function buildExportStyles(
     // instead of `seriesColor(undefined)` indexing SERIES_VARS[NaN] and
     // painting every such series the hardcoded fallback. Defensive only: the
     // one non-null producer builds it with `plotted.length` entries.
-    const hex = resolveToHex(seriesColor(pos[i] ?? i, st)); // palette-by-position or override
+    // BUG-016: a grouped request sends only an EXPLICIT colour (see `grouped`
+    // above) -- `seriesColor`'s palette fallback is position-derived and this
+    // list's positions are channels, not the levels the renderer draws.
+    const hex = grouped && !st?.color ? null : resolveToHex(seriesColor(pos[i] ?? i, st));
     if (hex) spec.color = hex;
     if (st?.width != null) spec.width = st.width;
     if (st?.line) spec.line = st.line;

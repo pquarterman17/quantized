@@ -593,3 +593,150 @@ def test_a_grouped_export_folds_the_rename_into_its_per_level_labels() -> None:
         "Loop 1 (Series C=0) (au)",
         "Loop 1 (Series C=1) (au)",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Grouped per-series styling (BUG-016)
+#
+# The ``group_col`` branch expands every plotted channel into one synthetic
+# series per group level, and the CANVAS hands each of those levels the
+# channel's one style object (``Stage/usePlotPayload.ts``'s ``styleList`` over
+# ``plotGroupSplit.groupSplitChannelMap`` -> ``lib/uplotOpts.buildOpts``).
+# Until BUG-016 the branch dropped ``series_styles`` outright, so a figure the
+# user styled red/dashed/3px on screen exported solid, default-width and in
+# matplotlib's default cycle. A wire-level assertion could not see that (the
+# spec carried the style the renderer ignored), which is how it survived -- so
+# these read the RENDERED artists out of the SVG, like the rest of this file.
+# ---------------------------------------------------------------------------
+
+_GROUP_LEVELS = 3
+
+# The drawn line of a DASHED series: matplotlib writes the dash pattern, the
+# stroke and the width into one `style="..."` attribute, in this order. The
+# width group is optional because matplotlib omits `stroke-width` at SVG's own
+# default of 1 -- every width asserted below is deliberately something else.
+_STYLED_LINE_RE = re.compile(
+    r'style="fill: none; stroke-dasharray: ([\d.,]+); stroke-dashoffset: 0; '
+    r'stroke: (#[0-9a-f]{6})(?:; stroke-width: ([\d.]+))?"'
+)
+# An UNDASHED data line. The trailing `stroke-linecap` is what separates these
+# from the axes spines (which carry a `stroke-linejoin` first) and the grid
+# lines (a `stroke-opacity`), so this matches only the curves.
+_PLAIN_LINE_RE = re.compile(
+    r'style="fill: none; stroke: (#[0-9a-f]{6}); stroke-width: ([\d.]+); stroke-linecap: square"'
+)
+# matplotlib's square marker glyph: four straight corners. The DEFAULT marker
+# is a circle, whose path is cubic Beziers ("C ..."), so this distinguishes
+# "the requested shape reached the renderer" from "a marker was drawn".
+_SQUARE_GLYPH = "M -2.5 2.5 L 2.5 2.5 L 2.5 -2.5 L -2.5 -2.5 z"
+
+
+def _grouped_dataset() -> dict[str, Any]:
+    """Two value channels plus a 3-level group column, two rows per level."""
+    return {
+        "time": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+        "values": [
+            [1.0, 7.0, 0.0],
+            [2.0, 8.0, 0.0],
+            [3.0, 9.0, 1.0],
+            [4.0, 10.0, 1.0],
+            [5.0, 11.0, 2.0],
+            [6.0, 12.0, 2.0],
+        ],
+        "labels": ["Value", "Other", "Group"],
+        "units": ["V", "V", ""],
+        "metadata": {},
+    }
+
+
+def _grouped_plot_area(**extra: Any) -> str:
+    """The rendered ``axes_1`` subtree MINUS its legend: matplotlib draws a
+    second copy of every series' style as that series' legend handle, so the
+    data curves can only be counted with the legend cut away."""
+    payload = {"dataset": _grouped_dataset(), "fmt": "svg", "group_col": 2, **extra}
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    axes = _extract_group(svg, "axes_1")
+    legend = axes.find('<g id="legend_1">')
+    return axes if legend < 0 else axes[:legend]
+
+
+def test_a_grouped_export_draws_every_level_with_its_channel_style() -> None:
+    # BUG-016's headline case: ONE channel, ONE style entry, three levels --
+    # all three curves red, dashed, 3px, with the requested square marker.
+    plot = _grouped_plot_area(
+        y_keys=[0],
+        series_styles=[
+            {
+                "color": "#ff0000",
+                "line": "dashed",
+                "width": 3,
+                "marker": True,
+                "marker_shape": "square",
+            }
+        ],
+    )
+    lines = _STYLED_LINE_RE.findall(plot)
+    assert len(lines) == _GROUP_LEVELS
+    assert {stroke for _dash, stroke, _w in lines} == {"#ff0000"}
+    assert {width for _dash, _stroke, width in lines} == {"3"}
+    # One dash PATTERN, shared by every level. The pattern's exact numbers are
+    # matplotlib's (they scale with linewidth) and not this test's business;
+    # "every level is dashed, identically" is.
+    assert len({dash for dash, _s, _w in lines}) == 1
+    # The requested marker SHAPE, not merely "a marker": the default is a
+    # circle, drawn with Bezier segments.
+    assert _SQUARE_GLYPH in " ".join(plot.split())
+
+
+def test_a_grouped_export_maps_each_level_back_to_its_own_channel_style() -> None:
+    # The MAPPING, not just the expansion: synthetic series `i` belongs to
+    # channel `i // levels` (`calc.figure_group_styles`), so two differently
+    # styled channels must not bleed into each other's levels. An
+    # "apply series_styles[0] to everything" implementation passes the test
+    # above and fails here.
+    plot = _grouped_plot_area(
+        y_keys=[0, 1],
+        series_styles=[
+            {"color": "#ff0000", "line": "dashed", "width": 3},
+            {"color": "#0000ff", "line": "dotted", "width": 5},
+        ],
+    )
+    lines = _STYLED_LINE_RE.findall(plot)
+    assert len(lines) == 2 * _GROUP_LEVELS
+    # Channel-major, level-minor -- the nesting `build_grouped_series` uses.
+    assert [stroke for _d, stroke, _w in lines] == ["#ff0000"] * 3 + ["#0000ff"] * 3
+    assert [width for _d, _s, width in lines] == ["3"] * 3 + ["5"] * 3
+    # The two dash PATTERNS differ (dashed vs dotted), so `line` was read per
+    # channel rather than copied from the first entry.
+    assert len({dash for dash, _s, _w in lines}) == 2
+
+
+def test_a_grouped_export_with_no_series_styles_still_cycles_its_levels() -> None:
+    # The acceptance criterion the fix must NOT break: with nothing to honour,
+    # the rendering is the pre-BUG-016 one -- matplotlib's own property cycle
+    # gives each level its own colour and nothing is dashed. It is also what
+    # keeps the canvas' per-LEVEL palette cycle matched in STRUCTURE for an
+    # UNCOLOURED channel, for which the client omits `color` entirely (see
+    # `calc.figure_group_styles`' module doc).
+    plot = _grouped_plot_area(y_keys=[0])
+    strokes = [stroke for stroke, _w in _PLAIN_LINE_RE.findall(plot)]
+    assert len(strokes) == _GROUP_LEVELS
+    assert len(set(strokes)) == _GROUP_LEVELS  # one cycle colour per level
+    assert not _STYLED_LINE_RE.findall(plot)  # nothing dashed
+
+
+def test_a_grouped_export_does_not_colour_map_a_level() -> None:
+    # `color_by` is DROPPED on this branch, because the canvas drops it too:
+    # `Stage/usePlotPayload.ts` builds its `colorByColumns` map only when
+    # `groupCol === null`, so a grouped canvas draws an ordinary styled line
+    # for such a channel. Honouring it here would put a point cloud and a
+    # colourbar in the PDF that the screen never showed.
+    plot = _grouped_plot_area(
+        y_keys=[0],
+        series_styles=[{"color": "#ff0000", "line": "dashed", "width": 3, "color_by": 1}],
+    )
+    lines = _STYLED_LINE_RE.findall(plot)
+    assert len(lines) == _GROUP_LEVELS
+    assert {stroke for _d, stroke, _w in lines} == {"#ff0000"}

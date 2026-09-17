@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-17 (BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
+**Updated:** 2026-09-17 (BUG-016 fixed: a grouped figure's levels export with their channel's style, as the canvas draws them; BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -40,7 +40,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
-| BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
+| BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 
@@ -5354,7 +5354,12 @@ design-time finding, not yet surfaced by a user report.
 `group_col` branch and the canvas' group-split style mapping, and by measuring
 both paths — see Confirmed implementation evidence below.
 
-**Suggested implementation owner/model:** Unassigned.
+**State:** **FIXED 2026-09-17.** See Implementation and the Completion record.
+The one design question the filing left open — what a grouped export should do
+about COLOUR — is decided and recorded there, measured off the canvas rather
+than chosen.
+
+**Suggested implementation owner/model:** Claude (agent), 2026-09-17.
 
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
 plot/project regression matrix"), divergence D5.
@@ -5417,19 +5422,20 @@ the default line width. Nothing warns that the styling was discarded.
   every one with `dash: [8, 4]` and `width: 2`; the wire carries
   `series_styles: [{color: …, width: 2, line: "dashed"}]` alongside
   `group_col: 6`; the backend resolves that to `styles=None`.
-- Test: `frontend/src/lib/regressionMatrix.test.ts:415`,
-  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
-  canvas but is dropped from the exported figure", ...)` — reads the three
-  per-level strokes out of the real `buildOpts` options object
+- Test: `frontend/src/lib/regressionMatrix.test.ts`'s BUG-016 test — reads the
+  three per-level strokes out of the real `buildOpts` options object
   (`screenDrawnStyles`, `regressionMatrixLegs.testkit.ts`), reads
-  `group_col`/`series_styles` out of the real `FigureSpec`, takes the level
-  count from the wire's own `cat_levels`, and pins the backend's contract as a
-  named constant (`STYLE_DROPPED_BY_THE_GROUP_BRANCH = null`) before asserting
-  the two differ. Structural, like the rest of the matrix — it does not render
-  a PDF.
+  `group_col`/`series_styles` out of the real `FigureSpec` and takes the level
+  count from the wire's own `cat_levels`. It pinned the backend's contract as a
+  named constant (`STYLE_DROPPED_BY_THE_GROUP_BRANCH = null`) and asserted the
+  two differed; since the fix it is the same measurement with the assertion
+  INVERTED and renamed ("a grouped figure's levels carry the channel's style on
+  screen AND in the export"). Structural, like the rest of the matrix — it does
+  not render a PDF, which is why the fix also adds rendered-layer tests.
 - `frontend/src/lib/regressionMatrix.testkit.ts` — `styleComparable("group")`
-  is now `false` for exactly this reason, so the matrix's leg-to-leg comparison
-  no longer reports agreement on a field one side ignores.
+  was narrowed to `false` for exactly this reason, so the matrix's leg-to-leg
+  comparison stopped reporting agreement on a field one side ignored. It now
+  returns `{shape: true, color: false}` for GROUP; see the Fix checklist.
 
 #### Why this priority
 
@@ -5458,61 +5464,163 @@ channels) exists.
 - [x] Expected result recorded — the exported grouped figure should carry the
   channel's dash/width/marker/step/fill on every level, exactly as the canvas
   draws them.
-- [x] Reproduced by an agent —
-  `frontend/src/lib/regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
-  canvas but is dropped from the exported figure", ...)`.
+- [x] Reproduced by an agent — `frontend/src/lib/regressionMatrix.test.ts`'s
+  BUG-016 test (filed as `DIVERGENCE (BUG-016): ...`; the fix inverted and
+  renamed it, per the Fix checklist).
+
+#### The colour rule, MEASURED (2026-09-17)
+
+The filing left "what about colour" open. It was settled by reading what the
+canvas actually does and reproducing that, not by choosing something new.
+
+`Stage/usePlotPayload.ts` builds `styleList[i] = seriesStyles[plotted[i]]` over
+`plotGroupSplit.groupSplitChannelMap`, so every level of a channel is handed
+that channel's ONE style object, and `lib/uplotOpts.buildOpts` applies it
+verbatim. Colour goes through `lib/seriesStyleCycle.seriesColor(i, style)`,
+which has two halves:
+
+1. an EXPLICIT `style.color` wins at every display position. Measured on the
+   matrix's `group` fixture with `color: "#ffe066"` added: all three levels
+   draw `#ffe066`.
+2. with NO explicit colour it falls back to the palette token at the series'
+   OWN display position, and a grouped canvas' display positions are per-LEVEL.
+   Measured on the fixture as committed (no colour): the three levels draw
+   `#7fb3ff`, `#ffb37f`, `#8fe08f` — palette slots 0, 1, 2.
+
+So the rule the export now implements is: **expand the channel's whole style
+onto every level, colour included — and send a colour only when the user chose
+one.** Half 1 is reproduced exactly (the wire carries the explicit colour, the
+backend gives it to every level). Half 2 cannot be carried by a list that is
+1:1 with `y_keys` — one entry cannot hold three colours — so
+`lib/exportStyles.buildExportStyles` OMITS `color` for a grouped request rather
+than sending the channel's own palette slot, which would have painted every
+level one hue: a NEW divergence, and worse than the bug. With no `color` key
+matplotlib's own property cycle colours the levels, which is the pre-fix
+rendering, unchanged. Both sides therefore CYCLE per level; the two palettes
+still differ, and that (the screen's `--series-N` tokens vs matplotlib's
+`C0/C1/C2`) stays out of scope — it is a palette question, not a
+styling-dropped one, and it is recorded here rather than silently closed.
+
+#### Implementation
+
+- `src/quantized/calc/figure_group_styles.py` (NEW, pure) —
+  `expand_grouped_series_styles(styles, n_channels, n_series)`. Series `i`
+  belongs to channel `i // n_levels` (the channel-major/level-minor nesting
+  `build_grouped_series` produces), so each channel's style is repeated once
+  per level, as its own dict. Two keys cannot expand verbatim and the module
+  doc says why: `color_by`/`colormap` are DROPPED (the canvas builds its
+  `colorByColumns` map only when `groupCol === null`, so a grouped canvas draws
+  an ordinary line — honouring it would put a point cloud and a colourbar in
+  the PDF that the screen never showed), and a `fill: {"vs": p}` is re-indexed
+  to `p * n_levels`, which is what the canvas' own
+  `uplotFill.resolveFillBands` resolves via `plotted.indexOf(vs)` over the
+  expanded channel map. A list that cannot be reconciled (no channels, or a
+  series count that is not a whole multiple) returns `None` and renders as
+  before, the same degrade-gracefully contract `resolve_style_channels` keeps.
+- `src/quantized/routes/export_figures.py` — the `group_col` branch passes
+  `resolve_style_channels(...)`'s output through that expander instead of
+  returning `styles=None`. Three lines; the mapping is all in `calc/`.
+- `src/quantized/routes/export_figures.py`'s `group_col` field doc and
+  `export_figures_schema.SERIES_STYLES_DOC` / `WATERFALL_OFFSETS_DOC` — the
+  contract text, corrected. The old text claimed the screen "never assigns
+  per-level colors either", which is half true and was the load-bearing half
+  of the wrong decision; `WATERFALL_OFFSETS_DOC` cited `series_styles` being
+  unapplied as the reason offsets are unapplied, and now gives the reason that
+  is actually still true of offsets (one offset per channel cannot say how far
+  to stagger each level). OpenAPI + `lib/api/schema.d.ts` regenerated.
+- `frontend/src/lib/exportStyles.ts` (`grouped` parameter),
+  `figureSpecSeries.resolveSeriesPresentation`, `figureSpec.ts` and
+  `figurebuilder/legacyFigure.ts` — the "omit a palette-derived colour for a
+  grouped request" half of the rule, at the one place colours are resolved. An
+  EXPLICIT colour still ships. A document's pinned `publication.seriesStyles`
+  array is untouched on every mode: it is that document's final word.
 
 #### Fix checklist
 
-- [ ] Decide the contract for `series_styles` under `group_col`: expand the
+- [x] Decide the contract for `series_styles` under `group_col`: expand the
   1:1-with-`y_keys` style list to the synthetic per-level series server-side
   (each level inheriting its source channel's style, which is exactly what the
   canvas does), rather than dropping it. `calc.plotting.build_grouped_series`
-  already knows which channel each synthetic series came from.
-- [ ] Keep COLOUR out of scope unless deliberately chosen: the canvas colours
+  already knows which channel each synthetic series came from. — done in
+  `calc.figure_group_styles`, from that function's own nesting.
+- [x] Keep COLOUR out of scope unless deliberately chosen: the canvas colours
   levels by display position and the backend by its own cycle, and making those
   agree is a separate decision from honouring dash/width/marker/step/fill.
   Whatever is decided, say so in `export_figures.py:81-85`'s doc, which is the
-  contract this bug is measured against.
-- [ ] Update `figureSpec.ts:232-233`'s `overlayExportsSeriesStyles` reasoning
+  contract this bug is measured against. — DELIBERATELY CHOSEN, and only half
+  of it: an explicit colour is honoured on every level (that is the reported
+  symptom); the palette fallback is not carried, and the two palettes still
+  differ. See "The colour rule, MEASURED" above; the field doc now says so.
+- [x] Update `figureSpec.ts:232-233`'s `overlayExportsSeriesStyles` reasoning
   if `group_col` stops ignoring `series_styles` — the predicate currently cites
-  the backend behaviour this fix would change.
-- [ ] Add a backend test at the RENDERED layer (the
+  the backend behaviour this fix would change. — the predicate still REFUSES a
+  grouped view, on the narrower ground its doc now gives: the P3.3 cycle is
+  keyed by DISPLAY POSITION and a grouped canvas' positions are per-level, so
+  one channel-aligned entry cannot say "level 1 solid, level 2 dashed". The
+  canvas refuses through the same predicate, so neither side cycles.
+  `figureSpecSeries.resolveSeriesCycle`'s doc is corrected the same way.
+- [x] Add a backend test at the RENDERED layer (the
   `tests/test_export_vector_structure.py` family) that a grouped export's
   curves carry the requested dash/width — a wire-level assertion cannot see
-  this bug, which is how it survived.
-- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
-  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
-  canvas but is dropped from the exported figure", ...)` — drop the
+  this bug, which is how it survived. — four, reading the SVG's own artists:
+  every level red/dashed/3px with the requested SQUARE marker glyph; two
+  channels not bleeding into each other's levels; the unstyled control still
+  cycling; and `color_by` dropped.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
+  `it("DIVERGENCE (BUG-016): ...", ...)` — drop the
   `STYLE_DROPPED_BY_THE_GROUP_BRANCH` constant and the `.not.toEqual`, and
   assert the exported per-level styles EQUAL the canvas'. The fix makes the
   current assertion RED; it is not an `it.fails` that would silently become an
-  "unexpected pass".
-- [ ] Set `styleComparable("group")` back to `true` in
+  "unexpected pass". — done; it also pins the canvas' three per-level palette
+  slots and that the wire carries no `color`, which is the colour rule above.
+- [x] Set `styleComparable("group")` back to `true` in
   `regressionMatrix.testkit.ts` and regenerate `group.json`
   (`node frontend/scripts/freeze-regression-matrix.mjs`), so the matrix
-  compares grouped styling leg-to-leg again once the two paths agree.
+  compares grouped styling leg-to-leg again once the two paths agree. — with
+  one honest narrowing: it now returns `{shape, color}` rather than a boolean,
+  and GROUP is `{shape: true, color: false}`. Every leg compares
+  width/dash/marker/step/fill for a grouped figure; colour is the half the wire
+  cannot carry, so nothing pretends to compare it. `group.json` regenerated —
+  the ONLY golden that moved, and only by `width: null -> 2` and
+  `dash: null -> [8, 4]` on its one channel.
 
 #### Acceptance criteria
 
-- [ ] A grouped figure styled dashed/3 px on screen exports as dashed/3 px on
-  every level.
-- [ ] An UNGROUPED export is byte-identical to before the fix (no regression to
-  the common, 1:1-with-`y_keys` case).
-- [ ] A grouped export with NO per-series styles set is byte-identical to
+- [x] A grouped figure styled dashed/3 px on screen exports as dashed/3 px on
+  every level. — `test_a_grouped_export_draws_every_level_with_its_channel_style`.
+- [x] An UNGROUPED export is byte-identical to before the fix (no regression to
+  the common, 1:1-with-`y_keys` case). — the flat branch is untouched
+  (`resolve_style_channels` -> `_ResolvedFigure` as before), the `grouped` flag
+  defaults to `false` at every producer, and the eight other matrix fixtures'
+  goldens did not move.
+- [x] A grouped export with NO per-series styles set is byte-identical to
   before the fix (the default-cycle rendering is unchanged when there is
-  nothing to honour).
-- [ ] The matrix's `group` fixture passes `screen ≡ export` with
-  `styleComparable("group") === true`.
+  nothing to honour). — `styles is None` returns `None` from the expander;
+  `test_a_grouped_export_with_no_series_styles_still_cycles_its_levels` pins the
+  rendering (three levels, three cycle colours, nothing dashed).
+- [x] The matrix's `group` fixture passes `screen ≡ export` with
+  `styleComparable("group")` comparing per-series styling again — see the
+  narrowing recorded one section up.
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
-- Owner verification: —
-- Notes: —
+- PR/commit: `fix(export): BUG-016 — a grouped figure's levels export with
+  their channel's style, as the canvas draws them`.
+- Automated tests: `tests/test_calc_figure_group_styles.py` (13, new — the pure
+  mapping); `tests/test_export_vector_structure.py`'s four new grouped-styling
+  tests (the RENDERED layer); `regressionMatrix.test.ts`'s inverted BUG-016
+  test plus the `group` fixture's own `screen ≡ export ≡ reopen` + golden.
+- Agent verification: every new test sabotage-verified (the expander's channel
+  index, its `color_by` drop, its `fill` re-index, the route's use of it, and
+  the frontend's colour omission each broken in turn and the naming test
+  confirmed red). Backend `ruff`/`mypy`/`pytest` green; frontend `tsc -b
+  --force`, `eslint --max-warnings=0` and `vitest src/lib src/store
+  src/architecture.test.ts` green.
+- Owner verification: open — a real grouped figure exported to PDF and compared
+  against the screen.
+- Notes: the palette difference for an UNCOLOURED grouped channel (screen
+  `--series-N`, export matplotlib's `C0/C1/C2`) is deliberately still open; see
+  "The colour rule, MEASURED".
 
 ---
 

@@ -53,14 +53,21 @@ function plottedChannels(state: LegacyFigureState, data: DataStruct): number[] {
 }
 
 /** Resolve the export styles for either builder: a saved doc's own styles win
- *  over the live per-channel ones, and an explicit null stays null. */
+ *  over the live per-channel ones, and an explicit null stays null.
+ *
+ *  BUG-016: a `docGroupCol` request has the backend expand every entry onto
+ *  one series per group LEVEL, so the derived styles omit a palette-derived
+ *  colour (which belongs to a level's display position, not to the channel) —
+ *  `buildExportStyles`' `grouped` doc carries the rule. */
 function exportStyles(
   state: LegacyFigureState,
   data: DataStruct,
 ): (ExportSeriesStyle | null)[] | null {
   return state.docSeriesStyles !== undefined
     ? state.docSeriesStyles
-    : buildExportStyles(plottedChannels(state, data), state.seriesStyles);
+    : buildExportStyles(
+        plottedChannels(state, data), state.seriesStyles, null, false, state.docGroupCol !== null,
+      );
 }
 
 /** The request shared by the debounced PNG preview and the export at the

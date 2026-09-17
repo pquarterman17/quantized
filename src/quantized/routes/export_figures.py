@@ -90,14 +90,18 @@ class FigureRequest(BaseModel):
     # lands on the PRIMARY axis (`buildXY` never assigns `axis: 1` to a
     # grouped series), so combining `group_col` with `y2_keys` is rejected
     # (422) rather than inventing a secondary-axis semantic for it -- see
-    # `_figure_series`. `series_styles`' STYLE keys are not applied in this
-    # path either (they're 1:1-with-`y_keys`, which doesn't align with the
-    # synthetic per-level series) -- matplotlib's default color cycle takes
-    # over, exactly like the screen, which never assigns per-level colors
-    # either. Its `legend` key IS applied (BUG-014): being a LABEL rather than
-    # a stroke, it replaces the channel-label half of `build_grouped_series`'
-    # `"{label} ({group}={level})"` template, which is byte-for-byte what the
-    # pre-BUG-014 wire produced. See `_figure_series`' own grouped branch.
+    # `_figure_series`. `series_styles` IS applied here (BUG-016 -- this doc
+    # used to claim the opposite, and that "the screen never assigns per-level
+    # colors either"): the screen gives EVERY level of a channel that
+    # channel's one style, explicit colour included, so the branch expands the
+    # `y_keys`-aligned list onto the synthetic series. What it does NOT give a
+    # level is a colour nobody chose -- an unstyled level takes the palette
+    # slot at its OWN display position, which one channel-aligned entry cannot
+    # express, so the client omits `color` for a grouped request and
+    # matplotlib's cycle colours the levels as before. The measured rule, and
+    # the two keys that cannot expand verbatim, are in
+    # `calc.figure_group_styles`. `legend` is a LABEL, not a stroke: it
+    # replaces the channel-label half of `"{label} ({group}={level})"`.
     group_col: int | None = None
     # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
     # multiples panel per facet-column level, RESOLVED client-side
@@ -219,10 +223,12 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     ``req.group_col`` (GUI_INTERACTION #12 Slice 5) switches to the grouped
     resolve path (``calc.plotting.build_grouped_series``): every ``y_keys``
     channel becomes one series per group level instead of one series per
-    channel, matching the screen's ``buildXY`` colour split. Mutually
+    channel, matching the screen's ``buildXY`` colour split; ``styles`` is
+    ``series_styles`` expanded onto them (BUG-016, below). Mutually
     exclusive with ``req.y2_keys`` (raises ``ValueError`` -- ``buildXY``
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
+    from quantized.calc.figure_group_styles import expand_grouped_series_styles
     from quantized.calc.plotting import (
         PlotState,
         apply_waterfall_offsets,
@@ -248,9 +254,8 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         # LEVEL, so the override cannot name a finished series name the way it
         # does on the flat path -- it replaces the CHANNEL-label half of
         # `build_grouped_series`' own `"{y_label} ({group}={level})"` template,
-        # which is byte-for-byte what the pre-BUG-014 wire produced (the rename
-        # used to arrive as a rewritten `dataset.labels[ch]`). Grouped export
-        # parity as a whole is BUG-016, not this fix.
+        # byte-for-byte what the pre-BUG-014 wire produced (the rename used to
+        # arrive as a rewritten `dataset.labels[ch]`).
         grouped = build_grouped_series(
             ds, req.x_key, y_keys, req.group_col, series_legends(req.series_styles, len(y_keys))
         )
@@ -259,8 +264,13 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         g_series: list[tuple[str, Any]] = [
             (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in grouped.series
         ]
+        # BUG-016: every level draws with its channel's style, as the canvas
+        # does -- `calc.figure_group_styles` carries the measured rule.
+        g_styles = expand_grouped_series_styles(
+            resolve_style_channels(ds, y_keys, req.series_styles), len(y_keys), len(g_series)
+        )
         return _ResolvedFigure(
-            grouped.x, g_series, x_label, y_label, None, [False] * len(g_series), ""
+            grouped.x, g_series, x_label, y_label, g_styles, [False] * len(g_series), ""
         )
 
     validate_y2_subset(req.y_keys, req.y2_keys)

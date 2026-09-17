@@ -148,8 +148,13 @@ export function displayListsAgree(v: CycleView): boolean {
 /** The plain single-panel XY overlay is the ONLY live view whose publication
  *  export renders the plotted series one-for-one — same set, same display order,
  *  same per-series styles. Grouped views send `group_col`, which the renderer
- *  splits into synthetic per-level series that `series_styles` cannot address
- *  (`routes/export_figures.py:114-117`); faceted views send `facets`, for which
+ *  splits into one synthetic series PER LEVEL: since BUG-016 those levels DO
+ *  carry their channel's `series_styles` entry, but this cycle is keyed by
+ *  DISPLAY POSITION and a grouped canvas' positions are per-level, so one
+ *  channel-aligned entry still cannot say "level 1 solid, level 2 dashed,
+ *  level 3 dotted" — the refusal stands, on the narrower ground (the canvas
+ *  refuses too, through this same predicate, so neither side cycles a grouped
+ *  view at all); faceted views send `facets`, for which
  *  `series_styles` is explicitly unused (`:125-127`); `stackMode` is a
  *  screen-only split (one panel per channel, plus the break/facet/spatial
  *  arrangements, all of which `PlotStage` gates behind it) that the

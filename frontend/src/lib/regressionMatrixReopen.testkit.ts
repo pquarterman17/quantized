@@ -119,12 +119,12 @@ export function projectReopen(reopened: ReopenedProject): CanonicalFigure {
       // `seriesColor` is the shared resolver both other legs also bottom out
       // in — not the screen or export builder — so this stays independent
       // evidence about what was saved.
-      color: comparableStyle ? seriesColor(i, style) : null,
-      width: comparableStyle ? (style?.width ?? null) : null,
-      dash: comparableStyle ? dashOf(style?.line) : null,
-      marker: comparableStyle ? markerOf(style) : null,
-      step: comparableStyle ? (style?.step ?? null) : null,
-      fill: comparableStyle && style?.fill && style.fill !== "none"
+      color: comparableStyle.color ? seriesColor(i, style) : null,
+      width: comparableStyle.shape ? (style?.width ?? null) : null,
+      dash: comparableStyle.shape ? dashOf(style?.line) : null,
+      marker: comparableStyle.shape ? markerOf(style) : null,
+      step: comparableStyle.shape ? (style?.step ?? null) : null,
+      fill: comparableStyle.shape && style?.fill && style.fill !== "none"
         ? (style.fill === "under" ? "under" : `vs:${style.fill.vs}`)
         : null,
     };
