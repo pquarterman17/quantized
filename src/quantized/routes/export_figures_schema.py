@@ -16,10 +16,19 @@ split changes no call site outside ``export_figures.py``.
 ``calc.figure_ticks`` expects, moved here with it (BUG-014, which added a
 label-resolution sibling to ``export_figures.py`` and needed the room). ``routes.export_page``,
 its other caller, imports it from here directly.
+
+``_ResolvedFigure`` moved here for the same reason (BUG-016 round 2, which left
+``export_figures.py`` at exactly 500 of its 500 lines -- passing with ZERO
+headroom, so the next line added there would have failed the ceiling). It fits
+the module's stated remit: a frozen dataclass that is pure data shape with no
+route logic of its own. It is route-INTERNAL (``_``-prefixed, no pydantic, no
+OpenAPI surface); ``routes.export_page`` reads the object ``_figure_series``
+returns but never names the type, so this moves no call site either.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -123,6 +132,23 @@ class TickFormatSpec(BaseModel):
 
     mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
     digits: float = 2
+
+
+@dataclass(frozen=True)
+class _ResolvedFigure:
+    """``export_figures._figure_series``'s resolved output, in DISPLAY
+    (``y_keys``) order. ``y2_mask[i]`` is ``True`` when ``series[i]`` is one of
+    ``req.y2_keys`` (see ``calc.plotting.PlotState.y2_keys``) -- all-``False``
+    (the default, ``req.y2_keys`` absent) means "no secondary axis", the pre-y2
+    shape."""
+
+    x: Any
+    series: list[tuple[str, Any]]
+    x_label: str
+    y_label: str
+    styles: list[dict[str, Any] | None] | None
+    y2_mask: list[bool]
+    y2_label: str
 
 
 def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:

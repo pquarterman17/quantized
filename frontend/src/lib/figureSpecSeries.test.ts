@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolveDisplaySeries, resolveSeriesPresentation, seriesDisplayLabel, withSeriesLegends } from "./figureSpecSeries";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -167,5 +168,61 @@ describe("resolveSeriesPresentation", () => {
     expect(resolveSeriesPresentation([0], {}, [0], false, ["Loop 1"], null)).toEqual([
       { legend: "Loop 1" },
     ]);
+  });
+
+  // BUG-016 round 2 (review F1). A pinned array is a previous
+  // `buildExportStyles` run on a FLAT request, so its `color` is the palette
+  // slot whether or not the user chose one. Shipping it verbatim on a grouped
+  // request made the backend paint every LEVEL that one hue — a regression
+  // against the pre-fix cycle. The DERIVED branch already omitted it; the
+  // pinned one now obeys the same rule.
+  describe("a grouped request's colour", () => {
+    let restorePalette: () => void = () => {};
+    beforeEach(() => {
+      restorePalette = installSeriesPalette();
+    });
+    afterEach(() => restorePalette());
+
+    it("derives no palette colour when grouped", () => {
+      const styles = { 0: { width: 3 } };
+      expect(resolveSeriesPresentation([0], styles, [0], false, [], undefined, true))
+        .toEqual([{ width: 3 }]);
+      // Control: the same call, ungrouped, DOES carry the slot.
+      expect(resolveSeriesPresentation([0], styles, [0], false, [], undefined, false))
+        .toEqual([{ color: TEST_SERIES_PALETTE[0], width: 3 }]);
+    });
+
+    it("strips a PINNED palette colour when grouped, and only the colour", () => {
+      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" as const }];
+      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, true))
+        .toEqual([{ width: 2, line: "dashed" }]);
+      // The document is never mutated by the strip.
+      expect(pinned[0].color).toBe(TEST_SERIES_PALETTE[0]);
+    });
+
+    it("keeps a PINNED explicit colour when grouped", () => {
+      const pinned = [{ color: "#ffe066", width: 2 }];
+      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, true)).toEqual(pinned);
+    });
+
+    it("strips against the entry's DISPLAY position, not its array index", () => {
+      // Position 1 (a hidden earlier series): the derived colour there is slot
+      // 1, so slot 0's hue at that position is one the user chose.
+      const pinned = [{ color: TEST_SERIES_PALETTE[1] }];
+      expect(resolveSeriesPresentation([1], {}, [1], false, [], pinned, true)).toEqual([null]);
+      const explicit = [{ color: TEST_SERIES_PALETTE[0] }];
+      expect(resolveSeriesPresentation([1], {}, [1], false, [], explicit, true)).toEqual(explicit);
+    });
+
+    it("leaves a pinned array verbatim when NOT grouped", () => {
+      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, false)).toEqual(pinned);
+    });
+
+    it("still lays a legend rename over a stripped entry", () => {
+      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+      expect(resolveSeriesPresentation([0], {}, [0], false, ["Loop 1"], pinned, true))
+        .toEqual([{ width: 2, legend: "Loop 1" }]);
+    });
   });
 });

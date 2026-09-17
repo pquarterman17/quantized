@@ -16,7 +16,6 @@ it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
@@ -42,6 +41,7 @@ from quantized.routes.export_figures_schema import (
     WATERFALL_OFFSETS_DOC,
     FigureFacet,
     TickFormatSpec,
+    _ResolvedFigure,
     _tick_fmt,
 )
 
@@ -184,22 +184,6 @@ class FigureRequest(BaseModel):
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
     filename: str = "figure"
-
-
-@dataclass(frozen=True)
-class _ResolvedFigure:
-    """``_figure_series``'s resolved output, in DISPLAY (``y_keys``) order.
-    ``y2_mask[i]`` is ``True`` when ``series[i]`` is one of ``req.y2_keys``
-    (see ``calc.plotting.PlotState.y2_keys``) -- all-``False`` (the default,
-    ``req.y2_keys`` absent) means "no secondary axis", the pre-y2 shape."""
-
-    x: Any
-    series: list[tuple[str, Any]]
-    x_label: str
-    y_label: str
-    styles: list[dict[str, Any] | None] | None
-    y2_mask: list[bool]
-    y2_label: str
 
 
 def _figure_series(req: FigureRequest) -> _ResolvedFigure:

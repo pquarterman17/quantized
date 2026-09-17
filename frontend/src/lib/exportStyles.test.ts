@@ -1,7 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildExportStyles } from "./exportStyles";
+import { buildExportStyles, stripDerivedColors } from "./exportStyles";
 import type { PlotPayload } from "./plotdata";
+import type { ExportSeriesStyle } from "./publicationStyles";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { DASH, displayPositions } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
 import { buildOpts } from "./uplotOpts";
@@ -278,5 +280,95 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
     } finally {
       paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
     }
+  });
+});
+
+// ── BUG-016: the `grouped` flag, and the pinned array that bypassed it ───────
+// Round 1 added `buildExportStyles`' fifth argument and nothing guarded it
+// directly: sabotaging `legacyFigure`'s use of it left 713/713 green (review
+// finding F3). Round 2 added `stripDerivedColors` for the PINNED path (F1).
+// Both are unit-pinned here, where the rule actually lives.
+describe("BUG-016 — a grouped request's colour", () => {
+  let restorePalette: () => void = () => {};
+  beforeEach(() => {
+    restorePalette = installSeriesPalette();
+  });
+  afterEach(() => restorePalette());
+
+  it("`grouped` omits the palette-DERIVED colour and nothing else", () => {
+    const style: Record<number, SeriesStyle> = { 0: { width: 2, line: "dashed" } };
+    // Control, same call with the flag off: the colour IS baked in, so the
+    // assertion below is about the flag and not about an absent palette.
+    expect(buildExportStyles([0], style)[0]).toEqual({
+      color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed",
+    });
+    expect(buildExportStyles([0], style, null, false, true)[0]).toEqual({
+      width: 2, line: "dashed",
+    });
+  });
+
+  it("`grouped` KEEPS an explicit colour — the canvas gives it to every level", () => {
+    const style: Record<number, SeriesStyle> = { 0: { color: "#ffe066", width: 2 } };
+    expect(buildExportStyles([0], style, null, false, true)[0]).toEqual({
+      color: "#ffe066", width: 2,
+    });
+  });
+
+  it("`grouped` leaves nothing at all for a channel whose only style was the palette", () => {
+    expect(buildExportStyles([0, 1], {}, null, false, true)).toEqual([null, null]);
+    // Non-vacuous: flat, the same channels carry their two distinct slots.
+    expect(buildExportStyles([0, 1], {}).map((s) => s?.color))
+      .toEqual([TEST_SERIES_PALETTE[0], TEST_SERIES_PALETTE[1]]);
+  });
+
+  it("strips a pinned colour that IS the palette slot for its own position", () => {
+    const pinned: (ExportSeriesStyle | null)[] = [
+      { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
+      { color: TEST_SERIES_PALETTE[1] },
+      null,
+    ];
+    expect(stripDerivedColors(pinned)).toEqual([{ width: 2, line: "dashed" }, null, null]);
+  });
+
+  it("keeps a pinned colour the user actually chose", () => {
+    const pinned: (ExportSeriesStyle | null)[] = [{ color: "#ffe066", width: 2 }];
+    expect(stripDerivedColors(pinned)).toEqual([{ color: "#ffe066", width: 2 }]);
+  });
+
+  it("reads the slot at the entry's DISPLAY position, not at its array index", () => {
+    // The same pinned hex, at two different positions. At position 2 slot 0's
+    // hue is a colour that series never drew, so it is a deliberate one.
+    expect(stripDerivedColors([{ color: TEST_SERIES_PALETTE[0] }], [2])[0])
+      .toEqual({ color: TEST_SERIES_PALETTE[0] });
+    expect(stripDerivedColors([{ color: TEST_SERIES_PALETTE[2] }], [2])[0]).toBeNull();
+  });
+
+  it("compares case-insensitively — a pinned #7FB3FF is still the palette slot", () => {
+    expect(TEST_SERIES_PALETTE[0]).toBe("#7fb3ff"); // the hex the fold is about
+    expect(stripDerivedColors([{ color: "#7FB3FF" }])[0]).toBeNull();
+  });
+
+  it("returns the caller's OWN array, unmutated, when nothing is derived", () => {
+    const entry: ExportSeriesStyle = { color: "#ffe066" };
+    const pinned: (ExportSeriesStyle | null)[] = [entry];
+    expect(stripDerivedColors(pinned)).toBe(pinned);
+    expect(entry).toEqual({ color: "#ffe066" });
+  });
+
+  it("does not mutate the entries it strips from", () => {
+    const entry: ExportSeriesStyle = { color: TEST_SERIES_PALETTE[0], width: 2 };
+    stripDerivedColors([entry]);
+    expect(entry).toEqual({ color: TEST_SERIES_PALETTE[0], width: 2 });
+  });
+
+  it("strips nothing once the palette the array was built against is gone", () => {
+    restorePalette();
+    restorePalette = () => {};
+    const pinned: (ExportSeriesStyle | null)[] = [{ color: TEST_SERIES_PALETTE[0] }];
+    // With no `--series-N` set, `seriesColor` resolves to its one hardcoded
+    // fallback, which this hex is not: a colour that no longer matches any
+    // slot is treated as chosen, so the pinned array stays the document's word
+    // rather than being stripped on a guess.
+    expect(stripDerivedColors(pinned)).toBe(pinned);
   });
 });

@@ -16,7 +16,7 @@
 // from). One input type makes that structural instead of a review question.
 
 import type { FigureSpec } from "../../../lib/api/figures";
-import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
+import { buildExportStyles, stripDerivedColors, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { axisFmtParam, type AxisFormat, type AxisScale, type DataStruct, type SeriesStyle } from "../../../lib/types";
@@ -58,16 +58,29 @@ function plottedChannels(state: LegacyFigureState, data: DataStruct): number[] {
  *  BUG-016: a `docGroupCol` request has the backend expand every entry onto
  *  one series per group LEVEL, so the derived styles omit a palette-derived
  *  colour (which belongs to a level's display position, not to the channel) —
- *  `buildExportStyles`' `grouped` doc carries the rule. */
+ *  `buildExportStyles`' `grouped` doc carries the rule.
+ *
+ *  ROUND 2: the SAVED branch obeys it too. A `docSeriesStyles` array is a
+ *  previous `buildExportStyles` run on a flat request — a reopened pre-BUG-016
+ *  doc, or a graph style template (`useGraphTemplates`, which builds one flat
+ *  so it stays portable onto a flat figure) — so its `color` is the channel's
+ *  palette slot whether the user chose a colour or not. Shipping that on a
+ *  grouped request painted every LEVEL that one hue; `stripDerivedColors`
+ *  removes exactly the entries still sitting on their own palette slot and
+ *  leaves an explicit colour alone. Applied inside this shared helper, so the
+ *  preview, the export and the doc "Save as figure" persists cannot disagree
+ *  about it — the reason the two builders share this function at all. */
 function exportStyles(
   state: LegacyFigureState,
   data: DataStruct,
 ): (ExportSeriesStyle | null)[] | null {
-  return state.docSeriesStyles !== undefined
-    ? state.docSeriesStyles
-    : buildExportStyles(
-        plottedChannels(state, data), state.seriesStyles, null, false, state.docGroupCol !== null,
-      );
+  if (state.docSeriesStyles !== undefined) {
+    if (state.docSeriesStyles === null || state.docGroupCol === null) return state.docSeriesStyles;
+    return stripDerivedColors(state.docSeriesStyles);
+  }
+  return buildExportStyles(
+    plottedChannels(state, data), state.seriesStyles, null, false, state.docGroupCol !== null,
+  );
 }
 
 /** The request shared by the debounced PNG preview and the export at the

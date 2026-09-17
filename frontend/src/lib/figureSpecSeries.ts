@@ -11,7 +11,7 @@
 import type { ErrorPair } from "./api";
 import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
-import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
+import { buildExportStyles, stripDerivedColors, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
 import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
@@ -254,9 +254,16 @@ export function seriesDisplayLabel(label: string, unit: string, legend: string |
  *  `buildExportStyles`, whose own doc carries the rule — a grouped request
  *  sends no palette-derived colour, because the backend expands each entry onto
  *  one series per LEVEL and the palette slot belongs to the level, not the
- *  channel. It reaches only the DERIVED branch: a document's pinned
- *  `publication` array is that document's final word on every field and ships
- *  verbatim on every mode, as it did before. */
+ *  channel.
+ *
+ *  The PINNED branch obeys the same rule (BUG-016 round 2), and it has to: a
+ *  pinned array is a previous `buildExportStyles` run on a FLAT request, so its
+ *  `color` is the channel's palette slot whether or not the user ever chose a
+ *  colour, and shipping that verbatim on a grouped request painted every level
+ *  one hue — worse than the bug. `stripDerivedColors` removes exactly the
+ *  entries whose colour still equals the palette slot for their position and
+ *  leaves an explicit one alone; everything else in the array stays that
+ *  document's final word, as before. */
 export function resolveSeriesPresentation(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
@@ -271,7 +278,9 @@ export function resolveSeriesPresentation(
       ? buildExportStyles(plotted, seriesStyles, positions, cycle, grouped)
       : publication === null
         ? null
-        : structuredClone(publication);
+        : grouped
+          ? stripDerivedColors(structuredClone(publication), positions)
+          : structuredClone(publication);
   return withSeriesLegends(base, legends);
 }
 

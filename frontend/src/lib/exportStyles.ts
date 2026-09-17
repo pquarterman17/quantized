@@ -97,3 +97,59 @@ export function buildExportStyles(
     return Object.keys(spec).length > 0 ? spec : null;
   });
 }
+
+/**
+ * Drop a PALETTE-DERIVED `color` from an ALREADY-BUILT publication style array
+ * (BUG-016 round 2).
+ *
+ * `buildExportStyles`' `grouped` flag reaches only the DERIVED branch. A
+ * document that pins `publication.seriesStyles` ships that array verbatim, and
+ * such an array is itself this builder's output on a FLAT request — which
+ * always bakes the channel's palette slot into `color`, a colour the user
+ * never chose. Grouping such a document (reopening a `FigureDoc` saved before
+ * BUG-016, or applying a graph style template, whose
+ * `useGraphTemplates.saveStyleTemplate` builds the array flat by design so it
+ * stays portable onto a flat figure) then sent that ONE hue to the backend,
+ * which paints every level with it: measured `#7fb3ff`/`#ffb37f`/`#8fe08f` on
+ * the canvas against `#7fb3ff`x3 in the export — the very divergence the
+ * derived branch was changed to avoid, and a REGRESSION against the pre-fix
+ * rendering (matplotlib's cycle, which at least cycled).
+ *
+ * The pinned array does not record whether a colour was explicit, so the truth
+ * is recovered rather than trusted: an entry whose `color` resolves to exactly
+ * the palette slot `seriesColor` would have produced at that entry's display
+ * position IS the derived one and is stripped; anything else is a colour the
+ * user chose and survives, because the canvas gives an explicit colour to
+ * every level too. `positions` is the list the array was built against (`null`
+ * = the builder's own index order, which is what every producer of a pinned
+ * array passes).
+ *
+ * The AMBIGUITY is deliberate and one-sided. A user who hand-picks the exact
+ * hex of the palette slot their series already sits in gets the cycling
+ * render — which is what the canvas draws for that series anyway, so the two
+ * still agree. Guessing the other way (calling it explicit and painting three
+ * levels one hue) is the regression above.
+ *
+ * Returns the caller's own array by reference when nothing is derived, so a
+ * request pinning explicit colours is unchanged by this existing.
+ */
+export function stripDerivedColors(
+  styles: (ExportSeriesStyle | null)[],
+  positions: readonly number[] | null = null,
+): (ExportSeriesStyle | null)[] {
+  let changed = false;
+  const out = styles.map((style, i) => {
+    if (!style?.color) return style;
+    const slot = resolveToHex(seriesColor(positions?.[i] ?? i));
+    // An UNRESOLVABLE slot (`resolveToHex` needs a canvas for anything that is
+    // not already a 6-digit hex, and returns null without one) strips nothing
+    // rather than guessing: the pinned array stays the document's word
+    // wherever the derived value cannot be reconstructed.
+    if (slot === null || resolveToHex(style.color) !== slot) return style;
+    changed = true;
+    const rest: ExportSeriesStyle = { ...style };
+    delete rest.color;
+    return Object.keys(rest).length > 0 ? rest : null;
+  });
+  return changed ? out : styles;
+}

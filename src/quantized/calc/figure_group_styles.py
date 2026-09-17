@@ -67,9 +67,16 @@ def _level_style(spec: Mapping[str, Any], n_levels: int) -> dict[str, Any]:
     out: dict[str, Any] = dict(spec)  # shallow copy -- never mutate the caller's
     out.pop("color_by", None)
     out.pop("colormap", None)
-    # `legend` is the BUG-014 rename; it is consumed at the route layer by
-    # `series_legends` (it names the channel half of the level label template)
-    # and no renderer reads it, so an expanded STYLE entry must not carry it.
+    # `legend` is the BUG-014 rename. It is consumed at the ROUTE layer -- on
+    # this branch by `build_grouped_series`' `"{legend} ({group}={level})"`
+    # template (`series_legends`), on the flat branch by
+    # `figure_labels.series_display_name` -- and `calc.figure._plot_kwargs`
+    # names every key it reads, so the copy sitting in a style dict is inert on
+    # BOTH branches. It is popped here and left alone on the flat branch
+    # (asymmetry deliberate, review NIT 8): this branch is the one that MINTS
+    # new per-level dicts, and a per-level entry carrying the channel's rename
+    # would read as a per-level label -- which it is not; the level's own name
+    # already came from that template one step earlier.
     out.pop("legend", None)
     fill = out.get("fill")
     if isinstance(fill, Mapping) and isinstance(fill.get("vs"), int):

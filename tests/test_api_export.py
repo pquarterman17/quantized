@@ -783,8 +783,10 @@ def test_figure_greyscale_defaults_to_off() -> None:
 # `_render_impl` also serves -- group_col/y2/x_breaks -- mirroring
 # test_calc_figure.py's own `_achromatic_hexes`. The prior "group_col" unit
 # test (test_calc_figure.py) called `render_figure` directly and never
-# actually went through the route's grouped-resolve branch (`_figure_
-# series`'s `group_col` path, which builds `series_styles=None` itself);
+# actually went through the route's grouped-resolve branch (`_figure_series`'s
+# `group_col` path, which resolves the styles and expands them onto the
+# per-level series itself -- `calc.figure_group_styles`, BUG-016; it used to
+# build `series_styles=None` there, which is the bug that entry records);
 # these do.
 # N1 (round-2 review): widened from stroke-only to stroke-OR-fill, same as
 # test_calc_figure.py's `_achromatic_hexes` -- a chromatic `fill:` (e.g. the

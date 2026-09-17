@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "../../../lib/regressionMatrix.testkit";
 import type { DataStruct } from "../../../lib/types";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 
@@ -133,5 +134,70 @@ describe("buildLegacyFigureDoc", () => {
     const config = buildLegacyFigureDoc(state, IDENTITY, OUTPUT)!.config;
     expect([config.xKey, config.yKeys, config.groupCol, config.xScale])
       .toEqual([spec.x_key, spec.y_keys, spec.group_col, spec.x_scale]);
+  });
+});
+
+// ── BUG-016 on the LEGACY Publication Preview path ──────────────────────────
+// The backend expands every `y_keys`-aligned entry onto its channel's
+// per-level series, so this path must not send a colour the user never chose:
+// one channel-aligned entry would paint EVERY level that one hue, while the
+// canvas cycles the palette per level. Round 1 wired the flag here and pinned
+// it nowhere (sabotaging it left the whole suite green — review F3); round 2
+// found the saved-array branch bypassed it entirely (review F1).
+describe("BUG-016 — a grouped legacy request's colour", () => {
+  let restorePalette: () => void = () => {};
+  beforeEach(() => {
+    restorePalette = installSeriesPalette();
+  });
+  afterEach(() => restorePalette());
+
+  const grouped = (over: Partial<LegacyFigureState>): LegacyFigureState =>
+    ({ ...BASE, docGroupCol: 1, ...over });
+
+  it("derives no palette colour for a grouped doc, and keeps the rest of the style", () => {
+    const state = grouped({ seriesStyles: { 0: { width: 3, line: "dashed" } } });
+    expect(buildLegacyFigureSpec(state)!.series_styles![0]).toEqual({ width: 3, line: "dashed" });
+    // Control: the SAME state ungrouped bakes the slot in, so this is about
+    // the flag and not about an unreadable palette.
+    expect(buildLegacyFigureSpec({ ...state, docGroupCol: null })!.series_styles![0])
+      .toEqual({ color: TEST_SERIES_PALETTE[0], width: 3, line: "dashed" });
+  });
+
+  it("still sends an EXPLICIT colour on a grouped doc — every level draws it", () => {
+    const state = grouped({ seriesStyles: { 0: { color: "#ffe066", width: 3 } } });
+    expect(buildLegacyFigureSpec(state)!.series_styles![0])
+      .toEqual({ color: "#ffe066", width: 3 });
+  });
+
+  // The F1 path: a pre-BUG-016 saved doc, or a graph style template applied to
+  // a grouped figure (`useGraphTemplates` builds its array flat, by design, so
+  // it stays portable onto a flat figure). Both arrive as `docSeriesStyles`
+  // with the palette slot already baked in.
+  it("strips the palette colour a PINNED array carries on a grouped doc", () => {
+    const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" as const }];
+    expect(buildLegacyFigureSpec(grouped({ docSeriesStyles: pinned }))!.series_styles)
+      .toEqual([{ width: 2, line: "dashed" }]);
+  });
+
+  it("keeps a PINNED explicit colour on a grouped doc", () => {
+    const pinned = [{ color: "#ffe066", width: 2 }];
+    expect(buildLegacyFigureSpec(grouped({ docSeriesStyles: pinned }))!.series_styles)
+      .toEqual(pinned);
+  });
+
+  it("leaves a pinned array alone on a FLAT doc — the strip is grouped-only", () => {
+    const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+    const spec = buildLegacyFigureSpec({ ...BASE, docGroupCol: null, docSeriesStyles: pinned })!;
+    expect(spec.series_styles).toEqual(pinned);
+  });
+
+  it("saves what the preview renders: the stripped array reaches the doc too", () => {
+    // The two builders share one `exportStyles` helper precisely so a saved
+    // doc cannot reopen looking different from the preview it was saved from.
+    const state = grouped({ docSeriesStyles: [{ color: TEST_SERIES_PALETTE[0], width: 2 }] });
+    expect(buildLegacyFigureDoc(state, IDENTITY, OUTPUT)!.config.seriesStyles)
+      .toEqual(buildLegacyFigureSpec(state)!.series_styles);
+    expect(buildLegacyFigureDoc(state, IDENTITY, OUTPUT)!.config.seriesStyles)
+      .toEqual([{ width: 2 }]);
   });
 });
