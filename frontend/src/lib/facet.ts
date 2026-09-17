@@ -303,14 +303,20 @@ export function breakCompositionFromBreaks(
   yKeys: number[] | null,
 ): Composition | null {
   // `!breaks?.length` FIRST, before `analysisData` (review round 3, finding
-  // 2): this runs on EVERY render of the focused Stage hook and of every
-  // background plot window, and the overwhelmingly common case is a plain XY
-  // figure with no break at all. `analysisData` is not free -- `droppedRows`
-  // -> `pruneExcluded` copies `time` + `values` whenever the dataset has any
-  // excluded row, and re-runs the Data Filter predicate over every row when
-  // one is active. Measured on this tree, 50 000 rows with one excluded row,
-  // no facet and no break, 100 calls: 561.2 ms without this line (5.6 ms per
-  // call), 0.0 ms with it. `breakCompositionFromData` re-checks the same
+  // 2): both call sites (`Stage/useEffectiveComposition.ts`,
+  // `BackgroundPlotWindow.tsx`) gate this behind a `useMemo`, so it runs on
+  // every RECOMPUTATION whose deps changed, not literally every render --
+  // still frequent, since the dataset object's identity changes on every row
+  // edit, exclusion toggle and filter change, and `active`/`xKey`/`yKeys` are
+  // deps too (round-3 review NIT 2). The overwhelmingly common case among
+  // those recomputations is a plain XY figure with no break at all.
+  // `analysisData` is not free -- `droppedRows` -> `pruneExcluded` copies
+  // `time` + `values` whenever the dataset has any excluded row, and re-runs
+  // the Data Filter predicate over every row when one is active. Measured on
+  // this tree (2026-09-17, in-repo vitest/jsdom, one machine -- expect this
+  // to vary), 50 000 rows with one excluded row, no facet and no break, 100
+  // calls: ~273-318 ms without this line (~2.7-3.2 ms per call, three runs),
+  // ~0.1 ms with it. `breakCompositionFromData` re-checks the same
   // condition, so this line is a pure guard and changes no result.
   if (!breaks?.length || !dataset) return null;
   return breakCompositionFromData(analysisData(dataset) ?? dataset.data, breaks, xKey, yKeys);

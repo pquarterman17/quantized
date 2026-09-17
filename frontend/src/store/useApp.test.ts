@@ -6100,10 +6100,15 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
   //
   // It is UNCONDITIONAL here, unlike the focused branch's `s.activeId !== id`
   // gate, and the second case pins that deliberately: this branch re-applies
-  // `datasetViewDefaults` wholesale, so `xKey`, `yKeys` and `facetKey` all
-  // reset even when the SAME dataset is dropped back on. The break is that
-  // same class of binding and resets with them, rather than being the one
-  // field that survives a gesture which resets everything around it.
+  // `datasetViewDefaults` wholesale, and `facetKey` -- the one channel-keyed
+  // binding per-technique view memory (`lib/techniqueViewMemory.ts`)
+  // deliberately does NOT carry -- resets even when the SAME dataset is
+  // dropped back on. The break is that same class of channel-keyed binding
+  // and resets with `facetKey`, rather than being the one field that
+  // survives a gesture which resets everything around it. `xKey`/`yKeys`
+  // are a DIFFERENT case: a technique-tagged dataset's memory DOES carry
+  // them, so they can come back restored on a same-dataset re-drop instead
+  // of resetting -- see the technique-memory test below (round-3 review NIT 1).
   it("rebindWindow on a BACKGROUND window drops an authored x-break with the rest of the bindings", () => {
     seedTwoDatasets();
     const withBreak = (id: string, datasetId: string): PlotWindow => {
@@ -6157,6 +6162,61 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
     // the break follows it, which is the consistency this pins.
     expect(w2.document?.bindings.facetKey).toBeNull();
     expect(w2.document?.plot.axisBreaks.x).toEqual([]);
+  });
+
+  // Round-3 review NIT 1: the comment above (and this file's prior version of
+  // this test) claimed `xKey`/`yKeys` reset on a same-dataset re-drop too,
+  // like `facetKey`. FALSE for a technique-tagged dataset — `windows.ts`'s
+  // background branch captures the OUTGOING live view into
+  // `techniqueViewMemory` one line before it calls `datasetViewDefaults`, and
+  // that memory carries `xKey`/`yKeys` (not `facetKey` — deliberately excluded,
+  // `lib/techniqueViewMemory.ts`'s field-set doc), so on a same-dataset
+  // re-drop the memory just captured is replayed straight back over
+  // `datasetViewDefaults`' nulls. Only `facetKey` — the channel-keyed binding
+  // memory does NOT carry — and the break that rides its class actually
+  // reset here; `xKey`/`yKeys` come back.
+  it("rebindWindow restores xKey/yKeys from technique memory on a SAME-dataset re-drop, but still drops facetKey and the break", () => {
+    const xrdData: DataStruct = {
+      time: [1, 2, 3],
+      values: [
+        [1, 2, 3],
+        [10, 20, 30],
+      ],
+      labels: ["angle", "counts"],
+      units: ["deg", "cps"],
+      metadata: { technique: "xrd.powder" },
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "xrd", data: xrdData }],
+      activeId: "d1",
+      selectedIds: ["d1"],
+    });
+    const w = win({ id: "w2", datasetId: "d1" });
+    const liveView = { ...w.view, xKey: 1, yKeys: [0], facetKey: 0 };
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1" }),
+        {
+          ...w,
+          view: liveView,
+          document: createFigureDocument({
+            id: "fig-w2",
+            name: "w2",
+            datasetId: "d1",
+            view: liveView,
+            axisBreaks: { x: [[2, 3]] },
+          }),
+        },
+      ],
+      focusedWindowId: "w1",
+      techniqueViewMemory: {},
+    });
+    useApp.getState().rebindWindow("w2", "d1"); // the same dataset, re-dropped
+    const w2 = useApp.getState().plotWindows.find((w) => w.id === "w2")!;
+    expect(w2.document?.bindings.xKey).toBe(1); // restored from technique memory
+    expect(w2.document?.bindings.yKeys).toEqual([0]); // restored from technique memory
+    expect(w2.document?.bindings.facetKey).toBeNull(); // NOT carried by memory -- resets
+    expect(w2.document?.plot.axisBreaks.x).toEqual([]); // same class as facetKey -- resets
   });
 
   it("rebindWindow is a no-op for an unknown window or dataset id", () => {

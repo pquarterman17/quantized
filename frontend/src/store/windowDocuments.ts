@@ -53,10 +53,15 @@ export interface CreatePlotWindowDocumentOptions {
    *  the already-active dataset (`setActive`'s own `s.activeId !== id` test),
    *  nor to a same-dataset reimport or error resync — neither is a dataset
    *  switch. An explicit DROP onto a BACKGROUND window is the one deliberate
-   *  exception: that branch re-applies `datasetViewDefaults` wholesale, so
-   *  `xKey`, `yKeys` and `facetKey` all reset even when the same dataset is
-   *  dropped back on, and an x-break is that same class of binding — it
-   *  resets with them (round 3, finding 7; pinned by `store/useApp.test.ts`). */
+   *  exception: that branch re-applies `datasetViewDefaults` wholesale, and
+   *  `facetKey` — the one channel-keyed binding `store/windows.ts`'s
+   *  per-technique view memory (`lib/techniqueViewMemory.ts`) deliberately
+   *  does NOT carry — resets even when the same dataset is dropped back on.
+   *  An x-break is that same class of channel-keyed binding, so it resets
+   *  with `facetKey` (round 3, finding 7; pinned by `store/useApp.test.ts`).
+   *  `xKey`/`yKeys` are a DIFFERENT case: a technique-tagged dataset's
+   *  memory does carry them, so they can come back restored on a
+   *  same-dataset re-drop rather than resetting (round-3 review NIT 1). */
   resetAxisBreaks?: boolean;
 }
 

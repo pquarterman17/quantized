@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 // Round 3, finding 2: `breakCompositionFromBreaks` must NOT resolve the
@@ -695,6 +699,33 @@ describe("break arrangements have ONE construction site (review NIT 13)", () => 
       /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
       (_m, str: string | undefined) => str ?? "",
     );
+
+  // Round-3 review NIT 5: the block above is byte-identical to
+  // `architecture.test.ts`'s own `stripComments`, but until now nothing tied
+  // them, so a future fix to the master (that file already records two
+  // residual over-reports) could diverge here silently. Neither file may
+  // IMPORT the other's stripper -- `architecture.test.ts` must not pull in
+  // the runtime modules its own corpus scan guards, and this file's copy is
+  // deliberately local to this `describe` -- so this reads both sources off
+  // disk and compares the same anchored slice, extracted the same way, from
+  // each. A change to either copy alone fails this the moment they diverge.
+  it("stays byte-identical to architecture.test.ts's master stripComments (NIT 5)", () => {
+    const anchor = "const stripComments = (src: string): string =>";
+    const extractStripComments = (source: string): string => {
+      const start = source.indexOf(anchor);
+      expect(start, `anchor not found: ${JSON.stringify(anchor)}`).toBeGreaterThan(-1);
+      const end = source.indexOf(");", start);
+      expect(end, "closing `);` not found after the anchor").toBeGreaterThan(-1);
+      return source.slice(start, end + 2);
+    };
+    const thisFilePath = fileURLToPath(import.meta.url);
+    const thisFile = readFileSync(thisFilePath, "utf8");
+    const architectureFile = readFileSync(
+      join(dirname(thisFilePath), "..", "architecture.test.ts"),
+      "utf8",
+    );
+    expect(extractStripComments(thisFile)).toBe(extractStripComments(architectureFile));
+  });
 
   it("ignores a mere COMMENT that names breakComposition( (NIT 8)", () => {
     // Non-vacuity for the stripper itself, both ways round.
