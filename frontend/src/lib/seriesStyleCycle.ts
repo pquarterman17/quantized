@@ -119,14 +119,6 @@ export interface CycleView {
   statMode: boolean;
   xKey: number | null;
   yKeys: readonly number[] | null;
-  /** BUG-013 round 3: the secondary-Y binding, read ONLY by
-   *  `lib/waterfallOffset.waterfallWire` (through
-   *  `plotGroupSplit.canvasGroupCol`) to learn whether a `groupKey` above is
-   *  one the canvas actually splits by — it degrades a grouped view to a plain
-   *  ungrouped overlay whenever this is non-empty. Optional because it is not
-   *  part of the P3.3 cycle's own question: `overlayExportsSeriesStyles` is
-   *  unchanged, and a caller that omits the field behaves exactly as before. */
-  y2Keys?: readonly number[] | null;
 }
 
 /** Do the canvas and its publication export draw the SAME display list?

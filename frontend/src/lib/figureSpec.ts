@@ -41,9 +41,9 @@ import {
   mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
-import { resolveGroupCol } from "./figureSpecGroup";
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
+import { canvasGroupCol } from "./plotGroupSplit";
 import { pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
@@ -260,11 +260,12 @@ function buildFigureSpecForView(
     scale: st.yScale,
     fmt: st.yFmt,
   });
-  // See `figureSpecGroup.resolveGroupCol`'s own doc: degrades `group_col`
+  // See `plotGroupSplit.canvasGroupCol`'s own doc: degrades `group_col`
   // exactly like the canvas (BUG-013 round 5; round 4's throw for a REALLY
-  // rendered y2 is gone — the canvas draws that cell too). Reused below AS
-  // the waterfall's resolved grouping, so the two never disagree.
-  const groupCol = resolveGroupCol(extras.groupKey, st.y2Keys);
+  // rendered y2 is gone). Called directly — NIT 9 deleted the one-line
+  // `figureSpecGroup` wrapper, a second name for this one predicate. Reused
+  // below AS the waterfall's resolved grouping, so the two never disagree.
+  const groupCol = canvasGroupCol(extras.groupKey, st.y2Keys);
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.

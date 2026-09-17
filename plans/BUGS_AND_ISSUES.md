@@ -4101,13 +4101,16 @@ A fourth adversarial review, of `1fcc4137`, returned **2 CONFIRMED** and
   `group_col` combined with `y2_keys`, and a degrade emits no `group_col` at
   all). Fixed by deleting the throw: `resolveGroupCol` is now `canvasGroupCol`
   itself, one function, one answer, for every cell. `computeCanonicalReadiness`
-  needed no change — with nothing left to throw, the Figure Builder's
-  preview naturally reports `"ready"` instead of `"invalid-spec"`, canExport
-  flips to true, and no new UI/warning channel was invented (none existed to
-  reuse, per the brief's own qualifier). Sabotage (S1 below) shows the fix is
-  covered by a new 7-cell truth table (`figureSpec.test.ts`) plus 5 existing
+  needed no change — with nothing left to throw on the GROUP path,
+  the Figure Builder's preview naturally reports `"ready"` instead of
+  `"invalid-spec"` for a grouped+y2 view, canExport flips to true, and no new
+  UI/warning channel was invented (none existed to reuse, per the brief's own
+  qualifier). `"invalid-spec"` itself is not dead: `figureSpecFacets.ts:101`'s
+  "no visible series to export" still throws it, for its own, unrelated
+  reason (round-5-review NIT 6). Sabotage (S1 below) shows the fix is
+  covered by a new 7-cell truth table (`figureSpec.test.ts`) plus 6 existing
   test sites across 4 files that pinned the old throw, all rewritten to
-  assert the degrade instead: `figureSpec.test.ts` (2 sites),
+  assert the degrade instead: `figureSpec.test.ts` (3 sites),
   `useFigureBuilder.test.ts`, `copyFigureCommand.test.ts`,
   `exportFigureCommand.test.ts`.
 - **CONFIRMED 2 — the live `buildFigureSpec` route could read two different
@@ -4154,6 +4157,29 @@ A fourth adversarial review, of `1fcc4137`, returned **2 CONFIRMED** and
   redundant** after fix 2 (round 4's "redundant... left in place anyway" note
   is moot now that dropping it would be a compile error, not just an
   unreachable-in-practice branch).
+- **NIT 8 (named residual) — on the LIVE route, the wire's curve SET still
+  does not match the canvas' after this fix; only the stagger STEP does.**
+  `buildFigureSpec` (`lib/figureSpec.ts:125-129`) is the legacy/live builder
+  "Copy figure"/"Export figure…" fall back to when no canonical document
+  applies (`buildStageFigureSpec`'s rare fallback, round-4 CONFIRMED 1's own
+  finding) — its `extras` parameter has no `groupKey` field at all, so it
+  structurally cannot carry a group binding onto the wire regardless of this
+  fix. Measured (`st.groupKey:0, yKeys:[1,2,3], waterfall:0.25`, 4 rows, 2
+  group levels): wire emits `group_col` absent, `y_keys:[1,2,3],
+  waterfall_offsets:[0, 99.75, 199.5]`; the canvas (`Stage/usePlotPayload.ts`,
+  `applyGroupSplit` at `:340`) draws **6** split series, staggered across 6
+  slots with that SAME step. Before this fix the live route emitted neither
+  `group_col` nor `waterfall_offsets` at all (a flat, un-staggered 3-curve
+  figure) — the fix is still a net improvement on BUG-013's own "does the
+  export look like the screen" axis, and matches the canvas' own stagger
+  amount — but the exported curve SET (3 curves) is not the canvas' curve set
+  (6 split series), so this residual is not closed by this commit. Closing it
+  needs `buildFigureSpec` to gain a `groupKey` field (or for every "Copy
+  figure"/"Export figure…" caller to route through
+  `buildFigureSpecFromDocument` instead, closing round-4 CONFIRMED 1's
+  fallback rather than widening the legacy builder) — out of this round's
+  scope, tracked here rather than left implicit in "the figure is the
+  canvas."
 
 Sabotage table (scope `src/lib/figureSpec.test.ts src/lib/waterfallOffset.
 test.ts src/components/workshops/figurebuilder/useFigureBuilder.test.ts`,
@@ -4179,6 +4205,26 @@ worktree`s, the third the worktree this commit was made in): `19018015` and
 this commit **913,181 B**, **-68 B** — comment trims (finding 1's throw
 removal, finding 2's doc rewrite) outweighing the small amount of new test
 code, none of which is eagerly reachable.
+
+**Record correction (round-5-review CONFIRMED 1 / NIT 5, added after the
+fact):** every number in the paragraph above was measured on the
+**pre-cherry-pick worktree**, whose parent was `1fcc4137`, not on the
+branch — `git rev-parse 97eeb1a4^` is `65ecbf81` (BUG-014 round 5), which
+sits between `1fcc4137` and `97eeb1a4` and lands inside both the recorded
+vitest scope and eager code. Re-measured on the branch at `97eeb1a4` itself,
+exact recorded scope, foreground, clean tree: **351 files / 6602 tests
+passed, 0 failed** (`65ecbf81` alone added `frontend/src/lib/
+sanitizeRecord.test.ts` plus 16 tests across four existing files — the exact
++1 file / +16 test delta). `65ecbf81`'s own commit body independently
+records "Eager bundle 913,249 -> 913,348 B (+99)", so the branch total at
+`97eeb1a4` is **913,348 − 68 = 913,280 B**, not the recorded 913,181 B — the
+**−68 B delta above is still a fair ISOLATED measurement of this diff** (its
+base tree differs from the branch by this diff alone), only the recorded
+absolute was wrong. Restated pair, both SHAs named: parent `65ecbf81` =
+**913,348 B**, `97eeb1a4` = **913,280 B** (arithmetic from two committed
+records, not a fresh build of either). The CONFIRMED 1 paragraph above ("Five
+… test sites") is corrected in place to **six** (`figureSpec.test.ts` had
+three rewritten sites, not two).
 
 ---
 

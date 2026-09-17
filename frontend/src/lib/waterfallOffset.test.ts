@@ -55,10 +55,13 @@ const XY: CycleView = {
 
 // `groupCol` is REQUIRED (round 5 — no fallback inside `waterfallWire`
 // itself, see its doc). The default here mirrors what a real caller
-// (`figureSpec.ts`) resolves BEFORE calling in — `resolveGroupCol`/
-// `canvasGroupCol` over the view's own binding — so a test that only
+// (`figureSpec.ts`) resolves BEFORE calling in — `canvasGroupCol` over the
+// view's own binding — so a test that only
 // overrides `view` still exercises the resolved-value contract, not a
-// bypass of it.
+// bypass of it. `y2Keys` no longer lives on `CycleView` (it had no reader —
+// this module took `groupCol` pre-resolved from round 5 on), so the default
+// asks `canvasGroupCol` with no secondary-axis argument; no fixture in this
+// file ever set one, so the resolved value is unchanged.
 function wire(over: Partial<Parameters<typeof waterfallWire>[0]> = {}) {
   const view = over.view ?? XY;
   return waterfallWire({
@@ -67,7 +70,7 @@ function wire(over: Partial<Parameters<typeof waterfallWire>[0]> = {}) {
     positions: [0, 1, 2],
     fraction: GOLDEN_FRACTION,
     view,
-    groupCol: canvasGroupCol(view.groupKey, view.y2Keys),
+    groupCol: canvasGroupCol(view.groupKey, undefined),
     ...over,
   });
 }

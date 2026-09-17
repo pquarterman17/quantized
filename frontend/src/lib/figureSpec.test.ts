@@ -392,17 +392,31 @@ describe("FigureDocument FigureSpec adapter", () => {
 });
 
 // BUG-013 round 5 review's truth table: document route == canvas for
-// `group_col` presence and `waterfall_offsets` in every cell of
-// (groupKey, y2 state). `data`'s own channels 1/2/3 ("signal"/"right"/"plus")
-// are the review's own fixture; the "canvas" side is computed from the SAME
-// raw columns through the SAME `canvasGroupCol`/`waterfallSpan` primitives
-// the canvas itself resolves through (`Stage/usePlotPayload`,
-// `lib/waterfallOffset.ts`), never hardcoded, so this fails the moment either
-// side's rule drifts from the other.
-describe("BUG-013 round 5: document route matches the canvas in every group/y2 cell", () => {
+// `group_col` presence and `waterfall_offsets`, over 6 distinct cells of
+// (groupKey, y2 state) — {ungrouped, grouped} x {no y2, y2 plotted, y2
+// hidden} — plus cell 7 (y2 not in `yKeys` at all) below as its own test.
+// `data`'s own channels 1/2/3 ("signal"/"right"/"plus") are the review's own
+// fixture. Two independent assertions per cell, round-5-review NIT 4's fix
+// for a truth table that was tautological for the very rule it names:
+//   - the AGREEMENT check, against the "canvas" side computed from the SAME
+//     raw columns through the SAME `canvasGroupCol`/`waterfallSpan`
+//     primitives the canvas itself resolves through (`Stage/usePlotPayload`,
+//     `lib/waterfallOffset.ts`) — never hardcoded, so it fails the moment
+//     either side's rule drifts from the other (measured: catches a
+//     wire-only drift, round-5 review's sabotage S8);
+//   - a HARDCODED expectation baked into each cell below — because the
+//     agreement check alone moves both sides together, so a WRONG shared
+//     degrade rule (never degrades; always degrades) leaves every
+//     parameterized cell green. Measured (round-5 review S5/S6, reproduced
+//     here): `canvasGroupCol` returning `groupKey ?? null` unconditionally,
+//     or `null` unconditionally, both now fail every cell whose hardcoded
+//     `expectGroupCol`/`expectOffsets` the mutation disagrees with.
+describe("BUG-013 round 5: document route matches the canvas over 6 group/y2 cells", () => {
   const CH = [1, 2, 3]; // signal, right, plus
   const COLS = CH.map((c) => data.values.map((row) => row[c]));
   const FRACTION = 0.25;
+  const FULL_OFFSETS = [0, 74.75, 149.5]; // FRACTION * waterfallSpan(COLS) per slot, 3 surviving channels
+  const TWO_OF_THREE_OFFSETS = [0, 74.75]; // same step; channel 3's slot dropped (hidden)
   const docWith = (over: { groupKey?: number | null; y2Keys?: number[]; hiddenChannels?: number[] }) =>
     createFigureDocument({
       id: `cell-${JSON.stringify(over)}`,
@@ -419,23 +433,42 @@ describe("BUG-013 round 5: document route matches the canvas in every group/y2 c
       groupKey: over.groupKey ?? null,
     });
 
-  const CELLS: { name: string; groupKey: number | null; y2Keys: number[]; hiddenChannels: number[] }[] = [
-    { name: "1 ungrouped, no y2", groupKey: null, y2Keys: [], hiddenChannels: [] },
-    { name: "2 ungrouped, y2 plotted", groupKey: null, y2Keys: [3], hiddenChannels: [] },
-    { name: "3 grouped, no y2", groupKey: 0, y2Keys: [], hiddenChannels: [] },
-    { name: "4 grouped, y2 PLOTTED (round 5 fix)", groupKey: 0, y2Keys: [3], hiddenChannels: [] },
-    { name: "5 grouped, y2 hidden", groupKey: 0, y2Keys: [3], hiddenChannels: [3] },
-    { name: "6 grouped, y2 solo'd-out (same wire path as hidden)", groupKey: 0, y2Keys: [3], hiddenChannels: [3] },
+  const CELLS: {
+    name: string;
+    groupKey: number | null;
+    y2Keys: number[];
+    hiddenChannels: number[];
+    /** Hardcoded, not derived from `canvasGroupCol`/`waterfallSpan` — see
+     *  this describe block's header (NIT 4). */
+    expectGroupCol: number | null;
+    expectOffsets: number[] | undefined;
+  }[] = [
+    { name: "1 ungrouped, no y2", groupKey: null, y2Keys: [], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "2 ungrouped, y2 plotted", groupKey: null, y2Keys: [3], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "3 grouped, no y2", groupKey: 0, y2Keys: [], hiddenChannels: [], expectGroupCol: 0, expectOffsets: undefined },
+    { name: "4 grouped, y2 PLOTTED (round 5 fix)", groupKey: 0, y2Keys: [3], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "5 grouped, y2 hidden", groupKey: 0, y2Keys: [3], hiddenChannels: [3], expectGroupCol: null, expectOffsets: TWO_OF_THREE_OFFSETS },
+    // Round-5-review NIT 3: this cell used to be byte-identical to cell 5
+    // ("solo'd-out", same wire path as hidden, zero added coverage). The
+    // ungrouped x hidden-y2 combination was never exercised at all, so this
+    // replaces it rather than adding a 7th duplicate.
+    { name: "6 ungrouped, y2 hidden", groupKey: null, y2Keys: [3], hiddenChannels: [3], expectGroupCol: null, expectOffsets: TWO_OF_THREE_OFFSETS },
   ];
-  it.each(CELLS)("$name", ({ groupKey, y2Keys, hiddenChannels }) => {
+  it.each(CELLS)("$name", ({ groupKey, y2Keys, hiddenChannels, expectGroupCol, expectOffsets }) => {
     const canvasCol = canvasGroupCol(groupKey, y2Keys);
     const doc = docWith({ groupKey, y2Keys, hiddenChannels });
     const spec = buildFigureSpecFromDocument(doc, dataset, "cell");
+    // Agreement: the wire must match whatever the canvas primitive resolves.
     expect(spec.group_col ?? null).toBe(canvasCol);
-    if (canvasCol !== null) {
+    // Hardcoded: the canvas primitive itself must resolve to the number this
+    // cell actually expects, not just to a value it agrees with.
+    expect(canvasCol).toBe(expectGroupCol);
+    expect(spec.group_col ?? null).toBe(expectGroupCol);
+    if (expectGroupCol !== null) {
       // A real group split: the renderer expands per-level series, so the
       // XY overlay's waterfall has nothing to stagger.
       expect(spec.waterfall_offsets).toBeUndefined();
+      expect(expectOffsets).toBeUndefined();
       return;
     }
     // Degraded (or never grouped) to a plain overlay: the canvas stripes
@@ -446,6 +479,7 @@ describe("BUG-013 round 5: document route matches the canvas in every group/y2 c
       (v): v is number => v !== null,
     );
     expect(spec.waterfall_offsets).toEqual(offsets);
+    expect(spec.waterfall_offsets).toEqual(expectOffsets);
   });
 
   // Cell 7 needs its own case: channel 3 isn't in `yKeys` at all, so the

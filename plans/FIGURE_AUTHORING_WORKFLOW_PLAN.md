@@ -2539,15 +2539,23 @@ recorded above instead.
      document.bindings.datasetId === ds.id`, not a bare dataset-id compare —
      dropping the frozen clause would silently reopen this exact gap for a
      window seeded from a frozen editable figure.
-- **Grouped + secondary axis fails visibly, for the first time on Stage
-  copy/export.** The shared core already rejects that combination
-  ("grouped figures cannot use a secondary Y axis") — `buildFigureSpec`
-  never exercised the check because it never passed `groupKey` at all, so a
-  Stage copy/export of a grouped+y2 window used to silently drop the
-  grouping (not fail) before this fix. Now that the document path can be
-  reached, the same window throws, and `exportActive`'s existing try/catch
-  turns it into the ordinary copy-failed/export-failed toast+status — no
-  new wiring needed, only a test proving it (both command test files).
+- **Grouped + secondary axis failed visibly, for the first time on Stage
+  copy/export — since superseded (BUG-013 round 5).** At the time this was
+  written, the shared core rejected that combination ("grouped figures
+  cannot use a secondary Y axis") — `buildFigureSpec` never exercised the
+  check because it never passed `groupKey` at all, so a Stage copy/export of
+  a grouped+y2 window used to silently drop the grouping (not fail) before
+  this fix, and once the document path could be reached, the same window
+  threw, with `exportActive`'s existing try/catch turning it into the
+  ordinary copy-failed/export-failed toast+status. BUG-013 round 5 deleted
+  that refusal: `figureSpec.ts` now degrades the same combination to a plain
+  ungrouped overlay via `plotGroupSplit.canvasGroupCol` (called directly —
+  the one-line `figureSpecGroup.resolveGroupCol` alias that briefly sat
+  between them was itself deleted, round-5-review NIT 9), matching what the
+  canvas already drew, so a Stage copy/export of a grouped+y2 window no
+  longer throws — it
+  exports the degraded overlay instead (`plans/BUGS_AND_ISSUES.md`'s BUG-013
+  round 5 entry).
 - **Dialog/copy-default choices still win**, per contract:
   `buildStageFigureSpec` maps every `FigureRenderOpts` field (`fmt`,
   `style`, `dpi`, `title`, `xLabel`, `yLabel`) straight onto

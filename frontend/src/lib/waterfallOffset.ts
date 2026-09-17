@@ -181,9 +181,10 @@ export function readLiveWaterfallSpan(datasetId: string): number | null {
  *  The GROUP clause of that predicate is asked about the grouping this request
  *  actually carries, not the view's raw binding (BUG-013 round 3). `groupCol`
  *  is REQUIRED and carries that answer directly — the exact value
- *  `figureSpec.ts` already resolved with `figureSpecGroup.resolveGroupCol`
- *  (itself `plotGroupSplit.canvasGroupCol`, the rule `Stage/usePlotPayload`
- *  applies to decide what to draw) and put on the wire as `group_col`. Round 4
+ *  `figureSpec.ts` already resolved with `plotGroupSplit.canvasGroupCol`
+ *  (the same rule `Stage/usePlotPayload` applies to decide what to draw;
+ *  NIT 9 deleted the one-line `figureSpecGroup.resolveGroupCol` alias that
+ *  used to sit between them) and put on the wire as `group_col`. Round 4
  *  had this fall back to a SECOND `canvasGroupCol` call over the view's raw
  *  binding whenever `groupCol` was `null` — indistinguishable from "not
  *  resolved yet" — so a route that resolved `group_col` to null (an explicit

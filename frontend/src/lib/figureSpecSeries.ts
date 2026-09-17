@@ -175,10 +175,6 @@ export function resolveSeriesCycle(
     statMode: st.statMode,
     xKey: st.xKey,
     yKeys: st.yKeys,
-    // Read only by the waterfall wire (see `CycleView.y2Keys`): a grouped view
-    // with a secondary Y axis is drawn — and staggered — as a plain ungrouped
-    // overlay, and the live route puts no `group_col` on the wire for it either.
-    y2Keys: st.y2Keys,
   };
   return { view, cycle: autoSeriesStyles === true && overlayExportsSeriesStyles(view) };
 }
