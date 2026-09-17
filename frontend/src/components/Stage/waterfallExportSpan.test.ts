@@ -21,7 +21,7 @@ import { buildStageFigureSpec } from "../../lib/figureSpec";
 import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView } from "../../lib/plotview";
 import { buildColumns, type PlotPayload } from "../../lib/plotdata";
-import { publishLiveWaterfallSpan } from "../../lib/waterfallOffset";
+import { publishLiveWaterfallSpan, readLiveWaterfallSpan } from "../../lib/waterfallOffset";
 import type { Dataset, DataStruct } from "../../lib/types";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload, type PlotPayloadParams } from "./usePlotPayload";
@@ -64,9 +64,9 @@ const EMPTY_LABELS: PlotPayloadParams["seriesLabels"] = {};
 const EMPTY_ERR_KEYS: PlotPayloadParams["errKeys"] = {};
 const EMPTY_HIDDEN: PlotPayloadParams["hiddenChannels"] = [];
 
-function params(xLim: [number, number] | null): PlotPayloadParams {
+function params(xLim: [number, number] | null, ds: Dataset = DATASET): PlotPayloadParams {
   return {
-    active: DATASET,
+    active: ds,
     yScale: "linear",
     xScale: "linear",
     xKey: null,
@@ -94,13 +94,14 @@ function params(xLim: [number, number] | null): PlotPayloadParams {
 function useStageLike(p: PlotPayloadParams) {
   const r = usePlotPayload(p);
   useLiveSnapshotPublish({
-    active: DATASET,
+    active: p.active ?? null,
     polarMode: false,
     statMode: false,
     stackMode: false,
     plottedCount: r.plotted.length,
     composition: null,
     payload: r.payload,
+    payloadDatasetId: r.payloadDatasetId,
     displayPayload: r.displayPayload,
     styleList: r.styleList,
     labelList: r.labelList,
@@ -178,5 +179,65 @@ describe("waterfall export parity across a windowed re-fetch (BUG-013 finding 2)
     // y-range is 1981 - 0, and 0.25 of it is 495.25.
     const spec = buildStageFigureSpec(stage(false), DATASET, "big", OPTS);
     expect(spec.waterfall_offsets?.[1]).toBeCloseTo(495.25, 12);
+  });
+});
+
+// BUG-013 round 3, findings 1 and 8. The seam used to publish the span under
+// `args.active.id` — the store's CURRENT dataset, which a switch advances
+// SYNCHRONOUSLY — while the span itself came from `usePlotPayload`'s payload
+// STATE, which keeps the PREVIOUS dataset's rows for the whole fetch round
+// trip. `readLiveWaterfallSpan(newDataset)` therefore handed out the old
+// dataset's span, and an export taken in that window staggered the new dataset
+// by it. Nothing varied the dataset here before, which is why the mismatch
+// between the two sources went unnoticed.
+const SPAN_200: DataStruct = {
+  time: [0, 1, 2],
+  values: [
+    [0, 100],
+    [100, 200],
+    [200, 150],
+  ],
+  labels: ["A", "B"],
+  units: ["", ""],
+  metadata: {},
+};
+const SPAN_2: DataStruct = {
+  time: [0, 1, 2],
+  values: [
+    [0, 1],
+    [1, 2],
+    [2, 1.5],
+  ],
+  labels: ["A", "B"],
+  units: ["", ""],
+  metadata: {},
+};
+const DS_A: Dataset = { id: "dsA", name: "a.csv", data: SPAN_200 };
+const DS_B: Dataset = { id: "dsB", name: "b.csv", data: SPAN_2 };
+
+describe("the published span is keyed by the PAYLOAD's dataset (BUG-013 round 3)", () => {
+  it("names no span for a dataset whose fetch is still in flight", async () => {
+    fetchPlotMock.mockResolvedValueOnce(buildColumns(SPAN_200, null, null, [0, 1]));
+    const { result, rerender } = renderHook((p: PlotPayloadParams) => useStageLike(p), {
+      initialProps: params(null, DS_A),
+    });
+    await waitFor(() => expect(result.current.payloadDatasetId).toBe("dsA"));
+    expect(readLiveWaterfallSpan("dsA")).toBeCloseTo(200, 12);
+
+    // Switch datasets. dsB's fetch never resolves, so the canvas on screen is
+    // still drawing dsA's rows — and that is exactly what the seam must say.
+    fetchPlotMock.mockReturnValueOnce(new Promise<never>(() => undefined));
+    rerender(params(null, DS_B));
+
+    expect(result.current.payloadDatasetId).toBe("dsA");
+    expect(readLiveWaterfallSpan("dsB")).toBeNull();
+    expect(readLiveWaterfallSpan("dsA")).toBeCloseTo(200, 12);
+
+    // The export of dsB taken in that window measures dsB's OWN rows:
+    // 0.25 x 2 = 0.5. Under the old key it took dsA's published 200 and
+    // staggered by 50 — a hundred times too much, and 25x dsB's y-range.
+    expect(buildStageFigureSpec(stage(false), DS_B, "b", OPTS).waterfall_offsets).toEqual([0, 0.5]);
+    // Non-vacuous companion: dsA, whose span IS published, still gets it.
+    expect(buildStageFigureSpec(stage(false), DS_A, "a", OPTS).waterfall_offsets).toEqual([0, 50]);
   });
 });

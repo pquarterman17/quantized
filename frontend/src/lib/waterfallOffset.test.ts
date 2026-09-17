@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyWaterfall, buildColumns } from "./plotdata";
+import { applyWaterfall, buildColumns, dropTrailingEmptyRows } from "./plotdata";
 import {
   publishLiveWaterfallSpan,
   readLiveWaterfallSpan,
@@ -55,7 +55,7 @@ const XY: CycleView = {
 function wire(over: Partial<Parameters<typeof waterfallWire>[0]> = {}) {
   return waterfallWire({
     data: GOLDEN,
-    displayChannels: [0, 1, 2],
+    canvasChannels: [0, 1, 2],
     positions: [0, 1, 2],
     fraction: GOLDEN_FRACTION,
     view: XY,
@@ -134,7 +134,7 @@ describe("the canvas and the export wire resolve the SAME offsets", () => {
 describe("waterfallWire refusals", () => {
   it("emits nothing without a waterfall, or with a single display channel", () => {
     expect(wire({ fraction: 0 })).toEqual({});
-    expect(wire({ displayChannels: [0], positions: [0] })).toEqual({});
+    expect(wire({ canvasChannels: [0], positions: [0] })).toEqual({});
   });
 
   it("emits nothing for a grouped or faceted request", () => {
@@ -176,6 +176,68 @@ describe("waterfallWire honours the live canvas' span", () => {
   it("falls back to the DataStruct for a render with no live canvas behind it", () => {
     expect(wire({ span: null })).toEqual({ waterfall_offsets: GOLDEN_OFFSETS });
     expect(wire({ span: NaN })).toEqual({ waterfall_offsets: GOLDEN_OFFSETS });
+  });
+
+  // BUG-013 round 3, finding 4. `fetchPlot` ends BOTH of its return paths in
+  // `dropTrailingEmptyRows`, so no canvas has ever measured a raw DataStruct.
+  // The fallback used to, and the Origin over-allocation artefact that function
+  // exists for (trailing rows reading exactly 0 in x and every y) then dragged
+  // the measured range down to zero.
+  it("measures the fallback over the rows a canvas would draw, trailing padding dropped", () => {
+    const PADDED: DataStruct = {
+      time: [1, 2, 3, 0, 0],
+      values: [
+        [50, 60],
+        [65, 70],
+        [70, 75],
+        [0, 0],
+        [0, 0],
+      ],
+      labels: ["a", "b"],
+      units: ["", ""],
+      metadata: {},
+    };
+    // The canvas' own number, derived by running `applyWaterfall` on the
+    // payload `fetchPlot` would hand it — never hardcoded.
+    const before = dropTrailingEmptyRows(buildColumns(PADDED, null, null, [0, 1]));
+    const after = applyWaterfall(before, GOLDEN_FRACTION);
+    const canvasShift =
+      ((after.data[2] as (number | null)[])[0] as number) -
+      ((before.data[2] as (number | null)[])[0] as number);
+    // Non-vacuous: the padded rows really do move the answer (75 - 50 = 25 of
+    // real range, against 75 - 0 once the zero rows are counted).
+    expect(canvasShift).toBeCloseTo(6.25, 12);
+    expect(GOLDEN_FRACTION * waterfallSpan([[50, 65, 70, 0, 0], [60, 70, 75, 0, 0]])).toBeCloseTo(18.75, 12);
+
+    expect(wire({ data: PADDED, canvasChannels: [0, 1], positions: [0, 1] })).toEqual({
+      waterfall_offsets: [0, canvasShift],
+    });
+  });
+
+  // BUG-013 round 3, finding 3. `allowExplicitXAsY` keeps the X channel in the
+  // REQUEST's display list as a Y series; the canvas never draws it. Measuring
+  // the fallback span over the request's list therefore stretched it by a curve
+  // that is not on screen.
+  it("measures the fallback over the CANVAS' channels, not a request's X-as-Y extra", () => {
+    const X_AS_Y: DataStruct = {
+      time: [0, 1, 2],
+      values: [
+        [1000, 100, 1],
+        [2000, 200, 3],
+        [3000, 300, 5],
+      ],
+      labels: ["x", "b", "c"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    // Channel 0 is the x axis AND in yKeys; the canvas draws channels 1 and 2,
+    // whose combined range is 300 - 1 = 299 -> a step of 74.75. Channel 0's
+    // 1000..3000 lies entirely OUTSIDE that range, so measuring over the
+    // request's list would give 0.25 * (3000 - 1) = 749.75 instead.
+    const view: CycleView = { ...XY, xKey: 0, yKeys: [0, 1, 2] };
+    expect(
+      wire({ data: X_AS_Y, canvasChannels: [1, 2], positions: [2, 0, 1], view }),
+    ).toEqual({ waterfall_offsets: [149.5, 0, 74.75] });
   });
 
   it("the seam hands back a span only for the dataset it was measured from", () => {

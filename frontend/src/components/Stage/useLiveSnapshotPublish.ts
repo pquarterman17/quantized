@@ -36,6 +36,18 @@ export interface LiveSnapshotArgs {
    *  `lib/waterfallOffset.ts`'s header for why the export needs this number
    *  rather than re-measuring the DataStruct. */
   payload: PlotPayload | null;
+  /** The id of the dataset `payload` above was FETCHED for — `usePlotPayload`'s
+   *  own `payloadDatasetId`, which travels in the same `useState` as the rows.
+   *  NOT `active.id` (BUG-013 round 3): the store advances `active`
+   *  SYNCHRONOUSLY on a dataset switch while the new dataset's fetch is still in
+   *  flight, so publishing the span under `active.id` handed `readLive-
+   *  WaterfallSpan(newDataset)` a span measured from the OLD dataset's rows for
+   *  the whole round trip — measured at 200 for a dataset whose own span is 2,
+   *  i.e. a stagger 100x too large and wider than the figure. Keying by the
+   *  payload's own id makes the seam unable to name a dataset it has not seen:
+   *  mid-flight the old dataset's (still drawn) span is published under the OLD
+   *  id, and the new one simply has no published span until its rows arrive. */
+  payloadDatasetId: string | null;
   // Matches usePlotPayload's own return type exactly (each `| undefined`
   // while the payload is still being composed) — PlotStage passes these
   // straight through from that hook.
@@ -80,7 +92,7 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   // `applyWaterfall` scans. Recomputed here rather than returned by
   // `usePlotPayload` so the hook's three call sites (only ONE of which is the
   // focused Stage) cannot each publish a competing span.
-  const datasetId = args.active?.id ?? null;
+  const datasetId = args.payloadDatasetId;
   const rawPayload = args.payload;
   const span = useMemo(
     () =>

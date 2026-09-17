@@ -47,6 +47,7 @@ const args = (
   plottedCount: 2,
   composition: null,
   payload,
+  payloadDatasetId: "d1",
   displayPayload: payload,
   styleList,
   labelList: [undefined, undefined],

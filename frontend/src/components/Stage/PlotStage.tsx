@@ -154,6 +154,7 @@ export default function PlotStage() {
 
   const {
     payload,
+    payloadDatasetId,
     displayPayload,
     plotted,
     styleList,
@@ -240,6 +241,7 @@ export default function PlotStage() {
     plottedCount: plotted.length,
     composition,
     payload,
+    payloadDatasetId,
     displayPayload,
     styleList,
     labelList,

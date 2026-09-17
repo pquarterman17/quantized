@@ -28,6 +28,14 @@ export interface DisplaySeries {
    *  `uplotOpts.buildOpts` resolves that series' palette colour, dash/marker
    *  cycle and waterfall step against. */
   positions: number[];
+  /** The CANVAS' own display list — `displayChannels` minus an X channel that
+   *  `allowExplicitXAsY` kept as a Y series, which the canvas never draws. The
+   *  index space `positions` above are slots in. Returned (BUG-013 round 3)
+   *  because the waterfall STEP has to be measured over the same channels the
+   *  positions are resolved against: measuring it over `displayChannels`
+   *  stretched the span by an X channel with no curve on screen, exporting a
+   *  stagger 5x the canvas' on the measured fixture. */
+  canvasChannels: number[];
 }
 
 export interface DisplaySeriesInput {
@@ -101,7 +109,7 @@ export function resolveDisplaySeries(data: DataStruct, v: DisplaySeriesInput): D
     plotted.push(ch);
     positions.push(slot);
   }
-  return { displayChannels, plotted, positions };
+  return { displayChannels, plotted, positions, canvasChannels };
 }
 
 /** A request's answer to "does this view's canvas reproduce series-for-series?"
@@ -167,6 +175,10 @@ export function resolveSeriesCycle(
     statMode: st.statMode,
     xKey: st.xKey,
     yKeys: st.yKeys,
+    // Read only by the waterfall wire (see `CycleView.y2Keys`): a grouped view
+    // with a secondary Y axis is drawn — and staggered — as a plain ungrouped
+    // overlay, and the live route puts no `group_col` on the wire for it either.
+    y2Keys: st.y2Keys,
   };
   return { view, cycle: autoSeriesStyles === true && overlayExportsSeriesStyles(view) };
 }

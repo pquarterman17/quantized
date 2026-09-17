@@ -197,7 +197,7 @@ function buildFigureSpecForView(
   // slot in the CANVAS' own index space are resolved together by
   // `lib/figureSpecSeries.ts` -- see `resolveDisplaySeries`' doc for why the
   // positions come from the canvas' list rather than this request's.
-  const { displayChannels, plotted, positions } = resolveDisplaySeries(data, {
+  const { canvasChannels, plotted, positions } = resolveDisplaySeries(data, {
     yKeys: st.yKeys,
     xKey: st.xKey,
     seriesOrder: st.seriesOrder,
@@ -325,11 +325,14 @@ function buildFigureSpecForView(
     // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
     ...waterfallWire({
       data,
-      displayChannels,
+      canvasChannels,
       positions,
       fraction: st.waterfall,
       view: cycleView,
       span: extras.waterfallSpan,
+      // What this spec actually emits above, so the refusal is keyed on the
+      // request rather than on the view's binding (BUG-013 round 3).
+      groupCol: extras.groupKey,
     }),
     filename: extras.filename ?? stem,
   };
@@ -379,7 +382,12 @@ export function buildFigureSpecFromDocument(
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
       autoSeriesStyles: overrides.autoSeriesStyles,
-      waterfallSpan: overrides.waterfallSpan,
+      // BUG-013 round 3: dropped for a FROZEN document, in the same place and
+      // for the same reason `liveDataset` is — such a document renders its own
+      // snapshot and "intentionally ignores any live dataset". Scaling its
+      // stagger by the LIVE canvas' span flung the second curve 25x the
+      // snapshot's own y-range off the figure, and only on the Stage export.
+      waterfallSpan: document.data.mode === "frozen" ? null : overrides.waterfallSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );

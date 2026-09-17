@@ -39,11 +39,46 @@
 // The fix is `publishLiveWaterfallSpan` below — the focused canvas publishes the
 // span it actually measured, and `figureSpec.buildStageFigureSpec` reads it back
 // at export time, so that export uses the canvas' own number rather than a
-// second derivation of it. A render with NO live canvas behind it (a Figure Page
-// panel, a graph template, a saved Library figure) has no published span and
-// falls back to the full DataStruct, which is what its own canvas-less
-// `buildColumns` would measure anyway.
+// second derivation of it. The span is keyed by the dataset the PAYLOAD was
+// fetched for, not by whichever dataset the store is currently pointing at; see
+// `Stage/useLiveSnapshotPublish`'s `payloadDatasetId` for the mid-flight race
+// that distinction closes.
+//
+// THE NO-LIVE-CANVAS FALLBACK (BUG-013 round 3). A render with no published
+// span behind it (a Figure Page panel, a graph template, a saved Library
+// figure, a Figure Builder preview) measures the span by BUILDING the payload
+// its own canvas would draw — `plotdata.buildColumns` over the CANVAS' channel
+// list and this request's x channel, then `plotdata.dropTrailingEmptyRows`,
+// which is the literal tail of both `fetchPlot` return paths. It used to map
+// `data.values` over the REQUEST's `displayChannels` instead, and the two
+// differ in two measured ways:
+//   * `allowExplicitXAsY` keeps an X channel in `displayChannels` as a Y series
+//     that the canvas never draws, so its values widened the span: exported
+//     offsets [500, 0, 250] against canvas shifts [0, 49.75];
+//   * every canvas payload has been through `dropTrailingEmptyRows`, and the
+//     raw DataStruct has not — on the Origin over-allocation artefact that
+//     function exists for, export 18.75 against canvas 6.25.
+// A frozen figure document is measured this way too, and deliberately: it
+// ignores the live dataset entirely (`figureSpec.resolveFigureDocumentData`),
+// so its own snapshot is the only honest span source.
+//
+// RESIDUAL (recorded, not fixed). The Figure Builder's own export of a window
+// (`components/workshops/figurebuilder/previewExport.ts:55` and
+// `figurebuilder/canonicalReadiness.ts:60`) calls `buildFigureSpecFromDocument`
+// with no span, so it takes the fallback above while `Export figure…` on the
+// focused Stage takes the canvas' windowed span — two staggers for one figure
+// whenever a committed zoom has narrowed a server-decimated payload. The span
+// is NOT threaded there on purpose: this seam is written by the FOCUSED Stage
+// canvas alone, and the Figure Builder renders a TARGET window that need not be
+// the focused one (`figurebuilder/canonicalSession.ts` documents focus as not a
+// styling input). Feeding it a focus-derived number would make the preview
+// change when the user clicks another window — the class
+// `components/windows/BackgroundPlotWindow.tsx`'s header names. Closing it
+// properly means publishing per-window spans, which is a wider change than this
+// round.
 
+import { buildColumns, dropTrailingEmptyRows } from "./plotdata";
+import { canvasGroupCol } from "./plotGroupSplit";
 import { overlayModesMatchTheCanvas, type CycleView } from "./seriesStyleCycle";
 import type { DataStruct } from "./types";
 
@@ -74,6 +109,22 @@ export function waterfallSpan(columns: readonly (readonly (number | null)[])[]):
     }
   }
   return hi > lo ? hi - lo : 1;
+}
+
+/** The value columns a canvas with no live payload behind it would draw, built
+ *  exactly the way `plotdata.fetchPlot`'s offline path builds them: pack the
+ *  canvas' channels against this request's x channel, then drop the trailing
+ *  empty/over-allocated rows every fetched payload has already had dropped. The
+ *  span the wire falls back to is measured over THESE columns — see the
+ *  module header for the two divergences that reading `data.values` directly
+ *  produced. */
+function canvasColumns(
+  data: DataStruct,
+  channels: readonly number[],
+  xKey: number | null,
+): (number | null)[][] {
+  const packed = dropTrailingEmptyRows(buildColumns(data, null, xKey, [...channels]));
+  return (packed.data as unknown as (number | null)[][]).slice(1);
 }
 
 /** The per-index vertical step of a waterfall: `fraction` of `waterfallSpan`. */
@@ -110,12 +161,12 @@ export function readLiveWaterfallSpan(datasetId: string): number | null {
 /** The `waterfall_offsets` half of a `FigureSpec`, or `{}` when the view has no
  *  waterfall (so an ordinary export's wire is byte-identical to before).
  *
- *  `displayChannels` is the UNFILTERED display list — the canvas' own index
- *  space, the same one `lib/figureSpecSeries.ts` resolves series colours
- *  against (BUG-015) — and `positions` is each PLOTTED series' slot in it, so a
- *  hidden series reserves its stagger step exactly as it does on screen. Every
- *  plotted series is offset, secondary-axis ones included: `applyWaterfall`
- *  shifts every value column of the payload, and the y2 columns are in it.
+ *  `canvasChannels` is the CANVAS' display list (`lib/figureSpecSeries.
+ *  resolveDisplaySeries`) — the index space `positions` are slots in, so a
+ *  hidden series reserves its stagger step exactly as it does on screen — and
+ *  the list the fallback span is measured over. Every plotted series is offset,
+ *  secondary-axis ones included: `applyWaterfall` shifts every value column of
+ *  the payload, and the y2 columns are in it.
  *
  *  REFUSED for every view whose canvas is not the plain single-panel XY overlay
  *  this field is keyed to, through the SAME predicate the canvases and the
@@ -128,25 +179,40 @@ export function readLiveWaterfallSpan(datasetId: string): number | null {
  *  staggered an export the user's screen never did. Omitting the field is the
  *  honest response: the renderer never receives an offset it would mis-apply.
  *
+ *  The GROUP clause of that predicate is asked about the grouping this request
+ *  actually carries, not the view's raw binding (BUG-013 round 3): `groupCol`
+ *  is the `group_col` the spec emits (a document binding, or nothing at all on
+ *  the live route), and with none emitted the view's own `groupKey` is put
+ *  through `plotGroupSplit.canvasGroupCol` — the rule `Stage/usePlotPayload`
+ *  applies to decide what to draw. A grouped view with `y2Keys` set degrades to
+ *  a plain ungrouped overlay on screen AND on the wire, and used to be the one
+ *  view where the canvas staggered and the export refused to.
+ *
  *  `span` is the canvas' own measured y-range when a live XY canvas published
- *  one for this request (see `readLiveWaterfallSpan`); absent, the span is
- *  measured over the full DataStruct. */
+ *  one for this request (see `readLiveWaterfallSpan`); absent, see the
+ *  no-live-canvas fallback in this module's header. */
 export function waterfallWire(args: {
   data: DataStruct;
-  displayChannels: readonly number[];
+  canvasChannels: readonly number[];
   positions: readonly number[];
   fraction: number;
   view: CycleView;
   span?: number | null;
+  /** The `group_col` this spec emits, if any — `undefined`/`null` means the
+   *  request draws a plain ungrouped overlay whatever the view binds. */
+  groupCol?: number | null;
 }): { waterfall_offsets?: number[] } {
   // `< 2` mirrors `applyWaterfall`'s `payload.data.length <= 2` (x + one value
-  // column): a single series has nothing to be staggered against.
-  if (!waterfallApplies(args.fraction) || args.displayChannels.length < 2) return {};
-  if (!overlayModesMatchTheCanvas(args.view)) return {};
+  // column): a single series has nothing to be staggered against. Asked about
+  // the CANVAS' list, because that is what `applyWaterfall` counts — an X-as-Y
+  // request can carry two display channels while the canvas draws one curve.
+  if (!waterfallApplies(args.fraction) || args.canvasChannels.length < 2) return {};
+  const grouped = args.groupCol ?? canvasGroupCol(args.view.groupKey, args.view.y2Keys);
+  if (!overlayModesMatchTheCanvas({ ...args.view, groupKey: grouped })) return {};
   const span =
     args.span != null && Number.isFinite(args.span)
       ? args.span
-      : waterfallSpan(args.displayChannels.map((ch) => args.data.values.map((row) => row[ch])));
+      : waterfallSpan(canvasColumns(args.data, args.canvasChannels, args.view.xKey));
   const step = args.fraction * span;
   // A zero step (an all-equal column set at a vanishing fraction) is no
   // stagger at all. An overflow to Infinity needs no guard here: the backend

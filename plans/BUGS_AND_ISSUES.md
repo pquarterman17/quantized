@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-16 (BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed; UX-003 filed)  
+**Updated:** 2026-09-17 (BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -3678,15 +3678,140 @@ Gate (all foreground): `ruff check src tests tools` clean; `mypy src` clean
 (296 files); `pytest -q` over
 `test_openapi_snapshot/test_repo_integrity/test_export_vector_structure/test_calc_plotting/test_api_export`
 — **188 passed, 1 skipped**; `tsc -b --force` and `eslint src --max-warnings=0`
-clean; `vitest run src/lib src/components/Stage src/store src/architecture.test.ts`
-— **7755 passed, 1 failed**, the single failure being
-`store/plotRecipes.test.ts > keeps Stage, Figure Builder, reopen, export, and
-clipboard on one canonical spec`, a BUG-014 leftover pre-existing on this
-commit's parent and already fixed later on the branch by `950b3a9b`;
-`freeze-regression-matrix.mjs --check` clean, no committed golden changed;
-`check-bundle-size.mjs` OK. Eager bundle, both trees built after `npm ci`:
-**910,528 B** at `7dfcde07` → **911,045 B** here, **+517 B**, 9,355 B inside the
-920,400 B budget. No budget move.
+clean; `freeze-regression-matrix.mjs --check` clean, no committed golden changed;
+`check-bundle-size.mjs` OK.
+
+**Corrected 2026-09-17 (round 3, NIT 6) — the vitest and bundle numbers first
+recorded here were measured against the wrong parent.** `git rev-parse
+da00c042^` is **`56bb3599`**, not `7dfcde07`: four commits sit between them, one
+of which (`91a2aa3a`) edits eagerly-reachable modules, so the original
+"910,528 B at `7dfcde07` → 911,045 B, +517 B" was not attributable to this
+commit. Re-measured on the real pair: **910,971 B** at `56bb3599` →
+**911,488 B** at `da00c042`, **+517 B**, 8,912 B inside the 920,400 B budget.
+No budget move. The accompanying claim that the scoped vitest run left one
+failure in `store/plotRecipes.test.ts` "already fixed later on the branch by
+`950b3a9b`" was also wrong and is withdrawn rather than re-worded: `950b3a9b`
+is `da00c042`'s GRANDparent and was already in the tree, and re-running
+`vitest run src/lib src/components/Stage src/store src/architecture.test.ts`
+with `src/store` in scope on `da00c042` gives **53 files / 930 tests, 0
+failed**.
+
+#### Review round 3 — 2026-09-17 (`fix(export): BUG-013 round 3 …`)
+
+A second adversarial review, of `da00c042`, returned **4 CONFIRMED and 4 NITs**.
+Every one is closed or recorded below; four changed behaviour, and each of those
+went in behind a test that fails without it.
+
+- **CONFIRMED 1 — the span was published under the STORE's current dataset while
+  that dataset's fetch was still in flight.** `Stage/useLiveSnapshotPublish` read
+  the key from `args.active.id`, which the store advances SYNCHRONOUSLY on a
+  dataset switch, while the span itself came from `usePlotPayload`'s payload
+  STATE, which keeps the PREVIOUS dataset's rows for the whole fetch round trip
+  (only a switch to `null` clears it). So `readLiveWaterfallSpan(newDataset)`
+  handed out the old dataset's number for the length of a network round trip.
+  Measured on the real hook pair with `fetchPlot` mocked at the network
+  boundary: d1 span **200**, d2 span **2**, and an export of d2 taken mid-flight
+  staggered by **50** instead of **0.5** — a hundred times too much, and 25x d2's
+  entire y-range. Fixed at the source: `usePlotPayload` now carries the dataset
+  id WITH the payload in a single `useState` (`PlotPayloadResult.
+  payloadDatasetId`) and the publish keys off that, so the seam cannot name a
+  dataset whose rows it has never seen. Mid-flight the old dataset's span stays
+  published under the OLD id — which is what the canvas is still drawing — and
+  the new dataset simply has no published span until its rows arrive.
+- **CONFIRMED 2 — a FROZEN document's stagger was scaled by the LIVE dataset's
+  span.** `buildStageFigureSpec` read the span for `ds.id` and threaded it into
+  the frozen branch too, contradicting this file's own contract that "a frozen
+  document is self-contained and intentionally ignores any live dataset". The
+  span is now dropped in `buildFigureSpecFromDocument`, in the same place and on
+  the same condition `liveDataset` already is. Measured at the
+  `buildStageFigureSpec` layer: snapshot span 2, live span 200, `waterfall 0.25`
+  — offsets **[0, 0.5]**, where the live span gave **[0, 50]**, i.e. 25x the
+  snapshot's whole y-range and a curve flung off the figure.
+- **CONFIRMED 3 — the no-live-canvas fallback measured the span over channels
+  the canvas never draws.** It scanned the REQUEST's `displayChannels`, which
+  under `allowExplicitXAsY` (passed unconditionally by
+  `buildFigureSpecFromDocument`) keeps the X channel as a Y series. Positions
+  were already resolved against the canvas' list (BUG-014); the step was not.
+  `resolveDisplaySeries` now also RETURNS `canvasChannels` — the list it already
+  computed — and the wire measures over it, so span and positions come from one
+  index space. Measured on a fixture whose X channel lies outside the others'
+  range: export **[500, 0, 250]** against canvas shifts **[0, 49.75]**, now
+  **[149.5, 0, 74.75]** against the canvas' own **[0, 74.75]**. The existing
+  X-as-Y pin was re-based onto that fixture: it used to pass by coincidence,
+  because in the shared fixture channel 0's values sat INSIDE channels 1-2's, so
+  both spans were 299 either way. It now asserts the step numerically.
+- **CONFIRMED 4 (narrow) — the fallback also ignored `dropTrailingEmptyRows`.**
+  Both `fetchPlot` return paths end in it, so no canvas has ever measured a raw
+  DataStruct; the fallback did. The fallback now BUILDS the payload its own
+  canvas would draw — `buildColumns` over `canvasChannels` and the request's x
+  channel, then `dropTrailingEmptyRows`, the literal tail of `fetchPlot`'s
+  offline path — and measures that. Measured on the Origin over-allocation
+  artefact `plotdata.ts` documents (trailing rows reading exactly 0 in x and
+  every y): export **18.75** against canvas **6.25**, now 6.25 on both. The
+  header sentence that called the old fallback "what its own canvas-less
+  `buildColumns` would measure anyway" was false in both these ways and has been
+  replaced with what the code now does.
+- **NIT 5 — a grouped view with `y2Keys` set: closed.** The canvas degrades such
+  a view to a plain ungrouped overlay (`usePlotPayload`'s `groupCol`) and
+  staggers it, and the live export route puts no `group_col` on the wire for it
+  either — but the refusal was keyed on the view's RAW `groupKey`, so the screen
+  staggered and the PDF overlaid: BUG-013's original symptom, still open for this
+  one combination. The degrade rule now has ONE definition,
+  `lib/plotGroupSplit.canvasGroupCol`, asked by the canvas and by
+  `waterfallWire`; the wire additionally refuses on the `group_col` it actually
+  EMITS, so a document binding that rides the wire still refuses even when the
+  live view would have degraded. The P3.3 style cycle is deliberately NOT
+  changed — it keeps asking `overlayExportsSeriesStyles` on the raw binding, the
+  same question both canvas hooks ask, so canvas and export still agree there.
+- **NIT 6 — the mis-based gate/bundle numbers: corrected in place above.**
+- **NIT 7 — the Figure Builder's own export: RECORDED, not threaded.**
+  `components/workshops/figurebuilder/previewExport.ts:55` and
+  `figurebuilder/canonicalReadiness.ts:60` call `buildFigureSpecFromDocument`
+  with no span, so they take the fallback while `Export figure…` on the focused
+  Stage takes the canvas' windowed span — two staggers for one figure whenever a
+  committed zoom has narrowed a server-decimated payload. Threading the seam
+  there would be wrong, not merely more work: it is written by the FOCUSED Stage
+  canvas alone, while the Figure Builder renders a TARGET window that need not be
+  focused (`figurebuilder/canonicalSession.ts` documents focus as not a styling
+  input), so the preview would change when the user clicked another window — the
+  class `components/windows/BackgroundPlotWindow.tsx`'s header names. Closing it
+  properly means per-window published spans. Named as a residual in
+  `lib/waterfallOffset.ts`'s header with both file:line coordinates.
+- **NIT 8 — covered by CONFIRMED 1's test.** `waterfallExportSpan.test.ts` now
+  varies the dataset and reads the seam mid-flight; it was the only end-to-end
+  test of the seam and it used one dataset and one window, which is exactly why
+  the key mismatch went unnoticed.
+
+Also closed while there: `waterfallWire`'s "fewer than two series" guard now
+counts the CANVAS' channels rather than the request's, because that is what
+`applyWaterfall` counts — an X-as-Y request can carry two display channels while
+the canvas draws one curve and staggers nothing.
+
+Sabotage table (mutation → tests that turned red; scope
+`src/lib/waterfallOffset.test.ts src/lib/figureSpec.test.ts
+src/components/Stage/waterfallExportSpan.test.ts
+src/components/Stage/useLiveSnapshotPublish.test.ts
+src/components/Stage/usePlotPayload*.test.ts src/store/plotRecipes.test.ts
+src/lib/regressionMatrix.test.ts`, 233 green unsabotaged):
+
+| # | Mutation | Red |
+|---|---|---|
+| 1 | the publish keys the span by the STORE's active dataset again | 1 — `waterfallExportSpan` "names no span for a dataset whose fetch is still in flight" |
+| 2 | the frozen branch is handed the live span again | 1 — `figureSpec` "a FROZEN document's stagger comes from its snapshot, never the live canvas' span" |
+| 3 | `resolveDisplaySeries` returns the request's list as `canvasChannels` | 1 — `figureSpec` "the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots" |
+| 4 | the fallback skips `dropTrailingEmptyRows` | 1 — `waterfallOffset` "measures the fallback over the rows a canvas would draw, trailing padding dropped" |
+| 5 | the group refusal reads the view's RAW binding again | 1 — `figureSpec` "rides a grouped view that a secondary Y axis degraded to a plain overlay" |
+| 6 | `payloadDatasetId` is taken from the params instead of the fetched state | 1 — `waterfallExportSpan` "names no span for a dataset whose fetch is still in flight" |
+| 7 | the fallback span is measured over the request's `yKeys` | 3 — both new `waterfallOffset` fallback tests + the X-as-Y pin |
+
+Gate (all foreground, on the round-3 commit): `tsc -b --force` and
+`eslint src --max-warnings=0` clean; `vitest run src/lib src/components/Stage
+src/store src/architecture.test.ts` — **406 files / 7809 tests passed, 0
+failed**; `pytest -q tests/test_repo_integrity.py` — **12 passed**. No backend
+file changed, so the export/OpenAPI suites are untouched by this round.
+`check-bundle-size.mjs` OK, 7.0 kB under budget. Eager bundle, both trees built
+in the same checkout after `rm -rf node_modules/.vite`: **912,846 B** at the
+parent `0565b674` → **913,186 B** here, **+340 B**. No budget move.
 
 ---
 

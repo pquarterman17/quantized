@@ -27,6 +27,7 @@ describe("resolveDisplaySeries", () => {
   it("is plain display order when nothing is hidden or reordered", () => {
     expect(resolveDisplaySeries(data, view())).toEqual({
       displayChannels: [0, 1, 2, 3],
+      canvasChannels: [0, 1, 2, 3],
       plotted: [0, 1, 2, 3],
       positions: [0, 1, 2, 3],
     });
@@ -60,6 +61,8 @@ describe("resolveDisplaySeries", () => {
   it("drops the X channel from both lists by default", () => {
     expect(resolveDisplaySeries(data, view({ xKey: 1 }))).toEqual({
       displayChannels: [0, 2, 3],
+      // With no `allowExplicitXAsY` the two lists are the same array.
+      canvasChannels: [0, 2, 3],
       plotted: [0, 2, 3],
       positions: [0, 1, 2],
     });
@@ -70,13 +73,16 @@ describe("resolveDisplaySeries", () => {
     // Channels 2 and 3 therefore keep slots 0 and 1 — the paints the screen
     // actually used — and channel 1, which the canvas never draws, is parked
     // past the end rather than stealing slot 0 or colliding with channel 2.
-    const { displayChannels, plotted, positions } = resolveDisplaySeries(
+    const { displayChannels, canvasChannels, plotted, positions } = resolveDisplaySeries(
       data,
       view({ xKey: 1, yKeys: [1, 2, 3], allowExplicitXAsY: true }),
     );
     expect(displayChannels).toEqual([1, 2, 3]);
     expect(plotted).toEqual([1, 2, 3]);
     expect(positions).toEqual([2, 0, 1]);
+    // BUG-013 round 3: the waterfall STEP is measured over this list, so it is
+    // returned rather than recomputed by every caller that needs it.
+    expect(canvasChannels).toEqual([2, 3]);
   });
 
   it("parks EVERY canvas-absent channel on its own slot", () => {

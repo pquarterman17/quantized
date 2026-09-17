@@ -14,6 +14,7 @@ import { defaultPlotView } from "./plotview";
 import { applyWaterfall, buildColumns } from "./plotdata";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { analysisData } from "./rowstate";
+import { publishLiveWaterfallSpan } from "./waterfallOffset";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -1399,8 +1400,14 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
   const opts = { fmt: "pdf", style: "default", dpi: 300, title: "" };
   /** The canvas' own offset for display column `position` (0-based among the
    *  value columns) of `channels`, at `fraction`. */
-  function canvasOffset(channels: number[], fraction: number, position: number): number {
-    const before = buildColumns(data, null, null, channels);
+  function canvasOffset(
+    channels: number[],
+    fraction: number,
+    position: number,
+    src: DataStruct = data,
+    xKey: number | null = null,
+  ): number {
+    const before = buildColumns(src, null, xKey, channels);
     const after = applyWaterfall(before, fraction);
     const col = position + 1;
     const b = before.data[col] as (number | null)[];
@@ -1529,21 +1536,48 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
   // the canvas never draws) sits on a parked slot. Both are asserted together:
   // they are the same position, and pinning one without the other would let the
   // two drift apart again.
+  // BUG-013 round 3, finding 3: the STEP has to come from the canvas' channel
+  // list too, not just the slots. This fixture is built so the two lists cannot
+  // give the same answer by accident — channel 0's values (1000..3000) lie
+  // entirely OUTSIDE channels 1-2's (1..300), so the canvas' span is 299 and
+  // the request's would be 2999. The shared `data` fixture happened to have
+  // channel 0 inside the others' range, so both spans were 299 and the pin
+  // passed either way.
+  const xAsY: DataStruct = {
+    time: [0, 1, 2],
+    values: [
+      [1000, 100, 1],
+      [2000, 200, 3],
+      [3000, 300, 5],
+    ],
+    labels: ["x", "b", "c"],
+    units: ["", "", ""],
+    metadata: {},
+  };
+  const xAsYDataset: Dataset = { id: "dataset-x-as-y", name: "xasy.csv", data: xAsY };
+
   it("the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots", () => {
     const restore = installSeriesPalette();
     try {
       const document = createFigureDocument({
         id: "wf-x-as-y",
         name: "X as Y waterfall",
-        datasetId: dataset.id,
+        datasetId: xAsYDataset.id,
         view: { ...defaultPlotView(), xKey: 0, yKeys: [0, 1, 2], waterfall: 0.25 },
       });
-      const spec = buildFigureSpecFromDocument(document, dataset, "device");
+      const spec = buildFigureSpecFromDocument(document, xAsYDataset, "device");
       expect(spec.y_keys).toEqual([0, 1, 2]);
       // The canvas draws channels 1 and 2 only (x is always dropped), at
       // display slots 0 and 1 — derived by running `applyWaterfall` on exactly
       // that list, never hardcoded.
-      const canvas = [canvasOffset([1, 2], 0.25, 0), canvasOffset([1, 2], 0.25, 1)];
+      const canvas = [
+        canvasOffset([1, 2], 0.25, 0, xAsY, 0),
+        canvasOffset([1, 2], 0.25, 1, xAsY, 0),
+      ];
+      // Numerically, so a step measured over the WRONG list cannot pass: the
+      // canvas' own span is 300 - 1 = 299, a quarter of which is 74.75. Over
+      // the request's list (channel 0 included) it would be 749.75.
+      expect(canvas).toEqual([0, 74.75]);
       const offsets = spec.waterfall_offsets ?? [];
       expect([offsets[1], offsets[2]]).toEqual(canvas);
       expect(offsets[0]).toBeCloseTo(2 * canvas[1], 12); // parked past the canvas list
@@ -1554,6 +1588,94 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
       ]);
     } finally {
       restore();
+    }
+  });
+
+  // BUG-013 round 3, NIT 5. The canvas degrades a grouped view to a plain
+  // ungrouped overlay the moment a secondary Y axis is bound
+  // (`Stage/usePlotPayload`'s `groupCol`) and staggers it; the live export
+  // route puts no `group_col` on that wire either. Refusing the offsets on the
+  // view's RAW binding was therefore BUG-013's original symptom, still open for
+  // this one combination: a staggered screen exporting overlaid curves.
+  it("rides a grouped view that a secondary Y axis degraded to a plain overlay", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      groupKey: 0,
+      y2Keys: [2],
+      waterfall: 0.25,
+    });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    // The request really is a plain ungrouped overlay with a secondary axis.
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+  });
+
+  it("but a grouped view with NO secondary axis still refuses — the canvas splits", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      groupKey: 0,
+      waterfall: 0.25,
+    });
+    expect("waterfall_offsets" in buildFigureSpec(view as never, dataset, "device", opts)).toBe(false);
+  });
+
+  // BUG-013 round 3, finding 2. `buildStageFigureSpec` read the LIVE canvas'
+  // span for `ds.id` and handed it to the frozen branch too, so a frozen
+  // document — which `figureSpec.ts`'s own contract says "intentionally ignores
+  // any live dataset" — had its snapshot's stagger scaled by a dataset it does
+  // not render.
+  it("a FROZEN document's stagger comes from its snapshot, never the live canvas' span", () => {
+    const snapshot: DataStruct = {
+      time: [0, 1, 2],
+      values: [
+        [0, 0],
+        [1, 0.5],
+        [2, 1],
+      ],
+      labels: ["a", "b"],
+      units: ["", ""],
+      metadata: {},
+    };
+    // The same rows rescaled x100: span 200 against the snapshot's 2.
+    const live: Dataset = {
+      id: "frozen-live",
+      name: "live.csv",
+      data: { ...snapshot, values: snapshot.values.map((row) => row.map((v) => v * 100)) },
+    };
+    const document = createFigureDocument({
+      id: "w1",
+      name: "Frozen waterfall",
+      datasetId: live.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1], waterfall: 0.25 },
+      data: { mode: "frozen", snapshot },
+    });
+    const state = {
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [0, 1],
+      waterfall: 0.25,
+      autoSeriesStyles: false,
+      focusedWindowId: "w1",
+      windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+    };
+    publishLiveWaterfallSpan({ datasetId: live.id, span: 200 });
+    try {
+      const spec = buildStageFigureSpec((() => state) as never, live, "frozen", opts);
+      // The snapshot's own span is 2, so 0.25 of it is 0.5. With the live span
+      // the second curve landed at 50 — 25x the snapshot's entire y-range.
+      expect(spec.waterfall_offsets).toEqual([0, 0.5]);
+      expect(spec.dataset.values).toEqual(snapshot.values);
+    } finally {
+      publishLiveWaterfallSpan(null);
     }
   });
 });
