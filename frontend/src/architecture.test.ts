@@ -265,7 +265,30 @@ const STORE_PINS: Record<string, number> = {
   // (17 of them) — every Prefs key is already an AppState field of the same name,
   // which is exactly what `prefsOf(s)` relies on to read them back out, so the
   // list could only ever drift. Same anti-drift move as `PrefKey = keyof Prefs`.
-  "/store/useApp.ts": 2322,
+  // 2322 -> 2122 (2026-09-17, PRIMARY_SOFTWARE_AUDIT_PLAN P4.1 "decompose
+  // high-risk frontend god-modules… characterization tests first", zero
+  // headroom): the singleton PlotView WRITERS — axis scales/limits/steps/tick
+  // formats/titles, the legend/grid/axis-box flags, stack mode + panel fit +
+  // page setup, the x/y/y2/group channel keys, reference lines, annotations,
+  // per-channel series styles/labels/error pairings, draw order, hidden/solo
+  // channels and the waterfall offset (45 actions, plus the `ref-`/`ann-` id
+  // counters they mint from) — moved verbatim to the new
+  // store/plotViewSettings.ts (PlotViewSettingsSlice), composed exactly like
+  // datasetMeta.ts/gadget.ts: one import line, one word on the extends
+  // clause, one creator-spread line. Chosen by COUPLING, not size: unlike
+  // `setChannelRole`/`setChannelType` (which sit in the middle of the same
+  // block and stay behind), nothing in the cluster writes `datasets` at all,
+  // so the pending-edit ratchet above has nothing to say about it and the
+  // module's promise stays exactly "PlotView state". The FIELDS stay declared
+  // and initialized on AppState here, because the actions that RESET them on
+  // a dataset switch (setActive/addDataset/duplicateDataset) and the ones
+  // that bulk-apply them (loadWorkspace/applyOriginFigure/facetByColumn) are
+  // NOT part of the cluster — the same shape corrections.ts already has for
+  // the shared `datasets` field. store/plotViewSettings.characterization.test.ts
+  // (119 specs) was written and run green against the PRE-extraction code and
+  // passes unchanged after the move; that, not a line count, is what made the
+  // extraction verifiable.
+  "/store/useApp.ts": 2122,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

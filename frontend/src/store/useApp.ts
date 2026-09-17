@@ -50,7 +50,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { clearFocusedXBreaks, rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -104,10 +104,9 @@ import { compositionPanelCount, facetComposition, spatialComposition, type Compo
 import { breakCompositionFromData, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
-import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
+import type { PanelFit } from "../lib/panelLayout";
 import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
 import type { FwhmResult } from "../lib/peakwidth";
-import { effectiveChannels } from "../lib/plotdata";
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { analysisData } from "../lib/rowstate";
@@ -117,6 +116,7 @@ import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
+import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
 import type {
   Annotation,
   AxisFormat, AxisScale,
@@ -150,8 +150,6 @@ export const recompute = (d: Dataset): Dataset => {
   const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
   return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 };
-let _refSeq = 0;
-let _annSeq = 0;
 let _idSeq = 0;
 // Exported for store/split.ts (nextWindowId/panels.ts precedent) — a split
 // mints several dataset ids + one folder id from the SAME sequence used
@@ -273,7 +271,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -640,66 +638,14 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Generic pref setter (used by the Preferences dialog); applies + persists.
   setPref: (key: PrefKey, value: string | number | boolean) => void;
   setPrefsOpen: (open: boolean) => void;
-  setYScale: (yScale: AxisScale) => void;
-  setXScale: (xScale: AxisScale) => void;
-  setShowGrid: (showGrid: boolean) => void;
-  setShowLegend: (showLegend: boolean) => void;
-  setLegendPos: (pos: LegendPos) => void;
-  setLegendStatic: (v: boolean) => void;
-  setPlotTemplate: (template: string) => void;
-  setShowAxisBox: (show: boolean) => void;
-  setStackMode: (stackMode: boolean) => void;
-  setPanelFit: (mode: PanelFit) => void; // #54
-  cyclePanelFit: () => void; // #54 — frames<->window, +page when a pageSetup exists
-  setPageSetup: (pageSetup: PageSetup | null) => void; // #54
-  setInsetMode: (insetMode: boolean) => void;
-  setPolarMode: (polarMode: boolean) => void;
-  setStatMode: (statMode: boolean) => void;
-  setXLim: (xLim: [number, number] | null) => void;
-  setYLim: (yLim: [number, number] | null) => void;
-  // Secondary (right) Y axis: expose the already-rendered y2Scale/y2Lim fields
-  // so the plot context menu can edit an Origin double-Y import's right axis.
-  // Only meaningful when y2Keys is non-empty (otherwise there is no y2 scale).
-  setY2Scale: (y2Scale: AxisScale | null) => void;
-  setY2Lim: (y2Lim: [number, number] | null) => void;
-  setXFmt: (xFmt: AxisFormat) => void;
-  setYFmt: (yFmt: AxisFormat) => void;
-  setY2Fmt: (y2Fmt: AxisFormat | null) => void;
-  setPlotTitle: (plotTitle: string) => void;
-  setXAxisLabel: (xAxisLabel: string) => void;
-  setYAxisLabel: (yAxisLabel: string) => void;
-  setY2AxisLabel: (y2AxisLabel: string) => void;
-  setXKey: (xKey: number | null) => void;
-  setYKeys: (yKeys: number[] | null) => void;
-  setGroupKey: (groupKey: number | null) => void;
-  setY2Keys: (y2Keys: number[] | null) => void;
-  addRefLine: (axis: "x" | "y", value: number) => void;
-  removeRefLine: (id: string) => void;
-  updateRefLine: (id: string, value: number) => void;
-  /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
-   *  the caller (e.g. `usePeaks`' "Label peaks" batch) so this add folds
-   *  into that batch's one undo entry instead of pushing its own — same
-   *  pattern as `addDataset`'s own `historyToken` (see its doc). Omitted by
-   *  every ordinary call site (manual "Add text here…", the object menu's
-   *  Duplicate, plotspec apply), which keep recording their own independent
-   *  entry exactly as before. */
-  addAnnotation: (x: number, y: number, text: string, historyToken?: HistoryBatchToken) => string;
-  removeAnnotation: (id: string) => void;
-  setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
-  resetSeriesStyle: (channel: number) => void;
-  setSeriesLabel: (channel: number, label: string) => void;
-  setErrKey: (channel: number, errChannel: number | null) => void;
+  // (setYScale … setErrKey and setSeriesOrder/toggleHidden/soloChannel/
+  //  setWaterfall — every writer of singleton PlotView state — are declared
+  //  on PlotViewSettingsSlice; see store/plotViewSettings.ts.)
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
   setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
   // (Row exclusion (#50), the row `selection` that feeds it, and the per-column
   // data filter (#53) are declared on RowStateSlice — store/rowState.ts, which
   // also carries their BUG-009 pending guards.)
-  setSeriesOrder: (order: number[] | null) => void;
-  toggleHidden: (channel: number) => void;
-  // Solo one plotted channel (hide all others); null = show all. The column
-  // switcher's engine — kept in the store so it's testable.
-  soloChannel: (channel: number | null) => void;
-  setWaterfall: (waterfall: number) => void;
   // (createWindow … windowsForSave — the window-management actions — are
   // declared on WindowsSlice; see store/windows.ts.)
   setPlotTool: (tool: PlotTool) => void;
@@ -828,6 +774,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkbookCombineSlice(set, get),
   ...createWorkbookSeparateSlice(set, get),
   ...createWorkbookTransferSlice(set, get),
+  ...createPlotViewSettingsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1880,126 +1827,9 @@ export const useApp = create<AppState>((set, get) => ({
     syncPrefs(get());
   },
   setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
-  setYScale: (yScale) => {
-    get().recordHistory("change Y scale"); set({ yScale });
-    get().recordMacro(`Y axis ${yScale}`, `qz.setYScale(${lit(yScale)})`);
-  },
-  setXScale: (xScale) => {
-    get().recordHistory("change X scale"); set({ xScale });
-    get().recordMacro(`X axis ${xScale}`, `qz.setXScale(${lit(xScale)})`);
-  },
-  setShowGrid: (showGrid) => { get().recordHistory("toggle grid"); set({ showGrid }); },
-  setShowLegend: (showLegend) => { get().recordHistory("toggle legend"); set({ showLegend }); },
-  setLegendPos: (legendPos) => { get().recordHistory("move legend"); set({ legendPos }); },
-  setLegendStatic: (legendStatic) => { get().recordHistory("change legend mode"); set({ legendStatic }); },
-  setPlotTemplate: (plotTemplate) => { get().recordHistory("apply plot template"); set({ plotTemplate }); },
-  setShowAxisBox: (showAxisBox) => { get().recordHistory("toggle axis box"); set({ showAxisBox }); },
-  // A manual toggle (on OR off) always drops any spatial arrangement from a
-  // prior Origin multi-panel apply, or a prior facet-by-column arrangement
-  // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
-  // is what the user asked for, never a stale spatial/facet grid.
-  // F4.4: also clears `facetKey` -- without it, toggling OFF a facet
-  // (`composition: null` here) then toggling stack mode back ON via the
-  // plain "Stack" button (never through `facetByColumn`) would resurrect the
-  // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
-  // rebuilds it from `facetKey` whenever `composition` is null.
-  setStackMode: (stackMode) => (
-    get().recordHistory("change plot layout"), set((s) => ({ stackMode, composition: null, facetKey: null, plotWindows: clearFocusedXBreaks(s.plotWindows, s.focusedWindowId) })) // review F3: clears the AUTHORED break too, in BOTH directions -- a break composition pre-empts the per-channel stack (`multiPanelShowing`), so keeping it would make ON inert exactly as OFF was; see `clearFocusedXBreaks`' doc
-  ),
-  // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
-  // advances frames<->window until a page model exists (Stage 2 opens page).
-  setPanelFit: (panelFit) => { get().recordHistory("change panel fit"); set({ panelFit }); },
-  cyclePanelFit: () => { get().recordHistory("change panel fit"); set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })); },
-  setPageSetup: (pageSetup) => { get().recordHistory("change page setup"); set({ pageSetup }); },
-  setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
-  setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
-  setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
-  // Clears the paired decoded step too: a manual/Inspector range (or the
-  // smart auto-scale reset to null) is no longer the Origin figure that
-  // produced xStep/yStep, so a stale step must never leak onto it.
-  setXLim: (xLim) => set({ xLim, xStep: null }),
-  setYLim: (yLim) => set({ yLim, yStep: null }),
-  // A manual y2 range is no longer the Origin figure that decoded y2Step, so
-  // drop the stale step alongside it (mirrors setYLim / yStep above).
-  setY2Scale: (y2Scale) => { get().recordHistory("change Y2 scale"); set({ y2Scale }); },
-  setY2Lim: (y2Lim) => { get().recordHistory("change Y2 limits"); set({ y2Lim, y2Step: null }); },
-  setXFmt: (xFmt) => { get().recordHistory("format X axis"); set({ xFmt }); },
-  setYFmt: (yFmt) => { get().recordHistory("format Y axis"); set({ yFmt }); },
-  setY2Fmt: (y2Fmt) => { get().recordHistory("format Y2 axis"); set({ y2Fmt }); },
-  setPlotTitle: (plotTitle) => {
-    get().recordHistory("edit plot title"); set({ plotTitle });
-    get().recordMacro(`Title → ${plotTitle || "(none)"}`, `qz.setPlotTitle(${lit(plotTitle)})`);
-  },
-  setXAxisLabel: (xAxisLabel) => { get().recordHistory("edit X axis title"); set({ xAxisLabel }); },
-  setYAxisLabel: (yAxisLabel) => { get().recordHistory("edit Y axis title"); set({ yAxisLabel }); },
-  setY2AxisLabel: (y2AxisLabel) => { get().recordHistory("edit Y2 axis title"); set({ y2AxisLabel }); },
-  setXKey: (xKey) => {
-    get().recordHistory("change X channel"); set({ xKey });
-    get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
-  },
-  // P1.5: durable live grouping -- committed by useGraphBuilder's commitToPlot
-  // (replacing the old "preview-only" toast) and editable directly once a
-  // window exists. Mirrors setXKey exactly (undo history + macro record);
-  // syncPlotWindow/updateFigureDocumentFromPlotView (windowDocuments.ts /
-  // figureDocument.ts) then carry this singleton into the focused window's
-  // canonical FigureDocument on the next view sync, same as every other
-  // PlotView field.
-  setGroupKey: (groupKey) => {
-    get().recordHistory("change group");
-    set({ groupKey });
-    get().recordMacro(`Group by channel ${groupKey ?? "none"}`, `qz.setGroupKey(${lit(groupKey)})`);
-  },
-  setYKeys: (yKeys) => {
-    get().recordHistory("change Y channels"); set({ yKeys });
-    get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
-  },
-  setY2Keys: (y2Keys) => {
-    get().recordHistory("change Y2 channels");
-    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
-    get().recordMacro(
-      `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
-      `qz.setY2Keys(${lit(y2Keys)})`,
-    );
-  },
-  addRefLine: (axis, value) => { get().recordHistory("add reference line"); set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })); },
-  removeRefLine: (id) => { get().recordHistory("delete reference line"); set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })); },
-  // Move a reference line to a new value (drag commit). No-op for an unknown id.
-  updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },
-  // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
-  addAnnotation: (x, y, text, historyToken) => {
-    const id = `ann-${++_annSeq}`;
-    get().recordHistory("add annotation", historyToken);
-    set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
-    return id;
-  },
-  removeAnnotation: (id) => { get().recordHistory("delete annotation"); set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })); },
-  setSeriesStyle: (channel, patch) => (get().recordHistory("style curve"),
-    set((s) => ({
-      seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },
-    }))),
-  resetSeriesStyle: (channel) => (get().recordHistory("reset curve style"),
-    set((s) => {
-      const next = { ...s.seriesStyles };
-      delete next[channel];
-      return { seriesStyles: next };
-    })),
-  // Rename a channel's legend/series label. Blank (or whitespace) clears the
-  // override, reverting to the dataset's own label.
-  setSeriesLabel: (channel, label) => (get().recordHistory("rename curve"),
-    set((s) => {
-      const next = { ...s.seriesLabels };
-      const t = label.trim();
-      if (t) next[channel] = t;
-      else delete next[channel];
-      return { seriesLabels: next };
-    })),
-  setErrKey: (channel, errChannel) => (get().recordHistory("change error bars"),
-    set((s) => {
-      const next = { ...s.errKeys };
-      if (errChannel == null) delete next[channel];
-      else next[channel] = errChannel;
-      return { errKeys: next };
-    })),
+  // (the PlotView-settings action implementations moved to
+  // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice
+  // at the top of this literal.)
   // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
   // the dataset (persist across switches + round-trip .dwk); the map empties to
   // undefined to keep saved files clean.
@@ -2047,36 +1877,6 @@ export const useApp = create<AppState>((set, get) => ({
   // Row state (#50): the single source of truth for per-row exclusion. Excluded
   // rows persist on the dataset (round-trip .dwk) so every view can honor them —
   // no view should keep its own local row mask.
-  // Persist an explicit plotted-channel draw order (a permutation of the current
-  // plotted channels). effectiveChannels reorders by it; stale entries (channels
-  // no longer plotted) are ignored and newly-plotted channels append in order.
-  setSeriesOrder: (seriesOrder) => { get().recordHistory("reorder curves"); set({ seriesOrder }); },
-  toggleHidden: (channel) => {
-    get().recordHistory("toggle curve visibility");
-    set((s) => ({
-      hiddenChannels: s.hiddenChannels.includes(channel)
-        ? s.hiddenChannels.filter((c) => c !== channel)
-        : [...s.hiddenChannels, channel],
-    }));
-  },
-  // Solo = hide every plotted channel except `channel` (the column switcher's
-  // engine). null clears. View state like toggleHidden — not macro-recorded.
-  soloChannel: (channel) => {
-    get().recordHistory("solo curve");
-    set((s) => {
-      if (channel == null) return { hiddenChannels: [] };
-      const ds = s.datasets.find((d) => d.id === s.activeId);
-      if (!ds) return {};
-      const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder);
-      if (!plotted.includes(channel)) return {};
-      return { hiddenChannels: plotted.filter((c) => c !== channel) };
-    });
-  },
-  setWaterfall: (waterfall) => {
-    get().recordHistory("change waterfall offset");
-    set({ waterfall });
-    get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
-  },
   // (the window-management action implementations moved to store/windows.ts —
   // composed via createWindowsSlice at the top of this literal.)
   setPlotTool: (plotTool) => set({ plotTool }),

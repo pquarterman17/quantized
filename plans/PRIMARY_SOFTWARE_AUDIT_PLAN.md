@@ -5147,8 +5147,30 @@ user-activation rule `openWorkspaceCommand` was rejected on), and the
 two-argument `.then(onRun, onLoadFailure)` form at every `runLazy` call site
 so a loaded handler's own throw is no longer swallowed with the load's.
 
-- [ ] Characterization tests before moves.
-- [ ] Split one owned domain per PR with unchanged behavior/contracts.
+- [~] Characterization tests before moves. **First domain done 2026-09-17**
+  (see the box below): `store/plotViewSettings.characterization.test.ts`, 119
+  specs, written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing byte-unchanged after the move. Still `[~]` because the practice
+  is per-domain and `store/useApp.ts` has more domains left.
+- [~] Split one owned domain per PR with unchanged behavior/contracts.
+  **ONE domain extracted 2026-09-17**, characterization tests first: the
+  singleton **PlotView writers** — axis scales/limits/steps/tick formats/
+  titles, legend/grid/axis-box flags, stack mode + panel fit + page setup,
+  the x/y/y2/group channel keys, reference lines, annotations, per-channel
+  series styles/labels/error pairings, draw order, hidden/solo channels and
+  the waterfall offset (45 actions) — moved verbatim from `store/useApp.ts`
+  to the new `store/plotViewSettings.ts` (277 lines by the repo's
+  `split("\n")` ceiling metric, `PlotViewSettingsSlice`, composed like
+  `datasetMeta.ts`/`gadget.ts`). `store/useApp.ts` **2,322 →
+  2,122 lines (−200)**; its `architecture.test.ts` STORE_PINS entry ratcheted
+  DOWN to 2,122 with a dated justification. Chosen by measured coupling, not
+  size: nothing in the cluster writes `datasets`, so the pending-edit ratchet
+  has nothing to say about it. Deliberately left behind as NOT this domain:
+  `setChannelRole`/`setChannelType` (per-dataset channel config that
+  round-trips the `.dwk`, not view state), the preference setters and the
+  shell-layout toggles. The box stays `[~]`: `store/useApp.ts` is still far
+  over the 500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
+  `lib/uplotOverlays.ts` are untouched by this pass.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
