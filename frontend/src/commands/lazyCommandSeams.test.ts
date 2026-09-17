@@ -179,10 +179,17 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
   /** Capture the process-level unhandled rejection a handler throw must still
    *  produce. Vitest's own listener is stood down for the duration and put
    *  back afterwards, so an expected rejection cannot fail the run. */
+  // Distinguishes "no rejection captured yet" from "rejected with `undefined`"
+  // — `captured === undefined` could not tell those apart (round-3 review,
+  // nit 7). No seam here rejects with `undefined`, so this was cosmetic (a
+  // spurious `Promise.reject()` would just burn the 5 s deadline and still
+  // assert correctly), but the sentinel makes the loop's own intent explicit.
+  const NONE = Symbol("no rejection captured");
+
   async function unhandledRejectionFrom(run: () => void, settled: () => boolean = () => false): Promise<unknown> {
     const prior = process.listeners("unhandledRejection");
     process.removeAllListeners("unhandledRejection");
-    let captured: unknown;
+    let captured: unknown = NONE;
     const capture = (reason: unknown): void => {
       captured = reason;
     };
@@ -195,15 +202,19 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
       // the seam's own dynamic `import()` first, and under a loaded parallel
       // gate that alone can outlast a fixed 50 ms: measured 2026-09-15, both
       // specs in this block failed once inside the scoped gate and passed in
-      // isolation, and shrinking this wait to 0 ms reproduces exactly that
-      // pair of failures on demand. Poll on the OUTCOME instead, keeping the
-      // 50 ms turn as the minimum so the "no rejection" case still gets a
-      // real settle window rather than an early exit.
+      // isolation. That diagnosis is about the PRE-fix single fixed wait this
+      // loop replaced — shrinking THAT to 0 ms reproduced the same pair of
+      // failures on demand. It is not true of the poll below: measured
+      // 2026-09-17, setting its 50 ms turn to a 0 ms floor and running 20
+      // sequential process runs produced 0/20 failures, because the poll,
+      // not the turn length, is now what gates the wait. The 50 ms turn is
+      // kept anyway so the "no rejection" case still gets a real settle
+      // window rather than an early exit.
       const deadline = Date.now() + 5_000;
       do {
         await new Promise((resolve) => setTimeout(resolve, 50));
-      } while (captured === undefined && !settled() && Date.now() < deadline);
-      return captured;
+      } while (captured === NONE && !settled() && Date.now() < deadline);
+      return captured === NONE ? undefined : captured;
     } finally {
       process.off("unhandledRejection", capture);
       for (const listener of prior) process.on("unhandledRejection", listener);

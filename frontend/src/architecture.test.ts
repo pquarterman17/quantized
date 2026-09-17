@@ -2288,11 +2288,22 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  that ate forward to the next `*\/` and deleted every import in between.
    *  Measured on this tree: 32 shipped modules / 56 distinct static import
    *  specifiers invisible (including all five of `appCommands.ts`'s
-   *  `./commands/*` edges), and the eager walk below reported 378 modules
-   *  where the truth is 399. With this form the corpus has 0 false negatives
-   *  against `es-module-lexer` ground truth. Keeping the literals means the
-   *  scan never mistakes a `//` inside `"https://…"` for a comment, which is
-   *  what the old `[^:]` lookbehind-substitute was for. */
+   *  `./commands/*` edges), and the eager walk below reported 379 modules
+   *  where the truth is 400 (2026-09-17 correction: the commit that shipped
+   *  this comment measured itself against its own two-commits-back ancestor
+   *  rather than its real parent, which had already added a module —
+   *  `lib/nonFiniteCells.ts` at `0565b674` — same root cause as the bundle-
+   *  bytes correction in `plans/BUNDLE_HEADROOM.md`; re-measured in-test on
+   *  that commit's own tree: 901 sources, 379 of them eager with the old
+   *  stripper, 400 with the new). With this form the corpus has 0 false negatives
+   *  against `es-module-lexer` ground truth — scoped to the current corpus:
+   *  regex literals are NOT among the preserved alternatives above, so a
+   *  regex containing `/*` or `//` (e.g. `/[/*]/g`) ahead of a real import on
+   *  the same line would still delete it; measured 0 occurrences of that
+   *  shape on this tree, which is why the false-negative count is 0 and not
+   *  a structural guarantee. Keeping the literals means the scan never
+   *  mistakes a `//` inside `"https://…"` for a comment, which is what the
+   *  old `[^:]` lookbehind-substitute was for. */
   const stripComments = (src: string): string =>
     src.replace(
       /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
@@ -2314,15 +2325,28 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  through). Dynamic `import("…")` is `import(`, never `import "`, so it is
    *  correctly not matched here.
    *
-   *  Two measured residual OVER-reports, both fail-safe (they can only add a
-   *  phantom edge, never hide a real one, so the guards below stay sound):
-   *  an import-looking string inside a TEMPLATE literal is counted (literals
-   *  are preserved verbatim by `stripComments`, by design — measured
-   *  `["./realA", "./fake", "./realB"]`), and an `import type` clause that is
-   *  not the first thing on its line is counted as a value import (measured
-   *  `import { b } from "x"; import type { A } from "y";` -> `["x", "y"]`;
-   *  the reverse order is handled correctly by the line anchor). Neither
-   *  fires anywhere on the current tree. */
+   *  Two measured residual OVER-reports: an import-looking string inside a
+   *  TEMPLATE literal is counted (literals are preserved verbatim by
+   *  `stripComments`, by design — measured `["./realA", "./fake",
+   *  "./realB"]`), and an `import type` clause that is not the first thing
+   *  on its line is counted as a value import (measured `import { b } from
+   *  "x"; import type { A } from "y";` -> `["x", "y"]`; the reverse order is
+   *  handled correctly by the line anchor). The `import type` case does not
+   *  fire on this tree. The template-literal case DOES: 7 times across 6
+   *  modules (2026-09-17 correction — a prior version of this doc claimed
+   *  neither fired), all of the shape `` `… "${expr}" …` `` in a doc comment
+   *  or string, e.g. `components/Inspector/ChannelsCard.tsx` and
+   *  `components/Library/folderOps.ts`. Every one of the 7 is a non-relative
+   *  specifier, so `resolveFrom` below drops it and the guards stay correct
+   *  today — but that is a corpus fact, not a soundness property: a phantom
+   *  edge is fail-safe only in the direction of hiding nothing, NOT in the
+   *  other direction. A template literal that happens to spell a RELATIVE
+   *  seam path (e.g. `` `copied from "../lib/workbookTransfer"` `` inside
+   *  `store/workbookTransfer.ts`) resolves onto the seam and turns "no
+   *  module value-imports a seam module statically" RED for a module that
+   *  imports nothing — a false positive. That fails closed, which is
+   *  acceptable for a guard, but it is a live trip-wire, not a hypothetical:
+   *  string content, not import structure, decides whether it fires. */
   const staticSpecifiers = (src: string): string[] => {
     const v = valueImportsOnly(src);
     return [
@@ -2451,7 +2475,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
     const eager = eagerlyReachable();
     // Vacuity guard: a walk that stalls at the entry would pass everything.
-    // Measured 2026-09-15 on this tree: 399 of 900 source modules are eager.
+    // Measured 2026-09-15 on this tree: 400 of 901 source modules are eager
+    // (corrected 2026-09-17 — see the stripper doc above for why 399/900 was
+    // one commit stale).
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(
@@ -2469,7 +2495,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  `//` line citing `commands/*.ts`, and the `lib/api/*.ts` modules open
    *  with one citing a glob path of their own (`lib/api/*` in `http.ts`,
    *  `/api/baseline/*` in `baseline.ts`, …). If the walk stops seeing them,
-   *  the two guards above go quiet on the whole command and api layers. */
+   *  the two guards above go quiet on the whole command and api layers.
+   *
+   *  Round-3 review, nit 4: the REACHABILITY arm below (the `anchors` list)
+   *  is pinned to a specific module list, not to the invariant it exists to
+   *  protect — a legitimate future lazification of any one of these modules
+   *  (exactly the work this describe block enables) would redden it with the
+   *  misleading "blinded by a comment" message. The corpus-wide invariant
+   *  test right after this one is the version that cannot go red for that
+   *  reason; this reachability arm stays for its more concrete failure
+   *  message on the regression it was written for, and the `./commands/`
+   *  count arm below is a direct scanner assertion (not reachability), which
+   *  is not brittle in that way and is kept as-is. */
   it("the eager walk reaches the command and api layers (corpus anchor for the comment stripper)", () => {
     const eager = eagerlyReachable();
     const anchors = [
@@ -2494,6 +2531,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       staticSpecifiers(appCommands?.[1] ?? "").filter((s) => s.startsWith("./commands/")).length,
       "appCommands.ts registers five command modules; a blinded scanner sees none of them",
     ).toBeGreaterThanOrEqual(5);
+  });
+
+  /** Round-3 review, nit 4's proposed fix: a corpus-wide SCANNER invariant
+   *  that needs no reachability walk at all, so it cannot go red because a
+   *  module was legitimately moved behind a seam — only because the scanner
+   *  itself regressed. For every source module, `staticSpecifiers` must find
+   *  at least as many static edges as a naive `from "…"` line regex (value
+   *  imports/exports only, `type` clauses excluded) finds by itself; the
+   *  naive regex has no comment- or string-awareness, so it is a lower bound
+   *  a correct stripper can never fall under. Measured 2026-09-17: 0
+   *  violations with the current stripper, 32 with the old two-pass one
+   *  (headed by `/appCommands.ts: 0 < 5` and every `lib/api/*.ts` module). */
+  it("staticSpecifiers never undercounts a naive from-clause scan, corpus-wide (comment-stripper invariant)", () => {
+    // Vacuity guard: the glob must actually be reaching most of the corpus.
+    expect(sources().length).toBeGreaterThanOrEqual(800);
+    const naiveFromClauseCount = (src: string): number =>
+      (src.match(/^(?:import|export)(?!\s+type\s)[^\n]*\bfrom\s*["'][^"']+["']/gm) ?? []).length;
+    const violations = sources()
+      .filter(([, src]) => staticSpecifiers(src).length < naiveFromClauseCount(src))
+      .map(([p, src]) => `${p}: ${staticSpecifiers(src).length} < ${naiveFromClauseCount(src)}`);
+    expect(violations, "staticSpecifiers is blind to real static imports a naive regex still finds").toEqual([]);
   });
 
   it("each loader reaches its seam through a dynamic import()", () => {

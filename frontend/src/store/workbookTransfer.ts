@@ -91,9 +91,10 @@ async function transferCore(get: SliceGet, what: string): Promise<TransferCore |
 /** Copy's half of the seam, as a promise the caller STARTS INSIDE the click's
  *  own task and hands, still pending, to `copyTextAsync`.
  *
- *  `copyTextAsync` (lib/clipboard.ts) passes it straight to `ClipboardItem`,
- *  so `navigator.clipboard.write` is reached with ZERO awaits after the
- *  gesture while the chunk fetch and the package build are still in flight.
+ *  `copyTextAsync` (lib/clipboard.ts) wraps it in a `Promise<Blob>` and hands
+ *  that to `ClipboardItem`, so `navigator.clipboard.write` is reached with
+ *  ZERO awaits after the gesture while the chunk fetch and the package build
+ *  are still in flight.
  *  Awaiting the core first — the first cut of this seam did — spends the
  *  transient user activation the Clipboard API requires, and the copy then
  *  fails reporting "clipboard unavailable", which is not what went wrong.
