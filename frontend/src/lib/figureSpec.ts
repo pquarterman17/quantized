@@ -41,6 +41,7 @@ import {
   mergeFigureOverrides,
   type FigureOverrides,
 } from "./figureOverrides";
+import { resolveGroupCol } from "./figureSpecGroup";
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
 import { pruneToLiveDataset } from "./rowstate";
@@ -259,13 +260,11 @@ function buildFigureSpecForView(
     scale: st.yScale,
     fmt: st.yFmt,
   });
-  // The renderer deliberately has no grouped-secondary-axis semantic: group
-  // expansion produces synthetic primary-axis series, so the backend rejects
-  // this combination. Fail before transport rather than silently dropping a
-  // canonical binding or sending a request guaranteed to receive a 422.
-  if (extras.groupKey !== null && extras.groupKey !== undefined && y2Axis !== null) {
-    throw new Error("grouped figures cannot use a secondary Y axis");
-  }
+  // See `figureSpecGroup.resolveGroupCol`'s own doc: fails on a group bound
+  // with a REALLY rendered secondary axis, else degrades `group_col` exactly
+  // like the canvas (BUG-013 round 4). Reused below for the waterfall
+  // refusal too, so the two never read two different answers.
+  const groupCol = resolveGroupCol(extras.groupKey, y2Axis !== null, st.y2Keys);
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
@@ -297,7 +296,7 @@ function buildFigureSpecForView(
     // applied that same inherit-default above, so the render matches the live
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
-    ...(extras.groupKey === null || extras.groupKey === undefined ? {} : { group_col: extras.groupKey }),
+    ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
@@ -330,9 +329,11 @@ function buildFigureSpecForView(
       fraction: st.waterfall,
       view: cycleView,
       span: extras.waterfallSpan,
-      // What this spec actually emits above, so the refusal is keyed on the
-      // request rather than on the view's binding (BUG-013 round 3).
-      groupCol: extras.groupKey,
+      // The SAME degraded value this spec just emitted (or omitted) above as
+      // `group_col`, so the refusal is keyed on what the request ACTUALLY
+      // carries rather than a second, possibly-undegraded reading of the
+      // view's binding (BUG-013 round 3, corrected round 4).
+      groupCol,
     }),
     filename: extras.filename ?? stem,
   };
@@ -414,11 +415,16 @@ export function buildFigureSpecFromDocument(
  *     unconditionally, so this matches established precedent.
  *
  *  Falls back to `buildFigureSpec` (the live-view builder) otherwise:
- *   - no focused window, the focused window isn't `kind:"plot"`, or it has
- *     no document yet — none of these should occur in practice (every real
- *     window has carried a document since F1, and only a `kind:"plot"`
- *     window can hold focus) but the fallback is the safe response to an
- *     invariant violation, not a crash;
+ *   - no focused window, the focused window isn't `kind:"plot"`, or it has no
+ *     document yet — none of these should occur for a FOCUSED Stage window in
+ *     practice (every real window has carried a document since F1, and only a
+ *     `kind:"plot"` window can hold focus), but the fallback is the safe
+ *     response to an invariant violation, not a crash. `buildFigureSpec` is
+ *     reached ONLY through this fallback in production (grep) — a test that
+ *     calls it directly, as round 3's own new test did, exercises this rare
+ *     branch, not the `buildFigureSpecFromDocument` route real exports take
+ *     (exactly how round 3 marked a group_col degrade "closed" on a branch
+ *     users do not reach — round 4 review);
  *   - a LIVE document whose `bindings.datasetId` disagrees with `ds.id` —
  *     the one case this guard actively defends: `exportActive` resolves
  *     `ds` from `activeId` BEFORE an async `resolveDataset()`, during which

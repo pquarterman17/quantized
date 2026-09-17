@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-17 (BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; UX-003 filed)  
+**Updated:** 2026-09-17 (BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -3813,8 +3813,9 @@ clean; `freeze-regression-matrix.mjs --check` clean, no committed golden changed
 
 **Corrected 2026-09-17 (round 3, NIT 6) — the vitest and bundle numbers first
 recorded here were measured against the wrong parent.** `git rev-parse
-da00c042^` is **`56bb3599`**, not `7dfcde07`: four commits sit between them, one
-of which (`91a2aa3a`) edits eagerly-reachable modules, so the original
+da00c042^` is **`56bb3599`**, not `7dfcde07`: three commits sit between them
+(`91a2aa3a`, `950b3a9b`, `56bb3599` itself), one of which (`91a2aa3a`) edits
+eagerly-reachable modules, so the original
 "910,528 B at `7dfcde07` → 911,045 B, +517 B" was not attributable to this
 commit. Re-measured on the real pair: **910,971 B** at `56bb3599` →
 **911,488 B** at `da00c042`, **+517 B**, 8,912 B inside the 920,400 B budget.
@@ -3893,6 +3894,12 @@ went in behind a test that fails without it.
   live view would have degraded. The P3.3 style cycle is deliberately NOT
   changed — it keeps asking `overlayExportsSeriesStyles` on the raw binding, the
   same question both canvas hooks ask, so canvas and export still agree there.
+  **Overclaimed — narrowed 2026-09-17 (round 4 review): closed only on
+  `buildFigureSpec` (the live-view builder), which this module's own header
+  documents as reached ONLY through `buildStageFigureSpec`'s rare fallback in
+  production. The canonical `buildFigureSpecFromDocument` route real exports
+  take still emitted `group_col` from the RAW binding — genuinely closed in
+  round 4, below.**
 - **NIT 6 — the mis-based gate/bundle numbers: corrected in place above.**
 - **NIT 7 — the Figure Builder's own export: RECORDED, not threaded.**
   `components/workshops/figurebuilder/previewExport.ts:55` and
@@ -3942,6 +3949,133 @@ file changed, so the export/OpenAPI suites are untouched by this round.
 `check-bundle-size.mjs` OK, 7.0 kB under budget. Eager bundle, both trees built
 in the same checkout after `rm -rf node_modules/.vite`: **912,846 B** at the
 parent `0565b674` → **913,186 B** here, **+340 B**. No budget move.
+
+**Corrected 2026-09-17 (round 4, NIT 3) — this bundle pair was measured
+against the wrong parent AGAIN, the same mistake round 3 corrected once
+already (this file's NIT 6, just above — whose own "four commits" is also
+corrected to three, in place).** `git rev-parse fe50280f^` is **`f0d33783`**,
+not `0565b674` — `0565b674` is the base of the worktree this work was
+cherry-picked from, and three commits with eager frontend edits
+(`caa10f88`, `8a8d92b1`, `230a174a`) sit between the two. Re-measured on the
+real pair, both trees built in a scratch `git worktree` after `npm ci` and
+`rm -rf node_modules/.vite`: **912,953 B** at `f0d33783` → **913,293 B** at
+`fe50280f`, **+340 B** — the delta the original record quoted happens to be
+right even though its base was wrong.
+
+#### Review round 4 — 2026-09-17 (`fix(export): BUG-013 round 4 …`)
+
+A third adversarial review, of `fe50280f`, returned **1 CONFIRMED (medium), 1
+CONFIRMED (test gap) and 3 NITs**. Round 3's CONFIRMED 1-4 were re-attacked and
+hold; this round's findings are about round 3's OWN fix and its own record.
+
+- **CONFIRMED 1 — round 3's `group_col` degrade fix reached only the branch
+  `figureSpec.ts` itself never calls in production.** `figureSpec.ts`'s
+  `group_col` field, and the `groupCol` it fed `waterfallWire`, both read the
+  RAW `extras.groupKey` binding, not the degraded value `plotGroupSplit.
+  canvasGroupCol` computes — the exact function the CANVAS (`Stage/
+  usePlotPayload`) and `waterfallWire`'s own internal fallback already asked.
+  Round 3's new test ("rides a grouped view that a secondary Y axis degraded
+  to a plain overlay") only exercised `buildFigureSpec`, the live-view
+  builder that `buildStageFigureSpec`'s own header documents as reached ONLY
+  through its rare invariant-violation fallback — not
+  `buildFigureSpecFromDocument`, the canonical route "Copy figure"/"Export
+  figure…" actually take. Reachable with one legend click on that real route:
+  bind a group column, bind a secondary axis, then hide the y2 series (the
+  canvas degrades on the RAW y2 binding regardless of hidden state, so the
+  screen shows a plain, staggered overlay). Measured on that exact document
+  fixture (`dataset`'s channels 1-3, `groupKey:0, y2Keys:[3], hiddenChannels:
+  [3], waterfall:0.25`), before the fix: `group_col:0`, `y_keys:[1,2]`, NO
+  `waterfall_offsets` — a grouped, un-staggered export of an ungrouped,
+  staggered screen, BUG-013's own symptom. Fixed by extracting `lib/
+  figureSpecGroup.ts`'s `resolveGroupCol` (funds the fix against `figureSpec.
+  ts`'s 500-line ceiling rather than raising it): it keeps the existing
+  grouped+REALLY-rendered-secondary-axis throw on the raw binding (a genuine
+  conflict, unchanged — `richView()`'s existing throw test still passes
+  unmodified), and everywhere else degrades `group_col` through
+  `canvasGroupCol`, reused verbatim for the `groupCol` `waterfallWire` is
+  given. After the fix, the same fixture emits no `group_col` and offsets
+  `[0, 74.75]` — the canvas' own numbers, not hardcoded. The stale doc comment
+  claiming `buildFigureSpec`'s fallback branch "should not occur in practice"
+  is corrected in place: it is the ONLY way `buildFigureSpec` is reached in
+  production, and testing it directly (as round 3 did) is exactly how a fix
+  got marked closed on a branch users don't reach.
+- **CONFIRMED 2 (test gap) — the `groupCol` argument `waterfallWire` takes was
+  untested; investigated and narrowed rather than closed as specified.**
+  Sabotaging the raw-vs-degraded computation (finding 1's mutation) is caught
+  by the new test above. Separately sabotaging the `waterfallWire` CALL SITE —
+  dropping the `groupCol,` line from `figureSpec.ts`'s call entirely — does
+  **NOT** turn the new test red: measured directly (`tsc -b --force` clean,
+  `vitest run src/lib/figureSpec.test.ts` 83/83 green with that line deleted).
+  Traced why: `waterfallWire`'s own internal fallback is `args.groupCol ??
+  canvasGroupCol(args.view.groupKey, args.view.y2Keys)`, and `args.view` here
+  is `resolveSeriesCycle`'s `cycleView`, whose `groupKey` is `extras.groupKey
+  ?? st.groupKey` and whose `y2Keys` is `st.y2Keys` — the SAME two inputs
+  `figureSpecGroup.resolveGroupCol` computes `group_col` from, for BOTH
+  callers (`buildFigureSpecFromDocument`'s `st.groupKey` is always literally
+  `document.bindings.groupKey`, i.e. `extras.groupKey`, by construction —
+  `figureDocumentToPlotView` line ~208 — so the two never differ; the live
+  route's `extras.groupKey` is always `undefined`, which is nullish either way
+  it is read). So after the finding-1 fix, the explicit argument is
+  mathematically redundant with the callee's own fallback in every caller
+  this codebase has — not a coincidence of one fixture, a structural
+  invariant of the call graph. Left in place anyway (it is what the code
+  comment already documents as "keyed on what the request ACTUALLY carries",
+  self-documenting and harmless), but the "must go red when dropped" bar in
+  the brief cannot be met honestly; the finding-1 test above is the real
+  regression guard for the behaviour this argument was meant to protect
+  ("the wire still refuses offsets when it emits `group_col` … or, after fix
+  1, emits neither" — it emits neither, and the offsets ride).
+- **NIT 3 — the round-3 record's bundle numbers and commit-count claim:
+  corrected in place above** (this section's own preamble).
+- **NIT 4 (test gap) — `canvasColumns`' `xKey` argument was untested.**
+  Sabotage (`waterfallOffset.ts`: `canvasColumns(args.data, args.canvasChannels,
+  null)` instead of `args.view.xKey`) left the existing suite green. It is
+  live: the Origin over-allocation padding rule keys off the ACTUAL x column,
+  and a request whose x channel is a value column (not `time`) can have a
+  DIFFERENT trailing-zero pattern than `time` does. New test, measured (not
+  hardcoded from the review): real `xKey` drops the padded tail -> range
+  `[50,75]` -> step **6.25**; `xKey:null` (the sabotage) sees `time` as
+  finite/non-zero throughout, drops nothing -> range `[0,75]` -> step
+  **18.75**. Sabotage-verified: reverting to `null` turns exactly this one
+  test red (17/18 -> the new one).
+- **NIT 5 — the regression matrix's REOPEN leg measured the waterfall over a
+  raw, un-dropped `buildColumns`.** `regressionMatrixReopen.testkit.ts`'s
+  `waterfallOffsetFor` now wraps its `buildColumns` call in
+  `dropTrailingEmptyRows`, matching the EXPORT leg's own fallback
+  (`waterfallOffset.canvasColumns`) so a future padded fixture cannot report a
+  false `reopen != export` divergence. `freeze-regression-matrix.mjs --check`
+  stays clean — no current matrix fixture has trailing empty rows, exactly as
+  the screen leg's own comment already notes for its own (deliberate) omission
+  of this step — so this is a defensive fix, not new coverage; sabotaging it
+  (reverting to the raw `buildColumns`) leaves `regressionMatrix.test.ts`
+  green, confirmed. Non-vacuous: probed directly against the finding-4 padded
+  fixture outside the suite — `18.75` without the drop, `6.25` with it, the
+  same two numbers NIT 4 pins.
+
+Sabotage table (scope `src/lib/figureSpec.test.ts src/lib/waterfallOffset.
+test.ts src/lib/regressionMatrix.test.ts`, restored byte-identical after
+each):
+
+| # | Mutation | Result |
+|---|---|---|
+| S1 | `figureSpecGroup.resolveGroupCol` returns the raw `groupKey` instead of `canvasGroupCol(...)` (keeps the throw) | RED 1 — `figureSpec` "degrades group_col exactly like the canvas when the y2 channel is hidden, and the offsets ride" |
+| S2 | drop the `groupCol,` line from `figureSpec.ts`'s `waterfallWire` call | GREEN — 83/83 unchanged; investigated, see CONFIRMED 2 |
+| S3 | `waterfallOffset.ts`: `canvasColumns(args.data, args.canvasChannels, null)` instead of `args.view.xKey` | RED 1 — `waterfallOffset` "measures the padding drop against the REQUEST's x channel, not always `time`" |
+| S4 | `regressionMatrixReopen.testkit.ts`: revert to the raw `buildColumns`, no `dropTrailingEmptyRows` | GREEN — `regressionMatrix.test.ts` 47/47 unchanged (no current fixture has trailing padding; see NIT 5) |
+
+Gate (all foreground): `npx tsc -b --force` and `npx eslint src
+--max-warnings=0` clean; `npx vitest run src/lib src/components/Stage
+src/store/plotRecipes.test.ts src/architecture.test.ts` — **328 files / 6124
+tests passed, 0 failed**; `node scripts/freeze-regression-matrix.mjs --check`
+clean, no committed golden moved; `uv run pytest -q tests/
+test_repo_integrity.py` — **12 passed**. No backend file changed. Eager
+bundle, both trees built in a scratch `git worktree` after `npm ci` + `rm -rf
+node_modules/.vite`, measured against `HEAD~1` (per this file's own prior two
+corrections about using the real parent, not a cherry-pick base): **913,348
+B** at `b3fb6668` → **913,348 B** here, **+0 B** — `figureSpecGroup.ts` is
+eagerly reachable through the same `figureSpec.ts` import graph the code it
+holds moved out of, so no new lazy seam applies, and the net line count
+change is small enough to fall out in minification.
 
 ---
 

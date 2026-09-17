@@ -1480,6 +1480,44 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
     expect("waterfall_offsets" in spec).toBe(false);
   });
 
+  // BUG-013 round 4 review, finding 1 + finding 2. The CANONICAL/document
+  // route (`buildFigureSpecFromDocument`, what "Copy figure"/"Export figure…"
+  // actually takes) used to emit `group_col` from the RAW `groupKey` binding
+  // rather than the degraded value the canvas draws — so a group bound with
+  // its y2 channel merely HIDDEN (the canvas already degrades to a plain,
+  // staggered overlay: `plotGroupSplit.canvasGroupCol`) still rode the wire
+  // as a grouped, un-staggered request: a grouped, un-staggered export of an
+  // ungrouped, staggered screen, reachable with one legend click (bind a
+  // group column, bind a secondary axis, then hide the y2 series). Round 3's
+  // own equivalent test only exercised `buildFigureSpec`, the branch this
+  // module's header now documents as unreachable through Stage's normal
+  // routing — this one exercises the route real exports take.
+  it("degrades group_col exactly like the canvas when the y2 channel is hidden, and the offsets ride", () => {
+    const document = createFigureDocument({
+      id: "wf-group-y2-hidden",
+      name: "Grouped, y2 hidden",
+      datasetId: dataset.id,
+      view: {
+        ...defaultPlotView(),
+        xKey: null,
+        yKeys: [1, 2, 3],
+        y2Keys: [3],
+        hiddenChannels: [3],
+        waterfall: 0.25,
+      },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    // The request really is a plain, staggered, ungrouped overlay of channels
+    // 1 and 2 — channel 3 stays hidden but still reserves its stagger slot.
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y_keys).toEqual([1, 2]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+    ]);
+  });
+
   it("is ABSENT for a faceted request — the panels carry their own resolved y", () => {
     const document = createFigureDocument({
       id: "wf-facet",

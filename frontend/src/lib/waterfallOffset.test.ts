@@ -214,6 +214,42 @@ describe("waterfallWire honours the live canvas' span", () => {
     });
   });
 
+  // BUG-013 round 3 review, NIT 4. `canvasColumns`' `xKey` argument was
+  // untested — sabotaging it to `null` stayed green — though it decides which
+  // rows the Origin over-allocation rule prunes: the real x channel and the
+  // fallback (the `time` array) can have DIFFERENT trailing-zero patterns.
+  it("measures the padding drop against the REQUEST's x channel, not always `time`", () => {
+    // Channel 0 is the x-designated channel and carries the trailing
+    // over-allocation padding (0, 0); `time` is deliberately non-zero
+    // throughout, so an `xKey: null` sabotage sees a DIFFERENT (wrong) tail.
+    const X_CHANNEL_PADDED: DataStruct = {
+      time: [1, 2, 3, 4, 5],
+      values: [
+        [10, 50, 55],
+        [20, 60, 65],
+        [30, 70, 75],
+        [0, 0, 0],
+        [0, 0, 0],
+      ],
+      labels: ["x", "a", "b"],
+      units: ["", "", ""],
+      metadata: {},
+    };
+    const view: CycleView = { ...XY, xKey: 0 };
+    // Real xKey: rows 3-4 (x=0, every y=0) are dropped -> range [50,75] -> 25
+    // -> a quarter-step of 6.25.
+    expect(
+      wire({ data: X_CHANNEL_PADDED, canvasChannels: [1, 2], positions: [0, 1], view }),
+    ).toEqual({ waterfall_offsets: [0, 6.25] });
+    // `xKey: null` (the sabotage): `time` is finite and non-zero on every row,
+    // so NOTHING is dropped -> range [0,75] -> 75 -> a quarter-step of 18.75.
+    // Asserted directly (not just contrasted) so this test still fails on its
+    // own if the real-xKey behaviour above regresses to this number too.
+    expect(
+      wire({ data: X_CHANNEL_PADDED, canvasChannels: [1, 2], positions: [0, 1], view: XY }),
+    ).toEqual({ waterfall_offsets: [0, 18.75] });
+  });
+
   // BUG-013 round 3, finding 3. `allowExplicitXAsY` keeps the X channel in the
   // REQUEST's display list as a Y series; the canvas never draws it. Measuring
   // the fallback span over the request's list therefore stretched it by a curve

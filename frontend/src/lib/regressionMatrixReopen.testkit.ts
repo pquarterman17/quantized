@@ -18,7 +18,7 @@
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
 import type { PageDocument } from "./pageDocument";
-import { buildColumns, composeDisplayPayload, effectiveChannels } from "./plotdata";
+import { buildColumns, composeDisplayPayload, dropTrailingEmptyRows, effectiveChannels } from "./plotdata";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { parseWorkspace, serializeWorkspace, type WorkspaceState } from "./workspace";
 import type { Dataset, DataStruct } from "./types";
@@ -160,7 +160,16 @@ export function projectReopen(reopened: ReopenedProject): CanonicalFigure {
 
 /** The offset a reopened figure's data WOULD carry, measured the same way the
  *  screen leg measures it (`measureWaterfall`) rather than read off the field —
- *  so the two legs are comparing the same quantity in the same units. */
+ *  so the two legs are comparing the same quantity in the same units.
+ *
+ *  BUG-013 round 4, NIT 5: `dropTrailingEmptyRows` wraps `buildColumns` here
+ *  because the EXPORT leg's own fallback (`waterfallOffset.canvasColumns`)
+ *  does too — without it, a padded fixture would report a false `reopen !=
+ *  export` divergence purely from measuring over a longer, un-dropped tail.
+ *  (The SCREEN leg's mirror omits this step deliberately, documented as a
+ *  no-op for every current matrix fixture — see `regressionMatrix.testkit.ts`
+ *  — because it mirrors `usePlotPayload`'s pre-fetch-resolution shape, not
+ *  the fetched payload `dropTrailingEmptyRows` runs on.) */
 function waterfallOffsetFor(
   data: DataStruct,
   waterfall: number,
@@ -168,7 +177,7 @@ function waterfallOffsetFor(
   xKey: number | null,
   channels: number[],
 ): number {
-  const base = buildColumns(data, y2Keys, xKey, channels);
+  const base = dropTrailingEmptyRows(buildColumns(data, y2Keys, xKey, channels));
   const offset = composeDisplayPayload(base, {
     id: null,
     waterfall,
