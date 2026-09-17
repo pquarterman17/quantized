@@ -11,12 +11,21 @@
 // INSTEAD of `PlotViewport` + `PlotLegend`, so the only slot on a panel that
 // shows a series' resolved name is the y-axis label (`uplotOpts.soloLabel`,
 // which reads the same resolved `labels` array `seriesLabels` overrides).
-// Until this round the break leg passed no renames at all, so a renamed
+// Before BUG-014 round 4 the break leg passed no renames at all, so a renamed
 // channel read its derived "Signal (au)" on screen while the export of the
 // same view carried "Loop 1" (`lib/figureSpec.ts` -> `series_styles[i].legend`
-// — a break view exports as the flat figure). The array is POSITIONAL, one
-// entry per series of every panel's payload, because every break panel is the
-// same channel set sliced to its own x-segment.
+// — a break view exports as the flat figure). The map is CHANNEL-keyed and
+// projected PER PANEL through that panel's own `BreakPanel.channels`
+// (BUG-014 round 5), exactly as `facetGridRender.ts` projects it through
+// `FacetPanel.channels`: a break panel's channel list is resolved over its
+// own x-slice, so two panels of one view can legitimately hold different
+// channels and a positional list shared by every panel would mislabel.
+//
+// The parity this buys is exact only where a break panel HAS a visible name
+// slot: `soloLabel` paints the y-axis only when a SINGLE series sits on that
+// axis, so a multi-channel break panel (no legend, no solo axis label) still
+// shows no series name on screen while the export carries the rename — a
+// recorded residual, not something this projection closes.
 
 import uPlot from "uplot";
 
@@ -40,11 +49,10 @@ export type BreakCellOpts = Omit<
 
 export interface BreakPanelsArgs {
   panels: readonly BreakPanel[];
-  /** Per-series legend renames, positional over the payload's series (the
-   *  caller projects the channel-keyed store map onto the panels' channel
-   *  list). `undefined` = no renames resolved for this arrangement, which is
-   *  what every pre-BUG-014 break view passed. */
-  seriesLabels?: (string | undefined)[];
+  /** The store's per-CHANNEL legend renames, projected onto each panel's own
+   *  `channels` list below. `{}` (every pre-BUG-014 break view) leaves every
+   *  panel reading its derived "label (unit)". */
+  seriesLabels: Record<number, string>;
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** The shared x-zoom/pan propagation hook — one instance for the whole
@@ -84,7 +92,11 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       height: args.box.h,
       // A break panel's whole point is showing only its own x-slice.
       xLim: p.xRange,
-      seriesLabels: args.seriesLabels,
+      // `channels[i]` is the dataset channel behind `payload.series[i]`, by
+      // construction in `lib/facet.breakPayloads` — so a rename lands on the
+      // channel it was made for even when this panel's channel list differs
+      // from its neighbour's.
+      seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

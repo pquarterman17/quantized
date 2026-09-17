@@ -549,7 +549,13 @@ const TS_MODULE_PINS: Record<string, number> = {
   // (a legend rename now reaches all three multi-panel legs' y-axis labels,
   // the way the export already carried it). An extraction, not a bump: the
   // hook keeps mode selection, state and the effect lifecycle only.
-  "/components/Stage/useMultiPanelStage.ts": 757,
+  // 757 -> 753 (2026-09-17, BUG-014 round 5): the break leg's whole
+  // `breakLabels` memo (a whole-dataset channel re-derivation plus a
+  // series-count fail-closed guard) is gone — each `BreakPanel` now carries
+  // its own `channels` list, so `breakPanelRender.ts` projects the
+  // channel-keyed renames per panel with no derivation to guard. Part of the
+  // saving went back into the stack leg's payload/channel snapshot (N4).
+  "/components/Stage/useMultiPanelStage.ts": 753,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the

@@ -34,7 +34,7 @@
 // "generic" datasets) -- capture/apply both no-op for it.
 
 import { isAxisScale } from "./plotview";
-import { isString, keyedRecord } from "./sanitizeRecord";
+import { isFiniteNumber, isString, numKeyedRecord } from "./sanitizeRecord";
 import { isValidTechnique, techniqueOf } from "./techniqueDefaults";
 import type { AxisScale, Dataset, SeriesStyle, Technique } from "./types";
 
@@ -173,6 +173,13 @@ export function applyTechniqueMemory(
 }
 
 // ── `.dwk` / untrusted-boundary sanitizer (wired by lib/workspace.ts) ──────
+//
+// Every map here is genuinely CHANNEL-indexed and read by numeric index or
+// through `Number(key)` above, so all three go through
+// `lib/sanitizeRecord.numKeyedRecord` — keys normalized, values validated.
+// That is the one key policy this file has ever had (its former private
+// `strRecord`/`numRecord` both did `out[Number(k)] = val`); `keyedRecord`'s
+// verbatim keys belong to the string-keyed callers, not here.
 
 function numOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
@@ -180,15 +187,6 @@ function numOrNull(v: unknown): number | null {
 
 function numArray(v: unknown): number[] {
   return Array.isArray(v) ? v.filter((n): n is number => typeof n === "number" && Number.isFinite(n)) : [];
-}
-
-function numRecord(v: unknown): Record<number, number> {
-  if (typeof v !== "object" || v === null) return {};
-  const out: Record<number, number> = {};
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    if (typeof val === "number" && Number.isFinite(val)) out[Number(k)] = val;
-  }
-  return out;
 }
 
 /** Same structural-passthrough convention `lib/plotview.ts`'s `sanitizeView`
@@ -207,11 +205,11 @@ function sanitizeEntry(v: unknown): TechniqueViewMemory | null {
     yScale: isAxisScale(o.yScale) ? o.yScale : "linear",
     xScale: isAxisScale(o.xScale) ? o.xScale : "linear",
     seriesStyles: styleRecord(o.seriesStyles),
-    seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
+    seriesLabels: numKeyedRecord(o.seriesLabels, isString),
     seriesOrder: Array.isArray(o.seriesOrder) ? numArray(o.seriesOrder) : null,
-    errKeys: numRecord(o.errKeys),
+    errKeys: numKeyedRecord(o.errKeys, isFiniteNumber),
     hiddenChannels: numArray(o.hiddenChannels),
-    labels: keyedRecord<string, number>(o.labels, isString),
+    labels: numKeyedRecord(o.labels, isString),
   };
 }
 

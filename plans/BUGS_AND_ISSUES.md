@@ -38,7 +38,7 @@ This is a working document, not a claim that every observation is already reprod
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-16** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded. **Round 3 closed 2026-09-17**: the IMPORT rebind clears the break too (the third switch site), the no-break short-circuit is back in front of `analysisData`, the stack toggle no longer dirties the project when nothing changes, and the screen≡export claim is narrowed to in-extent non-empty breaks with the three diverging shapes recorded |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
-| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas |
+| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
@@ -4597,11 +4597,13 @@ rename; non-string renames are dropped at the sanitizer`, on top of
   makes exactly one single-series panel per plotted channel, the same
   indexing `styleList` uses), and the break leg gets the panels' own channel
   list, re-derived as `yKeys ?? defaultDenseChannels(analysisData(active))`
-  because a `BreakPanel` (unlike a `FacetPanel`) carries no `channels` field.
-  That derivation FAILS CLOSED: when it does not match the built panels'
-  series count (a composition built from a selection the view no longer
-  holds) no renames are passed at all, rather than one landing on the wrong
-  series by position.
+  because a `BreakPanel` (unlike a `FacetPanel`) carried no `channels` field.
+  **That derivation was WRONG and is replaced in round 5 below.** It assumed
+  every break panel holds the same channel set; `breakPayloads` in fact
+  resolves each panel's list over that panel's own x-slice, so with a null
+  `yKeys` the panels can legitimately differ, and the fail-closed guard —
+  which compared only `breakPanels[0]`'s series COUNT — let every
+  equal-count/different-membership case through and mislabeled it.
   **Funded by an extraction, not a pin bump** (round 3's Nit 7 flagged this
   exact need): `Stage/useMultiPanelStage.ts` was ON its 787-line pin, so the
   STACK and BREAK render legs moved to `Stage/stackPanelRender.ts` (102
@@ -4628,11 +4630,14 @@ rename; non-string renames are dropped at the sanitizer`, on top of
   `lib/techniqueViewMemory.ts`'s `strRecord` are deleted in favour of it, so
   all three `.dwk`/recipe restore paths validate this field through one
   function. `lib/plotview.ts` ratchets **981 -> 980**; no pin raised. (One
-  deliberate behaviour nuance: the shared helper passes KEYS through
-  verbatim, where `strRecord` used to normalize them with `Number(k)` — for a
-  channel-indexed map the runtime key is the same string either way, and a
-  non-canonical hand-edited key like `"01"` now simply never matches a
-  channel instead of being silently folded onto one.)
+  behaviour nuance, **corrected in round 5 below**: the shared helper passes
+  KEYS through verbatim, where `strRecord` used to normalize them with
+  `Number(k)`. The "`"01"` now never matches a channel" claim holds only for
+  `lib/plotview.ts`'s map — measured. On the technique-memory path
+  `applyTechniqueMemory` iterates with `Number(key)`, so a `"01"` in
+  `seriesLabels` still lands on channel 1; what silently changed there is
+  `TechniqueViewMemory.labels`, which IS read by numeric index. Round 5 gives
+  that file back its numeric keys.)
   Two stale test comments that cited the unvalidated cast as the reason a
   `null` is reachable (`figureSpecSeries.test.ts`, `figureSpecFacets.test.ts`)
   are corrected in place: the `.dwk` route is closed, the type hole is not,
@@ -4677,6 +4682,151 @@ rename; non-string renames are dropped at the sanitizer`, on top of
   `Stage/stackPanelRender.ts` 102, `Stage/breakPanelRender.ts` 112,
   `lib/sanitizeRecord.ts` 43; `lib/plotRecipeIO.ts` 377 (was 384),
   `lib/techniqueViewMemory.ts` 233 (was 241). No pin raised.
+
+#### Round 5 (2026-09-17) — the break panels carry their own channel list
+
+A fourth adversarial review of `3dee67df` returned 1 CONFIRMED regression,
+2 confirmed record/doc defects and 5 nits. Closed by
+`fix(stage): BUG-014 round 5 — break panels carry their own channel list;
+technique memory keeps numeric keys`, on top of `1fcc4137`:
+
+- **F1 (CONFIRMED, a REGRESSION against round 4's parent) — the break leg's
+  re-derivation mislabeled silently, and its fail-closed guard could not
+  see it.** `useMultiPanelStage.ts` derived ONE channel list
+  (`yKeys ?? defaultDenseChannels(analysisData(active), xKey)`) over the
+  WHOLE dataset and applied it positionally to every panel, guarding only
+  that its length matched `breakPanels[0].payload.series.length`. But
+  `lib/facet.breakPayloads` builds each panel from its own x-slice and
+  resolves `yChannels ?? defaultDenseChannels(<that slice>, xKey)` there, so
+  with a null `yKeys` — the DEFAULT view, and what `breakAtGaps` passes for a
+  non-active dataset — panels legitimately hold different channels, and any
+  equal-count/different-membership pair walked through the guard. Measured on
+  `3dee67df` (all three reproductions are now committed tests, and all three
+  fail against that commit's files):
+  * a 23-row set where channel 2 is finite only in the 2-row segment after
+    the gap (under the whole dataset's 10% density floor, densest in its own
+    panel) and channel 0 only before it: panels hold `[0,1]` then `[1,2]`,
+    whole-data derivation `[0,1]` (same LENGTH), rendered
+    `[["RENAMED-FIELD","Signal (au)"],["RENAMED-FIELD","Aux (V)"]]` — panel
+    1's channel-1 curve wearing channel 0's rename;
+  * the same shape with two channels, so both panels are single-series and
+    `soloLabel` paints the Y-AXIS: measured
+    `["RENAMED-FIELD","RENAMED-FIELD"]` on panels whose data is channel 0
+    then channel 1. That is strictly worse than before round 4, which passed
+    no renames and let panel 2 read its correct derived `"Aux (V)"`;
+  * `yKeys [0,1]` then `breakAtGaps` then the ordinary `setYKeys([1,2])` (two
+    ChannelsCard toggles; `setYKeys` does not clear `composition`): panels
+    still hold `[0,1]`, measured `["SIGNAL-NAME","AUX-NAME"]` on both.
+  Fixed the way round 2 fixed the facet grid: `BreakPanel` gains
+  `channels: number[]`, resolved ONCE in `breakPayloads` and handed to the
+  same `buildColumns` call, and `breakPanelRender.ts` takes the store's
+  channel-keyed map and projects `p.channels.map((ch) => seriesLabels[ch])`
+  PER PANEL — exactly what `facetGridRender.ts` does with `FacetPanel`. The
+  `breakLabels` memo and its fail-closed guard are deleted (with the
+  `analysisData`/`defaultDenseChannels` imports they were the only users of),
+  and the guard's test is replaced by the three reproductions above. Exact
+  beats heuristic: the guard's own failure mode left screen showing derived
+  labels while the export shipped the rename.
+- **F2 (CONFIRMED) — the doc promise the break leg rested on was false.**
+  `breakPanelRender.ts`, `useMultiPanelStage.ts` and this plan's round-4
+  Finding 1 all asserted "every break panel is the SAME channel set sliced to
+  its own x-segment". `lib/facet.ts`'s `FacetPanel.channels` already
+  documented the opposite for the identical construction. All three are
+  rewritten to the true rule (the per-panel list is carried on the panel);
+  round 4's Finding 1 above is corrected in place.
+- **F3 (CONFIRMED, low severity) — the round-4 `"01"` claim was wrong for the
+  technique-memory path, and left that file internally inconsistent.**
+  Measured: `applyTechniqueMemory` iterates `Object.entries` and calls
+  `resolve(Number(key))`, so a `"01"` in a persisted `seriesLabels` still
+  lands on channel 1 — no behaviour change at all there. The claim holds only
+  for `lib/plotview.ts`'s map. What DID change unstated is
+  `TechniqueViewMemory.labels`, which is read by numeric index
+  (`remembered.labels[ch]`): a `"01"` now misses and silently takes the
+  "never captured a label -> by-index passthrough" branch instead of the
+  relocate-or-drop one. `numRecord` in the same file still normalized keys,
+  so the file disagreed with itself. Fixed by making the KEY POLICY explicit
+  and per-consumer: `lib/sanitizeRecord.ts` gains `numKeyedRecord` (keys
+  through `Number`, non-finite keys dropped, same value guard) plus an
+  `isFiniteNumber` guard, and `techniqueViewMemory.ts` routes all three of
+  its channel-indexed maps (`seriesLabels`, `labels`, `errKeys`) through it —
+  restoring the numeric normalization its own `strRecord`/`numRecord` always
+  had. `keyedRecord` keeps verbatim keys for the string-keyed callers
+  (`plotRecipeIO`'s signature-entry ids) and for `lib/plotview.ts`. The new
+  `lib/sanitizeRecord.test.ts` (N5 — the module had no direct test) pins both
+  policies, including `"01"` in each direction.
+- **N4 — closed, not recorded.** `labelList`/`styleList`/`errorBarsList`
+  recomputed synchronously from `plotted` while `payload` only moved when
+  `fetchPlot` resolved, so between a channel toggle and its payload landing
+  the OLD payload's panels rendered wearing the NEW lists. Measured on
+  `1fcc4137`: hiding channel 0 of three renamed channels rebuilt three panels
+  as `[{series:"N1",firstY:10},{series:"N2",firstY:100},{series:"Aux (V)",firstY:1000}]`
+  — every panel wrong for a frame. The stack payload is now stored together
+  with the channel list it was fetched for and all three lists derive from
+  that snapshot, so the transient cannot exist (measured: 8 uPlot
+  constructions across the toggle before, 5 after — the three
+  wrong-labelled intermediates are gone). Pre-existing for `styleList` and
+  `errorBarsList` since before round 4; fixed for all three at once.
+- **N7 — narrowed in the docs, and the untested half pinned.**
+  `uplotOpts.soloLabel` returns a label only when exactly ONE series sits on
+  an axis, so a MULTI-channel break panel has no legend and no solo axis
+  label: no series name appears on screen there at all while the export still
+  carries the rename. `breakPanelRender.ts`'s header now says so instead of
+  claiming unqualified screen==export parity. **Residual:** that shape stays
+  unreachable-by-design for a rename until a break view grows a legend
+  (adjacent to FEATURE-001). The other half of the nit — a y2 channel's stack
+  panel painting the rename on `axes[2]`, correct but untested — is now
+  pinned by `MultiPanelStage.test.tsx` "paints a renamed Y2 channel's STACK
+  panel on the SECONDARY axis".
+- **N8 — recorded as a residual (pre-existing, out of scope).**
+  `lib/facet.breakPayloads` (`frontend/src/lib/facet.ts:196`) honours neither
+  `hiddenChannels` nor `y2Keys`: measured with `hiddenChannels [1]` and
+  `y2Keys [2]`, a break panel's series are `Field`/`Signal`/`Aux` all on axis
+  0 — the hidden channel drawn, the y2 channel on the primary axis — while
+  the flat view and the export drop/split them. `store/useApp.ts`'s
+  `breakAtGaps` (:1359) passes only `xKey`/`yKeys`. Carrying `channels` on
+  the panel is the prerequisite for fixing it, not the fix.
+- **N6 — noted, no action.** `plotview.test.ts` importing `buildOpts` pulls
+  the uPlot chain into a pure-lib test (+0.4 s); the assertion it buys is
+  worth it.
+- Agent verification (round 5): every new/changed assertion sabotaged and
+  reverted, the worktree clean afterwards —
+
+  | # | sabotage | failing test(s) |
+  |---|---|---|
+  | 1 | `breakPanelRender.ts`: pass `seriesLabels: undefined` to `buildOpts` (the pre-round-4 break leg) | 5 — `MultiPanelStage.test.tsx` "reaches EVERY x-break panel verbatim", "SCREEN label == EXPORT legend … in an x-break view", "labels each break panel by ITS channels…", "puts the renamed channel's name on the Y-AXIS of its OWN panel only", "labels a break panel by the channels it was BUILT from…" |
+  | 2 | `lib/facet.ts`: store the WHOLE-dataset channel list on each panel (`defaultDenseChannels(data, …)`) | 3 — `facet.test.ts` "carries each panel's OWN channel list, which can differ panel to panel"; `MultiPanelStage.test.tsx` "labels each break panel by ITS channels…", "puts the renamed channel's name on the Y-AXIS of its OWN panel only" |
+  | 3 | restore round 4's three files verbatim (`facet.ts`, `breakPanelRender.ts`, `useMultiPanelStage.ts` as of `3dee67df`) — i.e. the regression itself | 3 — the three reproductions, with the measured wrong labels `["RENAMED-FIELD","RENAMED-FIELD"]` and `["SIGNAL-NAME","AUX-NAME"]` |
+  | 4 | `sanitizeRecord.ts`: `numKeyedRecord` passes keys verbatim | 3 — `sanitizeRecord.test.ts` "relocates a non-canonical numeric key onto its channel", "drops a key that is not a finite number at all"; `techniqueViewMemory.test.ts` "normalizes a non-canonical numeric key onto its channel…" |
+  | 5 | `sanitizeRecord.ts`: `keyedRecord` normalizes keys through `Number` | 3 — `sanitizeRecord.test.ts` "keeps only entries whose value passes the guard", "leaves a non-canonical numeric key EXACTLY as written", "preserves the object's own key order" |
+  | 6 | `stackPanelRender.ts`: drop the per-panel `seriesLabels` | 4 — the three round-4 stack tests plus the new "paints a renamed Y2 channel's STACK panel on the SECONDARY axis" |
+  | 7 | `lib/facet.ts`: `breakPayloads` ignores an explicit `yChannels` | 2 — `facet.test.ts` "uses the explicit yChannels list verbatim for every panel when one is given", "threads xKey and yKeys into the panels" |
+  | 8 | `useMultiPanelStage.ts`: derive the three per-panel lists from `plotted` again (the N4 shape) | 1 — `MultiPanelStage.test.tsx` "never dresses a stack panel in another channel's rename while a re-fetch is in flight" (8 constructions instead of 5) |
+
+  Sabotage 7's first version of that test used the single-channel fixture,
+  where the explicit list and the density default coincide, and survived it;
+  it is now written against the divergent fixture.
+- Gate: `npx tsc -b --force` (exit 0, no output); `npx eslint src --max-warnings=0`
+  (exit 0, no output); `npx vitest run src/lib/facet.test.ts
+  src/lib/composition.test.ts src/lib/sanitizeRecord.test.ts
+  src/lib/techniqueViewMemory src/lib/plotview
+  src/lib/regressionMatrix.test.ts src/components/Stage src/components/windows
+  src/store/useApp.test.ts src/architecture.test.ts` -> **66 files, 1516
+  tests, 0 failed** (0 `^ FAIL` lines in the saved log); `node
+  scripts/freeze-regression-matrix.mjs --check` -> 1 test passed (the golden
+  did NOT move — `BreakPanel` is not serialized into it); backend
+  `tests/test_repo_integrity.py` -> **12 passed**.
+- Bundle (exact eager bytes, `npm ci` on both sides, `node_modules/.vite`
+  cleared before the local build): parent (this commit's `HEAD~1`) =
+  **`1fcc4137`** **913,249 B** -> this commit **913,348 B**, **+99 B**
+  (891.9 kB against the 898.8 kB budget, 6.9 kB under). The added bytes are
+  the per-panel `channels` resolution, the per-panel projection and the
+  payload/channel snapshot object; the round-4 entry's −99 B is exactly
+  reversed.
+- Module ceilings this round (`architecture.test.ts`'s own
+  `split("\n").length`): `Stage/useMultiPanelStage.ts` **753** (pin 757 ->
+  753); `Stage/breakPanelRender.ts` 124 (was 112); `lib/facet.ts` 384 (was
+  369); `lib/sanitizeRecord.ts` 78 (was 43); `lib/techniqueViewMemory.ts` 231
+  (was 233); `Stage/stackPanelRender.ts` 102 (unchanged). No pin raised.
 
 ---
 

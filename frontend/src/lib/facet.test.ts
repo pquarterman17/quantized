@@ -28,7 +28,7 @@ import {
   type BreakPanel,
   type FacetPanel,
 } from "./facet";
-import type { PlotPayload } from "./plotdata";
+import { defaultDenseChannels, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
@@ -436,11 +436,58 @@ describe("breakPayloads", () => {
   it("returns [] when breaks is empty", () => {
     expect(breakPayloads(ds, null, [0], [])).toEqual([]);
   });
+
+  // BUG-014 round 5. With a null `yChannels` each panel's series list is
+  // `defaultDenseChannels(<that panel's own rows>, xKey)`, so two panels of
+  // ONE break can legitimately hold different channels: "Aux" is finite only
+  // in the 2-row segment after the gap (2 of 23 rows — below the whole
+  // dataset's 10% density floor, but the densest thing in its own panel) and
+  // "Field" only before it. That is why the panel CARRIES the list: a caller
+  // re-deriving one list over the whole dataset gets `[0, 1]`, which has the
+  // right LENGTH for both panels and the wrong membership for the second.
+  const divergent = (): DataStruct => {
+    const time: number[] = [];
+    const values: number[][] = [];
+    for (let i = 0; i <= 20; i++) {
+      time.push(i);
+      values.push([10 + i, 100 + i, NaN]);
+    }
+    for (let i = 0; i < 2; i++) {
+      time.push(100 + i);
+      values.push([NaN, 300 + i, 270 + i]);
+    }
+    return { time, values, labels: ["Field", "Signal", "Aux"], units: ["T", "au", "V"], metadata: {} };
+  };
+
+  it("carries each panel's OWN channel list, which can differ panel to panel", () => {
+    const data = divergent();
+    expect(defaultDenseChannels(data, null)).toEqual([0, 1]);
+    const panels = breakPayloads(data, null, null, [[20, 100]]);
+    expect(panels.map((p) => p.channels)).toEqual([
+      [0, 1],
+      [1, 2],
+    ]);
+    // `channels[i]` really is the channel behind `payload.series[i]`.
+    expect(panels.map((p) => p.payload.series.map((se) => se.label))).toEqual([
+      ["Field", "Signal"],
+      ["Signal", "Aux"],
+    ]);
+  });
+
+  it("uses the explicit yChannels list verbatim for every panel when one is given", () => {
+    // Non-vacuous against the density default: channel 2 is what NEITHER
+    // panel would pick on its own (`[0, 1]` then `[1, 2]`), so this fails if
+    // the explicit selection is dropped in favour of the heuristic.
+    const panels = breakPayloads(divergent(), null, [2], [[20, 100]]);
+    expect(panels.map((p) => p.channels)).toEqual([[2], [2]]);
+    expect(panels.map((p) => p.payload.series.map((se) => se.label))).toEqual([["Aux"], ["Aux"]]);
+  });
 });
 
 describe("sharedYDomain", () => {
   const panel = (ys: (number | null)[]): BreakPanel => ({
     xRange: [0, ys.length - 1],
+    channels: [0],
     payload: {
       data: [ys.map((_, i) => i), ys] as PlotPayload["data"],
       series: [{ label: "y", unit: "", axis: 0 }],
@@ -468,6 +515,7 @@ describe("sharedYDomain", () => {
   it("covers multiple series within one panel", () => {
     const twoSeries: BreakPanel = {
       xRange: [0, 1],
+      channels: [0, 1],
       payload: {
         data: [
           [0, 1],

@@ -41,7 +41,7 @@ function spatial(): SpatialPanel {
 }
 
 const facet = (): FacetPanel => ({ label: "a", payload: payload(), channels: [0] });
-const brk = (): BreakPanel => ({ payload: payload(), xRange: [0, 1] });
+const brk = (): BreakPanel => ({ payload: payload(), xRange: [0, 1], channels: [0] });
 
 describe("composition constructors", () => {
   it("returns null for an empty panel list so 'nothing' has ONE representation", () => {

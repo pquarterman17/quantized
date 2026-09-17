@@ -6,7 +6,7 @@
 // right NUMBER of panels get built, without throwing) can run headlessly.
 // jsdom also has no ResizeObserver, so it's stubbed too.
 
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
@@ -759,6 +759,20 @@ function yAxisLabels(): (string | undefined)[] {
   return (created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label);
 }
 
+/** Every panel's SECONDARY y-axis label, in panel order — where a y2
+ *  channel's resolved name lands instead (`uplotOpts` builds `axes[2]` for
+ *  the y2 scale). */
+function y2AxisLabels(): (string | undefined)[] {
+  return (created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[2]?.label);
+}
+
+/** Every panel's SERIES labels (payload order, x column dropped) — the slot
+ *  to read when a panel holds more than one series and therefore has no solo
+ *  y-axis label at all. */
+function panelSeriesLabels(): (string | undefined)[][] {
+  return (created as { opts: { series: { label?: string }[] } }[]).map((p) => p.opts.series.slice(1).map((s) => s.label));
+}
+
 const RENDER_OPTS = { fmt: "pdf", style: "default", dpi: 300, title: "" };
 
 describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-014 round 4)", () => {
@@ -826,19 +840,17 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
   });
 
-  // Fail-closed half of the break projection: a break panel carries no
-  // channel list of its own (unlike a `FacetPanel`), so the hook re-derives
-  // it the way `lib/facet.breakPayloads` did. Here the composition was built
-  // from one channel and the view now selects two — the derivation no longer
-  // describes the panels, so NO renames are passed rather than one landing on
-  // the wrong series by position.
-  it("passes no renames at all when the view's channel selection no longer matches the built panels", async () => {
-    useApp.setState({ yKeys: [1], seriesLabels: { 0: "WRONG", 1: "Loop 1" } });
-    useApp.getState().breakAtGaps("d1", [[1, 2]]);
-    useApp.setState({ yKeys: [0, 1] });
+  // The stack leg's SECONDARY-axis slot — the other place a rename can land
+  // on screen in a multi-panel view, untested until round 5. A y2 channel's
+  // panel paints its resolved name on `axes[2]`, not `axes[1]`.
+  it("paints a renamed Y2 channel's STACK panel on the SECONDARY axis", async () => {
+    useApp.setState({ y2Keys: [1], seriesLabels: { 1: "Loop 1" } });
     render(<MultiPanelStage />);
     await waitFor(() => expect(created).toHaveLength(2));
-    expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
+    expect(y2AxisLabels()).toEqual([undefined, "Loop 1"]);
+    // Non-vacuous: channel 1's rename is NOT on the primary axis of its own
+    // panel, and channel 0's un-renamed panel still reads its derived label.
+    expect(yAxisLabels()).toEqual(["Field (T)", undefined]);
   });
 
   // The parity the bug is actually about: the string on screen and the string
@@ -872,5 +884,172 @@ describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-0
     const legend = spec.series_styles?.[0]?.legend;
     expect(legend).toBe("Loop 1");
     expect(yAxisLabels()).toEqual([legend, legend]);
+  });
+});
+
+// BUG-014 round 5. Round 4 gave the break leg its renames by re-deriving ONE
+// channel list over the whole dataset (`yKeys ?? defaultDenseChannels(...)`)
+// and applying it positionally to every panel, guarded only by a comparison
+// against `breakPanels[0]`'s series COUNT. But `lib/facet.breakPayloads`
+// builds each panel from its own x-slice, and with `yKeys` null resolves that
+// panel's channels over those rows alone — so panels legitimately differ, and
+// an equal-count/different-membership pair walked straight through the guard
+// and wore each other's names. The fix carries `channels` on the panel, the
+// way `FacetPanel` already does. Each test below FAILS on the round-4 code
+// with the wrong-channel label recorded in its comment.
+//
+// `Aux` is finite only in the 2-row segment after the gap: 2 of 23 rows, under
+// the WHOLE dataset's 10% density floor (so the whole-data derivation is
+// `[0, 1]`, length 2 — the same length as either panel) but the densest thing
+// in its own panel. `Field` is finite only before the gap.
+function divergentData(): DataStruct {
+  const time: number[] = [];
+  const values: number[][] = [];
+  for (let i = 0; i <= 20; i++) {
+    time.push(i);
+    values.push([10 + i, 100 + i, NaN]);
+  }
+  for (let i = 0; i < 2; i++) {
+    time.push(100 + i);
+    values.push([NaN, 300 + i, 270 + i]);
+  }
+  return { time, values, labels: ["Field", "Signal", "Aux"], units: ["T", "au", "V"], metadata: {} };
+}
+
+/** The same divergence with only TWO channels, so every panel is
+ *  single-series and the mislabel lands on the visible Y-AXIS. */
+function soloDivergentData(): DataStruct {
+  const time: number[] = [];
+  const values: number[][] = [];
+  for (let i = 0; i <= 20; i++) {
+    time.push(i);
+    values.push([10 + i, NaN]);
+  }
+  for (let i = 0; i < 2; i++) {
+    time.push(100 + i);
+    values.push([NaN, 270 + i]);
+  }
+  return { time, values, labels: ["Field", "Aux"], units: ["T", "V"], metadata: {} };
+}
+
+/** Each panel's first finite y value — identifies WHICH channel's data a
+ *  panel actually holds, so a label assertion cannot be read the wrong way
+ *  round. */
+function firstYs(): (number | null)[] {
+  return (created as { data: (number | null)[][] }[]).map(
+    (p) => p.data[1]?.find((v) => v != null && Number.isFinite(v)) ?? null,
+  );
+}
+
+/** Three dense channels whose magnitudes identify them: 10 -> channel 0,
+ *  100 -> channel 1, 1000 -> channel 2. */
+const THREE_DENSE: DataStruct = {
+  time: [0, 1, 2, 3],
+  values: [
+    [10, 100, 1000],
+    [11, 101, 1001],
+    [12, 102, 1002],
+    [13, 103, 1003],
+  ],
+  labels: ["Field", "Signal", "Aux"],
+  units: ["T", "au", "V"],
+  metadata: {},
+};
+
+describe("MultiPanelStage — break panels carry their OWN channel list (BUG-014 round 5)", () => {
+  beforeEach(() => {
+    useApp.setState({ plotWindows: [], focusedWindowId: null, hiddenChannels: [] });
+  });
+
+  // N4: `plotted` recomputes synchronously with the view, `fetchPlot`
+  // resolves later. The load-invariant property that has to hold in EVERY
+  // frame, not only the settled one: a stack panel's y-axis label is the
+  // rename of the channel whose data that panel is drawing. Measured before
+  // the payload/channel snapshot: hiding channel 0 rebuilt the three OLD
+  // panels wearing the new two-entry list — 10 labelled "N1", 100 labelled
+  // "N2", 1000 left derived — i.e. every panel wrong for one frame.
+  it("never dresses a stack panel in another channel's rename while a re-fetch is in flight", async () => {
+    const nameOf: Record<number, string> = { 10: "N0", 100: "N1", 1000: "N2" };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: THREE_DENSE }],
+      activeId: "d1",
+      seriesLabels: { 0: "N0", 1: "N1", 2: "N2" },
+    });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(3));
+    act(() => {
+      useApp.setState({ hiddenChannels: [0] });
+    });
+    // The settled state is 3 panels + the 2-panel rebuild once the re-fetch
+    // lands. Waiting on ">= 5" rather than "== 5" so a regression that adds a
+    // wrong-labelled intermediate pass reaches the assertion below instead of
+    // hanging here.
+    await waitFor(() => expect(created.length).toBeGreaterThanOrEqual(5));
+    // Every instance EVER built, intermediates included: its label is its own
+    // channel's rename. (With the snapshot there is no intermediate at all —
+    // exactly 5 — because the derived lists only move when the payload does.)
+    expect(created).toHaveLength(5);
+    const ys = firstYs();
+    expect(ys.map((y, i) => [y, yAxisLabels()[i]])).toEqual(ys.map((y) => [y, nameOf[y as number]]));
+  });
+
+  it("labels each break panel by ITS channels when the panels hold different ones", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: divergentData() }],
+      activeId: "d1",
+      yKeys: null,
+      seriesLabels: { 0: "RENAMED-FIELD" },
+    });
+    useApp.getState().breakAtGaps("d1", [[20, 100]]);
+    expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    // Round 4 measured [["RENAMED-FIELD", "Signal (au)"], ["RENAMED-FIELD",
+    // "Aux (V)"]] — panel 1's channel-1 curve wearing channel 0's rename.
+    expect(panelSeriesLabels()).toEqual([
+      ["RENAMED-FIELD", "Signal (au)"],
+      ["Signal (au)", "Aux (V)"],
+    ]);
+  });
+
+  it("puts the renamed channel's name on the Y-AXIS of its OWN panel only", async () => {
+    // The visible case: both panels are single-series, so `soloLabel` paints
+    // the y-axis. Round 4 measured ["RENAMED-FIELD", "RENAMED-FIELD"] — the
+    // channel-1 panel's axis reading channel 0's user-chosen name, which is
+    // worse than the pre-round-4 state (it read its derived "Aux (V)").
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: soloDivergentData() }],
+      activeId: "d1",
+      yKeys: null,
+      seriesLabels: { 0: "RENAMED-FIELD" },
+    });
+    useApp.getState().breakAtGaps("d1", [[20, 100]]);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["RENAMED-FIELD", "Aux (V)"]);
+    // Panel 1 really is channel 1's data (270), not channel 0's (10).
+    expect(firstYs()).toEqual([10, 270]);
+  });
+
+  it("labels a break panel by the channels it was BUILT from, not the view's current selection", async () => {
+    // Two ordinary ChannelsCard toggles after the break gesture (`setYKeys`
+    // does not clear `composition`): the panels still hold channels 0 and 1,
+    // so channel 0's and 1's renames are the correct ones. Round 4 derived
+    // `[1, 2]` from the live view — equal length, wrong membership — and
+    // measured ["SIGNAL-NAME", "AUX-NAME"] on both panels.
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: divergentData() }],
+      activeId: "d1",
+      yKeys: [0, 1],
+      seriesLabels: { 0: "FIELD-NAME", 1: "SIGNAL-NAME", 2: "AUX-NAME" },
+    });
+    useApp.getState().breakAtGaps("d1", [[20, 100]]);
+    useApp.setState({ yKeys: [1, 2] });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(panelSeriesLabels()).toEqual([
+      ["FIELD-NAME", "SIGNAL-NAME"],
+      ["FIELD-NAME", "SIGNAL-NAME"],
+    ]);
   });
 });

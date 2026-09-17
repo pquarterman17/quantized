@@ -148,6 +148,17 @@ export function suggestBreaks(xs: readonly number[], gapFactor = 4): [number, nu
 
 export interface BreakPanel {
   payload: PlotPayload;
+  /** The dataset channel index behind each `payload.series` entry, in the
+   *  same order -- carried for exactly the reason `FacetPanel.channels` is
+   *  (BUG-014 round 5): the per-panel list is
+   *  `yChannels ?? defaultDenseChannels(<this panel's x-slice>, xKey)`, and
+   *  with a null `yChannels` the density heuristic runs over each segment's
+   *  OWN rows, so two break panels of the same view can legitimately hold
+   *  different channels (a channel finite only after the gap is dense in the
+   *  last panel and absent from the first). A caller therefore cannot
+   *  reconstruct it from the view's binding; `Stage/breakPanelRender.ts`
+   *  projects the store's channel-keyed `seriesLabels` through THIS list. */
+  channels: number[];
   /** This panel's x-domain — the per-panel `xLim` `MultiPanelStage` applies,
    *  since a break panel's whole point is showing only its own x-slice, not
    *  the full (elided-gap) span.
@@ -230,8 +241,12 @@ export function breakPayloads(
       time: rows.map((r) => data.time[r]),
       values: rows.map((r) => data.values[r]),
     };
-    const payload = buildColumns(sliced, null, xKey, yChannels);
-    panels.push({ payload, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)] });
+    // Resolve the channel list HERE and hand the same array to
+    // `buildColumns`, so `channels[i]` is the channel behind
+    // `payload.series[i]` by construction -- identical to `facetPayloads`.
+    const channels = yChannels ?? defaultDenseChannels(sliced, xKey);
+    const payload = buildColumns(sliced, null, xKey, channels);
+    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)] });
   }
   return panels;
 }

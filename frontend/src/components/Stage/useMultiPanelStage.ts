@@ -30,7 +30,7 @@ import {
 import { resolveSecondaryAxis, secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
-import { defaultDenseChannels, effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
@@ -55,7 +55,6 @@ import {
 } from "../../lib/panelLayout";
 import type { PageSetup } from "../../lib/pagesetup";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
-import { analysisData } from "../../lib/rowstate";
 import type { AxisFormat, AxisScale, Dataset, DefaultTrace, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
@@ -226,7 +225,13 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const breakPanels = breakPanelsOf(composition);
   const hostRef = useRef<HTMLDivElement>(null);
   const plotsRef = useRef<uPlot[]>([]);
-  const [payload, setPayload] = useState<PlotPayload | null>(null);
+  // The fetched stack payload TOGETHER with the channels it was fetched for
+  // (BUG-014 round 5, N4): `plotted` recomputes synchronously with the view
+  // while `fetchPlot` resolves later, so per-panel labels/styles/error bars
+  // derived from `plotted` briefly dressed the OLD payload's panels in the
+  // NEW list (measured: 3 panels wearing a 2-entry label list). Derived from
+  // this snapshot instead, the two cannot disagree.
+  const [payload, setPayload] = useState<{ payload: PlotPayload; channels: number[] } | null>(null);
   const [spatialPayloads, setSpatialPayloads] = useState<(SpatialFetch | null)[]>([]);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [spatialLegends, setSpatialLegends] = useState<SpatialLegendPortal[]>([]);
@@ -270,35 +275,27 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         : [],
     [spatial, facet, breakMode, active, yKeys, xKey, seriesOrder, hiddenChannels],
   );
-  const styleList = useMemo(() => plotted.map((ch) => seriesStyles[ch]), [plotted, seriesStyles]);
+  const styleList = useMemo(() => (payload?.channels ?? []).map((ch) => seriesStyles[ch]), [payload, seriesStyles]);
   // One error-bar map per stacked panel (each panel is a single-series uPlot
   // instance, so its own column index is always 1 — see `buildErrorColumns`'s
   // 1-based keying). Mirrors `usePlotPayload.errorBars`, scoped per panel.
   const errorBarsList = useMemo(
-    () => (active ? plotted.map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
-    [active, plotted, errKeys],
+    () => (active ? (payload?.channels ?? []).map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
+    [active, payload, errKeys],
   );
   // BUG-014 round 4: the channel-keyed renames the facet leg already
   // projects (`facetGridRender`), projected for the two OTHER legs.
-  // STACK: one entry per plotted channel in panel order — `splitPayload`
-  // makes exactly one single-series panel per `plotted` entry, so the same
-  // indexing `styleList` uses is correct here.
-  const labelList = useMemo(() => plotted.map((ch) => seriesLabels[ch]), [plotted, seriesLabels]);
-  // BREAK: every panel is the SAME channel set sliced to its own x-segment,
-  // and `lib/facet.breakPayloads` builds each payload with `buildColumns(
-  // sliced, null, xKey, yKeys)` — so a panel's positional series list is
-  // `yKeys ?? defaultDenseChannels(...)` over the ANALYSIS view the
-  // composition was built from (`breakCompositionFromBreaks`). Fail closed:
-  // when that derivation does not match the panels' actual series count (a
-  // composition built from a selection the view no longer holds), pass NO
-  // renames rather than mislabel by position.
-  const breakLabels = useMemo(() => {
-    const data = breakMode ? (analysisData(active) ?? active?.data) : null;
-    if (!data) return undefined;
-    const chans = yKeys ?? defaultDenseChannels(data, xKey);
-    const seriesCount = breakPanels?.[0]?.payload.series.length ?? 0;
-    return chans.length === seriesCount ? chans.map((ch) => seriesLabels[ch]) : undefined;
-  }, [breakMode, active, yKeys, xKey, breakPanels, seriesLabels]);
+  // STACK: one entry per FETCHED channel in panel order — `splitPayload`
+  // makes exactly one single-series panel per series of that payload, so the
+  // same indexing `styleList` uses is correct here.
+  const labelList = useMemo(() => (payload?.channels ?? []).map((ch) => seriesLabels[ch]), [payload, seriesLabels]);
+  // BREAK: nothing to project here — each `BreakPanel` carries its OWN
+  // `channels` list (resolved over that panel's x-slice, which with a null
+  // `yKeys` can differ panel to panel), so `breakPanelRender` projects the
+  // channel-keyed map per panel exactly as the facet leg does. Round 4
+  // re-derived one list over the WHOLE dataset instead and guarded it with a
+  // series-COUNT check, which equal-count/different-membership panels walked
+  // straight through (BUG-014 round 5).
 
   useEffect(() => {
     let cancelled = false;
@@ -327,7 +324,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         : null;
     void fetchPlot(active.data, yScale === "log", xScale === "log", plotted, y2Keys, xKey, decimateWidth).then(
       (p) => {
-        if (!cancelled) setPayload(p);
+        if (!cancelled) setPayload({ payload: p, channels: plotted });
       },
     );
     return () => {
@@ -592,11 +589,11 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
       plotsRef.current = renderBreakPanels(host, {
         panels: bPanels,
-        // BUG-014 round 4: a break view's only visible label slot is the
-        // panel's y-axis label, and its EXPORT carries the rename — so the
-        // renames belong here for the same reason they belong on the facet
-        // leg below.
-        seriesLabels: breakLabels,
+        // BUG-014: a break view's only visible label slot is the panel's
+        // y-axis label, and its EXPORT carries the rename — so the renames
+        // belong here for the same reason they belong on the facet leg below.
+        // Channel-keyed, projected per panel through `BreakPanel.channels`.
+        seriesLabels,
         syncKey,
         // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
         // panel's x axis still means "this series' x", so zooming one seam
@@ -665,7 +662,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
 
     const w = host.clientWidth || 600;
     plotsRef.current = renderStackPanels(host, {
-      panels: splitPayload(payload),
+      panels: splitPayload(payload.payload),
       // BUG-014 round 4: each stack panel is single-series, so its y-axis
       // label IS that series' legend text — the rename has to reach it or
       // screen and export disagree.
@@ -717,7 +714,6 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     refLines,
     styleList,
     labelList,
-    breakLabels,
     seriesLabels,
     autoSeriesStyles,
     errorBarsList,

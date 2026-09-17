@@ -13,11 +13,25 @@
 // copies became one function, here, in a leaf module all three can import
 // without a cycle (both siblings already import `plotview`).
 //
-// Keys are passed through VERBATIM — the caller's key type is a view on the
-// object's own string keys (a channel-indexed `Record<number, string>` is
-// still `{"1": ...}` at runtime), so a non-canonical numeric key from a
-// hand-edited file (`"01"`) stays as written and simply never matches a
-// channel, instead of being silently normalized onto one.
+// There are two key policies, one per consumer, because the two kinds of map
+// are LOOKED UP differently and a sanitizer must not change what a stored map
+// resolves to:
+//
+//   * `keyedRecord` passes keys through VERBATIM. Its callers either key by a
+//     genuine string (`plotRecipeIO`'s signature-entry ids, `"y0"`) or
+//     iterate with `Object.entries` + `Number(key)` (`lib/plotview.ts`'s
+//     `seriesLabels`, read as `seriesLabels[ch]` on the canvas). A
+//     non-canonical numeric key from a hand-edited file (`"01"`) therefore
+//     stays as written and simply never matches a channel, instead of being
+//     silently normalized onto one.
+//   * `numKeyedRecord` NORMALIZES each key through `Number` and drops the
+//     ones that are not finite numbers. `lib/techniqueViewMemory.ts` needs
+//     this: its `labels` map is read by numeric index
+//     (`remembered.labels[ch]`), so a `"01"` that survived verbatim would
+//     miss and silently take the "never captured a label -> by-index
+//     passthrough" branch. Normalizing is what its own pre-BUG-014
+//     `strRecord`/`numRecord` helpers did, and this keeps that behaviour
+//     while gaining the value validation.
 
 /** Every entry of `v` whose VALUE passes `guard`, in the object's own key
  *  order; `{}` for a non-object. Never throws — a defective entry is
@@ -39,4 +53,25 @@ export function keyedRecord<T, K extends PropertyKey = string>(
  *  on the export wire, so anything but a string is dropped. */
 export function isString(x: unknown): x is string {
   return typeof x === "string";
+}
+
+/** Key-NORMALIZING sibling of `keyedRecord` for a genuinely channel-indexed
+ *  map: each key runs through `Number`, so a hand-edited `"01"` lands on
+ *  channel 1 the way the pre-BUG-014 helpers put it there, and a key that is
+ *  not a finite number at all (`"x"`) is dropped rather than parked under
+ *  `NaN`. Values are validated by `guard`, same as `keyedRecord`. */
+export function numKeyedRecord<T>(v: unknown, guard: (x: unknown) => x is T): Record<number, T> {
+  const out: Record<number, T> = {};
+  if (typeof v !== "object" || v === null) return out;
+  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+    const key = Number(k);
+    if (Number.isFinite(key) && guard(val)) out[key] = val;
+  }
+  return out;
+}
+
+/** The guard `numKeyedRecord` takes for a numeric map (`errKeys`): a channel
+ *  index, so non-finite numbers and every other type are dropped. */
+export function isFiniteNumber(x: unknown): x is number {
+  return typeof x === "number" && Number.isFinite(x);
 }
