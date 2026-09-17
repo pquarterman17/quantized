@@ -5,6 +5,7 @@
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
+import { effectiveColorLimits } from "../../lib/mapView";
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdataFetch";
@@ -186,6 +187,10 @@ export function draw(
   peaks: RsmPeak[] | null = null,
   smooth = true,
   contour: ContourOptions | null = null,
+  // Audit P2.8: the user's explicit colour limits, or null for "auto" (the
+  // payload's own z extent — exactly what this function used before). Last and
+  // defaulted so every existing caller and test is untouched.
+  colorLimits: [number, number] | null = null,
 ) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return; // jsdom / headless — nothing to paint
@@ -202,8 +207,14 @@ export function draw(
   const muted = cssVar("--text-dim", "#9aa");
   const rect = plotRect(p, W, H);
   // Log mode floors at the smallest positive cell (0/negative -> transparent).
-  const lo = logZ ? minPositive(p.zGrid) : p.zMin;
-  const hi = p.zMax;
+  // P2.8: explicit colour limits win over that auto extent; `effectiveColorLimits`
+  // keeps the log floor as the lower bound when the explicit `lo` is non-positive,
+  // so switching a clipped map to log never blanks it. Both the heatmap and the
+  // colourbar below read the SAME pair, so the scale bar cannot disagree with the
+  // pixels it labels.
+  const limits = effectiveColorLimits(colorLimits, logZ ? minPositive(p.zGrid) : p.zMin, p.zMax, logZ);
+  const lo = limits ? limits[0] : null;
+  const hi = limits ? limits[1] : null;
 
   // Offscreen nx×ny image (built pure), then one scaled blit.
   if (lo != null && hi != null && hi > lo) {

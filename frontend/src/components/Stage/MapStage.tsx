@@ -6,17 +6,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { COLORMAPS, type ColormapName } from "../../lib/colormap";
+import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
+import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import MapRoiOverlay from "./MapRoiOverlay";
+import MapSliceOverlay from "./MapSliceOverlay";
 import MapToolbar from "./MapToolbar";
 import { armExclusively, routedTool } from "./mapToolArming";
-import { draw, fmt, hitTest, type Readout } from "./mapRender";
+import { draw, fmt } from "./mapRender";
 import { useMapCuts } from "./useMapCuts";
+import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
 import { useMapRuler } from "./useMapRuler";
 import { useMapSectorWedge } from "./useMapSectorWedge";
@@ -42,8 +45,22 @@ export default function MapStage({ dataset }: MapStageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [payload, setPayload] = useState<MapPayload | null>(null);
-  const [cmap, setCmap] = useState<ColormapName>("viridis");
-  const [logZ, setLogZ] = useState(false);
+  // Audit P2.8: the colormap, the linear/log colour scale, the explicit colour
+  // limits, the committed H/V/segment slices and the map annotations are ONE
+  // durable record in the store (store/mapView.ts) instead of this component's
+  // local `useState`. That is what makes them survive an unmount — switching
+  // the Stage tab, or closing and reopening a map document window — as well as
+  // a `.dwk` save/reopen, autosave and Pack Project.
+  const mapView = useApp((s) => s.mapView);
+  const bindMapView = useApp((s) => s.bindMapView);
+  const setMapColormap = useApp((s) => s.setMapColormap);
+  const setMapLogZ = useApp((s) => s.setMapLogZ);
+  const addMapSlice = useApp((s) => s.addMapSlice);
+  const removeMapSlice = useApp((s) => s.removeMapSlice);
+  const addMapAnnotation = useApp((s) => s.addMapAnnotation);
+  const removeMapAnnotation = useApp((s) => s.removeMapAnnotation);
+  const cmap = mapView.colormap;
+  const logZ = mapView.logZ;
   // Gridding controls live in the Inspector "2-D map" card (store-backed) so the
   // map toolbar stays focused on view picks (channels / colormap / log).
   const method = useApp((s) => s.mapMethod);
@@ -55,7 +72,6 @@ export default function MapStage({ dataset }: MapStageProps) {
   const contourScale = useApp((s) => s.contourScale);
   const setContourOn = useApp((s) => s.setContourOn);
   const setStatus = useApp((s) => s.setStatus);
-  const [readout, setReadout] = useState<Readout | null>(null);
   // x/y/z channel picks, local to this view (default the first three channels).
   const [keys, setKeys] = useState<[number, number, number]>([0, 1, 2]);
 
@@ -95,8 +111,6 @@ export default function MapStage({ dataset }: MapStageProps) {
   // arms regardless, but `wedge.sector`/dragging both go inert off a Q
   // view — see useMapSectorWedge.ts's header).
   const wedge = useMapSectorWedge(active, cutSpace);
-  // Segment-drag state in canvas pixels (for the SVG preview line).
-  const [dragPx, setDragPx] = useState<{ a: [number, number]; b: [number, number] } | null>(null);
   // Host box size in CSS px, kept in sync by the paint effect below (the
   // SAME ResizeObserver that already exists for the canvas) — the ROI
   // overlay needs it to convert data<->px through the SAME plotRect the
@@ -108,6 +122,18 @@ export default function MapStage({ dataset }: MapStageProps) {
     setKeys([0, 1, Math.min(2, Math.max(0, labels.length - 1))]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+
+  // P2.8: point the durable map view at whatever dataset this map shows. The
+  // preservation rule itself lives in `bindMapView` (store/mapView.ts) — a
+  // GENUINE dataset switch drops the colour limits, slices and annotations
+  // (they are in the old map's units), re-activating the SAME dataset keeps
+  // every one of them. `bindMapView` is a no-op when the id already matches,
+  // so this effect cannot loop or dirty the project on a re-render, and
+  // NOTHING here reacts to `mapRes`/`mapMethod`/the colour limits — which is
+  // precisely why a regrid or a colour-limit change preserves the slices.
+  useEffect(() => {
+    bindMapView(active?.id ?? null);
+  }, [active?.id, bindMapView]);
 
   // Fetch + regrid on dataset/channel changes. AbortController (item 16)
   // cancels a SUPERSEDED request outright instead of only discarding its
@@ -143,7 +169,7 @@ export default function MapStage({ dataset }: MapStageProps) {
     const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
     const contour = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
     const paint = () => {
-      draw(canvas, host, payload, cmap, logZ, markers, antialias, contour);
+      draw(canvas, host, payload, cmap, logZ, markers, antialias, contour, mapView.colorLimits);
       const w = host.clientWidth;
       const h = host.clientHeight;
       setHostSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
@@ -165,19 +191,8 @@ export default function MapStage({ dataset }: MapStageProps) {
     contourOn,
     contourLevelCount,
     contourScale,
+    mapView.colorLimits,
   ]);
-
-  function hitAt(ev: React.MouseEvent<HTMLCanvasElement>): {
-    r: Readout | null;
-    px: [number, number];
-  } {
-    const canvas = canvasRef.current;
-    const host = hostRef.current;
-    if (!payload || !canvas || !host) return { r: null, px: [0, 0] };
-    const rect = canvas.getBoundingClientRect();
-    const px: [number, number] = [ev.clientX - rect.left, ev.clientY - rect.top];
-    return { r: hitTest(payload, host.clientWidth, host.clientHeight, px[0], px[1]), px };
-  }
 
   // Box, ruler, and the sector wedge take precedence over the cut tool while
   // armed — all four drive the same canvas pointer gestures, so only one may
@@ -193,49 +208,31 @@ export default function MapStage({ dataset }: MapStageProps) {
     { armed: wedgeArmed, ...wedge },
   ]);
 
-  function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
-    const { r, px } = hitAt(ev);
-    setReadout(r);
-    if (routed && payload) {
-      routed.onMove(payload, hostSize.w, hostSize.h, px);
-      return;
-    }
-    if (dragPx) setDragPx({ a: dragPx.a, b: px });
-  }
-
-  function onClick(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (routed) return;
-    if (cuts.mode !== "h" && cuts.mode !== "v") return;
-    const { r } = hitAt(ev);
-    if (r) cuts.runLine(cuts.mode, { x: r.x, y: r.y });
-  }
-
-  function onDown(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (routed && payload) {
-      const { px } = hitAt(ev);
-      routed.onDown(payload, hostSize.w, hostSize.h, px);
-      return;
-    }
-    if (cuts.mode !== "seg") return;
-    const { r, px } = hitAt(ev);
-    if (r) setDragPx({ a: px, b: px });
-  }
-
-  function onUp(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (routed) {
-      const { px } = hitAt(ev);
-      routed.onUp(px);
-      return;
-    }
-    if (cuts.mode !== "seg" || !dragPx) return;
-    const canvas = canvasRef.current;
-    const host = hostRef.current;
-    setDragPx(null);
-    if (!payload || !canvas || !host) return;
-    const start = hitTest(payload, host.clientWidth, host.clientHeight, dragPx.a[0], dragPx.a[1]);
-    const { r: end } = hitAt(ev);
-    if (start && end) cuts.runSegment({ x: start.x, y: start.y }, { x: end.x, y: end.y });
-  }
+  // Every canvas gesture (hover readout, armed-tool dispatch, the H/V click and
+  // the segment drag that fire a cut, and P2.8's double-click-to-label) lives
+  // in useMapPointer.ts — see its header for why it is not inline here.
+  const pointer = useMapPointer({
+    payload,
+    canvasRef,
+    hostRef,
+    routed,
+    cuts,
+    hostSize,
+    cutSpace,
+    // P2.8: the cut that just ran ALSO leaves a durable slice at the position
+    // it was taken, built from the SAME data-space points the request used, so
+    // the drawn line and the landed 1-D dataset can never disagree.
+    onSlice: (kind, a, b) => {
+      if (cutSpace == null) return;
+      addMapSlice({ kind, a, ...(b ? { b } : {}), width: cuts.width, space: cutSpace });
+    },
+    onAnnotate: (x, y) => {
+      void askAnnotationText("Map label", "").then((text) => {
+        if (text != null && text.trim()) addMapAnnotation(x, y, text.trim(), cutSpace);
+      });
+    },
+  });
+  const { readout, dragPx } = pointer;
 
   function savePng() {
     const canvas = canvasRef.current;
@@ -260,17 +257,17 @@ export default function MapStage({ dataset }: MapStageProps) {
             display: "block",
             cursor: routed ? routed.cursor : cuts.mode === "off" ? "default" : "crosshair",
           }}
-          onMouseMove={onMove}
+          onMouseMove={pointer.onMove}
           onMouseLeave={() => {
-            setReadout(null);
-            setDragPx(null);
+            pointer.onLeave();
             roi.onLeave();
             ruler.onLeave();
             wedge.onLeave();
           }}
-          onClick={onClick}
-          onMouseDown={onDown}
-          onMouseUp={onUp}
+          onClick={pointer.onClick}
+          onDoubleClick={pointer.onDoubleClick}
+          onMouseDown={pointer.onDown}
+          onMouseUp={pointer.onUp}
           onKeyDown={(ev) => {
             if (!payload) return;
             roi.onKeyDown(ev, payload);
@@ -289,6 +286,18 @@ export default function MapStage({ dataset }: MapStageProps) {
               strokeDasharray="5 4"
             />
           </svg>
+        )}
+        {payload && hostSize.w > 0 && hostSize.h > 0 && (
+          <MapSliceOverlay
+            payload={payload}
+            w={hostSize.w}
+            h={hostSize.h}
+            slices={mapView.slices}
+            annotations={mapView.annotations}
+            space={cutSpace}
+            onRemoveSlice={removeMapSlice}
+            onRemoveAnnotation={removeMapAnnotation}
+          />
         )}
         {payload && cutSpace != null && hostSize.w > 0 && hostSize.h > 0 && (
           <MapRoiOverlay
@@ -334,9 +343,9 @@ export default function MapStage({ dataset }: MapStageProps) {
           }
           cmap={cmap}
           cmapOptions={Object.keys(COLORMAPS)}
-          onCmapChange={setCmap}
+          onCmapChange={setMapColormap}
           logZ={logZ}
-          onToggleLogZ={() => setLogZ((v) => !v)}
+          onToggleLogZ={() => setMapLogZ(!logZ)}
           contourOn={contourOn}
           onToggleContour={() => setContourOn(!contourOn)}
           cutSpace={cutSpace}

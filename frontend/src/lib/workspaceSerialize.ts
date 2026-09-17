@@ -24,6 +24,7 @@ import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { serializeRois } from "../store/rois";
+import { isDefaultMapView, serializeMapView, type MapViewState } from "./mapView";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import type { ReportEntry } from "./report";
@@ -133,6 +134,9 @@ interface WorkspaceDoc {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  /** Audit P2.8 — additive-OPTIONAL, and written only when the map view is
+   *  non-default (see the serializer below). */
+  mapView?: MapViewState;
   quickPlotTemplates: QuickPlotTemplate[];
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
@@ -194,6 +198,14 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     // RSM_CUTS_PLAN item 13: named ROIs only (see WorkspaceState's doc) — the
     // actual (de)serialize logic lives in store/rois.ts, this module just calls it.
     savedRois: serializeRois(ws.savedRois ?? []),
+    // Audit P2.8: the durable map view, written ONLY when something about it
+    // was actually decided. BUG-017's rule for an additive field — a project
+    // that never opened a map serializes byte-for-byte as it did before this
+    // field existed, so no schema bump and no diff on an untouched document.
+    // The copy goes through lib/mapView's own serializer for the same reason
+    // `savedRois` goes through `serializeRois`: a live store object must never
+    // be aliased into the saved doc.
+    ...(ws.mapView && !isDefaultMapView(ws.mapView) ? { mapView: serializeMapView(ws.mapView) } : {}),
     // PR E2: passed through verbatim, same plain-serializer convention as
     // every other field here.
     librarySelection: ws.librarySelection ?? null,

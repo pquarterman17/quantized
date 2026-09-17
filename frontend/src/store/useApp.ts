@@ -97,7 +97,7 @@ import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./q
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
-import { createRoisSlice, type RoisSlice } from "./rois";
+import { createRoisSlice, loadedMapView, type RoisSlice } from "./rois"; // loadedMapView: P2.8, see store/mapView.ts
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
@@ -1432,7 +1432,7 @@ export const useApp = create<AppState>((set, get) => ({
         figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
-        savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
+        savedRois: ws.savedRois ?? [], mapView: loadedMapView(ws.mapView), // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3; and P2.8's durable map view — .dwk v4 additive, MUST be explicit for the same cross-project-leak reason `workbooks` above is (its colour limits and slice positions are in the PREVIOUS project's units). Packed onto one line, not its own: this module is AT its store-size pin (architecture.test.ts) with zero headroom, which is also why the slice composes through store/rois.ts — see store/mapView.ts's header.
         collections: ws.collections ?? [], // saved-search Collections (PR L, L0.48/L0.49) — .dwk v4 additive
         // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
         // serialized by the whole-state-spread save path (workspaceIO.ts /

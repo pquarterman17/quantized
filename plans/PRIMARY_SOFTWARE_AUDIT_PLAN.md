@@ -3079,9 +3079,42 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P0.4
 (SATISFIED 2026-07-27 — the profile exists; see below).
 
-- [ ] Preserve existing H/V/segment slices and link positions.
+- [x] Preserve existing H/V/segment slices and link positions. **Done
+  2026-09-17.** Before this, nothing was preserved because nothing was kept:
+  an H/V click and a segment drag fired a backend cut and landed a 1-D
+  dataset, and the map retained no record of WHERE the cut was taken — there
+  was no slice object, no position, and nothing drawn. A committed cut now
+  also records a durable `MapSliceDef` (kind + linked position in map DATA
+  coordinates + width + cut space; `lib/mapView.ts`), drawn over the heatmap
+  by `components/Stage/MapSliceOverlay.tsx` through the SAME
+  `mapRender.dataToPx` projector the canvas paints with. Slices survive a
+  regrid (resolution AND grid method), a colour-limit change and a
+  re-activation of the same dataset, and are cleared only by a GENUINE
+  dataset switch — BUG-012's rule, spelled in `store/mapView.ts`'s
+  `bindMapView` exactly as `focusedRebindPatch` spells it. Proven at the DOM
+  layer in `components/Stage/MapStage.mapView.test.tsx` (the drawn line, not
+  just the store field). The RSM angular⇄Q toggle is NOT a dataset change, so
+  the overlay draws only definitions recorded in the space now displayed;
+  toggling back brings them back.
 - [ ] Add ROI statistics/export only from real need.
-- [ ] Persist color limits/scale/map/slices/annotations.
+- [x] Persist color limits/scale/map/slices/annotations. **Done 2026-09-17.**
+  The five are one durable record (`mapView`, `lib/mapView.ts` +
+  `store/mapView.ts`) instead of `MapStage`'s local `useState` (colormap,
+  log scale) and nothing at all (colour limits, slices, annotations — colour
+  limits did not exist; the canvas always painted the payload's own z
+  extent). It rides the existing persistence contract: `.dwk` save/reopen,
+  autosave (`shouldAutosave` trigger + `AutosaveState`) and Pack Project's
+  whole-state spread, plus undo via `HistorySnapshot`. Additive-optional and
+  written ONLY when non-default, so a project that never opened a map
+  serializes byte-identically to before — pinned as BUG-017's fix was
+  (`lib/workspaceMapView.test.ts`). Explicit limits clip the heatmap AND its
+  colourbar, verified against a real raster in
+  `components/Stage/mapRenderLimits.test.ts`. NOT persisted, deliberately:
+  the regrid inputs `mapMethod`/`mapRes`/`contour*` (app-wide render
+  settings with their own HISTORY_EXCLUDED entries) and the working
+  `mapRoi`/`mapRuler`/`mapSector` geometry (see `store/rois.ts`). Workbook
+  transfer deliberately does not carry it: that package is one workbook's
+  data, and a map view belongs to the project, not to a workbook.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid
