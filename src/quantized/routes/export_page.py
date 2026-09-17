@@ -29,8 +29,8 @@ from quantized.routes.export_figures import (
     FigureRequest,
     _facet_panels,
     _figure_series,
-    _tick_fmt,
 )
+from quantized.routes.export_figures_schema import _tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 

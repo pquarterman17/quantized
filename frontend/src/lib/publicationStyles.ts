@@ -37,6 +37,20 @@ export interface ExportSeriesStyle {
    *  the wire form of `SeriesStyle.step`/`StepMode`; mapped to matplotlib's
    *  `drawstyle` by `calc.figure._plot_kwargs`. */
   step?: "pre" | "post" | "mid";
+  /** BUG-014: this series' legend text, used VERBATIM by the renderer
+   *  (`calc.figure_labels.series_display_name`) — unit included or not,
+   *  exactly as the user typed it, which is the on-screen rule
+   *  (`uplotOpts`'s `args.seriesLabels?.[i] ?? "label (unit)"`). Absent = the
+   *  renderer derives "label (unit)" from the DATA's own label and unit, which
+   *  is every series of every request that predates BUG-014.
+   *
+   *  DERIVED AT EXPORT TIME, never persisted: `lib/figureSpecSeries.ts`'s
+   *  `withSeriesLegends` lays it over whichever style list a request carries,
+   *  reading `view.seriesLabels` — which is where a rename actually lives in a
+   *  saved document. `sanitizeExportSeriesStyles` below deliberately DROPS it
+   *  for that reason: a legend restored from a stale `publication.seriesStyles`
+   *  could otherwise outvote the rename the user can still see and edit. */
+  legend?: string;
 }
 
 const object = (value: unknown): Record<string, unknown> | null =>
@@ -76,6 +90,8 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     if (Number.isInteger(raw.color_by) && (raw.color_by as number) >= 0) style.color_by = raw.color_by as number;
     if (typeof raw.colormap === "string") style.colormap = raw.colormap;
     if (raw.step === "pre" || raw.step === "post" || raw.step === "mid") style.step = raw.step;
+    // `legend` is NOT restored -- see its own doc on ExportSeriesStyle above:
+    // a rename persists in `view.seriesLabels` and is re-laid on every export.
     return Object.keys(style).length ? style : null;
   });
 }

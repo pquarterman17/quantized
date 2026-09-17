@@ -60,10 +60,14 @@ export async function querySqlite(req: SqliteQueryRequest): Promise<DataStruct> 
   return postJSON<DataStruct>("/api/database/sqlite/query", req);
 }
 
-export async function health(): Promise<{ status: string }> {
+/** The launcher's identity handshake. `app`/`version` are the same
+ *  server-generated constants `store/backendHealth.ts` caches from `App.tsx`'s
+ *  startup call — widened (P3.4 review round, 2026-09-14) from `{status}` so
+ *  that one call site, not two, hits `/api/health`. */
+export async function health(): Promise<{ status: string; app?: string; version?: string }> {
   const res = await fetch("/api/health");
   if (!res.ok) throw new Error(`health ${res.status}`);
-  return (await res.json()) as { status: string };
+  return (await res.json()) as { status: string; app?: string; version?: string };
 }
 
 /** Import a local file path (auto-detect format) → DataStruct. `signal` lets

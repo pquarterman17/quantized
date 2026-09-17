@@ -32,6 +32,10 @@ What is compared, and how:
     the SVG; its absence means the export silently dropped the uncertainty.
   * ANNOTATIONS -- each annotation's text appears exactly once, standalone
     (not swallowed into the legend or a tick label).
+  * WATERFALL (BUG-013) -- a `waterfall_offsets` request really shifts each
+    series line by its own amount, measured from the hit-map's own series
+    pixel boxes converted back to data units, and widens the autoscaled
+    y-axis to fit the stagger.
   * PANEL PLACEMENT -- a 2x2 page's four ``axes_N`` groups' own background-
     patch pixel rects tile a 2x2 grid in row-major order, and each panel's
     own title text lands inside the geometrically-correct ``axes_N`` block.
@@ -58,6 +62,7 @@ import math
 import re
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
@@ -378,3 +383,213 @@ def test_page_2x2_panels_tile_the_grid_in_row_major_order() -> None:
     assert "Panel B" in blocks[2]
     assert "Panel C" in blocks[3]
     assert "Panel D" in blocks[4]
+
+
+# ---------------------------------------------------------------------------
+# Waterfall: the per-series stagger the canvas draws reaches the render
+# (BUG-013). Read STRUCTURALLY -- where the series line actually lands in the
+# rendered Axes, recovered from the hit-map's own pixel boxes + the axis
+# limits the renderer set, never re-derived from the request.
+# ---------------------------------------------------------------------------
+
+_WATERFALL_YLIM = [-2.0, 5.0]
+
+
+def _waterfall_payload(offsets: list[float] | None, *, fixed_ylim: bool = True) -> dict[str, Any]:
+    """Two series (sin, cos -- both inside [-1, 1]) so a stagger is
+    unambiguous. With ``fixed_ylim`` the y-range is pinned wide enough for
+    both renders, which makes the two pixel boxes directly comparable."""
+    payload: dict[str, Any] = {
+        "dataset": _dataset(),
+        "y_keys": [0, 1],
+        "fmt": "png",
+        "filename": "waterfall",
+    }
+    if fixed_ylim:
+        payload["overrides"] = {"y_lim": _WATERFALL_YLIM}
+    if offsets is not None:
+        payload["waterfall_offsets"] = offsets
+    return payload
+
+
+def _series_data_span(hitmap: dict[str, Any], index: int) -> tuple[float, float]:
+    """(y_min, y_max) of series ``index`` in DATA units, converted from the
+    hit-map's pixel box with the axes rect + ``ylim`` the renderer reported."""
+    axes = hitmap["axes"]
+    box = next(e for e in hitmap["elements"] if e["id"] == f"series:{index}")
+    lo, hi = axes["ylim"]
+    span_px = axes["y1"] - axes["y0"]
+
+    def to_data(py: float) -> float:
+        return hi - (py - axes["y0"]) / span_px * (hi - lo)
+
+    return to_data(box["y1"]), to_data(box["y0"])
+
+
+def _hitmap(payload: dict[str, Any]) -> dict[str, Any]:
+    resp = client.post("/api/export/figure-hitmap", json=payload)
+    assert resp.status_code == 200, resp.text
+    return dict(resp.json())
+
+
+def test_waterfall_offsets_shift_each_series_by_its_own_amount() -> None:
+    plain = _hitmap(_waterfall_payload(None))
+    staggered = _hitmap(_waterfall_payload([0.0, 2.0]))
+    # Both renders share the same fixed y-range, so a pixel box is directly
+    # comparable; the stroke-width padding cancels in the DIFFERENCE.
+    for index, want_shift in ((0, 0.0), (1, 2.0)):
+        before = _series_data_span(plain, index)
+        after = _series_data_span(staggered, index)
+        assert after[0] - before[0] == pytest.approx(want_shift, abs=0.05)
+        assert after[1] - before[1] == pytest.approx(want_shift, abs=0.05)
+
+
+def test_waterfall_offsets_are_absent_by_default() -> None:
+    """Omitting the field renders exactly what it always did -- the offsets
+    are opt-in, so no existing export moves."""
+    plain = _hitmap(_waterfall_payload(None))
+    explicit_zero = _hitmap(_waterfall_payload([0.0, 0.0]))
+    for index in (0, 1):
+        assert _series_data_span(explicit_zero, index) == pytest.approx(
+            _series_data_span(plain, index), abs=1e-9
+        )
+
+
+def test_waterfall_offsets_widen_the_autoscaled_axis_to_fit_the_stagger() -> None:
+    """The canvas autoscales over the OFFSET values, so the vector export must
+    too -- otherwise the staggered curves are drawn off the top of the axes."""
+    plain = _hitmap(_waterfall_payload(None, fixed_ylim=False))
+    staggered = _hitmap(_waterfall_payload([0.0, 3.0], fixed_ylim=False))
+    assert plain["axes"]["ylim"][1] < 2.0  # sin/cos alone
+    assert staggered["axes"]["ylim"][1] > 3.0  # the shifted cos is inside the axes
+
+
+def test_waterfall_offsets_leave_the_legend_and_axis_labels_alone() -> None:
+    payload = _waterfall_payload([0.0, 2.0])
+    payload["fmt"] = "svg"
+    payload["title"] = "Stagger"
+    payload["x_label"] = "Field"
+    payload["y_label"] = "Signal"
+    payload["overrides"] = {"y_lim": _WATERFALL_YLIM, "legend": {"show": True}}
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == _LEGEND_ENTRIES[:2]
+    assert "Field" in svg and "Signal" in svg and "Stagger" in svg
+
+
+# ---------------------------------------------------------------------------
+# Legend renames (BUG-014): `series_styles[i].legend` is used VERBATIM
+# ---------------------------------------------------------------------------
+
+
+def _renamed_payload(legends: list[str | None]) -> dict[str, Any]:
+    """The fixture figure with a per-series legend override on some series.
+
+    The override rides the SAME per-series presentation list colour/width/dash
+    already ride, and the wire ``dataset`` keeps the DATA's labels and units --
+    which is the whole point of BUG-014: the renderer must not re-derive
+    "label (unit)" from those bytes once the user has renamed the series.
+    """
+    payload = _fixture_payload("svg")
+    payload["overrides"] = {"legend": {"show": True, "loc": "upper right"}}
+    payload["series_styles"] = [
+        None if legend is None else {"legend": legend} for legend in legends
+    ]
+    return payload
+
+
+def test_a_renamed_series_renders_its_legend_text_exactly() -> None:
+    # "Loop 1", not "Loop 1 (au)": the channel's own unit is NOT appended to a
+    # user-supplied legend, which is what the on-screen legend does too.
+    payload = _renamed_payload(["Loop 1", None, None])
+    # The request POSTED below still names the channel "Series A" and carries
+    # its unit -- the rename reaches the renderer through the presentation
+    # field alone, so "Loop 1" in the legend can only have come from there.
+    assert payload["dataset"]["labels"][0] == "Series A"
+    assert payload["dataset"]["units"][0] == "au"
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Loop 1", "Series B (au)", "Series C (au)"]
+    # ... and the un-renamed "Series A (au)" the same bytes would otherwise
+    # compose appears nowhere in the rendered figure.
+    assert "Series A" not in svg
+
+
+def test_an_unrenamed_series_still_gets_its_unit_appended() -> None:
+    # The common case must not regress: with no `legend` anywhere the legend is
+    # byte-for-byte the pre-BUG-014 one.
+    resp = client.post("/api/export/figure", json=_renamed_payload([None, None, None]))
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == _LEGEND_ENTRIES
+
+
+def test_a_renamed_solo_series_titles_its_axis_with_the_same_text() -> None:
+    # ``soloLabel`` on screen reads the RESOLVED legend, so the auto-derived
+    # y-axis title of a single-series figure has to read the rename too --
+    # otherwise the axis says "Series A (au)" under a legend saying "Loop 1".
+    payload = _renamed_payload(["Loop 1"])
+    payload["y_keys"] = [0]
+    payload["error_spans"] = [None]
+    payload.pop("y_label")
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Loop 1"]
+    assert "Loop 1" in svg
+    assert "Series A" not in svg
+
+
+def test_an_empty_rename_drops_the_series_from_the_rendered_legend() -> None:
+    # RESIDUAL DIVERGENCE, pinned deliberately rather than "fixed" (BUG-014
+    # review round, NIT 4). An empty rename is honoured VERBATIM on the wire
+    # and by `series_display_name` -- but matplotlib treats a zero-length
+    # label the way it treats a leading "_" and omits the artist from the
+    # legend entirely, so the series loses its ROW here while uPlot still
+    # draws a blank row with its swatch on screen. "Identical text" therefore
+    # degenerates to "blank row vs no row" for `""` alone.
+    #
+    # Not papered over with a " ": which of the two legs should move is a
+    # product decision, and a space would silently change what the user typed.
+    # The pre-BUG-014 wire rendered " (au)" here, so this is a change from one
+    # divergence to another, and the point of this test is that the change is
+    # a chosen, visible one.
+    payload = _renamed_payload(["", None, None])
+    assert payload["series_styles"][0] == {"legend": ""}
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    assert _legend_entries(svg) == ["Series B (au)", "Series C (au)"]
+    # Specifically NOT the derived label: the empty override was honoured, it
+    # just left matplotlib nothing to draw.
+    assert "Series A" not in svg
+
+
+def test_a_non_string_legend_degrades_instead_of_422ing_the_export() -> None:
+    # Same degrade-gracefully contract as every other key in that loose dict.
+    payload = _renamed_payload([None, None, None])
+    payload["series_styles"] = [{"legend": 7}, None, None]
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert _legend_entries(resp.content.decode("utf-8", "ignore")) == _LEGEND_ENTRIES
+
+
+def test_a_grouped_export_folds_the_rename_into_its_per_level_labels() -> None:
+    # The group branch expands each channel into one series per level, so a
+    # rename cannot name a finished series there; it replaces the CHANNEL-label
+    # half of "{label} ({group}={level})". Grouped export parity as a whole is
+    # BUG-016 -- this only pins that the rename still reaches that branch.
+    payload = _renamed_payload(["Loop 1", None, None])
+    payload["y_keys"] = [0]
+    payload["error_spans"] = [None]
+    payload["group_col"] = 2
+    payload["dataset"]["values"] = [
+        [row[0], row[1], float(i % 2)] for i, row in enumerate(payload["dataset"]["values"])
+    ]
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    assert _legend_entries(resp.content.decode("utf-8", "ignore")) == [
+        "Loop 1 (Series C=0) (au)",
+        "Loop 1 (Series C=1) (au)",
+    ]

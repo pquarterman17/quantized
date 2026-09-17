@@ -31,7 +31,7 @@ import {
   errorBindingsApplyToPlotted,
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
-import { applyGroupSplit, groupSplitChannelMap } from "../../lib/plotGroupSplit";
+import { applyGroupSplit, canvasGroupCol, groupSplitChannelMap } from "../../lib/plotGroupSplit";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
@@ -98,6 +98,10 @@ export interface PlotPayloadResult {
    *  `displayPayload` instead; kept for anything that needs the un-composed
    *  series (e.g. a future background viewport building its own compose). */
   payload: PlotPayload | null;
+  /** The id of the dataset `payload` was FETCHED for — NOT `params.active.id`,
+   *  which advances while these rows still belong to the previous dataset (see
+   *  `Stage/useLiveSnapshotPublish`, BUG-013 round 3). */
+  payloadDatasetId: string | null;
   /** The fully composed, drawable payload — what PlotViewport renders. */
   displayPayload: PlotPayload | null;
   /** Value-channel indices actually plotted, in draw order. */
@@ -123,7 +127,9 @@ export interface PlotPayloadResult {
  *  selection changes. */
 export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const { active } = p;
-  const [payload, setPayload] = useState<PlotPayload | null>(null);
+  // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
+  const [fetched, setFetched] = useState<{ payload: PlotPayload; datasetId: string } | null>(null);
+  const payload = fetched?.payload ?? null;
 
   // G4 review round (P1 fix): whether the focused window's OWN document
   // errors are rich enough to be the AUTHORITATIVE errorSpans source (see
@@ -166,7 +172,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const dropped = useMemo(() => droppedRows(active), [active]);
 
   // P1.5: degrades to ungrouped + y2 (mirrors the backend's own incompatibility).
-  const groupCol = p.groupKey !== null && !(p.y2Keys && p.y2Keys.length > 0) ? p.groupKey : null;
+  // The rule lives in `lib/plotGroupSplit.canvasGroupCol` (BUG-013 round 3).
+  const groupCol = canvasGroupCol(p.groupKey, p.y2Keys);
 
   // Channels actually drawn (y selection minus the x-axis channel), in
   // order -- the REAL channels to fetch (a group split happens CLIENT-SIDE
@@ -276,7 +283,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   useEffect(() => {
     let cancelled = false;
     if (!active) {
-      setPayload(null);
+      setFetched(null);
       basePayloadRef.current = null;
       decimateWidthRef.current = null;
       setBaseDecimated(false);
@@ -340,7 +347,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
           : withCategories;
       basePayloadRef.current = composed;
       decimateWidthRef.current = decimateWidth;
-      setPayload(composed);
+      setFetched({ payload: composed, datasetId: active.id });
       setBaseDecimated(!!composed.decimated);
     });
     return () => {
@@ -376,7 +383,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // of the kept min/max envelope. Deliberately does NOT depend on
   // `payload`/`displayPayload` — only on the inputs needed to describe WHAT
   // to fetch (`p.xLim` + the same dataset/channel/scale identity the base
-  // effect uses, plus `baseDecimated`). This effect's own `setPayload` call
+  // effect uses, plus `baseDecimated`). This effect's own `setFetched` call
   // must never be one of its own triggers, or every windowed fetch would
   // immediately re-arm itself (a fetch feedback loop).
   //
@@ -396,7 +403,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       // Reset/autoscale: restore the cached full-range payload with no fetch
       // at all — it's already in memory from the base effect above.
       const base = basePayloadRef.current;
-      if (base && base !== payload) setPayload(base);
+      // `active` is redundant here (the ref is cleared when there is none).
+      if (base && base !== payload && active) setFetched({ payload: base, datasetId: active.id });
       return;
     }
     if (!active || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
@@ -418,7 +426,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       .then((raw) => {
         if (cancelled) return;
         const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
-        setPayload(categoricalXPayload(raw, active.data, p.xKey, xType));
+        setFetched({ payload: categoricalXPayload(raw, active.data, p.xKey, xType), datasetId: active.id });
       })
       .catch(() => {
         // Aborted (superseded by a newer commit) or a genuine network error
@@ -476,6 +484,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
 
   return {
     payload,
+    payloadDatasetId: fetched?.datasetId ?? null,
     displayPayload,
     plotted,
     styleList,

@@ -5,6 +5,7 @@ import {
   clipboardSvgSupported,
   copyImageAsync,
   copySvgAsync,
+  copyTextAsync,
   payloadToTSV,
   tableToTSV,
 } from "./clipboard";
@@ -288,5 +289,134 @@ describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
     stubClipboardWrite();
     const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])), signal);
     expect(ok).toBe(true);
+  });
+});
+
+// 2026-09-15 review, finding 1: `store/workbookTransfer.ts`'s Copy has to
+// `await` a chunk before it has any text, and awaiting BEFORE touching the
+// clipboard spends the transient user activation the Clipboard API requires.
+// `copyTextAsync` is the text half of the `copyImageAsync` answer to that.
+describe("copyTextAsync — keeps the gesture while the text is still building", () => {
+  const originalClipboard = navigator.clipboard;
+  const originalClipboardItem = (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem;
+
+  afterEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: originalClipboard, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = originalClipboardItem;
+  });
+
+  /** A `navigator.clipboard.write` that reads each value the way a real
+   *  browser does (awaiting a promise value), recording what it resolved to. */
+  function stubWrite(): {
+    write: ReturnType<typeof vi.fn>;
+    text: () => Promise<string>;
+    value: () => Promise<string | Blob>;
+  } {
+    const seen: (string | Blob | Promise<string | Blob>)[] = [];
+    const write = vi.fn(async (items: FakeClipboardItem[]) => {
+      for (const item of items) seen.push(...Object.values(item.items));
+      for (const value of seen) await value;
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+    const value = async (): Promise<string | Blob> => await seen[0];
+    return {
+      write,
+      value,
+      text: async () => {
+        const v = await value();
+        return v instanceof Blob ? await v.text() : String(v);
+      },
+    };
+  }
+
+  it("calls write() with the text STILL PENDING — no await between the caller and the write", async () => {
+    const { write, text } = stubWrite();
+    let build!: (t: string) => void;
+    const pending = new Promise<string>((r) => (build = r));
+
+    const p = copyTextAsync(pending);
+    // No `await` has run since the call, so this is still the caller's own
+    // (gesture) task — and the write has already started.
+    expect(write).toHaveBeenCalledTimes(1);
+
+    build("PACKAGE");
+    expect(await p).toBe(true);
+    expect(await text()).toBe("PACKAGE");
+  });
+
+  it("falls back to copyText on an engine with no ClipboardItem (re-opening the gesture window)", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = undefined;
+
+    expect(await copyTextAsync(Promise.resolve("PACKAGE"))).toBe(true);
+    expect(writeText).toHaveBeenCalledWith("PACKAGE");
+  });
+
+  it("falls back to copyText when write() itself refuses a promise value", async () => {
+    const writeText = vi.fn(async () => undefined);
+    const write = vi.fn(async () => {
+      throw new Error("promise values unsupported");
+    });
+    Object.defineProperty(navigator, "clipboard", { value: { write, writeText }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+
+    expect(await copyTextAsync(Promise.resolve("PACKAGE"))).toBe(true);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith("PACKAGE");
+  });
+
+  it("resolves false — never throws — when the text never builds", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = undefined;
+
+    expect(await copyTextAsync(Promise.reject(new Error("build failed")))).toBe(false);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  // 2026-09-15 review round 2, finding 3: `Promise<DOMString>` is legal per
+  // spec but is the least-supported ClipboardItem value shape. An engine that
+  // refuses it sends copyTextAsync into its `await pending` fallback, which
+  // re-opens the very gesture window this function exists to close — and
+  // nothing in the tests or in jsdom would show it.
+  it("hands ClipboardItem a text/plain BLOB, the shape the sibling copy helpers use", async () => {
+    const { text, value } = stubWrite();
+    const p = copyTextAsync(Promise.resolve("PACKAGE"));
+    const item = await value();
+    expect(item, "a bare string value is the least-supported ClipboardItem shape").toBeInstanceOf(Blob);
+    expect((item as Blob).type).toBe("text/plain");
+    expect(await text()).toBe("PACKAGE");
+    expect(await p).toBe(true);
+  });
+
+  // 2026-09-15 review round 2, finding 2: an engine whose write() RESOLVES
+  // without ever reading the value promise never attaches a handler to it, so
+  // a build failure escapes as an unhandled rejection — while the caller's own
+  // `await build` is already reporting the real reason. `copyImageAsync`
+  // guards exactly this class one function above.
+  it("leaves no unhandled rejection when write() resolves without reading the value", async () => {
+    // Deliberately does NOT await the item values — the pathological engine.
+    const write = vi.fn(async () => undefined);
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { write, writeText }, configurable: true });
+    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+
+    const prior = process.listeners("unhandledRejection");
+    process.removeAllListeners("unhandledRejection");
+    const captured: unknown[] = [];
+    const capture = (reason: unknown): void => void captured.push(reason);
+    process.on("unhandledRejection", capture);
+    try {
+      expect(await copyTextAsync(Promise.reject(new Error("build failed")))).toBe(true);
+      // Node decides a rejection is unhandled once the microtask queue has
+      // drained, i.e. no earlier than the next macrotask turn.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off("unhandledRejection", capture);
+      for (const listener of prior) process.on("unhandledRejection", listener);
+    }
+    expect(captured, "the value promise must carry its own handler").toEqual([]);
   });
 });

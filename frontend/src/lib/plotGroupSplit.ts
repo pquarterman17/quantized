@@ -45,6 +45,25 @@ import { categoryLevels, levelCountOf, levelsOf, orderLevels } from "./categoric
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { DataStruct } from "./types";
 
+/** The group channel a render ACTUALLY splits by: `groupKey`, unless a
+ *  secondary Y axis is bound, in which case the render degrades to a plain
+ *  ungrouped overlay. THE one definition of that degrade rule (BUG-013 round
+ *  3): `Stage/usePlotPayload` and `lib/figureSpec.ts` (the export wire's own
+ *  entry point) both call this directly — before round 5 the canvas degraded
+ *  and staggered while the wire refused offsets on the view's RAW binding, so
+ *  a grouped view with `y2Keys` set exported the very overlaid curves
+ *  BUG-013 is about; a one-line `lib/figureSpecGroup.resolveGroupCol` alias
+ *  briefly sat between this and `figureSpec.ts` and was deleted
+ *  (round-5-review NIT 9) once it added nothing but a second name. Mirrors
+ *  the backend's own "grouped + secondary Y axis" incompatibility
+ *  (`routes/export_figures.py` raises 422 for the combination). */
+export function canvasGroupCol(
+  groupKey: number | null | undefined,
+  y2Keys: readonly number[] | null | undefined,
+): number | null {
+  return groupKey !== null && groupKey !== undefined && !(y2Keys && y2Keys.length > 0) ? groupKey : null;
+}
+
 /** The per-DISPLAY-series channel map a grouped render needs: each real
  *  fetched channel repeated once per level (or returned unchanged when
  *  there's nothing to split on). `usePlotPayload.ts` uses this as its

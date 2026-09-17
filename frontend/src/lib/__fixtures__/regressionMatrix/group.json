@@ -1,0 +1,71 @@
+{
+  "mode": "group",
+  "xBinding": null,
+  "series": [
+    {
+      "channel": 0,
+      "label": "Signal (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": null,
+      "width": null,
+      "dash": null,
+      "marker": null,
+      "step": null,
+      "fill": null
+    }
+  ],
+  "errors": [
+    []
+  ],
+  "grouping": {
+    "channel": 6,
+    "levelOrder": [
+      2,
+      0,
+      1
+    ],
+    "levelLabels": [
+      "C",
+      "A",
+      "B"
+    ]
+  },
+  "facet": {
+    "channel": null,
+    "panels": null
+  },
+  "y2Positions": [],
+  "xBreaks": [],
+  "waterfallOffset": 0,
+  "axes": {
+    "x": {
+      "label": "Index",
+      "scale": "linear",
+      "limits": [
+        0,
+        5
+      ]
+    },
+    "y": {
+      "label": "Signal (au)",
+      "scale": "linear",
+      "limits": [
+        -1,
+        4
+      ]
+    },
+    "y2": null
+  },
+  "decor": {
+    "legend": {
+      "show": true,
+      "position": "nw",
+      "title": null
+    },
+    "annotations": [],
+    "shapes": [],
+    "refLines": [],
+    "regionShades": []
+  }
+}

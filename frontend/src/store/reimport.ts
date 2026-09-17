@@ -235,6 +235,11 @@ export function applyReimportMerge(
               // `recomputeStaleFits`, and have its saved `params` silently
               // overwritten with a fit of the wrong column.
               fitSpec: undefined,
+              // Audit P2.1 review round 2: the durable fitted-peak table is
+              // the same category — it records peaks measured from the columns
+              // this re-import just replaced, and there is no honest
+              // re-derivation (a re-fit is a user action, not a recompute).
+              peakTable: undefined,
             }
           : {}),
       };
@@ -322,8 +327,17 @@ async function runReimport(
     toast(`re-imported "${ds.name}"`, "ok");
   } catch (e) {
     const msg = e instanceof Error ? e.message : "error";
+    // P3.4 error-quality audit (2026-09-14, corrected in the review round):
+    // "the dataset is unchanged" is literally true here — `applyReimportMerge`
+    // is the LAST STORE-MUTATING statement in the try above (the `setStatus`/
+    // `toast` calls that follow it don't touch `ds`), so any throw (fetch,
+    // resolve, or merge) happens before the store is touched. Saying it
+    // matters more for re-import than for most
+    // failures: the operation's whole purpose is to overwrite data the user
+    // already has, so "failed" alone leaves them unsure whether they still
+    // have it.
     get().setStatus(`re-import failed: ${msg}`);
-    toast(`re-import "${ds.name}" failed: ${msg}`, "danger");
+    toast(`re-import "${ds.name}" failed: ${msg} — the dataset is unchanged`, "danger");
   }
 }
 

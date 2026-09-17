@@ -196,15 +196,69 @@ ride-along.
    cut to unblock, but it is well short of the 25-40 kB this file's own history
    calls healthy. Slices 2 and 3 stay on the table.
 
-### Slice 2 — command metadata vs. handlers
+### Slice 2 — command metadata vs. handlers — **PARTIALLY DONE**
 
-**Upper bound 22,347 B · measured net eager delta: TBD · HIGHER risk**
+**Upper bound 22,347 B · measured so far −3,104 B of it · HIGHER risk**
+
+**2026-09-14 (`b749f804`), the first two data points, both exactly this
+slice's shape** — the `run` body behind a dynamic `import()`, the metadata
+(id/label/description/keywords/section) left eager so the palette, the menus
+and Help search are untouched:
+
+| seam | module deferred | loader | measured eager delta |
+|---|---|---|---:|
+| worksheet reshapes | `lib/worksheetTransformCommands.ts` | `commands/dataCommands.ts` | **−2,645 B** |
+| Page setup | `lib/pageSetupCommand.ts` | `commands/plotCommands.ts` | **−459 B** |
+
+Both were measured cumulatively with `npm run build` after `npm ci` and a
+`node_modules/.vite` wipe, on `4aafd3a3` (919,781 → 917,136 → … → 910,631 →
+910,172 B across the four seams of that commit; the two rows above are the
+reshape and Page-setup steps of that chain). `commands/plotCommands.ts` is in
+this slice's own table above (6,626 B) and `commands/dataCommands.ts` is the
+same axis — the Data-menu half of what `fileCommands`/`analysisCommands`
+represent. The remaining bulk (`fileCommands` + `analysisCommands`, and the
+rest of `plotCommands`) is untouched, so the slice stays open.
+
+The Page-setup row is also the honest scale check this slice's own text asks
+for: −459 B for one command's handler says the prize really is the handlers'
+TRANSITIVE imports, not the command files' own bytes.
+
+**2026-09-17 correction — `caa10f88` (round-2 seam-guard review close) recorded
+its eager bytes against the wrong parent.** That commit's own body says
+"eager JS 910,971 B at `56bb3599` -> 911,040 B here (+69 B)", but
+`56bb3599` is `caa10f88^^`, not `caa10f88^` — the real parent
+(`git rev-parse caa10f88^`) is `0565b674` (BUG-017's NaN/±Infinity/-0 cell
+round-trip), which is two commits later than `56bb3599` and already carries
+its own eager growth. Re-measured per `agent_rules.md` (`rm -rf
+node_modules/.vite`, fresh `npm ci`, in scratch worktrees, exact bytes via
+the eager-`<script type=module>`/`modulepreload` count in `dist/index.html`,
+not the rounded kB the build's own `check-bundle-size.mjs` prints):
+
+| tree | eager bytes (exact) |
+|---|---:|
+| `0565b674` (the real parent) | **912,846** |
+| `caa10f88` | **912,915** |
+
++69 B, which matches the commit body's claimed delta exactly even though its
+stated baseline was wrong — the arithmetic the round-3 review flagged as
+"impossible" (a −795 B baseline shift against a claimed +69 B addition) does
+not reproduce once the baseline is the real parent. Budget stays unchanged at
+920,400 B; headroom is 7,485 B. **The pin is not moved.**
+
+**Not in this slice, and not anywhere else yet: a root error boundary.** The
+17 `lazy()` sites in `frontend/src` have none (measured 2026-09-15), so a
+failed chunk load at a `Suspense` boundary unmounts the React root. Every
+`lazy()`-shaped seam added here inherits that. It is a separate task, filed
+as `plans/BUGS_AND_ISSUES.md` UX-003 — do not treat "the seam reports its
+load failures" as true of `lazy()`-shaped seams.
 
 Especially loose: the metadata (id, label, section, keywords) and the dispatch
 seam must stay eager for the palette to list and search commands at all. The
 real prize is the handlers' TRANSITIVE imports, which this attribution
 credits to those modules rather than to the command files — so the bound says
-little about the achievable number. Spike before scheduling.
+little about the achievable number. (The spike this line asked for is the
+table above; it landed at −3,104 B for two handlers, so the bound remains a
+poor predictor and the rest still needs measuring one seam at a time.)
 
 `fileCommands` + `analysisCommands` + `plotCommands` = 22,347 B. The earlier
 rejection ("a dynamic import in front of the FIRST PRESS of every keyboard

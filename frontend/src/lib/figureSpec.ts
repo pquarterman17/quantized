@@ -25,13 +25,16 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import type { ErrorPair } from "./api";
 import type { FigureSpec } from "./api/figures";
-import { buildErrorSpans } from "./errorbars";
-import { buildExportStyles } from "./exportStyles";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
 import { resolveFacetsOrThrow } from "./figureSpecFacets";
+import {
+  exportErrorSpans,
+  resolveDisplaySeries,
+  resolveSeriesCycle,
+  resolveSeriesPresentation,
+} from "./figureSpecSeries";
 import {
   compactOverrides,
   gateY2Overrides,
@@ -39,17 +42,18 @@ import {
   type FigureOverrides,
 } from "./figureOverrides";
 import { marginFractions, pageSizeInches } from "./pagesetup";
-import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
+import { canvasGroupCol } from "./plotGroupSplit";
 import { pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
 // projection in whether it uses it or not.
 import { viewOverrides } from "./figureViewOverrides";
-import { overlayExportsSeriesStyles, windowCyclesSeriesStyles } from "./seriesStyleCycle";
+import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
+import { readLiveWaterfallSpan, waterfallWire } from "./waterfallOffset";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -86,6 +90,12 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
    *  document's styles the RAW user styles and stops it disagreeing with itself
    *  when the preference is later flipped. */
   autoSeriesStyles?: boolean;
+  /** BUG-013 review round: the y-span the LIVE canvas measured its waterfall
+   *  stagger from, when there is one on screen. Passed only by
+   *  `buildStageFigureSpec`, which reads it from `waterfallOffset.
+   *  readLiveWaterfallSpan`; absent everywhere else, and the step is then
+   *  measured over the full DataStruct. See that module's header. */
+  waterfallSpan?: number | null;
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -117,7 +127,7 @@ export function buildFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extras: { autoSeriesStyles?: boolean } = {},
+  extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null } = {},
 ): FigureSpec {
   const raw = s();
   // R7: `raw` is the live singleton, which a refocus-mid-export race can
@@ -127,6 +137,7 @@ export function buildFigureSpec(
   return buildFigureSpecForView(st, ds.data, ds.channelRoles, ds.errorRoles, stem, o, {
     liveDataset: ds,
     autoSeriesStyles: extras.autoSeriesStyles,
+    waterfallSpan: extras.waterfallSpan,
   });
 }
 
@@ -162,6 +173,9 @@ function buildFigureSpecForView(
      *  Builder's window-target preview/Export. Absent everywhere else on
      *  purpose — see `seriesCycle` below. */
     autoSeriesStyles?: boolean;
+    /** BUG-013 review round: the LIVE canvas' measured waterfall y-span —
+     * see `FigureDocumentRenderOpts.waterfallSpan`. */
+    waterfallSpan?: number | null;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
@@ -179,34 +193,38 @@ function buildFigureSpecForView(
 
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend
   // entries are both visible-state decisions. Multi-X Origin books also
-  // require the live xKey instead of silently falling back to time.
-  // The UNFILTERED display list is kept: it is the canvas' own index space
-  // (`usePlotPayload` leaves a hidden series in `payload.series` with
-  // `show:false`), and P3.3's dash/marker cycle plus the series palette are
-  // both resolved against it below so the export cannot land a channel on a
-  // different display position than the screen did.
-  const displayChannels = effectiveChannels(
-    data,
-    st.yKeys,
-    extras.allowExplicitXAsY && st.yKeys !== null ? null : st.xKey,
+  // require the live xKey instead of silently falling back to time. The
+  // UNFILTERED display list, the hidden-filtered `y_keys`, and each survivor's
+  // slot in the CANVAS' own index space are resolved together by
+  // `lib/figureSpecSeries.ts` -- see `resolveDisplaySeries`' doc for why the
+  // positions come from the canvas' list rather than this request's.
+  const { canvasChannels, plotted, positions } = resolveDisplaySeries(data, {
+    yKeys: st.yKeys,
+    xKey: st.xKey,
+    seriesOrder: st.seriesOrder,
+    hiddenChannels: st.hiddenChannels,
     channelRoles,
-    st.seriesOrder,
-  );
-  const plotted = displayChannels.filter((ch) => !st.hiddenChannels.includes(ch));
+    allowExplicitXAsY: extras.allowExplicitXAsY,
+  });
 
-  // Legend renames / decoded Origin captions are channel-keyed. Apply them to a
-  // request-local DataStruct label copy so the backend series builder and legend
-  // path both see the same display names without mutating the imported workbook.
-  const dataset = Object.keys(st.seriesLabels).length
-    ? {
-        ...data,
-        labels: data.labels.map((label, ch) => st.seriesLabels[ch] ?? label),
-      }
-    : data;
-
+  // Legend renames / decoded Origin captions are channel-keyed, and BUG-014
+  // moved them off `dataset.labels` and onto their own per-series
+  // presentation field (`series_styles[i].legend`, assembled below): the wire
+  // dataset now carries the DATA's labels and units, so the backend can render
+  // a rename verbatim instead of appending the channel's unit to it a second
+  // time, and any data-table/CSV consumer of this same spec still sees the
+  // real column names. FACETS are the one place a rename is still resolved
+  // client-side -- a facet panel ships FINISHED series strings
+  // (`FigureFacetSeries.label`) that no per-series field on this request can
+  // reach -- so `st.seriesLabels` is handed to the panel builder itself and
+  // applied by the SAME rule the flat path and the canvas use
+  // (`figureSpecSeries.seriesDisplayLabel`: rename verbatim, no unit
+  // re-appended). It used to arrive as a request-local relabelled copy of
+  // `data`, which re-created BUG-014's own symptom inside the facet branch.
+  //
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
-  const facets = resolveFacetsOrThrow(dataset, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length);
+  const facets = resolveFacetsOrThrow(data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels);
 
   // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
   // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`
@@ -220,53 +238,18 @@ function buildFigureSpecForView(
   // silently re-scoping it. `pruneToLiveDataset` is a no-op (`=== data`
   // fast-path) for a frozen/document-only call (`extras.liveDataset` absent),
   // so that case is byte-identical to before this fix.
-  const wireDataset = facets === undefined ? pruneToLiveDataset(dataset, extras.liveDataset) : dataset;
+  const wireDataset = facets === undefined ? pruneToLiveDataset(data, extras.liveDataset) : data;
 
-  // P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`). OPT-IN, in two
-  // senses: `extras.autoSeriesStyles` is passed by the LIVE stage export
-  // (`buildStageFigureSpec`) and by nothing else — a saved document, a Figure
-  // Page panel, a Figure Builder preview and a graph template all render
-  // uncycled, which is what keeps a persisted `publication.seriesStyles` array
-  // the user's RAW styles and makes a document authored with the preference on
-  // reopen identically with it off. And `overlayExportsSeriesStyles` refuses the
-  // views this route cannot style series-by-series anyway (`group_col` and
-  // `facets` are documented as ignoring `series_styles` in
-  // `routes/export_figures.py`; `stackMode` is the screen-only panel split that
-  // this single-figure request does not reproduce) — the SAME predicate
-  // `PlotStage.tsx` gates its canvas on, so the two cannot disagree about which
-  // views cycle. Positions come from the UNFILTERED display list so a hidden
-  // series does not shift every later channel's dash (and colour) by one.
-  // (No separate `facets === undefined` clause: `facets` is non-undefined only
-  // when `st.facetKey` is set, which the predicate below already refuses. A
-  // clause no sabotage can make fail is dead code, not defence in depth.)
-  //
-  // ONE more refusal rides the SAME predicate, and it is about the display list
-  // rather than the view: `seriesStyleCycle.displayListsAgree` (folded into
-  // `overlayExportsSeriesStyles`) refuses an X channel that is also in `yKeys`,
-  // because `allowExplicitXAsY` keeps it in `displayChannels` AS a Y series
-  // while the canvas' own call (`usePlotPayload.fetchChannels`) always drops it.
-  // It lived HERE as a local `xAlsoPlotted` test, which is why it was a
-  // divergence rather than a refusal: the canvases could not see it, so with
-  // `xKey:1, yKeys:[1,2,3]` the screen drew channels 2 and 3 solid/dashed and
-  // the PDF drew all three solid.
-  const seriesCycle =
-    extras.autoSeriesStyles &&
-    overlayExportsSeriesStyles({
-      // `extras.groupKey` is what actually rides the wire; `st.groupKey` is the
-      // view's own binding, which the plain live entry point does NOT forward —
-      // a grouped view exported through it already renders an ungrouped overlay
-      // while the screen shows one series per level, so either being set is
-      // enough to refuse.
-      groupKey: extras.groupKey ?? st.groupKey,
-      facetKey: st.facetKey,
-      stackMode: st.stackMode,
-      polarMode: st.polarMode,
-      statMode: st.statMode,
-      xKey: st.xKey,
-      yKeys: st.yKeys,
-    })
-      ? plotted.map((ch) => displayChannels.indexOf(ch))
-      : null;
+  // P3.3 auto dash/marker cycle + the view it is decided from — resolved by
+  // `figureSpecSeries.resolveSeriesCycle`, whose doc carries the whole rule.
+  // `cycleView` is reused verbatim by the waterfall wire below, so the two
+  // fields of this spec that depend on "is this canvas reproducible
+  // series-for-series?" ask about one object rather than two.
+  const { view: cycleView, cycle: seriesCycle } = resolveSeriesCycle(
+    st,
+    extras.groupKey,
+    extras.autoSeriesStyles,
+  );
 
   // Secondary (right) Y axis (matplotlib twinx): y2Keys tags a SUBSET of
   // `plotted` — send y_keys = the FULL plotted list (the backend's y2_keys is a
@@ -277,13 +260,12 @@ function buildFigureSpecForView(
     scale: st.yScale,
     fmt: st.yFmt,
   });
-  // The renderer deliberately has no grouped-secondary-axis semantic: group
-  // expansion produces synthetic primary-axis series, so the backend rejects
-  // this combination. Fail before transport rather than silently dropping a
-  // canonical binding or sending a request guaranteed to receive a 422.
-  if (extras.groupKey !== null && extras.groupKey !== undefined && y2Axis !== null) {
-    throw new Error("grouped figures cannot use a secondary Y axis");
-  }
+  // See `plotGroupSplit.canvasGroupCol`'s own doc: degrades `group_col`
+  // exactly like the canvas (BUG-013 round 5; round 4's throw for a REALLY
+  // rendered y2 is gone). Called directly — NIT 9 deleted the one-line
+  // `figureSpecGroup` wrapper, a second name for this one predicate. Reused
+  // below AS the waterfall's resolved grouping, so the two never disagree.
+  const groupCol = canvasGroupCol(extras.groupKey, st.y2Keys);
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
@@ -292,6 +274,14 @@ function buildFigureSpecForView(
     y2Plotted: y2Axis !== null,
     minorTicks: st.xScale === "log" || st.yScale === "log" || secondaryAxisIsLog(y2Axis),
   });
+
+  // The legend overrides, aligned 1:1 with `plotted` (= the wire's `y_keys`)
+  // like every other per-series list here. `undefined` = not renamed, which is
+  // every channel of every figure that predates BUG-014.
+  const legends = plotted.map((ch) => st.seriesLabels[ch]);
+  const seriesPresentation = resolveSeriesPresentation(
+    plotted, st.seriesStyles, positions, seriesCycle === true, legends, extras.publicationSeriesStyles,
+  );
 
   return {
     dataset: wireDataset,
@@ -307,7 +297,7 @@ function buildFigureSpecForView(
     // applied that same inherit-default above, so the render matches the live
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
-    ...(extras.groupKey === null || extras.groupKey === undefined ? {} : { group_col: extras.groupKey }),
+    ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
@@ -317,11 +307,11 @@ function buildFigureSpecForView(
     title: o.title,
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
-    ...(extras.publicationSeriesStyles === undefined
-      ? { series_styles: buildExportStyles(plotted, st.seriesStyles, seriesCycle) }
-      : extras.publicationSeriesStyles === null
-        ? {}
-        : { series_styles: structuredClone(extras.publicationSeriesStyles) }),
+    // BUG-014: the legend renames are laid OVER whichever per-series list this
+    // request carries — a built one, or a document's saved publication styles
+    // — so a rename reaches the renderer on every branch, including the one
+    // that otherwise omits `series_styles` entirely.
+    ...(seriesPresentation === null ? {} : { series_styles: seriesPresentation }),
     // MAIN #36: the SAME spans the canvas draws, so a PDF cannot quietly
     // understate the uncertainty the screen showed. Built from `wireDataset`,
     // not the raw `data`, so a pruned row's magnitude can never outnumber
@@ -332,6 +322,20 @@ function buildFigureSpecForView(
     overrides: gatedOverrides,
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
     ...(o.greyscale ? { greyscale: true } : {}),
+    // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
+    ...waterfallWire({
+      data,
+      canvasChannels,
+      positions,
+      fraction: st.waterfall,
+      view: cycleView,
+      span: extras.waterfallSpan,
+      // The SAME degraded value this spec just emitted (or omitted) above as
+      // `group_col` — REQUIRED (round 5), so this is the only place either
+      // field can be resolved from, not a second, possibly-disagreeing read
+      // of the view's raw binding.
+      groupCol,
+    }),
     filename: extras.filename ?? stem,
   };
 }
@@ -380,6 +384,12 @@ export function buildFigureSpecFromDocument(
       publicationSeriesStyles: document.publication?.seriesStyles,
       allowExplicitXAsY: true,
       autoSeriesStyles: overrides.autoSeriesStyles,
+      // BUG-013 round 3: dropped for a FROZEN document, in the same place and
+      // for the same reason `liveDataset` is — such a document renders its own
+      // snapshot and "intentionally ignores any live dataset". Scaling its
+      // stagger by the LIVE canvas' span flung the second curve 25x the
+      // snapshot's own y-range off the figure, and only on the Stage export.
+      waterfallSpan: document.data.mode === "frozen" ? null : overrides.waterfallSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
     },
   );
@@ -406,11 +416,16 @@ export function buildFigureSpecFromDocument(
  *     unconditionally, so this matches established precedent.
  *
  *  Falls back to `buildFigureSpec` (the live-view builder) otherwise:
- *   - no focused window, the focused window isn't `kind:"plot"`, or it has
- *     no document yet — none of these should occur in practice (every real
- *     window has carried a document since F1, and only a `kind:"plot"`
- *     window can hold focus) but the fallback is the safe response to an
- *     invariant violation, not a crash;
+ *   - no focused window, the focused window isn't `kind:"plot"`, or it has no
+ *     document yet — none of these should occur for a FOCUSED Stage window in
+ *     practice (every real window has carried a document since F1, and only a
+ *     `kind:"plot"` window can hold focus), but the fallback is the safe
+ *     response to an invariant violation, not a crash. `buildFigureSpec` is
+ *     reached ONLY through this fallback in production (grep) — a test that
+ *     calls it directly, as round 3's own new test did, exercises this rare
+ *     branch, not the `buildFigureSpecFromDocument` route real exports take
+ *     (exactly how round 3 marked a group_col degrade "closed" on a branch
+ *     users do not reach — round 4 review);
  *   - a LIVE document whose `bindings.datasetId` disagrees with `ds.id` —
  *     the one case this guard actively defends: `exportActive` resolves
  *     `ds` from `activeId` BEFORE an async `resolveDataset()`, during which
@@ -453,6 +468,17 @@ export function buildStageFigureSpec(
   // `document.publication`) would otherwise cycle while the canvas — which reads
   // the pin straight off the focused window — refuses.
   const autoSeriesStyles = windowCyclesSeriesStyles(st.autoSeriesStyles, st, document);
+  // BUG-013 review round: the y-span the FOCUSED canvas actually measured its
+  // waterfall stagger from — the one thing about this export that cannot be
+  // re-derived from `ds`, because a committed zoom on a server-decimated
+  // dataset narrows the canvas' own payload to the visible x-window while `ds`
+  // still holds every row (see lib/waterfallOffset.ts's header). Read at
+  // command time from the module-scope seam `Stage/useLiveSnapshotPublish`
+  // writes, the same shape `lib/plotsnapshot.ts` uses for the display bundle,
+  // and keyed by dataset so the documented refocus race below cannot stagger
+  // one dataset by another's span. `null` (no XY canvas on screen, or one
+  // showing a different dataset) falls back to the full DataStruct.
+  const waterfallSpan = readLiveWaterfallSpan(ds.id);
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -463,29 +489,9 @@ export function buildStageFigureSpec(
         yLabel: o.yLabel,
         filename: null,
         autoSeriesStyles,
+        waterfallSpan,
         greyscale: o.greyscale,
       })
-    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles });
+    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
-}
-
-/** Project the canvas error spans onto the export wire shape.
- *
- *  `buildErrorSpans` keys by uPlot COLUMN (0 = x, p+1 = the p-th series); the
- *  renderer wants one entry per plotted SERIES, so this re-indexes rather than
- *  letting the two conventions meet in the route — where the off-by-one would
- *  show up as error bars on the wrong curve. */
-export function exportErrorSpans(
-  data: DataStruct,
-  plotted: number[],
-  roles: readonly ErrorBinding[],
-): ({ x?: ErrorPair; y?: ErrorPair } | null)[] {
-  const byCol = buildErrorSpans(data, plotted, roles);
-  return plotted.map((_ch, p) => {
-    const spans = byCol.get(p + 1);
-    if (!spans?.length) return null;
-    const out: { x?: ErrorPair; y?: ErrorPair } = {};
-    for (const s of spans) out[s.axis] = { plus: s.plus, minus: s.minus };
-    return out;
-  });
 }

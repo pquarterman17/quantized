@@ -443,7 +443,13 @@ const MODULE_PINS: Record<string, number> = {
   // machinery `groupKey` uses — no new machinery, no extractable cohesive
   // block to fund it with. Written justification per CLAUDE.md's "raise
   // only with written justification".
-  "/lib/plotview.ts": 981,
+  // 981 -> 980 (2026-09-17, BUG-014 round 4): the unchecked `seriesLabels`
+  // cast became a one-line `sanitizeRecord.keyedRecord` call — the SAME
+  // validator the recipe and technique-memory restore paths now share — so
+  // a non-string rename is dropped here instead of crashing the canvas in
+  // `richtext.hasMarkup`. The four-line ternary went out; the call, its
+  // one-line note and the import came in: a ratchet, not a bump.
+  "/lib/plotview.ts": 980,
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {
@@ -515,7 +521,15 @@ const TS_MODULE_PINS: Record<string, number> = {
   // (see lib/workbooks.ts's `deriveWorkbooks`/`reconcileWorkbookRefs`, the
   // new pure module that derives/repairs it — not yet wired into the store
   // or .dwk; that's PR A2).
-  "/lib/types.ts": 1053,
+  // 1053 -> 1009 (2026-09-14, PRIMARY_SOFTWARE_AUDIT_PLAN P2.1): the four
+  // /api/peaks wire types (Peak/FittedPeak/MultiFitResult/SinglePeakFit) — a
+  // self-contained leaf block, the same shape as the Reductions extraction
+  // above — moved verbatim to the new lib/peakTable.ts, which is now the single
+  // home for the peak contract because P2.1's durable `PeakTable` is built from
+  // and rehydrated into exactly those shapes. Re-exported from types.ts, so no
+  // importer changed. Funds this item's own `Dataset.peakTable` field and
+  // ratchets down by the balance.
+  "/lib/types.ts": 1009,
   "/lib/plotspec.ts": 893,
   // originFigures.ts GRADUATED 2026-08-30 (pin was 793; BUNDLE_HEADROOM
   // slice 1): 793 -> 208 lines. The apply-only half — legend/annotation/
@@ -528,7 +542,20 @@ const TS_MODULE_PINS: Record<string, number> = {
   // dash/marker cycle paid for itself — the per-cell styles/labels/legend
   // derivation moved to `lib/multipanel.spatialCellStyling`, where the spatial
   // EXPORT's own channel list already lives, so the two cannot drift.
-  "/components/Stage/useMultiPanelStage.ts": 791,
+  // 787 -> 757 (2026-09-17, BUG-014 round 4): the PLAIN STACK and paneled
+  // X-BREAK render legs moved to components/Stage/stackPanelRender.ts and
+  // breakPanelRender.ts, the siblings facetGridRender.ts already set the
+  // pattern for — which is what funded the per-leg `seriesLabels` projection
+  // (a legend rename now reaches all three multi-panel legs' y-axis labels,
+  // the way the export already carried it). An extraction, not a bump: the
+  // hook keeps mode selection, state and the effect lifecycle only.
+  // 757 -> 753 (2026-09-17, BUG-014 round 5): the break leg's whole
+  // `breakLabels` memo (a whole-dataset channel re-derivation plus a
+  // series-count fail-closed guard) is gone — each `BreakPanel` now carries
+  // its own `channels` list, so `breakPanelRender.ts` projects the
+  // channel-keyed renames per panel with no derivation to guard. Part of the
+  // saving went back into the stack leg's payload/channel snapshot (N4).
+  "/components/Stage/useMultiPanelStage.ts": 753,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the
@@ -549,7 +576,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // fetch, composition, and the cross-panel handoffs.
   "/lib/roiMath.ts": 664,
   "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
-  "/lib/plotdata.ts": 658,
+  // 658 -> 650 (2026-09-14, BUG-013): `applyWaterfall`'s span/step scan moved
+  // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
+  // reads it too — so the canvas and the exported figure resolve the same step
+  // from one implementation. A ratchet, not a bump: 11 lines freed, 1 spent.
+  "/lib/plotdata.ts": 650,
   // Unchanged at 648 (BUG-009): its hand-rolled `pendingGuard` became a one-line
   // call to `store/pendingEdit.refusePendingEdit`, and dropping the duplicate paid
   // for the import exactly — net zero, so there is no ratchet to record here.
@@ -1530,6 +1561,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   source: "re-import source path descriptor, not channel-indexed",
   versionOf: "a dataset id, not channel-indexed",
   workbookId: "Library organization only, not channel-indexed",
+  peakTable:
+    "fitted-peak records in the dataset's own x/y UNITS (2-theta, FWHM, intensity) plus a provenance record -- it stores no channel index at all, so a column removal cannot leave it pointing at the wrong one",
 };
 
 const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
@@ -2207,6 +2240,344 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
     const src = loader?.[1] ?? "";
     for (const name of LAZY) {
       expect(src).toContain(`import("../lib/${name}")`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lazy action seams (bundle diet, 2026-09-14 — 919,781 -> 910,172 B eager).
+//
+// Four modules were taken out of the eager entry graph because every entry
+// point into them is a user action that happens long after first paint: the
+// four Data-menu worksheet reshapes, the Page setup dialog, the workbook
+// Copy/Paste/Duplicate core, and the saved-Origin-preview window behind
+// FigureRow's "▣". Each is now reached through a dynamic `import()` from the
+// one file that used to import it statically.
+//
+// This is the same guard `LAZY`/`LAZY_IMPORTERS` above gives the Origin-apply
+// split, and it exists for the same reason: Rollup ships a module to wherever
+// ANY of its importers' chunks land, so ONE value import from an eagerly
+// reachable file silently folds the whole seam back into the entry chunk.
+// `scripts/check-bundle-size.mjs` would eventually notice as a budget failure,
+// but only once the headroom is gone and without naming the cause; this names
+// it at the import site.
+//
+// TYPE-ONLY imports are deliberately allowed: `import type`/`export type` is
+// erased before the bundler sees it, and `store/workbookTransfer.ts` keeps one
+// (`TransferExistingIds`/`TransferIdGenerators`) precisely because it costs
+// nothing. A `typeof import("…")` type alias is likewise invisible here — it
+// is not a `from "…"` clause at all.
+describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)", () => {
+  const SEAMS = [
+    {
+      module: "/lib/worksheetTransformCommands.ts",
+      loader: "/commands/dataCommands.ts",
+      call: 'import("../lib/worksheetTransformCommands")',
+    },
+    {
+      module: "/lib/pageSetupCommand.ts",
+      loader: "/commands/plotCommands.ts",
+      call: 'import("../lib/pageSetupCommand")',
+    },
+    {
+      module: "/lib/workbookTransfer.ts",
+      loader: "/store/workbookTransfer.ts",
+      call: 'import("../lib/workbookTransfer")',
+    },
+    {
+      module: "/components/Library/OriginSavedPreviewWindow.tsx",
+      loader: "/components/Library/FigureRow.tsx",
+      call: 'import("./OriginSavedPreviewWindow")',
+    },
+  ];
+
+  /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
+   *  type-clause stripper below used an unbounded `[\s\S]*?`, so an `import
+   *  type` mentioned inside a COMMENT started a match that ate forward to the
+   *  next real `from "…"` and deleted a genuine value import. Measured: a
+   *  `// we deliberately keep an import type here` line above a real static
+   *  import blinded the guard completely.
+   *
+   *  ONE left-to-right pass, string/template literals matched first and put
+   *  back verbatim, so whichever of `//`, `/*` or a quote comes first at a
+   *  given index wins (2026-09-15 review round 2, finding 1). The previous
+   *  two-pass form ran the BLOCK pass first, so a `//` line comment that
+   *  merely mentioned `/*` — this repo's headers are full of them, citing
+   *  paths like `lib/api/*` and `commands/*.ts` — opened a fake block comment
+   *  that ate forward to the next `*\/` and deleted every import in between.
+   *  Measured on this tree: 32 shipped modules / 56 distinct static import
+   *  specifiers invisible (including all five of `appCommands.ts`'s
+   *  `./commands/*` edges), and the eager walk below reported 379 modules
+   *  where the truth is 400 (2026-09-17 correction: the commit that shipped
+   *  this comment measured itself against its own two-commits-back ancestor
+   *  rather than its real parent, which had already added a module —
+   *  `lib/nonFiniteCells.ts` at `0565b674` — same root cause as the bundle-
+   *  bytes correction in `plans/BUNDLE_HEADROOM.md`; re-measured in-test on
+   *  that commit's own tree: 901 sources, 379 of them eager with the old
+   *  stripper, 400 with the new). With this form the corpus has 0 false negatives
+   *  against `es-module-lexer` ground truth — scoped to the current corpus:
+   *  regex literals are NOT among the preserved alternatives above, so a
+   *  regex containing `/*` or `//` (e.g. `/[/*]/g`) ahead of a real import on
+   *  the same line would still delete it; measured 0 occurrences of that
+   *  shape on this tree, which is why the false-negative count is 0 and not
+   *  a structural guarantee. Keeping the literals means the scan never
+   *  mistakes a `//` inside `"https://…"` for a comment, which is what the
+   *  old `[^:]` lookbehind-substitute was for. */
+  const stripComments = (src: string): string =>
+    src.replace(
+      /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+      (_m, str: string | undefined) => str ?? "",
+    );
+
+  /** Drop `import type … from "…"` / `export type … from "…"` clauses, which
+   *  carry no runtime edge, so only VALUE imports are searched. Anchored to a
+   *  statement start and stopped at the first `;`, so it cannot run past the
+   *  clause it matched. `import { type A, b }` is NOT a type-only clause and
+   *  is deliberately left in place — it does carry a runtime edge. */
+  const valueImportsOnly = (src: string): string =>
+    stripComments(src).replace(/^[ \t]*(?:import|export)\s+type\s[^;]*?\bfrom\s*["'][^"']+["']/gm, "");
+
+  /** Every STATIC value-import specifier in a module: the `from "…"` clauses
+   *  AND bare side-effect `import "…"` (2026-09-15 review, finding 6 — a bare
+   *  import has no `from`, yet folds the module into the importer's chunk just
+   *  the same, so the old `from`-only scan let `import "./workbookTransfer";`
+   *  through). Dynamic `import("…")` is `import(`, never `import "`, so it is
+   *  correctly not matched here.
+   *
+   *  Two measured residual OVER-reports: an import-looking string inside a
+   *  TEMPLATE literal is counted (literals are preserved verbatim by
+   *  `stripComments`, by design — measured `["./realA", "./fake",
+   *  "./realB"]`), and an `import type` clause that is not the first thing
+   *  on its line is counted as a value import (measured `import { b } from
+   *  "x"; import type { A } from "y";` -> `["x", "y"]`; the reverse order is
+   *  handled correctly by the line anchor). The `import type` case does not
+   *  fire on this tree. The template-literal case DOES: 7 times across 6
+   *  modules (2026-09-17 correction — a prior version of this doc claimed
+   *  neither fired), all of the shape `` `… "${expr}" …` `` in a doc comment
+   *  or string, e.g. `components/Inspector/ChannelsCard.tsx` and
+   *  `components/Library/folderOps.ts`. Every one of the 7 is a non-relative
+   *  specifier, so `resolveFrom` below drops it and the guards stay correct
+   *  today — but that is a corpus fact, not a soundness property: a phantom
+   *  edge is fail-safe only in the direction of hiding nothing, NOT in the
+   *  other direction. A template literal that happens to spell a RELATIVE
+   *  seam path (e.g. `` `copied from "../lib/workbookTransfer"` `` inside
+   *  `store/workbookTransfer.ts`) resolves onto the seam and turns "no
+   *  module value-imports a seam module statically" RED for a module that
+   *  imports nothing — a false positive. That fails closed, which is
+   *  acceptable for a guard, but it is a live trip-wire, not a hypothetical:
+   *  string content, not import structure, decides whether it fires. */
+  const staticSpecifiers = (src: string): string[] => {
+    const v = valueImportsOnly(src);
+    return [
+      ...[...v.matchAll(/\bfrom\s*["']([^"']+)["']/g)].map((m) => m[1]),
+      ...[...v.matchAll(/(?:^|[\s;}])import\s*["']([^"']+)["']/gm)].map((m) => m[1]),
+    ];
+  };
+
+  it("scans the modules it claims to", () => {
+    // A guard whose subject has been renamed away passes vacuously.
+    const paths = sources().map(([p]) => p);
+    for (const { module, loader } of SEAMS) {
+      expect(paths.some((p) => p.endsWith(module)), `${module} not found`).toBe(true);
+      expect(paths.some((p) => p.endsWith(loader)), `${loader} not found`).toBe(true);
+    }
+  });
+
+  /** Resolve a relative import specifier against the importing module's own
+   *  path, so `./workbookTransfer` from `./store/useApp.ts` is not confused
+   *  with `../lib/workbookTransfer` — the false positive the first version of
+   *  this guard reported (two different modules, same basename). */
+  const resolveFrom = (importer: string, spec: string): string | null => {
+    if (!spec.startsWith(".")) return null;
+    const parts = importer.split("/").slice(0, -1).concat(spec.split("/"));
+    const out: string[] = [];
+    for (const part of parts) {
+      if (part === "." || part === "") continue;
+      if (part === "..") out.pop();
+      else out.push(part);
+    }
+    return `/${out.join("/")}`;
+  };
+
+  it("no module value-imports a seam module statically", () => {
+    const targets = new Set(SEAMS.map((s) => s.module.replace(/\.tsx?$/, "")));
+    const offenders = sources().flatMap(([p, src]) => {
+      const hits = staticSpecifiers(src)
+        .map((spec) => resolveFrom(p, spec))
+        .filter((r): r is string => r !== null && targets.has(r));
+      return hits.length ? [`${p} -> ${hits.join(", ")}`] : [];
+    });
+    expect(
+      offenders,
+      "these modules are chunk-deferred — reach them through the dynamic import() in their loader, not a static one",
+    ).toEqual([]);
+  });
+
+  // The two blind spots the 2026-09-15 review measured in the first version of
+  // this scanner. Both are asserted on synthetic sources, because both were
+  // LATENT — no shipped module triggers either today, so a corpus-wide
+  // assertion would pass with the bug still present.
+  it("is not blinded by a comment that merely mentions an import type clause", () => {
+    // The two cases the review measured against the original unanchored
+    // `[\s\S]*?` — each returned [] where a real value import was present.
+    const withLineComment = '// we deliberately keep an import type here\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    const withDocComment = '/** see export type re-exports */\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    // And the case that ANCHORING alone does not fix: a commented-out clause
+    // that starts its own line and has no `from` of its own, so the scan runs
+    // on into the next real import and eats it. Only stripping comments first
+    // holds this one.
+    const withCommentedOutClause = '/*\nimport type Foo\n*/\nimport { buildTransferPackage } from "../lib/workbookTransfer";\n';
+    expect(staticSpecifiers(withLineComment)).toEqual(["../lib/workbookTransfer"]);
+    expect(staticSpecifiers(withDocComment)).toEqual(["../lib/workbookTransfer"]);
+    expect(staticSpecifiers(withCommentedOutClause)).toEqual(["../lib/workbookTransfer"]);
+  });
+
+  it("is not blinded by a line comment that merely contains a block-comment opener", () => {
+    // The round-2 regression: with the block pass running first, this `//`
+    // line opened a fake block comment that ran to the next `*/` — i.e. to the
+    // end of the doc comment BELOW the import — and swallowed the import.
+    // This shape is everywhere in the repo's headers (`lib/api/*`,
+    // `commands/*.ts`, `/api/baseline/*`), which is why it was live on 32
+    // shipped modules and not latent like the two cases above.
+    const src = '// the loaders live in commands/*.ts\nimport { registerFileCommands } from "./commands/fileCommands";\n/** and then a doc comment closes the fake block */\n';
+    expect(staticSpecifiers(src)).toEqual(["./commands/fileCommands"]);
+    // …and a `//` inside a string is still not a comment.
+    expect(staticSpecifiers('const u = "https://example.com/x";\nimport { a } from "./realA";\n')).toEqual(["./realA"]);
+  });
+
+  it("sees a bare side-effect import, and still ignores a real type-only one", () => {
+    expect(staticSpecifiers('import "./workbookTransfer";\n')).toEqual(["./workbookTransfer"]);
+    expect(staticSpecifiers('import type { TransferIdGenerators } from "../lib/workbookTransfer";\n')).toEqual([]);
+    // A dynamic import is the SANCTIONED shape and must never be reported.
+    expect(staticSpecifiers('const m = await import("../lib/workbookTransfer");\n')).toEqual([]);
+  });
+
+  /** Modules that are not seams themselves but were dragged OUT of the eager
+   *  graph BY one — seam 2's measured −4,675 B is mostly these two, which
+   *  `OriginSavedPreviewWindow` was the only eagerly-reachable importer of.
+   *  ~40 lazily-reached workshop panels import them, so the static-import
+   *  grep above cannot hold this line; REACHABILITY can (2026-09-15 review,
+   *  finding 7). Without it, one eager importer silently folds 4.7 kB back
+   *  into the entry chunk and only the bundle budget would ever notice —
+   *  the exact failure this describe block exists to prevent. */
+  const DRAGGED_OUT = ["/components/overlays/ToolWindow.tsx", "/lib/workshopHelp.ts"];
+
+  /** The eager chunk's module set, computed the way Rollup computes it: walk
+   *  STATIC value imports from the app entry, stop at every dynamic
+   *  `import()`. Unresolvable specifiers (bare packages, CSS, assets) are
+   *  skipped — they cannot reach an `src/` module anyway. */
+  const eagerlyReachable = (): Set<string> => {
+    const byPath = new Map(sources().map(([p, src]) => [p.replace(/^\./, ""), src]));
+    const resolve = (importer: string, spec: string): string | null => {
+      const base = resolveFrom(importer, spec);
+      if (base === null) return null;
+      for (const c of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) {
+        if (byPath.has(c)) return c;
+      }
+      return null;
+    };
+    const seen = new Set(["/main.tsx"]);
+    const queue = ["/main.tsx"];
+    while (queue.length > 0) {
+      const cur = queue.shift() as string;
+      for (const spec of staticSpecifiers(byPath.get(cur) ?? "")) {
+        const next = resolve(cur, spec);
+        if (next !== null && !seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    return seen;
+  };
+
+  it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
+    const eager = eagerlyReachable();
+    // Vacuity guard: a walk that stalls at the entry would pass everything.
+    // Measured 2026-09-15 on this tree: 400 of 901 source modules are eager
+    // (corrected 2026-09-17 — see the stripper doc above for why 399/900 was
+    // one commit stale).
+    expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
+    expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
+    expect(
+      [...SEAMS.map((s) => s.module), ...DRAGGED_OUT].filter((m) => eager.has(m)),
+      "these ship inside a lazy seam's chunk; a static import from an eagerly reachable module folds them back into the entry chunk",
+    ).toEqual([]);
+  });
+
+  /** The regression test the round-2 review asked for. A scanner whose
+   *  failures are CORPUS-shaped cannot be protected by synthetic sources
+   *  alone: every one of this block's synthetic assertions passed while the
+   *  two-pass stripper was silently deleting 56 real import edges. These
+   *  anchors are modules the walk provably reaches only if comment stripping
+   *  survives this repo's actual file headers — `appCommands.ts` opens with a
+   *  `//` line citing `commands/*.ts`, and the `lib/api/*.ts` modules open
+   *  with one citing a glob path of their own (`lib/api/*` in `http.ts`,
+   *  `/api/baseline/*` in `baseline.ts`, …). If the walk stops seeing them,
+   *  the two guards above go quiet on the whole command and api layers.
+   *
+   *  Round-3 review, nit 4: the REACHABILITY arm below (the `anchors` list)
+   *  is pinned to a specific module list, not to the invariant it exists to
+   *  protect — a legitimate future lazification of any one of these modules
+   *  (exactly the work this describe block enables) would redden it with the
+   *  misleading "blinded by a comment" message. The corpus-wide invariant
+   *  test right after this one is the version that cannot go red for that
+   *  reason; this reachability arm stays for its more concrete failure
+   *  message on the regression it was written for, and the `./commands/`
+   *  count arm below is a direct scanner assertion (not reachability), which
+   *  is not brittle in that way and is kept as-is. */
+  it("the eager walk reaches the command and api layers (corpus anchor for the comment stripper)", () => {
+    const eager = eagerlyReachable();
+    const anchors = [
+      "/appCommands.ts",
+      "/commands/fileCommands.ts",
+      "/commands/dataCommands.ts",
+      "/commands/plotCommands.ts",
+      "/commands/uiCommands.ts",
+      "/commands/analysisCommands.ts",
+      "/lib/api.ts",
+      "/lib/api/http.ts",
+    ];
+    expect(
+      anchors.filter((a) => !eager.has(a)),
+      "these are eagerly reachable from main.tsx in the real graph; if the walk cannot see them the import scanner is being blinded by a comment",
+    ).toEqual([]);
+    // `appCommands.ts` statically imports all five command registries. A
+    // stripper that eats its header comment reports zero.
+    const appCommands = sources().find(([p]) => p.endsWith("/appCommands.ts"));
+    expect(appCommands, "src/appCommands.ts not found").toBeDefined();
+    expect(
+      staticSpecifiers(appCommands?.[1] ?? "").filter((s) => s.startsWith("./commands/")).length,
+      "appCommands.ts registers five command modules; a blinded scanner sees none of them",
+    ).toBeGreaterThanOrEqual(5);
+  });
+
+  /** Round-3 review, nit 4's proposed fix: a corpus-wide SCANNER invariant
+   *  that needs no reachability walk at all, so it cannot go red because a
+   *  module was legitimately moved behind a seam — only because the scanner
+   *  itself regressed. For every source module, `staticSpecifiers` must find
+   *  at least as many static edges as a naive `from "…"` line regex (value
+   *  imports/exports only, `type` clauses excluded) finds by itself; the
+   *  naive regex has no comment- or string-awareness, so it is a lower bound
+   *  a correct stripper can never fall under. Measured 2026-09-17: 0
+   *  violations with the current stripper, 32 with the old two-pass one
+   *  (headed by `/appCommands.ts: 0 < 5` and every `lib/api/*.ts` module). */
+  it("staticSpecifiers never undercounts a naive from-clause scan, corpus-wide (comment-stripper invariant)", () => {
+    // Vacuity guard: the glob must actually be reaching most of the corpus.
+    expect(sources().length).toBeGreaterThanOrEqual(800);
+    const naiveFromClauseCount = (src: string): number =>
+      (src.match(/^(?:import|export)(?!\s+type\s)[^\n]*\bfrom\s*["'][^"']+["']/gm) ?? []).length;
+    const violations = sources()
+      .filter(([, src]) => staticSpecifiers(src).length < naiveFromClauseCount(src))
+      .map(([p, src]) => `${p}: ${staticSpecifiers(src).length} < ${naiveFromClauseCount(src)}`);
+    expect(violations, "staticSpecifiers is blind to real static imports a naive regex still finds").toEqual([]);
+  });
+
+  it("each loader reaches its seam through a dynamic import()", () => {
+    for (const { module, loader, call } of SEAMS) {
+      const found = sources().find(([p]) => p.endsWith(loader));
+      expect(found, `${loader} not found`).toBeDefined();
+      expect(found?.[1] ?? "", `${loader} must dynamically import ${module}`).toContain(call);
     }
   });
 });

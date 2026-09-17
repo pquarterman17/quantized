@@ -318,7 +318,12 @@ describe("useFigureBuilder", () => {
     expect(result.current.canApply).toBe(false);
   });
 
-  it("reports an incompatible canonical spec while retaining its resolved source data", () => {
+  // BUG-013 round 5: a group bound with a REALLY rendered secondary axis used
+  // to be reported "invalid-spec" (round 4's throw). The canvas has always
+  // degraded this to a plain, ungrouped overlay instead (`canvasGroupCol`
+  // reads the RAW y2Keys, no plotted/hidden distinction), so the draft is now
+  // "ready" and previews/exports exactly what the screen already shows.
+  it("degrades (not refuses) a group bound with a REALLY rendered secondary axis — ready, not invalid-spec (round 5)", async () => {
     const document = createFigureDocument({
       id: "grouped-y2",
       name: "Grouped y2",
@@ -330,13 +335,14 @@ describe("useFigureBuilder", () => {
       figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
     });
     const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
 
-    expect(result.current.canonicalReadiness).toBe("invalid-spec");
-    expect(result.current.error).toContain("figure configuration is not previewable");
-    expect(result.current.error).toContain("grouped figures cannot use a secondary Y axis");
+    expect(result.current.canonicalReadiness).toBe("ready");
     expect(result.current.data).toEqual(DATA);
-    expect(result.current.canExport).toBe(false);
-    expect(renderFigureHitmap).not.toHaveBeenCalled();
+    expect(result.current.canExport).toBe(true);
+    const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+    expect(preview?.group_col).toBeUndefined();
+    expect(preview?.y2_keys).toEqual([0]);
   });
 
   it("renders and patches one canonical draft without dropping rich document state", async () => {

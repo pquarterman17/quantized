@@ -290,6 +290,115 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
     await waitFor(() => expect(created).toHaveLength(4));
   });
 
+  // BUG-014 round 3: a background window's facet grid is a SECOND caller of
+  // `useMultiPanelStage` (`BackgroundAltModes.tsx`'s `BackgroundStackWindow`),
+  // and it did not pass `seriesLabels` even though `durableComposition` above
+  // proves this window renders a real facet grid, not just the plain stack —
+  // so a rename reached every OTHER leg (focused stage, flat export, facet
+  // export) but a background window's facet panels still read the derived
+  // "Signal (au)". Mirrors `MultiPanelStage.test.tsx`'s focused-window twin.
+  it("a legend rename reaches every facet panel's legend, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 100],
+        [1, 200],
+        [2, 300],
+        [2, 400],
+      ],
+      labels: ["batch", "Signal"],
+      units: ["", "au"],
+      metadata: {},
+    };
+    const view = {
+      ...defaultPlotView(),
+      stackMode: true,
+      facetKey: 0,
+      yKeys: [1],
+      seriesLabels: { 1: "Loop 1" },
+    };
+    render(<BackgroundPlotWindow dataset={{ id: "d1", name: "ds1", data: UNITS }} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const labels = (created as { opts: { series: { label?: string }[] } }[]).map(
+      (panel) => panel.opts.series[1].label,
+    );
+    expect(labels).toEqual(["Loop 1", "Loop 1"]);
+  });
+
+  // BUG-014 round 4, the background twins of `MultiPanelStage.test.tsx`'s
+  // stack/break pair. The rename has to reach the same slot here: a
+  // background window builds its panels through the SAME
+  // `useMultiPanelStage` legs, `buildOpts` shows no legend in them, so the
+  // panel's y-axis label is the only place the name appears — while this
+  // window's own export (`buildStageFigureSpec`, reached once it is focused)
+  // carries the rename either way.
+  it("a legend rename reaches the renamed channel's STACK panel, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 100],
+        [20, 200],
+        [30, 300],
+        [40, 400],
+      ],
+      labels: ["Field", "Signal"],
+      units: ["T", "au"],
+      metadata: {},
+    };
+    const view = { ...defaultPlotView(), stackMode: true, seriesLabels: { 1: "Loop 1" } };
+    render(<BackgroundPlotWindow dataset={{ id: "d1", name: "ds1", data: UNITS }} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    // Non-vacuous: panel 0 carries no rename and must still read its derived
+    // "label (unit)".
+    expect((created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label)).toEqual([
+      "Field (T)",
+      "Loop 1",
+    ]);
+  });
+
+  it("a legend rename reaches every X-BREAK panel, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 100],
+        [20, 200],
+        [30, 300],
+        [40, 400],
+      ],
+      labels: ["Field", "Signal"],
+      units: ["T", "au"],
+      metadata: {},
+    };
+    const view = {
+      ...defaultPlotView(),
+      stackMode: true,
+      yKeys: [1],
+      seriesLabels: { 1: "Loop 1" },
+    };
+    // The break arrangement a background window can render: derived from the
+    // window's OWN document (`durableComposition`'s `plot.axisBreaks.x`),
+    // never the transient singleton — BUG-012 review F5.
+    const document = createFigureDocument({
+      id: "fig-w1",
+      name: "w1",
+      datasetId: "d1",
+      view,
+      axisBreaks: { x: [[1, 2]] },
+    });
+    render(
+      <BackgroundPlotWindow
+        dataset={{ id: "d1", name: "ds1", data: UNITS }}
+        view={view}
+        document={document}
+      />,
+    );
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect((created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label)).toEqual([
+      "Loop 1",
+      "Loop 1",
+    ]);
+  });
+
   it("a facetKey pointing at a column with no finite levels still falls back to the plain XY path, never a crash", async () => {
     const view = { ...defaultPlotView(), stackMode: true, facetKey: 99 };
     render(<BackgroundPlotWindow dataset={DATASET} view={view} />);

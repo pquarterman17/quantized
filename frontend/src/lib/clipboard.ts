@@ -116,6 +116,59 @@ export async function copyImageAsync(pending: Promise<Blob | null>, signal?: Abo
   }
 }
 
+/** Write text the caller is still BUILDING, without losing the user gesture —
+ *  `copyText`'s counterpart to `copyImageAsync`, and it exists for the same
+ *  MAIN #35 reason. `store/workbookTransfer.ts`'s Copy has to `await` a
+ *  dynamic `import()` of its package builder before it has any text at all;
+ *  doing that BEFORE touching the clipboard drops the transient user
+ *  activation the Clipboard API requires, and the copy then fails reporting
+ *  "clipboard unavailable" when the clipboard was fine. The spec allows a
+ *  `ClipboardItem` value to be a promise, so handing the still-pending text
+ *  straight to the constructor keeps the write inside the originating
+ *  gesture while the chunk and the package are still in flight.
+ *
+ *  The capability gate is `clipboardImageSupported()`: despite its name it
+ *  tests exactly `navigator.clipboard.write` + `ClipboardItem`, which is the
+ *  same pair a promise-valued TEXT write needs.
+ *
+ *  The value handed to `ClipboardItem` is a `Promise<Blob>`, not the bare
+ *  `Promise<string>` (2026-09-15 review round 2, finding 3). The spec allows
+ *  `DOMString or Blob`, but Blob is the shape every engine that has
+ *  `ClipboardItem` at all has accepted since it shipped, and it is what
+ *  `copyImage`/`copyImageAsync`/`copySvgAsync` above already pass. On an
+ *  engine that refuses the string shape the `catch` below would drop into the
+ *  gesture-losing fallback and this function would silently no-op its whole
+ *  reason for existing; wrapping costs one synchronous `.then` registration
+ *  and changes no timing (the write still starts in the caller's task).
+ *
+ *  Fallback — an engine with no `ClipboardItem`, or one that refuses a promise
+ *  value — awaits the text and calls `copyText`. That path RE-OPENS the very
+ *  window this function exists to close (the gesture can be spent before the
+ *  write), so on those engines the behaviour degrades to "might lose the
+ *  gesture", not to "never copies". Resolves false if both routes fail. */
+export async function copyTextAsync(pending: Promise<string>): Promise<boolean> {
+  if (clipboardImageSupported()) {
+    const asBlob = pending.then((text) => new Blob([text], { type: "text/plain" }));
+    // An engine whose write() resolves WITHOUT reading the value promise never
+    // attaches a handler to it, so a build failure would land as an unhandled
+    // rejection while the caller's own `await build` still reports the real
+    // reason (measured 2026-09-15, review round 2 finding 2). Same guard
+    // `copyImageAsync` uses above.
+    asBlob.catch(() => {});
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": asBlob })]);
+      return true;
+    } catch {
+      /* promise-valued ClipboardItem unsupported, or the text never built */
+    }
+  }
+  try {
+    return await copyText(await pending);
+  } catch {
+    return false;
+  }
+}
+
 /** Synchronous capability check for the async Clipboard image API — the exact
  *  condition copyImage gates on above, exposed so the plot toolbar (#7) can
  *  disable its "Copy Image" button with a reason instead of clicking through

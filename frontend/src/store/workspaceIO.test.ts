@@ -619,6 +619,13 @@ describe("saveWorkspace — quick save to a known project (P1.2 box 1)", () => {
     expect(saveBlob).not.toHaveBeenCalled();
     expect(useApp.getState().projectDirty).toBe(true);
     expect(useApp.getState().status).toMatch(/save failed/i);
+    // P3.4 error-quality audit (2026-09-14): all three facts, not just the
+    // first. The atomic temp-file-plus-os.replace write (desktop_bridge.py)
+    // is what makes the middle one true, and `runSaveWorkspace`'s own header
+    // had promised the message would say it.
+    expect(useApp.getState().status, "what failed").toContain("/proj/workspace.dwk");
+    expect(useApp.getState().status, "whether data changed").toMatch(/unchanged/i);
+    expect(useApp.getState().status, "next action").toMatch(/save as/i);
   });
 
   it("falls back to Save-As behavior (prompts) when no project is known yet", async () => {

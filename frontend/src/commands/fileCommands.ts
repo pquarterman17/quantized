@@ -61,10 +61,17 @@ function rejectIfImportRunning(): boolean {
  *  `finally`), so the loaded module's own body (exportActive.ts's callers
  *  register their OWN pendingOp) never overlaps this one. Rethrows on
  *  failure so the caller's own `.then(...)` is skipped — the caller must
- *  still end its own chain with `.catch(() => {})` (see any call site below)
- *  so THAT rejection doesn't itself go unhandled; a success from the
- *  module's own body never reaches this catch, so it can't double-toast a
- *  failure exportActive already reported through its own status/toast. */
+ *  still handle THAT rejection, with `.then(onRun, onLoadFailure)` (see
+ *  `onLoadFailure` below and any call site); a success from the module's own
+ *  body never reaches this catch, so it can't double-toast a failure
+ *  exportActive already reported through its own status/toast. */
+// 2026-09-14: now shared beyond this module — `commands/dataCommands.ts`
+// (worksheet reshapes) and `commands/plotCommands.ts` (Page setup) wrap their
+// own chunk-deferred `run` bodies in it, for the identical reason. It stays
+// here rather than moving to a neutral module because both importers are
+// already eagerly reachable through `appCommands.ts`, so the import moves no
+// chunk boundary (measured), and moving an exported helper that
+// `fileCommands.test.ts` pins directly would be churn with no benefit.
 // N3 (2026-09-13 round-2 review): `label` is the pendingOps busy text
 // ("Loading CSV export…"), already gerund-shaped — appending "failed to
 // load" to it read as "Loading CSV export failed to load", doubling "load".
@@ -76,6 +83,28 @@ export function runLazy<M>(label: string, load: () => Promise<M>): Promise<M> {
     throw e;
   });
 }
+
+/** The ONLY rejection a chunk-deferred command body may swallow: the chunk
+ *  load, which `runLazy` has already toasted.
+ *
+ *  Pass it as the SECOND argument of `.then(onRun, onLoadFailure)`, never as a
+ *  trailing `.catch(() => {})`. A trailing `.catch` sits after `.then`, so it
+ *  also swallows whatever the LOADED HANDLER throws — measured 2026-09-15 on
+ *  the transpose seam: a handler that threw produced no toast, no status and
+ *  no console error. With the two-argument form that throw reaches neither
+ *  this function nor `runLazy`'s catch, and surfaces as an unhandled
+ *  rejection — CONSOLE ONLY: `runAction` (`store/commands.ts`) never wraps
+ *  these (each seam's `run` is `() => void runLazy(…)`, so `result` is not
+ *  thenable) and `frontend/src` installs no `unhandledrejection` listener, so
+ *  no toast, no status, no `pendingOps` entry. Scoped 2026-09-15 (review
+ *  round 2, finding 4): that restores what 6 of the 7 seams did before
+ *  lazification — the five exports and Page setup already rejected
+ *  asynchronously — but the reshape seam (`dataCommands.ts`) threw
+ *  SYNCHRONOUSLY out of `run()` as a loud React event-handler error, louder
+ *  than this. Making it loud again is UX-003's call, not this helper's. */
+export const onLoadFailure = (): void => {
+  /* runLazy already toasted the load failure */
+};
 
 let demoCounter = 0;
 let sampleCounter = 0;
@@ -313,12 +342,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // runLazy (F5) — see that function's own doc — covers the import step
       // itself, which sits outside exportActive's own error handling.
       run: () =>
+        // TWO-argument `.then` throughout: a throw from the loaded handler is
+        // deliberately NOT swallowed here — see `onLoadFailure`.
         void runLazy("Loading CSV export…", () => import("./fileCommandsLazy"))
-          .then((m) => m.runExportXrdCsv(s, exportXrdCsv))
-          .catch(() => {
-            /* runLazy already toasted a load failure; a run() failure
-               already reported its own status/toast (see exportActive.ts) */
-          }),
+          .then((m) => m.runExportXrdCsv(s, exportXrdCsv), onLoadFailure),
     },
     {
       id: "export-hdf5",
@@ -329,10 +356,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // "export-csv" above (same `void`-prefix + runLazy reasoning).
       run: () =>
         void runLazy("Loading HDF5 export…", () => import("./fileCommandsLazy"))
-          .then((m) => m.runExportHdf5(s, exportHdf5))
-          .catch(() => {
-            /* see "export-csv" above */
-          }),
+          .then((m) => m.runExportHdf5(s, exportHdf5), onLoadFailure),
     },
     {
       id: "figure-builder",
@@ -403,10 +427,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // runLazy (F5) — see that function's own doc.
       run: () =>
         void runLazy("Loading figure export…", () => import("../lib/exportFigureCommand"))
-          .then((m) => m.runExportFigureCommand(s))
-          .catch(() => {
-            /* see "export-csv" above */
-          }),
+          .then((m) => m.runExportFigureCommand(s), onLoadFailure),
     },
     {
       id: "export-origin",
@@ -422,10 +443,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // runLazy (F5) — see that function's own doc.
       run: () =>
         void runLazy("Loading Origin export…", () => import("./fileCommandsLazy"))
-          .then((m) => m.runExportOrigin(s, exportOrigin))
-          .catch(() => {
-            /* see "export-csv" above */
-          }),
+          .then((m) => m.runExportOrigin(s, exportOrigin), onLoadFailure),
     },
     {
       id: "send-to-origin",
@@ -473,10 +491,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // — see that function's own doc.
       run: () =>
         void runLazy("Loading page export…", () => import("../lib/exportPageCommand"))
-          .then((m) => m.runExportSpatialPageCommand(s))
-          .catch(() => {
-            /* see "export-csv" above */
-          }),
+          .then((m) => m.runExportSpatialPageCommand(s), onLoadFailure),
     },
   ];
 }

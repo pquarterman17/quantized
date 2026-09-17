@@ -16,6 +16,7 @@ import type {
   PeakOverlay,
   PlotSeriesResponse,
 } from "./types";
+import { waterfallApplies, waterfallStep } from "./waterfallOffset";
 
 export interface PlotSeriesSpec {
   label: string;
@@ -519,20 +520,11 @@ export function withPeakOverlay(
  *  offset is display-only, so absolute y-values no longer read true (standard for
  *  waterfall). Apply to the base payload before overlays so channel 0 stays put. */
 export function applyWaterfall(payload: PlotPayload, fraction: number): PlotPayload {
-  if (fraction <= 0 || payload.data.length <= 2) return payload;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (let s = 1; s < payload.data.length; s++) {
-    for (const v of payload.data[s]) {
-      if (v != null && Number.isFinite(v)) {
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-      }
-    }
-  }
-  const span = hi > lo ? hi - lo : 1;
-  const step = fraction * span;
+  if (!waterfallApplies(fraction) || payload.data.length <= 2) return payload;
   const cols = payload.data as unknown as (number | null)[][];
+  // The span/step rule lives in lib/waterfallOffset.ts because the EXPORT wire has to
+  // resolve the identical number (BUG-013) — see that module's header.
+  const step = waterfallStep(cols.slice(1), fraction);
   const data = cols.map((col, s) =>
     s === 0 ? col : col.map((v) => (v == null ? v : v + (s - 1) * step)),
   );

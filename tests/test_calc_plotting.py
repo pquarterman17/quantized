@@ -2,15 +2,18 @@
 per-series `fill`/`color_by` CHANNEL reference resolver — the glue between the
 wire-level channel indices `export_figures.FigureRequest.series_styles`
 carries and the display-position / concrete-array values `calc.figure`'s pure
-renderer expects)."""
+renderer expects), plus `apply_waterfall_offsets` (BUG-013's export-side
+waterfall stagger -- see its own cross-language golden below)."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from quantized.calc.plotting import (
     PlotState,
+    apply_waterfall_offsets,
     build_grouped_series,
     build_series,
     resolve_style_channels,
@@ -412,3 +415,59 @@ def test_build_grouped_series_default_x_label_prefers_x_column_long() -> None:
     ds = _origin_like_ds()
     plot = build_grouped_series(ds, None, [0], 0)
     assert plot.x_label == "Theta"
+
+
+# ---------------------------------------------------------------------------
+# apply_waterfall_offsets (BUG-013 -- the export half of a waterfall view)
+# ---------------------------------------------------------------------------
+
+
+def _wf_series() -> list[tuple[str, NDArray[np.float64]]]:
+    """The SAME three columns the frontend golden uses (see below)."""
+    return [
+        ("a", np.array([1.0, 2.0, 3.0, 4.0])),
+        ("b", np.array([10.0, 20.0, 30.0, 40.0])),
+        ("c", np.array([100.0, 200.0, 300.0, 400.0])),
+    ]
+
+
+def test_apply_waterfall_offsets_matches_the_canvas_golden() -> None:
+    """THE CROSS-LANGUAGE PIN. The dataset, the offsets and the shifted values
+    below are the same literals ``frontend/src/lib/waterfallOffset.test.ts``
+    pins by RUNNING the canvas' own ``applyWaterfall`` on those columns at
+    fraction 0.25 (y-range 400 - 1 = 399, so the step is 0.25 * 399 = 99.75).
+    Screen and export therefore agree by construction; a change to either
+    implementation that the other does not follow turns one of the two red."""
+    offsets = [0.0, 99.75, 199.5]
+    out = apply_waterfall_offsets(_wf_series(), offsets)
+    expected = [
+        [1.0, 2.0, 3.0, 4.0],
+        [109.75, 119.75, 129.75, 139.75],
+        [299.5, 399.5, 499.5, 599.5],
+    ]
+    assert [label for label, _ in out] == ["a", "b", "c"]
+    for (_, values), want in zip(out, expected, strict=True):
+        assert np.allclose(values, want, rtol=0.0, atol=1e-12)
+
+
+def test_apply_waterfall_offsets_is_a_no_op_without_offsets() -> None:
+    original = _wf_series()
+    for offsets in (None, []):
+        out = apply_waterfall_offsets(original, offsets)
+        for (_, got), (_, want) in zip(out, original, strict=True):
+            assert np.array_equal(got, want)
+
+
+def test_apply_waterfall_offsets_never_mutates_the_caller_arrays() -> None:
+    original = _wf_series()
+    apply_waterfall_offsets(original, [0.0, 99.75, 199.5])
+    assert np.array_equal(original[1][1], np.array([10.0, 20.0, 30.0, 40.0]))
+
+
+def test_apply_waterfall_offsets_degrades_on_a_short_or_bad_offset_list() -> None:
+    """An export must degrade, never 500 or poison values with NaN -- the rule
+    ``resolve_style_channels`` already follows for a malformed style dict."""
+    out = apply_waterfall_offsets(_wf_series(), [5.0, float("nan")])
+    assert np.allclose(out[0][1], [6.0, 7.0, 8.0, 9.0])
+    assert np.array_equal(out[1][1], np.array([10.0, 20.0, 30.0, 40.0]))  # NaN -> no shift
+    assert np.array_equal(out[2][1], np.array([100.0, 200.0, 300.0, 400.0]))  # missing -> no shift

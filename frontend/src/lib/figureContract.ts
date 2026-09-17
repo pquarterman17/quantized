@@ -185,6 +185,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   x_label: derived("axes.x.label"),
   y_label: derived("axes.y.label"),
   series_styles: derived("series.styles"),
+  waterfall_offsets: derived(
+    "plot.waterfall.verticalOffset",
+    "BUG-013: the per-series stagger RESOLVED at render time (lib/waterfallOffset.ts) from the canonical fraction above plus the display list -- Y data units, not a second source of the fraction itself. Nothing here is stored on the document.",
+  ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
   greyscale: unsupported(

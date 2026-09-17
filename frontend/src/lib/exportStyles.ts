@@ -6,27 +6,37 @@
 import { resolveToHex } from "./color";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
-import { resolveSeriesStyle, seriesColor, type SeriesCycle } from "./seriesStyleCycle";
+import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 
 export type { ExportSeriesStyle } from "./publicationStyles";
 
 /** `plotted` = the channel indices being drawn (yKeys ?? all channels), in order.
  *  Returns one spec per series (null = no styling → matplotlib defaults).
  *
- *  `cycle` (P3.3, `lib/seriesStyleCycle.ts`) is the CANVAS' display position
- *  for each entry of `plotted`, and `null`/absent — the default for every
- *  producer that has no paired canvas (`legacyFigure`, `useGraphTemplates`,
- *  `plotSpecFigure`) — makes this function byte-identical to what it was before
- *  the cycle existed. It matters because `plotted` here is hidden-FILTERED
- *  while the canvas keeps hidden series in place with `show:false`: passing the
- *  canvas' positions is what stops channel B drawing dashed on screen and solid
- *  in the PDF. It also fixes the same skew in the palette, since `seriesColor`
- *  is indexed by the same position. */
+ *  `positions` is the CANVAS' display position for each entry of `plotted`;
+ *  `null`/absent means "`plotted` IS the display order" (plain 0,1,2,…), which
+ *  is true for every producer whose list is not hidden-filtered against a
+ *  wider canvas list (`legacyFigure`, `useGraphTemplates`, `plotSpecFigure`,
+ *  and the spatial page panel, whose cell canvas filters the same way it does).
+ *  It matters because `lib/figureSpec.ts`'s `plotted` IS hidden-FILTERED while
+ *  the canvas keeps hidden series in place with `show:false`: without the
+ *  canvas' positions, hiding one series slides every later one down a palette
+ *  slot in the PDF but not on screen (BUG-015). Positions are therefore NOT
+ *  opt-in — this function colours by display position always.
+ *
+ *  `cycle` (P3.3, `lib/seriesStyleCycle.ts`) is the separate, opt-in half: the
+ *  auto dash/marker cycle, which a producer turns on only when its live canvas
+ *  is cycling the same series at the same positions. It rides the SAME
+ *  positions, so screen and PDF cannot disagree about which slot a series is
+ *  in; `false` (the default) is byte-identical to what this function did
+ *  before the cycle existed. */
 export function buildExportStyles(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
-  cycle: SeriesCycle = null,
+  positions: readonly number[] | null = null,
+  cycle = false,
 ): (ExportSeriesStyle | null)[] {
+  const pos: readonly number[] = positions ?? plotted.map((_ch, i) => i);
   return plotted.map((ch, i) => {
     // The EFFECTIVE style — the stored per-channel style plus the P3.3 auto
     // dash/marker cycle when this producer opted in. This is the ONE reason the
@@ -36,10 +46,13 @@ export function buildExportStyles(
     // explicit `line`/`marker_shape` and renders it (the faceted-styling
     // attempt that shipped a screen-only change is FEATURE-001 in
     // plans/BUGS_AND_ISSUES.md; this is the shape that avoids repeating it).
-    const st = resolveSeriesStyle(seriesStyles[ch], i, cycle);
-    const pos = cycle?.[i] ?? i;
+    const st = resolveSeriesStyle(seriesStyles[ch], i, cycle ? pos : null);
     const spec: ExportSeriesStyle = {};
-    const hex = resolveToHex(seriesColor(pos, st)); // palette-by-position or override
+    // `?? i` keeps a short/ragged `positions` degrading to the plotted index
+    // instead of `seriesColor(undefined)` indexing SERIES_VARS[NaN] and
+    // painting every such series the hardcoded fallback. Defensive only: the
+    // one non-null producer builds it with `plotted.length` entries.
+    const hex = resolveToHex(seriesColor(pos[i] ?? i, st)); // palette-by-position or override
     if (hex) spec.color = hex;
     if (st?.width != null) spec.width = st.width;
     if (st?.line) spec.line = st.line;

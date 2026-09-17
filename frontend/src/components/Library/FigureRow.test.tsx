@@ -64,3 +64,39 @@ describe("FigureRow — PR C additions", () => {
     expect(useApp.getState().workbookLastChild).toEqual({});
   });
 });
+
+// ---------------------------------------------------------------------------
+// Bundle diet, 2026-09-14: the saved-preview ToolWindow is chunk-deferred
+// (`lazy()` + `<Suspense fallback={null}>` in FigureRow), which took it,
+// components/overlays/ToolWindow.tsx and lib/workshopHelp.ts out of the eager
+// entry graph. `src/architecture.test.ts` holds the static half of that guard
+// (nothing may import it statically); this holds the behavioural half — the
+// "▣" still opens the window, one microtask later than it used to.
+describe("FigureRow — chunk-deferred saved-Origin-preview window", () => {
+  const withPreview = (): OriginFigureEntry => {
+    const base = entry("g1", "a");
+    return {
+      ...base,
+      figure: {
+        ...base.figure,
+        saved_preview: {
+          format: "png", mime: "image/png", width: 200, height: 155,
+          sha256: "c".repeat(64), data: "iVBORw0KGgo=",
+          confidence: "exact_page", page_name: "MokeGraph",
+        },
+      },
+    };
+  };
+
+  it("opens the preview after its chunk resolves, not on the click itself", async () => {
+    render(<FigureRow entry={withPreview()} />);
+    fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
+
+    // Red-first: a STATIC import puts the window in the very first render
+    // after the click, so this line fails the moment the seam is reverted.
+    expect(screen.queryByAltText(/Saved Origin preview of MokeGraph/)).not.toBeInTheDocument();
+
+    const image = await screen.findByAltText(/Saved Origin preview of MokeGraph/);
+    expect(image).toHaveAttribute("src", "data:image/png;base64,iVBORw0KGgo=");
+  });
+});

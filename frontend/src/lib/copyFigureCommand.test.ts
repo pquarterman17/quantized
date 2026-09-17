@@ -259,13 +259,18 @@ describe("F2.5b — Stage copy routes through the focused window's canonical doc
     expect(spec.group_col).toBeUndefined();
   });
 
-  it("surfaces a grouped+secondary-axis document as a copy-failed toast/status, not an unhandled rejection", async () => {
+  // BUG-013 round 5: this combination used to THROW (round 4), surfaced here
+  // as a copy-failed toast. The canvas has always degraded it to a plain,
+  // ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys — no
+  // plotted/hidden distinction), so the copy now succeeds and matches the
+  // screen the user was already looking at, rather than refusing.
+  it("copies a grouped+secondary-axis document as a degraded, ungrouped spec — no refusal (round 5)", async () => {
     const document = createFigureDocument({
-      id: "w1-doc-invalid",
-      name: "Window invalid",
+      id: "w1-doc-degraded",
+      name: "Window degraded",
       datasetId: "d1",
       view: { ...defaultPlotView(), yKeys: [0, 1], y2Keys: [1] },
-      groupKey: 1, // grouping + a secondary axis is a backend-invalid combination
+      groupKey: 1,
     });
     await expect(
       runCopyFigureCommand(
@@ -275,13 +280,12 @@ describe("F2.5b — Stage copy routes through the focused window's canonical doc
         }),
       ),
     ).resolves.toBeUndefined();
-    expect(renderFigureBlob).not.toHaveBeenCalled();
+    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([1]);
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
-    expect(
-      messages.some(
-        (m) => m.startsWith("copy failed") && m.includes("grouped figures cannot use a secondary Y axis"),
-      ),
-    ).toBe(true);
+    expect(messages.some((m) => m.startsWith("copy failed"))).toBe(false);
   });
 });
 

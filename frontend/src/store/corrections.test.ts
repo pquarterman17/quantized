@@ -17,6 +17,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import type { CorrectionsRequest } from "../lib/api";
+import { rowsChangedGuard } from "./corrections";
+import { peakTableFromFit } from "../lib/peakTableFit";
 import type { CorrectionParams, DataStruct, Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -212,5 +214,93 @@ describe("corrections refuse a derived worksheet (plan #10)", () => {
     expect(after.data.labels).toEqual(before.labels);
     expect(after.data.values).toEqual(before.values);
     expect(useApp.getState().status).toMatch(/derived worksheet/i);
+  });
+});
+
+describe("applyCorrections — the durable peak table (audit P2.1, review round 2)", () => {
+  const fitted = () =>
+    peakTableFromFit(
+      {
+        peaks: [
+          { center: 20, fwhm: 0.2, height: 9, bg: 1, eta: null, area: 2, status: "fitted(global)", model: "Gaussian" },
+        ],
+        bgCoeffs: [1, 0],
+        R2: 0.99,
+        rmse: 0.1,
+        nPeaks: 1,
+        model: "Gaussian",
+      },
+      {
+        datasetId: "d1",
+        datasetName: "film",
+        method: "simultaneous" as const,
+        bgDegree: 1,
+        linkMode: "None",
+        constrain: false,
+        wavelengthA: 1.5406,
+      },
+    );
+
+  it("drops a fit measured from data the correction just re-derived", async () => {
+    // The reviewer's measured case: an xOff keeps the ROW COUNT, so
+    // `rowsChangedGuard` never fires — yet every 2-theta in the table is now
+    // off by the offset the user applied.
+    vi.mocked(applyCorrectionsApi).mockImplementation(async (req: CorrectionsRequest) => ({
+      ...req.dataset,
+      time: req.dataset.time.map((t) => t + 0.5),
+    }));
+    useApp.setState({
+      datasets: [{ id: "d1", name: "film", data: base, peakTable: fitted() }],
+      activeId: "d1",
+    });
+
+    const ok = await useApp.getState().applyCorrections("d1", { xOff: 0.5 } as CorrectionParams);
+
+    expect(ok).toBe(true);
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.time).toEqual([1.5, 2.5, 3.5]);
+    expect(ds.peakTable).toBeUndefined();
+  });
+
+  it("drops it on a row-count-changing correction too (the rowsChangedGuard path)", async () => {
+    vi.mocked(applyCorrectionsApi).mockImplementation(async (req: CorrectionsRequest) => ({
+      ...req.dataset,
+      time: req.dataset.time.slice(1),
+      values: req.dataset.values.slice(1),
+    }));
+    useApp.setState({
+      datasets: [{ id: "d1", name: "film", data: base, peakTable: fitted(), excludedRows: [0] }],
+      activeId: "d1",
+    });
+
+    await useApp.getState().applyCorrections("d1", { xMin: 2 } as CorrectionParams);
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.excludedRows).toBeUndefined();
+    expect(ds.peakTable).toBeUndefined();
+  });
+});
+
+describe("rowsChangedGuard — the SHARED contract its other callers consume", () => {
+  // `applyCorrections` clears the peak table unconditionally, so its own tests
+  // cannot see this field. The guard is also called by store/recalcDatasets.ts
+  // and (through it) store/derivedWorksheets.ts's cross-dataset recompute,
+  // which have no unconditional clear — the helper exists precisely so those
+  // callers cannot drift from this one, so the contract is asserted here.
+  // Compared by KEY, not by `toEqual`: the patch's values are all `undefined`,
+  // and `toEqual` treats a missing key and an undefined one as the same — so a
+  // value comparison here would pass with `peakTable` dropped entirely.
+  it("names peakTable alongside excludedRows on a row-count change", () => {
+    const patch = rowsChangedGuard(useApp.getState(), "d1", true, [0]).datasetPatch;
+    expect(Object.keys(patch).sort()).toEqual(["excludedRows", "peakTable"]);
+    expect(patch.peakTable).toBeUndefined();
+    // And it really clears when spread onto a dataset.
+    expect({ ...({ peakTable: { version: 1 } } as unknown as Dataset), ...patch }.peakTable).toBeUndefined();
+  });
+
+  it("patches nothing at all when the row count held", () => {
+    expect(
+      Object.keys(rowsChangedGuard(useApp.getState(), "d1", false, [0]).datasetPatch),
+    ).toEqual([]);
   });
 });

@@ -6,6 +6,8 @@ import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { createPageDocument } from "./pageDocumentActions";
+import { serializePeakTable, type PeakTable } from "./peakTable";
+import { peakTableFromFit, withPeakExcluded } from "./peakTableFit";
 import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
 import type { FrozenPlotBundle } from "./plotsnapshot";
@@ -2473,5 +2475,96 @@ describe("workspace level order (Group O-2)", () => {
     doc.datasets[0].data.level_order = { 1: [1, "x", null, 0], 2: "nope" };
     const [restored] = parse(JSON.stringify(doc));
     expect(restored.data.level_order).toEqual({ 1: [1, 0] });
+  });
+});
+
+describe("workspace durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () => {
+  const table = (): PeakTable =>
+    peakTableFromFit(
+      {
+        peaks: [
+          { center: 30.1, fwhm: 0.2, height: 100, bg: 5, eta: null, area: 21, status: "fitted(global)", model: "Gaussian" },
+          { center: 43.2, fwhm: 0.25, height: 80, bg: 5, eta: null, area: 19, status: "fitted(global)", model: "Gaussian" },
+        ],
+        bgCoeffs: [5, 0],
+        R2: 0.99,
+        rmse: 0.5,
+        nPeaks: 2,
+        model: "Gaussian",
+      },
+      {
+        datasetId: "a",
+        datasetName: "film.xrdml",
+        method: "simultaneous",
+        bgDegree: 1,
+        linkMode: "None",
+        constrain: false,
+        wavelengthA: 1.5406,
+        now: new Date("2026-09-14T12:00:00.000Z"),
+      },
+    );
+
+  it("survives save -> reopen with identity, model, uncertainty slots and provenance intact", () => {
+    const ds = makeDataset("a", "film");
+    ds.peakTable = table();
+    const [restored] = parse(ser([ds]));
+    expect(restored.peakTable).toEqual(ds.peakTable);
+    expect(restored.peakTable?.peaks[0].id).toBe(ds.peakTable.peaks[0].id);
+    expect(restored.peakTable?.peaks[0].centerErr).toBeNull();
+    expect(restored.peakTable?.provenance.wavelengthA).toBe(1.5406);
+    expect(restored.peakTable?.provenance.fittedAt).toBe("2026-09-14T12:00:00.000Z");
+  });
+
+  it("keeps the user's exclusions across the round trip", () => {
+    const ds = makeDataset("a", "film");
+    const t = table();
+    ds.peakTable = withPeakExcluded(t, t.peaks[1].id, true);
+    const [restored] = parse(ser([ds]));
+    expect(restored.peakTable?.peaks.map((p) => p.excluded)).toEqual([false, true]);
+  });
+
+  it("is additive-optional: a pre-P2.1 doc (no field) loads with no table and no warning", () => {
+    const doc = JSON.parse(ser([makeDataset("a", "film")]));
+    expect(doc.datasets[0].peakTable).toBeUndefined(); // absent, not written as null
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.datasets[0].peakTable).toBeUndefined();
+    expect(loaded.migrationWarnings).toEqual([]);
+  });
+
+  it("degrades a hand-edited/corrupt record to no table instead of throwing", () => {
+    const ds = makeDataset("a", "film");
+    ds.peakTable = table();
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].peakTable.provenance = { datasetId: "" };
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    expect(loaded.datasets[0].peakTable).toBeUndefined();
+  });
+
+  it("routes the saved table through serializePeakTable's defensive copy", () => {
+    // Was "does not alias the live record into the saved doc" — VACUOUS, and
+    // the review round proved it: `serializeWorkspace` returns a JSON STRING,
+    // so `JSON.parse` of it can never alias anything, and replacing
+    // `serializePeakTable` with `(t) => t` left the old assertion green. The
+    // copy is what has to hold, so assert it on the helper the writer calls.
+    const t = table();
+    const copy = serializePeakTable(t);
+    expect(copy).toEqual(t);
+    expect(copy).not.toBe(t);
+    expect(copy.peaks[0]).not.toBe(t.peaks[0]);
+    expect(copy.provenance.bgCoeffs).not.toBe(t.provenance.bgCoeffs);
+    copy.peaks[0].center = 999;
+    copy.provenance.bgCoeffs.push(99);
+    expect(t.peaks[0].center).toBe(30.1);
+    expect(t.provenance.bgCoeffs).toEqual([5, 0]);
+  });
+
+  it("a table whose fingerprint no longer matches still round-trips verbatim", () => {
+    // The `.dwk` layer stores; the READERS decide (lib/peakTable.ts's
+    // INVALIDATION header). Saving must never quietly drop a stale table, or
+    // reopening would lose the record the user can still see and re-fit.
+    const ds = makeDataset("a", "film");
+    ds.peakTable = { ...table(), provenance: { ...table().provenance, fingerprint: "fp-stale" } };
+    const [restored] = parse(ser([ds]));
+    expect(restored.peakTable?.provenance.fingerprint).toBe("fp-stale");
   });
 });

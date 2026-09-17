@@ -167,7 +167,12 @@ export function applyResolvedRecipe(
   // hydrates this window's document into the live singleton facade, which
   // `MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback then turns
   // into an actual small-multiples grid -- closing `store/plotRecipes.ts`'s
-  // own documented GAP note for the facet case (spatial/break still open).
+  // own documented GAP note for the facet case. BUG-012 closed the BREAK case
+  // the same way: `axisBreaks` above rides the document's canonical
+  // `plot.axisBreaks.x`, which `lib/facet.durableComposition` (the other half
+  // of that same fallback) rebuilds into paneled x-breaks once this window is
+  // focused -- see store/plotRecipes.test.ts's "applyPlotRecipe rebuilds a
+  // live paneled x-break" for the end-to-end pin. SPATIAL is still open.
   get().focusWindow(windowId);
   // P3.5 "recently used". This is the ONE commit seam every plot-recipe apply
   // entry point funnels through (`resolveApplyOrStage`'s clean-match branch

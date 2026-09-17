@@ -50,7 +50,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
+import { clearFocusedXBreaks, rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -100,8 +100,8 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
-import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
+import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
+import { breakCompositionFromData, facetPayloads, suggestBreaks } from "../lib/facet";
 import type { ReportEntry, ReportSheet } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
@@ -1373,8 +1373,8 @@ export const useApp = create<AppState>((set, get) => ({
       toast("no large x-gaps found to break at", "danger");
       return;
     }
-    const panels = breakPayloads(data, xKey, yKeys, useBreaks);
-    if (panels.length < 2) {
+    const composition = breakCompositionFromData(data, useBreaks, xKey, yKeys);
+    if (compositionPanelCount(composition) < 2) {
       toast("not enough data on both sides of a break to panel", "danger");
       return;
     }
@@ -1386,7 +1386,7 @@ export const useApp = create<AppState>((set, get) => ({
     // this, a later focus round-trip resurrects the REPLACED facet grid
     // instead of this break arrangement (`useEffectiveComposition`'s
     // fallback reads facetKey whenever `composition` itself is null again).
-    set({ stackMode: true, composition: breakComposition(panels), facetKey: null });
+    set({ stackMode: true, composition, facetKey: null });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
@@ -1709,7 +1709,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
       toast(`merged ${picks.length} datasets`, "ok");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "merge failed";
+      const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`; // P3.4 error audit 2026-09-14: `addDataset` runs after the throwing call, so "nothing was added" holds
       get().setStatus(msg);
       toast(msg, "danger");
     }
@@ -1904,7 +1904,7 @@ export const useApp = create<AppState>((set, get) => ({
   // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
   // rebuilds it from `facetKey` whenever `composition` is null.
   setStackMode: (stackMode) => (
-    get().recordHistory("change plot layout"), set({ stackMode, composition: null, facetKey: null })
+    get().recordHistory("change plot layout"), set((s) => ({ stackMode, composition: null, facetKey: null, plotWindows: clearFocusedXBreaks(s.plotWindows, s.focusedWindowId) })) // review F3: clears the AUTHORED break too, in BOTH directions -- a break composition pre-empts the per-channel stack (`multiPanelShowing`), so keeping it would make ON inert exactly as OFF was; see `clearFocusedXBreaks`' doc
   ),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).

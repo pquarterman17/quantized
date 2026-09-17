@@ -55,6 +55,15 @@ const SNAP: DiagnosticsSnapshot = {
     { key: "qz.prefs", bytes: 512 },
   ],
   otherStorage: { slots: 0, bytes: 0 },
+  backend: { reachable: true, app: "quantized", version: "0.23.2", ageSec: 12 },
+  session: {
+    lastAutosaveAgeSec: 12,
+    autosaveFailing: false,
+    autosaveGenerations: 3,
+    recoveryPromptOpen: false,
+    pendingOps: 1,
+    notifications: { total: 9, errors: 2, lastErrorAgeSec: 41 },
+  },
 };
 
 describe("diagnostics bundle — redaction", () => {
@@ -138,6 +147,126 @@ describe("diagnostics bundle — usefulness", () => {
       otherStorage: { slots: 3, bytes: 8192 },
     });
     expect(withOther).toContain("3 slots, 8192 bytes");
+  });
+
+  it("names the backend that answered, so a version mismatch is visible", () => {
+    // A desktop launch pairs a bundled SPA with a bundled backend; when the
+    // two disagree the symptom ("the button does nothing") names neither.
+    // The startup-handshake age is part of the row (P3.4 review round,
+    // finding 2) — this is a cached snapshot, not live state, and the row
+    // says so rather than reading as fresher than it is.
+    expect(text).toMatch(/backend\s+quantized 0\.23\.2 \(startup handshake, 12 s ago\)/);
+  });
+
+  it("strips control, format and line/paragraph-separator characters from the echoed backend identity (P3.4 review round, nit 7 + re-review nit 6)", () => {
+    // `app`/`version` are server-generated constants for the real backend,
+    // but the fetch is same-origin-relative — whatever process answers
+    // /api/health controls these two strings. Pasted verbatim with no clamp,
+    // a value containing a newline could break this report's column layout
+    // or forge a section heading; this asserts it cannot. The original fix
+    // stripped only ASCII C0 controls (`\x00-\x1f`) plus DEL — U+2028 LINE
+    // SEPARATOR, U+2029 PARAGRAPH SEPARATOR and U+0085 NEL are ALSO forced
+    // line breaks under CSS Text, and U+202E RIGHT-TO-LEFT OVERRIDE reorders
+    // rendered text, none of which that narrower range caught.
+    const LINE_SEPARATOR = "\u2028";
+    const PARAGRAPH_SEPARATOR = "\u2029";
+    const NEL = "\u0085";
+    const RIGHT_TO_LEFT_OVERRIDE = "\u202e";
+    const hostile = buildDiagnostics({
+      ...SNAP,
+      backend: {
+        reachable: true,
+        app: `quantized\n## Session health${LINE_SEPARATOR}${PARAGRAPH_SEPARATOR}`,
+        version: `1\t0\r0${NEL}${RIGHT_TO_LEFT_OVERRIDE}`,
+        ageSec: 12,
+      },
+    });
+    // The injected control/format/separator characters all became single
+    // spaces — the "backend" row stays exactly one line, and none of them
+    // survives anywhere in the report.
+    expect(hostile).toMatch(
+      /^backend\s+quantized ## Session health 1 0 0 \(startup handshake, 12 s ago\)$/m,
+    );
+    expect(hostile).not.toContain("\t");
+    expect(hostile).not.toContain("\r");
+    expect(hostile).not.toContain(LINE_SEPARATOR);
+    expect(hostile).not.toContain(PARAGRAPH_SEPARATOR);
+    expect(hostile).not.toContain(NEL);
+    expect(hostile).not.toContain(RIGHT_TO_LEFT_OVERRIDE);
+    // Same total line count as the well-behaved baseline report: an
+    // unsanitized embedded "\n" (or U+2028/U+2029/U+0085, which browsers and
+    // several text renderers treat as a line break too) would have split the
+    // backend row into an EXTRA line, growing the count and letting the
+    // injected text land at the start of its own line rather than inside the
+    // "backend" value.
+    expect(hostile.split("\n")).toHaveLength(text.split("\n").length);
+  });
+
+  it("renders a numeric or object backend identity as text rather than throwing (P3.4 re-review finding 1)", () => {
+    // `lib/api.ts`'s `health()` response is an unchecked `as`-cast of
+    // whatever JSON a same-origin server answers with; a hostile or buggy
+    // backend can send a number or an object where `app`/`version` are
+    // promised to be `string | null`. A bare `.replace` on that value used
+    // to throw and delete the WHOLE report, not just the backend row.
+    const numeric = () =>
+      buildDiagnostics({
+        ...SNAP,
+        backend: { reachable: true, app: 42 as unknown as string, version: null, ageSec: 12 },
+      });
+    expect(numeric).not.toThrow();
+    expect(numeric()).toMatch(/backend\s+42 unknown version/);
+
+    const object = () =>
+      buildDiagnostics({
+        ...SNAP,
+        backend: { reachable: true, app: {} as unknown as string, version: "0.23.2", ageSec: 12 },
+      });
+    expect(object).not.toThrow();
+    // `String({})` is "[object Object]" — rendered as SOME text, never threw.
+    expect(object()).toMatch(/backend\s+\[object Object\] 0\.23\.2/);
+  });
+
+  it("renders a control-character-only identity as 'unknown app', not a blank slot (P3.4 re-review nit 7)", () => {
+    // The truthiness check used to run BEFORE sanitizing, so `app: "\n\n"`
+    // was "present", sanitized to "", and the row rendered with the app slot
+    // simply missing — indistinguishable from a field that was never there.
+    const blank = buildDiagnostics({
+      ...SNAP,
+      backend: { reachable: true, app: "\n\n", version: "0.23.2", ageSec: 12 },
+    });
+    expect(blank).toMatch(/backend\s+unknown app 0\.23\.2/);
+  });
+
+  it("says so plainly when no backend answered", () => {
+    const offline = buildDiagnostics({
+      ...SNAP,
+      backend: { reachable: false, app: null, version: null, ageSec: null },
+    });
+    expect(offline).toMatch(/backend\s+unreachable or not yet answered/);
+    // Never "null"/"undefined" dressed up as a version.
+    expect(offline).not.toContain("null");
+  });
+
+  it("reports session health as states, counts and ages", () => {
+    expect(text).toMatch(/autosave\s+ok/);
+    expect(text).toMatch(/last autosave\s+12 s ago/);
+    expect(text).toMatch(/generations kept\s+3/);
+    expect(text).toMatch(/operations in flight\s+1/);
+    expect(text).toMatch(/notifications\s+9/);
+    expect(text).toMatch(/of those, errors\s+2/);
+    expect(text).toMatch(/last error\s+41 s ago/);
+  });
+
+  it("shouts when autosave is failing, since that changes how a report reads", () => {
+    const failing = buildDiagnostics({
+      ...SNAP,
+      session: { ...SNAP.session, autosaveFailing: true, lastAutosaveAgeSec: null },
+    });
+    expect(failing).toMatch(/autosave\s+FAILING/);
+    // "never" rather than an age nobody can interpret, and no NaN from the
+    // arithmetic that would otherwise run on a null.
+    expect(failing).toMatch(/last autosave\s+never/);
+    expect(failing).not.toContain("NaN");
   });
 
   it("is stable and copy-pasteable plain text", () => {

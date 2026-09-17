@@ -3431,7 +3431,7 @@
         "type": "object"
       },
       "FigureFacet": {
-        "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpec.ts`'s `buildFacetSpecs`) and ships it here verbatim, so\nthis route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention.",
+        "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpecFacets.ts`'s `buildFacetSpecs`) and ships it here verbatim,\nso this route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention. Each series' `label` is likewise\nFINISHED legend text, composed client-side by the same rule the flat\npath's `series_styles[i].legend` is rendered under \u2014 a user's legend\nrename verbatim, otherwise \"label (unit)\" (BUG-014). `series_styles` is\nunused on this branch, so a panel label has no second source here.",
         "properties": {
           "label": {
             "title": "Label",
@@ -3738,6 +3738,7 @@
                 "type": "null"
               }
             ],
+            "description": "Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to \"o\" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` (\"under\" or `{\"vs\": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` (\"pre\"/\"post\"/\"mid\", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time. An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export.",
             "title": "Series Styles"
           },
           "style": {
@@ -3754,6 +3755,21 @@
             "default": false,
             "title": "Transparent",
             "type": "boolean"
+          },
+          "waterfall_offsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-plotted-series vertical offset in Y data units, aligned to `y_keys`: the stagger a waterfall view draws on screen, which used to reach no export path at all (the exported figure overlaid the curves the canvas had separated). RESOLVED client-side (`frontend/src/lib/waterfallOffset.ts`) rather than re-derived here, because the fraction the user sets is a share of the CANVAS y-range -- a range that includes hidden series and excluded rows this request never receives, and that a zoomed canvas measures over only the rows it fetched. `dataset` keeps the true, un-shifted values; None/absent renders exactly as it did before the field existed. UNUSED on the `group_col` branch (the per-level series it synthesizes do not align 1:1 with `y_keys`, the same reason `series_styles`' style keys are unapplied there -- its `legend` key is the one exception, BUG-014) and on the `facets` branch (which renders from its own panel payloads); the client omits it for both rather than sending an offset the renderer would mis-apply. See `calc.plotting.apply_waterfall_offsets`.",
+            "title": "Waterfall Offsets"
           },
           "width_in": {
             "anyOf": [

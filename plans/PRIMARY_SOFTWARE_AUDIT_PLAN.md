@@ -2640,8 +2640,355 @@ reusable recipe, and figure in one flow.
 
 **Models:** Sol high/Opus 4.8 for scientific contracts; Sonnet 5 for bounded UI.
 
-- [ ] Connect peak results to Williamson-Hall and available Pawley capability.
-- [ ] Durable peak identity, uncertainty, exclusion, model, and provenance.
+**Reconciliation, 2026-09-14 (verified against the code before building).**
+This item's first two boxes were NOT stale — but neither was the gap in the
+physics, which already existed and was already golden. The map:
+
+- **Williamson-Hall — present and correct, end to end.**
+  `calc/reductions.py::williamson_hall` implements the uniform-strain model
+  (β·cosθ vs 4·sinθ, K factor, instrumental broadening subtracted in
+  quadrature with MATLAB's 1e-16 clamp), exposed by
+  `routes/reductions.py::williamson_hall_route` (POST
+  `/api/reductions/williamson-hall`), wrapped by `lib/api/reductions.ts`, and
+  driven by `components/workshops/reductions/{useWilliamsonHall.ts,
+  WilliamsonHallSection.tsx}`. No formula was added or changed by this work.
+- **The gap was WIRING plus DATA MODEL, not UI and not physics.**
+  `useWilliamsonHall.ts`'s own header stated it: the Peaks workshop's fitted
+  peaks "live only in ITS OWN component state, never published to the store,
+  so there is nothing durable to prefill from without new cross-workshop
+  plumbing". `usePeaks.ts` held the fit in `useState<MultiFitResult>` and
+  cleared it on every dataset change; the user retyped every 2θ/FWHM by hand.
+- **DATA MODEL, specifically.** `FittedPeak`/`MultiFitResult` (then in
+  `lib/types.ts`, now in `lib/peakTable.ts`) carried center/fwhm/height/bg/
+  eta/area/status/model and nothing else — no stable id, no uncertainty, no
+  exclusion flag, no provenance — and `lib/workspaceSerialize.ts` /
+  `lib/workspaceDatasetParse.ts` named no peak field at all, so nothing about
+  a fit survived a save. That is what `Dataset.peakTable` now closes.
+- **Pawley is not "available capability".** `calc/pawley.py::pawley_refine`
+  is implemented and invariant-tested, but has no route, no API wrapper and no
+  UI, and its inputs (whole pattern + a `phase_info` unit cell) are not
+  derivable from a peak table — so it got its own box below rather than a
+  wire-up here.
+- **Uncertainties are modelled, not measured.** Neither fit engine returns a
+  covariance, and `williamson_hall` accepts no weights; the columns are
+  durable, the numbers are a separate box that needs a MATLAB golden first.
+- Boxes 3-5 ("Manual peak edits and reviewed batch recipe",
+  "Technique-specific plot recipe…", "Validate on representative owner
+  instruments/phases") were checked and are genuinely NOT shipped; left
+  untouched.
+
+- [x] Connect peak results to Williamson-Hall. **(2026-09-14)** One "Use
+  fitted peaks" action fills the Williamson-Hall peak list from the active
+  dataset's durable peak table, honouring the per-peak `excluded` flags and
+  adopting the wavelength recorded at fit time. Tests:
+  `WilliamsonHallSection.test.tsx`'s "Williamson-Hall — Use fitted peaks
+  (P2.1)" suite — "one click fills the table from the fitted peaks instead of
+  manual entry", "omits peaks excluded in the Peaks workshop, and says so"
+  (asserts the API call carries only the included peaks), "adopts the
+  wavelength the pattern was measured at", "names the provenance of the loaded
+  rows", "drops the provenance line the moment a row is edited by hand".
+- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
+  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
+  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
+  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
+  and over `frontend/src` returns exactly one hit — a doc comment in
+  `lib/peakTableFit.ts` naming a future entry point, added by this item).
+  It is also NOT a peak-table consumer — it refines a unit cell
+  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
+  cell, so the missing piece is a route + phase-cell entry point, not the
+  wiring this item shipped.
+- [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
+  **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
+  `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,
+  `center`/`fwhm`/`height` with `centerErr`/`fwhmErr`/`heightErr` slots, the
+  per-row `model`, a user-controlled `excluded` flag, and a
+  `PeakTableProvenance` naming the source dataset id/name, the fit method and
+  its parameters, R²/RMSE, the instrument wavelength and the fit instant. It
+  hangs off `Dataset.peakTable` (additive-optional, absent = no table, no
+  `WORKSPACE_VERSION` bump) and round-trips the `.dwk`. Tests:
+  `lib/peakTable.test.ts` (24 cases incl. id uniqueness, exclusion carry-over
+  across a re-fit, sanitizer fail-soft), `store/peakTables.test.ts`,
+  `lib/workspace.test.ts`'s "workspace durable peak table
+  (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)" save→reopen suite, and
+  `PeaksPanel.test.tsx`'s "durable table exclusion column (P2.1)".
+**Review round, 2026-09-14 (adversarial re-read of the two boxes above).**
+The physics held exactly — `git diff` over `src/quantized/` is empty, and the
+one-click path sends the byte-identical request the manual path sends — but the
+DURABILITY half did not. Three confirmed defects, three plausible, seven nits;
+all thirteen closed in one commit, with the findings recorded here because every
+one of them was a claim this plan had already ticked.
+
+- **The table was durable but never INVALIDATED.** `Dataset.peakTable` survived
+  every change to the data it was fit from: an `applyCorrections` xOff moved
+  `data.time` to `[10.5, 20.5, …]` while `peaks[0].center` stayed `20.0`; a
+  column-changing `reimportDataset` cleared `fitSpec` and kept the table
+  verbatim; a `setCellValue` re-ran detection and the panel effect then
+  RESTORED the pre-edit fit over the changed data. Williamson-Hall's "Use
+  fitted peaks" would then load centers and widths measured from data that no
+  longer exists, under a provenance line asserting they came from this dataset.
+  FIXED two ways, both needed: `PeakTableProvenance.fingerprint` — a
+  deterministic digest of the dataset's numbers (`lib/peakTableFit.ts`'s
+  `peakDataFingerprint`: row/column counts, the x channel's first/last/min/max,
+  FNV-1a over every value's float bytes — *this composition was widened in
+  round 2 below*) stamped at publish time and compared
+  on every read — plus outright clears wherever `fitSpec` already clears
+  (`store/reimport.ts`'s column branch, `store/corrections.ts`'s
+  `applyCorrections` and `rowsChangedGuard`, `store/cellEdit.ts`'s
+  `setCellValue`). The Peaks workshop refuses to rehydrate a mismatched table
+  and Williamson-Hall disables the action with the reason. Deliberately NOT a
+  `peaks:<id>` node in `lib/recalc.ts`: that graph marks artifacts an EXECUTOR
+  re-derives automatically (`recalcDatasets.ts`/`recalcFits.ts`), a peak table
+  has none — re-deriving it means a new peak search plus a user-chosen model —
+  and its only writer, `touchDataset`, returns early when `recalcMode` is
+  "off". The fingerprint also survives a `.dwk` reopen, which no in-memory
+  stale list does.
+- **The "incl." checkbox was not keyboard-operable**, and the one keystroke a
+  user would try did what the mouse path is careful to prevent: the enclosing
+  `<tr>` handles `" "`/`"Enter"` with `preventDefault()` + select, so Space on a
+  focused box cancelled the browser's own toggle AND moved the row selection.
+  FIXED with an `onKeyDown` stopper beside the existing `onClick` one.
+- **"Use fitted peaks" left the previous result on screen**, newly captioned by
+  the fresh provenance line — a number computed from inputs that had just been
+  replaced wholesale. FIXED: `loadFittedPeaks` clears the result, and a
+  hand-typed wavelength now drops the provenance line like every other edit.
+- **No x-channel identity was recorded**, so a q-axis pattern in Å⁻¹ loaded
+  silently into the 2θ column and produced a plausible grain size (`canCompute`
+  only checks `0 < 2θ < 180`). FIXED: the provenance records the x label and
+  unit — TEXT, never a column index, so `architecture.test.ts`'s
+  `DATASET_CHANNEL_REMAP_EXCLUDED` reason stays true — and the reduction
+  refuses anything whose unit is present and not degrees. An unrecorded unit
+  still loads; most XRD files carry none. *(That last rule was the round-1
+  fix's weak point and was replaced in round 2 below: a substring test passed
+  `degC`, and "an unrecorded unit still loads" re-admitted the very q-axis
+  case this box exists to refuse, because a unit-less q CSV is the common
+  spelling of it.)*
+- **Exclusion carry-over across a re-fit was positional** with only a length
+  guard, and `fitEach` publishes only the SUCCESSES — so an N-of-M run whose
+  success count merely happened to match carried the user's exclusions onto
+  different physical peaks. FIXED: matched by nearest centre within half the
+  smaller FWHM, each prior exclusion claiming at most one row, unmatched
+  exclusions dropped.
+- **`lib/xrdWavelength.ts` documented four metadata keys; two are dead.**
+  Measured over `src/quantized/io/`: `wavelength_a` (xrdml, `_xrdml_scan`) and
+  `alpha_average` (bruker_raw) are written; `k_alpha1`/`kAlpha1` are written by
+  no parser (`xrd_csv.py:285` is the ASCII EXPORTER reading them back out, and
+  `xrdml.py:86` is an XML element name), so the stated "explicit Kα1 beats the
+  average" preference could never fire. FIXED in the frontend: the dead keys
+  are gone and the preference now names `wavelength_a`, which IS the Kα1 line.
+  The Bruker half stays open — `bruker_raw.py` documents `alpha1` at byte 624
+  and emits only `alpha_average` (Cu: 1.5418 vs 1.540598, +0.08 % into
+  `D = Kλ/intercept`), so every Bruker RAW pattern still adopts the average;
+  decoding byte 624 is a backend change and is the box below.
+- **Nits, all closed:** `lib/workspace.test.ts`'s "does not alias the live
+  record" was vacuous (`serializeWorkspace` returns a JSON STRING, so
+  `serializePeakTable = (t) => t` left it green) and now asserts the copy on the
+  helper itself; the `lib/types.ts` pin comment said `1053 -> 1008` above a pin
+  of 1009 (`wc -l` vs the split-length convention) and now says 1009; the Pawley
+  grep claim above is corrected to its measured one hit; `PeaksPanel`'s fitted
+  rows no longer pair a reactive `peakTable` read with local `fitResult` state
+  positionally across a dataset switch; and `duplicateDataset` still does NOT
+  carry the table — documented in `lib/peakTable.ts`'s header, because a
+  duplicate is an INDEPENDENT dataset that carries no derived analysis at all
+  (not `fitSpec`, not `excludedRows`) and the copied provenance would name the
+  SOURCE dataset's id.
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| 1 | `peakTableMatchesData` always true | `peakTable.test.ts` "does NOT match once a value changed"; `usePeaks.test.ts` "does NOT rehydrate a table whose data moved under it"; `PeaksPanel.test.tsx` "does NOT re-present a saved fit…"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" |
+| 2 | drop the checkbox `onKeyDown` stopper | `PeaksPanel.test.tsx` "Space on a focused checkbox…", "Enter on a focused checkbox…" |
+| 3 | `loadFittedPeaks` keeps the previous result | `WilliamsonHallSection.test.tsx` "clears the result when one click swaps every input" |
+| 4 | `peakTableXIsDegrees` always true | `peakTable.test.ts` "refuses a reciprocal-space or real-space axis"; `WilliamsonHallSection.test.tsx` "refuses a table fit on a q axis…" |
+| 5 | exclusion carry-over back to positional | `peakTable.test.ts` "carries an exclusion onto the peak at the same CENTRE…", "drops an exclusion whose peak the re-fit no longer found", "refuses to carry an exclusion onto a centre that moved…" |
+| 6 | `applyCorrections` keeps the table | `corrections.test.ts` "drops a fit measured from data the correction just re-derived" |
+| 7 | `rowsChangedGuard` keeps the table | `corrections.test.ts` "names peakTable alongside excludedRows on a row-count change" |
+| 8 | column-changing reimport keeps the table | `reimport.test.ts` "clears it on a COLUMN-changing re-import…" |
+| 9 | `setCellValue` keeps the table | `cellEdit.test.ts` "drops a fit measured from the value that was just typed over"; `usePeaks.test.ts` "a cell edit re-runs detection and does not bring the pre-edit fit back" |
+| 10 | `setWavelength` stops clearing `fittedSource` | `WilliamsonHallSection.test.tsx` "a hand-typed wavelength drops the provenance line…" |
+| 11 | `serializePeakTable = (t) => t` | `workspace.test.ts` "routes the saved table through serializePeakTable's defensive copy" (the vacuous predecessor stayed GREEN under this exact mutation) |
+| 12 | `xrdWavelength` reads `k_alpha1` again | `xrdWavelength.test.ts` "ignores `k_alpha1`/`kAlpha1` — NO parser writes either" |
+| 13 | `PeaksPanel` pairs the table positionally again | `PeaksPanel.test.tsx` "renders no checkbox rather than a MISPAIRED one…" |
+| 14 | `publishFitResult` stamps no fingerprint / x identity | `peakTables.test.ts` "stamps a fingerprint of the LIVE data…", "names the x axis from the time column's Origin metadata…", "names the x axis from the PLOTTED column…" |
+
+**Gate (2026-09-14).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,118 tests passed**; `uv run pytest -q tests/test_repo_integrity.py`
+**12 passed**. Backend untouched (`git diff --stat -- src` empty). Eager bundle,
+exact bytes on clean `npm ci` builds either side: **919,781 -> 919,693, a delta
+of -88 B** against a 920,400 budget left where it was (headroom 619 -> 707 B) —
+everything new is in the lazy-only `lib/peakTableFit.ts`, and the eager
+additions are funded by a shared `str()` coercion in `lib/peakTable.ts` and by
+folding `clearOverlaysFor`'s four identical `if`s into one typed loop.
+
+**Review round 2, 2026-09-15 (adversarial re-review of the fix commit above).**
+The round-1 CONFIRMEDs 2 and 3 were re-probed and are genuinely closed, and the
+backend is still untouched. Four new CONFIRMEDs and five nits, all closed in one
+commit; the theme is that round 1's invalidation was right in shape and too
+narrow in every detail that had been reduced to a summary statistic.
+
+- **The bulk sibling of the fixed cell writer did not clear, and the digest
+  could not see the write either.** `setCellValue` got `peakTable: undefined`;
+  `setCellBlock` twenty lines below — reachable from the same worksheet by
+  PASTING instead of typing — did not, and the fingerprint reduced the x
+  channel to `length/first/last/min/max`, so an INTERIOR 2θ paste changed
+  nothing it could see. Measured through the real panel and the real store:
+  after `setCellBlock("d1", [{row: 3, col: -1, value: 3.4}], "paste")` the
+  table was still present, `peakTableMatchesData` still returned **true**, and
+  the Peaks workshop re-presented the pre-paste fit over the moved abscissa.
+  FIXED both ways: `setCellBlock` and `setCategoricalCell` (the third cell
+  writer, safe only because a level code lands in `values`) now clear like
+  `setCellValue`, and the digest hashes the whole x column.
+- **The x-axis rule still passed a q axis whenever the unit string was
+  EMPTY**, which is the common spelling of the case round 1 set out to refuse
+  (a unit-less CSV) — probed end to end: `xLabel: "q"`, `xUnit: ""`, button
+  enabled, `two_theta_deg: [2.15, 3.04]` posted. The same expression's
+  `includes("deg")`/`includes("°")` also passed `degC` and `°C`, i.e. a
+  magnetometry M(T) curve in Celsius, whose 0..180 range clears `canCompute`
+  too. FIXED, and THE EXACT RULE IS NOW THIS, in `peakTableXIsDegrees`:
+  1. the unit is trimmed and lower-cased; a PRESENT unit passes only on an
+     EXACT match against `{"deg", "°", "degree", "degrees"}` — exact, never
+     substring, so `degC`/`°C`/`deg C`/`degrees C` are refused;
+  2. an EMPTY unit passes only on LABEL evidence — `xLabel` matching
+     `/2\s*-?\s*(theta|θ)|two[_ -]?theta/i`, i.e. `2Theta`, `2-Theta`,
+     `2 theta`, `2θ`, `two_theta`, `Two Theta`. A unit-less `q`/`Q`/`d` axis,
+     and a record naming no axis at all, are refused.
+  Real files clear clause 1 without needing clause 2 (`io/_xrdml_scan.py`
+  writes `x_column_name: "2-Theta"` AND `x_column_unit: "deg"`).
+- **Nearest-centre exclusion carry-over inherited an exclusion onto a peak the
+  user had explicitly KEPT.** Measured at Kα1/Kα2 spacing (0.20° apart, FWHM
+  0.50°, tolerance 0.25°): old table `[20.00 EXCLUDED, 20.20 INCLUDED]`, re-fit
+  finds only `[20.20]`, and the surviving peak — the one the user kept — came
+  back excluded and dropped silently out of Williamson-Hall. Under the OLD
+  positional rule the 2→1 length change abandoned the mapping, so for this
+  shape round 1 was a regression. FIXED: the match must be MUTUALLY nearest —
+  an old exclusion may claim a new row only when no other row of the whole
+  prior table (excluded or not) is as close to that row's centre. A tie (the
+  merged-peak case: 30.0 excluded + 30.1 kept re-fit as one 30.05) resolves to
+  NOT carrying, because an ambiguous inheritance that silently drops a peak
+  from a reduction is worse than a checkbox the user re-ticks.
+- **A row-state change moved the fit's real input while the digest said "still
+  valid".** The digest was taken from `ds.data`; the fit runs on
+  `analysisData(ds)` (`selectedFitData`, and `peakInputs`'s fallback). Probed:
+  fit over 6 rows, set `excludedRows = [3]`, detection re-ran on the 5-row
+  subset and the same effect rehydrated the 6-row fit over it. The header's
+  stated reason ("those select a SUBSET of unchanged measurements and the Peaks
+  workshop already re-runs detection on them") did not survive the measurement,
+  because re-running DETECTION never refreshes the FIT. FIXED by taking the
+  digest over the analysis view on both sides.
+- **The digest was widened ONCE, and that one edit retires three findings**
+  (the interior-x hole, this row-state hole, and the nit below about a stale
+  unit). It is now a single FNV-1a pass over `analysisData(ds) ?? ds.data`
+  covering: every x value's float bytes, every value column's float bytes,
+  every column label and unit (UTF-16 code units, each terminated so `["ab"]`
+  and `["a","b"]` differ), plus the kept row count, the column count and the
+  RAW row count in the prefix. The four x order statistics are gone — the
+  whole-column hash replaces them and the min/max loop, so this is not a second
+  pass (round-2 NIT 5's concern). The prefix is versioned `2:`; a round-1
+  fingerprint therefore reads as a mismatch, which asks for a re-fit — the safe
+  direction — rather than trusting a digest whose fields meant something else.
+- **Nits, all closed.** (2) `publishFitResult` stamped `st.xKey` while
+  `peakInputs` falls back to `data.time` whenever `effectiveChannels(...)[0]`
+  is undefined (`lib/fitselection.ts:48-49`), so the provenance could name a
+  channel the fit never touched; `peakInputs` now returns the `xKeyUsed` it
+  actually took and that is what is stamped. (3) closed by the digest above.
+  (4) the Williamson-Hall refusal now names the REMEDY ("this dataset has
+  changed since the fit — re-fit the peaks in the Peaks workshop") rather than
+  a cause that reads as wrong to a user who only added a computed column; the
+  q-axis note spells an empty unit as "no unit recorded" instead of "()".
+  (5) closed by hashing the x column in the one pass. (1) was the commit
+  trailer, which is this session's standing convention, not a code finding.
+  `peakInputs` moved to its own `components/workshops/peaks/peakInputs.ts` so
+  `usePeaks.ts` did not grow toward its ceiling (497 -> 478 by the split rule).
+
+**Invalidation completeness, as it now stands** — every store path that writes
+a dataset's numbers: (a) clears the table, (b) carries it and the fingerprint
+REJECTS at read time, (c) carries it and it still matches.
+
+| Path | Site | Verdict |
+|---|---|---|
+| `applyCorrections` | `corrections.ts:211` | **(a)** unconditional |
+| `rowsChangedGuard` (trims, derived recompute) | `corrections.ts:105` | **(a)** |
+| column-changing `reimportDataset` | `reimport.ts:242` | **(a)** |
+| same-shape `reimportDataset` | `reimport.ts:177` | **(b)** — correctly KEPT when the bytes are identical |
+| `setCellValue` | `cellEdit.ts:273` | **(a)** |
+| `setCellBlock` (value cells AND the x column) | `cellEdit.ts:341` | **(a)** — round 2's fix |
+| `setCategoricalCell` | `cellEdit.ts:397` | **(a)** — round 2's fix |
+| `insertRows` / `deleteRows` | `cellEdit.ts:149-212` | (b) |
+| `addFormula` / `removeFormula` | `computedColumns.ts` | (b) |
+| `recomputeStaleDatasets`, derived-sheet branch | `recalcDatasets.ts:94-104` | (a) on a row-count change, else (b) |
+| `recomputeStaleDatasets`, bgRef branch | `recalcDatasets.ts:110+` | (a) — delegates to `applyCorrections` |
+| `levelOrder` / `recode` | `levelOrder.ts:274`, `recode.ts` | (b) |
+| `splitDatasetByColumn`, `mergeSelected`, `duplicateDataset`, `createDerivedWorksheet` | `split.ts:153`, `useApp.ts:1731`, `derivedWorksheets.ts` | whitelist constructions — no table carried |
+| `setDatasetFilter` / row-exclusion toggle | `rowState.ts` | **(b)** — was (c); closed by digesting the analysis view |
+| same-shape `reimportDataset` with changed headers (labels/units) | `reimport.ts:177` | **(b)** — was uncaught; closed by digesting labels/units. (No in-app path writes labels/units today — `grep -rn "renameColumn\|setColumnLabel\|setColumnUnit\|setColumnMeta"` over `frontend/src` is 0 hits, and `components/Inspector/ChannelsCard.tsx` renders `labels`/`units` read-only; this row names the real path a re-read of a file whose headers changed while the shape did not.) |
+
+No (c) rows remain. Readers are all gated exactly as round 1 left them, except
+that `publishFitResult`'s unchecked read into the exclusion matcher is now safe
+for the neighbour case as well (the mutual-nearest rule above).
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| S1 | x column no longer hashed (round-1 order statistics) | `peakTable.test.ts` "changes when an INTERIOR x value moves and the extremes do not", "changes when the x channel is shifted…", "does NOT match once an interior x cell is pasted over"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" (4) |
+| S2 | labels/units no longer hashed | `peakTable.test.ts` "changes when a column LABEL or UNIT is corrected", "does NOT match once a column is renamed", "does not split labels ambiguously…" (3) |
+| S3 | digest the RAW data, not `analysisData` | `peakTable.test.ts` "changes when a row is EXCLUDED…", "does NOT match once a row is excluded"; `peakTables.test.ts` "stamps a fingerprint of the LIVE data…"; `usePeaks.test.ts` "does NOT re-present the fit once a ROW IS EXCLUDED"; `WilliamsonHallSection.test.tsx` "disables the action once a ROW IS EXCLUDED…" (5) |
+| S4 | drop `fnvText`'s string terminator | `peakTable.test.ts` "does not split labels ambiguously — ['ab'] and ['a','b'] differ" |
+| S5 | fold `ds.id` into the digest (non-data input) | `peakTable.test.ts` "still matches a structurally IDENTICAL re-import of the same numbers" |
+| S6 | `setCellBlock` stops clearing | `cellEdit.test.ts` "setCellBlock drops it too — a PASTE is the bulk sibling of typing", "…for a VALUE-column paste as well" (2) |
+| S7 | `setCategoricalCell` stops clearing | `cellEdit.test.ts` "setCategoricalCell drops it — a level code IS a number in `values`" |
+| S8 | drop the mutual-nearest guard (nearest-only again) | `peakTable.test.ts` "does NOT inherit a vanished exclusion onto the neighbour the user KEPT", "does NOT inherit onto a peak that MERGED an excluded and a kept one" (2) |
+| S9 | mutual-nearest never holds (the over-correction) | `peakTable.test.ts` 6 carry-over tests incl. "still carries when the excluded peak IS the nearest prior row"; `peakTables.test.ts` "re-fitting keeps the exclusions the user set…" (7) |
+| S10 | unit test back to `includes("deg")`/`includes("°")` | `peakTable.test.ts` "refuses a unit that merely CONTAINS a degree spelling (degC, °C)"; `WilliamsonHallSection.test.tsx` "refuses a Celsius axis…" (2) |
+| S11 | an empty unit always passes (round-1 rule) | `peakTable.test.ts` "refuses a unit-less axis with no 2θ evidence in its label"; `WilliamsonHallSection.test.tsx` "refuses a UNIT-LESS q axis…" (2) |
+| S12 | an empty unit always refused (over-correction) | `peakTable.test.ts` "accepts an unrecorded unit only on 2θ LABEL evidence…"; `WilliamsonHallSection.test.tsx` "still loads a unit-less table whose LABEL names the 2θ axis" (2) |
+| S13 | stamp the plotted `xKey` again, not `xKeyUsed` | `usePeaks.test.ts` "stamps the x axis the fit RAN on, not the plotted one" |
+| S14 | refusal text stops naming the remedy | `WilliamsonHallSection.test.tsx` "disables the action, and says why…", "disables the action once a ROW IS EXCLUDED…" (2) |
+
+**Gate (2026-09-15).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,147 tests passed**; `uv run pytest -q
+tests/test_repo_integrity.py` **12 passed**; `node scripts/check-bundle-size.mjs`
+OK. Backend untouched. Eager bundle, exact bytes on clean `npm ci` builds either
+side (`ff45a200` -> this commit): **919,693 -> 919,674, a delta of −19 B**
+against the 920,400 budget left where it was (headroom 707 -> 726 B). The two
+new eager `peakTable: undefined` clears in `store/cellEdit.ts` cost 34 B and are
+funded by hoisting that file's twice-spelled paste-skip reason into one
+`PASTE_SKIP_REASON` constant (−53 B, measured); everything else new is in the
+lazy-only `lib/peakTableFit.ts` and the lazy peaks/reductions workshops.
+
+**Review round 3, 2026-09-15 (adversarial re-review of the round-2 fix commit,
+`b8cb5e16`).** Verdict **CLEAN** — 0 confirmed defects; every round-2 CONFIRMED
+and NIT re-probed through the real store and re-verified closed. Seven nits
+(documentation/plan accuracy or pre-existing, none behavioural): NITs 1, 2, 3,
+5 and 6 were closed in this same commit (the invalidation-table row above now
+names the real `reimportDataset` path instead of a nonexistent Inspector
+rename/unit-correction UI; the digest-prefix comment names all four emitted
+fields; the x-axis rule documents clause 2 as positive-evidence-only; the NaN-
+hash header now states the "stable, distinct from 0" guarantee is per bit
+pattern, fail-safe direction only; `peakInputs.ts`'s `fullX` doc now says
+exactly what it returns on each branch instead of "the same x channel"). NIT 4
+(the `.dwk` round trip losing `-0`/`NaN`, pre-existing and outside this
+commit's diff) is filed as **BUG-017** in `plans/BUGS_AND_ISSUES.md` rather
+than fixed here. NIT 7 (the commit trailer) is this session's standing
+attribution convention, not a code finding, and is not actionable from inside
+a plan edit.
+
+- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+  documented Kα1-over-average preference can fire for Bruker patterns.
+  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
+  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
+  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
+  Backend change; needs a golden RAW fixture.
+- [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
+  `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
+  `*Err` columns above are always null today; `calc/reductions.
+  williamson_hall` likewise takes no weights. Filling either in is new
+  numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
+  deliberately not invented here.
 - [ ] Manual peak edits and reviewed batch recipe.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
@@ -4090,8 +4437,491 @@ Original acceptance criteria (unchanged):
   plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
   is NOT on this list: it carries its own explicit `.catch` with a
   fire-and-forget rationale, so its failure is a deliberate silent no-op.)
-- [ ] Errors say what failed, whether data changed, and next action.
-- [ ] Copyable diagnostic bundle excludes raw/private data by default.
+- [~] Errors say what failed, whether data changed, and next action.
+  **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
+  intended as the whole user-facing failure surface, not a sample; the first
+  pass fell short of that by construction (below), fixed in this pass.
+  A single-line `grep` over `frontend/src` excluding tests found **132**
+  `toast(…, "danger")` call sites. That grep structurally cannot see a call
+  wrapped across lines — and this pass's own `ReportPanel.tsx` fix (below) is
+  exactly that shape — so it is not "the whole surface" on its own. A
+  brace-matched scan (walks `toast(` to its matching close-paren; written for
+  this pass, kept under the scratchpad rather than the repo) found **7** more,
+  for **139** total. Two of the seven have a conditional kind
+  (`components/Library/folderOps.ts:183`, `components/workshops/pipeline/
+  useTemplates.ts:153`); the other five were unlisted before this pass —
+  `store/figureLifecycle.ts:289`, `store/dataIntake.ts:101`,
+  `lib/plotSelectedTogether.ts:57`, `commands/projectLockCommands.ts:40`, and
+  `components/workshops/report/ReportPanel.tsx:148` (this pass's own fix,
+  listed in the FIXED table below) — with rubric verdicts for the first four
+  added below.
+
+  Separately, **263** total `setStatus(` sites. **83** ("of which 34 sit
+  beside a toast built from the same `msg` variable — this codebase's
+  established shape, one message/one status line/one toast, see
+  `store/workbookTransfer.ts`'s `fail()` — and 49 status-line-only") is a
+  CLASSIFICATION against the rubric below, not a grep figure — the previous
+  wording of this box implied it had the same "measured by grep" provenance
+  as the 132/139, which is not reproducible with one grep. The reproducible
+  grep bounds it is built from: **52** `setStatus(` sites whose own line
+  carries failure wording (`fail|error|could not|unable|refus|cannot|
+  unavailable|invalid|nothing`, case-insensitive; corrected in the 2026-09-14
+  re-review — **60** only reproduces against the paren-less `setStatus`
+  pattern, a 334-site superset that also counts declarations, types and
+  comments, not the 263-site `setStatus(` figure this box is about) and
+  **26** inside a brace-matched `catch` block. **52 corrected to 51 in the
+  round-3 re-review**: `grep -rn` prefixes every output line with
+  `path:lineno:` before the pattern is matched, so a file whose PATH
+  contains a failure word inflates the count — `components/Inspector/
+  ErrorRolesCard.tsx:126`'s own `setStatus(` line carries no failure wording
+  (its message is on the following line) and matched only on "Error" in the
+  filename. Reproducible method: strip the `path:lineno:` prefix before
+  matching (`grep -rnE 'setStatus\(' … | grep -v '\.test\.' | sed
+  's/^[^:]*:[0-9]*://' | grep -icE '…'`), or equivalently `grep -rhE` (no
+  filename) in place of `-rnE`.
+
+  Rubric, because "all three facts in every message" would be noise in most of
+  them:
+  - **(a) what failed** — the message names the OPERATION, not only the
+    underlying error. A bare `e.message` FAILS this: `lib/api/http.ts`'s
+    `ensureOk` throws the backend's `detail` or, failing that, the status line,
+    and `fetch` itself throws `TypeError: Failed to fetch` — so the user can be
+    shown "500 Internal Server Error" with no hint of what they had clicked.
+  - **(b) whether data changed** — required EXPLICITLY where the operation's
+    target is data or a file the user ALREADY HAS (save over a project,
+    re-import over a dataset, a batch that is part-way through), i.e. where
+    "did I just lose or half-change what I had?" is the question the message
+    leaves open. Satisfied structurally, and not demanded in the text, for a
+    precondition refusal (nothing was attempted) or an operation that can only
+    add (a failed merge creates nothing) or only read (export, copy, report,
+    preview). One sharper line inside the save flow: only the path where the
+    write was actually ATTEMPTED (`store/workspaceIO.ts:444`) leaves the
+    "is my existing file damaged?" question open; the gates that refuse before
+    the write — `:77/:95` (books still loading), `:212/:241/:257/:297`
+    (backend refusal), `:368/:381` (read-only / offline), `:429/:440` (lock
+    lost) — answer it by saying the save was refused.
+  - **(c) next action** — required where the user can do something. Recorded
+    EXCEPTION class: a transient backend or chunk-load failure whose only
+    remedy is retry, raised from a control still on screen — the affordance IS
+    the next action, and "try again" appended to forty messages is noise
+    rather than guidance.
+
+  Every site was classified against that rubric. The ones that FAILED are
+  listed below; the rest pass through its structural clauses — refusals that
+  are themselves the instruction ("select at least 2 datasets first", "Find
+  (or fit) peaks before labeling.", `store/figureLifecycle.ts`'s "publication
+  figure was not found; no editable copy created"), and read-only failures
+  that name the operation ("export page failed: …", "clipboard image
+  unavailable — use Save as PNG or Export figure"). Two sites already carried
+  all three facts and were used as the model for the fixes:
+  `store/reimportAllRun.ts:410` ("reimport all: N problems — nothing changed")
+  and `components/Stage/worksheet/useWorksheetBlockOps.ts:165` ("clipboard
+  unavailable — nothing was cut").
+
+  Four more, brought in by the brace-matched re-scan above (multi-line, so the
+  original single-line grep missed them) — all PASS, added here rather than
+  to the FIXED table:
+  - `store/figureLifecycle.ts:289` — "the plot changed while previewing —
+    Cancel and reopen Publication Preview to pick up the changes." Names the
+    state (the preview target changed) and the recovery (Cancel + reopen);
+    the session's draft is untouched, satisfying (b) structurally the same
+    way a precondition refusal does.
+  - `lib/plotSelectedTogether.ts:57` — "need at least N plottable datasets to
+    overlay…". A precondition refusal (nothing was attempted) that is itself
+    the instruction, same class as "select at least 2 datasets first".
+  - `commands/projectLockCommands.ts:40` — "Take Over Editing is not
+    available — the other instance is still responding" / "nothing to take
+    over — this project is not locked by another instance". Both branches are
+    precondition refusals naming the reason; nothing is attempted either way.
+  - `store/dataIntake.ts:101` — "couldn't load full data for "<name>" —
+    <why>". Names the operation (loading that dataset's full data); falls
+    under the recorded retry exception for (c) since `ensureBookData` is
+    re-triggered the next time the pending dataset is touched. NOTE: this
+    site's message embeds the dataset NAME — evidence for, not against, the
+    toast-ring redaction rationale in the diagnostics-bundle box below,
+    which is exactly why that ring never recorded message text.
+
+  FIXED this pass — message text only; no flow, no control flow, no new state.
+  Each says a fact the code already guaranteed and simply did not voice:
+
+  | Site | Missing | Now says / test |
+  |---|---|---|
+  | `store/importDatasets.ts:456` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
+  | `store/workspaceIO.ts:451-453` (msg + setStatus + toast — corrected 2026-09-14 re-review, the prior correction's 451-452 range covered msg+setStatus but dropped the toast line) | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
+  | `store/reimport.ts:335` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the last STORE-MUTATING statement of the `try` (the comment originally said "the LAST statement", which is wrong — a `setStatus`/`toast` follow it; neither touches the store), so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
+  | `store/useApp.ts:1712` | (a), (b) | `could not merge the selected datasets: <why> — nothing was added` (was a bare `e.message`). `addDataset` runs after the throwing call. |
+  | `store/dataIntake.ts:175-177` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
+  | 9 × "Add to report" — `components/Stage/useGadgetChip.ts`, `components/workshops/{variability,peaks/PeaksPanel,curvefit,tabulate,peakwizard,statschooser,fityx,distribution}` | (a) | `could not add to report — <why>` (all nine were a bare `e.message`, so an HTTP failure reported itself without ever mentioning reports). |
+  | `components/workshops/report/ReportPanel.tsx:148` | (a), (b) | `could not export the report as <format> — <why>; nothing was saved`. |
+
+  REMAINING — not reachable by a message edit, so this box stays open:
+  - `components/workshops/roicuts/useRoiBatch.ts:265` — "batch failed: …" is
+    the OUTER catch of a loop that has already landed `newIds` datasets. It can
+    honestly claim neither "nothing changed" nor a count without the flow
+    handing it the partial outcome.
+  - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
+    raised from inside `withHistoryBatch`, where some annotations may already
+    have been added; same shape, same reason it is not a rename.
+  - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
+    "recalculation failed" say nothing about which worksheets took the new
+    values and which kept the old ones.
+  All three need the operation to report its own partial outcome — a flow
+  change, and the shape `store/reimportAllRun.ts:410` already has.
+- [x] Copyable diagnostic bundle excludes raw/private data by default.
+  **Verified shipped 2026-09-14** (it landed with #267/#268 and their
+  follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
+  → `commands/uiCommands.ts` → `store/diagnostics.ts` (the impure collector,
+  dynamically imported so none of it is on the eager path) → `lib/diagnostics.ts`
+  (a pure renderer over an explicit `DiagnosticsSnapshot`). The exclusion is
+  STRUCTURAL rather than filtered: a field absent from that type cannot be
+  collected, and `lib/storageKeys.ts` plus the storage-key ratchet in
+  `architecture.test.ts` stop even a `localStorage` KEY name from becoming a
+  back door. Tests: `store/diagnostics.test.ts` › "omits the dataset name,
+  column label, path and both kinds of cell value" — a real store holding a
+  distinctive numeric value, a distinctive TEXT cell, a collaborator's compound
+  as a column label and an absolute source path, none of which (nor the
+  directory part, nor the basename) reaches the output — with "still describes
+  THAT dataset by shape, so the exclusion test is not vacuous" as its
+  non-vacuity companion; `components/Shell/copyDiagnosticsMenu.test.tsx`
+  asserts both properties of the bytes that actually reach the clipboard when
+  the REAL Help menu item is clicked (neither pure-module test would catch a
+  command wired to `JSON.stringify(useApp.getState())`); `lib/diagnostics.test.ts`
+  holds the renderer's own redaction and usefulness cases.
+  EXTENDED the same day, since a bundle that cannot say what state the session
+  was in is half a bug report: the backend identity from `/api/health`
+  (`{app, version}` — the launcher's existing handshake route, so no new
+  endpoint; "unreachable" when nothing answers, which is itself an answer), and
+  a Session-health section — autosave ok/FAILING, generations kept,
+  last-autosave age, whether a recovery prompt is open, operations in flight,
+  and notification counts with the age of the last error.
+  DELIBERATE DEVIATION, recorded because it is the interesting half: the last N
+  toast/status MESSAGES are NOT included, and neither is the autosave failure
+  reason. Message text in this app IS project content — the audit table above
+  is the evidence, message after message embedding a dataset name, a column
+  label or an absolute source path. `store/toasts.ts` therefore keeps three
+  content-free, monotonic counters (`totalCount`/`errorCount`/`lastErrorAt`,
+  corrected from a bounded `{kind, at}` ring in the 2026-09-14 review round
+  below — a ring is a window, not a total, and could under-report both), which
+  answer the triage question ("were errors firing, and how recently?") and
+  cannot leak by construction rather than by review. The wording stays on
+  screen, where the user can read it and quote it deliberately.
+
+  **Review round, 2026-09-14** (a later pass over the same-day P3.4
+  diagnostics-bundle commit): adversarial review found 2 CONFIRMED issues, 1
+  PLAUSIBLE, and 8 nits, all fixed in one follow-up commit. Findings and
+  fixes:
+  1. **CONFIRMED — the notification ring could under-report both counts.**
+     `store/toasts.ts`'s old `{kind, at}[]` ring evicted past `MARKS_MAX = 50`
+     entries; a `"danger"` push followed by 50 later `"ok"`/`"info"` pushes
+     evicted it, so `errors`/`lastErrorAgeSec` read `0`/`never` even though an
+     error really had fired, and a 500-push burst reported `total 50` with no
+     way to tell "exactly 50" from "500, 449 evicted". Fixed: `totalCount`,
+     `errorCount`, `lastErrorAt` are monotonic scalars incremented once per
+     `push` and never trimmed; the ring is gone (nothing else read it).
+     `lib/diagnostics.ts`'s doc updated to match (the `NotificationMark`
+     reference no longer exists).
+  2. **CONFIRMED — the danger-toast census was grep-shaped and missed 5
+     multi-line sites (139 real total, not 132).** A single-line `grep` for
+     `toast(…, "danger")` cannot see a call wrapped across lines, and this
+     same commit's own `ReportPanel.tsx` fix was exactly that shape. A
+     brace-matched scan (kept under the scratchpad, not the repo) found 132
+     single-line + 7 multi-line = 139 sites; 2 of the 7 were already noted
+     (conditional kind); the other 5 — `store/figureLifecycle.ts:289`,
+     `store/dataIntake.ts:101`, `lib/plotSelectedTogether.ts:57`,
+     `commands/projectLockCommands.ts:40`, and this commit's own
+     `ReportPanel.tsx:148` — are now in the audit table above with rubric
+     verdicts (all PASS). The "83 failure `setStatus(` sites" figure was also
+     presented as "measured by grep" when it is a classification; the box
+     above now says so and gives the reproducible grep bounds (263 total / 52
+     failure-worded / 26 in catch blocks — corrected from 60 in the 2026-09-14
+     re-review below, see nit 4 there).
+  3. **PLAUSIBLE — an awaited network probe sat between the click and the
+     clipboard write.** `diagnosticsText()` used to `await probeBackend()` (a
+     fresh `/api/health` fetch, up to 1.5 s) on every "Copy diagnostics"
+     click — the same hazard `lib/clipboard.ts` already documents for the
+     PNG-copy path (an awaited round-trip can drop the transient
+     user-activation `navigator.clipboard.writeText` requires), and one that
+     degrades exactly when the backend is slow or hung, i.e. the situation
+     this bundle exists to report. Fixed: `App.tsx`'s existing startup
+     `health()` call now also records the result into a new, deliberately
+     tiny `store/backendHealth.ts` module (kept separate from
+     `store/diagnostics.ts` so `App.tsx` does not drag that whole
+     dynamically-imported chunk into the eager bundle); `collectDiagnostics`/
+     `diagnosticsText` read it back synchronously and `probeBackend` plus its
+     1.5 s timeout are deleted outright — no sync fallback needed one, since
+     the startup probe runs at startup; a click before it answers reads "not
+     yet answered" (corrected in the 2026-09-14 re-review below — the
+     original wording, "already runs before any click is possible", conflated
+     STARTING with ANSWERING). `lib/api.ts`'s `health()` return type widened
+     from `{status}` to `{status, app?, version?}` so `App.tsx` has the data
+     to record.
+  4. NITs fixed: control characters stripped/length-clamped from the echoed
+     backend `app`/`version` (`lib/diagnostics.ts`'s new `sanitizeServerString`
+     — these are server-generated but same-origin-relative, and the sibling
+     `fermiviewer` answers the same shape on the same default port);
+     `store/reimport.ts`'s comment corrected from "the LAST statement" to "the
+     last STORE-MUTATING statement" (a `setStatus`/`toast` actually follow it);
+     `resetNotificationMarks` renamed `resetNotificationCountsForTests` to
+     match the repo's `…ForTests` convention (`store/windowHydration.ts`,
+     `store/packProject.ts`, `store/originApplyLibs.ts`); `store/importDatasets.ts`'s
+     danger toast now reuses `summary` instead of re-interpolating the same
+     string; the four fix-table line refs that had drifted onto comments were
+     re-pointed at the actual message/toast lines (all four; `useApp.ts`,
+     `ReportPanel.tsx` and the three REMAINING refs already landed exactly,
+     confirmed unchanged). Not fixed, with reasons: the `age()`/`takenAt`
+     privacy-vs-readability wording (kept `takenAt` at full precision — several
+     tests pin the literal ISO string, and reducing it would be a real behavior
+     change, not a nit — so the comment was reworded to drop the privacy claim
+     instead); `probeBackend`'s missing `AbortController`/`clearTimeout` is
+     moot, since finding 3 deletes the function entirely; a BUG-009-style reset
+     ratchet for `store/backendHealth.ts`'s new module state was considered and
+     NOT added at the time — **the stated reason was wrong and is corrected in
+     the 2026-09-14 re-review below (nit 9)**: the module state IS reachable by
+     the POISONING failure mode the precedent exists to catch (a stale
+     `{reachable: true, app, version}` left by an earlier test in the same file
+     can misdirect a later test asserting `backend unreachable`); the honest
+     reason to decline the ratchet is narrower — no test recorded backend
+     health at the time, so nothing was poisoning anything YET, not that the
+     module structurally cannot be poisoned.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1a | `store/toasts.ts`: cap `totalCount` at 50 (re-introduce ring-style eviction) | caught — `toasts.test.ts`'s "500 pushes report a total of 500" AND "a danger toast survives 50 later ok toasts" both fail |
+  | 1b | (same file) — confirms both new tests are load-bearing, not just one | see above |
+  | 2 | n/a — finding 2 is a documentation/census fix, nothing to sabotage in code | — |
+  | 3 | `commands/uiCommands.ts`: reinsert `await fetch("/api/health")` before building the diagnostics text | caught — `copyDiagnosticsMenu.test.tsx`: 3 of 4 tests fail, including the new "completes the clipboard write without awaiting any network call" test (the 4th, "carries none of the workspace's names/values/paths", passes VACUOUSLY on an empty copied string — the same shape the review's own S2 sabotage found) |
+  | nit (dedup) | `store/importDatasets.ts`: revert the toast to the pre-fix `` toast(`${lastError}${hint}`) `` | caught — `importDatasets.test.ts`'s "the failure toast carries the imported count, not just the failure" |
+  | nit (control chars) | `lib/diagnostics.ts`: make `sanitizeServerString` a no-op | caught — `diagnostics.test.ts`'s "strips control characters from the echoed backend identity" |
+
+  Gate: `npx tsc -b --force` clean; `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — 99 files, 1941 passed, 0
+  failed; `uv run pytest -q tests/test_repo_integrity.py` — 12 passed.
+  `store/useApp.ts` untouched (2321 lines, exactly its pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does): this commit's parent (`git rev-parse HEAD~1`
+  = `a7e158bc`, matching the commit this review round repairs) measured
+  **917,224 B** in a scratch worktree (`npm ci`'d node_modules); this commit
+  (HEAD) measured **917,385 B** — **+161 B**, from the comment/doc growth and
+  the `sanitizeServerString` call plus the `backendHealth.ts` module (tiny;
+  most of its lines are comments, stripped by minification). `EAGER_JS_BUDGET`
+  is 920,400 B (`check-bundle-size.mjs`), unchanged — the commit lands 3,015 B
+  under budget, no pin edit owed.
+
+  **Re-review round, 2026-09-14** (an adversarial re-review of the review-
+  round commit above, `d4c06387`): found 3 CONFIRMED issues and 8 nits, all
+  fixed in one follow-up commit. Findings and fixes:
+  1. **CONFIRMED — `sanitizeServerString` turned a non-string `app`/`version`
+     into a total loss of the report.** `lib/api.ts`'s `health()` response is
+     an unchecked `as`-cast; a hostile or buggy backend answering with a
+     number or object for `app`/`version` made `v.replace` throw, and the
+     throw propagated out of `diagnosticsText()` into the command's outer
+     `.catch` — no report at all, exactly the case the sanitizer exists to
+     harden against. Fixed at BOTH layers: `sanitizeServerString` now calls
+     `String(v)` before `.replace`, and `App.tsx`'s mount effect guards the
+     recording site itself (`typeof info.app === "string" ? info.app : null`,
+     same for `version`) so `BackendInfo` stays honest at its source. Hostile
+     test extended with a `42` and a `{}` — both render as text (`"42"`,
+     `"[object Object]"`), neither throws.
+  2. **CONFIRMED — the `backend` row became a startup snapshot rendered as
+     live state.** `recordBackendHealth` has exactly one non-test caller, in
+     a mount effect that runs once; nothing ever refreshed or invalidated it,
+     so a backend that died minutes ago still read as "quantized 0.25.0" and
+     a click before the handshake settled read as "unreachable" —
+     indistinguishable from a truly dead backend. Fixed: `store/backendHealth.ts`
+     now stamps `Date.now()` at record time and computes the age at READ
+     time (not cached at record time, so it keeps growing while the report
+     sits open); the row renders `quantized 0.25.0 (startup handshake, 2520 s
+     ago)` (`age()`'s convention is seconds, not minutes — see
+     `store/diagnostics.test.ts:~245`), and the unreachable case renders
+     `unreachable or not yet answered`, honestly covering THREE indistinguishable cases (dead
+     backend, offline/file-served page, click before the handshake answers)
+     instead of the two the field doc used to enumerate — `lib/diagnostics.ts`'s
+     `backend` field doc corrected to say so. The finding-3 paragraph above
+     also had the same conflation ("the startup probe already runs before
+     any click is possible") — corrected there to "runs at startup; a click
+     before it answers reads 'not yet answered'". Tests: before any
+     `recordBackendHealth` call → "not yet answered"; immediately after →
+     the timestamped row at 0 s; and (new) recording under fake timers, then
+     advancing 42 minutes before reading → the row shows 2520 s, proving the
+     age is computed at read time and not frozen at record time.
+  3. **CONFIRMED (doc-promise) — "depends on nothing but synchronous module
+     state" was false on the first click.** `commands/uiCommands.ts` still
+     does `await import("../store/diagnostics")` before building the text;
+     that chunk is deliberately excluded from the eager bundle, so in
+     production the first "Copy diagnostics" click of a session can fetch it
+     over the network inside the user gesture — the same hazard class the
+     network probe removal was for, one order of magnitude rarer (once per
+     page load). Fixed two ways: the claims in `store/backendHealth.ts`'s
+     header and the `copyDiagnosticsMenu.test.tsx` test title are narrowed to
+     "removes the app's own `/api/health` round-trip; the one remaining await
+     is the lazily-imported renderer chunk"; and `components/Shell/MenuBar.tsx`
+     now warms that chunk (`void import("../../store/diagnostics").catch(() =>
+     {})`) when the Help menu opens (a closed→open transition only, via a
+     small `onOpen` callback added to the shared `title()` helper — no static
+     or eager import, so it stays off `dist/index.html`'s modulepreload list;
+     verified by diffing the eager-ref list before/after, unchanged at 35
+     files). From the SECOND "Copy diagnostics" click of a session onward the
+     import resolves from the module cache instantly; the FIRST click of a
+     session can still be waiting on a real fetch for the chunk if the user
+     reaches the command before the warm import (started when they opened
+     Help) has finished — narrower than the pre-fix hazard (every click) but
+     not eliminated. **Corrected in the round-3 re-review (finding 2
+     below):** the LATENCY the warm import saves is genuinely not testable
+     in vitest — it resolves a mocked or real dynamic import from the
+     in-process module graph effectively instantly regardless of whether
+     `warmDiagnosticsChunk` ran, the same limitation the original review's
+     own F3 probe used a manual `vi.mock` + `sleep` harness to work around,
+     not a per-commit test — but that is a narrower claim than "an automated
+     test cannot distinguish 'warmed early' from 'fetched cold'", which
+     conflated timing with the regression that actually matters: whether the
+     chunk is imported when the Help menu opens, before any item is clicked.
+     That IS observable, and is now pinned by
+     `components/Shell/copyDiagnosticsMenu.test.tsx`'s "Help menu warms the
+     diagnostics chunk" tests.
+  4. NIT — the census bound was not reproducible with the pattern it named:
+     the plan claimed **60** `setStatus(` sites carry failure wording, but
+     that number only reproduces against the paren-less `setStatus` pattern
+     (334 sites, a superset that also counts declarations/types/comments);
+     the reproducible figure for `setStatus(` (263 sites, matching the box's
+     other number) is **52**. Re-measured independently with a plain grep
+     over non-test `frontend/src`; both boxes above corrected to 52.
+     **Corrected again to 51 in the round-3 re-review**: `grep -rn` matches
+     the pattern against each output line's `path:lineno:code` haystack,
+     not just `code` — `components/Inspector/ErrorRolesCard.tsx:126` counted
+     only because "Error" appears in the FILENAME, the exact class of defect
+     this nit was originally filed for. Corrected method: strip the
+     `path:lineno:` prefix before matching (or use `grep -rhE`, which omits
+     the filename) — see the box above for the reproducible command.
+  5. NIT — the plan's recorded gate run (99 files, 1941 passed) predates this
+     commit's own five new tests (1936 prior + 5 = 1941, i.e. it was the
+     PARENT's run). Re-measured — **corrected twice more since**: the figure
+     first written here (100 files, 1954 passed) turned out to be the
+     PARENT's run again (`5af88343`, not this commit), caught by the
+     round-3 re-review; this commit's own count at the time was 101 files,
+     1962 passed (`store/backendHealth.test.ts` new at +5,
+     `lib/diagnostics.test.ts` +2, `store/diagnostics.test.ts` +1, over
+     `5af88343`'s 100/1954). The round-3 fixes below (a new warm-import test
+     plus doc/plan edits) move the count again — see this entry's closing
+     Gate line for the number that is actually current, measured from a
+     fresh worktree of the finished commit rather than the working tree that
+     produced it, per the round-3 reviewer's own suggested guard.
+  6. NIT — the sanitizer regex (`/[\x00-\x1f\x7f]+/g`) stripped only ASCII C0
+     controls plus DEL; U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR and
+     U+0085 NEL are ALSO forced line breaks under CSS Text, and U+202E
+     RIGHT-TO-LEFT OVERRIDE reorders rendered text — none of them were
+     caught, so a hostile backend identity pasted into a `<pre>` (a GitHub
+     issue) could still break the column layout or forge a heading. Fixed:
+     `/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu` (Unicode control + format + line/
+     paragraph separator categories). Hostile test extended with all four.
+  7. NIT — the truthiness check ran BEFORE sanitizing, so a control-
+     character-only identity (`"\n\n"`) was "present", sanitized to `""`,
+     and rendered with the app slot simply missing — indistinguishable from
+     a field that was never collected. Fixed: sanitize first, then
+     `|| "unknown app"`. New test: `"\n\n"` renders "unknown app".
+  8. NIT — one of the four re-pointed plan line refs from the prior round
+     still missed: `workspaceIO.ts:451-452` covers msg+setStatus but drops
+     the toast line at `:453`. Corrected to `451-453`.
+  9. NIT — the stated reason for declining a BUG-009-style reset ratchet on
+     `store/backendHealth.ts` was wrong: it claimed the module "cannot
+     produce" the poisoning failure mode the ratchet exists to catch, but it
+     can — a stale `{reachable: true, app, version}` left by an earlier test
+     in the same file would misdirect a later test asserting `backend
+     unreachable`, and `copyDiagnosticsMenu.test.tsx` was exactly such a
+     test, passing only because the file never called
+     `resetBackendHealthForTests`. Verified by temporarily removing that
+     call and injecting a leaked `recordBackendHealth` in an earlier test in
+     the same file: the later "unreachable" assertion failed, reproducing
+     the exact scenario described. Fixed: `resetBackendHealthForTests()`
+     added to `copyDiagnosticsMenu.test.tsx`'s `beforeEach`; the plan's
+     stated reason corrected to the honest one — no test recorded backend
+     health at the time, not that the module structurally cannot be
+     poisoned.
+  10. NIT — the network-call exclusion test asserted the property only
+      through `vi.waitFor`'s default-timeout backstop, which proves "under
+      about a second," not "fetch was never called." Added a direct,
+      unconditional `expect(hungFetch).not.toHaveBeenCalled()` outside any
+      `waitFor` (exempt from the weak-wait ratchet, which only flags
+      `waitFor(() => expect(mock).toHaveBeenCalled())`).
+  11. NIT — `BACKEND_UNREACHABLE` was an exported, unfrozen object handed out
+      by reference (`getBackendHealth()` returns it directly when nothing has
+      been recorded); any consumer that wrote to it would poison the shared
+      constant for the rest of the session. Fixed: `Object.freeze`, matching
+      the repo's frozen `DataStruct` convention. New test asserts both
+      `Object.isFrozen` and that an assignment attempt throws.
+  12. NIT (**fixed in the round-3 re-review, 2026-09-14**, not this commit) —
+      `lib/diagnostics.ts`'s `DIAGNOSTICS_SCHEMA_VERSION` did not move even
+      though the `backend` row's rendered layout changed in BOTH this round
+      and the round above it: `"backend  quantized 0.23.2"` became
+      `"backend  quantized 0.23.2 (startup handshake, 12 s ago)"`, and
+      `"backend  unreachable"` became `"backend  unreachable or not yet
+      answered"` — both breaking for a line-scoped parser (`/^backend\s+
+      unreachable$/` no longer matches; an "app version" split now picks up
+      extra tokens), and this commit had to rewrite its own regexes in three
+      test files as a direct result, which is the evidence the layout truly
+      changed. Precedent: `3cbc115b`, which bumped 1 → 2 for *adding* the
+      `backend` row, a strictly smaller change than reshaping its content.
+      Fixed: `DIAGNOSTICS_SCHEMA_VERSION = 3`. No in-repo consumer reads the
+      constant; the only test asserts the stamp against the constant itself
+      (`lib/diagnostics.test.ts`'s "stamps the report schema..."), so the
+      bump needed no test changes beyond the constant.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1 | `lib/diagnostics.ts`: drop `String(v)` from `sanitizeServerString` | caught — `diagnostics.test.ts`'s "renders a numeric or object backend identity as text rather than throwing" |
+  | 2a | `store/backendHealth.ts`: hardcode `ageSec = 0` instead of computing it from `recordedAt` | caught — `store/backendHealth.test.ts`'s "computes the age at READ time..." AND `store/diagnostics.test.ts`'s "ages the recorded backend identity..." |
+  | 2b | `lib/diagnostics.ts`: revert `backendRow`'s unreachable case to `"unreachable"` | caught — `diagnostics.test.ts`, `store/diagnostics.test.ts` and `copyDiagnosticsMenu.test.tsx` all fail (3 files) |
+  | 6 | `lib/diagnostics.ts`: narrow the sanitizer regex back to `/[\x00-\x1f\x7f]+/g` | caught — `diagnostics.test.ts`'s "strips control, format and line/paragraph-separator characters..." |
+  | 7 | `lib/diagnostics.ts`: check truthiness before sanitizing (revert order) | caught — `diagnostics.test.ts`'s "renders a control-character-only identity as 'unknown app'..." |
+  | 9 | `copyDiagnosticsMenu.test.tsx`: remove `resetBackendHealthForTests()` from `beforeEach` AND record a leaked backend identity in an earlier test | caught — the later "unreachable" assertion fails, reproducing the exact poisoning scenario nit 9 describes |
+  | 10 | `commands/uiCommands.ts`: reinsert a fire-and-forget `void fetch("/api/health")` in the click handler (does not stall the clipboard write) | caught by the new DIRECT assertion (`hungFetch` called once) — a `waitFor`-only check would have missed this, since nothing stalls |
+  | 11 | `store/backendHealth.ts`: drop `Object.freeze` from `BACKEND_UNREACHABLE` | caught — `store/backendHealth.test.ts`'s "freezes BACKEND_UNREACHABLE..." |
+  | 12 (round-3) | `components/Shell/MenuBar.tsx`: revert `title("Help", warmDiagnosticsChunk)` to `title("Help")` in a scratch copy | caught — `copyDiagnosticsMenu.test.tsx`'s "opening Help imports the chunk exactly once, before any item is clicked" fails (`diagnosticsEvals.length` stays `0`); reverted |
+
+  **Round-3 re-review, 2026-09-14** (closing the round-3 adversarial
+  re-review of this commit): fixed finding 1 (this Gate line and nit 5 above
+  both recorded the PARENT's test count, not this commit's own — a third
+  recurrence of the exact mistake nit 5 itself was filed to correct; see nit
+  5's text above, now corrected) and finding 2 (item 12 above: the warm
+  import shipped with no test — added and sabotage-verified) as CONFIRMED,
+  and nits 3/4/5 (this section's items 2 and 12, and the two boxes corrected
+  to 51 earlier in this P3.4 entry) as NITs. The round-3 re-review found the
+  CODE clean on every one of the 11 prior items it re-probed (nothing there
+  needed a fix); its two CONFIRMED findings and three nits are all
+  record/test-level — item 12's new test and the `DIAGNOSTICS_SCHEMA_VERSION`
+  bump above are the only code changes this round, everything else is the
+  plan's own record catching up to what the code already did.
+
+  Gate (measured in THIS worktree, after all round-3 edits landed, so it is
+  this commit's own run — not a parent's): `npx tsc -b --force` clean;
+  `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — **101 files, 1965 passed,
+  0 failed**; `uv run pytest -q tests/test_repo_integrity.py`
+  — 12 passed.
+  `store/useApp.ts` untouched (`wc -l` 2321, unchanged, at its 2322 pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does, via a standalone byte-exact re-implementation
+  since the script itself only prints rounded kB): this commit's parent
+  (`git rev-parse HEAD~1` = `1593cdee`, the branch tip this round started
+  from) measured **917,739 B** in a scratch worktree (`git worktree add` +
+  `npm ci`); this commit (HEAD) measured **918,124 B** — **+385 B**, from the
+  doc/comment growth, the `App.tsx` guard, `MenuBar.tsx`'s `warmDiagnosticsChunk`,
+  and `backendHealth.ts`'s `recordedAt`/age arithmetic. `EAGER_JS_BUDGET` is
+  920,400 B, unchanged — the commit lands 2,276 B under budget, well clear of
+  the `EAGER_JS_BUDGET - SLACK` (880,400 B) floor that would force a lower
+  pin, no pin edit owed. Confirmed the warm import stayed lazy: `dist/assets/`
+  contains a `diagnostics-*.js` chunk that appears in neither build's
+  `index.html` (no `<script type="module">`, no `<link rel="modulepreload">`),
+  and the eager-ref list is the same 35 files before and after (three files'
+  content hashes shifted from unrelated upstream edits — `index`,
+  `contextActions`, `datasetRemoval` — no file added or removed).
 - [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
   write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
   (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"
@@ -4264,6 +5094,59 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 boundary before adding substantial UI" item below is now IMMINENT: the
 next eager feature cannot land without it.)
 
+**2026-09-14 — lazy-seam diet, `EAGER_JS_BUDGET` unmoved at 920,400 B.**
+Headroom was under 1 kB again (919,781 B on the branch tip `4aafd3a3`).
+Four modules left the eager entry graph behind dynamic `import()` seams —
+`lib/worksheetTransformCommands.ts` (the four Data-menu reshapes),
+`components/Library/OriginSavedPreviewWindow.tsx` (with
+`overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`, which nothing else
+eager reached), `lib/workbookTransfer.ts` (the Copy/Paste/Duplicate core,
+whose four callers were already `async`, so no signature changed) and
+`lib/pageSetupCommand.ts`. Measured cumulatively with `npm run build` after
+`npm ci` and a `node_modules/.vite` wipe, summed exactly as
+`check-bundle-size.mjs` sums: **919,781 → 910,172 B, −9,609 B**, leaving
+10.2 kB of headroom and staying well clear of the
+`EAGER_JS_BUDGET - SLACK` floor (880,400 B) that would force a lower pin.
+This is `plans/BUNDLE_HEADROOM.md` slice 2's shape (metadata eager, handler
+lazy), not its whole scope — the command *metadata* stays eager, so the
+palette, menus and Help search are untouched. A fifth seam
+(`lib/originTemplate.ts` behind the "Import Origin template…" picker) was
+built, measured at **+219 B** — Rollup's new chunk boundary cost more than
+the ~1 kB of modules it moved — and **reverted**, the same way the
+2026-09-09 `DatasetRowPreview` split was. Seams rejected without building,
+on this file's and `check-bundle-size.mjs`'s own recorded grounds:
+`lib/contextActions.ts` / `PlotContextMenu` (right-click latency),
+the command registry itself (first press of every shortcut),
+`lib/openWorkspaceCommand.ts` (its `openFilePicker()` must stay in the
+click's own task or a browser blocks the dialog) and every first-paint
+Library section.
+
+**2026-09-15 review round — two narrower claims and the trees the numbers
+were measured on.** *Failure reporting:* seams 1, 3 and 4 do report a
+chunk-load failure and do retry on the next gesture — the reshape and
+Page-setup commands through `runLazy`'s danger toast, Copy/Paste/Duplicate
+through that slice's own status line + toast. **Seam 2 does neither.**
+`FigureRow`'s `lazy()` + `Suspense` inherits what all 17 `lazy()` sites in
+`frontend/src` already do: measured 2026-09-15, there is no error boundary
+anywhere under `frontend/src` (0 files match
+`componentDidCatch|getDerivedStateFromError|ErrorBoundary`), so a failed
+chunk unmounts the React root with no toast and no status, and React caches
+the rejected payload so the next gesture does not retry. That is a
+pre-existing class the seam is merely consistent with, not something it
+introduced; it is filed as `plans/BUGS_AND_ISSUES.md` **UX-003** and a root
+error boundary is its own task, deliberately not done here. *Measurement
+trees:* both absolutes above (919,781 and 910,172 B) were measured on
+`4aafd3a3`, an ANCESTOR of the commit that landed the work (`b749f804`,
+whose real parent is `50b30a04`, five commits later). The **−9,609 B delta**
+is the load-bearing figure; `EAGER_JS_BUDGET` was not edited, so nothing in
+the repo depends on those absolutes — re-measure them on the branch before
+the pin is next touched. Also closed that round: `copyTextAsync`
+(`lib/clipboard.ts`) so seam 3's Copy starts its clipboard write inside the
+click's own task instead of after the chunk `await` (the same
+user-activation rule `openWorkspaceCommand` was rejected on), and the
+two-argument `.then(onRun, onLoadFailure)` form at every `runLazy` call site
+so a loaded handler's own throw is no longer swallowed with the load's.
+
 - [ ] Characterization tests before moves.
 - [ ] Split one owned domain per PR with unchanged behavior/contracts.
 - [ ] Generate clients/types where it reduces drift.
@@ -4295,8 +5178,102 @@ next eager feature cannot land without it.)
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels.
-- [ ] Screen/export/reopen structural and visual equivalence.
+- [x] ~~Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels~~
+  SHIPPED 2026-09-14 (tests only): eight committed figure goldens plus a
+  page golden under `frontend/src/lib/__fixtures__/regressionMatrix/` (`plain`, `errors`,
+  `group`, `facet`, `y2`, `break`, `waterfall`, `decor`, `page`), each the
+  canonical structural projection of a deterministic TS-built fixture
+  (`lib/regressionMatrixFixtures.testkit.ts`). **2-D could not be built and is
+  deliberately absent:** this repo has no first-class 2-D/heatmap FIGURE —
+  `/api/export/map-figure` has no frontend wrapper at all (stated in
+  `lib/api/figures.ts`), `PLOT_MARKS` has no 2-D member, and `FigureDocument`
+  therefore cannot express one, so it has no place on the document path the
+  three legs share. How to add a fixture: add a builder, list it in
+  `MATRIX_FIXTURES`, regenerate with `node
+  frontend/scripts/freeze-regression-matrix.mjs` (added 2026-09-14; `--check`
+  diffs without writing), commit the JSON.
+- [x] ~~Screen/export/reopen STRUCTURAL equivalence~~ SHIPPED 2026-09-14
+  (tests only — no production code changed): `frontend/src/lib/
+  regressionMatrix.test.ts` asserts SCREEN ≡ EXPORT ≡ REOPEN on one canonical
+  structural payload for every fixture, where screen reads the real uPlot
+  options object (`lib/uplotOpts.ts`'s `buildOpts` over `usePlotPayload`'s own
+  pipeline), export reads the real `FigureSpec`
+  (`buildFigureSpecFromDocument`), and reopen reads the FigureDocument that
+  comes back out of `serializeWorkspace` -> `parseWorkspace`; the page leg adds
+  `buildPageSpecFromDocument` vs `resolvePagePanel`/`pagePanelLabels`.
+  Extractors: `lib/regressionMatrix.testkit.ts` (payload + shared helpers),
+  `lib/regressionMatrixLegs.testkit.ts` (screen + export),
+  `lib/regressionMatrixReopen.testkit.ts` (reopen),
+  `lib/regressionMatrixPage.testkit.ts` (the page). The box's wording was
+  narrowed from "structural **and visual** equivalence" to "STRUCTURAL
+  equivalence" on 2026-09-14 so the strike-through matches the delivered scope;
+  the visual half is its own open box below.
+  **Five divergences found, each filed as a bug and pinned by a test asserting
+  BOTH concrete values, none fixed here** (all in `regressionMatrix.test.ts`'s
+  "divergences found" block): D1/BUG-012 a document's `plot.axisBreaks.x`
+  reaches the export wire and survives reopen but NOTHING on screen renders it
+  (`PlotView`, the canvas's whole input, has no break field;
+  `useEffectiveComposition`'s durable fallback covers `facetKey` only and the
+  on-screen break is the transient `composition` from `breakAtGaps`);
+  D2/BUG-013 the canvas offsets every series by `view.waterfall` (measured
+  0.8125 on the fixture) while `FigureSpec` has no waterfall field, so the
+  export draws un-offset curves; D3/BUG-014 a legend rename replaces the whole
+  on-screen label but only `dataset.labels[ch]` on the wire, so the exported
+  legend re-appends the unit ("Loop 1 (au)"); D4/BUG-015 hiding a series shifts
+  later series' palette positions on export (`buildExportStyles` with
+  `cycle: null` over the hidden-FILTERED list) but not on the canvas;
+  D5/BUG-016 a grouped figure's per-series styling reaches the canvas (every
+  level drawn dashed) but `routes/export_figures.py:236-238` drops
+  `series_styles` on the `group_col` branch, so the exported curves are solid
+  and default-coloured.
+
+  **Review round 2026-09-14 (findings closed, tests/fixtures/plans only).** An
+  adversarial review of the matrix found three load-bearing comparisons that
+  were vacuous or false comfort, and eight nits; all are closed here.
+  (1) `FIXTURE_COLORS` — the only fixture with explicit `SeriesStyle.color`
+  overrides — was byte-identical to the first two `TEST_SERIES_PALETTE` slots,
+  so "the override wins" was indistinguishable from "the palette was used";
+  the colours are now disjoint (`#ffe066`/`#66ffd9`/`#ff8fa3`/`#b0ff7f`, all
+  clearing `resolveDrawColor`'s MIN_CONTRAST on the pinned dark theme by 8.7x
+  or more), `decor.json` is regenerated, and the `decor` test asserts both
+  `=== FIXTURE_COLORS[0]` and `!== TEST_SERIES_PALETTE[0]`.
+  (2) `projectExportPage` resolved its panel labels by calling
+  `pagePanelLabels(page.panels, page.output.labelFormat)` — the screen leg's
+  own call on the screen leg's own input — so `spec.label_format` was read by
+  no leg at all; it now rebuilds the slot list from `spec.panels` at
+  `row*cols+col` and resolves from `spec.label_format`, and the `page`
+  parameter is gone.
+  (3) GROUP mode compared `spec.series_styles`, a wire field the renderer
+  provably never reads on that branch, which both gave false comfort and hid
+  D5; `styleComparable("group")` is now `false` (facet's treatment, with the
+  `export_figures.py` citation) and the divergence is BUG-016 with its own
+  test. Nits closed: the five `it.fails` pins became explicit
+  `DIVERGENCE (BUG-01x): …` tests asserting both concrete values and their
+  difference (an `it.fails` passes on any throw); the two wrong fixture counts
+  in the fixtures header (eight figures + page = nine goldens); a committed
+  regeneration script, `frontend/scripts/freeze-regression-matrix.mjs`
+  (`--check` diffs without writing) replacing the "temporarily add a test that
+  writes the JSON" ritual, verified to reproduce the seven unchanged goldens
+  byte-identically; `reopenProject` widened to round-trip ALL four page
+  figures instead of panel 0 only; the module-scope `function document(...)`
+  in the fixtures testkit renamed to `makeFigure` (and the reopen leg split
+  into its own module, the legs testkit having been at 486/500); and two
+  KNOWN-LIMIT notes recorded in the testkit header — colour equality is
+  conditional on contrast-safe colours because of `resolveDrawColor`, and the
+  facet partition plus `mode` are shared-input rather than independent
+  evidence, as is the screen leg's hand-written mirror of `usePlotPayload`
+  (driving the real hook was measured as not cheap: it delivers its payload
+  through an async `fetchPlot` state transition, while `projectScreen` is a
+  synchronous function called ~20 times across the suite).
+  Sabotage-verified: dropping `style?.color` in `seriesStyleCycle.ts` and
+  forcing `label_format: "roman"` in `panelResolve.ts` — both of which the
+  matrix passed before this round — now fail named tests, as do the four
+  product-code mutations the original commit recorded.
+- [ ] Visual (rendered-output) equivalence for the same nine fixtures — the
+  half of the box above that 2026-09-14's structural matrix did not cover.
+  Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`
+  on ONE A8 fixture; the screen canvas has no rendered-output comparison at
+  all.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED

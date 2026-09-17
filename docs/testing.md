@@ -31,6 +31,22 @@ and still flaked under concurrent load. Load does not scale predictably — a
 worker can stall for whole seconds. An old bound that has never failed is
 evidence that bound is survivable; keep it.
 
+**2026-09-16, `freezeRegressionMatrixCheck.test.ts`.** The guard test's own
+`it(..., 30_000)` timeout (not `execFileSync`'s — unset — and not the
+suite's global `testTimeout: 20_000`, which this test already overrode)
+failed 3/3 in scoped gates of 7,700–7,900 tests with 6 concurrent agents on
+the box (`Error: Test timed out in 30000ms.` at 30,845–41,877ms elapsed),
+while passing alone every time (~15–21 s for the same 4 nested-vitest
+`runScript` calls). Forced deterministically by dropping the same test's
+timeout to 5,000 ms with no load at all: identical failure text at the same
+line, proving the outer `it()` bound was the one in play. Fix: raised the
+bound to 180,000 ms (a loose backstop only — every assertion already checks
+the load-invariant property: exit code, read-only bytes, stale-file name,
+byte-identical regenerate) and cut the nested run's own overhead (`pool:
+"forks"`, a single non-isolated worker, coverage off) in
+`scripts/freeze-regression-matrix.mjs`, which does not change `--check`'s
+read-only/non-zero-on-stale contract in production use.
+
 ## Patch where the name is RESOLVED, not where it is defined
 
 A monkeypatch that passes alone and fails under `pytest -n auto` is usually not

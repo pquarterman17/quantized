@@ -237,11 +237,18 @@ describe("Publication Preview role cues", () => {
   // so its own `title` attribute never gets a chance to show a tooltip — the
   // title has to live on a wrapping element instead.
   it("gives the disabled Export button an explanatory tooltip via a wrapping span", () => {
+    // BUG-013 round 5 deleted the "grouped figures cannot use a secondary Y
+    // axis" refusal this fixture used to name (that combination now degrades
+    // instead of throwing — see `plotGroupSplit.canvasGroupCol`). The hook
+    // is mocked here, so the exact message is incidental to what this test
+    // checks (the tooltip wiring); `"no visible series to export"`
+    // (`figureSpecFacets.ts:101`) is a still-real `"invalid-spec"` refusal,
+    // used so the fixture names a message production can actually produce.
     vi.mocked(useFigureBuilder).mockReturnValue({
       ...figureState,
       canonical: true,
       canExport: false,
-      error: "figure configuration is not previewable: grouped figures cannot use a secondary Y axis",
+      error: "figure configuration is not previewable: no visible series to export",
     } as unknown as ReturnType<typeof useFigureBuilder>);
     render(<FigureBuilderView />);
 
@@ -250,7 +257,7 @@ describe("Publication Preview role cues", () => {
     expect(exportButton).not.toHaveAttribute("title");
     expect(exportButton.closest("span")).toHaveAttribute(
       "title",
-      "figure configuration is not previewable: grouped figures cannot use a secondary Y axis",
+      "figure configuration is not previewable: no visible series to export",
     );
   });
 

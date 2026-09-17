@@ -441,7 +441,14 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     return;
   }
   if (result === null) {
-    const msg = `save failed — could not write to ${project.path} (try Save As)`;
+    // P3.4 error-quality audit (2026-09-14): this message now says the thing
+    // this function's own header already promised it would ("the atomic
+    // temp-file-plus-`os.replace` write already guarantees the previous good
+    // file on disk is untouched, so the only job left here is to say so
+    // plainly") — it named the failure and the remedy but never the fact the
+    // user is actually anxious about, which is whether the save half-wrote
+    // over their project.
+    const msg = `save failed — could not write to ${project.path}; the file on disk is unchanged (try Save As)`;
     get().setStatus(msg);
     toast(msg, "danger");
     return;

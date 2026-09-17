@@ -11,7 +11,11 @@ import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
+import { applyWaterfall, buildColumns } from "./plotdata";
+import { canvasGroupCol } from "./plotGroupSplit";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { analysisData } from "./rowstate";
+import { publishLiveWaterfallSpan, waterfallSpan } from "./waterfallOffset";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -105,7 +109,9 @@ describe("FigureDocument FigureSpec adapter", () => {
     const spec = buildFigureSpec(get, dataset, "device", opts);
 
     const expected = {
-      dataset: { ...data, labels: ["group", "left trace", "right", "plus", "minus", "x error"] },
+      // BUG-014: the wire dataset keeps the DATA's labels — the rename on
+      // channel 1 rides `series_styles[1].legend` below, not `labels[1]`.
+      dataset: data,
       x_key: undefined,
       y_keys: [2, 1],
       x_scale: "log",
@@ -129,7 +135,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       y_label: "Y",
       series_styles: [
         { color: "#8b5cf6" },
-        { color: "#123456", width: 3, marker: true, marker_size: 7 },
+        { color: "#123456", width: 3, marker: true, marker_size: 7, legend: "left trace" },
       ],
       overrides: {
         legend: { show: true, loc: "custom", anchor: [0.2, 0.8], title: "Signals" },
@@ -253,14 +259,28 @@ describe("FigureDocument FigureSpec adapter", () => {
     const absent = createFigureDocument(base);
     expect(buildFigureSpecFromDocument(absent, dataset, "absent").series_styles).toHaveLength(1);
 
+    // BUG-014: `richView()` renames channel 1, and a rename must reach the
+    // renderer on EVERY branch — so the two "no styles" shapes materialize a
+    // legend-only list instead of dropping it. `unnamed` is the same document
+    // with no rename, which is what pins the original no-styles wire shapes.
+    const unnamed = { ...base, view: { ...base.view, seriesLabels: {} } };
+
     const nullStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: null } });
-    expect(buildFigureSpecFromDocument(nullStyles, dataset, "null")).not.toHaveProperty("series_styles");
+    expect(buildFigureSpecFromDocument(nullStyles, dataset, "null").series_styles).toEqual([
+      { legend: "left trace" },
+    ]);
+    const nullNoRename = createFigureDocument({ ...unnamed, publication: { overrides: null, seriesStyles: null } });
+    expect(buildFigureSpecFromDocument(nullNoRename, dataset, "null")).not.toHaveProperty("series_styles");
 
     // Nit 4 (round-4 review): the `[]` half of the exact-array branch ships
     // `series_styles: []` on the wire — pinned here, not just at
     // `documentPinsSeriesStyles([])` in seriesStyleCycle.test.ts.
-    const emptyStyles = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    const emptyStyles = createFigureDocument({ ...unnamed, publication: { overrides: null, seriesStyles: [] } });
     expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([]);
+    const emptyRenamed = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
+    expect(buildFigureSpecFromDocument(emptyRenamed, dataset, "empty").series_styles).toEqual([
+      { legend: "left trace" },
+    ]);
 
     const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
     const publication = createFigureDocument({
@@ -277,8 +297,52 @@ describe("FigureDocument FigureSpec adapter", () => {
       margins: { left: 0.33, right: 0.2, top: 0.1, bottom: 0.3 },
       ticks: { dir: "in", minor: true },
     });
-    expect(spec.series_styles).toEqual(exactStyles);
+    // The saved array rides verbatim, with only the rename laid over it — and
+    // the document's own copy is never touched (BUG-014's overlay is a
+    // per-request presentation pass, not an edit).
+    expect(spec.series_styles).toEqual([{ ...exactStyles[0], legend: "left trace" }]);
     expect(spec.series_styles).not.toBe(exactStyles);
+    expect(exactStyles[0]).not.toHaveProperty("legend");
+  });
+
+  // BUG-014. A rename used to be written onto the wire's `dataset.labels[ch]`,
+  // which the backend then appended `dataset.units[ch]` to a second time, so
+  // "Loop 1" exported as "Loop 1 (au)" while the screen showed "Loop 1".
+  it("carries a legend rename as its own presentation field, leaving the data's labels and units alone", () => {
+    const renamed = createFigureDocument({
+      id: "renamed",
+      name: "Renamed",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1, 2], seriesLabels: { 1: "Loop 1" } },
+    });
+    const spec = buildFigureSpecFromDocument(renamed, dataset, "renamed");
+
+    expect(spec.y_keys).toEqual([1, 2]);
+    expect(spec.series_styles?.[0]?.legend).toBe("Loop 1");
+    // The un-renamed channel carries NO legend, so the backend keeps deriving
+    // "label (unit)" for it — the common case must not change.
+    expect(spec.series_styles?.[1]?.legend).toBeUndefined();
+    // The data's own labels and units reach the backend untouched.
+    expect(spec.dataset.labels).toEqual(data.labels);
+    expect(spec.dataset.units).toEqual(data.units);
+    // ...and the source document/dataset are not mutated either.
+    expect(dataset.data.labels[1]).toBe("signal");
+    expect(renamed.plot.view.seriesLabels).toEqual({ 1: "Loop 1" });
+  });
+
+  // An EMPTY rename is a real choice (a blank legend entry) — `uplotOpts`'
+  // `args.seriesLabels?.[i] ?? …` only falls back on undefined, so the screen
+  // blanks the label. The wire has to be able to say that too.
+  it("carries an EMPTY legend rename verbatim rather than falling back to the derived label", () => {
+    const blanked = createFigureDocument({
+      id: "blanked",
+      name: "Blanked",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1], seriesLabels: { 1: "" } },
+    });
+    expect(buildFigureSpecFromDocument(blanked, dataset, "blanked").series_styles).toEqual([
+      { color: "#8b5cf6", legend: "" },
+    ]);
   });
 
   it("rejects a mismatched live dataset and resolves frozen documents from their snapshot", () => {
@@ -299,7 +363,7 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(buildFigureSpecFromDocument(frozen, undefined, "frozen").dataset).toEqual(data);
   });
 
-  it("exports grouping without y2 and rejects the backend-invalid grouped+y2 combination", () => {
+  it("exports grouping without y2, and degrades (not refuses) a group bound with a REALLY rendered y2 — round 5, see the truth table below", () => {
     const grouped = createFigureDocument({
       id: "grouped",
       name: "Grouped",
@@ -309,15 +373,130 @@ describe("FigureDocument FigureSpec adapter", () => {
     });
     expect(buildFigureSpecFromDocument(grouped, dataset, "grouped").group_col).toBe(0);
 
-    const invalid = createFigureDocument({
-      id: "invalid",
+    // richView() plots y2Keys:[2], not hidden -- round 4 threw here; the
+    // canvas (`Stage/usePlotPayload`) has always degraded this to a plain,
+    // ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys, no
+    // plotted/hidden distinction), so the export now matches it rather than
+    // refusing a figure the screen already renders.
+    const degraded = createFigureDocument({
+      id: "degraded",
       name: "Grouped y2",
       datasetId: dataset.id,
       view: richView(),
       groupKey: 0,
     });
-    expect(() => buildFigureSpecFromDocument(invalid, dataset, "invalid"))
-      .toThrow("grouped figures cannot use a secondary Y axis");
+    const spec = buildFigureSpecFromDocument(degraded, dataset, "degraded");
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
+  });
+});
+
+// BUG-013 round 5 review's truth table: document route == canvas for
+// `group_col` presence and `waterfall_offsets`, over 6 distinct cells of
+// (groupKey, y2 state) — {ungrouped, grouped} x {no y2, y2 plotted, y2
+// hidden} — plus cell 7 (y2 not in `yKeys` at all) below as its own test.
+// `data`'s own channels 1/2/3 ("signal"/"right"/"plus") are the review's own
+// fixture. Two independent assertions per cell, round-5-review NIT 4's fix
+// for a truth table that was tautological for the very rule it names:
+//   - the AGREEMENT check, against the "canvas" side computed from the SAME
+//     raw columns through the SAME `canvasGroupCol`/`waterfallSpan`
+//     primitives the canvas itself resolves through (`Stage/usePlotPayload`,
+//     `lib/waterfallOffset.ts`) — never hardcoded, so it fails the moment
+//     either side's rule drifts from the other (measured: catches a
+//     wire-only drift, round-5 review's sabotage S8);
+//   - a HARDCODED expectation baked into each cell below — because the
+//     agreement check alone moves both sides together, so a WRONG shared
+//     degrade rule (never degrades; always degrades) leaves every
+//     parameterized cell green. Measured (round-5 review S5/S6, reproduced
+//     here): `canvasGroupCol` returning `groupKey ?? null` unconditionally,
+//     or `null` unconditionally, both now fail every cell whose hardcoded
+//     `expectGroupCol`/`expectOffsets` the mutation disagrees with.
+describe("BUG-013 round 5: document route matches the canvas over 6 group/y2 cells", () => {
+  const CH = [1, 2, 3]; // signal, right, plus
+  const COLS = CH.map((c) => data.values.map((row) => row[c]));
+  const FRACTION = 0.25;
+  const FULL_OFFSETS = [0, 74.75, 149.5]; // FRACTION * waterfallSpan(COLS) per slot, 3 surviving channels
+  const TWO_OF_THREE_OFFSETS = [0, 74.75]; // same step; channel 3's slot dropped (hidden)
+  const docWith = (over: { groupKey?: number | null; y2Keys?: number[]; hiddenChannels?: number[] }) =>
+    createFigureDocument({
+      id: `cell-${JSON.stringify(over)}`,
+      name: "cell",
+      datasetId: dataset.id,
+      view: {
+        ...defaultPlotView(),
+        xKey: null,
+        yKeys: [1, 2, 3], // cell 7 (y2 not in yKeys at all) is its own test below
+        y2Keys: over.y2Keys ?? [],
+        hiddenChannels: over.hiddenChannels ?? [],
+        waterfall: FRACTION,
+      },
+      groupKey: over.groupKey ?? null,
+    });
+
+  const CELLS: {
+    name: string;
+    groupKey: number | null;
+    y2Keys: number[];
+    hiddenChannels: number[];
+    /** Hardcoded, not derived from `canvasGroupCol`/`waterfallSpan` — see
+     *  this describe block's header (NIT 4). */
+    expectGroupCol: number | null;
+    expectOffsets: number[] | undefined;
+  }[] = [
+    { name: "1 ungrouped, no y2", groupKey: null, y2Keys: [], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "2 ungrouped, y2 plotted", groupKey: null, y2Keys: [3], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "3 grouped, no y2", groupKey: 0, y2Keys: [], hiddenChannels: [], expectGroupCol: 0, expectOffsets: undefined },
+    { name: "4 grouped, y2 PLOTTED (round 5 fix)", groupKey: 0, y2Keys: [3], hiddenChannels: [], expectGroupCol: null, expectOffsets: FULL_OFFSETS },
+    { name: "5 grouped, y2 hidden", groupKey: 0, y2Keys: [3], hiddenChannels: [3], expectGroupCol: null, expectOffsets: TWO_OF_THREE_OFFSETS },
+    // Round-5-review NIT 3: this cell used to be byte-identical to cell 5
+    // ("solo'd-out", same wire path as hidden, zero added coverage). The
+    // ungrouped x hidden-y2 combination was never exercised at all, so this
+    // replaces it rather than adding a 7th duplicate.
+    { name: "6 ungrouped, y2 hidden", groupKey: null, y2Keys: [3], hiddenChannels: [3], expectGroupCol: null, expectOffsets: TWO_OF_THREE_OFFSETS },
+  ];
+  it.each(CELLS)("$name", ({ groupKey, y2Keys, hiddenChannels, expectGroupCol, expectOffsets }) => {
+    const canvasCol = canvasGroupCol(groupKey, y2Keys);
+    const doc = docWith({ groupKey, y2Keys, hiddenChannels });
+    const spec = buildFigureSpecFromDocument(doc, dataset, "cell");
+    // Agreement: the wire must match whatever the canvas primitive resolves.
+    expect(spec.group_col ?? null).toBe(canvasCol);
+    // Hardcoded: the canvas primitive itself must resolve to the number this
+    // cell actually expects, not just to a value it agrees with.
+    expect(canvasCol).toBe(expectGroupCol);
+    expect(spec.group_col ?? null).toBe(expectGroupCol);
+    if (expectGroupCol !== null) {
+      // A real group split: the renderer expands per-level series, so the
+      // XY overlay's waterfall has nothing to stagger.
+      expect(spec.waterfall_offsets).toBeUndefined();
+      expect(expectOffsets).toBeUndefined();
+      return;
+    }
+    // Degraded (or never grouped) to a plain overlay: the canvas stripes
+    // EVERY fetched channel (hidden ones keep their slot and widen the
+    // span), and the wire reports only the surviving, non-hidden slots.
+    const step = FRACTION * waterfallSpan(COLS);
+    const offsets = CH.map((c, i) => (hiddenChannels.includes(c) ? null : i * step)).filter(
+      (v): v is number => v !== null,
+    );
+    expect(spec.waterfall_offsets).toEqual(offsets);
+    expect(spec.waterfall_offsets).toEqual(expectOffsets);
+  });
+
+  // Cell 7 needs its own case: channel 3 isn't in `yKeys` at all, so the
+  // canvas' display list itself is only [1, 2] and the span is measured over
+  // two columns, not three.
+  it("7 grouped, y2 not plotted at all (not in yKeys)", () => {
+    const doc = createFigureDocument({
+      id: "cell-7",
+      name: "cell-7",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], y2Keys: [3], waterfall: FRACTION },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(doc, dataset, "cell-7");
+    expect(spec.group_col).toBeUndefined();
+    const step = FRACTION * waterfallSpan(COLS.slice(0, 2));
+    expect(spec.waterfall_offsets).toEqual([0, step]);
   });
 });
 
@@ -771,22 +950,22 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(spec.dataset).toEqual(frozenSnapshot);
   });
 
-  it("surfaces the grouped+secondary-axis rejection as a thrown error, same as the direct adapter (exportActive's catch turns this into a toast/status, tested at the command level)", () => {
+  it("degrades group+secondary-axis the SAME way as the direct adapter (round 5 — no more thrown rejection here)", () => {
     const document = createFigureDocument({
       id: "stage-window-invalid",
       name: "Stage window invalid",
       datasetId: dataset.id,
-      view: richView(), // richView() plots y2Keys: [2] — grouped + y2 is invalid
+      view: richView(), // richView() plots y2Keys: [2] — a REALLY rendered y2
       groupKey: 0,
     });
-    expect(() =>
-      buildStageFigureSpec(
-        fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
-        dataset,
-        "device",
-        opts,
-      ),
-    ).toThrow("grouped figures cannot use a secondary Y axis");
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
   });
 
   // Fix-round R7: the live-view FALLBACK (no canonical document to route
@@ -1020,6 +1199,67 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
     expect(lines(spec)).toEqual([undefined, undefined, undefined]);
   });
 
+  // BUG-015 review round: the CYCLE is refused above, but the palette POSITIONS
+  // are not opt-in and are applied on this branch too. They are resolved against
+  // the list the CANVAS builds (`effectiveChannels(…, xKey, …)` = [2, 3], x
+  // always dropped), so channels 2 and 3 keep the canvas' own slots 0 and 1 —
+  // not the [0, 1, 2] this request's own list would have given them. Channel 1
+  // is drawn only by the export, so it has no canvas slot at all and is parked
+  // past the end (slot 2).
+  it("ON: the X-as-Y branch colours the canvas' channels by the CANVAS' slots", () => {
+    const restore = installSeriesPalette();
+    try {
+      const xAsY = createFigureDocument({
+        id: "xasy-colors",
+        name: "XasY",
+        datasetId: dataset.id,
+        view: { ...defaultPlotView(), xKey: 1, yKeys: [1, 2, 3] },
+      });
+      const spec = buildFigureSpecFromDocument(xAsY, dataset, "xasy", { autoSeriesStyles: true });
+      expect(spec.y_keys).toEqual([1, 2, 3]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[2], // channel 1: parked — the canvas never draws it
+        TEST_SERIES_PALETTE[0], // channel 2: the canvas' first slot
+        TEST_SERIES_PALETTE[1], // channel 3: the canvas' second slot
+      ]);
+      // Non-vacuous: this is NOT the request's own display order, which is what
+      // an `indexOf` into the unfiltered export list would have produced.
+      expect((spec.series_styles ?? []).map((s) => s?.color)).not.toEqual([
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+        TEST_SERIES_PALETTE[2],
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  // NIT 2 of the BUG-015 review: `indexOf` gave two occurrences of the same
+  // channel ONE slot, where the canvas (`seriesColor(i, …)`, keyed by array
+  // index) gives them distinct ones. The load sanitizer does not dedupe
+  // `yKeys`, so a hand-edited document can carry one.
+  it("a channel plotted TWICE takes two distinct palette slots, as the canvas does", () => {
+    const restore = installSeriesPalette();
+    try {
+      const dupe = createFigureDocument({
+        id: "dupe",
+        name: "Dupe",
+        datasetId: dataset.id,
+        view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1, 1, 2] },
+      });
+      const spec = buildFigureSpecFromDocument(dupe, dataset, "dupe");
+      expect(spec.y_keys).toEqual([0, 1, 1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+        TEST_SERIES_PALETTE[2],
+        TEST_SERIES_PALETTE[3],
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
   // The one case where `buildStageFigureSpec`'s OWN exact-styles refusal is load
   // bearing rather than a restatement. Normally an exact publication array makes
   // `buildFigureSpecForView` skip `buildExportStyles` entirely, so asking for the
@@ -1144,6 +1384,77 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
   });
 });
 
+// ── BUG-015: hiding a series must not recolour the ones still drawn ─────────
+// The canvas keeps a hidden series in its display list with `show:false`, so
+// every later series keeps its palette slot; the export wire drops hidden
+// channels outright. Colouring the survivors by their position in the FILTERED
+// list is what made an exported figure disagree with the screen the user
+// authored it against — and it hit every SAVED document, which never opts into
+// the P3.3 cycle and so used to reach `buildExportStyles` with no positions at
+// all. The positions are now derived unconditionally; the cycle stays opt-in.
+describe("hidden series keep their palette slot on the export wire (BUG-015)", () => {
+  /** Three plotted channels, the FIRST one hidden. */
+  const hiddenDoc = (hiddenChannels: number[], seriesStyles = {}) =>
+    createFigureDocument({
+      id: "hidden",
+      name: "Hidden",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1, 2], hiddenChannels, seriesStyles },
+    });
+
+  /** `seriesColor` reads `--series-N` off the document and jsdom's stylesheet
+   *  has none, so without real tokens every slot falls back to one literal and
+   *  the assertions below could not fail. */
+  const withPalette = (paint: string[], run: () => void) => {
+    const root = document.documentElement;
+    paint.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    try {
+      run();
+    } finally {
+      paint.forEach((_, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
+  };
+
+  const PAINT = ["#ffcccc", "#ccffcc", "#ccccff"];
+
+  it("channels 1 and 2 take palette slots 1 and 2, not the filtered 0 and 1", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([0]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([PAINT[1], PAINT[2]]);
+    });
+  });
+
+  it("generalizes past the two-series repro: hiding 0 AND 1 leaves channel 2 on slot 2", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([0, 1]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([PAINT[2]]);
+    });
+  });
+
+  it("with the cycle ON, channel 2's dash and glyph are slot 2's as well", () => {
+    // The cycle rides the same positions, so the dash/marker half cannot drift
+    // from the palette half: slot 1 is dashed, slot 2 dotted + a triangle.
+    const spec = buildFigureSpecFromDocument(
+      hiddenDoc([0], { 2: { marker: true } }),
+      dataset,
+      "hidden",
+      { autoSeriesStyles: true },
+    );
+    expect((spec.series_styles ?? []).map((s) => s?.line)).toEqual(["dashed", "dotted"]);
+    expect((spec.series_styles ?? []).map((s) => s?.marker_shape)).toEqual([undefined, "triangle"]);
+  });
+
+  it("with NOTHING hidden the wire is unchanged — positions ARE the plotted order", () => {
+    withPalette(PAINT, () => {
+      const spec = buildFigureSpecFromDocument(hiddenDoc([]), dataset, "hidden");
+      expect(spec.y_keys).toEqual([0, 1, 2]);
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual(PAINT);
+    });
+  });
+});
+
 describe("greyscale (print-safe) export option (P3.3)", () => {
   const opts = { fmt: "pdf", style: "default", dpi: 300, title: "", xLabel: "", yLabel: "" };
 
@@ -1193,5 +1504,346 @@ describe("greyscale (print-safe) export option (P3.3)", () => {
     const off = buildFigureSpecFromDocument(document, dataset, "device", {});
     expect(on.greyscale).toBe(true);
     expect("greyscale" in off).toBe(false);
+  });
+});
+
+// BUG-013: a waterfall view's per-series stagger reaches the export wire.
+// Every expected number here is derived by RUNNING the canvas' own
+// `applyWaterfall` on the same columns, never hardcoded — so the wire is
+// pinned to the renderer the user actually looks at, and a change to either
+// one that the other does not follow turns these red.
+describe("FigureSpec waterfall_offsets (BUG-013)", () => {
+  const opts = { fmt: "pdf", style: "default", dpi: 300, title: "" };
+  /** The canvas' own offset for display column `position` (0-based among the
+   *  value columns) of `channels`, at `fraction`. */
+  function canvasOffset(
+    channels: number[],
+    fraction: number,
+    position: number,
+    src: DataStruct = data,
+    xKey: number | null = null,
+  ): number {
+    const before = buildColumns(src, null, xKey, channels);
+    const after = applyWaterfall(before, fraction);
+    const col = position + 1;
+    const b = before.data[col] as (number | null)[];
+    const a = after.data[col] as (number | null)[];
+    return (a[0] as number) - (b[0] as number);
+  }
+
+  it("emits the canvas' offset per plotted series", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+    // Non-vacuous: the stagger is a real, growing shift, and the first series
+    // stays put (the canvas anchors display position 0).
+    const offsets = spec.waterfall_offsets ?? [];
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBeGreaterThan(0);
+    expect(offsets[2]).toBeCloseTo(2 * offsets[1], 12);
+  });
+
+  it("leaves the wire dataset un-shifted — the offset is render metadata, not data", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.dataset.values).toEqual(data.values);
+  });
+
+  it("is ABSENT from the wire for a view with no waterfall", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3] });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  it("is ABSENT for a single plotted series — nothing to stagger against", () => {
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1], waterfall: 0.25 });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  it("a HIDDEN series keeps its stagger slot, exactly as the canvas payload does", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      hiddenChannels: [1],
+      waterfall: 0.25,
+    });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    // Two series ride the wire, but they are DISPLAY positions 1 and 2 — the
+    // hidden channel still occupies slot 0 on the canvas (BUG-015's rule).
+    expect(spec.y_keys).toEqual([2, 3]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+  });
+
+  it("is ABSENT for a grouped request — the backend synthesizes per-level series", () => {
+    const document = createFigureDocument({
+      id: "wf-group",
+      name: "Grouped waterfall",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], waterfall: 0.25 },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    expect(spec.group_col).toBe(0);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  // BUG-013 round 4 review, finding 1 + finding 2. The CANONICAL/document
+  // route (`buildFigureSpecFromDocument`, what "Copy figure"/"Export figure…"
+  // actually takes) used to emit `group_col` from the RAW `groupKey` binding
+  // rather than the degraded value the canvas draws — so a group bound with
+  // its y2 channel merely HIDDEN (the canvas already degrades to a plain,
+  // staggered overlay: `plotGroupSplit.canvasGroupCol`) still rode the wire
+  // as a grouped, un-staggered request: a grouped, un-staggered export of an
+  // ungrouped, staggered screen, reachable with one legend click (bind a
+  // group column, bind a secondary axis, then hide the y2 series). Round 3's
+  // own equivalent test only exercised `buildFigureSpec`, the branch this
+  // module's header now documents as unreachable through Stage's normal
+  // routing — this one exercises the route real exports take.
+  it("degrades group_col exactly like the canvas when the y2 channel is hidden, and the offsets ride", () => {
+    const document = createFigureDocument({
+      id: "wf-group-y2-hidden",
+      name: "Grouped, y2 hidden",
+      datasetId: dataset.id,
+      view: {
+        ...defaultPlotView(),
+        xKey: null,
+        yKeys: [1, 2, 3],
+        y2Keys: [3],
+        hiddenChannels: [3],
+        waterfall: 0.25,
+      },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    // The request really is a plain, staggered, ungrouped overlay of channels
+    // 1 and 2 — channel 3 stays hidden but still reserves its stagger slot.
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y_keys).toEqual([1, 2]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+    ]);
+  });
+
+  it("is ABSENT for a faceted request — the panels carry their own resolved y", () => {
+    const document = createFigureDocument({
+      id: "wf-facet",
+      name: "Faceted waterfall",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], waterfall: 0.25 },
+      facetKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "device");
+    expect(spec.facets?.length).toBeGreaterThan(0);
+    expect("waterfall_offsets" in spec).toBe(false);
+  });
+
+  // BUG-013 review round, finding 1. `stackMode`/`polarMode`/`statMode` each
+  // REPLACE the XY canvas (`PlotStage` early-returns to MultiPanelStage /
+  // PolarStage / StatStage before the overlay is built) and none of them
+  // staggers anything — `useMultiPanelStage` never calls
+  // `composeDisplayPayload` at all. Emitting offsets there staggered an export
+  // the screen had not: a NEW divergence, not an inherited one. Both entry
+  // points are exercised because `stackMode` is a canonical binding
+  // (`figureContract.ts`), so it round-trips through a document too.
+  const MODES = ["stackMode", "polarMode", "statMode"] as const;
+  for (const mode of MODES) {
+    it(`is ABSENT for a ${mode} view — that canvas staggers nothing`, () => {
+      const view = { ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25, [mode]: true };
+      const live = buildFigureSpec((() => view) as never, dataset, "device", opts);
+      expect("waterfall_offsets" in live).toBe(false);
+
+      const document = createFigureDocument({
+        id: `wf-${mode}`,
+        name: `Waterfall ${mode}`,
+        datasetId: dataset.id,
+        view,
+      });
+      const fromDoc = buildFigureSpecFromDocument(document, dataset, "device");
+      expect("waterfall_offsets" in fromDoc).toBe(false);
+    });
+  }
+
+  it("still rides a PLAIN overlay — the mode refusals are not a blanket off switch", () => {
+    // Non-vacuous companion to the six assertions above: with every mode off,
+    // the same view still carries the field.
+    const view = () => ({ ...defaultPlotView(), xKey: null, yKeys: [1, 2, 3], waterfall: 0.25 });
+    expect(buildFigureSpec(view as never, dataset, "device", opts).waterfall_offsets).toHaveLength(3);
+  });
+
+  // BUG-013 review round, finding 3 — CLOSED by BUG-014 rather than by a
+  // refusal, and pinned here so it stays closed. When an explicitly selected X
+  // channel is ALSO in `yKeys`, the export draws a curve the canvas does not;
+  // the review measured every REAL series landing one stagger slot late. It no
+  // longer does, because `resolveDisplaySeries` resolves positions against the
+  // CANVAS' channel list — so the offset and the palette colour of each drawn
+  // channel now agree with the canvas, and only the extra X-as-Y curve (which
+  // the canvas never draws) sits on a parked slot. Both are asserted together:
+  // they are the same position, and pinning one without the other would let the
+  // two drift apart again.
+  // BUG-013 round 3, finding 3: the STEP has to come from the canvas' channel
+  // list too, not just the slots. This fixture is built so the two lists cannot
+  // give the same answer by accident — channel 0's values (1000..3000) lie
+  // entirely OUTSIDE channels 1-2's (1..300), so the canvas' span is 299 and
+  // the request's would be 2999. The shared `data` fixture happened to have
+  // channel 0 inside the others' range, so both spans were 299 and the pin
+  // passed either way.
+  const xAsY: DataStruct = {
+    time: [0, 1, 2],
+    values: [
+      [1000, 100, 1],
+      [2000, 200, 3],
+      [3000, 300, 5],
+    ],
+    labels: ["x", "b", "c"],
+    units: ["", "", ""],
+    metadata: {},
+  };
+  const xAsYDataset: Dataset = { id: "dataset-x-as-y", name: "xasy.csv", data: xAsY };
+
+  it("the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots", () => {
+    const restore = installSeriesPalette();
+    try {
+      const document = createFigureDocument({
+        id: "wf-x-as-y",
+        name: "X as Y waterfall",
+        datasetId: xAsYDataset.id,
+        view: { ...defaultPlotView(), xKey: 0, yKeys: [0, 1, 2], waterfall: 0.25 },
+      });
+      const spec = buildFigureSpecFromDocument(document, xAsYDataset, "device");
+      expect(spec.y_keys).toEqual([0, 1, 2]);
+      // The canvas draws channels 1 and 2 only (x is always dropped), at
+      // display slots 0 and 1 — derived by running `applyWaterfall` on exactly
+      // that list, never hardcoded.
+      const canvas = [
+        canvasOffset([1, 2], 0.25, 0, xAsY, 0),
+        canvasOffset([1, 2], 0.25, 1, xAsY, 0),
+      ];
+      // Numerically, so a step measured over the WRONG list cannot pass: the
+      // canvas' own span is 300 - 1 = 299, a quarter of which is 74.75. Over
+      // the request's list (channel 0 included) it would be 749.75.
+      expect(canvas).toEqual([0, 74.75]);
+      const offsets = spec.waterfall_offsets ?? [];
+      expect([offsets[1], offsets[2]]).toEqual(canvas);
+      expect(offsets[0]).toBeCloseTo(2 * canvas[1], 12); // parked past the canvas list
+      expect((spec.series_styles ?? []).map((s) => s?.color)).toEqual([
+        TEST_SERIES_PALETTE[2],
+        TEST_SERIES_PALETTE[0],
+        TEST_SERIES_PALETTE[1],
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  // BUG-013 round 3, NIT 5. The canvas degrades a grouped view to a plain
+  // ungrouped overlay the moment a secondary Y axis is bound
+  // (`Stage/usePlotPayload`'s `groupCol`) and staggers it; the live export
+  // route puts no `group_col` on that wire either. Refusing the offsets on the
+  // view's RAW binding was therefore BUG-013's original symptom, still open for
+  // this one combination: a staggered screen exporting overlaid curves.
+  it("rides a grouped view that a secondary Y axis degraded to a plain overlay", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      groupKey: 0,
+      y2Keys: [2],
+      waterfall: 0.25,
+    });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    // The request really is a plain ungrouped overlay with a secondary axis.
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
+    expect(spec.waterfall_offsets).toEqual([
+      canvasOffset([1, 2, 3], 0.25, 0),
+      canvasOffset([1, 2, 3], 0.25, 1),
+      canvasOffset([1, 2, 3], 0.25, 2),
+    ]);
+  });
+
+  // BUG-013 round 5 review, finding 2. `buildFigureSpec` (the live/StoreGet
+  // route) never passes `extras.groupKey`, so `group_col` on THIS route is
+  // ALWAYS absent regardless of `st.groupKey` — a pre-existing, separate
+  // limitation of this legacy builder (it structurally cannot carry grouping
+  // at all; `buildStageFigureSpec` routes through the focused window's
+  // canonical document instead whenever one applies, which is the real fix
+  // for a grouped window). Round 4's `waterfallWire` papered over that gap by
+  // falling back to a SECOND read of `st.groupKey` for the offset refusal
+  // alone, so this exact request emitted `group_col` absent ("ungrouped") but
+  // still refused `waterfall_offsets` ("grouped") — the two-answers case
+  // round 5 closes. `groupCol` is required now, with no fallback, so the
+  // offsets follow the SAME (absent) `group_col` this spec emits.
+  it("group_col absent implies waterfall_offsets present here too, even for a view the CANVAS still splits (round 5 — one answer, not two)", () => {
+    const view = () => ({
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [1, 2, 3],
+      groupKey: 0,
+      waterfall: 0.25,
+    });
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.waterfall_offsets).toHaveLength(3);
+  });
+
+  // BUG-013 round 3, finding 2. `buildStageFigureSpec` read the LIVE canvas'
+  // span for `ds.id` and handed it to the frozen branch too, so a frozen
+  // document — which `figureSpec.ts`'s own contract says "intentionally ignores
+  // any live dataset" — had its snapshot's stagger scaled by a dataset it does
+  // not render.
+  it("a FROZEN document's stagger comes from its snapshot, never the live canvas' span", () => {
+    const snapshot: DataStruct = {
+      time: [0, 1, 2],
+      values: [
+        [0, 0],
+        [1, 0.5],
+        [2, 1],
+      ],
+      labels: ["a", "b"],
+      units: ["", ""],
+      metadata: {},
+    };
+    // The same rows rescaled x100: span 200 against the snapshot's 2.
+    const live: Dataset = {
+      id: "frozen-live",
+      name: "live.csv",
+      data: { ...snapshot, values: snapshot.values.map((row) => row.map((v) => v * 100)) },
+    };
+    const document = createFigureDocument({
+      id: "w1",
+      name: "Frozen waterfall",
+      datasetId: live.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [0, 1], waterfall: 0.25 },
+      data: { mode: "frozen", snapshot },
+    });
+    const state = {
+      ...defaultPlotView(),
+      xKey: null,
+      yKeys: [0, 1],
+      waterfall: 0.25,
+      autoSeriesStyles: false,
+      focusedWindowId: "w1",
+      windowsForSave: () => [{ id: "w1", kind: "plot", document }],
+    };
+    publishLiveWaterfallSpan({ datasetId: live.id, span: 200 });
+    try {
+      const spec = buildStageFigureSpec((() => state) as never, live, "frozen", opts);
+      // The snapshot's own span is 2, so 0.25 of it is 0.5. With the live span
+      // the second curve landed at 50 — 25x the snapshot's entire y-range.
+      expect(spec.waterfall_offsets).toEqual([0, 0.5]);
+      expect(spec.dataset.values).toEqual(snapshot.values);
+    } finally {
+      publishLiveWaterfallSpan(null);
+    }
   });
 });

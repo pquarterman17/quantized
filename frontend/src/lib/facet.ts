@@ -20,18 +20,29 @@
 // x-break render. Breaks are the opposite sharing axis from facets: facet
 // panels are independent row-slices that share ONE x-domain (`sharedXDomain`);
 // break panels are contiguous x-slices of the SAME series that share ONE
-// y-domain (`sharedYDomain`) and each keep their OWN local x-range.
+// y-domain (`sharedYDomain`) and each keep their OWN local x-range (the
+// break bounds clamped to the data extent -- see `BreakPanel.xRange`).
 
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { sliceRowSidecars } from "./rowSidecars";
-import { facetComposition, type Composition } from "./composition";
-import { buildColumns, type PlotPayload } from "./plotdata";
+import { breakComposition, facetComposition, type Composition } from "./composition";
+import { buildColumns, defaultDenseChannels, type PlotPayload } from "./plotdata";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
 export interface FacetPanel {
   label: string;
   payload: PlotPayload;
+  /** The dataset channel index behind each `payload.series` entry, in the
+   *  same order. Carried rather than re-derived because the per-panel list
+   *  is `yChannels ?? defaultDenseChannels(<this panel's rows>, xKey)` --
+   *  the default (null `yChannels`) case can legitimately differ panel to
+   *  panel, so a caller cannot reconstruct it from the binding alone. Both
+   *  consumers of a channel-keyed per-series override need it (BUG-014): the
+   *  facet grid's own `seriesLabels` on screen
+   *  (`Stage/facetGridRender.ts`) and the facet export's panel labels
+   *  (`lib/figureSpecFacets.ts`). */
+  channels: number[];
 }
 
 export interface FacetSlice {
@@ -78,10 +89,18 @@ export function facetPayloads(
   xKey: number | null,
   yChannels: number[] | null,
 ): FacetPanel[] {
-  return facetSlices(data, facetCol).map((s) => ({
-    label: s.label,
-    payload: buildColumns(s.data, null, xKey, yChannels),
-  }));
+  return facetSlices(data, facetCol).map((s) => {
+    // Resolve the channel list HERE and hand the same array to
+    // `buildColumns`, so `channels[i]` is the channel behind
+    // `payload.series[i]` by construction rather than by a matching rule two
+    // callers would have to keep in sync.
+    const channels = yChannels ?? defaultDenseChannels(s.data, xKey);
+    return {
+      label: s.label,
+      payload: buildColumns(s.data, null, xKey, channels),
+      channels,
+    };
+  });
 }
 
 /** Union x-domain across a set of facet panels — the min/max of every panel's
@@ -129,10 +148,50 @@ export function suggestBreaks(xs: readonly number[], gapFactor = 4): [number, nu
 
 export interface BreakPanel {
   payload: PlotPayload;
-  /** This panel's OWN local x-domain (min/max of its finite x values within
-   *  the segment) — the per-panel `xLim` `MultiPanelStage` applies, since a
-   *  break panel's whole point is showing only its own x-slice, not the full
-   *  (elided-gap) span. */
+  /** The dataset channel index behind each `payload.series` entry, in the
+   *  same order -- carried for exactly the reason `FacetPanel.channels` is
+   *  (BUG-014 round 5): the per-panel list is
+   *  `yChannels ?? defaultDenseChannels(<this panel's x-slice>, xKey)`, and
+   *  with a null `yChannels` the density heuristic runs over each segment's
+   *  OWN rows, so two break panels of the same view can legitimately hold
+   *  different channels (a channel finite only after the gap is dense in the
+   *  last panel and absent from the first). A caller therefore cannot
+   *  reconstruct it from the view's binding; `Stage/breakPanelRender.ts`
+   *  projects the store's channel-keyed `seriesLabels` through THIS list. */
+  channels: number[];
+  /** This panel's x-domain — the per-panel `xLim` `MultiPanelStage` applies,
+   *  since a break panel's whole point is showing only its own x-slice, not
+   *  the full (elided-gap) span.
+   *
+   *  It is the panel's BREAK BOUNDS clamped to the data's own finite x extent
+   *  — `[max(segment lo, data min), min(segment hi, data max)]` — which is
+   *  the `bounds` list the export renderer builds
+   *  (`calc/figure_break.render_breaks_impl`: `lo = data min`, then one
+   *  `(lo, b0)` per break with `lo = b1` after it, and a final `(lo, data
+   *  max)`; each panel then does `ax.set_xlim(lo, hi)`) WHENEVER every break
+   *  lies inside the data extent and leaves at least one row in every
+   *  segment — the shape the Figure Builder and `suggestBreaks` produce. For
+   *  those, screen and export elide the SAME x-ranges and size their panels
+   *  the same way.
+   *
+   *  It is NOT the same list for three shapes the export wire still accepts
+   *  (`calc/figure_overrides._validate_overrides` rejects only `lo >= hi`,
+   *  unsorted and overlapping pairs — never an out-of-range one), because
+   *  this builder drops empty segments and clamps while `render_breaks_impl`
+   *  emits `len(breaks) + 1` panels unconditionally and clamps nothing. Those
+   *  three are a recorded BUG-012 residual (measured numbers on the entry in
+   *  `plans/BUGS_AND_ISSUES.md`), not a regression of this fix: the behaviour
+   *  is unchanged from before it. `lib/facet.test.ts` pins the empty-middle-
+   *  segment one so the residual cannot silently change.
+   *
+   *  It used to be the segment's own min/max data x instead (BUG-012 review
+   *  F2). That agrees with the bounds only when the authored break endpoints
+   *  are themselves data points — true for every `suggestBreaks` output
+   *  (`[finite[i], finite[i + 1]]`), and therefore for every live
+   *  `breakAtGaps` gesture, but NOT for a break typed into the Figure
+   *  Builder's breaks panel or carried by a plot recipe: an authored
+   *  `[[2.2, 2.8]]` over x = 0..5 elided `(2, 3)` on screen while the export
+   *  elided `(2.2, 2.8)`, with different panel width ratios to match. */
   xRange: [number, number];
 }
 
@@ -154,6 +213,13 @@ export function breakPayloads(
   if (breaks.length === 0) return [];
   const sorted = [...breaks].sort((a, b) => a[0] - b[0]);
   const xs = xKey == null ? data.time : data.values.map((row) => row[xKey]);
+  // The data extent the outermost bounds clamp to -- `render_breaks_impl`'s
+  // own `xlo`/`xhi` (the finite min/max of the WHOLE x column, not of any one
+  // segment). Unused when no row has a finite x: every segment is then empty
+  // and drops out below.
+  const finiteAll = xs.filter((v) => Number.isFinite(v));
+  const dataLo = finiteAll.length ? Math.min(...finiteAll) : -Infinity;
+  const dataHi = finiteAll.length ? Math.max(...finiteAll) : Infinity;
   const segments: [number, number][] = [];
   let prevHi = -Infinity;
   for (const [lo, hi] of sorted) {
@@ -175,9 +241,12 @@ export function breakPayloads(
       time: rows.map((r) => data.time[r]),
       values: rows.map((r) => data.values[r]),
     };
-    const payload = buildColumns(sliced, null, xKey, yChannels);
-    const finiteXs = rows.map((r) => xs[r]);
-    panels.push({ payload, xRange: [Math.min(...finiteXs), Math.max(...finiteXs)] });
+    // Resolve the channel list HERE and hand the same array to
+    // `buildColumns`, so `channels[i]` is the channel behind
+    // `payload.series[i]` by construction -- identical to `facetPayloads`.
+    const channels = yChannels ?? defaultDenseChannels(sliced, xKey);
+    const payload = buildColumns(sliced, null, xKey, channels);
+    panels.push({ payload, channels, xRange: [Math.max(lo, dataLo), Math.min(hi, dataHi)] });
   }
   return panels;
 }
@@ -223,4 +292,92 @@ export function facetCompositionFromBinding(
 ): Composition | null {
   if (facetKey == null || !dataset) return null;
   return facetComposition(facetPayloads(analysisData(dataset) ?? dataset.data, facetKey, xKey, yKeys));
+}
+
+/** Rebuild a live paneled-x-break `Composition` from the durable break
+ *  ranges a figure persists (`FigureDocument.plot.axisBreaks.x`) -- the break
+ *  counterpart of `facetCompositionFromBinding` above, and the ONE place a
+ *  break arrangement is ever constructed (BUG-012): the store's live
+ *  `breakAtGaps` gesture and `useEffectiveComposition`'s durable fallback
+ *  both call THIS, so a reopened document panels exactly the way the live
+ *  gesture did instead of the two builds drifting apart. Same
+ *  `breakPayloads` call over the dataset's ANALYSIS view (row
+ *  exclusion/filter, guards #50/#53) as `facetCompositionFromBinding` makes
+ *  for facets, so a restored break honors whatever rows are currently in
+ *  play.
+ *
+ *  Returns null (an ordinary plot) when there are no breaks, no bound
+ *  dataset, or fewer than TWO panels survive -- `breakAtGaps`' own "not
+ *  enough data on both sides of a break to panel" refusal, kept here so the
+ *  durable fallback cannot render a one-panel "break" the live gesture would
+ *  have declined. Never throws. */
+export function breakCompositionFromBreaks(
+  dataset: Dataset | null | undefined,
+  breaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  // `!breaks?.length` FIRST, before `analysisData` (review round 3, finding
+  // 2): both call sites (`Stage/useEffectiveComposition.ts`,
+  // `BackgroundPlotWindow.tsx`) gate this behind a `useMemo`, so it runs on
+  // every RECOMPUTATION whose deps changed, not literally every render --
+  // still frequent, since the dataset object's identity changes on every row
+  // edit, exclusion toggle and filter change, and `active`/`xKey`/`yKeys` are
+  // deps too (round-3 review NIT 2). The overwhelmingly common case among
+  // those recomputations is a plain XY figure with no break at all.
+  // `analysisData` is not free -- `droppedRows` -> `pruneExcluded` copies
+  // `time` + `values` whenever the dataset has any excluded row, and re-runs
+  // the Data Filter predicate over every row when one is active. Measured on
+  // this tree (2026-09-17, in-repo vitest/jsdom, one machine -- expect this
+  // to vary), 50 000 rows with one excluded row, no facet and no break, 100
+  // calls: ~273-318 ms without this line (~2.7-3.2 ms per call, three runs),
+  // ~0.1 ms with it. `breakCompositionFromData` re-checks the same
+  // condition, so this line is a pure guard and changes no result.
+  if (!breaks?.length || !dataset) return null;
+  return breakCompositionFromData(analysisData(dataset) ?? dataset.data, breaks, xKey, yKeys);
+}
+
+/** `breakCompositionFromBreaks` over a DataStruct that has already been
+ *  resolved to the analysis view — the ONE place `breakComposition` is ever
+ *  called (BUG-012 review NIT 13 ratchets that; `lib/facet.test.ts`'s
+ *  "single construction site" test greps for it). The store's `breakAtGaps`
+ *  action calls this directly because it has already computed
+ *  `analysisData(ds)` for its own gap detection, and re-deriving it inside
+ *  the builder scanned every row a second time (review NIT 17); every other
+ *  caller goes through `breakCompositionFromBreaks` above. */
+export function breakCompositionFromData(
+  data: DataStruct | null | undefined,
+  breaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  if (!breaks?.length || !data) return null;
+  const panels = breakPayloads(data, xKey, yKeys, breaks);
+  return panels.length >= 2 ? breakComposition(panels) : null;
+}
+
+/** The arrangement a SAVED figure shows on screen when the live render cache
+ *  (`AppState.composition`) is gone -- the ONE durable derivation, shared by
+ *  `Stage/useEffectiveComposition`'s fallback and by the P4.2 regression
+ *  matrix's screen leg, so "what the canvas draws" has a single definition
+ *  including its PRECEDENCE.
+ *
+ *  Precedence when a figure carries BOTH a facet binding and saved breaks:
+ *  the facet grid wins. That mirrors the EXPORT path, where
+ *  `routes/export_figures.py` branches on `if req.facets:` before the flat
+ *  renderer is reached at all, and `calc/figure_facets.render_facets_figure`
+ *  honors only the narrow override subset a facet grid can show (`x_breaks`
+ *  is not in it) -- so screen and export resolve that combination the same
+ *  way instead of each picking a side. */
+export function durableComposition(
+  dataset: Dataset | null | undefined,
+  facetKey: number | null,
+  xBreaks: readonly [number, number][] | null | undefined,
+  xKey: number | null,
+  yKeys: number[] | null,
+): Composition | null {
+  return (
+    facetCompositionFromBinding(dataset, facetKey, xKey, yKeys) ??
+    breakCompositionFromBreaks(dataset, xBreaks, xKey, yKeys)
+  );
 }

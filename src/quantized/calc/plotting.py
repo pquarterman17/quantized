@@ -6,6 +6,7 @@ routes layer's job. No fastapi/pydantic imports.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +20,7 @@ __all__ = [
     "PlotData",
     "PlotSeries",
     "PlotState",
+    "apply_waterfall_offsets",
     "build_grouped_series",
     "build_series",
     "resolve_style_channels",
@@ -206,6 +208,7 @@ def build_grouped_series(
     x_key: int | str | None,
     y_keys: Sequence[int | str],
     group_col: int | str,
+    y_legends: Sequence[str | None] | None = None,
 ) -> PlotData:
     """Faithful port of the frontend's ``lib/plotspec.ts`` ``buildXY``
     colour split (GUI_INTERACTION #12 Slice 5): each ``y_keys`` channel
@@ -231,7 +234,11 @@ def build_grouped_series(
         layer's existing NaN -> null conversion covers this series the
         same way it covers every other one; this pure layer stays NaN,
         like :func:`build_series`).
-      - Label: ``f"{y_label} ({group_label}={level})"`` -- ``level`` is the
+      - Label: ``f"{y_label} ({group_label}={level})"`` -- where
+        ``y_label`` is the channel's own label unless ``y_legends`` supplies
+        a per-``y_keys`` legend override for it (BUG-014's presentation
+        field, aligned 1:1 with ``y_keys``; ``None``/absent entries keep the
+        channel label, which is every pre-BUG-014 request). ``level`` is the
         RAW numeric group value (see :func:`_format_level`), never a
         resolved category text label -- UNLESS ``group_col`` is a P1.4
         categorical channel (:func:`quantized.datastruct.is_categorical`),
@@ -271,9 +278,10 @@ def build_grouped_series(
     group_is_categorical = is_categorical(ds, gi)
 
     series: list[PlotSeries] = []
-    for yk in y_keys:
+    for k, yk in enumerate(y_keys):
         yi = _resolve(ds, yk)
-        y_label = ds.labels[yi]
+        legend = y_legends[k] if y_legends is not None and k < len(y_legends) else None
+        y_label = ds.labels[yi] if legend is None else legend
         y_unit = ds.units[yi]
         y_vals = ds.values[:, yi]
         for lvl in levels:
@@ -351,4 +359,39 @@ def resolve_style_channels(
             else:
                 resolved.pop("color_by", None)
         out.append(resolved)
+    return out
+
+
+def apply_waterfall_offsets(
+    series: Sequence[tuple[str, NDArray[np.float64]]],
+    offsets: Sequence[float] | None,
+) -> list[tuple[str, NDArray[np.float64]]]:
+    """Shift each plotted series up by its own vertical offset -- the export
+    half of a WATERFALL view (BUG-013), where the on-screen canvas staggers
+    overlapping curves so they stay readable.
+
+    ``offsets`` is aligned to the plotted series order (the request's
+    ``y_keys``) and carries offsets already RESOLVED in Y data units by the
+    client (``frontend/src/lib/waterfallOffset.ts``). They are deliberately not
+    re-derived here from the fraction the user set: that fraction is a share
+    of the y-range of the canvas' own display payload, which includes hidden
+    series and excluded rows that never reach this request -- so recomputing
+    it server-side would stagger the exported figure by a different amount
+    than the screen shows, which is the very divergence this closes.
+
+    ``None``/empty passes ``series`` through unchanged (the no-waterfall
+    case, byte-identical to the pre-BUG-013 render). A missing or non-finite
+    entry offsets that series by zero rather than poisoning its values with
+    NaN -- an export must degrade, never 500, on a malformed hint (the same
+    rule ``resolve_style_channels`` follows for a bad style dict).
+    """
+    if not offsets:
+        return list(series)
+    out: list[tuple[str, NDArray[np.float64]]] = []
+    for i, (label, values) in enumerate(series):
+        dy = float(offsets[i]) if i < len(offsets) else 0.0
+        arr = np.asarray(values, dtype=float)
+        if dy != 0.0 and math.isfinite(dy):
+            arr = np.asarray(arr + dy, dtype=float)
+        out.append((label, arr))
     return out

@@ -62,6 +62,13 @@ import { recompute, type AppState } from "./useApp";
  *  formulaIncremental.ts's header) so correctness never depends on this
  *  fast path; setCellBlock (a multi-row paste) does not use this at all and
  *  always takes the full `recompute`. */
+/** The one reason a pasted cell is dropped, shared by `setCellBlock`'s two
+ *  status lines (total refusal and partial) so they can never drift apart —
+ *  and, measured, 53 bytes of eager bundle cheaper than spelling it twice
+ *  (919,727 -> 919,674 exact eager bytes), which funds this round's two
+ *  `peakTable: undefined` clears with room to spare. */
+const PASTE_SKIP_REASON = "read-only/out-of-range or not a valid level code for a categorical column";
+
 function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
   if (!d.formulas?.length) return d;
   const incremental = computeFormulasIncremental(asAlreadyComputed(d.data), d.formulas, [row], d.formulaErrors);
@@ -260,7 +267,10 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         } else {
           data = { ...d.data, values: patchCell(d.data.values, row, col, value) };
         }
-        return recomputeAfterCellEdit({ ...d, data }, row);
+        // peakTable (audit P2.1 review round 2): a typed-over value is a
+        // change to the data any saved fit was measured from, so the durable
+        // table goes with it — the same rule store/corrections.ts applies.
+        return recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row);
       }),
     }));
     get().recordMacro(
@@ -298,7 +308,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     if (usable.length === 0) {
       if (skipped > 0) {
         get().setStatus(
-          `${label}: nothing pasted — all ${skipped} cell${plural(skipped)} were read-only/out-of-range or not a valid level code for a categorical column.`,
+          `${label}: nothing pasted — all ${skipped} cell${plural(skipped)} were ${PASTE_SKIP_REASON}.`,
         );
       }
       return;
@@ -324,14 +334,18 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
             else values[row][col] = value;
           }
         }
-        return recompute({ ...d, data: { ...d.data, time, values } });
+        // peakTable: same rule as setCellValue above, and review round 3's
+        // CONFIRMED 1 — a paste is the BULK sibling of typing a value, one
+        // keystroke away from the path that already cleared. An interior x
+        // (2θ) cell in particular moved the fit's own abscissa.
+        return recompute({ ...d, data: { ...d.data, time, values }, peakTable: undefined });
       }),
     }));
     get().recordMacro(`${label} on ${ds.name}`, `qz.setCells(${lit(ds.name)}, ${usable.length})`);
     get().touchDataset(id);
     if (skipped > 0) {
       get().setStatus(
-        `${label}: pasted ${usable.length} cell${plural(usable.length)}, skipped ${skipped} (read-only/out-of-range or not a valid level code for a categorical column).`,
+        `${label}: pasted ${usable.length} cell${plural(usable.length)}, skipped ${skipped} (${PASTE_SKIP_REASON}).`,
       );
     }
   },
@@ -377,7 +391,10 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         const data = extending
           ? { ...d.data, values, cat_levels: { ...d.data.cat_levels, [col]: [...levels, text] } }
           : { ...d.data, values };
-        return recomputeAfterCellEdit({ ...d, data }, row);
+        // peakTable: the third cell writer, cleared for the same reason as the
+        // two above — a level code IS a number in `values`, so a fit measured
+        // from this worksheet is measured from data this just rewrote.
+        return recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row);
       }),
     }));
     get().recordMacro(

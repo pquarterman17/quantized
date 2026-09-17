@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-14  
+**Updated:** 2026-09-17 (BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -36,6 +36,13 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
+| BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-16** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded. **Round 3 closed 2026-09-17**: the IMPORT rebind clears the break too (the third switch site), the no-break short-circuit is back in front of `analysisData`, the stack toggle no longer dirties the project when nothing changes, and the screen≡export claim is narrowed to in-extent non-empty breaks with the three diverging shapes recorded |
+| BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
+| BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
+| BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
+| BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Unassigned | Found by the 2026-09-14 review round of the P4.2 regression matrix; reproduced by `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` test, not fixed |
+| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
+| BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 
 ---
 
@@ -3041,6 +3048,2849 @@ commit closes it:
 
 ---
 
+## ~~BUG-012 — a saved figure's x-axis break reaches export/reopen but never renders on screen~~ **FIXED 2026-09-14**
+
+**Priority:** P2 — the document and the export were correct and agreed with
+each other; only the live canvas disagreed with both. No data was lost or
+altered, but a user who reopened their own saved figure saw a plot that
+silently stopped matching what they exported, with no indication anything was
+wrong — exactly the kind of screen/export mismatch the P4.2 matrix exists to
+catch.
+
+**State:** FIXED 2026-09-14. `Stage/useEffectiveComposition`'s durable
+fallback now derives the paneled break from the document's canonical
+`plot.axisBreaks.x` through `lib/facet.durableComposition`, which wraps the
+SAME `breakCompositionFromBreaks` builder the live `breakAtGaps` gesture
+constructs its arrangement with — one construction site, so a reopened figure
+cannot panel differently from the one the user drew. See the Completion
+record.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the composition/fallback
+chain, not inferred — see Confirmed implementation evidence below.
+
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-14.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D1.
+
+#### User-visible problem
+
+A user draws an x-axis break on a plot (the store's `breakAtGaps` action),
+saves the workspace, and reopens it (or exports the figure without
+reopening). The `FigureDocument` faithfully carries the break —
+`plot.axisBreaks.x` round-trips through save/reopen, and an export of that
+document draws the break — but the on-screen canvas, after a reopen, renders
+the series as one continuous, unbroken line. The exported figure and the
+reopened document both say "this plot has a break here"; the screen the user
+is actually looking at does not show one.
+
+#### Confirmed implementation evidence (as filed — the state BEFORE the fix)
+
+- `frontend/src/lib/figureDocument.ts:44`, `:179-182`, `:295`, `:426` —
+  `FigureDocument.plot.axisBreaks` (`{x, y, y2}`) is the canonical, persisted
+  home for break ranges; `axisBreaks.x` round-trips through
+  `createFigureDocument` and the parse/validate path (`axisBreaks()` at
+  `:295`, consumed at `:426`) unchanged.
+- `frontend/src/lib/figureSpec.ts:376` — `buildFigureSpecFromDocument` reads
+  `document.plot.axisBreaks.x` into `extras.xBreaks`, and `:177` folds it into
+  `overrides.x_breaks` on the wire `FigureSpec` — every export of a document
+  with a break draws it.
+- `frontend/src/store/useApp.ts:539`, `:1359-1390` — the ONLY code path that
+  ever makes the CANVAS draw a break is the `breakAtGaps` store action, which
+  builds a transient panel arrangement held in `AppState.composition`
+  (`store/useApp.ts:371`) — a live-session render cache, not a field on
+  `FigureDocument` and never persisted.
+- `frontend/src/components/Stage/useEffectiveComposition.ts:33-41` — the ONE
+  hook `PlotStage.tsx` (`:135`) and `MultiPanelStage.tsx` read for "what
+  panels are actually showing." Its own header explains the fallback
+  contract: when the transient `composition` is `null` — exactly the state
+  right after a workspace reopen, since `composition` is never serialized —
+  it falls back to `facetCompositionFromBinding(active, facetKey, xKey,
+  yKeys)`, a DURABLE fallback keyed on `facetKey` only. There is no
+  equivalent durable fallback keyed on `document.plot.axisBreaks.x`, so a
+  reopened document with a break renders as an ordinary, unbroken single
+  panel until the user re-applies `breakAtGaps` by hand.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:318`,
+  `it("DIVERGENCE (BUG-012): a saved x-break reaches export and reopen; the
+  screen has no field to render it from", ...)` — pins BOTH measured values
+  (export `[[2, 3]]`, reopen `[[2, 3]]`, screen `[]`) and asserts they
+  differ, plus the underlying reason: rebuilding the document from
+  `figureDocumentToPlotView(figure)` — the canvas's ENTIRE input — yields
+  `plot.axisBreaks.x: []`, so `PlotView` cannot carry the break at all.
+  (Converted 2026-09-14 from a bare `it.fails`, which passed on any throw and
+  so could have gone green for the wrong reason.) The surrounding matrix's
+  own narrowed-equality table (`regressionMatrix.test.ts:108-110`,
+  `DIVERGENT.break`, `legs: ["export", "reopen"]`) exists specifically to
+  carve this field out of the main screen≡export/reopen assertions so the
+  divergence stays visible rather than silently passing.
+
+#### Why this priority
+
+P2 as filed. The evidence supports keeping it there rather than raising to
+P1/P0: nothing is corrupted (the document and export both hold the correct,
+complete break data — `axisBreaks.x` is never lost, only unrendered), and the
+mismatch has a workaround (re-apply `breakAtGaps` after every reopen).
+Priority is capped below P1 because a break is a presentation aid, not a
+value the analysis reads — but the fact that this happens on EVERY reopen of
+EVERY document with a break, unconditionally and with no error or notice,
+argues for keeping it toward the upper end of P2 rather than P3.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — the `break` fixture in
+  `frontend/src/lib/regressionMatrixFixtures.testkit.ts` (a `FigureDocument`
+  with `plot.axisBreaks.x: [[2, 3]]`).
+- [x] Exact actions recorded — reopen (`reopenProject`) or export
+  (`projectExport`) a document carrying `plot.axisBreaks.x`, then compare
+  against the live screen projection (`projectScreen`).
+- [x] Actual result recorded — export and reopen both carry
+  `xBreaks: [[2, 3]]`; the screen projection carries `xBreaks: []`.
+- [x] Expected result recorded — the screen should render the same break the
+  document persists and the export draws.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it("DIVERGENCE (BUG-012): a saved x-break reaches export and reopen; the
+  screen has no field to render it from", ...)`.
+
+#### Fix checklist
+
+- [x] Give `useEffectiveComposition`'s durable fallback a break-aware branch
+  (an `axisBreaks`-driven composition builder analogous to
+  `facetCompositionFromBinding`), or otherwise make a reopened document
+  re-derive the same panel arrangement `breakAtGaps` would have produced live.
+  **Done:** `lib/facet.breakCompositionFromBreaks` is that builder and is the
+  ONE construction site — `store/useApp.ts`'s `breakAtGaps` builds its live
+  arrangement with it too (net-zero lines; that file sits on its size pin) —
+  and `lib/facet.durableComposition` wraps it together with the facet fallback
+  so the PRECEDENCE has a single definition as well. No new persisted field:
+  the ranges are read from the canonical `plot.axisBreaks.x` the export path
+  already uses.
+- [x] Confirm `MultiPanelStage.tsx`'s panel-break render path can consume
+  that fallback exactly as it consumes a freshly-applied `breakAtGaps`
+  composition — no separate render branch. **Done** — it consumes the
+  `Composition` prop, so one break-mode branch renders both; pinned at the DOM
+  layer by `MultiPanelStage.test.tsx`'s "renders one uPlot per segment from
+  the document alone, with no live gesture". One gate change was required: the
+  mount predicate (now the shared `multiPanelShowing`, which
+  `useLiveSnapshotPublish`'s `altModeShowing` also calls instead of restating
+  it) treats a break arrangement as its own explicit intent, because an
+  AUTHORED break has no `stackMode` toggle to restore the way the
+  `breakAtGaps` gesture does.
+- [x] Add a regression test at the DOM/render layer (not only the structural
+  payload) that a workspace SAVE → RELOAD round-trip shows the break on
+  screen, per this repo's "test at the layer the user experiences" discipline.
+  **Done** — the DOM case above renders the real component through the real
+  hook from a reopened-shaped store and asserts each panel's x SLICE, not just
+  the panel count (the plain per-channel stack would also make two).
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — it is
+  now `it("BUG-012: a saved x-break reaches export, reopen AND the screen it
+  is drawn on", ...)`, asserting `projectScreen(...).xBreaks` equals both
+  other legs' `[[2, 3]]`. The screen leg MEASURES that value from the panel
+  geometry the shared derivation produces (`screenXBreaks`), so the equality
+  is still evidence about the product; the `PlotView`-cannot-carry-a-break
+  pins are kept, because that is still true and is exactly why the fix reads
+  the document instead.
+- [x] Drop the `break` fixture's `DIVERGENT` narrowing — done; `break` now
+  compares field-for-field like `plain`, and its committed golden gained
+  `"xBreaks": [[2, 3]]` — the only golden that changed, every other one
+  byte-identical after a full regeneration.
+
+#### Acceptance criteria
+
+- [x] A figure with a saved x-axis break renders the break on screen
+  immediately after a workspace reopen, with no user action required.
+- [x] `projectScreen(document, dataset).xBreaks` equals
+  `projectExport(document, dataset).xBreaks` for the `break` fixture — the
+  equality BUG-012's divergence test is inverted into.
+- [x] The fix does not change `breakAtGaps`'s existing live-session
+  behavior — applying a break interactively during the same session still
+  works exactly as before: the action's own store tests are unchanged and
+  green, the live `composition` still wins over both durable bindings (pinned
+  by a test), and the shared builder keeps the action's "fewer than two panels
+  is not a break" refusal.
+
+#### Completion record
+
+- Date: 2026-09-14
+- PR/commit: `fix(stage): BUG-012 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `b749f804` — the cherry-pick's real parent on this branch; the
+  originally-recorded `45f43070` was stale), followed by
+  `fix(stage): BUG-012 review round …` (2026-09-15, the entry below).
+- Bundle: eager JS 910,263 → 910,547 B against a 920,400 B budget, measured
+  on this branch (`b749f804` → the BUG-012 commit). The commit message's own
+  `919,781 → 920,078` pair was measured on the pre-cherry-pick `45f43070` and
+  does not describe this branch.
+- Code: `lib/facet.ts` (`breakCompositionFromBreaks`, `durableComposition`),
+  `components/Stage/useEffectiveComposition.ts` (the durable fallback plus the
+  shared `multiPanelShowing` mount predicate),
+  `components/Stage/PlotStage.tsx` and
+  `components/Stage/useLiveSnapshotPublish.ts` (both now ask that ONE
+  predicate, and PlotStage threads the ONE composition instead of two panel
+  arrays), `store/useApp.ts` (`breakAtGaps` builds through the shared builder,
+  net-zero lines), `lib/regressionMatrixLegs.testkit.ts` (the screen leg
+  measures its breaks off the rendered arrangement).
+- Automated tests: `components/Stage/useEffectiveComposition.test.tsx` (new —
+  fallback, drift guard against the live gesture, precedence, no-break
+  document, the two-panel refusal, and the mount predicate),
+  `components/Stage/MultiPanelStage.test.tsx` (new DOM case),
+  `store/plotRecipes.test.ts` (new — a recipe's captured break ranges rebuild
+  panels end to end), `lib/regressionMatrix.test.ts` (divergence inverted,
+  narrowing dropped), plus the regenerated `break.json` golden.
+- Agent verification: `tsc -b --force`, `eslint src --max-warnings=0`, and
+  `vitest run src/lib src/store src/components/Stage src/architecture.test.ts`
+  all green; every new test sabotage-verified (remove the break fallback → the
+  hook, DOM and matrix tests all fail; make the live gesture's build drift
+  from the shared builder → the drift guard fails, **and so do three
+  `store/useApp.test.ts` cases** in the `useApp breakAtGaps (gap #21 last
+  residual)` block — "auto-detects the gap, builds paneled segments, activates
+  the dataset, and turns on stack mode", "honors row exclusion (guard #11) —
+  an excluded row never enters a break panel" and "accepts an explicit breaks
+  override instead of auto-detecting". The original record said "only the
+  drift guard", which the 2026-09-15 review round re-measured as wrong (4
+  failures, not 1); drop the break clause
+  from the mount predicate → only the mount test fails; flip the facet/break
+  precedence → only the precedence test fails).
+- Owner verification: open — a real reopened figure on screen.
+- Notes: PRECEDENCE, defined and tested: when a figure carries BOTH a facet
+  binding and saved breaks, the facet grid wins — mirroring the export path,
+  where `routes/export_figures.py` branches on `if req.facets:` before the
+  flat renderer is reached and `calc/figure_facets.render_facets_figure`
+  honors a narrow override subset that excludes `x_breaks`. Also worth
+  recording: the live `breakAtGaps` gesture writes NO durable field of its own
+  (it only sets the transient `composition`), so the break this fix restores
+  is always an AUTHORED one — the Figure Builder's breaks panel or a plot
+  recipe, the only writers of `plot.axisBreaks.x`. The report's narrative of a
+  `breakAtGaps` gesture surviving save/reopen was therefore never reachable;
+  everything else in it reproduced exactly.
+
+#### Review round — 2026-09-16 (`fix(stage): BUG-012 review round …`, committed 00:18 UTC)
+
+An adversarial review of the fix commit confirmed the derivation and the
+shared-builder claim but found four behaviour defects and one coverage hole
+riding on top, all closed in `fix(stage): BUG-012 review round …`:
+
+- **F2 — screen and export elided DIFFERENT x-ranges** whenever the authored
+  break endpoints were not sample points. `lib/facet.breakPayloads` sized each
+  panel from the segment's own data extent; the export
+  (`calc/figure_break.render_breaks_impl`) sizes it from the BREAK BOUNDS
+  (`bounds`: data min → `b0`, `b1` → next `b0`, … → data max) and sets its
+  `width_ratios` from them. Measured on x = 0..5 with `axisBreaks.x =
+  [[2.2, 2.8]]`: screen panels `[0, 2]` / `[3, 5]` (elides `(2, 3)`, widths
+  2 : 2) vs export `[0, 2.2]` / `[2.8, 5]` (elides `(2.2, 2.8)`, widths
+  2.2 : 2.2). `BreakPanel.xRange` is now `[max(segment lo, data min),
+  min(segment hi, data max)]` — the same list, by construction. A **no-op for
+  every `suggestBreaks` output** (`[finite[i], finite[i + 1]]`, both endpoints
+  data points), so the live `breakAtGaps` gesture's panels are unchanged;
+  pinned by `facet.test.ts`'s "is a NO-OP for suggestBreaks' own output".
+- **F3 — the stack toggle could no longer switch an authored break off.**
+  `setStackMode(false)` cleared `composition` and `facetKey`, but the durable
+  fallback rebuilt the panels from `plot.axisBreaks.x` on the very next
+  render, so the control was inert and silently so. It now also clears the
+  FOCUSED document's `plot.axisBreaks.x` through the declared write chokepoint
+  (`store/windowDocuments.clearFocusedXBreaks` →
+  `withPlotWindowDocument`). A user action deleting a field; the persisted
+  `.dwk` contract for `plot.axisBreaks` is untouched.
+- **F4 — a stale break panelled a DIFFERENT dataset after a plain Library
+  click.** `createPlotWindowDocument` inherited `previous.plot.axisBreaks`
+  verbatim, while `datasetViewDefaults` nulls `facetKey` on a genuine switch
+  precisely because a channel-indexed binding cannot carry across datasets.
+  Measured: window on d1 with `[[2, 3]]`, `setActive("d3")` (unrelated, same
+  x range) → the stage panelled d3 at d1's gap, no gesture, no toggle. The two
+  genuine-dataset-switch rebind sites now pass `resetAxisBreaks`
+  (`focusedRebindPatch`, gated on the same `s.activeId !== id` test its
+  `viewPatch` uses, and `rebindWindow`'s background branch); re-activating the
+  already-active dataset keeps the break, as `breakAtGaps`' own trailing
+  `setActive` requires.
+- **F5 — background windows still drew a reopened break as one line.**
+  `BackgroundPlotWindow` built only the FACET half of the fallback and kept a
+  local `stackMode &&` gate with no break clause, so a workspace reopened with
+  several break figures showed the break in the focused window and BUG-012's
+  original symptom in every other one. It now derives through the shared
+  `durableComposition` and mounts through the shared `multiPanelShowing`.
+- **F1 — the hook's channel wiring was unpinned.** Every BUG-012 test ran
+  against a single-channel dataset with `xKey: null, yKeys: null`, so dropping
+  either from the hook's `durableComposition` call was invisible (measured:
+  both sabotages left the whole BUG-012 test set green). The fixture is now
+  two-channel with `xKey: 0, yKeys: [1, 0]`.
+
+Also closed in the same commit: direct unit coverage for both durable builders
+and the F2 cases in `lib/facet.test.ts` (there was none — they were reached
+only through the Stage hook, the DOM case and the matrix testkit); an
+`architecture.test.ts`-style ratchet, kept in `lib/facet.test.ts`, that
+`breakComposition(` is called from `lib/facet.ts` only (the "ONE construction
+site" invariant was a convention — reintroducing a second identical builder
+left 1236/1236 tests green); a facet+break assertion on the EXPORT leg, which
+needed the matrix's export leg to model `routes/export_figures.py`'s
+`if req.facets:` branch (the wire carries `x_breaks` for a faceted figure but
+`calc/figure_facets` applies only `lim_keys=("x_lim",)`, so reading the field
+raw claimed a break the renderer never draws); `breakAtGaps` computing
+`analysisData(ds)` once instead of twice (via `breakCompositionFromData`); a
+self-test for the now-unreachable `DIVERGENT`/`without()` narrowing machinery,
+which is KEPT rather than deleted so the next divergence has one documented
+place to be recorded; and the matrix header/describe-title drift about which
+divergences are fixed.
+
+**Residuals (measured, deliberately not fixed here):**
+
+- **Row exclusion can drop the SCREEN break while the export keeps it.**
+  `breakCompositionFromBreaks` refuses fewer than two surviving panels —
+  `breakAtGaps`' own refusal, and the right screen behaviour — but
+  `lib/figureSpec.ts:189-191` (`:177` when this was written; the emission
+  moved) sends `overrides.x_breaks` whenever the document carries any, with
+  no equivalent test. Measured: excluding every row above
+  the break collapses the screen to an ordinary plot while an export of the
+  same document still draws a broken axis. Pinned as behaviour (not as a
+  divergence) by `facet.test.ts`'s "honors row exclusion (analysisData)". A
+  real fix belongs on the export side (`figureSpec`/the renderer), not here.
+- **⊞ "snapshot to new window" is a silent no-op for a reopened break
+  figure.** `altModeShowing` is true for any break composition, so
+  `publishLivePlotSnapshot(null)` runs and `snapshotToNewWindow()` returns
+  without a toast. Identical to facet, per-channel stack, polar and stat —
+  none is snapshottable, because the frozen-XY snapshot kind cannot represent
+  a multi-panel canvas — so this is correct for what is on screen; it is only
+  a NEW class of figure reaching it. A fix is a new snapshot kind, not a line.
+
+#### Round 3 — 2026-09-17 (`fix(stage): BUG-012 round 3 …`)
+
+A second adversarial review of the review commit confirmed F1-F5 and their
+sabotage pins, and found three defects riding on the fix plus two
+claim-vs-code mismatches. All closed in one commit:
+
+- **The IMPORT path never got F4's reset — there were THREE genuine-switch
+  rebind sites, not two.** `store/windowDocuments.rebindFocusedPlotWindow`
+  (called only by `addDataset`, `store/useApp.ts`'s single entry point for
+  import/paste/demo/merge/append) rebinds the FOCUSED window to a brand-new
+  dataset and applies the same `datasetViewDefaults` that nulls `facetKey`,
+  but never received `resetAxisBreaks`. Measured on this tree with the
+  one-line fix reverted: a window on d1 with `[[2, 3]]`, then
+  `addDataset(d2)` over an overlapping x range → the document kept
+  `[[2, 3]]`, the durable fallback built panels `[[0, 2], [3, 5]]` and
+  `multiPanelShowing` was true, i.e. F4's exact symptom via
+  File ▸ Import — the commonest way a new dataset reaches the focused window.
+  The reset is UNCONDITIONAL there: the dataset was constructed moments ago
+  and is not yet in the store, so it can never be the already-active one that
+  `setActive` exempts. Pinned by `useEffectiveComposition.test.tsx`'s
+  "F4 (import leg)" case, through the real store action.
+- **Round-1 NIT 17's refactor lost the `!breaks?.length` short-circuit**, so
+  `analysisData(dataset)` — `droppedRows` → `pruneExcluded`, a full copy of
+  `time` + `values`, plus a Data Filter predicate scan when one is active —
+  ran on the ORDINARY no-break path, on the focused Stage hook AND on every
+  background plot window, for every plain XY figure. Measured on this tree
+  (50 000 rows, one excluded row, no facet, no break, 100 calls): **561.2 ms
+  without the guard, 0.0 ms with it** (0.2 ms vs 0.0 ms with no exclusions).
+  The guard is restored in `lib/facet.breakCompositionFromBreaks`; the
+  comment `BackgroundPlotWindow.tsx` had added in the same review round
+  ("short-circuits before scanning any rows") is true again and now cites the
+  test that keeps it true. Pinned as the load-INVARIANT property — a wrapped
+  `analysisData` is asserted NOT to be called — not as a wall-clock bound.
+- **Every `setStackMode` marked the project dirty and scheduled an
+  autosave.** `clearFocusedXBreaks` returned `windows.map(…)`, and `map`
+  always allocates, so `plotWindows` got a fresh identity on every toggle
+  including the overwhelmingly common case where no window holds a break.
+  `useWorkspaceAutosave.shouldAutosave` compares `plotWindows` by identity,
+  so the toggle flipped the title bar's ● marker, restarted the 800 ms
+  autosave debounce and re-rendered all four `plotWindows` subscribers. It
+  now returns the SAME array when nothing changed, pinned by a `toBe` on
+  `plotWindows` plus `shouldAutosave(after, before) === false`, with the
+  converse (a real break DOES change both) pinned beside it.
+- **`setStackMode(TRUE)` clears the authored break as well — deliberate, and
+  now stated and tested.** The review found the clear unconditional while
+  every claim and test covered only `false`. Kept unconditional after
+  reasoning from `useEffectiveComposition`'s own precedence:
+  `multiPanelShowing` short-circuits on `breakPanelsOf(composition) !== null`
+  ahead of every `stackMode` clause, so a break left in place would pre-empt
+  the per-channel stack the user just asked for — the ON direction would be
+  inert in precisely the way F3 fixed for OFF. It is also what the toggle's
+  own comment already promised for every other arrangement ("a manual toggle
+  (on OR off) always drops any spatial arrangement"), and it is symmetric
+  with the `facetKey: null` on the same line. Undo restores it.
+- **Claim narrowed: "screen ≡ export by construction" holds for in-extent,
+  non-empty breaks only.** `BreakPanel.xRange`'s doc claimed its bounds were
+  "exactly the `bounds` list the export renderer builds". Three shapes the
+  wire accepts break that (see the new residual below); the doc now states
+  the precondition and points at the residual.
+
+Nits closed in the same commit: the test named "clamps a break endpoint that
+sits outside the data range" used endpoints INSIDE it (it pins the ±Infinity
+outer sentinels) — renamed, with a genuine out-of-range case added beside it;
+`rebindWindow`'s background-branch reset, the one new behaviour of the review
+round with no test at all (sabotaging it to `false` left the whole scope
+green), now has two — including the same-dataset re-drop, which drops the
+break deliberately because that branch re-applies `datasetViewDefaults`
+wholesale and resets `facetKey` (the channel-keyed binding per-technique view
+memory deliberately does not carry) with it; `xKey`/`yKeys` can instead come
+back from that memory on a technique-tagged dataset, narrowed and pinned by
+a third test after a round-3 review nit (NIT 1); the NIT-13
+"one construction site" ratchet no longer fires on a mere COMMENT naming
+`breakComposition(` (it strips comments first, with the corpus-safe
+string-preserving single-pass form `architecture.test.ts` arrived at); and the
+F5 DOM test asserts TWO uPlot instances INSIDE EACH window frame instead of a
+total of four (a regression moving a panel between the windows would have
+passed).
+
+**Residuals added (measured, deliberately not fixed here):**
+
+- **Three wire-valid break shapes draw differently on screen and on export.**
+  `lib/facet.breakPayloads` drops a segment with no rows (`rows.length === 0`)
+  and clamps each bound to the data extent; `calc/figure_break.py:85-91`
+  builds `len(breaks) + 1` bounds unconditionally, sets `width_ratios =
+  [max(hi - lo, 1e-9)]` and applies `ax.set_xlim(lo, hi)` with no clamp, and
+  `calc/figure_overrides.py:63-76` rejects only `lo >= hi` and unsorted or
+  overlapping pairs — never an out-of-range one. On x = 0..5: a break WHOLLY
+  outside the data (`[[7, 8]]` or `[[-3, -2]]`) leaves one surviving panel, so
+  the screen refuses the arrangement and draws an ordinary plot while the
+  export draws 2 panels, one of them with an inverted `set_xlim`; an EMPTY
+  middle segment (`[[1.2, 1.4], [1.6, 1.8]]`) is 2 screen panels (widths
+  1.2 : 3.2) against 3 on export (1.2 : 0.2 : 3.2); an interior bound past the
+  data max (`[[2, 3], [7, 8]]`) is 2 screen panels (2 : 2) against 3 on export
+  (2 : 4 : 1e-9). Reachable in practice because the Figure Builder's breaks
+  panel accepts any numbers (`workshops/figurebuilder/PropertyPanels.tsx:150-159` enforces only
+  `from < to` and non-overlap against the breaks already authored) and `store/plotRecipeApply.ts` carries
+  `visual.axisBreaks` onto a DIFFERENT dataset. Behaviour is unchanged from
+  before BUG-012's fix — only the claim was new. The empty-middle-segment case
+  is pinned by `lib/facet.test.ts`'s "DIVERGENCE (residual)" so it cannot
+  change silently; a real fix is symmetry (drop empty-segment panels in
+  `render_breaks_impl` too, or stop dropping them here).
+- **A break authored while a facet binding exists is silently inert on BOTH
+  legs, and skips wire validation.** Screen: `lib/facet.ts`'s
+  `durableComposition` resolves `facet ?? break`. Export:
+  `routes/export_figures.py:364`/`:440` branch on `if req.facets:` before the
+  flat renderer, and `calc/figure_facets.py` never reads `x_breaks` (zero
+  occurrences; its only two `break` mentions are a docstring contrasting the
+  facet grid with `calc.figure_break`'s shared-y one, `:212-213`). So the two agree — but the Figure Builder's breaks panel still
+  accepts and persists ranges that draw nothing anywhere, with no feedback,
+  and `calc/figure_overrides._validate_overrides` never runs on the facet
+  path, so an `x_breaks` pair that would 400 the flat export is accepted in
+  silence. Precedence itself is correct and tested; this is the missing
+  authoring feedback beside it.
+
+**Round-3 verification:** `tsc -b --force`, `eslint src --max-warnings=0`,
+`vitest run src/lib src/store src/components/Stage src/components/windows
+src/architecture.test.ts`, `freeze-regression-matrix.mjs --check` and
+`pytest -q tests/test_repo_integrity.py` all green; every new test
+sabotage-verified. Eager bundle, both trees built after `npm ci`:
+**913,293 B** at `e0ab164c` (the real parent — `git rev-parse HEAD^`;
+`8a8d92b1` originally cited is five commits back, corrected 2026-09-17 round-3
+review NIT 3) → **913,348 B** here, **+55 B**, 7,052 B inside the 920,400 B
+budget. No budget move. `store/useApp.ts` (2322) and
+`store/windows.ts` (749) stay at their exact ceiling pins — the round-2 commit
+held them there by packing new arguments onto existing lines (up to ~220
+characters); nothing enforces a line length (there is no eslint `max-len`
+rule and no prettier gate), so this is a readability cost, not a rule
+violation, and no pin was raised.
+
+---
+
+## ~~BUG-013 — a waterfall view's offset never reaches the export wire~~ **FIXED 2026-09-14**
+
+**Priority:** P2 — a whole view TYPE mis-exports (overlaid instead of
+staggered curves), with a workaround (manually offset before export, or
+accept the wrong figure) but no data loss.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the compose pipeline and
+the `FigureSpec` wire contract, not inferred — see Confirmed implementation
+evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D2.
+
+#### User-visible problem
+
+A user turns on a waterfall view (`view.waterfall`, a positive offset
+fraction), which visibly staggers every series vertically on screen so
+overlapping curves become readable. Exporting that same view — to PDF/SVG,
+or via Copy figure — produces a figure with every series drawn at its
+ORIGINAL, un-offset position: the export looks like the waterfall was never
+applied, even though the screen the user is looking at clearly shows it.
+
+#### Confirmed implementation evidence
+
+*As filed (2026-09-14, before the fix) — kept verbatim as the record of what
+was measured. Every line-numbered claim below describes the PRE-FIX tree; see
+the Completion record for what the code does now.*
+
+- `frontend/src/lib/plotdata.ts:364` (`DisplayCompose.waterfall: number`) and
+  `:377-382` (`composeDisplayPayload`) — the FIRST step of the canonical
+  on-screen compose pipeline is `applyWaterfall(payload, o.waterfall)`
+  (`:521`, "Vertically offset each series for a waterfall view"), so every
+  on-screen render of a waterfall view is offset before anything else runs.
+- `frontend/src/lib/api/figures.ts` — the `FigureSpec` interface (`:43` on,
+  the wire contract every export/reopen path serializes to) has no
+  `waterfall` field anywhere; a whole-file grep finds exactly one `waterfall`
+  mention (`:117`), an unrelated comment about a still-unbuilt 2-D/
+  heatmap/surface figure type.
+- `frontend/src/lib/figureSpec.ts` (`buildFigureSpecForView`, lines 136-395 —
+  the ONE function every export path routes through, per the module's own
+  header) never reads or applies `st.waterfall` anywhere in its body —
+  confirmed by grep, zero `waterfall` references in the file.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:347`,
+  `it("DIVERGENCE (BUG-013): the canvas offsets a waterfall by 0.8125; the
+  export wire has no waterfall field at all", ...)` — pins BOTH measured
+  values (screen `0.8125`, export `0`) and asserts they differ, plus the
+  wire-level reason: `buildFigureSpecFromDocument`'s spec has no key matching
+  `/water|offset|stagger/i` and `spec.dataset.values[1][1]` is the raw,
+  un-offset `2.25`. (Converted 2026-09-14 from a bare `it.fails`.)
+  The matrix's own `DIVERGENT.waterfall` table entry
+  (`regressionMatrix.test.ts:108-110`, `legs: ["export"]`) exempts ONLY the
+  export leg — reopen restores the raw `view.waterfall` fraction from the
+  document and the canvas re-applies it identically, so it is specifically
+  the wire spec sent to export that never carries the offset.
+
+#### Why this priority
+
+P2 as filed. Matches the evidence: this is substantial friction (an entire
+view type exports wrong) with a workaround (manual offset, or accepting the
+wrong exported figure), not data loss or a scientifically incorrect stored
+value — the document and the live data are both untouched, only the exported
+RENDERING is wrong.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — the `waterfall` fixture in
+  `frontend/src/lib/regressionMatrixFixtures.testkit.ts`, a `FigureDocument`
+  whose `view.waterfall` is a positive fraction.
+- [x] Exact actions recorded — export the document (`projectExport`) and
+  compare its `waterfallOffset` to the live screen projection
+  (`projectScreen`).
+- [x] Actual result recorded — the screen's `waterfallOffset` is `0.8125`
+  (`regressionMatrix.test.ts:221-223`); the exported `FigureSpec` carries no
+  waterfall field at all, so `projectExport(...).waterfallOffset` is `0`.
+- [x] Expected result recorded — the exported figure should offset each
+  series by the same fraction the canvas shows.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it("DIVERGENCE (BUG-013): the canvas offsets a waterfall by 0.8125; the
+  export wire has no waterfall field at all", ...)`.
+
+#### Fix checklist
+
+- [x] Decide where the offset should be applied for export — a THIRD shape,
+  chosen over both options as filed: the wire carries `waterfall_offsets`, a
+  per-plotted-series shift in Y DATA UNITS (not the raw fraction), resolved
+  client-side and simply ADDED to each series by the backend. Rationale, in
+  full, in `frontend/src/lib/waterfallOffset.ts`'s header: a server-side
+  `fraction × y-range` cannot reproduce the canvas' number, because the range
+  the canvas measures includes hidden series (filtered out of `y_keys`),
+  excluded/filter-dropped rows (`applyWaterfall` runs BEFORE
+  `maskExcludedPayload`, while `pruneToLiveDataset` strips them from the wire
+  `dataset`) and, for a decimated fetch, extremes the wire never sees — so
+  option (B)-style re-derivation would have re-opened this very divergence the
+  moment a user hid a series. Pre-applying the offset to `dataset.values`
+  (option A as filed) was rejected for the opposite reason: it lies on the
+  wire. The chosen shape keeps `dataset` truthful and declares the offset
+  beside it.
+- [x] Whichever shape is chosen, use the SAME offset formula `applyWaterfall`
+  uses — enforced by CONSTRUCTION, not by duplication: the span/step scan moved
+  out of `applyWaterfall` into `lib/waterfallOffset.waterfallStep`, which both
+  the canvas and the wire builder call. Per-series indices are the UNFILTERED
+  display positions `lib/figureSpec.ts` already derives for BUG-015's colours.
+- [x] Confirm reopen continues to round-trip `view.waterfall` unchanged — the
+  reopen leg is untouched and `screen ≡ reopen` still passes for the fixture.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — now
+  `it("BUG-013: the export wire carries the canvas' 0.8125 waterfall offset")`,
+  a single `toBeCloseTo` equality plus the two honesty pins (the offset rides
+  its own field; `spec.dataset.values[1][1]` is still the raw `2.25`).
+- [x] Drop the `waterfall` fixture's export-only `DIVERGENT` narrowing — the
+  table now lists `break` only.
+
+#### Acceptance criteria
+
+- [x] Exporting a waterfall view produces a PDF/SVG with each series
+  visibly offset by the same amount the on-screen canvas shows —
+  `tests/test_export_vector_structure.py`'s
+  `test_waterfall_offsets_shift_each_series_by_its_own_amount` measures each
+  series line's position in the RENDERED axes (hit-map pixel box converted
+  back to data units) and finds the requested shift; its sibling
+  `..._widen_the_autoscaled_axis_to_fit_the_stagger` proves the axis range
+  grows to fit the offsets, as the canvas autoscale does.
+- [x] `projectExport(document, dataset).waterfallOffset` equals
+  `projectScreen(document, dataset).waterfallOffset` for the `waterfall`
+  fixture — the equality BUG-013's divergence test is inverted into.
+- [x] The reopen leg is unaffected —
+  `projectReopen(...).waterfallOffset` continues to equal the screen's.
+
+#### Completion record
+
+- PR/commit: fixed 2026-09-14 on `claude/repo-evaluation-l7y7k9`, one commit
+  `fix(export): BUG-013 — carry the waterfall stagger to the export wire`
+  (`50b30a04`, parent `ff45a200` — corrected 2026-09-16, review NIT 7: the
+  originally recorded `ebefa693` is the pre-cherry-pick commit and is not in
+  this branch's history). Nine files:
+  `frontend/src/lib/waterfallOffset.ts` (new — `waterfallStep` +
+  `waterfallWire`), `lib/plotdata.ts` (`applyWaterfall` now calls the shared
+  step; 11 lines freed, so the `architecture.test.ts` pin ratchets 658 → 650),
+  `lib/figureSpec.ts` (+3 lines: the spread that emits the field),
+  `lib/api/figures.ts` + `lib/figureContract.ts` (the wire field and its
+  `derived("plot.waterfall.verticalOffset")` classification — the `satisfies
+  FieldContractMap<FigureSpec>` guard forces every new spec field to be
+  classified), `src/quantized/calc/plotting.py` (`apply_waterfall_offsets`),
+  `src/quantized/routes/export_figures.py` (`FigureRequest.waterfall_offsets`,
+  applied in the shared `_figure_series` — so `/figure`, `/figure-hitmap` and
+  the page-panel route in `routes/export_page.py` all honour it), plus the
+  regenerated `frontend/api/openapi.json` / `lib/api/schema.d.ts`.
+- Automated tests: `frontend/src/lib/waterfallOffset.test.ts` (new, 9 tests —
+  step math, canvas/wire agreement column by column, the four refusals, and
+  the DISPLAY-position rule for a hidden series);
+  `lib/figureSpec.test.ts`'s `FigureSpec waterfall_offsets (BUG-013)` block
+  (7 tests, every expected number derived by RUNNING `applyWaterfall`, never
+  hardcoded); `lib/regressionMatrix.test.ts`'s inverted
+  `BUG-013: the export wire carries the canvas' 0.8125 waterfall offset` plus
+  the now-unnarrowed `waterfall > screen ≡ export`;
+  `tests/test_calc_plotting.py`'s four `apply_waterfall_offsets` tests,
+  including `test_apply_waterfall_offsets_matches_the_canvas_golden` — the
+  CROSS-LANGUAGE pin, whose dataset/offsets/shifted values are the same
+  literals `waterfallOffset.test.ts` pins from the real canvas implementation,
+  compared at 1e-12; `tests/test_export_vector_structure.py`'s four new
+  route-level structural tests.
+- Agent verification: sabotage table (mutation → tests that turned red):
+  (1) `waterfallWire` returns `{}` unconditionally → 7 red, incl.
+  `figureSpec.test.ts > … > emits the canvas' offset per plotted series`,
+  `… > a HIDDEN series keeps its stagger slot`,
+  `regressionMatrix.test.ts > … > waterfall > screen ≡ export` and the
+  inverted BUG-013 pin, and 3 in `waterfallOffset.test.ts`;
+  (2) `apply_waterfall_offsets` returns its input unchanged → 4 red
+  (`test_apply_waterfall_offsets_matches_the_canvas_golden`,
+  `…_degrades_on_a_short_or_bad_offset_list`,
+  `test_waterfall_offsets_shift_each_series_by_its_own_amount`,
+  `…_widen_the_autoscaled_axis_to_fit_the_stagger`);
+  (3) the route passes `None` instead of `req.waterfall_offsets` → the two
+  `test_export_vector_structure.py` waterfall tests red, proving the thin
+  adapter itself is covered and not just `calc/`.
+  Gate: `ruff check src tests tools` clean; `mypy src` clean (295 files);
+  `pytest` — 62 passed across
+  `test_export_vector_structure/test_calc_plotting/test_openapi_snapshot/test_repo_integrity`,
+  324 passed + 1 skipped across
+  `test_api_export/test_api_export_page/test_calc_figure/test_calc_figure_page`;
+  `tsc -b --force` and `eslint src --max-warnings=0` clean;
+  `vitest run src/lib src/architecture.test.ts` — 5221 passed, 0 failed;
+  `node scripts/freeze-regression-matrix.mjs --check` clean and no committed
+  golden changed (they are the SCREEN projection, which this fix does not
+  touch). Eager bundle measured on a `npm ci`-fresh build of each tree, on the
+  BRANCH (corrected 2026-09-16, review NIT 7 — the figures first recorded here
+  were measured against `ebefa693`, an ancestor this branch does not contain):
+  **919,693 B** at `ff45a200` → **919,877 B** at `50b30a04`, a **+184 B**
+  delta, 523 B inside the then-current 920,400 B budget. No budget move.
+- Owner verification: pending.
+- Notes: two DOCUMENTED residuals, both inherited rather than introduced. A
+  `group_col` request omits the field (the backend synthesizes one series per
+  level, which does not align 1:1 with `y_keys` — the same reason
+  `series_styles` is documented as unapplied there; see BUG-016), and a
+  `facets` request omits it (that branch renders from its own resolved panel
+  payloads, per `FigureRequest.facets`' own contract). Omitting is the honest
+  response: the renderer never receives an offset it would mis-apply. Both
+  combinations already export unstyled today. Also: the matrix's screen leg
+  measures the offset of the second DISPLAYED series while the export leg
+  reads the second PLOTTED one; the two index spaces coincide for every
+  fixture (none both hides a series and sets a waterfall), and the export leg
+  says so in place.
+
+#### Review round — 2026-09-16 (`fix(export): BUG-013 review round …`)
+
+An adversarial review of `50b30a04` returned **2 CONFIRMED, 1 CONFIRMED-narrow
+and 5 NITs**. All eight are addressed here; three of them changed behaviour.
+
+- **CONFIRMED 1 — offsets were emitted for `stackMode`/`polarMode`/`statMode`,
+  where the canvas staggers nothing.** A regression this fix introduced, not an
+  inherited residual: `PlotStage` early-returns to `MultiPanelStage`/
+  `PolarStage`/`StatStage` before the XY overlay exists, and
+  `useMultiPanelStage` never calls `composeDisplayPayload` at all, so a user who
+  left the waterfall slider up and switched to stacked panels got an export
+  staggered in a way the screen never was. Reproduced on BOTH entry points
+  (`stackMode` is a canonical binding, so it round-trips through a document):
+  offsets `[0, 74.75, 149.5]` for all three modes from `buildFigureSpec`, and
+  the same list from `buildFigureSpecFromDocument`. `waterfallWire` now asks the
+  predicate the canvases ask — `seriesStyleCycle.overlayModesMatchTheCanvas`,
+  the view-mode half of `overlayExportsSeriesStyles`, split out so each clause
+  still has exactly one definition. It subsumes the old hand-rolled `groupKey`/
+  `facets` refusals.
+  **Deliberate narrowing, against the review's suggested one-liner:** the
+  waterfall asks the MODE half only, not `displayListsAgree`. That clause exists
+  because the dash/marker/colour CYCLE is keyed by positions the two sides derive
+  independently; the waterfall's positions are the ones BUG-014 already resolves
+  against the canvas' own channel list, so folding it in would have exported the
+  two real series of an X-as-Y view OVERLAID — re-opening this very bug for a
+  view whose stagger is otherwise reproduced exactly. See finding 3.
+- **CONFIRMED 2 — the step was resolved from the full dataset; the canvas
+  resolves it from the fetched payload.** Fixed by the review's option (a), the
+  "by construction" one, because the plumbing turned out to be cheap:
+  `usePlotPayload` ALREADY returns the raw pre-compose `payload`
+  (`PlotPayloadResult.payload`), so the focused Stage's own publish effect
+  (`Stage/useLiveSnapshotPublish`, which already no-ops in the alternate render
+  modes and clears on unmount) now also publishes that payload's y-span through a
+  module-scope seam in `lib/waterfallOffset.ts` — the same imperative-ref shape
+  `lib/plotsnapshot.ts` uses for the display bundle, keyed by dataset id so
+  `exportActive`'s documented refocus race cannot stagger one dataset by
+  another's span. `buildStageFigureSpec` reads it at command time and threads it
+  through both branches. The SPAN travels rather than the step, so a request
+  whose `waterfall` fraction differs from the live view's still scales the
+  canvas' measured range correctly.
+  Measured, driving the real hook with `fetchPlot` mocked at the network
+  boundary (20 000 rows, excursion in rows `[0,100)`, `xLim [5000,6000]`,
+  `waterfall 0.25`): screen shift **0.25**, export offset **0.25** on BOTH the
+  live-view fallback and the canonical-document path. Before: 0.25 vs 495.25.
+  **Option (b) — filtering the wire's rows to `st.xLim` — was NOT shipped, on
+  either path, because it would create two NEW divergences.** The canvas windows
+  its payload only when `shouldRefetchWindow(xLim, baseDecimated)` holds
+  (`lib/plotDecimate.ts:383`), i.e. only for a SERVER-DECIMATED base: (i) a
+  dataset under `DECIMATE_MIN_POINTS` with axis limits set keeps drawing from the
+  full payload, so a windowed wire would disagree with it; and (ii)
+  `components/windows/BackgroundPlotWindow.tsx:164-188` does not pass `xLim` to
+  `usePlotPayload` at ALL, so a background window — and the Figure Builder
+  window-target preview built from its document — never windows, and a windowed
+  wire would disagree there too. `components/windows/PanelCell.tsx` likewise
+  passes no `xLim`. Option (a) has no such blind spot: every canvas that exists
+  publishes the span it actually measured.
+  The commit-body rationale that cited **decimation** as a reason to resolve
+  client-side was inverted and has been corrected in
+  `lib/waterfallOffset.ts`'s header: min/max bucket decimation PRESERVES each
+  series' extremes by construction (`calc/decimate.py`), so that case was never a
+  divergence; the windowed re-fetch is what trims, and it is what the seam fixes.
+- **Finding 3 (narrow) — the `allowExplicitXAsY` one-slot shift: CLOSED by
+  BUG-014, verified by probe, now pinned.** Probed against this branch's tip
+  (`7dfcde07`) with `xKey:0, yKeys:[0,1,2], waterfall:0.25`: the canvas draws
+  channels `[1,2]` at offsets `[0, 74.75]`, and the wire emits
+  `[149.5, 0, 74.75]` for `y_keys [0,1,2]` — every channel the canvas draws now
+  lands on the canvas' own offset, and only the extra X-as-Y curve (which the
+  canvas never draws) sits on the parked slot past the end. `resolveDisplaySeries`
+  resolving positions against the CANVAS list is what closed it. A new test pins
+  the offset and the palette colour TOGETHER, since they are the same position
+  and pinning one alone would let them drift apart again.
+- **NIT 4 — module ceilings.** Both files named were at or one line under their
+  limit. `lib/figureSpec.ts` **498 → 486** (architecture-test metric,
+  `split("\n").length`, ceiling 500): the P3.3 cycle derivation and its rationale
+  moved to `lib/figureSpecSeries.resolveSeriesCycle`, which now returns the
+  `CycleView` the waterfall wire reuses — one object, asked twice.
+  `routes/export_figures.py` **494 → 485** (`splitlines()`, ceiling 500): the two
+  new field-doc strings live in `routes/export_figures_schema.py`, the sibling
+  that exists for exactly this reason. Both are ≥ 14 lines under.
+- **NIT 5 — the NaN guard.** `applyWaterfall` used `fraction <= 0` and
+  `waterfallWire` used `!(fraction > 0)`, so a hand-built view with a NaN
+  fraction made the canvas NaN every value column while the wire quietly omitted
+  the field. Both now call `waterfallOffset.waterfallApplies`.
+- **NIT 6 — the wire field's doc reached no generated artefact.**
+  `waterfall_offsets` and `series_styles` are now documented with
+  `Field(description=…)`, so `frontend/api/openapi.json` and `lib/api/schema.d.ts`
+  carry the contract. `series_styles` mattered most: it is a loose
+  `dict[str, Any]` whose keys — BUG-014's `legend` among them — can be described
+  nowhere else. Regenerated with `tools/dump_openapi.py` + `npm run api:types`.
+- **NIT 7 — the completion record's coordinates.** Corrected above: parent
+  `ff45a200` (not the pre-cherry-pick `ebefa693`), and the bundle figures
+  re-stated as measured on this branch.
+- **NIT 8 — the commit trailer.** Unchanged: it is this session's prescribed
+  attribution line, not an ad-hoc choice. Flagged for the owner rather than
+  silently rewritten.
+
+Sabotage table (mutation → tests that turned red):
+
+| # | Mutation | Red |
+|---|---|---|
+| 1 | `waterfallWire` drops the mode predicate (keeps only `groupKey`) | 6 — `waterfallOffset.test.ts` "emits nothing for a grouped or faceted request" + "…for a stacked, polar or statistics view"; `figureSpec.test.ts` "is ABSENT for a faceted request" + the three "is ABSENT for a `<mode>` view" |
+| 2 | `waterfallWire` ignores the published span | 3 — `waterfallOffset.test.ts` "uses the published span instead of re-measuring the DataStruct"; both `waterfallExportSpan.test.ts` parity cases |
+| 3 | the publish effect measures `displayPayload` (post-waterfall) instead of `payload` | 3 — `useLiveSnapshotPublish.test.ts` "is measured BEFORE the waterfall is applied"; both parity cases |
+| 4 | `waterfallApplies` becomes `!(fraction <= 0)` (NaN passes) | 2 — `waterfallOffset.test.ts` "refuses zero, negative and NaN fractions" + "so a NaN fraction leaves the canvas payload untouched AND the wire empty" |
+| 5 | `readLiveWaterfallSpan` drops the dataset-id guard | 2 — `waterfallOffset.test.ts` "the seam hands back a span only for the dataset it was measured from"; `useLiveSnapshotPublish.test.ts` "is refused for a DIFFERENT dataset" |
+| 6 | `resolveDisplaySeries` positions against the REQUEST's list, not the canvas' | 2 — `figureSpec.test.ts` "the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots" + the existing P3.3 colour sibling |
+| 7 | `waterfall_offsets` loses its `Field(description=…)` | 1 — `tests/test_openapi_snapshot.py::test_committed_openapi_json_matches_live_schema` |
+
+Gate (all foreground): `ruff check src tests tools` clean; `mypy src` clean
+(296 files); `pytest -q` over
+`test_openapi_snapshot/test_repo_integrity/test_export_vector_structure/test_calc_plotting/test_api_export`
+— **188 passed, 1 skipped**; `tsc -b --force` and `eslint src --max-warnings=0`
+clean; `freeze-regression-matrix.mjs --check` clean, no committed golden changed;
+`check-bundle-size.mjs` OK.
+
+**Corrected 2026-09-17 (round 3, NIT 6) — the vitest and bundle numbers first
+recorded here were measured against the wrong parent.** `git rev-parse
+da00c042^` is **`56bb3599`**, not `7dfcde07`: three commits sit between them
+(`91a2aa3a`, `950b3a9b`, `56bb3599` itself), one of which (`91a2aa3a`) edits
+eagerly-reachable modules, so the original
+"910,528 B at `7dfcde07` → 911,045 B, +517 B" was not attributable to this
+commit. Re-measured on the real pair: **910,971 B** at `56bb3599` →
+**911,488 B** at `da00c042`, **+517 B**, 8,912 B inside the 920,400 B budget.
+No budget move. The accompanying claim that the scoped vitest run left one
+failure in `store/plotRecipes.test.ts` "already fixed later on the branch by
+`950b3a9b`" was also wrong and is withdrawn rather than re-worded: `950b3a9b`
+is `da00c042`'s GRANDparent and was already in the tree, and re-running
+`vitest run src/lib src/components/Stage src/store src/architecture.test.ts`
+with `src/store` in scope on `da00c042` gives **53 files / 930 tests, 0
+failed**.
+
+#### Review round 3 — 2026-09-17 (`fix(export): BUG-013 round 3 …`)
+
+A second adversarial review, of `da00c042`, returned **4 CONFIRMED and 4 NITs**.
+Every one is closed or recorded below; four changed behaviour, and each of those
+went in behind a test that fails without it.
+
+- **CONFIRMED 1 — the span was published under the STORE's current dataset while
+  that dataset's fetch was still in flight.** `Stage/useLiveSnapshotPublish` read
+  the key from `args.active.id`, which the store advances SYNCHRONOUSLY on a
+  dataset switch, while the span itself came from `usePlotPayload`'s payload
+  STATE, which keeps the PREVIOUS dataset's rows for the whole fetch round trip
+  (only a switch to `null` clears it). So `readLiveWaterfallSpan(newDataset)`
+  handed out the old dataset's number for the length of a network round trip.
+  Measured on the real hook pair with `fetchPlot` mocked at the network
+  boundary: d1 span **200**, d2 span **2**, and an export of d2 taken mid-flight
+  staggered by **50** instead of **0.5** — a hundred times too much, and 25x d2's
+  entire y-range. Fixed at the source: `usePlotPayload` now carries the dataset
+  id WITH the payload in a single `useState` (`PlotPayloadResult.
+  payloadDatasetId`) and the publish keys off that, so the seam cannot name a
+  dataset whose rows it has never seen. Mid-flight the old dataset's span stays
+  published under the OLD id — which is what the canvas is still drawing — and
+  the new dataset simply has no published span until its rows arrive.
+- **CONFIRMED 2 — a FROZEN document's stagger was scaled by the LIVE dataset's
+  span.** `buildStageFigureSpec` read the span for `ds.id` and threaded it into
+  the frozen branch too, contradicting this file's own contract that "a frozen
+  document is self-contained and intentionally ignores any live dataset". The
+  span is now dropped in `buildFigureSpecFromDocument`, in the same place and on
+  the same condition `liveDataset` already is. Measured at the
+  `buildStageFigureSpec` layer: snapshot span 2, live span 200, `waterfall 0.25`
+  — offsets **[0, 0.5]**, where the live span gave **[0, 50]**, i.e. 25x the
+  snapshot's whole y-range and a curve flung off the figure.
+- **CONFIRMED 3 — the no-live-canvas fallback measured the span over channels
+  the canvas never draws.** It scanned the REQUEST's `displayChannels`, which
+  under `allowExplicitXAsY` (passed unconditionally by
+  `buildFigureSpecFromDocument`) keeps the X channel as a Y series. Positions
+  were already resolved against the canvas' list (BUG-014); the step was not.
+  `resolveDisplaySeries` now also RETURNS `canvasChannels` — the list it already
+  computed — and the wire measures over it, so span and positions come from one
+  index space. Measured on a fixture whose X channel lies outside the others'
+  range: export **[500, 0, 250]** against canvas shifts **[0, 49.75]**, now
+  **[149.5, 0, 74.75]** against the canvas' own **[0, 74.75]**. The existing
+  X-as-Y pin was re-based onto that fixture: it used to pass by coincidence,
+  because in the shared fixture channel 0's values sat INSIDE channels 1-2's, so
+  both spans were 299 either way. It now asserts the step numerically.
+- **CONFIRMED 4 (narrow) — the fallback also ignored `dropTrailingEmptyRows`.**
+  Both `fetchPlot` return paths end in it, so no canvas has ever measured a raw
+  DataStruct; the fallback did. The fallback now BUILDS the payload its own
+  canvas would draw — `buildColumns` over `canvasChannels` and the request's x
+  channel, then `dropTrailingEmptyRows`, the literal tail of `fetchPlot`'s
+  offline path — and measures that. Measured on the Origin over-allocation
+  artefact `plotdata.ts` documents (trailing rows reading exactly 0 in x and
+  every y): export **18.75** against canvas **6.25**, now 6.25 on both. The
+  header sentence that called the old fallback "what its own canvas-less
+  `buildColumns` would measure anyway" was false in both these ways and has been
+  replaced with what the code now does.
+- **NIT 5 — a grouped view with `y2Keys` set: closed.** The canvas degrades such
+  a view to a plain ungrouped overlay (`usePlotPayload`'s `groupCol`) and
+  staggers it, and the live export route puts no `group_col` on the wire for it
+  either — but the refusal was keyed on the view's RAW `groupKey`, so the screen
+  staggered and the PDF overlaid: BUG-013's original symptom, still open for this
+  one combination. The degrade rule now has ONE definition,
+  `lib/plotGroupSplit.canvasGroupCol`, asked by the canvas and by
+  `waterfallWire`; the wire additionally refuses on the `group_col` it actually
+  EMITS, so a document binding that rides the wire still refuses even when the
+  live view would have degraded. The P3.3 style cycle is deliberately NOT
+  changed — it keeps asking `overlayExportsSeriesStyles` on the raw binding, the
+  same question both canvas hooks ask, so canvas and export still agree there.
+  **Overclaimed — narrowed 2026-09-17 (round 4 review): closed only on
+  `buildFigureSpec` (the live-view builder), which this module's own header
+  documents as reached ONLY through `buildStageFigureSpec`'s rare fallback in
+  production. The canonical `buildFigureSpecFromDocument` route real exports
+  take still emitted `group_col` from the RAW binding — genuinely closed in
+  round 4, below.**
+- **NIT 6 — the mis-based gate/bundle numbers: corrected in place above.**
+- **NIT 7 — the Figure Builder's own export: RECORDED, not threaded.**
+  `components/workshops/figurebuilder/previewExport.ts:55` and
+  `figurebuilder/canonicalReadiness.ts:60` call `buildFigureSpecFromDocument`
+  with no span, so they take the fallback while `Export figure…` on the focused
+  Stage takes the canvas' windowed span — two staggers for one figure whenever a
+  committed zoom has narrowed a server-decimated payload. Threading the seam
+  there would be wrong, not merely more work: it is written by the FOCUSED Stage
+  canvas alone, while the Figure Builder renders a TARGET window that need not be
+  focused (`figurebuilder/canonicalSession.ts` documents focus as not a styling
+  input), so the preview would change when the user clicked another window — the
+  class `components/windows/BackgroundPlotWindow.tsx`'s header names. Closing it
+  properly means per-window published spans. Named as a residual in
+  `lib/waterfallOffset.ts`'s header with both file:line coordinates.
+- **NIT 8 — covered by CONFIRMED 1's test.** `waterfallExportSpan.test.ts` now
+  varies the dataset and reads the seam mid-flight; it was the only end-to-end
+  test of the seam and it used one dataset and one window, which is exactly why
+  the key mismatch went unnoticed.
+
+Also closed while there: `waterfallWire`'s "fewer than two series" guard now
+counts the CANVAS' channels rather than the request's, because that is what
+`applyWaterfall` counts — an X-as-Y request can carry two display channels while
+the canvas draws one curve and staggers nothing.
+
+Sabotage table (mutation → tests that turned red; scope
+`src/lib/waterfallOffset.test.ts src/lib/figureSpec.test.ts
+src/components/Stage/waterfallExportSpan.test.ts
+src/components/Stage/useLiveSnapshotPublish.test.ts
+src/components/Stage/usePlotPayload*.test.ts src/store/plotRecipes.test.ts
+src/lib/regressionMatrix.test.ts`, 233 green unsabotaged):
+
+| # | Mutation | Red |
+|---|---|---|
+| 1 | the publish keys the span by the STORE's active dataset again | 1 — `waterfallExportSpan` "names no span for a dataset whose fetch is still in flight" |
+| 2 | the frozen branch is handed the live span again | 1 — `figureSpec` "a FROZEN document's stagger comes from its snapshot, never the live canvas' span" |
+| 3 | `resolveDisplaySeries` returns the request's list as `canvasChannels` | 1 — `figureSpec` "the X-as-Y branch staggers AND colours the canvas' channels by the CANVAS' slots" |
+| 4 | the fallback skips `dropTrailingEmptyRows` | 1 — `waterfallOffset` "measures the fallback over the rows a canvas would draw, trailing padding dropped" |
+| 5 | the group refusal reads the view's RAW binding again | 1 — `figureSpec` "rides a grouped view that a secondary Y axis degraded to a plain overlay" |
+| 6 | `payloadDatasetId` is taken from the params instead of the fetched state | 1 — `waterfallExportSpan` "names no span for a dataset whose fetch is still in flight" |
+| 7 | the fallback span is measured over the request's `yKeys` | 3 — both new `waterfallOffset` fallback tests + the X-as-Y pin |
+
+Gate (all foreground, on the round-3 commit): `tsc -b --force` and
+`eslint src --max-warnings=0` clean; `vitest run src/lib src/components/Stage
+src/store src/architecture.test.ts` — **406 files / 7809 tests passed, 0
+failed**; `pytest -q tests/test_repo_integrity.py` — **12 passed**. No backend
+file changed, so the export/OpenAPI suites are untouched by this round.
+`check-bundle-size.mjs` OK, 7.0 kB under budget. Eager bundle, both trees built
+in the same checkout after `rm -rf node_modules/.vite`: **912,846 B** at the
+parent `0565b674` → **913,186 B** here, **+340 B**. No budget move.
+
+**Corrected 2026-09-17 (round 4, NIT 3) — this bundle pair was measured
+against the wrong parent AGAIN, the same mistake round 3 corrected once
+already (this file's NIT 6, just above — whose own "four commits" is also
+corrected to three, in place).** `git rev-parse fe50280f^` is **`f0d33783`**,
+not `0565b674` — `0565b674` is the base of the worktree this work was
+cherry-picked from, and three commits with eager frontend edits
+(`caa10f88`, `8a8d92b1`, `230a174a`) sit between the two. Re-measured on the
+real pair, both trees built in a scratch `git worktree` after `npm ci` and
+`rm -rf node_modules/.vite`: **912,953 B** at `f0d33783` → **913,293 B** at
+`fe50280f`, **+340 B** — the delta the original record quoted happens to be
+right even though its base was wrong.
+
+#### Review round 4 — 2026-09-17 (`fix(export): BUG-013 round 4 …`)
+
+A third adversarial review, of `fe50280f`, returned **1 CONFIRMED (medium), 1
+CONFIRMED (test gap) and 3 NITs**. Round 3's CONFIRMED 1-4 were re-attacked and
+hold; this round's findings are about round 3's OWN fix and its own record.
+
+- **CONFIRMED 1 — round 3's `group_col` degrade fix reached only the branch
+  `figureSpec.ts` itself never calls in production.** `figureSpec.ts`'s
+  `group_col` field, and the `groupCol` it fed `waterfallWire`, both read the
+  RAW `extras.groupKey` binding, not the degraded value `plotGroupSplit.
+  canvasGroupCol` computes — the exact function the CANVAS (`Stage/
+  usePlotPayload`) and `waterfallWire`'s own internal fallback already asked.
+  Round 3's new test ("rides a grouped view that a secondary Y axis degraded
+  to a plain overlay") only exercised `buildFigureSpec`, the live-view
+  builder that `buildStageFigureSpec`'s own header documents as reached ONLY
+  through its rare invariant-violation fallback — not
+  `buildFigureSpecFromDocument`, the canonical route "Copy figure"/"Export
+  figure…" actually take. Reachable with one legend click on that real route:
+  bind a group column, bind a secondary axis, then hide the y2 series (the
+  canvas degrades on the RAW y2 binding regardless of hidden state, so the
+  screen shows a plain, staggered overlay). Measured on that exact document
+  fixture (`dataset`'s channels 1-3, `groupKey:0, y2Keys:[3], hiddenChannels:
+  [3], waterfall:0.25`), before the fix: `group_col:0`, `y_keys:[1,2]`, NO
+  `waterfall_offsets` — a grouped, un-staggered export of an ungrouped,
+  staggered screen, BUG-013's own symptom. Fixed by extracting `lib/
+  figureSpecGroup.ts`'s `resolveGroupCol` (funds the fix against `figureSpec.
+  ts`'s 500-line ceiling rather than raising it): it keeps the existing
+  grouped+REALLY-rendered-secondary-axis throw on the raw binding (a genuine
+  conflict, unchanged — `richView()`'s existing throw test still passes
+  unmodified), and everywhere else degrades `group_col` through
+  `canvasGroupCol`, reused verbatim for the `groupCol` `waterfallWire` is
+  given. After the fix, the same fixture emits no `group_col` and offsets
+  `[0, 74.75]` — the canvas' own numbers, not hardcoded. The stale doc comment
+  claiming `buildFigureSpec`'s fallback branch "should not occur in practice"
+  is corrected in place: it is the ONLY way `buildFigureSpec` is reached in
+  production, and testing it directly (as round 3 did) is exactly how a fix
+  got marked closed on a branch users don't reach.
+- **CONFIRMED 2 (test gap) — the `groupCol` argument `waterfallWire` takes was
+  untested; investigated and narrowed rather than closed as specified.**
+  Sabotaging the raw-vs-degraded computation (finding 1's mutation) is caught
+  by the new test above. Separately sabotaging the `waterfallWire` CALL SITE —
+  dropping the `groupCol,` line from `figureSpec.ts`'s call entirely — does
+  **NOT** turn the new test red: measured directly (`tsc -b --force` clean,
+  `vitest run src/lib/figureSpec.test.ts` 83/83 green with that line deleted).
+  Traced why: `waterfallWire`'s own internal fallback is `args.groupCol ??
+  canvasGroupCol(args.view.groupKey, args.view.y2Keys)`, and `args.view` here
+  is `resolveSeriesCycle`'s `cycleView`, whose `groupKey` is `extras.groupKey
+  ?? st.groupKey` and whose `y2Keys` is `st.y2Keys` — the SAME two inputs
+  `figureSpecGroup.resolveGroupCol` computes `group_col` from, for BOTH
+  callers (`buildFigureSpecFromDocument`'s `st.groupKey` is always literally
+  `document.bindings.groupKey`, i.e. `extras.groupKey`, by construction —
+  `figureDocumentToPlotView` line ~208 — so the two never differ; the live
+  route's `extras.groupKey` is always `undefined`, which is nullish either way
+  it is read). So after the finding-1 fix, the explicit argument is
+  mathematically redundant with the callee's own fallback in every caller
+  this codebase has — not a coincidence of one fixture, a structural
+  invariant of the call graph. Left in place anyway (it is what the code
+  comment already documents as "keyed on what the request ACTUALLY carries",
+  self-documenting and harmless), but the "must go red when dropped" bar in
+  the brief cannot be met honestly; the finding-1 test above is the real
+  regression guard for the behaviour this argument was meant to protect
+  ("the wire still refuses offsets when it emits `group_col` … or, after fix
+  1, emits neither" — it emits neither, and the offsets ride).
+- **NIT 3 — the round-3 record's bundle numbers and commit-count claim:
+  corrected in place above** (this section's own preamble).
+- **NIT 4 (test gap) — `canvasColumns`' `xKey` argument was untested.**
+  Sabotage (`waterfallOffset.ts`: `canvasColumns(args.data, args.canvasChannels,
+  null)` instead of `args.view.xKey`) left the existing suite green. It is
+  live: the Origin over-allocation padding rule keys off the ACTUAL x column,
+  and a request whose x channel is a value column (not `time`) can have a
+  DIFFERENT trailing-zero pattern than `time` does. New test, measured (not
+  hardcoded from the review): real `xKey` drops the padded tail -> range
+  `[50,75]` -> step **6.25**; `xKey:null` (the sabotage) sees `time` as
+  finite/non-zero throughout, drops nothing -> range `[0,75]` -> step
+  **18.75**. Sabotage-verified: reverting to `null` turns exactly this one
+  test red (17/18 -> the new one).
+- **NIT 5 — the regression matrix's REOPEN leg measured the waterfall over a
+  raw, un-dropped `buildColumns`.** `regressionMatrixReopen.testkit.ts`'s
+  `waterfallOffsetFor` now wraps its `buildColumns` call in
+  `dropTrailingEmptyRows`, matching the EXPORT leg's own fallback
+  (`waterfallOffset.canvasColumns`) so a future padded fixture cannot report a
+  false `reopen != export` divergence. `freeze-regression-matrix.mjs --check`
+  stays clean — no current matrix fixture has trailing empty rows, exactly as
+  the screen leg's own comment already notes for its own (deliberate) omission
+  of this step — so this is a defensive fix, not new coverage; sabotaging it
+  (reverting to the raw `buildColumns`) leaves `regressionMatrix.test.ts`
+  green, confirmed. Non-vacuous: probed directly against the finding-4 padded
+  fixture outside the suite — `18.75` without the drop, `6.25` with it, the
+  same two numbers NIT 4 pins.
+
+Sabotage table (scope `src/lib/figureSpec.test.ts src/lib/waterfallOffset.
+test.ts src/lib/regressionMatrix.test.ts`, restored byte-identical after
+each):
+
+| # | Mutation | Result |
+|---|---|---|
+| S1 | `figureSpecGroup.resolveGroupCol` returns the raw `groupKey` instead of `canvasGroupCol(...)` (keeps the throw) | RED 1 — `figureSpec` "degrades group_col exactly like the canvas when the y2 channel is hidden, and the offsets ride" |
+| S2 | drop the `groupCol,` line from `figureSpec.ts`'s `waterfallWire` call | GREEN — 83/83 unchanged; investigated, see CONFIRMED 2 |
+| S3 | `waterfallOffset.ts`: `canvasColumns(args.data, args.canvasChannels, null)` instead of `args.view.xKey` | RED 1 — `waterfallOffset` "measures the padding drop against the REQUEST's x channel, not always `time`" |
+| S4 | `regressionMatrixReopen.testkit.ts`: revert to the raw `buildColumns`, no `dropTrailingEmptyRows` | GREEN — `regressionMatrix.test.ts` 47/47 unchanged (no current fixture has trailing padding; see NIT 5) |
+
+Gate (all foreground): `npx tsc -b --force` and `npx eslint src
+--max-warnings=0` clean; `npx vitest run src/lib src/components/Stage
+src/store/plotRecipes.test.ts src/architecture.test.ts` — **328 files / 6124
+tests passed, 0 failed**; `node scripts/freeze-regression-matrix.mjs --check`
+clean, no committed golden moved; `uv run pytest -q tests/
+test_repo_integrity.py` — **12 passed**. No backend file changed. Eager
+bundle: the `+0 B` delta above was measured against a CHERRY-PICK base
+(`b3fb6668` = the worktree commit's own parent), not this commit's real
+parent — flagged as this file's own recurring mistake (see NIT 3, round 5
+review) and corrected here rather than left stale. Re-measured (round 5
+review) at the real pair, both trees built in a scratch `git worktree` after
+`npm ci` + `rm -rf node_modules/.vite`: `git rev-parse 1fcc4137^` =
+`19018015` → **913,249 B** at `19018015` → **913,249 B** at `1fcc4137`,
+**+0 B** — the same conclusion (`figureSpecGroup.ts` eagerly reachable
+through the unchanged `figureSpec.ts` import graph, net line-count change
+small enough to fall out in minification), now against the tree this commit
+actually built on.
+
+#### Review round 5 — 2026-09-17 (`fix(export): BUG-013 round 5 …`)
+
+A fourth adversarial review, of `1fcc4137`, returned **2 CONFIRMED** and
+**5 NITs**, all on round 4's OWN fix and its own record; round 3's CONFIRMED
+1-4 were not re-attacked this round.
+
+- **CONFIRMED 1 — round 4 kept a throw the canvas does not have.**
+  `figureSpecGroup.ts`'s `resolveGroupCol` refused (threw) a group bound with
+  a REALLY RENDERED (not merely hidden) secondary axis, reasoned as "a
+  genuine conflict, not a degrade case." But `Stage/usePlotPayload`'s own
+  `canvasGroupCol` call reads the RAW `y2Keys` binding with no
+  plotted/hidden distinction at all — the screen has always degraded THIS
+  exact combination to a plain, staggered overlay too, reachable with one
+  click (bind Group, right-click a series -> Y2). Measured with the throw
+  deleted: `{y_keys:[1,2,3], y2_keys:[3], group_col: absent,
+  waterfall_offsets:[0, 74.75, 149.5]}` — byte-for-byte the canvas' own
+  numbers, and the backend accepts it (`export_figures.py` rejects only
+  `group_col` combined with `y2_keys`, and a degrade emits no `group_col` at
+  all). Fixed by deleting the throw: `resolveGroupCol` is now `canvasGroupCol`
+  itself, one function, one answer, for every cell. `computeCanonicalReadiness`
+  needed no change — with nothing left to throw on the GROUP path,
+  the Figure Builder's preview naturally reports `"ready"` instead of
+  `"invalid-spec"` for a grouped+y2 view, canExport flips to true, and no new
+  UI/warning channel was invented (none existed to reuse, per the brief's own
+  qualifier). `"invalid-spec"` itself is not dead: `figureSpecFacets.ts:101`'s
+  "no visible series to export" still throws it, for its own, unrelated
+  reason (round-5-review NIT 6). Sabotage (S1 below) shows the fix is
+  covered by a new 7-cell truth table (`figureSpec.test.ts`) plus 6 existing
+  test sites across 4 files that pinned the old throw, all rewritten to
+  assert the degrade instead: `figureSpec.test.ts` (3 sites),
+  `useFigureBuilder.test.ts`, `copyFigureCommand.test.ts`,
+  `exportFigureCommand.test.ts`.
+- **CONFIRMED 2 — the live `buildFigureSpec` route could read two different
+  answers for one request.** `waterfallWire`'s `groupCol` argument was
+  optional with an internal fallback, `args.groupCol ?? canvasGroupCol(args.
+  view.groupKey, args.view.y2Keys)`. `??` treats an explicit `null` (a
+  resolved, degraded answer) the same as an omitted argument, so it did NOT
+  suppress the second reading — it invited it. On the live `buildFigureSpec`
+  route, `extras.groupKey` is always `undefined` (the legacy builder
+  structurally cannot carry a group binding at all — a known, separate
+  limitation `buildStageFigureSpec`'s document routing exists to close), so
+  `group_col` on the wire was ALWAYS absent regardless of `st.groupKey`,
+  while `waterfallWire`'s fallback still read the view's raw `st.groupKey`
+  for the offset refusal alone. Measured (`st.groupKey:0`, no y2, waterfall
+  0.25): `group_col` absent, `waterfall_offsets` ALSO absent — the field
+  says "ungrouped", the refusal says "grouped", precisely the two-answers
+  case the round-4 commit body claimed was now impossible. Fixed by making
+  `groupCol` REQUIRED on `waterfallWire`, no fallback: both fields now read
+  the one value `figureSpec.ts` already resolved with `resolveGroupCol`
+  before calling in. A pre-existing test ("a grouped view with NO secondary
+  axis still refuses") pinned the OLD two-answer behaviour and was rewritten
+  to assert the new one-answer contract instead (sabotage S2 below).
+- **NIT 3 — the round-4 record's absolute bundle pair named a cherry-pick
+  base, corrected in place above** (this section's own preamble).
+- **NIT 4 — `figureSpec.ts`'s line count, corrected in place above; round 5's
+  own edits left it at 497/500 (`split("\n").length`), unchanged from round 4
+  — comments trimmed to offset the doc additions the fix needed, so the
+  3-line headroom is preserved rather than spent.**
+- **NIT 5 — the reopen leg's waterfall doc contradicted itself, reworded in
+  place** (`regressionMatrixReopen.testkit.ts`'s `waterfallOffsetFor`): the
+  opening line now says what it actually measures (the export leg's own
+  columns, through the screen leg's own `measureWaterfall`) instead of a
+  since-contradicted "same way the screen leg measures it."
+- **NIT 6 — `figureMode` (`regressionMatrix.testkit.ts`) hand-copied the
+  degrade predicate instead of calling `canvasGroupCol`, and its comment
+  ("figureSpec.ts refuses the combination outright") went stale the moment
+  finding 1 landed.** Now calls `canvasGroupCol` directly — one fewer
+  hand-synced copy of the rule, matching this module's own "two
+  implementations drift apart" warning. `legacyFigure.ts:87`'s `group_col:
+  state.docGroupCol ?? undefined` is confirmed still benign (verified: no
+  `y2`/`waterfall` token anywhere in that module) and left as is, noted per
+  the brief.
+- **NIT 7 — the `groupCol` argument stays required and is no longer
+  redundant** after fix 2 (round 4's "redundant... left in place anyway" note
+  is moot now that dropping it would be a compile error, not just an
+  unreachable-in-practice branch).
+- **NIT 8 (named residual) — on the LIVE route, the wire's curve SET still
+  does not match the canvas' after this fix; only the stagger STEP does.**
+  `buildFigureSpec` (`lib/figureSpec.ts:125-129`) is the legacy/live builder
+  "Copy figure"/"Export figure…" fall back to when no canonical document
+  applies (`buildStageFigureSpec`'s rare fallback, round-4 CONFIRMED 1's own
+  finding) — its `extras` parameter has no `groupKey` field at all, so it
+  structurally cannot carry a group binding onto the wire regardless of this
+  fix. Measured (`st.groupKey:0, yKeys:[1,2,3], waterfall:0.25`, 4 rows, 2
+  group levels): wire emits `group_col` absent, `y_keys:[1,2,3],
+  waterfall_offsets:[0, 99.75, 199.5]`; the canvas (`Stage/usePlotPayload.ts`,
+  `applyGroupSplit` at `:340`) draws **6** split series, staggered across 6
+  slots with that SAME step. Before this fix the live route emitted neither
+  `group_col` nor `waterfall_offsets` at all (a flat, un-staggered 3-curve
+  figure) — the fix is still a net improvement on BUG-013's own "does the
+  export look like the screen" axis, and matches the canvas' own stagger
+  amount — but the exported curve SET (3 curves) is not the canvas' curve set
+  (6 split series), so this residual is not closed by this commit. Closing it
+  needs `buildFigureSpec` to gain a `groupKey` field (or for every "Copy
+  figure"/"Export figure…" caller to route through
+  `buildFigureSpecFromDocument` instead, closing round-4 CONFIRMED 1's
+  fallback rather than widening the legacy builder) — out of this round's
+  scope, tracked here rather than left implicit in "the figure is the
+  canvas."
+
+Sabotage table (scope `src/lib/figureSpec.test.ts src/lib/waterfallOffset.
+test.ts src/components/workshops/figurebuilder/useFigureBuilder.test.ts`,
+restored byte-identical after each):
+
+| # | Mutation | Result |
+|---|---|---|
+| S1 | Restore a throw in `figureSpecGroup.resolveGroupCol` for ANY grouped+non-empty-`y2Keys` binding (measured broader than round 4's exact plotted-only throw, on purpose) | **RED 10** — `figureSpec.test.ts` (6: the truth table's cells 4/5/6/7, the rewritten "exports grouping…" test, "degrades group+secondary-axis the SAME way…", "degrades group_col exactly like the canvas when the y2 channel is hidden"), `useFigureBuilder.test.ts` (1), `copyFigureCommand.test.ts` (1), `exportFigureCommand.test.ts` (1) — every rewritten degrade test plus 3 pre-existing hidden-y2 tests, since this broader throw also fires on the hidden/solo'd/not-plotted cells |
+| S2 | Restore `args.groupCol ?? canvasGroupCol(args.view.groupKey, args.view.y2Keys)` inside `waterfallWire` | RED 1 — `figureSpec` "group_col absent implies waterfall_offsets present here too, even for a view the CANVAS still splits" |
+| S3 | Drop the `groupCol,` line from `figureSpec.ts`'s `waterfallWire` call | tsc **compile error** (`groupCol` is now required, not a silently-green runtime gap — closes round 4's CONFIRMED-2 test gap structurally) |
+| S4 | `figureMode` reverts to the hand-copied predicate (`groupKey !== null && !(y2 && y2.length > 0)`) | GREEN — the two predicates are extensionally identical; the fix is a de-duplication, not new coverage (matches NIT 6's own framing) |
+
+Gate (all foreground): `npx tsc -b --force` and `npx eslint src
+--max-warnings=0` clean; `npx vitest run src/lib src/components/Stage
+src/components/workshops/figurebuilder src/store/plotRecipes.test.ts
+src/architecture.test.ts` — **350 files / 6586 tests passed, 0 failed**;
+`node scripts/freeze-regression-matrix.mjs --check` clean, no committed
+golden moved; `uv run pytest -q tests/test_repo_integrity.py` — **12
+passed**. No backend file changed. Eager bundle, three trees built after
+`npm ci` + `rm -rf node_modules/.vite` (the first two in scratch `git
+worktree`s, the third the worktree this commit was made in): `19018015` and
+`1fcc4137` both **913,249 B** (see the round-4 record correction above);
+this commit **913,181 B**, **-68 B** — comment trims (finding 1's throw
+removal, finding 2's doc rewrite) outweighing the small amount of new test
+code, none of which is eagerly reachable.
+
+**Record correction (round-5-review CONFIRMED 1 / NIT 5, added after the
+fact):** every number in the paragraph above was measured on the
+**pre-cherry-pick worktree**, whose parent was `1fcc4137`, not on the
+branch — `git rev-parse 97eeb1a4^` is `65ecbf81` (BUG-014 round 5), which
+sits between `1fcc4137` and `97eeb1a4` and lands inside both the recorded
+vitest scope and eager code. Re-measured on the branch at `97eeb1a4` itself,
+exact recorded scope, foreground, clean tree: **351 files / 6602 tests
+passed, 0 failed** (`65ecbf81` alone added `frontend/src/lib/
+sanitizeRecord.test.ts` plus 16 tests across four existing files — the exact
++1 file / +16 test delta). `65ecbf81`'s own commit body independently
+records "Eager bundle 913,249 -> 913,348 B (+99)", so the branch total at
+`97eeb1a4` is **913,348 − 68 = 913,280 B**, not the recorded 913,181 B — the
+**−68 B delta above is still a fair ISOLATED measurement of this diff** (its
+base tree differs from the branch by this diff alone), only the recorded
+absolute was wrong. Restated pair, both SHAs named: parent `65ecbf81` =
+**913,348 B**, `97eeb1a4` = **913,280 B** (arithmetic from two committed
+records, not a fresh build of either). The CONFIRMED 1 paragraph above ("Five
+… test sites") is corrected in place to **six** (`figureSpec.test.ts` had
+three rewritten sites, not two).
+
+---
+
+## ~~BUG-014 — a renamed legend loses its unit on screen but keeps it on export~~ **FIXED 2026-09-15**
+
+**Priority:** P3 — cosmetic only: the figure and its data are correct on
+both legs, the legend wording simply disagrees between screen and export.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading both the frontend label
+builder and the backend's label formatting, not inferred — see Confirmed
+implementation evidence below.
+
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-15.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D3.
+
+#### User-visible problem
+
+A user renames a series' legend label — for example to "Loop 1" — on a
+channel whose unit is "au". On screen, the legend shows exactly "Loop 1" and
+nothing else: a rename fully replaces the displayed label, unit included.
+Exporting the same figure shows "Loop 1 (au)" instead — the backend
+re-appends the channel's unit to the rename, producing a label the user
+never asked for and does not see on screen.
+
+#### Confirmed implementation evidence
+
+(As FILED, 2026-09-14, before the fix. The line numbers and the three code
+shapes named below — `seriesLabels?.[i] ?? …`, the `dataset.labels[ch]`
+rewrite, and the unconditional `f"{s.label} ({s.unit})"` — describe the code
+the bug was found in; the Completion record names what replaced them. Kept
+verbatim as the record of the finding.)
+
+- `frontend/src/lib/uplotOpts.ts:694` (`seriesLabels?: (string |
+  undefined)[]` on the opts builder's args) and `:907` — the on-screen
+  legend label is built as `args.seriesLabels?.[i] ?? (s.unit ? `${s.label}
+  (${s.unit})` : s.label)`. An explicit rename supplies a value at
+  `seriesLabels[i]`, which REPLACES the whole label — unit included — via the
+  `??` short-circuit; there is no code path that re-appends a unit onto a
+  rename.
+- `frontend/src/lib/figureSpec.ts:200-204` — the wire `dataset` sent to
+  export only rewrites `data.labels[ch]` to the raw rename text
+  (`st.seriesLabels[ch] ?? label`): this changes the CHANNEL LABEL the
+  backend receives, not a fully-resolved legend string with a unit already
+  decided.
+- `src/quantized/routes/export_figures.py:234` and `:267` (inside
+  `_figure_series`, part of `_resolve_figure`'s codepath) — every exported
+  series name is unconditionally built as `f"{s.label} ({s.unit})" if
+  s.unit else s.label`: the backend always re-appends the channel's OWN unit
+  to whatever label string it receives, with no way to mark a label as
+  "already complete, do not append a unit."
+- Net effect: a rename lands on `dataset.labels[ch]` (becomes `s.label`
+  server-side) and is then unit-appended a SECOND time by the backend,
+  producing "Loop 1 (au)", while the screen shows exactly "Loop 1".
+- Test: `frontend/src/lib/regressionMatrix.test.ts:368`,
+  `it('DIVERGENCE (BUG-014): a renamed series reads "Loop 1" on screen and
+  "Loop 1 (au)" in the export', ...)` — builds a document with
+  `view.seriesLabels: { 0: "Loop 1" }` on a channel with unit "au"
+  (`renamedFigure()`, `regressionMatrix.test.ts:447`) and pins BOTH measured
+  strings (screen "Loop 1", export "Loop 1 (au)") plus the wire bytes behind
+  them (`spec.dataset.labels[0] === "Loop 1"` AND `spec.dataset.units[0] ===
+  "au"` — the two the backend re-joins), then asserts they differ.
+  (Converted 2026-09-14 from a bare `it.fails`.)
+
+#### Why this priority
+
+P3 as filed. The evidence supports keeping it there: the plot itself is
+correct on both legs (same data, same series, same colours), only the legend
+STRING differs — a wording/polish mismatch, not a data or scientific
+correctness issue, and not something that could plausibly be mistaken for a
+different measurement.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a `FigureDocument` with
+  `view.seriesLabels: { 0: "Loop 1" }` on a channel whose unit is "au",
+  built by `renamedFigure()` (`regressionMatrix.test.ts:447-463`).
+- [x] Exact actions recorded — rename series 0's legend label, then compare
+  `projectScreen(...).series[0].label` to `projectExport(...).series[0]
+  .label`.
+- [x] Actual result recorded — screen: "Loop 1"; export: "Loop 1 (au)".
+- [x] Expected result recorded — the exported legend label should match the
+  renamed on-screen label exactly.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it('DIVERGENCE (BUG-014): a renamed series reads "Loop 1" on screen and
+  "Loop 1 (au)" in the export', ...)`.
+
+#### Fix checklist
+
+- [x] Decide the contract: **the backend learns to distinguish "raw channel
+  label, append the unit" from "user-supplied legend text, use verbatim."**
+  The frontend does NOT send a fully-resolved string in `dataset.labels`: a
+  rename is a presentation choice, not a data edit, so the wire `dataset`
+  now carries the DATA's own labels and units (any data-table/CSV consumer
+  of the same spec still sees the real column names) and the rename rides
+  its own optional field, `series_styles[i].legend` — the EXISTING per-series
+  presentation object, aligned 1:1 with `y_keys` exactly as
+  `color`/`width`/`line`/`marker` already are. Additive and optional: a
+  request with no rename is byte-identical to before.
+- [x] Whichever shape is chosen, thread a rename through distinctly from an
+  un-renamed channel label so the unit-appending format applies only to the
+  latter. The composition moved into the pure layer as
+  `calc.figure_labels.series_display_name(label, unit, legend)` — legend
+  verbatim when present, `"label (unit)"` otherwise — and
+  `routes/export_figures_labels.py` (a new route-layer sibling) reads the
+  loose `legend` key off the wire and applies it to the series names AND to
+  the auto-derived solo-axis titles, which `uplotOpts`' `soloLabel` also
+  reads off the resolved legend.
+- [x] Confirm an UN-renamed series (no `seriesLabels` entry) still gets its
+  unit appended on export exactly as today — the common case must not
+  regress. `tests/test_export_vector_structure.py`'s
+  `test_an_unrenamed_series_still_gets_its_unit_appended` renders the real
+  SVG and reads the legend group's `<text>` entries.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — the
+  export-side "Loop 1 (au)" pin and the `.not.toBe` are gone, replaced by the
+  screen-equals-export equality, and the test is renamed to drop the
+  `DIVERGENCE` prefix. It is kept non-vacuous by pinning the wire's own bytes
+  (`dataset.labels[0] === "Signal"`, `units[0] === "au"`,
+  `series_styles[0].legend === "Loop 1"`) and asserting the screen's text
+  differs from the `"label (unit)"` the backend would otherwise compose from
+  them.
+
+#### Acceptance criteria
+
+- [x] A series renamed on screen exports with the identical legend text, no
+  unit re-appended — measured in the rendered SVG, not only on the wire
+  (`test_a_renamed_series_renders_its_legend_text_exactly`: the legend group
+  reads `["Loop 1", "Series B (au)", "Series C (au)"]`). True on EVERY branch
+  as of the review round: the flat/solo/y2 paths since 2026-09-15, the FACET
+  panels since 2026-09-16 (they shipped `"Loop 1 (au)"` until then — see the
+  review round below), the `group_col` branch by the documented substitution
+  (the rename replaces the channel-label half of the per-level template).
+  ONE residual, pinned rather than fixed: an EMPTY rename — see the review
+  round's finding 4.
+- [x] An un-renamed series continues to export with its unit appended
+  exactly as before (no regression).
+- [x] `projectExport(renamed, dataset).series[0].label` equals
+  `projectScreen(renamed, dataset).series[0].label` — the equality
+  BUG-014's divergence test is inverted into. The FACET leg of the same
+  equality (`projectExport(...).facet` vs `projectScreen(...).facet`) is
+  pinned alongside it as of the review round.
+
+#### Completion record
+
+- PR/commit: `fix(export): BUG-014 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `50b30a04`). The wire gains ONE optional field,
+  `series_styles[i].legend`; `FigureRequest.series_styles` is a list of loose
+  dicts by design ("a bad/unrecognized value in ANY of these keys degrades
+  gracefully"), so `frontend/api/openapi.json` and
+  `frontend/src/lib/api/schema.d.ts` are BYTE-IDENTICAL after regenerating
+  them (`uv run python tools/dump_openapi.py`, `npm run api:types`) — the
+  schema never enumerated those keys. No persisted contract changed either:
+  a rename still lives in `view.seriesLabels`, `sanitizeExportSeriesStyles`
+  deliberately does NOT restore a `legend` from a saved
+  `publication.seriesStyles`, and no document version moved.
+- Module-ceiling work this required: `frontend/src/lib/figureSpec.ts` was at
+  499 of 500 lines, so the per-series half was extracted to
+  `frontend/src/lib/figureSpecSeries.ts` (display/plotted/position
+  resolution, the legend overlay, the `series_styles` assembly and
+  `exportErrorSpans`) with its own `figureSpecSeries.test.ts`;
+  `src/quantized/routes/export_figures.py` was at 499, so label resolution
+  moved to `routes/export_figures_labels.py` and `_tick_fmt` moved beside
+  its own `TickFormatSpec` in `routes/export_figures_schema.py`. No pin was
+  raised and no comment shaved.
+- Known limit: the `group_col` branch expands each channel into one series
+  PER LEVEL, so a rename cannot name a finished series there. It replaces the
+  channel-label half of `build_grouped_series`' `"{label} ({group}={level})"`
+  template instead (new optional `y_legends` argument), which reproduces the
+  pre-fix wire byte-for-byte — grouped export parity as a whole stays
+  BUG-016. Facet panels ship FINISHED series strings that no per-series field
+  on the request can reach, so their labels are resolved client-side —
+  **originally from a request-local relabelled copy of the DataStruct, which
+  re-created this very bug inside the facet branch** (`"Loop 1 (au)"`) and
+  was corrected in the review round below.
+- Automated tests: `tests/test_export_vector_structure.py` — five new
+  structural tests reading the rendered SVG's legend group (rename verbatim;
+  un-renamed unchanged; a renamed SOLO series' auto-derived axis title;
+  a non-string `legend` degrading instead of 422ing; the grouped branch).
+  `frontend/src/lib/figureSpecSeries.test.ts` — new file, 15 tests.
+  `frontend/src/lib/figureSpec.test.ts` — the rename/blank-rename wire tests,
+  the updated byte/deep-equal wire shape, and the publication-styles branches.
+  `frontend/src/lib/regressionMatrix.test.ts` — the inverted BUG-014 test.
+  `frontend/src/lib/exportParity.test.ts` and `exportFigureCommand.test.ts` —
+  the two pre-existing "rename rewrites `dataset.labels`" pins, rewritten to
+  the honest wire.
+- Agent verification: sabotage table (each reverted in turn, then restored) —
+  (a) `withSeriesLegends` returning `styles` unchanged → 11 failures across
+  `figureSpecSeries.test.ts`, `figureSpec.test.ts`, `regressionMatrix.test.ts`,
+  `exportParity.test.ts` and `exportFigureCommand.test.ts`; (b)
+  `series_display_name` ignoring its `legend` argument → 2 backend failures
+  (`test_a_renamed_series_renders_its_legend_text_exactly`,
+  `test_a_renamed_solo_series_titles_its_axis_with_the_same_text`);
+  (c) the grouped branch ignoring `y_legends` → 1 backend failure
+  (`test_a_grouped_export_folds_the_rename_into_its_per_level_labels`);
+  (d) `solo_axis_label` recomposing from the channel instead of the resolved
+  name → 1 backend failure (the solo-axis test).
+  Gate: `uv run ruff check src tests tools`; `uv run mypy src` (296 files);
+  `uv run pytest -q tests/test_openapi_snapshot.py tests/test_repo_integrity.py
+  tests/test_export_vector_structure.py tests/test_api_export.py
+  tests/test_calc_figure.py`; `npx tsc -b --force`;
+  `npx eslint src --max-warnings=0`;
+  `npx vitest run src/lib src/architecture.test.ts`;
+  `node scripts/freeze-regression-matrix.mjs --check` clean (the canonical
+  payload is unchanged — the goldens are SCREEN projections and no fixture is
+  renamed); `node scripts/check-bundle-size.mjs` green.
+- Bundle (measured): parent `50b30a04` **919,877 B** eager -> **919,877 B**,
+  a **+0 B** delta — the per-file eager byte list is identical entry for
+  entry. The split did NOT grow the eager graph: `lib/figureSpecSeries.ts`
+  lands in the same lazy `figureSpec` chunk its caller does (that chunk grew
+  6.64 kB -> 7.34 kB). Both builds were run after `npm ci`, with vite's
+  transform cache cleared, and `node scripts/check-bundle-size.mjs` reports
+  898.3 kB eager of the 898.8 kB budget, unmoved.
+  **Those two numbers are the ORIGINAL commit's pair (`bdf3b32a` on top of
+  `50b30a04`).** What landed on `claude/repo-evaluation-l7y7k9` is a
+  cherry-pick, `7dfcde07`, whose real parent is `3804e643`; re-measuring
+  `3804e643..7dfcde07` will not reproduce them, and nothing was re-measured
+  for the cherry-pick. The +0 B claim itself still holds structurally (no
+  eager module gains an import, `figureSpecSeries.ts` is reached only from
+  the already-lazy `figureSpec.ts`, and no ratchet pin moved).
+- Owner verification: pending — rename a series' legend on screen, export the
+  figure, and confirm the PDF's legend reads exactly what the on-screen
+  legend reads. Worth doing on a FACETED view too (the review round's
+  finding 2).
+- Notes: —
+
+#### Adversarial review round (2026-09-16)
+
+An adversarial review of `7dfcde07` returned 2 CONFIRMED + 6 NITs; the
+root-cause fix itself was measured correct on fourteen view configurations
+and nothing was reverted. Closed by
+`fix(export): close the BUG-014 review — facet panels honour a legend rename
+verbatim on screen and export`, on top of `da00c042`:
+
+- **Finding 1 (CONFIRMED) — the recorded frontend gate could not see the
+  suite it broke.** The gate line above reads `npx vitest run src/lib
+  src/architecture.test.ts`; that glob excludes `src/store` **structurally**,
+  and `frontend/src/store/plotRecipes.test.ts` was RED at `7dfcde07`
+  (`expected [ '2theta', 'Intensity', 'Ierr' ] to include 'Corrected
+  intensity'` at `:996` — the spec still asserted the pre-fix wire, where a
+  rename rewrote `dataset.labels`). So a green scoped gate was recorded on a
+  tree whose `npm test` was red. It was repaired two commits later by
+  `950b3a9b`, which re-points that spec at the honest wire and is strictly
+  stronger (it pins the positive, the negative, and the whole style object
+  including `legend`). Standing correction, now in `agent_rules.md`: any
+  change to the export WIRE must include `src/store` in the vitest scope.
+- **Finding 2 (CONFIRMED) — the FACET branch still exported the bug's exact
+  string; fixed.** With `facetKey` bound and `seriesLabels: {1: "Loop 1"}` on
+  a unit-`au` channel, facet EXPORT panels read `Loop 1 (au)` (the panel label
+  was composed as `${relabelled} (${unit})` from a request-local relabelled
+  DataStruct) while facet SCREEN panels read `Signal (au)` (the grid's
+  `buildOpts` call passed no `seriesLabels` at all) — three different strings
+  for one series. Pre-existing, not a regression, but the acceptance criteria
+  above were ticked without a carve-out and nothing tested it. Both legs now
+  apply ONE rule, `lib/figureSpecSeries.ts`'s new `seriesDisplayLabel(label,
+  unit, legend)` (rename verbatim, else `"label (unit)"` — the same rule
+  `uplotOpts.buildOpts` and `calc.figure_labels.series_display_name` apply):
+  `lib/figureSpecFacets.ts` takes the channel-keyed renames and composes with
+  it, the relabelled `facetData` copy in `lib/figureSpec.ts` is deleted, and
+  `Stage/useMultiPanelStage.ts` passes the store's `seriesLabels` into the
+  facet grid. `lib/facet.ts`'s `FacetPanel` now carries `channels` (the
+  dataset channel behind each payload series) because the default
+  (`yKeys === null`) channel list is resolved per row-slice and can differ
+  panel to panel, so neither consumer can reconstruct it from the binding.
+  Tests at both layers: `lib/figureSpecFacets.test.ts` (new file, 8 tests) and
+  `Stage/MultiPanelStage.test.tsx`'s "a legend rename reaches every facet
+  panel's legend, verbatim" (which reads the label real `buildOpts` put on the
+  real uPlot options), plus a facet row in `regressionMatrix.test.ts`'s
+  BUG-014 test asserting the two legs' facet projections are EQUAL.
+- **Finding 3 (NIT) — `lib/spatialPageExport.ts` shipped decoded Origin
+  captions as `dataset.labels`; fixed the same way.** Measured on the wire
+  the builder produced: `_figure_series` resolved
+  `['Decoded caption (au)', '_nolegend_ (au)']` before and
+  `['Decoded caption', '_nolegend_']` after. **The `(au)` suffix disappearing
+  IS the BUG-014 rule applied consistently** — a decoded caption is
+  presentation, so the unit is not re-appended to it. The `_nolegend_`
+  sentinel still suppresses by its leading `_` either way, and the wire
+  `dataset` now keeps the workbook's own column names (which is what that
+  function's `fallbackYLabel` already read).
+- **Finding 4 (NIT) — RESIDUAL, pinned not fixed: an EMPTY rename.** `""` is
+  honoured verbatim on the wire and by `series_display_name`, but matplotlib
+  drops a zero-length label from the legend exactly as it drops a leading-`_`
+  one, so the series loses its legend ROW on export while uPlot still draws a
+  blank row with its swatch on screen. "Identical text on both legs"
+  therefore degenerates to "blank row vs no row" for `""` alone. Pinned by
+  `test_an_empty_rename_drops_the_series_from_the_rendered_legend`
+  (measured: `['Series B (au)', 'Series C (au)']`). Deliberately NOT papered
+  over with a `" "`: which leg should move is the owner's call, and a space
+  would silently change what the user typed. (The pre-fix wire rendered
+  `" (au)"` here, so this is a change from one divergence to another. The
+  rename UI itself cannot produce this residual — `store/useApp.ts`'s
+  `setSeriesLabel` trims and `delete`s the override on a blank/whitespace-
+  only rename — so `""` can only reach a document via a restored/hand-edited
+  `.dwk` or the `overlayCurveLabels`/dual-selection merge paths, added
+  2026-09-17, round 3 finding 4.)
+- **Finding 5 (NIT) — stale `FigureRequest` field docs.** The
+  `series_styles` description already gained `legend` in `da00c042`
+  (BUG-013's own review round moved it to `export_figures_schema.py` as a
+  `Field(description=...)`). Left to fix and fixed here: `group_col`'s
+  comment claiming "`series_styles` is not applied in this path either" (its
+  STYLE keys are not; its `legend` key IS), the same claim echoed inside
+  `WATERFALL_OFFSETS_DOC`, and `FigureFacet`'s docstring, which pointed at
+  `lib/figureSpec.ts` for a builder that now lives in `figureSpecFacets.ts`
+  and said nothing about a panel label being FINISHED text. Comment/
+  description-only; `frontend/api/openapi.json` and
+  `frontend/src/lib/api/schema.d.ts` regenerated and committed (the two
+  `Field(description=...)` strings do reach the generated artefacts).
+- **Finding 6 (NIT) — a fixture assertion posing as a product one.**
+  `test_a_renamed_series_renders_its_legend_text_exactly`'s last line rebuilt
+  `_renamed_payload(...)` and asserted a property of the fixture helper. It
+  now hoists the payload it actually POSTs, asserts the label AND unit on
+  that object before the request, and adds `"Series A" not in svg` — so the
+  test can only pass if the rename reached the renderer through the
+  presentation field.
+- **Finding 7 (NIT) — an untested behavioural claim, now pinned.**
+  "`sanitizeExportSeriesStyles` deliberately does not restore a `legend`"
+  appears in the code comment, the commit body and this entry, but the
+  allowlist dropped it only incidentally. `publicationStyles.test.ts` now
+  pins both halves (a legend beside a valid key is stripped; an entry whose
+  only key is a legend becomes `null`).
+- **Finding 8 (NIT) — record hygiene.** The bundle pair's parent is corrected
+  above, and the duplicated empty `Agent verification` / `Owner verification`
+  / `Notes` template rows are removed.
+- Module ceilings this round: `Stage/useMultiPanelStage.ts` sat exactly on its
+  791-line pin, so the facet render leg was extracted to the new
+  `Stage/facetGridRender.ts` (`renderFacetGrid` + `resizeFacetGrid`); the pin
+  ratchets DOWN to 787. `lib/figureSpec.ts` 483, `lib/figureSpecFacets.ts`
+  104, `lib/figureSpecSeries.ts` 280, `lib/spatialPageExport.ts` 287,
+  `routes/export_figures.py` 490, `routes/export_figures_schema.py` 125 —
+  all under 500, none pinned, no pin raised. (Corrected 2026-09-17, round 3
+  finding 5: these two Python counts were originally recorded by
+  `split("\n")`, one more than `tests/test_repo_integrity.py`'s own
+  `splitlines()` rule gives — the TS counts beside them already matched
+  `architecture.test.ts`'s `split("\n").length` exactly.)
+- Agent verification (review round): sabotage table, each reverted with
+  `git checkout --` and the worktree verified clean afterwards —
+
+  | sabotage | failing tests |
+  |---|---|
+  | `figureSpecFacets.ts` composes ``` `${label} (${unit})` ``` again instead of `seriesDisplayLabel` | 5 — `figureSpecFacets.test.ts` ×4, `regressionMatrix.test.ts`'s BUG-014 facet row |
+  | `facetGridRender.ts` passes `seriesLabels: undefined` to `buildOpts` | 1 — `MultiPanelStage.test.tsx` "a legend rename reaches every facet panel's legend, verbatim" |
+  | `facet.ts` returns an EMPTY `FacetPanel.channels` (payload itself untouched) | 6 — `figureSpecFacets.test.ts` ×4, `regressionMatrix.test.ts` ×1, `MultiPanelStage.test.tsx` ×1. (Corrected 2026-09-17, round 3 finding 6: reaching 11 and moving the committed `facet` golden needs ALSO starving `buildColumns` of its channel list — a strictly larger edit than the reported field alone; see the round 3 entry.) |
+  | `spatialPageExport.ts` builds no `legends` at all | 1 — `spatialPageExport.test.ts` "carries decoded partial legend entries as presentation…" |
+  | `publicationStyles.ts` restores a string `legend` | 1 — `publicationStyles.test.ts` "deliberately does NOT restore a legend…" |
+  | `series_display_name` uses `if legend:` (drops `""`) | 1 — `test_an_empty_rename_drops_the_series_from_the_rendered_legend` |
+  | `series_display_name` ignores `legend` entirely | 3 — the renamed, renamed-solo-axis and empty-rename tests |
+
+  Gate: `uv run ruff check src tests tools` (All checks passed);
+  `uv run mypy src` (296 files, no issues);
+  `uv run pytest -q` over `test_export_vector_structure.py`,
+  `test_api_export*.py`, `test_api_report_export.py`,
+  `test_io_report_export.py`, `test_repo_integrity.py`,
+  `test_openapi_snapshot.py`, `test_calc_figure.py` → **298 passed, 1
+  skipped**; `npx tsc -b --force` (exit 0);
+  `npx eslint src --max-warnings=0` (exit 0);
+  `npx vitest run src/lib src/store src/components/Stage
+  src/architecture.test.ts` → **406 files, 7779 tests, 0 failed** (the
+  `src/store` scope finding 1 says was missing, included deliberately);
+  `node scripts/freeze-regression-matrix.mjs --check` → 1 test passed (the
+  `facet` golden is unchanged — no fixture carries a rename).
+- Bundle (measured, review round): parent `da00c042` **911,488 B** eager ->
+  this commit **911,526 B**, **+38 B** (one new eagerly-reachable module
+  boundary, `Stage/facetGridRender.ts`, split out of a file that was already
+  eager; no new module enters the eager graph). `node
+  scripts/check-bundle-size.mjs` reports 890.2 kB of the 898.8 kB budget, up
+  from 890.1 kB — 8.7 kB of headroom, budget unmoved. Both builds ran in the
+  same worktree with `node_modules/.vite` cleared, against a `node_modules`
+  installed by `npm ci` from the same (unchanged) lockfile.
+  **Correction (2026-09-17, round 3 finding 3): `da00c042` is not this
+  commit's parent — `git rev-parse HEAD~1` of `8a8d92b1` is `caa10f88`, four
+  commits later than `da00c042`, and the three commits in between
+  (`2d8b9b57`, `0565b674`, `caa10f88`) all touch eager frontend source. The
+  **real** pair, re-measured in a scratch worktree with `node_modules/.vite`
+  cleared after `npm ci`: `caa10f88` **912,915 B** eager -> `8a8d92b1`
+  **912,953 B**, **+38 B** — the same delta by coincidence, on the correct
+  SHAs this time; do not reuse the `da00c042`/911,488/911,526 numbers above
+  for anything.
+
+#### Round 3 (2026-09-17) — closes the round-2 review's remaining findings
+
+A second adversarial review of `8a8d92b1` returned 3 CONFIRMED + 4 NITs.
+Closed by `fix(stage): BUG-014 round 3 — background facet grids honour the
+rename; a null rename derives the label`, on top of `230a174a`:
+
+- **Finding 1 (CONFIRMED) — a BACKGROUND window's facet grid still ignored
+  the rename.** `components/windows/BackgroundAltModes.tsx`'s
+  `BackgroundStackWindow` (the SECOND caller of `useMultiPanelStage` — the
+  facet grid a background window renders when it carries a durable
+  `view.facetKey`, per the L2 fix `BackgroundPlotWindow.tsx` already made)
+  passed `seriesStyles` but not `seriesLabels`, so a renamed channel read its
+  derived `"Signal (au)"` in every panel of a background window's facet grid
+  while the focused stage, the flat export, and the facet export all read
+  the rename verbatim — a fourth string for the same series, on the one leg
+  the round-2 fix did not reach. Fixed by passing `seriesLabels:
+  view.seriesLabels` beside `seriesStyles`, mirroring where the flat
+  background leg already gets it (`BackgroundPlotWindow.tsx`'s
+  `BackgroundXYWindow`). The new `useMultiPanelStage.ts` param doc claim ("a
+  background window passes nothing … it renders the stack mode only") was
+  also false — `BackgroundPlotWindow.tsx`'s own module doc says a background
+  window renders the facet grid too, for a durable `facetKey` — corrected in
+  place, net line count unchanged (787/787, zero headroom, per round-2
+  finding 7 below). Pinned by the background twin of
+  `MultiPanelStage.test.tsx`'s facet-rename test, added to
+  `BackgroundPlotWindow.test.tsx`.
+- **Finding 2 (CONFIRMED) — `seriesDisplayLabel` was `!== undefined`, not the
+  `??` its own doc claimed.** A `null` legend (reachable: `sanitizePlotView`
+  casts a restored/hand-edited `.dwk`'s `seriesLabels` to
+  `Record<number, string>` without validating each value is a string) shipped
+  `label: null` on the facet wire — a 422 on the backend — while every other
+  leg (the screen, the flat export via `series_styles[i].legend`, the
+  backend's own `if legend is not None`) degrades gracefully. One-token fix:
+  `return legend ?? (unit ? \`${label} (${unit})\` : label);`. Pinned by
+  `seriesDisplayLabel("Signal", "au", null)` -> `"Signal (au)"` and a facet
+  spec built with `seriesLabels: {1: null}` carrying the derived label in
+  `figureSpecFacets.test.ts`.
+  **`sanitizePlotView` validation — residual, not fixed.** Whether
+  `sanitizePlotView` should drop non-string `seriesLabels` entries: it
+  should (the flat and facet legs both now degrade gracefully for a `null`
+  *value* reaching `seriesDisplayLabel`, but a non-string *key-to-value* pair
+  surviving sanitization is still a latent contract gap upstream of it), but
+  `frontend/src/lib/plotview.ts` measures 981/981 lines against
+  `architecture.test.ts`'s own pin (zero headroom, the same state
+  `useMultiPanelStage.ts` was in going into round 2) — implementing the
+  filter needs a new helper, which this round does not have room for without
+  moving a pin. Recorded as a residual: `frontend/src/lib/plotview.ts:757-760`
+  (`seriesLabels: typeof o.seriesLabels === "object" && ... ? (o.seriesLabels
+  as Record<number, string>) : {}` — cast through unvalidated).
+- **Finding 3 (CONFIRMED) — record hygiene, the bundle pair, again.** See the
+  correction above this section. Also re-measured this round's OWN commit
+  against its parent. **Corrected in round 4 (2026-09-17):** the parent used
+  here was `230a174a`, the PRE-CHERRY-PICK base, not `git rev-parse
+  e0ab164c^` = **`59d79a68`** (three commits touching nine eager source
+  modules land in between), so the `912,953 B` recorded for both sides was
+  neither commit's number. Re-measured on the real pair, same method:
+  `59d79a68` **913,293 B** eager -> `e0ab164c` **913,293 B**, **+0 B**. The
+  DELTA claim survives (the commit adds no import and no eager module); the
+  absolute figures did not. Every pair measured in scratch worktrees (`git
+  worktree add` off the scratchpad, `npm ci`, `node_modules/.vite` cleared,
+  `node <scratchpad>/exactbytes.mjs <tree>/src/quantized/web`), per
+  `agent_rules.md`'s standing bundle-measurement rule.
+- **Nit 4 — closed.** The `""` residual note now says `setSeriesLabel`
+  trims-and-deletes a blank/whitespace-only rename, so the rename UI itself
+  cannot produce it — only a restored/hand-edited `.dwk` or the
+  `overlayCurveLabels`/dual-selection merge paths can (edited into the
+  Finding 4 entry above).
+- **Nit 5 — closed.** The round-2 "Module ceilings this round" line recorded
+  `routes/export_figures.py 491, routes/export_figures_schema.py 126` by
+  `split("\n")`; `tests/test_repo_integrity.py`'s own `splitlines()` rule
+  gives **490** / **125** (both measured against the current tree — neither
+  file changed since). Corrected in place above.
+- **Nit 6 — closed.** The round-2 sabotage table's `channels: []` row claimed
+  11 failures for "an EMPTY `FacetPanel.channels`"; the literal edit
+  (emptying only the reported field, payload untouched) gives 6. Reaching 11
+  and moving the committed `facet` golden needs ALSO starving `buildColumns`
+  of its channel list — a strictly larger edit. Reworded in place above to
+  describe the literal edit's own count, with a note on what a larger edit
+  would take.
+- **Nit 7 — follow-up recorded, not extracted.** `Stage/useMultiPanelStage.ts`
+  is still exactly on its 787-line pin after this round's doc-only edit (net
+  zero lines). The next feature touching this file will need to extract a
+  sibling module first — flagged here rather than done speculatively.
+- Agent verification (round 3): each new/changed assertion sabotaged and
+  reverted, worktree verified clean afterwards —
+
+  | # | sabotage | failing test(s) |
+  |---|---|---|
+  | 1 | `BackgroundAltModes.tsx`'s `BackgroundStackWindow` reverted to omit `seriesLabels` | 1 — `BackgroundPlotWindow.test.tsx` "a legend rename reaches every facet panel's legend, verbatim, in a BACKGROUND window too" |
+  | 2 | `seriesDisplayLabel` reverted to `if (legend !== undefined) return legend;` | 2 — `figureSpecSeries.test.ts` "degrades to the derived label for a null legend, not `!== undefined`", `figureSpecFacets.test.ts` "a null rename (a hand-edited document's `seriesLabels`) degrades to the derived label" |
+
+  Nothing stayed green under sabotage; both restores verified with
+  `npx vitest run` passing again and `git diff` clean before the real fix
+  was reapplied.
+- Gate: `npx tsc -b --force` (exit 0, no output); `npx eslint src
+  --max-warnings=0` (exit 0, no output); `npx vitest run src/lib/figureSpec
+  src/lib/regressionMatrix.test.ts src/lib/plotview src/components/Stage
+  src/components/windows src/store/plotRecipes.test.ts
+  src/architecture.test.ts` -> **66 files, 1202 tests, 0 failed** (no `FAIL`
+  lines; no GridViewport.perf / freezeRegressionMatrixCheck flakes to
+  re-run); `node scripts/freeze-regression-matrix.mjs --check` -> 1 test
+  passed (the `facet` golden unchanged — this round touches no fixture);
+  `uv run pytest -q tests/test_repo_integrity.py` -> **12 passed**.
+- Module ceilings this round: `Stage/useMultiPanelStage.ts` 787/787 (doc fix
+  only, net zero lines — see Nit 7); `lib/figureSpecSeries.ts` **291** on the
+  committed tree (the `279 (was 280)` first recorded here was measured on the
+  pre-cherry-pick base `230a174a`, which lacks `fe50280f`'s +11 lines —
+  corrected in round 4; the one-line `if`/`return` collapse is still what
+  this round contributed, i.e. 292 -> 291); `lib/plotview.ts` 981/981
+  (untouched — see Finding 2's residual); no pin raised. All by
+  `architecture.test.ts`'s own `split("\n").length` rule.
+
+#### Round 4 (2026-09-17) — the stack and break panels, and the sanitizer residual
+
+A third adversarial review of `e0ab164c` returned 2 CONFIRMED + 3 NITs.
+Closed by `fix(stage): BUG-014 round 4 — stack and break panels honour the
+rename; non-string renames are dropped at the sanitizer`, on top of
+`b3fb6668`:
+
+- **Finding 1 (CONFIRMED) — the plain STACK and paneled X-BREAK legs still
+  showed the derived label.** Round 3 fixed the facet grid; the other two
+  legs of the same render effect still called `buildOpts` with no
+  `seriesLabels`. That is visible, not cosmetic: `buildOpts` sets
+  `legend: { show: false }` and `PlotStage.tsx` mounts `MultiPanelStage`
+  INSTEAD of `PlotViewport` + `PlotLegend`, so the only slot a series' name
+  appears in is the panel's Y-AXIS label (`uplotOpts`' `soloLabel`, fed by
+  the same resolved `labels` array `seriesLabels` overrides) — while the
+  EXPORT of those same views carries the rename (`lib/figureSpec.ts`'s
+  `legends = plotted.map((ch) => st.seriesLabels[ch])` ->
+  `series_styles[i].legend`; a stack or break view exports as the flat
+  figure). Screen and export therefore disagreed in two more legs, focused
+  and background alike. Fixed by projecting the channel-keyed renames onto
+  each leg the way `facetGridRender.ts` already did: the stack leg gets
+  `plotted.map((ch) => seriesLabels[ch])` (one entry per panel — `splitPayload`
+  makes exactly one single-series panel per plotted channel, the same
+  indexing `styleList` uses), and the break leg gets the panels' own channel
+  list, re-derived as `yKeys ?? defaultDenseChannels(analysisData(active))`
+  because a `BreakPanel` (unlike a `FacetPanel`) carried no `channels` field.
+  **That derivation was WRONG and is replaced in round 5 below.** It assumed
+  every break panel holds the same channel set; `breakPayloads` in fact
+  resolves each panel's list over that panel's own x-slice, so with a null
+  `yKeys` the panels can legitimately differ, and the fail-closed guard —
+  which compared only `breakPanels[0]`'s series COUNT — let every
+  equal-count/different-membership case through and mislabeled it.
+  **Funded by an extraction, not a pin bump** (round 3's Nit 7 flagged this
+  exact need): `Stage/useMultiPanelStage.ts` was ON its 787-line pin, so the
+  STACK and BREAK render legs moved to `Stage/stackPanelRender.ts` (102
+  lines) and `Stage/breakPanelRender.ts` (112 lines) — the siblings
+  `facetGridRender.ts` already set the pattern for — and the pin ratcheted
+  **787 -> 757**.
+  The param doc that asserted "the plain stack mode ... never showed a legend
+  rename either way" is rewritten to state what the three legs actually do
+  (and, per Nit 5, that a background window renders the x-break arrangement
+  too, from `document.plot.axisBreaks.x` via `durableComposition`).
+- **Finding 2 (CONFIRMED) — the `sanitizePlotView` residual understated a
+  CRASH, and its "no room" justification did not hold.** Round 3 recorded
+  leaving `seriesLabels` unvalidated as a latent gap. Measured: a `null`
+  degrades everywhere (round 3's `??`), but any OTHER non-string value
+  reached `buildOpts` -> `richLabelAst` -> `richtext.hasMarkup`, whose
+  `s.includes("$")` threw an UNCAUGHT `TypeError` and took the Stage canvas
+  down — strictly worse than the 422 the same value causes on the facet wire
+  (`FigureFacetSeries.label: str`). The deferral reason ("981/981, no room
+  for a helper") also did not survive arithmetic: the four-line unchecked
+  ternary collapses to one call plus one import. Fixed by validating values
+  with the SAME helper the two sibling restore paths already used, now a
+  single copy in the new leaf module `lib/sanitizeRecord.ts`
+  (`keyedRecord`/`isString`): `lib/plotRecipeIO.ts`'s `strKeyedRecord` and
+  `lib/techniqueViewMemory.ts`'s `strRecord` are deleted in favour of it, so
+  all three `.dwk`/recipe restore paths validate this field through one
+  function. `lib/plotview.ts` ratchets **981 -> 980**; no pin raised. (One
+  behaviour nuance, **corrected in round 5 below**: the shared helper passes
+  KEYS through verbatim, where `strRecord` used to normalize them with
+  `Number(k)`. The "`"01"` now never matches a channel" claim holds only for
+  `lib/plotview.ts`'s map — measured. On the technique-memory path
+  `applyTechniqueMemory` iterates with `Number(key)`, so a `"01"` in
+  `seriesLabels` still lands on channel 1; what silently changed there is
+  `TechniqueViewMemory.labels`, which IS read by numeric index. Round 5 gives
+  that file back its numeric keys.)
+  Two stale test comments that cited the unvalidated cast as the reason a
+  `null` is reachable (`figureSpecSeries.test.ts`, `figureSpecFacets.test.ts`)
+  are corrected in place: the `.dwk` route is closed, the type hole is not,
+  so those tests now pin the degrade rule itself.
+- **Nit 3 — closed.** Round 3's bundle pair and `lib/figureSpecSeries.ts`
+  line count were both measured on the pre-cherry-pick base; both corrected
+  in place above with re-measured numbers (`59d79a68` -> `e0ab164c`,
+  913,293 -> 913,293 B; `figureSpecSeries.ts` 291).
+- **Nit 4/5 — closed** with Findings 1 and 2 (the ceilings line and the
+  param doc's missing x-break arrangement).
+- Agent verification (round 4): each new/changed assertion sabotaged and
+  reverted, `git status --porcelain` clean afterwards —
+
+  | # | sabotage | failing test(s) |
+  |---|---|---|
+  | 1 | `stackPanelRender.ts`: drop the per-panel `seriesLabels` from `buildOpts` (the pre-fix stack leg) | 4 — `MultiPanelStage.test.tsx` "reaches the renamed channel's STACK panel verbatim…", "keys a STACK rename by CHANNEL, not by panel position", "SCREEN label == EXPORT legend … in a stack view"; `BackgroundPlotWindow.test.tsx` "… in a BACKGROUND window too" |
+  | 2 | `breakPanelRender.ts`: drop `seriesLabels` from `buildOpts` (the pre-fix break leg) | 3 — `MultiPanelStage.test.tsx` "reaches EVERY x-break panel verbatim", "SCREEN label == EXPORT legend … in an x-break view"; `BackgroundPlotWindow.test.tsx` "a legend rename reaches every X-BREAK panel, verbatim, in a BACKGROUND window too" |
+  | 3 | `useMultiPanelStage.ts`: drop the break fail-closed guard (project even on a length mismatch) | 1 — `MultiPanelStage.test.tsx` "passes no renames at all when the view's channel selection no longer matches the built panels" |
+  | 4 | `plotview.ts`: restore the unchecked `seriesLabels` cast | 3 — `plotview.test.ts` "keeps string renames and drops every other value type", "leaves the canvas builder with nothing that can throw in richtext"; `figureSpecFacets.test.ts` "a NUMBER rename in a restored view never reaches the facet wire" |
+  | 5 | `useMultiPanelStage.ts`: key the stack renames by POSITION instead of channel | 1 — `MultiPanelStage.test.tsx` "keys a STACK rename by CHANNEL, not by panel position" |
+
+  Sabotage 5 is why that test exists: the first version of the stack tests
+  used `yKeys = [0, 1]`, where position and channel coincide, and survived it.
+- Gate: `npx tsc -b --force` (exit 0, no output — it caught a missing
+  `onReadout` in a new test that vitest, which does not typecheck, ran
+  green); `npx eslint src --max-warnings=0` (exit 0, no output); `npx vitest
+  run src/lib/plotview src/lib/figureSpec src/lib/regressionMatrix.test.ts
+  src/lib/richtext src/components/Stage src/components/windows
+  src/store/plotRecipes.test.ts src/architecture.test.ts` -> **68 files,
+  1287 tests, 0 failed** (0 `^ FAIL` lines in the saved log); `node
+  scripts/freeze-regression-matrix.mjs --check` -> 1 test passed (no fixture
+  touched); `uv run pytest -q tests/test_repo_integrity.py` -> **12 passed**.
+- Bundle (exact eager bytes, `npm ci` + `node_modules/.vite` cleared on both
+  sides): parent `git rev-parse HEAD~1` = **`b3fb6668`** **913,348 B** ->
+  this commit **913,249 B**, **−99 B**. Two new eager modules
+  (`stackPanelRender`/`breakPanelRender`) are code MOVED out of a module that
+  was already eager, and `sanitizeRecord.ts` replaces two inline copies, so
+  the net is a small reduction.
+- Module ceilings this round (`architecture.test.ts`'s own
+  `split("\n").length`): `Stage/useMultiPanelStage.ts` **757** (pin 787 ->
+  757); `lib/plotview.ts` **980** (pin 981 -> 980); new
+  `Stage/stackPanelRender.ts` 102, `Stage/breakPanelRender.ts` 112,
+  `lib/sanitizeRecord.ts` 43; `lib/plotRecipeIO.ts` 377 (was 384),
+  `lib/techniqueViewMemory.ts` 233 (was 241). No pin raised.
+
+#### Round 5 (2026-09-17) — the break panels carry their own channel list
+
+A fourth adversarial review of `3dee67df` returned 1 CONFIRMED regression,
+2 confirmed record/doc defects and 5 nits. Closed by
+`fix(stage): BUG-014 round 5 — break panels carry their own channel list;
+technique memory keeps numeric keys`, on top of `1fcc4137`:
+
+- **F1 (CONFIRMED, a REGRESSION against round 4's parent) — the break leg's
+  re-derivation mislabeled silently, and its fail-closed guard could not
+  see it.** `useMultiPanelStage.ts` derived ONE channel list
+  (`yKeys ?? defaultDenseChannels(analysisData(active), xKey)`) over the
+  WHOLE dataset and applied it positionally to every panel, guarding only
+  that its length matched `breakPanels[0].payload.series.length`. But
+  `lib/facet.breakPayloads` builds each panel from its own x-slice and
+  resolves `yChannels ?? defaultDenseChannels(<that slice>, xKey)` there, so
+  with a null `yKeys` — the DEFAULT view, and what `breakAtGaps` passes for a
+  non-active dataset — panels legitimately hold different channels, and any
+  equal-count/different-membership pair walked through the guard. Measured on
+  `3dee67df` (all three reproductions are now committed tests, and all three
+  fail against that commit's files):
+  * a 23-row set where channel 2 is finite only in the 2-row segment after
+    the gap (under the whole dataset's 10% density floor, densest in its own
+    panel) and channel 0 only before it: panels hold `[0,1]` then `[1,2]`,
+    whole-data derivation `[0,1]` (same LENGTH), rendered
+    `[["RENAMED-FIELD","Signal (au)"],["RENAMED-FIELD","Aux (V)"]]` — panel
+    1's channel-1 curve wearing channel 0's rename;
+  * the same shape with two channels, so both panels are single-series and
+    `soloLabel` paints the Y-AXIS: measured
+    `["RENAMED-FIELD","RENAMED-FIELD"]` on panels whose data is channel 0
+    then channel 1. That is strictly worse than before round 4, which passed
+    no renames and let panel 2 read its correct derived `"Aux (V)"`;
+  * `yKeys [0,1]` then `breakAtGaps` then the ordinary `setYKeys([1,2])` (two
+    ChannelsCard toggles; `setYKeys` does not clear `composition`): panels
+    still hold `[0,1]`, measured `["SIGNAL-NAME","AUX-NAME"]` on both.
+  Fixed the way round 2 fixed the facet grid: `BreakPanel` gains
+  `channels: number[]`, resolved ONCE in `breakPayloads` and handed to the
+  same `buildColumns` call, and `breakPanelRender.ts` takes the store's
+  channel-keyed map and projects `p.channels.map((ch) => seriesLabels[ch])`
+  PER PANEL — exactly what `facetGridRender.ts` does with `FacetPanel`. The
+  `breakLabels` memo and its fail-closed guard are deleted (with the
+  `analysisData`/`defaultDenseChannels` imports they were the only users of),
+  and the guard's test is replaced by the three reproductions above. Exact
+  beats heuristic: the guard's own failure mode left screen showing derived
+  labels while the export shipped the rename.
+- **F2 (CONFIRMED) — the doc promise the break leg rested on was false.**
+  `breakPanelRender.ts`, `useMultiPanelStage.ts` and this plan's round-4
+  Finding 1 all asserted "every break panel is the SAME channel set sliced to
+  its own x-segment". `lib/facet.ts`'s `FacetPanel.channels` already
+  documented the opposite for the identical construction. All three are
+  rewritten to the true rule (the per-panel list is carried on the panel);
+  round 4's Finding 1 above is corrected in place.
+- **F3 (CONFIRMED, low severity) — the round-4 `"01"` claim was wrong for the
+  technique-memory path, and left that file internally inconsistent.**
+  Measured: `applyTechniqueMemory` iterates `Object.entries` and calls
+  `resolve(Number(key))`, so a `"01"` in a persisted `seriesLabels` still
+  lands on channel 1 — no behaviour change at all there. The claim holds only
+  for `lib/plotview.ts`'s map. What DID change unstated is
+  `TechniqueViewMemory.labels`, which is read by numeric index
+  (`remembered.labels[ch]`): a `"01"` now misses and silently takes the
+  "never captured a label -> by-index passthrough" branch instead of the
+  relocate-or-drop one. `numRecord` in the same file still normalized keys,
+  so the file disagreed with itself. Fixed by making the KEY POLICY explicit
+  and per-consumer: `lib/sanitizeRecord.ts` gains `numKeyedRecord` (keys
+  through `Number`, non-finite keys dropped, same value guard) plus an
+  `isFiniteNumber` guard, and `techniqueViewMemory.ts` routes all three of
+  its channel-indexed maps (`seriesLabels`, `labels`, `errKeys`) through it —
+  restoring the numeric normalization its own `strRecord`/`numRecord` always
+  had. `keyedRecord` keeps verbatim keys for the string-keyed callers
+  (`plotRecipeIO`'s signature-entry ids) and for `lib/plotview.ts`. The new
+  `lib/sanitizeRecord.test.ts` (N5 — the module had no direct test) pins both
+  policies, including `"01"` in each direction.
+- **N4 — closed, not recorded.** `labelList`/`styleList`/`errorBarsList`
+  recomputed synchronously from `plotted` while `payload` only moved when
+  `fetchPlot` resolved, so between a channel toggle and its payload landing
+  the OLD payload's panels rendered wearing the NEW lists. Measured on
+  `1fcc4137`: hiding channel 0 of three renamed channels rebuilt three panels
+  as `[{series:"N1",firstY:10},{series:"N2",firstY:100},{series:"Aux (V)",firstY:1000}]`
+  — every panel wrong for a frame. The stack payload is now stored together
+  with the channel list it was fetched for and all three lists derive from
+  that snapshot, so the transient cannot exist (measured: 8 uPlot
+  constructions across the toggle before, 5 after — the three
+  wrong-labelled intermediates are gone). Pre-existing for `styleList` and
+  `errorBarsList` since before round 4; fixed for all three at once.
+- **N7 — narrowed in the docs, and the untested half pinned.**
+  `uplotOpts.soloLabel` returns a label only when exactly ONE series sits on
+  an axis, so a MULTI-channel break panel has no legend and no solo axis
+  label: no series name appears on screen there at all while the export still
+  carries the rename. `breakPanelRender.ts`'s header now says so instead of
+  claiming unqualified screen==export parity. **Residual:** that shape stays
+  unreachable-by-design for a rename until a break view grows a legend
+  (adjacent to FEATURE-001). The other half of the nit — a y2 channel's stack
+  panel painting the rename on `axes[2]`, correct but untested — is now
+  pinned by `MultiPanelStage.test.tsx` "paints a renamed Y2 channel's STACK
+  panel on the SECONDARY axis".
+- **N8 — recorded as a residual (pre-existing, out of scope). Widened by
+  review round 5 (N3): also ignores `seriesOrder` and `channelRoles`.**
+  `lib/facet.breakPayloads` (`frontend/src/lib/facet.ts:247`) resolves each
+  panel's channels as `yChannels ?? defaultDenseChannels(sliced, xKey)` —
+  never `plotdata.effectiveChannels`, so it honours neither `hiddenChannels`
+  nor `y2Keys`: measured with `hiddenChannels [1]` and `y2Keys [2]`, a break
+  panel's series are `Field`/`Signal`/`Aux` all on axis 0 — the hidden
+  channel drawn, the y2 channel on the primary axis — while the flat view
+  and the export drop/split them. It also drops the user's `seriesOrder` and
+  never filters a `channelRoles` label/ignore column. Measured (review round
+  5, `frontend/src/lib/facet.ts:247` vs `frontend/src/lib/plotdata.ts:237`):
+  `effectiveChannels(data, null, null, {2:"label"}, [1,0])` -> `[1, 0]`
+  (role-filtered, user-ordered) while `breakPayloads(data, null, null,
+  [[lo,hi]]).channels` -> `[0, 1, 2]` on every panel (unfiltered,
+  dataset-natural order) — a `label`-role column is drawn as a curve in
+  every break panel and the user's draw order is dropped. Same root cause
+  and the same prerequisite (`channels` on the panel), so it belongs in this
+  one residual bullet with `hiddenChannels`/`y2Keys`. `store/useApp.ts`'s
+  `breakAtGaps` (:1359) passes only `xKey`/`yKeys`. Carrying `channels` on
+  the panel is the prerequisite for fixing it, not the fix.
+- **N4 (review round 5) — the screen/export parity paragraph in
+  `breakPanelRender.ts:24-28` narrows "screen == export" to a break panel
+  that HAS a visible name slot (single series on its axis), but that is not
+  the only divergence on the very fixture round 5 is built around —
+  membership is a second, larger one. Measured on `divergentData()` with a
+  LIVE `breakAtGaps([[20,100]])`: screen panels read
+  `[["RENAMED-FIELD","Signal (au)"], ["Signal (au)","Aux (V)"]]` while the
+  export spec carries `series_styles` for only 2 channels (`[0,1]`,
+  whole-dataset `effectiveChannels`) and `x_breaks: undefined` — no break at
+  all — because a LIVE `breakAtGaps` writes no durable field
+  (`store/plotRecipes.ts:63`, an already-documented GAP). Panel 2's
+  on-screen channel is therefore not in the export at all. Pre-existing and
+  orthogonal to the round-5 rename fix; recorded here beside N8 since the
+  in-source comment (round-5 change scope) stays narrowed to the
+  visible-slot caveat alone.**
+- **N6 — noted, no action.** `plotview.test.ts` importing `buildOpts` pulls
+  the uPlot chain into a pure-lib test (+0.4 s); the assertion it buys is
+  worth it.
+- Agent verification (round 5): every new/changed assertion sabotaged and
+  reverted, the worktree clean afterwards —
+
+  | # | sabotage | failing test(s) |
+  |---|---|---|
+  | 1 | `breakPanelRender.ts`: pass `seriesLabels: undefined` to `buildOpts` (the pre-round-4 break leg) | 5 — `MultiPanelStage.test.tsx` "reaches EVERY x-break panel verbatim", "SCREEN label == EXPORT legend … in an x-break view", "labels each break panel by ITS channels…", "puts the renamed channel's name on the Y-AXIS of its OWN panel only", "labels a break panel by the channels it was BUILT from…" |
+  | 2 | `lib/facet.ts`: store the WHOLE-dataset channel list on each panel (`defaultDenseChannels(data, …)`) | 3 — `facet.test.ts` "carries each panel's OWN channel list, which can differ panel to panel"; `MultiPanelStage.test.tsx` "labels each break panel by ITS channels…", "puts the renamed channel's name on the Y-AXIS of its OWN panel only" |
+  | 3 | restore round 4's three files verbatim (`facet.ts`, `breakPanelRender.ts`, `useMultiPanelStage.ts` as of `3dee67df`) — i.e. the regression itself | 3 — the three reproductions, with the measured wrong labels `["RENAMED-FIELD","RENAMED-FIELD"]` and `["SIGNAL-NAME","AUX-NAME"]` |
+  | 4 | `sanitizeRecord.ts`: `numKeyedRecord` passes keys verbatim | 3 — `sanitizeRecord.test.ts` "relocates a non-canonical numeric key onto its channel", "drops a key that is not a finite number at all"; `techniqueViewMemory.test.ts` "normalizes a non-canonical numeric key onto its channel…" |
+  | 5 | `sanitizeRecord.ts`: `keyedRecord` normalizes keys through `Number` | 3 — `sanitizeRecord.test.ts` "keeps only entries whose value passes the guard", "leaves a non-canonical numeric key EXACTLY as written", "preserves the object's own key order" |
+  | 6 | `stackPanelRender.ts`: drop the per-panel `seriesLabels` | **6** (corrected — review round 5, N5 below; was undercounted as 4) — the three round-4 stack tests, "paints a renamed Y2 channel's STACK panel on the SECONDARY axis", `MultiPanelStage.test.tsx` "never dresses a stack panel in another channel's rename while a re-fetch is in flight", and `BackgroundPlotWindow.test.tsx` "a legend rename reaches the renamed channel's STACK panel, verbatim, in a BACKGROUND window too" |
+  | 7 | `lib/facet.ts`: `breakPayloads` ignores an explicit `yChannels` | **8** (corrected — review round 5, N5 below; was undercounted as 2) — the 2 `facet.test.ts` bindings tests, the 3 round-4 `MultiPanelStage.test.tsx` break tests, the round-5 "built from" test, `useEffectiveComposition.test.tsx`'s durable-fallback test, and `BackgroundPlotWindow.test.tsx` "a legend rename reaches every X-BREAK panel, verbatim, in a BACKGROUND window too" |
+  | 8 | `useMultiPanelStage.ts`: derive the three per-panel lists from `plotted` again (the N4 shape) | 1 — `MultiPanelStage.test.tsx` "never dresses a stack panel in another channel's rename while a re-fetch is in flight" (8 constructions instead of 5) |
+
+  Sabotage 7's first version of that test used the single-channel fixture,
+  where the explicit list and the density default coincide, and survived it;
+  it is now written against the divergent fixture.
+- Gate: `npx tsc -b --force` (exit 0, no output); `npx eslint src --max-warnings=0`
+  (exit 0, no output); `npx vitest run src/lib/facet.test.ts
+  src/lib/composition.test.ts src/lib/sanitizeRecord.test.ts
+  src/lib/techniqueViewMemory src/lib/plotview
+  src/lib/regressionMatrix.test.ts src/components/Stage src/components/windows
+  src/store/useApp.test.ts src/architecture.test.ts` -> **66 files, 1516
+  tests, 0 failed** (0 `^ FAIL` lines in the saved log); `node
+  scripts/freeze-regression-matrix.mjs --check` -> 1 test passed (the golden
+  did NOT move — `BreakPanel` is not serialized into it); backend
+  `tests/test_repo_integrity.py` -> **12 passed**.
+- Bundle (exact eager bytes, `npm ci` on both sides, `node_modules/.vite`
+  cleared before the local build): parent (this commit's `HEAD~1`) =
+  **`1fcc4137`** **913,249 B** -> this commit **913,348 B**, **+99 B**
+  (891.9 kB against the 898.8 kB budget, 6.9 kB under). The added bytes are
+  the per-panel `channels` resolution, the per-panel projection and the
+  payload/channel snapshot object; the round-4 entry's −99 B is exactly
+  reversed.
+- Module ceilings this round (`architecture.test.ts`'s own
+  `split("\n").length`): `Stage/useMultiPanelStage.ts` **753** (pin 757 ->
+  753); `Stage/breakPanelRender.ts` 124 (was 112); `lib/facet.ts` 384 (was
+  369); `lib/sanitizeRecord.ts` 78 (was 43); `lib/techniqueViewMemory.ts` 231
+  (was 233); `Stage/stackPanelRender.ts` 102 (unchanged). No pin raised.
+
+#### Review round 5 — 2026-09-17 (`fix(lib): numeric record keys must be non-negative integers; canonical spelling wins a collision`)
+
+A fifth adversarial review, of `65ecbf81`, returned **CLEAN**: the round-5 fix
+itself is correct, minimal and exactly as advertised (regression reproduces on
+the real parent with the recorded labels, `BreakPanel.channels` is provably
+the array `buildColumns` consumed, all 14 of the review's own sabotages were
+caught, and the N4 snapshot survives a forced out-of-order fetch / StrictMode
+/ unmount-mid-flight race). It closed **2 CONFIRMED low-severity findings**,
+both in `numKeyedRecord` — the one piece of `65ecbf81` that was itself new,
+untested validation logic — plus **5 NITs** on the round's own record.
+
+- **F1 (CONFIRMED, low severity) — fixed.** `Number("")` and `Number(" ")`
+  are both `0` and finite, so `numKeyedRecord`'s bare `Number.isFinite`
+  check let a blank or whitespace-only key from a hand-edited/truncated
+  `.dwk` silently relocate onto channel 0 (measured: `labels: {"":
+  "GHOST"}` -> `{0: "GHOST"}`, and the paired `errKeys`/`seriesLabels` maps
+  the same way). `"0x10"`, `"1.5"` and `"1e0"` were also accepted and
+  parked on an unreachable non-canonical channel forever; `"-1"` likewise.
+  Checked `git show 3dee67df^:frontend/src/lib/techniqueViewMemory.ts` for
+  the pre-round-4 behaviour: `numRecord`/`strRecord` both did bare
+  `out[Number(k)] = val`, which trims whitespace and accepts a leading zero
+  through `Number`'s own coercion but has the same `""`/`" "` -> `0` hazard
+  and no integer/sign check at all. `numKeyedRecord` now accepts a key only
+  when `key.trim()` matches `/^\d+$/` (so `""`, `" "`, `"0x10"`, `"1.5"`,
+  `"-1"` and `"1e0"` are all dropped) and the parsed value is
+  `Number.isInteger`; `"01"` and `" 1 "` still normalize onto channel `1`,
+  matching the pre-round-4 helpers via `trim()`. Channel indices are
+  decided to be non-negative by construction, so a negative key is dropped
+  rather than parked unreachable — a deliberate narrowing past what
+  `Number()` alone would still coerce, documented in the module header.
+  Tests: `sanitizeRecord.test.ts` (new, written FAILING first against
+  `65ecbf81`) plus a `.dwk`-shaped repro in `techniqueViewMemory.test.ts`
+  using the review's own `{"": "GHOST"}` fixture.
+- **F2 (CONFIRMED, low severity) — fixed.** A key collision resolved to the
+  NON-canonical spelling regardless of file order (`{"1":"one","01":
+  "oh-one"}` and the reverse both gave `{1: "oh-one"}`), because
+  `Object.entries` always enumerates array-index-like keys — which is
+  exactly the canonical, no-leading-zero decimal spelling — ascending and
+  BEFORE any other string key, regardless of the source object's own
+  insertion order. `numKeyedRecord` now keeps only the FIRST value written
+  for a given normalized key (`!(key in out)`), so processing entries in
+  that (always-canonical-first) order makes the canonical spelling win a
+  collision in either file order without any extra bookkeeping. Tested both
+  orders in `sanitizeRecord.test.ts`.
+- **N3 — closed; folded into N8 above**, which now also records that
+  `breakPayloads` ignores `seriesOrder` and `channelRoles`
+  (`frontend/src/lib/facet.ts:247`), not only `hiddenChannels`/`y2Keys`.
+- **N4 — closed; recorded beside N8 above** (the narrowed screen/export
+  parity paragraph in `breakPanelRender.ts:24-28` misses a membership
+  divergence, orthogonal to the round-5 rename fix).
+- **N5 — closed; the sabotage table above is corrected in place.** Re-ran
+  both sabotages myself against the round's own declared gate scope
+  (`src/lib/facet.test.ts src/lib/composition.test.ts
+  src/lib/sanitizeRecord.test.ts src/lib/techniqueViewMemory src/lib/plotview
+  src/lib/regressionMatrix.test.ts src/components/Stage
+  src/components/windows src/store/useApp.test.ts src/architecture.test.ts`
+  — the same scope this round's own Gate line above uses): row 6
+  (`stackPanelRender.ts` drops the per-panel `seriesLabels`) fails **6**,
+  not the recorded 4 and not the review's own suggested 5; row 7
+  (`lib/facet.ts`'s `breakPayloads` ignores an explicit `yChannels`) fails
+  **8**, not the recorded 2 and not the review's own suggested 7. The
+  review's re-verification (`bug014_review5.md`) used a narrower scope that
+  excludes `src/components/windows` and `src/lib/regressionMatrix.test.ts`,
+  which is why it undercounted both rows by exactly one
+  `BackgroundPlotWindow.test.tsx` rename test that each sabotage also
+  breaks (a STACK-panel rename test for row 6, an X-BREAK-panel rename test
+  for row 7). The corrected counts and test names are measured against the
+  scope this round's own Gate line records, restored clean after each
+  (`git diff --stat` empty on both files post-restore).
+- **N6 — noted, no action needed.** `useMultiPanelStage.ts` sits exactly at
+  its `architecture.test.ts` pin, **753/753** (`split("\n").length`,
+  confirmed), zero headroom: the next line added to this hook must be
+  funded by an extraction first.
+- **N7 — noted, no code change (the comment lives in source at its
+  753/753 pin, with no room to add a clause).** `useMultiPanelStage.ts:233`
+  ("Derived from this snapshot instead, the two cannot disagree") is
+  accurate for `payload` <-> `channels` (both come from the one snapshot),
+  but not for `channels` <-> `active`: `errorBarsList` (:282-285) derives
+  from `payload.channels` (the snapshot) while reading `active.data`
+  (live), and the fetch effect does not null `payload` when `active`
+  changes, so across a dataset switch an old channel index can apply to the
+  new dataset's data for one frame. Strictly better than before this round
+  (panel count always matches the payload, which it did not when the list
+  came from `plotted`), and no test moves — recorded here since the pin
+  leaves no room to narrow the in-source wording itself.
+- Gate (this review round): `npx tsc -b --force` (exit 0); `npx eslint src
+  --max-warnings=0` (exit 0); `npx vitest run src/lib/sanitizeRecord.test.ts
+  src/lib/techniqueViewMemory src/lib/plotview src/lib/plotRecipeIO
+  src/architecture.test.ts` -> all passed (see the F1/F2 commit's own report
+  for the exact count); `uv run pytest -q tests/test_repo_integrity.py` ->
+  passed.
+
+---
+
+---
+
+## ~~BUG-015 — hiding a series shifts later series' export palette colour, not the canvas'~~ **FIXED 2026-09-14**
+
+**Priority:** P2 — a visible, wrong-looking export (recoloured series) with a
+workaround (temporarily un-hide, export, re-hide, or manually recolour after
+export), no data loss. Matches the same class of bug `SeriesCycle` was
+already built to fix for the live Stage export — this is that fix not
+reaching a saved document's export path.
+
+**Scope correction (2026-09-15, review NIT 4):** "a saved document's export
+path" UNDER-STATES it. `store/prefs.ts:105` defaults `autoSeriesStyles` to
+`false`, and the positional correction was gated on that preference, so the
+LIVE Stage export (Copy figure / Copy figure (vector) / Export figure…) was
+equally broken for every user who never turned it on — which is the default.
+Measured on the fix commit's own parent: Stage export, `hiddenChannels: [1]`,
+cycle OFF → parent `#8fe08f`, fixed `#d9a3ff` (the screen's slot). The fix
+covers that path too, at the same chokepoint and by the same mechanism (it
+derives `positions` in `buildFigureSpecForView`, which BOTH entry points route
+through), so no separate change was needed for it.
+
+**Reported:** 2026-09-14, by the P4.2 canonical regression matrix
+(`1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`) — a design-time
+finding from the matrix's structural comparison, not yet surfaced by a user
+report.
+
+**Investigated:** root cause confirmed by reading the canvas display-list
+builder, the export channel filter, and `buildExportStyles`, not inferred —
+see Confirmed implementation evidence below.
+
+**Suggested implementation owner/model:** Claude (agent) — fixed 2026-09-14.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D4.
+
+#### User-visible problem
+
+A user hides the first of two plotted series (via the legend). On screen,
+the second series keeps its ORIGINAL palette colour — hiding a series never
+reflows the colours of the series still visible. Exporting the same figure
+(PDF/SVG) recolours the second series as if it were now first in line: the
+exported colour does not match what the user sees on screen. This is true of
+BOTH export paths — a saved document's, and the live Stage export with the
+`autoSeriesStyles` preference off, i.e. its default (see the scope
+correction above).
+
+#### Confirmed implementation evidence
+
+(As FILED, 2026-09-14, before the fix. Line numbers and the two code shapes
+called out below — `pos = cycle?.[i] ?? i` and the conditional `seriesCycle` —
+describe the code the bug was found in; the Completion record names what
+replaced them. Kept verbatim as the record of the finding.)
+
+- `frontend/src/lib/uplotOpts.ts:1309` (`const show = !args.hidden?.[i];`)
+  and the surrounding series builder (e.g. `:1329`) — a hidden series stays
+  IN the canvas' display list at its ORIGINAL index with `show: false`;
+  every later series' colour call (`seriesColor(i, style)`) still uses the
+  untouched, original index `i`, so hiding never shifts anyone's colour on
+  screen.
+- `frontend/src/lib/figureSpec.ts:195` (`const plotted =
+  displayChannels.filter((ch) => !st.hiddenChannels.includes(ch));`) — the
+  export wire's channel list DROPS hidden channels entirely, so the second
+  series shifts to index 0 in the filtered list sent to export.
+- `frontend/src/lib/exportStyles.ts:25-40` (`buildExportStyles`) — colours
+  each entry by `pos = cycle?.[i] ?? i` (`:40`), where `i` is the index into
+  the ALREADY-FILTERED `plotted` array; with `cycle: null` (the common case
+  for a saved document — see below), `pos` is simply the filtered position,
+  so the remaining series is coloured as though it were first.
+- `frontend/src/lib/figureSpec.ts:382` (`buildFigureSpecFromDocument`) never
+  sets `extras.autoSeriesStyles`, so `buildFigureSpecForView`'s
+  `seriesCycle` (`figureSpec.ts:253-262`, gated on `extras.autoSeriesStyles`)
+  is `null` for every saved-document export — the positional correction
+  `SeriesCycle` provides is opt-in only for the LIVE Stage export
+  (`buildStageFigureSpec`) per `figureSpec.ts:226-249`'s own doc and
+  `exportStyles.ts:31-38`'s comment, and never reaches a saved document's
+  export path.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:390`,
+  `it("DIVERGENCE (BUG-015): hiding a series leaves the next one on palette
+  slot 1 on screen and slot 0 on export", ...)` — builds a document with
+  `yKeys: [0, 1]`, `hiddenChannels: [0]` (`hiddenFigure()`,
+  `regressionMatrix.test.ts:465`), asserts both legs draw exactly channel
+  `[1]`, and pins BOTH measured colours — screen `TEST_SERIES_PALETTE[1]`
+  (`#ffb37f`, the series' ORIGINAL position), export `TEST_SERIES_PALETTE[0]`
+  (`#7fb3ff`, its FILTERED position) — then asserts they differ.
+  (Converted 2026-09-14 from a bare `it.fails`.)
+
+#### Why this priority
+
+P2 as filed. Matches the evidence: substantial, visible friction (an
+exported figure's series colours do not match the legend/screen the user
+authored it against) with a workaround, not data loss — and the audit's own
+framing that this is a recurrence of a class of bug already fixed once
+elsewhere (`SeriesCycle` for the live Stage export) supports treating it as
+more than cosmetic polish.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a `FigureDocument` with
+  `yKeys: [0, 1]`, `hiddenChannels: [0]`, built by `hiddenFigure()`
+  (`regressionMatrix.test.ts:465-480`).
+- [x] Exact actions recorded — hide the first of two series, then compare
+  `projectScreen(...).series[0].color` (the remaining, second series) to
+  `projectExport(...).series[0].color`.
+- [x] Actual result recorded — screen keeps the second series' original
+  palette colour (its original position, 1); export recolours it as if it
+  were the first series (filtered position 0).
+- [x] Expected result recorded — the exported figure's series colours
+  should match the screen's, hidden series or not.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s BUG-015 test (named
+  `DIVERGENCE (BUG-015): …` when filed; inverted and renamed by the fix, see
+  the Completion record).
+
+#### Fix checklist
+
+- [x] Give `buildFigureSpecFromDocument`'s export path the same positional
+  correction `SeriesCycle`/`extras.autoSeriesStyles` already provides the
+  live Stage export (`figureSpec.ts:253-262`), so `buildExportStyles`'s
+  `pos` is computed from the UNFILTERED display index, not the filtered
+  `plotted` index. Done at the shared chokepoint rather than on the document
+  path: `buildFigureSpecForView` — which BOTH `buildStageFigureSpec` and
+  `buildFigureSpecFromDocument` route through — now derives `positions`
+  unconditionally, and `buildExportStyles` takes them as their own
+  argument, separate from the cycle opt-in.
+- [x] Confirm the fix does not also turn on the (opt-in) auto dash/marker
+  CYCLE feature itself for saved documents — only the palette-POSITION
+  correction, not `autoSeriesStyles`'s wider styling behaviour, should apply
+  universally. `buildExportStyles`'s third argument is now the positions and
+  its fourth a boolean `cycle`; the cycle gate (`overlayExportsSeriesStyles`
+  + `extras.autoSeriesStyles`) is untouched, and
+  `figureSpec.test.ts`'s pre-existing "a saved FigureDocument is independent
+  of the preference" block still asserts `line: undefined` throughout.
+- [x] Add a case with more than one hidden series (e.g. hiding series 0 of
+  three) to confirm the fix generalizes past the two-series minimal repro —
+  `figureSpec.test.ts`'s "generalizes past the two-series repro: hiding 0 AND
+  1 leaves channel 2 on slot 2", plus the three-channel `hidden` matrix
+  fixture.
+- [x] INVERT the divergence assertion in `regressionMatrix.test.ts` — the two
+  palette-slot pins and the `.not.toBe` are gone, replaced by the
+  screen-equals-export equality (kept non-vacuous by pinning the screen
+  slots and asserting they differ from the filtered ones), and the test is
+  renamed to drop the `DIVERGENCE` prefix.
+
+#### Acceptance criteria
+
+- [x] Hiding a series on screen and exporting the figure produces the SAME
+  palette colour for every remaining series as the screen shows.
+- [x] `projectExport(hidden, dataset).series[i].color` equals
+  `projectScreen(hidden, dataset).series[i].color` — the equality
+  BUG-015's divergence test is inverted into; `hidden` is now a full member
+  of the matrix, so `screen ≡ export` and `screen ≡ reopen` assert the whole
+  canonical payload for it, not just the colours.
+- [x] An export with NO hidden series is byte-identical to before the fix
+  (no regression to the common, all-visible case) — with nothing hidden
+  `plotted` IS the display list, so every position equals the old index;
+  `figureSpec.test.ts`'s "with NOTHING hidden the wire is unchanged" pins it,
+  and re-freezing the regression-matrix goldens wrote only the new
+  `hidden.json`, leaving the other nine byte-identical.
+
+#### Completion record
+
+- PR/commit: `fix(export): BUG-015 …` on `claude/repo-evaluation-l7y7k9`
+  (parent `e479f5da`). Product change is three lines of behaviour across
+  `frontend/src/lib/exportStyles.ts` (new `positions` argument, taken always;
+  `cycle` demoted to a boolean), `frontend/src/lib/figureSpec.ts` (`positions`
+  derived unconditionally from `displayChannels`) and
+  `frontend/src/lib/spatialPageExport.ts` (call-site update — that panel's
+  `plotted` IS its canvas' list, so it passes `null` positions). No persisted
+  contract changed: the positions are derived at export-build time from
+  `yKeys`/`seriesOrder`/`hiddenChannels`, all of which a saved document
+  already carries, so there is NO new document field and no schema bump.
+- Automated tests: `frontend/src/lib/figureSpec.test.ts` — new block "hidden
+  series keep their palette slot on the export wire (BUG-015)" (4 tests:
+  slots 1 and 2 for a hidden 0 of three; hiding 0 AND 1; the dash/glyph half
+  under the cycle; the nothing-hidden no-op).
+  `frontend/src/lib/exportStyles.test.ts` — "OFF: the positions still hold —
+  no dash is invented, and no palette skew either (BUG-015)" (rewritten from
+  the test that used to assert the skew).
+  `frontend/src/lib/regressionMatrix.test.ts` — "BUG-015: hiding a series
+  leaves the survivors on palette slots 1 and 2 on BOTH screen and export"
+  (the inverted divergence), "hidden — the hidden channel is drawn by nobody,
+  and the survivors keep their slots", and the `hidden` fixture's own
+  `screen ≡ export`, `screen ≡ reopen` and golden tests.
+- Agent verification: sabotage table (each reverted in turn, then restored) —
+  (a) `positions` back to the filtered index in `figureSpec.ts` → 6 failures
+  including `regressionMatrix` `hidden > screen ≡ export`, the inverted
+  BUG-015 test, all three new `figureSpec.test.ts` BUG-015 assertions and the
+  pre-existing P3.3 "a HIDDEN channel does not renumber the survivors";
+  (b) `seriesColor(pos[i], …)` back to `seriesColor(i, …)` in
+  `exportStyles.ts` → 6 failures including both `exportStyles.test.ts`
+  palette-parity tests; (c) the reopen leg's display position back to the
+  filtered index → `hidden > screen ≡ reopen`.
+  Gate: `uv run pytest -q tests/test_repo_integrity.py`;
+  `npx tsc -b --force`; `npx eslint src --max-warnings=0`;
+  `npx vitest run src/lib src/architecture.test.ts` (274 files, 5205 tests);
+  `npx vitest run src/components/Stage src/components/workshops/figurebuilder
+  src/components/workshops/figurepage` (73 files, 1236 tests);
+  `node scripts/freeze-regression-matrix.mjs --check` clean;
+  `node scripts/check-bundle-size.mjs` green.
+- Bundle (measured 2026-09-15, review NIT 5 — the number the record was
+  missing): parent `e479f5da` **919,781 B** eager -> this commit `ebefa693`
+  **919,781 B**, a **+0 B** delta. Both built after `npm ci` in a scratch
+  worktree, with vite's transform cache cleared between them; the two builds
+  really are different trees (every content hash moved, and the LAZY
+  `figureSpec` chunk grew 6.57 kB -> 6.60 kB) — the eager graph simply did not
+  gain a byte, because `exportStyles.ts`'s added statement lives in a lazy
+  chunk and no eager import was added.
+- Owner verification: pending — export a figure with a series hidden and
+  confirm the PDF's colours match the legend on screen. Worth doing from the
+  LIVE Stage (Copy figure / Export figure…) as well as from a saved document:
+  both were broken and both are fixed (see the scope correction above).
+- Notes: the REOPEN leg of the regression matrix (`lib/regressionMatrixReopen
+  .testkit.ts`) carried the same skew in its own projection and was corrected
+  to the unfiltered display position; it is a testkit, not product code, but
+  the `hidden` fixture's `screen ≡ reopen` is what now holds it there.
+- Review follow-up (2026-09-15, NIT 1 — landed with the BUG-014 commit): as
+  shipped on 2026-09-14 the positions were `displayChannels.indexOf(ch)`, i.e.
+  slots in THIS REQUEST's display list, which is the canvas' list only while
+  `seriesStyleCycle.displayListsAgree` holds. `buildFigureSpecFromDocument`
+  passes `allowExplicitXAsY: true` unconditionally, so a channel used as both
+  X and Y stays in the export's list while the canvas always drops it, and the
+  two index spaces then differ — making the comment's "the canvas' own display
+  list" false in exactly the case the surrounding block names as the
+  exception. The positions are now resolved against the CANVAS list itself
+  (`lib/figureSpecSeries.ts`'s `resolveDisplaySeries`), so the claim is true on
+  every branch; a channel the canvas never draws is parked past the end of that
+  list rather than stealing a drawn channel's slot. Two further nits from the
+  same round landed with it: `indexOf` collapsed a duplicated `yKeys` channel
+  onto one palette slot (the slots now come from a per-channel queue, so each
+  occurrence gets its own, as `uplotOpts`' index-keyed `seriesColor` does), and
+  `exportStyles.ts` regained its `?? i` guard for a short `positions` array.
+  Pinned by `figureSpecSeries.test.ts`, by colour assertions beside
+  `figureSpec.test.ts`'s x-as-y cycle test, and by a ragged-positions test in
+  `exportStyles.test.ts`.
+
+---
+
+## BUG-016 — a grouped figure's per-series styling reaches the canvas but is dropped from the export
+
+**Priority:** P2 — a visible, wrong-looking export (a figure the user styled
+red/dashed/3px comes back default-coloured, solid and default-width) with a
+workaround (un-group, style each level individually, or restyle after export),
+no data loss. The same class as BUG-015: the exported figure does not match the
+figure the user authored on screen.
+
+**Reported:** 2026-09-14, by the adversarial review round of the P4.2 canonical
+regression matrix — found while checking whether the matrix's GROUP-mode
+style comparison was load-bearing. It was not: the matrix compared
+`spec.series_styles`, a wire field the renderer provably never reads on this
+branch, so the comparison passed while the exported curve was solid. A
+design-time finding, not yet surfaced by a user report.
+
+**Investigated:** root cause confirmed by reading the backend resolver's
+`group_col` branch and the canvas' group-split style mapping, and by measuring
+both paths — see Confirmed implementation evidence below.
+
+**Suggested implementation owner/model:** Unassigned.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.2 ("Canonical
+plot/project regression matrix"), divergence D5.
+
+**Related:** FEATURE-001 (per-series styling ignored by FACETED plots). The two
+are siblings but NOT the same entry, and the difference is the whole point:
+facets ignore styling on BOTH paths, so screen and export agree and a user sees
+their styling stop mattering immediately. Grouping honours styling on screen and
+discards it only in the export, so the mismatch is invisible until the PDF comes
+out. A fix for one does not fix the other — FEATURE-001 additionally has to
+solve "different panels resolve different channel sets, so one style list cannot
+serve the grid", which a grouped figure does not have (every level belongs to
+ONE channel and shares that channel's one style).
+
+#### User-visible problem
+
+A user plots one Y channel split by a categorical column ("Batch"), styles that
+channel red, dashed, 3 px, and sees the canvas draw three red dashed 3 px curves
+— one per level — exactly as intended. Exporting the same figure to PDF/SVG
+produces three curves in matplotlib's default colour cycle, all solid, all at
+the default line width. Nothing warns that the styling was discarded.
+
+#### Confirmed implementation evidence
+
+- `src/quantized/routes/export_figures.py:81-85` — `FigureRequest.group_col`'s
+  own doc states the choice outright: *"`series_styles` is not applied in this
+  path either (it's 1:1-with-`y_keys`, which doesn't align with the synthetic
+  per-level series) -- matplotlib's default color cycle takes over, exactly like
+  the screen, which never assigns per-level colors either."* The parenthetical
+  is right about COLOUR and wrong about everything else: the screen does not
+  assign per-LEVEL colours, but it does give every level of a channel that
+  channel's dash, width, marker, step and fill.
+- `src/quantized/routes/export_figures.py:236-238` — the implementation. The
+  `group_col` branch returns
+  `_ResolvedFigure(grouped.x, g_series, x_label, y_label, None, [False] * len(g_series), "")`
+  — the fifth positional field is `styles` (`_ResolvedFigure`, `:169-181`), so
+  every per-series style is `None` for a grouped export. Measured directly
+  against the resolver: a `FigureRequest` with
+  `series_styles=[{color:'#ff0000', line:'dashed', width:3}]` resolves to
+  `styles=None` when `group_col=1` is set and to the styles verbatim when it is
+  not.
+- `frontend/src/lib/figureSpec.ts:310` — `buildFigureSpecFromDocument` still
+  PUTS the style on the wire: `group_col` is emitted from `extras.groupKey`,
+  and `series_styles` (`:321`) is built unconditionally. So the wire carries a
+  style the renderer will ignore, which is why a wire-level comparison cannot
+  see this bug.
+- `frontend/src/lib/figureSpec.ts:232-233` — the frontend already KNOWS about
+  the backend's behaviour, but only narrowly: `overlayExportsSeriesStyles`
+  refuses to auto-CYCLE styles for `group_col`/`facets` because those are
+  *"documented as ignoring `series_styles` in `routes/export_figures.py`"*. The
+  raw user-authored styles are still sent, and the mismatch is never surfaced.
+- `frontend/src/lib/plotGroupSplit.ts:55-61` (`groupSplitChannelMap`) and
+  `frontend/src/components/Stage/usePlotPayload.ts:226-230` (`styleList`) — the
+  canvas side. The channel map repeats each fetched channel once per level, and
+  `styleList` maps each DISPLAY position back through it to that channel's one
+  `seriesStyles[ch]` entry, which `buildOpts` then applies to every level.
+- Measured on the matrix's `group` fixture (channel 0 styled `width: 2,
+  line: "dashed"`, levels ordered C/A/B): the canvas draws
+  `Signal (Batch=C) (au)`, `Signal (Batch=A) (au)`, `Signal (Batch=B) (au)`,
+  every one with `dash: [8, 4]` and `width: 2`; the wire carries
+  `series_styles: [{color: …, width: 2, line: "dashed"}]` alongside
+  `group_col: 6`; the backend resolves that to `styles=None`.
+- Test: `frontend/src/lib/regressionMatrix.test.ts:415`,
+  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
+  canvas but is dropped from the exported figure", ...)` — reads the three
+  per-level strokes out of the real `buildOpts` options object
+  (`screenDrawnStyles`, `regressionMatrixLegs.testkit.ts`), reads
+  `group_col`/`series_styles` out of the real `FigureSpec`, takes the level
+  count from the wire's own `cat_levels`, and pins the backend's contract as a
+  named constant (`STYLE_DROPPED_BY_THE_GROUP_BRANCH = null`) before asserting
+  the two differ. Structural, like the rest of the matrix — it does not render
+  a PDF.
+- `frontend/src/lib/regressionMatrix.testkit.ts` — `styleComparable("group")`
+  is now `false` for exactly this reason, so the matrix's leg-to-leg comparison
+  no longer reports agreement on a field one side ignores.
+
+#### Why this priority
+
+P2, matching BUG-015 rather than FEATURE-001's P3. The distinction is
+screen/export AGREEMENT: FEATURE-001 is P3 because both paths ignore styling, so
+nothing the user sees is contradicted by what they get. Here the canvas honours
+the styling and the export silently does not, so the user's own reference — the
+figure on screen — actively misleads them about what the PDF will contain.
+Not P1: the data and the analysis are untouched, every level is still drawn and
+still labelled, and the workaround (un-group and plot the levels as separate
+channels) exists.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — the `group` fixture in
+  `frontend/src/lib/regressionMatrixFixtures.testkit.ts` (one Y channel,
+  `groupKey: 6` over the categorical "Batch" column with explicit
+  `level_order: [2, 0, 1]`, and `seriesStyles: { 0: { width: 2, line:
+  "dashed" } }`).
+- [x] Exact actions recorded — style a grouped channel, then compare the
+  per-level strokes the canvas resolved (`screenDrawnStyles`) against what the
+  backend's `group_col` branch will render.
+- [x] Actual result recorded — canvas: three curves, each `dash: [8, 4]`,
+  `width: 2`; export: three curves with `styles=None`, i.e. solid and
+  default-width in matplotlib's default cycle.
+- [x] Expected result recorded — the exported grouped figure should carry the
+  channel's dash/width/marker/step/fill on every level, exactly as the canvas
+  draws them.
+- [x] Reproduced by an agent —
+  `frontend/src/lib/regressionMatrix.test.ts`'s
+  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
+  canvas but is dropped from the exported figure", ...)`.
+
+#### Fix checklist
+
+- [ ] Decide the contract for `series_styles` under `group_col`: expand the
+  1:1-with-`y_keys` style list to the synthetic per-level series server-side
+  (each level inheriting its source channel's style, which is exactly what the
+  canvas does), rather than dropping it. `calc.plotting.build_grouped_series`
+  already knows which channel each synthetic series came from.
+- [ ] Keep COLOUR out of scope unless deliberately chosen: the canvas colours
+  levels by display position and the backend by its own cycle, and making those
+  agree is a separate decision from honouring dash/width/marker/step/fill.
+  Whatever is decided, say so in `export_figures.py:81-85`'s doc, which is the
+  contract this bug is measured against.
+- [ ] Update `figureSpec.ts:232-233`'s `overlayExportsSeriesStyles` reasoning
+  if `group_col` stops ignoring `series_styles` — the predicate currently cites
+  the backend behaviour this fix would change.
+- [ ] Add a backend test at the RENDERED layer (the
+  `tests/test_export_vector_structure.py` family) that a grouped export's
+  curves carry the requested dash/width — a wire-level assertion cannot see
+  this bug, which is how it survived.
+- [ ] INVERT the divergence assertion in `regressionMatrix.test.ts`'s
+  `it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the
+  canvas but is dropped from the exported figure", ...)` — drop the
+  `STYLE_DROPPED_BY_THE_GROUP_BRANCH` constant and the `.not.toEqual`, and
+  assert the exported per-level styles EQUAL the canvas'. The fix makes the
+  current assertion RED; it is not an `it.fails` that would silently become an
+  "unexpected pass".
+- [ ] Set `styleComparable("group")` back to `true` in
+  `regressionMatrix.testkit.ts` and regenerate `group.json`
+  (`node frontend/scripts/freeze-regression-matrix.mjs`), so the matrix
+  compares grouped styling leg-to-leg again once the two paths agree.
+
+#### Acceptance criteria
+
+- [ ] A grouped figure styled dashed/3 px on screen exports as dashed/3 px on
+  every level.
+- [ ] An UNGROUPED export is byte-identical to before the fix (no regression to
+  the common, 1:1-with-`y_keys` case).
+- [ ] A grouped export with NO per-series styles set is byte-identical to
+  before the fix (the default-cycle rendering is unchanged when there is
+  nothing to honour).
+- [ ] The matrix's `group` fixture passes `screen ≡ export` with
+  `styleComparable("group") === true`.
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: —
+
+---
+
+## BUG-017 — a dataset with a NaN or ±Infinity cell cannot be reopened after Save
+
+**Priority:** P1 — data loss: the affected dataset's `.dwk` cannot be reopened
+at all, and the failure takes the WHOLE workspace down with it (one bad
+dataset refuses every dataset in the file). No workaround inside the app once
+saved; only recovery is hand-editing the JSON or restoring an older save.
+
+**Reported:** 2026-09-15, by the round-3 adversarial review of the P2.1
+peak-table digest work (`b8cb5e16`) — found while measuring the digest's
+`.dwk` round trip (`xrd_review3.md` NIT 4) as a durability side-check, not a
+peak-table defect. Pre-existing and outside that commit's diff; recorded here
+rather than against the peak-table entry.
+
+**Investigated:** root cause confirmed by probe (below), not inferred.
+
+**State:** **FIXED 2026-09-16.** See the Implementation, Tests and Completion
+record sections; the two design rulings the original filing left open (what a
+pre-fix `null` cell means, and whether a malformed entry should still take the
+whole workspace down) are decided and recorded there, with one residual site
+left open and named by file:line.
+
+**Suggested implementation owner/model:** Claude (agent), 2026-09-16.
+
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P2.1 (found via its
+round-3 review; the peak-table fingerprint is a downstream SYMPTOM, not the
+cause — see the `-0` half below).
+
+#### User-visible problem
+
+A dataset containing a `NaN` cell (reachable today by `insertRows`, whose
+blank rows are minted as `Number.NaN` — see evidence) or a `±Infinity` cell
+(reachable by any correction/formula that can produce one, e.g. a divide by
+zero) is saved successfully, but the saved `.dwk` can never be opened again:
+`parseWorkspaceDataset` throws `dataset N ("<name>") has an invalid data
+structure` for THAT dataset, and `parseWorkspace` has no per-dataset recovery
+— the exception propagates out of the whole load, so every OTHER dataset in
+the same workspace file also fails to open. The user's only path back into
+their project is hand-editing the saved JSON. Separately, a cell holding `-0`
+silently becomes `0` on reopen — not a throw, but a silent value change and,
+for a dataset with a durable peak table (`PRIMARY_SOFTWARE_AUDIT_PLAN` P2.1),
+enough to flip `peakTableMatchesData` to false and discard an otherwise-valid
+saved fit for no user-visible reason.
+
+#### Confirmed implementation evidence
+
+- `frontend/src/lib/workspaceSerialize.ts:198` — `serializeWorkspace`'s
+  per-dataset map does `data: d.data` **inline**, with no replacer. The whole
+  document is then handed to a single `JSON.stringify` elsewhere in the same
+  function, and `JSON.stringify` turns `NaN`/`Infinity`/`-Infinity` into
+  `null` and leaves `-0` indistinguishable from `0` (`JSON.stringify(-0)` is
+  the string `"0"`) — neither is a bug in this file, but this is the one place
+  a dataset's numeric payload crosses the JSON boundary with no NaN/±Infinity/
+  -0 handling of its own.
+- `frontend/src/lib/workspaceDatasetParse.ts:38-40` — `isNumberArray`:
+  `Array.isArray(v) && v.every((x) => typeof x === "number")`. A `null` in the
+  array (what a serialized NaN/±Infinity cell becomes) fails `typeof x ===
+  "number"`, so any row or value column that held one is rejected.
+- `frontend/src/lib/workspaceDatasetParse.ts:75-108` (`isDataStruct`,
+  `parseWorkspaceDataset`) — `isDataStruct` calls `isNumberArray` on `time`
+  and (transitively, per row) on `values`; when it returns false,
+  `parseWorkspaceDataset` throws `` `dataset ${i} ("${String(dd.name ??
+  "")}") has an invalid data structure` `` (`:107`). This is a per-dataset
+  parse called from `parseWorkspace`'s `o.datasets.map(...)` with no
+  try/catch around each entry, so the thrown error aborts the `.map` and the
+  whole `parseWorkspace` call.
+- `frontend/src/store/cellEdit.ts:129-131` (`insertRows`) —
+  `` const blankRow = () => d.data.labels.map(() => Number.NaN); `` mints a
+  `NaN` in every value column for each inserted blank row, and the same
+  function pads `time` with `Number.NaN` too (`padRows(d.data.time, span,
+  Number.NaN)`). So a plain "insert a row" followed by "save" is enough to
+  reach the bug with no error-path or malformed-import involved.
+- **Probe, run end to end against the real code** (`serializeWorkspace` ->
+  `JSON.parse`/`JSON.stringify` -> `parseWorkspace`, a minimal one-dataset,
+  one-column workspace, 2026-09-15):
+  - a `NaN` cell: `parseWorkspace` **throws** exactly
+    `dataset 0 ("scan.dat") has an invalid data structure`, and the workspace
+    fails to load.
+  - a `-0` cell: parses without error; the round-tripped value reads back as
+    `0` (`Object.is(v, -0)` is false) — a silent, non-throwing change.
+  These match `xrd_review3.md`'s independent measurement
+  (`peakTableMatchesData` -> false for the `-0` case; the identical throw
+  message for the `NaN` case) — same bug, found by two different probes.
+
+#### Why this priority
+
+P1, not P2: this is category "the project cannot be reopened", the same class
+BUG-011 (Pack Project shipping preview rows) and the P0/P1 entries in this
+file reserve for actual data loss, and it needs no rare input — inserting a
+row is a normal, common action, and `insertRows`'s blank cells are `NaN` by
+construction, not by user error. It differs from the peak-table digest's
+`-0` half (recorded as fail-safe in `xrd_review3.md` NIT 4, and left there
+rather than duplicated here): the NaN half is not fail-safe, it is a hard
+failure that blocks reopening the file.
+
+#### Reproduction checklist
+
+- [x] Starting state and sample data identified — a one-dataset workspace,
+  one value column, three rows.
+- [x] Exact actions recorded — `insertRows` a blank row (or otherwise write a
+  `NaN`/`±Infinity` cell), `serializeWorkspace`, round-trip through
+  `JSON.parse(JSON.stringify(...))` (what a real Save/Open does via the file
+  on disk), `parseWorkspace` the result.
+- [x] Actual result recorded — `parseWorkspace` throws `dataset 0
+  ("scan.dat") has an invalid data structure`; the entire workspace fails to
+  open. Separately, a `-0` cell parses but reads back as `0`.
+- [x] Expected result recorded — the workspace should reopen with the
+  dataset's `NaN`/`±Infinity`/`-0` cells intact, exactly as saved.
+- [x] Reproduced by an agent — probe above, run against the real
+  `serializeWorkspace`/`parseWorkspace` (see Confirmed implementation
+  evidence). Committed as a regression suite 2026-09-16:
+  `frontend/src/lib/nonFiniteCells.test.ts` reproduces the probe's exact
+  path, but mints the NaN through the app's own `insertRows` action rather
+  than writing one by hand.
+
+#### Investigation
+
+- [x] Likely owning components/modules identified —
+  `lib/workspaceSerialize.ts`, `lib/workspaceDatasetParse.ts`.
+- [x] Root cause confirmed rather than inferred — the probe above, plus the
+  cited `isNumberArray`/`JSON.stringify` behavior.
+- [x] Related workflows and persistence paths checked (2026-09-16) — every
+  site that JSON-encodes a `DataStruct`'s numeric cells was enumerated by
+  grepping `JSON.stringify` across `frontend/src/lib` and `frontend/src/store`
+  and reading each hit. Exactly three encode dataset cells for PERSISTENCE
+  (narrowed from an earlier "every JSON boundary" framing — see the fourth,
+  non-persistence site below, missed by this same grep-and-read pass):
+  - `lib/workspaceSerialize.ts:281`'s `JSON.stringify(doc, null, 2)` — the
+    `.dwk` Save/Save As path AND, through the same function, `lib/autosave.ts`
+    (localStorage/IndexedDB generations) and
+    `store/packProjectContent.ts`'s `serializeCurrentWorkspaceForPack`. ALL
+    THREE are covered by this one fix; `contentFingerprint`'s
+    `JSON.parse`→`JSON.stringify` re-encode (packProjectContent.ts:174)
+    passes the sentinels through unchanged, and the round-trip test here
+    deliberately includes that extra hop.
+  - `lib/workbookTransfer.ts`'s `buildTransferPackage` — a SEPARATE
+    `JSON.stringify(pkg)` over live `Dataset`s, with the identical hole:
+    `parseTransferPackage` feeds the text back through `parseWorkspace`, so a
+    blank inserted row's NaN made workbook Copy→Paste (and Duplicate) refuse
+    the whole workbook with `"… has an invalid data structure"`. FIXED here
+    too, with the same encoder.
+  - **RESIDUAL, recorded not fixed:** `lib/figureDocument.ts:442`
+    (`serializeFigureDocument`) freezes a `DataStruct` snapshot inside a
+    figure document, which rides along in the same `.dwk` under
+    `editableFigures`. It does NOT throw — `normalizeFrozenDataStruct`
+    (`lib/figureDocument.ts:309-334`) already maps every `null` cell to `NaN`
+    by an explicit, documented contract — but that normalization is lossy in
+    the two ways this fix removes elsewhere: `+Infinity`/`-Infinity` both come
+    back as `NaN` (sign and kind gone) and `-0` comes back as `+0`. Left
+    alone deliberately: it is a fail-soft path with its own versioned
+    document contract, so changing its wire is a separate, versioned decision
+    rather than the same edit.
+  - **FOURTH SITE, missed by the original "exactly three" count, benign by
+    contract:** `lib/api/http.ts:58` (`fetchJSON`, plus the same
+    `JSON.stringify(body)` shape at `:142` `postBlob` and `:165`
+    `postDownload`) stringifies request bodies carrying a full `dataset:
+    DataStruct` — routed there by `lib/api/plot.ts`, `lib/api/rsm.ts`,
+    `lib/api/figures.ts` and `lib/api.ts` via `lib/api/datasetCache.ts`. This
+    is a LIVE REQUEST wire, not a persistence boundary, which is why "every
+    JSON boundary" (the commit subject, unchanged — see Completion record)
+    overclaimed scope that "every persistence boundary" would not have: it
+    is inside the same grepped tree and does encode dataset cells, yet
+    appeared in neither the "exactly three" list nor the "checked and NOT
+    affected" list below. The consequence is benign: the backend documents
+    `null` as its own non-finite wire form
+    (`src/quantized/routes/_payload.py`'s module docstring), and
+    `DataStruct.create`'s `np.asarray(..., dtype=float)` turns a JSON `None`
+    back into `nan` (measured: `np.asarray([1,None,3],dtype=float)` ->
+    `[1. nan 3.]`), so the API round trip is NaN-safe and lossy only for
+    `±Infinity`/`-0` — the same shape as the `figureDocument` residual below.
+    Not fixed here (not a persistence path, and not part of this fix's
+    scope); recorded as a residual for the same reason `figureDocument` is.
+  - Checked and NOT affected (no DataStruct cells cross them):
+    `lib/plotRecipe.ts:260`, `lib/plotspec.ts:792`,
+    `lib/pageDocumentActions.ts:198`, `lib/panelwindow.ts:117`,
+    `lib/dragaxis.ts:29`, `lib/template.ts:38` — all carry view/spec state or
+    drag payloads, not measured data. `lib/clipboard.ts`/`lib/clipboardGrid.ts`
+    write TSV text, not JSON.
+  - `lib/originBookRoles.ts` (named speculatively in the original filing)
+    holds no serializer at all — it only decides `errorRoles`; the pack-project
+    export it was cited for goes through `serializeWorkspace`, above.
+- [x] Existing plan overlap reconciled — this is the pre-existing bug
+  `xrd_review3.md` NIT 4 named and deliberately did not fix as part of the
+  P2.1 peak-table digest work; filed here instead of folded into that entry.
+
+#### Implementation
+
+- [x] Minimal safe behavior defined — an encoder/decoder PAIR in its own
+  module, `frontend/src/lib/nonFiniteCells.ts`, applied symmetrically at the
+  two ends of the `.dwk` boundary: `workspaceSerialize.ts`'s per-dataset map
+  calls `encodeDataStruct` on `data` and `raw`, and
+  `workspaceDatasetParse.ts` validates with `isWireCellArray` and decodes
+  with `decodeDataStruct` before `sanitizeDataStruct` ever sees the arrays.
+  A new module rather than either existing file (282 and 264 lines) so
+  neither is bulked toward the 500-line ceiling, and so the ONE other site
+  with the same hole (`lib/workbookTransfer.ts`) shares the same code.
+  SENTINELS CHOSEN: `"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"` — exactly
+  what `String(value)` produces for each, so the saved file is
+  self-describing to a human reading the JSON, rather than the `"__NaN__"`
+  spelling this box originally proposed. The collision argument is
+  unchanged by the shorter spelling and is the one that matters: these
+  strings only ever appear inside `time`/`values`, which are numeric by
+  contract (text cells live in the `metadata` row sidecars,
+  `lib/rowSidecars.ts` — never in `values`), so no legitimate cell can be
+  mistaken for one.
+- [x] Failure and ambiguous-data behavior defined — **RULING: a pre-fix
+  `null` cell stays a REJECTION**, not a silent `NaN` or `0`. Reasons: (a)
+  `null` is genuinely ambiguous — NaN, `+Infinity` and `-Infinity` all wrote
+  the same `null`, so reading it as NaN would fabricate a specific value the
+  file does not contain; (b) `null` is equally what truncated or
+  hand-corrupted JSON looks like, and this box's own original text asked for
+  it to stay "a real rejection for genuinely malformed data". The practical
+  cost is bounded and one-way: a `.dwk` saved by a PRE-fix build with a
+  non-finite cell remains unopenable (hand-editing the JSON is still the
+  recovery, as before), while every file written from this commit on
+  round-trips exactly. Recorded in the code at
+  `lib/workspaceDatasetParse.ts`'s cell-check comment and pinned by the test
+  "still REFUSES a pre-fix null cell rather than guessing which value it was".
+- [x] Data integrity and backward compatibility considered — four
+  directions; three pinned directly by a test, the fourth (no collision)
+  argued structurally and cross-checked by an existing test rather than a
+  dedicated one:
+  - **New code, old file:** a `.dwk` with no sentinels decodes by reference
+    and parses exactly as before (test: "parses a pre-fix .dwk (plain
+    numbers, no sentinels) exactly as before").
+  - **New code, ordinary data:** `encodeCells`/`encodeDataStruct`/
+    `encodeDatasetCells` return their INPUT object when nothing needs a
+    sentinel, so the object graph `JSON.stringify` walks is literally the
+    one it walked before — byte-identical output, no `WORKSPACE_VERSION`
+    bump, no new field (tests: "returns the input array/struct/dataset by
+    reference…" and "writes a finite dataset's payload with the exact bytes
+    it had before"). "Byte-identical" is scoped to ORDINARY data: a dataset
+    that legitimately holds a `-0` cell DOES change the saved bytes (`0` ->
+    `"-0"`) the moment this fix lands, same as a NaN/±Infinity cell does —
+    that is the fix working as intended (a `-0` was previously silently lost,
+    per the peak-fingerprint symptom above), not a regression, but it means
+    "byte-identical" is not universal and should not be read as such.
+  - **Old build, new file:** an old build cannot be changed, so what it DOES
+    was measured and pinned instead — its `isNumberArray` (`typeof x ===
+    "number"`) fails on a sentinel string, so `isDataStruct` fails and it
+    throws its usual `dataset N ("name") has an invalid data structure`.
+    That is the same clear refusal it already gave for such a dataset before
+    this fix: loud, never a silently wrong number (test: "makes an OLD build
+    refuse a sentinel-bearing .dwk loudly instead of corrupting it", which
+    runs the pre-fix predicate verbatim against real new-serializer output).
+  - **No collision** with a legitimate text cell (sentinels only ever appear
+    inside `time`/`values`, which are numeric by contract — text lives in the
+    `metadata` row sidecars, `lib/rowSidecars.ts`/`textColumns.ts`, never in
+    `values`) has no test of its own, but is cross-checked by the strict
+    rejection the decoder already needs for a different reason: "accepts a
+    number or the four sentinels, and rejects null and other strings"
+    (`nonFiniteCells.test.ts` ~line 99) asserts `isWireCellArray([1, "nan",
+    3])` and `isWireCellArray([1, "0", 3])` are both `false` — any string
+    that ISN'T exactly one of the four sentinels fails closed rather than
+    being silently accepted as data, which is the property that makes a real
+    string cell impossible to confuse with a sentinel.
+- [x] UI wording/tooltips/accessibility included where relevant — **RULING:
+  a malformed dataset entry STILL takes the whole workspace down**; it does
+  NOT degrade to a per-dataset skip-with-warning through BUG-010's
+  `notifyMigrationWarnings` channel. Considered and rejected because the
+  "safer" option is the more destructive one here: a skipped dataset is
+  invisible in the Library, and the user's very next Save would write the
+  workspace WITHOUT it — turning a fully recoverable file into a permanent
+  loss. Refusing to open leaves the file on disk untouched and names the
+  offending dataset. What this fix changes is narrower than "unreachable for
+  any file the app itself wrote": the ordinary NaN/±Infinity/-0 cell VALUES
+  this app writes are unreachable through this throw from this commit on,
+  but a pre-fix save with a non-finite cell still refuses (its `null`
+  predates the fix), and a hole/explicit `undefined` in a values row would
+  still serialize to `null` and still refuse — no known app path mints one
+  today (the three cell writers in `store/cellEdit.ts` are bounds-guarded,
+  and `padRows`/`insertBlanks`/`blankRow` all build with `Array.from`), so
+  that is a latent edge, not a live one. Recorded in
+  `parseWorkspaceDataset`'s doc comment ("WHY A MALFORMED ENTRY STILL TAKES
+  THE WHOLE WORKSPACE DOWN").
+
+#### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward — 17 specs in
+  the new `frontend/src/lib/nonFiniteCells.test.ts`, each round trip run as
+  `serializeWorkspace` → `JSON.stringify(JSON.parse(text))` → `parseWorkspace`
+  (the extra re-encode hop is deliberate: it is what
+  `packProjectContent.contentFingerprint` does to the same text). NaN,
+  `+Infinity`, `-Infinity` and `-0` all recover exactly, `-0` asserted with
+  `Object.is`.
+- [x] A VERSIONED round-trip test — "parses a pre-fix .dwk (plain numbers, no
+  sentinels) exactly as before" (an old document still loads unchanged) and
+  "still REFUSES a pre-fix null cell rather than guessing which value it was"
+  (the ruling recorded above, pinned so it cannot drift silently). Plus the
+  reverse direction: "makes an OLD build refuse a sentinel-bearing .dwk
+  loudly instead of corrupting it".
+- [x] `insertRows`' blank rows specifically — the NaN reaches the test
+  through `useApp.getState().insertRows("d1", 1, 1)`, i.e. the app's own
+  action, never a hand-written NaN; and a second spec asserts the OTHER
+  dataset in the same workspace loads too (the "whole workspace goes down"
+  half of the bug).
+- [x] Relevant focused tests pass — `npx vitest run src/lib src/store
+  src/architecture.test.ts`: 358 files, 7,076 tests, 7,075 passed. The one
+  failure is unrelated and load-induced:
+  `src/lib/freezeRegressionMatrixCheck.test.ts` times out at its own 30 s
+  budget when the whole scope runs in parallel (it spawns a NESTED `vitest`
+  run via `scripts/freeze-regression-matrix.mjs`); run on its own on the same
+  tree it passes in 19.6 s, and the script it drives imports only the
+  regression-matrix testkits — none of the four files this commit touches.
+- [x] Type-check/build/repository gates pass — `npx tsc -b --force` (exit 0),
+  `npx eslint src --max-warnings=0` (exit 0), the scoped vitest above,
+  `npm run build` after `rm -rf node_modules/.vite`, and
+  `uv run pytest -q tests/test_repo_integrity.py`.
+- [x] Agent verifies acceptance criteria — every sentinel round trip, the
+  byte-identity pin, both compatibility directions, the autosave path, the
+  workbook-transfer path and the peak-table fingerprint, each sabotage-
+  verified (7 sabotages, table in the commit body).
+- [ ] Owner verifies when required — a real Save/reopen of a project
+  containing an inserted blank row, in the running app on Windows.
+
+#### Completion record
+
+- PR/commit: `fix(workspace): BUG-017 — round-trip NaN/±Infinity/-0 cells
+  through every JSON boundary` (2026-09-16). That subject is the commit's own
+  immutable wording; scope note (2026-09-16 review round): it covers every
+  PERSISTENCE JSON boundary (`.dwk`/autosave/Pack Project and workbook
+  transfer) — a fourth JSON boundary, `lib/api/http.ts`'s live request
+  bodies, is a separate, benign-by-contract residual, not covered by this
+  commit — see the Investigation section's fourth-site bullet.
+- Automated tests: `frontend/src/lib/nonFiniteCells.test.ts` — 18 specs as of
+  the 2026-09-16 review round (17 from the original fix, encoder/decoder
+  contract; byte-identity for ordinary data; the `insertRows` NaN round trip
+  and its whole-workspace half; ±Infinity; `-0` via `Object.is`; `raw` through
+  the `.dwk` path; pre-fix document compatibility both ways; two autosave
+  specs; the workbook Copy/Paste package; the `peakDataFingerprint` survival
+  check; plus one added by that review round, closing a test gap it found:
+  `raw` with a NaN and a `-0` through the workbook-transfer package
+  specifically — `encodeDatasetCells`'s `raw` branch was unguarded by any of
+  the original 17, sabotage-verified, see that round's notes below).
+- Agent verification: 2026-09-16 — the original probe's two symptoms are
+  both gone (the NaN case now reopens; the `-0` case now reads back
+  `Object.is(v, -0) === true`), and every new spec was sabotage-verified by
+  breaking the code it guards and restoring the source byte-identical.
+- Owner verification: —
+- Notes: one residual recorded and deliberately not fixed —
+  `lib/figureDocument.ts:442`'s frozen figure snapshot is lossy for
+  `±Infinity` (both become `NaN`) and `-0` (becomes `+0`) but never throws;
+  see the Investigation section's third bullet for why it is a separate,
+  versioned decision. A second, benign residual recorded by the 2026-09-16
+  review round: `lib/api/http.ts`'s live request bodies (see the
+  Investigation section's fourth-site bullet).
+- **2026-09-16 review round (test gap + doc corrections):** re-read the
+  landed commit (`0565b674`, parent `2d8b9b57` — NOT the `56bb3599` the
+  original commit body measured against, which was `d3de75e2`'s parent
+  before this fix was rebased onto `2d8b9b57` for landing) and closed five
+  items: (1) added the `raw`-through-workbook-transfer test above, sabotage-
+  verified (`encodeDatasetCells` ignoring `raw` → that one new test fails;
+  the pre-existing `.dwk`-path `raw` test is unaffected by this specific
+  sabotage because `serializeWorkspace` never calls `encodeDatasetCells` — it
+  calls `encodeDataStruct` directly on `data`/`raw` — so only the branch this
+  round actually guards, the workbook-transfer path, needed a new test); (2)
+  reworded the "unreachable for any file the app itself wrote" overclaim in
+  both this entry and `workspaceDatasetParse.ts`'s doc comment (see above and
+  that file's `parseWorkspaceDataset` doc); (3) added the missed fourth
+  JSON-encode site (`lib/api/http.ts`) to the Investigation enumeration and
+  narrowed "every JSON boundary" to "every persistence boundary" in this
+  entry's own wording (the commit subject itself is unchanged, per the note
+  above); (4) reworded "four properties/three directions, each pinned by a
+  test" to name the no-collision property as argued-and-cross-checked rather
+  than independently pinned; (5) noted that a `-0` cell changes saved bytes
+  (in contract) and re-measured the eager bundle pair for the actual landed
+  parent: **911,982 B at `2d8b9b57`** (this fix's real `HEAD~1`, built with
+  `rm -rf node_modules/.vite && npm run build` in a scratch worktree) **->
+  912,846 B at `0565b674` (+864 B)**, 7,554 B under the unmoved 920,400 B
+  budget — the delta matches the commit body's own `+864 B` exactly (the
+  absolute totals differ only because the commit body measured against
+  `56bb3599`, an ancestor of the actual parent `2d8b9b57`, not because the
+  fix's own footprint changed).
+
+---
+
 ## FEATURE-001 — per-series styling does not apply to faceted plots (screen or export)
 
 **Priority:** P3 — nothing is lost or corrupted, and screen and export AGREE
@@ -3246,6 +6096,115 @@ ratchet tighter than it has been all session. Full rationale in
 
 ---
 
+## UX-003 — a failed lazy chunk load unmounts the React root: 17 `lazy()` sites, no error boundary
+
+**Priority:** P3 — recoverable by reloading the page, and it needs a chunk
+fetch to fail (offline right after a deploy, or a stale cached `index.html`
+referencing a since-rotated hash); but when it does happen the whole app
+goes blank with no message at all
+**State:** Open
+**Reported:** 2026-09-15 by agent (adversarial review of the `b749f804` bundle diet)
+**Investigated:** measured, not fixed — see below
+**Suggested implementation owner/model:** Unassigned
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 (the lazy-seam
+diet), `plans/BUNDLE_HEADROOM.md` slice 2
+
+#### User-visible problem
+
+Every code-split panel in the app is reached through React's
+`lazy()` + `<Suspense>`. If the chunk behind one cannot be fetched, the lazy
+component's promise rejects, and React propagates that rejection up looking
+for an error boundary. There is none: measured 2026-09-15,
+`grep -rln "componentDidCatch|getDerivedStateFromError|ErrorBoundary" frontend/src`
+returns **0 files**, against **17** `= lazy(` sites in nine modules
+(`main.tsx`, `App.tsx`, `AppOverlays.tsx`, `components/Library/Library.tsx`,
+`components/Library/FigureRow.tsx`, `components/Stage/Stage.tsx`,
+`components/Stage/PlotStage.tsx`, `components/windows/WindowCanvas.tsx`,
+`components/windows/DocumentWindow.tsx`).
+
+So the failure mode is: the user clicks something that opens a lazy panel,
+the fetch fails, and **the entire React root unmounts** — a blank window,
+no toast, no status line, no console error the user would ever see. The
+project state is not lost on disk, but everything unsaved in memory is, and
+the only recovery is a page reload. React additionally caches the rejected
+payload for that `lazy()` component, so even if the root survived, the next
+gesture would not retry.
+
+This is a whole CLASS, not one panel. It is filed now because the
+2026-09-14 bundle diet's commit body claimed "chunk-load failures are
+reported, never silent" and "a failed load is never cached, so the next
+gesture retries" without qualification. Both are true of the three seams
+that go through `commands/fileCommands.ts`'s `runLazy` or
+`store/workbookTransfer.ts`'s own `fail()`; **neither is true of any
+`lazy()`-shaped seam**, including that commit's own
+`components/Library/OriginSavedPreviewWindow.tsx`. The claims were narrowed
+in both plans on 2026-09-15; the missing boundary itself was deliberately
+NOT added in that review round, because a root error boundary is a design
+decision about what the app shows and offers when a subtree dies, not a
+one-line patch to slip into a bundle-diet follow-up.
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — any project; the Library
+  figure row's saved-Origin preview ("▣") is the cheapest lazy trigger
+- [x] Exact actions recorded — make the chunk unfetchable (DevTools offline,
+  or delete the built chunk from `src/quantized/web/assets/`), then click a
+  control whose panel is `lazy()`
+- [x] Actual result recorded — measured in a scratch spec at `b749f804`
+  (`vi.mock` of the lazy module throwing, then clicking "▣" on a
+  `saved_preview` row): root HTML length after the click **0**, row present
+  **false**, toasts **0**, `console.error` lines **0**
+- [ ] Expected result recorded — owner call: the decision below
+- [x] Reproduced by an agent
+
+#### Investigation
+
+- [x] Likely owning components/modules identified — the nine modules listed
+  above; a fix belongs at/near `src/main.tsx`'s root render and each
+  `<Suspense>` boundary, not in any individual panel
+- [x] Root cause confirmed rather than inferred — measured, both halves
+  (0 boundaries, 17 sites) counted by grep on 2026-09-15
+- [ ] Related workflows and persistence paths checked — in particular
+  whether autosave (`useWorkspaceAutosave`) has already written before a
+  root unmount, i.e. how much is actually lost
+- [ ] Existing plan overlap reconciled — P4.1 will keep ADDING `lazy()`
+  seams for bundle headroom, so this grows with every future slice
+
+#### Implementation
+
+- [ ] Minimal safe behavior defined — owner call between: (a) one root
+  boundary that shows a "something went wrong, reload" panel; (b) a boundary
+  per `<Suspense>` so only the failing panel dies and the rest of the app
+  keeps working; (c) (b) plus a Retry that remounts with a fresh `lazy()`,
+  which is the only way to defeat React's cached rejection
+- [ ] Failure and ambiguous-data behavior defined — a boundary must not
+  swallow non-chunk errors into a generic message that hides a real bug
+- [ ] Data integrity and backward compatibility considered — whether the
+  boundary should force an autosave before showing its fallback
+- [ ] UI wording/tooltips/accessibility included where relevant
+
+#### Tests and acceptance
+
+- [ ] Regression test fails before the fix and passes afterward — a spec
+  that makes one `lazy()` chunk reject and asserts the root is still mounted
+- [ ] Relevant focused tests pass
+- [ ] Type-check/build/repository gates pass
+- [ ] Agent verifies acceptance criteria
+- [ ] Owner verifies when required
+
+#### Completion record
+
+- PR/commit: —
+- Automated tests: —
+- Agent verification: —
+- Owner verification: —
+- Notes: filed by the 2026-09-15 review round of `b749f804`; that round
+  narrowed the two over-broad claims in the plans and left the boundary
+  itself to this item.
+
+---
+
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -3319,3 +6278,8 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Second adversarial review round on the BUG-011 fix: closed a regression the FIRST review round introduced (`startInFlight` had no escape hatch — a `fetchBookData` that never settles pinned Start pack rejected forever, recoverable neither by Cancel nor Reset), finished finding #5 (the refusal's reason now comes from the SAME `lastBookError` lookup as the name it's paired with, not the raw thrown error, so a stale reason can no longer be quoted against the wrong book), and closed nit N1 for real (a real terminal status on both the preview-ready and pack-completed paths, not another in-flight claim). Corrected the FALSE "still open on `workbookTransfer.ts` too" residual (already closed there via `buildTransferPackage`'s own re-check) in three places, and recounted every stale file:line citation this entry carried, several created by the first review round's own edits | 5 new specs (packProject.test.ts 70 passing, was 65), every new assertion sabotage-verified byte-identical after restore (see the commit body's table); `tsc -b --force`/`eslint --max-warnings=0` clean; full `npx vitest run` 636 files / 10,433 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 916,384 B (real parent `a99ebb6d`) -> 916,408 B here, +24 B, 3,992 B under budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Third adversarial review round on the BUG-011 fix: closed a NEW hole round 2's own fix introduced (`startInFlight` was cleared by an unconditional `finally`, so a late-settling abandoned attempt could clear a flag a NEWER attempt owned — closed with an attempt-scoped `startEpoch` token), and widened round 2's `notePackOutcome` terminal-status fix from two named paths (`awaiting_confirmation`, `completed`) to EVERY `failed`/`cancelled` transition in `packProjectRun.ts` via two choke-point helpers, so the entry's own "closed" claim is now actually true rather than narrowed. Corrected a FIFTH recurrence of the wrong-parent-SHA mistake (genuine rebase drift this time — round 2 measured against an ancestor four commits back, not its real `HEAD~1`) and an off-by-one spec-range citation (`:734-902` -> `:734-903`); fixed a stale cross-reference nit, a `truncateReason` docstring missing its third consumer, and pinned the "N dataset(s)" count in two existing specs that previously passed against a manifest whose count was always 0 | 4 new specs (1 attempt-scoping probe for finding #1, 3 terminal-status specs for finding #2 — poll-driven `failed`, poll-driven `cancelled`, and `cancelled`'s own pre-packing branch), every new assertion sabotage-verified byte-identical after restore; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`src/store` + `workspaceSerialize.test.ts` + `architecture.test.ts`) 1754 passed, 0 `FAIL` (full suite not re-run this round — machine contended; last verified full-suite count is the reviewer's own 636 files / 10,444 passed + 2 expected fail at `1aa8d4bd`); `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `26869ddb` -> 916,466 B here, +0 B (neither touched file is eager: `store/packProject.ts` is reached only through the lazy `PackProjectPanel` chunk, and the `packProjectRun.ts`/`packProjectContent.ts` chunk was already lazy); `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
+| 2026-09-14 | Claude (agent) | Filed BUG-016 (P2): a grouped figure's per-series styling reaches the canvas — `plotGroupSplit.ts`'s channel map gives every level its source channel's style and `buildOpts` applies it — but `routes/export_figures.py`'s `group_col` branch (`:81-85` documents the choice, `:236-238` returns `_ResolvedFigure(..., None, ...)`) drops `series_styles` outright, so the exported curves are solid, default-width and default-coloured. Found by the 2026-09-14 adversarial review round of the P4.2 regression matrix, which showed the matrix's own GROUP style comparison was reading a wire field the renderer never consults. Same round: renamed BUG-012..BUG-015's reproducing tests (the five bare `it.fails` pins became explicit `DIVERGENCE (BUG-01x)` tests asserting BOTH concrete values and their difference) and updated each entry's fix checklist to say the fix INVERTS the assertion rather than flipping an `it.fails`. Not fixed here — tests/fixtures/plans only, no product code touched | Design-time finding, code-read and file:line-cited, and measured on both paths (canvas: three levels at `dash: [8, 4]`, `width: 2`; resolver: `styles=None` under `group_col`). Reproducing test: `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` (new this round). `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; `npx vitest run src/lib/regressionMatrix.test.ts src/lib/figureSpec.a8.test.ts src/architecture.test.ts` |
+| 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |
+| 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
+| 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
