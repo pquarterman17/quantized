@@ -108,6 +108,17 @@ describe("freeze-regression-matrix.mjs --check", () => {
         rmSync(dir, { recursive: true, force: true });
       }
     },
-    30_000,
+    // Each of the 4 `runScript` calls above boots a REAL nested vitest run
+    // (see the script's own comment block on why it re-enters through
+    // `startVitest`), so this test's actual work is "start a full test
+    // runner from cold four times in a row". Alone that is ~15-20s; under a
+    // scoped gate with several concurrent agents and 7,700+ other tests
+    // competing for the box, measured elapsed climbed to 30-42s and tripped
+    // the old 30s bound (`Error: Test timed out in 30000ms.`) even though
+    // every assertion above it — read-only-ness, the non-zero exit, the
+    // stale-file name, and the byte-identical regenerate — was never in
+    // doubt. This bound is a loose wall-clock backstop for a hung process,
+    // not a check on load; per docs/testing.md, never lower it.
+    180_000,
   );
 });

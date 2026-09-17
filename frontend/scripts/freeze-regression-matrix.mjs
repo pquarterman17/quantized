@@ -133,6 +133,20 @@ if (process.env.VITEST) {
     watch: false,
     root: FRONTEND,
     include: [SELF],
+    // This entry point always drives exactly one spec file (`SELF`) with one
+    // test in it — a full thread/fork worker pool (vitest's default) spins up
+    // and tears down parallel workers it will never use. `forks` + a single
+    // worker + no isolation cuts that startup overhead, which matters because
+    // this can run 4x back-to-back inside the --check guard test
+    // (`freezeRegressionMatrixCheck.test.ts`). Read-only-ness and the exit
+    // code (the actual --check contract) come from the script body above and
+    // are unaffected by how the runner schedules its one worker.
+    pool: "forks",
+    maxWorkers: 1,
+    minWorkers: 1,
+    fileParallelism: false,
+    isolate: false,
+    coverage: { enabled: false },
   });
   await vitest?.close();
   const failed = vitest?.state.getCountOfFailedTests() ?? 1;
