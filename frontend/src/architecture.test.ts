@@ -271,7 +271,7 @@ const STORE_PINS: Record<string, number> = {
   // formats/titles, the legend/grid/axis-box flags, stack mode + panel fit +
   // page setup, the x/y/y2/group channel keys, reference lines, annotations,
   // per-channel series styles/labels/error pairings, draw order, hidden/solo
-  // channels and the waterfall offset (45 actions, plus the `ref-`/`ann-` id
+  // channels and the waterfall offset (43 actions, plus the `ref-`/`ann-` id
   // counters they mint from) — moved verbatim to the new
   // store/plotViewSettings.ts (PlotViewSettingsSlice), composed exactly like
   // datasetMeta.ts/gadget.ts: one import line, one word on the extends
@@ -713,6 +713,20 @@ const LIB_UI_GRANDFATHERED = new Set([
   "./lib/worksheetTransformCommands.ts",
 ]);
 
+// store/ layering guard (P4.1 review F1, 2026-09-17). store/plotViewSettings.ts's
+// header claims "architecture.test.ts's import-direction guards keep lib/ and
+// store/ below the component layer" — that was true for lib/ (above) but not
+// for store/, which had no guard at all. Same shape as the lib/ ratchet: three
+// store modules already import askConfirm from components/overlays/ConfirmDialog
+// (discovered 2026-09-17, predates this guard); they are grandfathered, and a
+// NEW store file must not import components/. The grandfathered list only
+// shrinks — a file that drops the import must leave it.
+const STORE_UI_GRANDFATHERED = new Set([
+  "./store/originFigureApply.ts",
+  "./store/reimport.ts",
+  "./store/reimportAllRun.ts",
+]);
+
 // PENDING-EDIT GUARD RATCHET (BUG-006 site 9, added review round 5).
 //
 // Five review rounds on one feature produced two HIGH defects per round, and the
@@ -955,6 +969,31 @@ describe("lib/ layering guard (DIRACULATOR_AUDIT P3)", () => {
       return entry == null || !importsComponents(entry[1]);
     });
     expect(stale, "remove from LIB_UI_GRANDFATHERED (ratchet down)").toEqual([]);
+  });
+});
+
+describe("store/ layering guard (P4.1 review F1)", () => {
+  const importsComponents = (src: string): boolean =>
+    /from\s+["'][^"']*components\//.test(src);
+  const storeFiles = () => sources().filter(([p]) => p.startsWith("./store/"));
+
+  it("no NEW store/ module imports from components/ (grandfathered set only shrinks)", () => {
+    const bad = storeFiles()
+      .filter(([p]) => !STORE_UI_GRANDFATHERED.has(p))
+      .filter(([, src]) => importsComponents(src))
+      .map(([p]) => p);
+    expect(
+      bad,
+      "store is a lower layer — inject the UI dependency from the caller instead",
+    ).toEqual([]);
+  });
+
+  it("the grandfathered list stays honest — a file that dropped the import leaves the list", () => {
+    const stale = [...STORE_UI_GRANDFATHERED].filter((key) => {
+      const entry = storeFiles().find(([p]) => p === key);
+      return entry == null || !importsComponents(entry[1]);
+    });
+    expect(stale, "remove from STORE_UI_GRANDFATHERED (ratchet down)").toEqual([]);
   });
 });
 

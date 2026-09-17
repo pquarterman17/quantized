@@ -5158,14 +5158,18 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   titles, legend/grid/axis-box flags, stack mode + panel fit + page setup,
   the x/y/y2/group channel keys, reference lines, annotations, per-channel
   series styles/labels/error pairings, draw order, hidden/solo channels and
-  the waterfall offset (45 actions) — moved verbatim from `store/useApp.ts`
+  the waterfall offset (43 actions) — moved verbatim from `store/useApp.ts`
   to the new `store/plotViewSettings.ts` (277 lines by the repo's
   `split("\n")` ceiling metric, `PlotViewSettingsSlice`, composed like
   `datasetMeta.ts`/`gadget.ts`). `store/useApp.ts` **2,322 →
   2,122 lines (−200)**; its `architecture.test.ts` STORE_PINS entry ratcheted
-  DOWN to 2,122 with a dated justification. Chosen by measured coupling, not
-  size: nothing in the cluster writes `datasets`, so the pending-edit ratchet
-  has nothing to say about it. Deliberately left behind as NOT this domain:
+  DOWN to 2,122 with a dated justification. Eager bundle for the landed pair:
+  913,336 B at parent `7a1ebd43` (the characterization commit — its body named
+  an orphaned pre-amend twin `7961f865`, same tree, unreachable SHA; corrected
+  here per review F3) → 913,376 B at `6686c23d` (+40 B). Chosen by measured
+  coupling, not size: nothing in the cluster writes `datasets`, so the
+  pending-edit ratchet has nothing to say about it. Deliberately left behind
+  as NOT this domain:
   `setChannelRole`/`setChannelType` (per-dataset channel config that
   round-trips the `.dwk`, not view state), the preference setters and the
   shell-layout toggles. The box stays `[~]`: `store/useApp.ts` is still far

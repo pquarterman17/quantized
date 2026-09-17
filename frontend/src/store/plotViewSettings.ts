@@ -20,7 +20,7 @@
 //     `AppState` in store/useApp.ts, because the actions that RESET them on a
 //     dataset switch (`setActive`/`addDataset`/`duplicateDataset`) and the
 //     ones that bulk-apply them (`loadWorkspace`, `applyOriginFigure`,
-//     `facetByColumn`) are not part of this cluster. Same shape as
+//     `facetByColumn`/`breakAtGaps`) are not part of this cluster. Same shape as
 //     store/corrections.ts, which mutates the shared `datasets` field without
 //     owning it, and store/libraryPanel.ts's `updateFolder`.
 //   - `setChannelRole`/`setChannelType`. Those write per-DATASET channel
@@ -32,9 +32,11 @@
 //     Those persist through store/prefs.ts and are not PlotView.
 //
 // WHAT IT MUST NOT IMPORT: nothing from `../components`, and no React — this
-// is store-layer code (architecture.test.ts's import-direction guards keep
-// lib/ and store/ below the component layer), and every action here is a
-// plain state writer a test can call without rendering anything. Only `lib/`
+// is store-layer code (architecture.test.ts's "store/ layering guard" enforces
+// this file specifically: only three grandfathered modules — reimport.ts,
+// reimportAllRun.ts, originFigureApply.ts — may import components/, and this
+// one is not among them), and every action here is a plain state writer a
+// test can call without rendering anything. Only `lib/`
 // pure helpers, sibling store modules, and the `AppState` TYPE from ./useApp
 // (type-only, so the runtime import graph stays one-directional:
 // useApp -> here).

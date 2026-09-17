@@ -160,6 +160,30 @@ describe("plot-view settings — the uniform one-field writers", () => {
     expect(useApp.getState().projectDirty).toBe(false);
   });
 
+  // Review F4: the specs above pin the field WRITTEN, but nothing asserted the
+  // complement — that no OTHER top-level store field moved. Sabotage that adds
+  // an extra `set(...)` field (e.g. setPolarMode also clearing stackMode/
+  // composition) passed every spec above. Diff the whole getState() snapshot
+  // instead of reading one key.
+  //
+  // Poison stackMode/composition/facetKey (F6: the fields a legitimate
+  // bulk-writer like facetByColumn/breakAtGaps clears) to NON-default values
+  // first. Without this, a sabotage that "clears" one of them back to its own
+  // default (stackMode: false, composition: null — resetView's own starting
+  // values) produces byte-identical state and no diff would ever see it.
+  it.each(SIMPLE)("%s writes ONLY its own field (plus history/future bookkeeping)", (_name, invoke, field) => {
+    useApp.setState({
+      stackMode: true,
+      composition: { kind: "facet" } as unknown as ReturnType<typeof useApp.getState>["composition"],
+      facetKey: 7,
+    });
+    const before = { ...useApp.getState() } as Record<string, unknown>;
+    invoke();
+    const after = useApp.getState() as unknown as Record<string, unknown>;
+    const changed = Object.keys(after).filter((k) => after[k] !== before[k]);
+    expect(changed.sort()).toEqual([field, "future", "history"].sort());
+  });
+
   it.each(SIMPLE)("%s records no macro step while the recorder is idle", (_name, invoke) => {
     invoke();
     expect(useApp.getState().macroSteps).toEqual([]);
