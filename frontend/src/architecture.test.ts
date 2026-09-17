@@ -288,7 +288,30 @@ const STORE_PINS: Record<string, number> = {
   // (119 specs) was written and run green against the PRE-extraction code and
   // passes unchanged after the move; that, not a line count, is what made the
   // extraction verifiable.
-  "/store/useApp.ts": 2122,
+  // 2122 -> 2012 (2026-09-17, the SECOND P4.1 domain, zero headroom): the
+  // report-sheet (#36) and figure-document (#12) lifecycle — addReport,
+  // removeReport, renameReport, setOpenReport, addFigureDoc, removeFigureDoc,
+  // renameFigureDoc, duplicateFigureDoc, openFigureDraft, openFigureDoc,
+  // openFigureDocInWindow, clearFigureDocSeed (12 actions) — moved verbatim to
+  // the new store/reportsFigureDocs.ts (ReportsFigureDocsSlice), composed
+  // exactly like plotViewSettings.ts: one import line, one word on the extends
+  // clause, one creator-spread line. Chosen by COUPLING over the two larger
+  // candidates: `loadWorkspace` (170 lines) writes 40 AppState fields and is
+  // where every new persisted field gets wired, and applyOriginFigure +
+  // facetByColumn + breakAtGaps (342 lines) write 24 PlotView fields that
+  // plotViewSettings.ts also writes; this cluster writes 15, of which the four
+  // it OWNS (reports/openReportId/figureDocs/figureDocSeed) are touched by
+  // nothing else outside `loadWorkspace`'s bulk hydrate. The FIELDS stay
+  // declared and initialized on AppState here for exactly that reason — same
+  // shape as plotViewSettings.ts. The shared `<prefix>-<t36>-<n>` id counter
+  // moved with them, to the leaf module store/idSeq.ts (a module-level `let`
+  // cannot be incremented across a module boundary, and splitting it per
+  // domain would have renumbered ids); useApp.ts re-exports nextDatasetId/
+  // nextFolderId from there so no importer changed.
+  // store/reportsFigureDocs.characterization.test.ts (55 specs, each writer
+  // diffing the WHOLE poisoned getState() snapshot) was written and run green
+  // against the PRE-extraction code and passes byte-unchanged after the move.
+  "/store/useApp.ts": 2012,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

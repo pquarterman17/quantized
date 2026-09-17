@@ -5183,8 +5183,15 @@ so a loaded handler's own throw is no longer swallowed with the load's.
 - [~] Characterization tests before moves. **First domain done 2026-09-17**
   (see the box below): `store/plotViewSettings.characterization.test.ts`, 119
   specs, written and run GREEN against the pre-extraction `store/useApp.ts`
-  and passing byte-unchanged after the move. Still `[~]` because the practice
-  is per-domain and `store/useApp.ts` has more domains left.
+  and passing byte-unchanged after the move. **Second domain done the same
+  day**: `store/reportsFigureDocs.characterization.test.ts`, 55 specs, same
+  discipline (green before, byte-identical `md5` after), and it starts with
+  the two guards the first net needed a review round to gain — every writer
+  diffs the WHOLE `getState()` snapshot (so an EXTRA field written is caught,
+  not only a missing one) against a POISONED baseline (so a write that
+  "clears" a field back to its own default still shows as a diff). Still
+  `[~]` because the practice is per-domain and `store/useApp.ts` has more
+  domains left.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -5205,7 +5212,44 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   as NOT this domain:
   `setChannelRole`/`setChannelType` (per-dataset channel config that
   round-trips the `.dwk`, not view state), the preference setters and the
-  shell-layout toggles. The box stays `[~]`: `store/useApp.ts` is still far
+  shell-layout toggles.
+  **SECOND domain extracted 2026-09-17**, same discipline: the **report-sheet
+  (#36) and figure-document (#12) lifecycle** — `addReport`, `removeReport`,
+  `renameReport`, `setOpenReport`, `addFigureDoc`, `removeFigureDoc`,
+  `renameFigureDoc`, `duplicateFigureDoc`, `openFigureDraft`, `openFigureDoc`,
+  `openFigureDocInWindow`, `clearFigureDocSeed` (12 actions) — moved to the new
+  `store/reportsFigureDocs.ts` (183 lines, `ReportsFigureDocsSlice`, composed
+  with one import + one word on the `extends` clause + one spread, exactly like
+  `plotViewSettings.ts`). `store/useApp.ts` **2,122 → 2,012 lines (−110)**; its
+  `STORE_PINS` entry ratcheted DOWN to 2,012 with a dated justification.
+  11 of the 12 bodies are byte-identical after whitespace normalisation;
+  the twelfth (`duplicateFigureDoc`) differs by exactly one expression,
+  `` `figd-${Date.now().toString(36)}-${++_idSeq}` `` → `nextFigureDocId()`,
+  because a module-level `let` cannot be incremented across an ES-module
+  boundary. Rather than split the counter per domain (which would renumber
+  ids), the whole shared sequence moved to the new leaf module
+  `store/idSeq.ts` (45 lines, imports nothing); `store/useApp.ts` re-exports
+  `nextDatasetId`/`nextFolderId` from there, so none of its eight importers
+  changed, and `addSmartFolder` — which stays behind — now calls
+  `nextSmartFolderId()`. One characterization spec pins the property that
+  makes this safe: `addReport`, `duplicateFigureDoc`, `addSmartFolder` and
+  `nextDatasetId` still draw four CONSECUTIVE suffixes from one counter.
+  Chosen by measured coupling over the two larger candidates: `loadWorkspace`
+  (170 lines) writes 40 `AppState` fields and is where every newly persisted
+  field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
+  (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
+  this cluster writes 15, of which the 4 it owns are touched by nothing else
+  outside `loadWorkspace`'s bulk hydrate. Verified beyond the suite: the
+  composed store is unchanged at **578 keys (372 actions)** with
+  byte-identical initial values, the `recordHistory`/`recordMacro`/`status:`
+  literal multisets are unchanged (15/10/6), and neither new module is in any
+  of the repo's 26 pre-existing runtime import cycles (type-only imports
+  erased; `reportsFigureDocs → useApp` has no runtime edge). Eager bundle,
+  both trees built after their own `npm ci` and measured byte-exactly:
+  **913,376 B at the parent `6b38cad0`** (the characterization commit, i.e.
+  `HEAD~1` of the extraction) **→ 913,440 B at `676d405a`, +64 B**; the budget
+  was not touched and keeps ~6.8 kB headroom.
+  The box stays `[~]`: `store/useApp.ts` is still far
   over the 500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
   `lib/uplotOverlays.ts` are untouched by this pass.
 - [ ] Generate clients/types where it reduces drift.

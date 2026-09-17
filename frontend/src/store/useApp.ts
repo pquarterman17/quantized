@@ -37,7 +37,7 @@ import {
   scaleFromLog, snapshotView,
 } from "../lib/plotview";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
-import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
+import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
 // rebind helpers are imported back for setActive/addDataset/loadWorkspace.
@@ -50,7 +50,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -82,7 +82,7 @@ import { recomputeStaleDatasets } from "./recalcDatasets";
 import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
-import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
+import { createTrashSlice, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
@@ -102,14 +102,16 @@ import { createRoisSlice, loadedMapView, type RoisSlice } from "./rois"; // load
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
 import { breakCompositionFromData, facetPayloads, suggestBreaks } from "../lib/facet";
-import type { ReportEntry, ReportSheet } from "../lib/report";
+import type { ReportEntry } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
 import type { PanelFit } from "../lib/panelLayout";
 import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
 import type { FwhmResult } from "../lib/peakwidth";
-import { docRenderable, type FigureDoc } from "../lib/figuredoc";
+import type { FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { analysisData } from "../lib/rowstate";
+import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
+import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -150,13 +152,12 @@ export const recompute = (d: Dataset): Dataset => {
   const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
   return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 };
-let _idSeq = 0;
-// Exported for store/split.ts (nextWindowId/panels.ts precedent) — a split
-// mints several dataset ids + one folder id from the SAME sequence used
-// everywhere else, so they can never collide with an id minted here.
-export const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
-export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
-const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
+// The shared `<prefix>-<t36>-<n>` object-id sequence moved to store/idSeq.ts
+// (P4.1): a module-level `let` cannot be incremented across a module boundary,
+// and store/reportsFigureDocs.ts mints `rep-`/`figd-` ids from it. Re-exported
+// so every existing `import { nextDatasetId } from "./useApp"` still resolves
+// (split.ts, importDatasets.ts, gadget.ts, workspaceIO.ts, ...).
+export { nextDatasetId, nextFolderId } from "./idSeq";
 // (window ids: see store/windows.ts — the MDI slice owns its own sequence)
 
 // (single-flight lazy-book resolution — ORIGIN_FILE_DECODE_PLAN #38 —
@@ -271,7 +272,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -535,28 +536,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // No-op (with a toast) when the dataset is missing, has no
   // rows in the analysis view, or no qualifying gap/override breaks exist.
   breakAtGaps: (datasetId: string, breaks?: [number, number][], gapFactor?: number) => void;
-  // Report sheets (#36): add opens the viewer on the new report.
-  addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
-  removeReport: (id: string) => void;
-  renameReport: (id: string, name: string) => void;
-  setOpenReport: (id: string | null) => void;
   // Recalc engine (#1): mark everything downstream of a data change, run the
   // dirty set now, and record/clear a dataset's re-runnable fit spec.
-  // Figure documents (#12).
-  addFigureDoc: (doc: FigureDoc) => void;
-  removeFigureDoc: (id: string) => void;
-  renameFigureDoc: (id: string, name: string) => void;
-  duplicateFigureDoc: (id: string) => void;
-  /** Open an ephemeral or saved FigureDoc without adding it to the library. */
-  openFigureDraft: (doc: FigureDoc) => void;
-  openFigureDoc: (id: string) => void;
-  // Item 9's figure-doc half: opens a NEW window bound to the doc's dataset
-  // and applies its channel/scale/label config (xKey/yKeys/log flags/titles)
-  // onto it. Live docs with a resolved dataset only — a frozen doc's data
-  // snapshot isn't a live `Dataset` a window can bind to (that's Tier 3 item
-  // 11's "snapshot-as-window" kind); a no-op otherwise.
-  openFigureDocInWindow: (id: string) => void;
-  clearFigureDocSeed: () => void;
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
@@ -775,6 +756,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkbookSeparateSlice(set, get),
   ...createWorkbookTransferSlice(set, get),
   ...createPlotViewSettingsSlice(set, get),
+  ...createReportsFigureDocsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -1792,7 +1774,7 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         smartFolders: [
           ...s.smartFolders,
-          { id: `smf-${Date.now().toString(36)}-${++_idSeq}`, name: nm, query: query.trim() },
+          { id: nextSmartFolderId(), name: nm, query: query.trim() },
         ],
       };
     });
@@ -1900,98 +1882,6 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),
   setImportWizardOpen: (importWizardOpen) => set({ importWizardOpen }),
   setPipelineOpen: (pipelineOpen) => set({ pipelineOpen }),
-  // Report sheets (#36). Adding opens the viewer on the new report so the
-  // producing workshop's "→ Report" lands somewhere visible immediately.
-  addReport: (name, report, datasetId) =>
-    set((s) => {
-      const entry: ReportEntry = {
-        id: nextReportId(),
-        name,
-        datasetId: datasetId ?? null,
-        report,
-      };
-      return {
-        reports: [...s.reports, entry],
-        openReportId: entry.id,
-        status: `report "${name}" created`,
-      };
-    }),
-  removeReport: (id) => removeReportWithTrash(get, set, id),
-  renameReport: (id, name) =>
-    set((s) => ({
-      reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
-    })),
-  setOpenReport: (openReportId) => set({ openReportId }),
-  // ── Figure documents (#12) ──────────────────────────────────────────────
-  addFigureDoc: (doc) => set((s) => ({
-    figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
-  })),
-  removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
-  renameFigureDoc: (id, name) => set((s) => ({
-      figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
-  })),
-  duplicateFigureDoc: (id) =>
-    set((s) => {
-      const src = s.figureDocs.find((f) => f.id === id);
-      if (!src) return {};
-      const copy: FigureDoc = {
-        ...src,
-        id: `figd-${Date.now().toString(36)}-${++_idSeq}`,
-        name: `${src.name} copy`,
-      };
-      return { figureDocs: [...s.figureDocs, copy] };
-  }),
-  openFigureDraft: (doc) => {
-    if (get().figurePublicationSession) { toast("finish or cancel the current Publication Preview first", "danger"); set({ status: "finish or cancel the current Publication Preview first" }); return; } if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
-    if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
-    set({ figureDocSeed: doc, figureBuilderOpen: true });
-  },
-  openFigureDoc: (id) => {
-    const doc = get().figureDocs.find((f) => f.id === id);
-    if (doc) get().openFigureDraft(doc);
-  },
-  // Item 9's figure-doc half: a live doc only (a frozen doc's snapshot isn't
-  // a live `Dataset` a window can bind to — that gap is Tier 3 item 11's
-  // "snapshot-as-window"). Creates + focuses a new window bound to the doc's
-  // dataset, then applies the config's channel/scale/label fields — NOT its
-  // `seriesStyles` (a `FigureConfig` carries the EXPORT style shape,
-  // `ExportSeriesStyle[]`, which has no inverse back to the live
-  // `Record<number,SeriesStyle>`; the window opens with default series styling.
-  openFigureDocInWindow: (id) => {
-    const doc = get().figureDocs.find((f) => f.id === id);
-    if (!doc || !doc.live || !doc.datasetId) return;
-    const s = get();
-    if (!s.datasets.some((dataset) => dataset.id === doc.datasetId)) return;
-    const title = dedupeWindowTitle(
-      doc.name,
-      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-    );
-    const winId = s.createWindow(doc.datasetId, undefined, title);
-    s.focusWindow(winId);
-    const c = doc.config;
-    const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
-    set((current) => ({
-      // Plot-intent (item 1): "open in new window" always means look at the
-      // plot, so surface it regardless of which tab was showing.
-      ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
-      xKey: c.xKey,
-      yKeys: c.yKeys,
-      // P1.5: a legacy FigureDoc's own grouping (Graph Builder's
-      // plotSpecToFigureDoc is the only producer) now carries over into the
-      // opened window's live groupKey too, same as xKey/yKeys just above --
-      // previously this whole binding was silently dropped on "open in window".
-      groupKey: c.groupCol ?? null,
-      xScale: c.xScale,
-      yScale: c.yScale,
-      plotTitle: c.title,
-      xAxisLabel: c.xLabel,
-      yAxisLabel: c.yLabel,
-      // Item 3: the doc's own error bindings, if any (else createWindow's dataset-seeded errorRoles stand).
-      ...(c.errors ? withWindowDocumentErrors(current.plotWindows, winId, c.errors) : {}),
-    }));
-    get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
-  },
-  clearFigureDocSeed: () => set({ figureDocSeed: null }),
   // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
   // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
   // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already
