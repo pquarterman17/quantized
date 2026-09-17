@@ -158,18 +158,25 @@ export function projectReopen(reopened: ReopenedProject): CanonicalFigure {
   };
 }
 
-/** The offset a reopened figure's data WOULD carry, measured the same way the
- *  screen leg measures it (`measureWaterfall`) rather than read off the field —
- *  so the two legs are comparing the same quantity in the same units.
+/** The offset a reopened figure's data WOULD carry, measured over the SAME
+ *  columns the EXPORT leg's fallback measures
+ *  (`waterfallOffset.canvasColumns`), through the SCREEN leg's own
+ *  `measureWaterfall` — not read off the persisted field — so all three legs
+ *  compare the same quantity in the same units.
  *
- *  BUG-013 round 4, NIT 5: `dropTrailingEmptyRows` wraps `buildColumns` here
- *  because the EXPORT leg's own fallback (`waterfallOffset.canvasColumns`)
- *  does too — without it, a padded fixture would report a false `reopen !=
- *  export` divergence purely from measuring over a longer, un-dropped tail.
- *  (The SCREEN leg's mirror omits this step deliberately, documented as a
- *  no-op for every current matrix fixture — see `regressionMatrix.testkit.ts`
- *  — because it mirrors `usePlotPayload`'s pre-fetch-resolution shape, not
- *  the fetched payload `dropTrailingEmptyRows` runs on.) */
+ *  BUG-013 round 4, NIT 5 (round 5 review, NIT 5: reworded — the opening line
+ *  used to say "measured the same way the screen leg measures it", which the
+ *  paragraph below then contradicted): `dropTrailingEmptyRows` wraps
+ *  `buildColumns` here because the EXPORT leg's own fallback does too —
+ *  without it, a padded fixture would report a false `reopen != export`
+ *  divergence purely from measuring over a longer, un-dropped tail. The
+ *  SCREEN leg's own mirror omits this step, documented as a no-op for every
+ *  current matrix fixture (`regressionMatrix.testkit.ts`'s KNOWN LIMITS) —
+ *  it mirrors `usePlotPayload`'s pre-fetch-resolution shape, not the fetched
+ *  payload `dropTrailingEmptyRows` runs on. A future padded fixture would
+ *  therefore surface as screen != {export, reopen}, not a hidden gap: the
+ *  matrix compares all three legs, and the screen leg's own KNOWN LIMITS
+ *  entry already says so. */
 function waterfallOffsetFor(
   data: DataStruct,
   waterfall: number,

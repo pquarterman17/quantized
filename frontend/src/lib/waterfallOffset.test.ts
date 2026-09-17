@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { applyWaterfall, buildColumns, dropTrailingEmptyRows } from "./plotdata";
+import { canvasGroupCol } from "./plotGroupSplit";
 import {
   publishLiveWaterfallSpan,
   readLiveWaterfallSpan,
@@ -52,13 +53,21 @@ const XY: CycleView = {
   yKeys: [0, 1, 2],
 };
 
+// `groupCol` is REQUIRED (round 5 — no fallback inside `waterfallWire`
+// itself, see its doc). The default here mirrors what a real caller
+// (`figureSpec.ts`) resolves BEFORE calling in — `resolveGroupCol`/
+// `canvasGroupCol` over the view's own binding — so a test that only
+// overrides `view` still exercises the resolved-value contract, not a
+// bypass of it.
 function wire(over: Partial<Parameters<typeof waterfallWire>[0]> = {}) {
+  const view = over.view ?? XY;
   return waterfallWire({
     data: GOLDEN,
     canvasChannels: [0, 1, 2],
     positions: [0, 1, 2],
     fraction: GOLDEN_FRACTION,
-    view: XY,
+    view,
+    groupCol: canvasGroupCol(view.groupKey, view.y2Keys),
     ...over,
   });
 }

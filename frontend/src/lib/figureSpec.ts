@@ -260,11 +260,11 @@ function buildFigureSpecForView(
     scale: st.yScale,
     fmt: st.yFmt,
   });
-  // See `figureSpecGroup.resolveGroupCol`'s own doc: fails on a group bound
-  // with a REALLY rendered secondary axis, else degrades `group_col` exactly
-  // like the canvas (BUG-013 round 4). Reused below for the waterfall
-  // refusal too, so the two never read two different answers.
-  const groupCol = resolveGroupCol(extras.groupKey, y2Axis !== null, st.y2Keys);
+  // See `figureSpecGroup.resolveGroupCol`'s own doc: degrades `group_col`
+  // exactly like the canvas (BUG-013 round 5; round 4's throw for a REALLY
+  // rendered y2 is gone — the canvas draws that cell too). Reused below AS
+  // the waterfall's resolved grouping, so the two never disagree.
+  const groupCol = resolveGroupCol(extras.groupKey, st.y2Keys);
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
@@ -330,9 +330,9 @@ function buildFigureSpecForView(
       view: cycleView,
       span: extras.waterfallSpan,
       // The SAME degraded value this spec just emitted (or omitted) above as
-      // `group_col`, so the refusal is keyed on what the request ACTUALLY
-      // carries rather than a second, possibly-undegraded reading of the
-      // view's binding (BUG-013 round 3, corrected round 4).
+      // `group_col` — REQUIRED (round 5), so this is the only place either
+      // field can be resolved from, not a second, possibly-disagreeing read
+      // of the view's raw binding.
       groupCol,
     }),
     filename: extras.filename ?? stem,

@@ -774,21 +774,28 @@ describe("runExportFigureCommand — F2.5b (routes through the focused window's 
     expect(body.group_col).toBeUndefined();
   });
 
-  it("surfaces a grouped+secondary-axis document as an export-failed status, not an unhandled rejection", async () => {
-    // grouping + a secondary axis is a backend-invalid combination; groupKey
-    // is live-singleton-synced (P1.5), same reasoning as the test above.
+  // BUG-013 round 5: this combination used to THROW (round 4), surfaced here
+  // as an export-failed status. The canvas has always degraded it to a
+  // plain, ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys
+  // — no plotted/hidden distinction), so the export now succeeds and matches
+  // the screen the user was already looking at, rather than refusing.
+  it("exports a grouped+secondary-axis document as a degraded, ungrouped spec — no refusal (round 5)", async () => {
+    // groupKey is live-singleton-synced (P1.5), same reasoning as the test above.
     useApp.setState({ yKeys: [0, 1], y2Keys: [1], groupKey: 1 });
     const document = createFigureDocument({
-      id: "figure-w1-invalid",
-      name: "Window invalid",
+      id: "figure-w1-degraded",
+      name: "Window degraded",
       datasetId: DATASET_ID,
       view: defaultPlotView(),
       groupKey: 1,
     });
     useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
     await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
-    expect(exportFigure).not.toHaveBeenCalled();
-    expect(useApp.getState().status).toContain("grouped figures cannot use a secondary Y axis");
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.group_col).toBeUndefined();
+    expect(body.y2_keys).toEqual([1]);
+    expect(useApp.getState().status ?? "").not.toContain("grouped figures cannot use a secondary Y axis");
   });
 });
 

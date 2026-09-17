@@ -12,9 +12,10 @@ import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFro
 import { facetCompositionFromBinding } from "./facet";
 import { defaultPlotView } from "./plotview";
 import { applyWaterfall, buildColumns } from "./plotdata";
+import { canvasGroupCol } from "./plotGroupSplit";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { analysisData } from "./rowstate";
-import { publishLiveWaterfallSpan } from "./waterfallOffset";
+import { publishLiveWaterfallSpan, waterfallSpan } from "./waterfallOffset";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -362,7 +363,7 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(buildFigureSpecFromDocument(frozen, undefined, "frozen").dataset).toEqual(data);
   });
 
-  it("exports grouping without y2 and rejects the backend-invalid grouped+y2 combination", () => {
+  it("exports grouping without y2, and degrades (not refuses) a group bound with a REALLY rendered y2 — round 5, see the truth table below", () => {
     const grouped = createFigureDocument({
       id: "grouped",
       name: "Grouped",
@@ -372,15 +373,96 @@ describe("FigureDocument FigureSpec adapter", () => {
     });
     expect(buildFigureSpecFromDocument(grouped, dataset, "grouped").group_col).toBe(0);
 
-    const invalid = createFigureDocument({
-      id: "invalid",
+    // richView() plots y2Keys:[2], not hidden -- round 4 threw here; the
+    // canvas (`Stage/usePlotPayload`) has always degraded this to a plain,
+    // ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys, no
+    // plotted/hidden distinction), so the export now matches it rather than
+    // refusing a figure the screen already renders.
+    const degraded = createFigureDocument({
+      id: "degraded",
       name: "Grouped y2",
       datasetId: dataset.id,
       view: richView(),
       groupKey: 0,
     });
-    expect(() => buildFigureSpecFromDocument(invalid, dataset, "invalid"))
-      .toThrow("grouped figures cannot use a secondary Y axis");
+    const spec = buildFigureSpecFromDocument(degraded, dataset, "degraded");
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
+  });
+});
+
+// BUG-013 round 5 review's truth table: document route == canvas for
+// `group_col` presence and `waterfall_offsets` in every cell of
+// (groupKey, y2 state). `data`'s own channels 1/2/3 ("signal"/"right"/"plus")
+// are the review's own fixture; the "canvas" side is computed from the SAME
+// raw columns through the SAME `canvasGroupCol`/`waterfallSpan` primitives
+// the canvas itself resolves through (`Stage/usePlotPayload`,
+// `lib/waterfallOffset.ts`), never hardcoded, so this fails the moment either
+// side's rule drifts from the other.
+describe("BUG-013 round 5: document route matches the canvas in every group/y2 cell", () => {
+  const CH = [1, 2, 3]; // signal, right, plus
+  const COLS = CH.map((c) => data.values.map((row) => row[c]));
+  const FRACTION = 0.25;
+  const docWith = (over: { groupKey?: number | null; y2Keys?: number[]; hiddenChannels?: number[] }) =>
+    createFigureDocument({
+      id: `cell-${JSON.stringify(over)}`,
+      name: "cell",
+      datasetId: dataset.id,
+      view: {
+        ...defaultPlotView(),
+        xKey: null,
+        yKeys: [1, 2, 3], // cell 7 (y2 not in yKeys at all) is its own test below
+        y2Keys: over.y2Keys ?? [],
+        hiddenChannels: over.hiddenChannels ?? [],
+        waterfall: FRACTION,
+      },
+      groupKey: over.groupKey ?? null,
+    });
+
+  const CELLS: { name: string; groupKey: number | null; y2Keys: number[]; hiddenChannels: number[] }[] = [
+    { name: "1 ungrouped, no y2", groupKey: null, y2Keys: [], hiddenChannels: [] },
+    { name: "2 ungrouped, y2 plotted", groupKey: null, y2Keys: [3], hiddenChannels: [] },
+    { name: "3 grouped, no y2", groupKey: 0, y2Keys: [], hiddenChannels: [] },
+    { name: "4 grouped, y2 PLOTTED (round 5 fix)", groupKey: 0, y2Keys: [3], hiddenChannels: [] },
+    { name: "5 grouped, y2 hidden", groupKey: 0, y2Keys: [3], hiddenChannels: [3] },
+    { name: "6 grouped, y2 solo'd-out (same wire path as hidden)", groupKey: 0, y2Keys: [3], hiddenChannels: [3] },
+  ];
+  it.each(CELLS)("$name", ({ groupKey, y2Keys, hiddenChannels }) => {
+    const canvasCol = canvasGroupCol(groupKey, y2Keys);
+    const doc = docWith({ groupKey, y2Keys, hiddenChannels });
+    const spec = buildFigureSpecFromDocument(doc, dataset, "cell");
+    expect(spec.group_col ?? null).toBe(canvasCol);
+    if (canvasCol !== null) {
+      // A real group split: the renderer expands per-level series, so the
+      // XY overlay's waterfall has nothing to stagger.
+      expect(spec.waterfall_offsets).toBeUndefined();
+      return;
+    }
+    // Degraded (or never grouped) to a plain overlay: the canvas stripes
+    // EVERY fetched channel (hidden ones keep their slot and widen the
+    // span), and the wire reports only the surviving, non-hidden slots.
+    const step = FRACTION * waterfallSpan(COLS);
+    const offsets = CH.map((c, i) => (hiddenChannels.includes(c) ? null : i * step)).filter(
+      (v): v is number => v !== null,
+    );
+    expect(spec.waterfall_offsets).toEqual(offsets);
+  });
+
+  // Cell 7 needs its own case: channel 3 isn't in `yKeys` at all, so the
+  // canvas' display list itself is only [1, 2] and the span is measured over
+  // two columns, not three.
+  it("7 grouped, y2 not plotted at all (not in yKeys)", () => {
+    const doc = createFigureDocument({
+      id: "cell-7",
+      name: "cell-7",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: null, yKeys: [1, 2], y2Keys: [3], waterfall: FRACTION },
+      groupKey: 0,
+    });
+    const spec = buildFigureSpecFromDocument(doc, dataset, "cell-7");
+    expect(spec.group_col).toBeUndefined();
+    const step = FRACTION * waterfallSpan(COLS.slice(0, 2));
+    expect(spec.waterfall_offsets).toEqual([0, step]);
   });
 });
 
@@ -834,22 +916,22 @@ describe("buildStageFigureSpec (F2.5b — Stage copy/export routing)", () => {
     expect(spec.dataset).toEqual(frozenSnapshot);
   });
 
-  it("surfaces the grouped+secondary-axis rejection as a thrown error, same as the direct adapter (exportActive's catch turns this into a toast/status, tested at the command level)", () => {
+  it("degrades group+secondary-axis the SAME way as the direct adapter (round 5 — no more thrown rejection here)", () => {
     const document = createFigureDocument({
       id: "stage-window-invalid",
       name: "Stage window invalid",
       datasetId: dataset.id,
-      view: richView(), // richView() plots y2Keys: [2] — grouped + y2 is invalid
+      view: richView(), // richView() plots y2Keys: [2] — a REALLY rendered y2
       groupKey: 0,
     });
-    expect(() =>
-      buildStageFigureSpec(
-        fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
-        dataset,
-        "device",
-        opts,
-      ),
-    ).toThrow("grouped figures cannot use a secondary Y axis");
+    const spec = buildStageFigureSpec(
+      fakeStage({ focusedWindowId: "w1", windowsForSave: () => [{ id: "w1", kind: "plot", document }] }),
+      dataset,
+      "device",
+      opts,
+    );
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([2]);
   });
 
   // Fix-round R7: the live-view FALLBACK (no canonical document to route
@@ -1655,7 +1737,19 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
     ]);
   });
 
-  it("but a grouped view with NO secondary axis still refuses — the canvas splits", () => {
+  // BUG-013 round 5 review, finding 2. `buildFigureSpec` (the live/StoreGet
+  // route) never passes `extras.groupKey`, so `group_col` on THIS route is
+  // ALWAYS absent regardless of `st.groupKey` — a pre-existing, separate
+  // limitation of this legacy builder (it structurally cannot carry grouping
+  // at all; `buildStageFigureSpec` routes through the focused window's
+  // canonical document instead whenever one applies, which is the real fix
+  // for a grouped window). Round 4's `waterfallWire` papered over that gap by
+  // falling back to a SECOND read of `st.groupKey` for the offset refusal
+  // alone, so this exact request emitted `group_col` absent ("ungrouped") but
+  // still refused `waterfall_offsets` ("grouped") — the two-answers case
+  // round 5 closes. `groupCol` is required now, with no fallback, so the
+  // offsets follow the SAME (absent) `group_col` this spec emits.
+  it("group_col absent implies waterfall_offsets present here too, even for a view the CANVAS still splits (round 5 — one answer, not two)", () => {
     const view = () => ({
       ...defaultPlotView(),
       xKey: null,
@@ -1663,7 +1757,9 @@ describe("FigureSpec waterfall_offsets (BUG-013)", () => {
       groupKey: 0,
       waterfall: 0.25,
     });
-    expect("waterfall_offsets" in buildFigureSpec(view as never, dataset, "device", opts)).toBe(false);
+    const spec = buildFigureSpec(view as never, dataset, "device", opts);
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.waterfall_offsets).toHaveLength(3);
   });
 
   // BUG-013 round 3, finding 2. `buildStageFigureSpec` read the LIVE canvas'

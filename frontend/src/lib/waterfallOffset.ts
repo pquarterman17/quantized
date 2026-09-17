@@ -78,7 +78,6 @@
 // round.
 
 import { buildColumns, dropTrailingEmptyRows } from "./plotdata";
-import { canvasGroupCol } from "./plotGroupSplit";
 import { overlayModesMatchTheCanvas, type CycleView } from "./seriesStyleCycle";
 import type { DataStruct } from "./types";
 
@@ -180,13 +179,19 @@ export function readLiveWaterfallSpan(datasetId: string): number | null {
  *  honest response: the renderer never receives an offset it would mis-apply.
  *
  *  The GROUP clause of that predicate is asked about the grouping this request
- *  actually carries, not the view's raw binding (BUG-013 round 3): `groupCol`
- *  is the `group_col` the spec emits (a document binding, or nothing at all on
- *  the live route), and with none emitted the view's own `groupKey` is put
- *  through `plotGroupSplit.canvasGroupCol` — the rule `Stage/usePlotPayload`
- *  applies to decide what to draw. A grouped view with `y2Keys` set degrades to
- *  a plain ungrouped overlay on screen AND on the wire, and used to be the one
- *  view where the canvas staggered and the export refused to.
+ *  actually carries, not the view's raw binding (BUG-013 round 3). `groupCol`
+ *  is REQUIRED and carries that answer directly — the exact value
+ *  `figureSpec.ts` already resolved with `figureSpecGroup.resolveGroupCol`
+ *  (itself `plotGroupSplit.canvasGroupCol`, the rule `Stage/usePlotPayload`
+ *  applies to decide what to draw) and put on the wire as `group_col`. Round 4
+ *  had this fall back to a SECOND `canvasGroupCol` call over the view's raw
+ *  binding whenever `groupCol` was `null` — indistinguishable from "not
+ *  resolved yet" — so a route that resolved `group_col` to null (an explicit
+ *  degrade) and a route that never resolved anything at all read the SAME
+ *  `null` and disagreed on what it meant: on the live `buildFigureSpec` route,
+ *  `group_col` came out absent while the fallback still read the view's own
+ *  `groupKey` and refused the offsets. One required argument, no fallback,
+ *  removes the second reading entirely.
  *
  *  `span` is the canvas' own measured y-range when a live XY canvas published
  *  one for this request (see `readLiveWaterfallSpan`); absent, see the
@@ -198,17 +203,18 @@ export function waterfallWire(args: {
   fraction: number;
   view: CycleView;
   span?: number | null;
-  /** The `group_col` this spec emits, if any — `undefined`/`null` means the
-   *  request draws a plain ungrouped overlay whatever the view binds. */
-  groupCol?: number | null;
+  /** The `group_col` this spec emits — `null` means the request draws a plain
+   *  ungrouped overlay whatever the view binds. REQUIRED, and the caller's
+   *  ONLY resolution of it: see this function's doc for why a fallback here
+   *  read a second, possibly-disagreeing answer. */
+  groupCol: number | null;
 }): { waterfall_offsets?: number[] } {
   // `< 2` mirrors `applyWaterfall`'s `payload.data.length <= 2` (x + one value
   // column): a single series has nothing to be staggered against. Asked about
   // the CANVAS' list, because that is what `applyWaterfall` counts — an X-as-Y
   // request can carry two display channels while the canvas draws one curve.
   if (!waterfallApplies(args.fraction) || args.canvasChannels.length < 2) return {};
-  const grouped = args.groupCol ?? canvasGroupCol(args.view.groupKey, args.view.y2Keys);
-  if (!overlayModesMatchTheCanvas({ ...args.view, groupKey: grouped })) return {};
+  if (!overlayModesMatchTheCanvas({ ...args.view, groupKey: args.groupCol })) return {};
   const span =
     args.span != null && Number.isFinite(args.span)
       ? args.span

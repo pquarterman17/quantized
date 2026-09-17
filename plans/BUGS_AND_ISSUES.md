@@ -4069,13 +4069,116 @@ src/store/plotRecipes.test.ts src/architecture.test.ts` — **328 files / 6124
 tests passed, 0 failed**; `node scripts/freeze-regression-matrix.mjs --check`
 clean, no committed golden moved; `uv run pytest -q tests/
 test_repo_integrity.py` — **12 passed**. No backend file changed. Eager
-bundle, both trees built in a scratch `git worktree` after `npm ci` + `rm -rf
-node_modules/.vite`, measured against `HEAD~1` (per this file's own prior two
-corrections about using the real parent, not a cherry-pick base): **913,348
-B** at `b3fb6668` → **913,348 B** here, **+0 B** — `figureSpecGroup.ts` is
-eagerly reachable through the same `figureSpec.ts` import graph the code it
-holds moved out of, so no new lazy seam applies, and the net line count
-change is small enough to fall out in minification.
+bundle: the `+0 B` delta above was measured against a CHERRY-PICK base
+(`b3fb6668` = the worktree commit's own parent), not this commit's real
+parent — flagged as this file's own recurring mistake (see NIT 3, round 5
+review) and corrected here rather than left stale. Re-measured (round 5
+review) at the real pair, both trees built in a scratch `git worktree` after
+`npm ci` + `rm -rf node_modules/.vite`: `git rev-parse 1fcc4137^` =
+`19018015` → **913,249 B** at `19018015` → **913,249 B** at `1fcc4137`,
+**+0 B** — the same conclusion (`figureSpecGroup.ts` eagerly reachable
+through the unchanged `figureSpec.ts` import graph, net line-count change
+small enough to fall out in minification), now against the tree this commit
+actually built on.
+
+#### Review round 5 — 2026-09-17 (`fix(export): BUG-013 round 5 …`)
+
+A fourth adversarial review, of `1fcc4137`, returned **2 CONFIRMED** and
+**5 NITs**, all on round 4's OWN fix and its own record; round 3's CONFIRMED
+1-4 were not re-attacked this round.
+
+- **CONFIRMED 1 — round 4 kept a throw the canvas does not have.**
+  `figureSpecGroup.ts`'s `resolveGroupCol` refused (threw) a group bound with
+  a REALLY RENDERED (not merely hidden) secondary axis, reasoned as "a
+  genuine conflict, not a degrade case." But `Stage/usePlotPayload`'s own
+  `canvasGroupCol` call reads the RAW `y2Keys` binding with no
+  plotted/hidden distinction at all — the screen has always degraded THIS
+  exact combination to a plain, staggered overlay too, reachable with one
+  click (bind Group, right-click a series -> Y2). Measured with the throw
+  deleted: `{y_keys:[1,2,3], y2_keys:[3], group_col: absent,
+  waterfall_offsets:[0, 74.75, 149.5]}` — byte-for-byte the canvas' own
+  numbers, and the backend accepts it (`export_figures.py` rejects only
+  `group_col` combined with `y2_keys`, and a degrade emits no `group_col` at
+  all). Fixed by deleting the throw: `resolveGroupCol` is now `canvasGroupCol`
+  itself, one function, one answer, for every cell. `computeCanonicalReadiness`
+  needed no change — with nothing left to throw, the Figure Builder's
+  preview naturally reports `"ready"` instead of `"invalid-spec"`, canExport
+  flips to true, and no new UI/warning channel was invented (none existed to
+  reuse, per the brief's own qualifier). Sabotage (S1 below) shows the fix is
+  covered by a new 7-cell truth table (`figureSpec.test.ts`) plus 5 existing
+  test sites across 4 files that pinned the old throw, all rewritten to
+  assert the degrade instead: `figureSpec.test.ts` (2 sites),
+  `useFigureBuilder.test.ts`, `copyFigureCommand.test.ts`,
+  `exportFigureCommand.test.ts`.
+- **CONFIRMED 2 — the live `buildFigureSpec` route could read two different
+  answers for one request.** `waterfallWire`'s `groupCol` argument was
+  optional with an internal fallback, `args.groupCol ?? canvasGroupCol(args.
+  view.groupKey, args.view.y2Keys)`. `??` treats an explicit `null` (a
+  resolved, degraded answer) the same as an omitted argument, so it did NOT
+  suppress the second reading — it invited it. On the live `buildFigureSpec`
+  route, `extras.groupKey` is always `undefined` (the legacy builder
+  structurally cannot carry a group binding at all — a known, separate
+  limitation `buildStageFigureSpec`'s document routing exists to close), so
+  `group_col` on the wire was ALWAYS absent regardless of `st.groupKey`,
+  while `waterfallWire`'s fallback still read the view's raw `st.groupKey`
+  for the offset refusal alone. Measured (`st.groupKey:0`, no y2, waterfall
+  0.25): `group_col` absent, `waterfall_offsets` ALSO absent — the field
+  says "ungrouped", the refusal says "grouped", precisely the two-answers
+  case the round-4 commit body claimed was now impossible. Fixed by making
+  `groupCol` REQUIRED on `waterfallWire`, no fallback: both fields now read
+  the one value `figureSpec.ts` already resolved with `resolveGroupCol`
+  before calling in. A pre-existing test ("a grouped view with NO secondary
+  axis still refuses") pinned the OLD two-answer behaviour and was rewritten
+  to assert the new one-answer contract instead (sabotage S2 below).
+- **NIT 3 — the round-4 record's absolute bundle pair named a cherry-pick
+  base, corrected in place above** (this section's own preamble).
+- **NIT 4 — `figureSpec.ts`'s line count, corrected in place above; round 5's
+  own edits left it at 497/500 (`split("\n").length`), unchanged from round 4
+  — comments trimmed to offset the doc additions the fix needed, so the
+  3-line headroom is preserved rather than spent.**
+- **NIT 5 — the reopen leg's waterfall doc contradicted itself, reworded in
+  place** (`regressionMatrixReopen.testkit.ts`'s `waterfallOffsetFor`): the
+  opening line now says what it actually measures (the export leg's own
+  columns, through the screen leg's own `measureWaterfall`) instead of a
+  since-contradicted "same way the screen leg measures it."
+- **NIT 6 — `figureMode` (`regressionMatrix.testkit.ts`) hand-copied the
+  degrade predicate instead of calling `canvasGroupCol`, and its comment
+  ("figureSpec.ts refuses the combination outright") went stale the moment
+  finding 1 landed.** Now calls `canvasGroupCol` directly — one fewer
+  hand-synced copy of the rule, matching this module's own "two
+  implementations drift apart" warning. `legacyFigure.ts:87`'s `group_col:
+  state.docGroupCol ?? undefined` is confirmed still benign (verified: no
+  `y2`/`waterfall` token anywhere in that module) and left as is, noted per
+  the brief.
+- **NIT 7 — the `groupCol` argument stays required and is no longer
+  redundant** after fix 2 (round 4's "redundant... left in place anyway" note
+  is moot now that dropping it would be a compile error, not just an
+  unreachable-in-practice branch).
+
+Sabotage table (scope `src/lib/figureSpec.test.ts src/lib/waterfallOffset.
+test.ts src/components/workshops/figurebuilder/useFigureBuilder.test.ts`,
+restored byte-identical after each):
+
+| # | Mutation | Result |
+|---|---|---|
+| S1 | Restore a throw in `figureSpecGroup.resolveGroupCol` for ANY grouped+non-empty-`y2Keys` binding (measured broader than round 4's exact plotted-only throw, on purpose) | **RED 10** — `figureSpec.test.ts` (6: the truth table's cells 4/5/6/7, the rewritten "exports grouping…" test, "degrades group+secondary-axis the SAME way…", "degrades group_col exactly like the canvas when the y2 channel is hidden"), `useFigureBuilder.test.ts` (1), `copyFigureCommand.test.ts` (1), `exportFigureCommand.test.ts` (1) — every rewritten degrade test plus 3 pre-existing hidden-y2 tests, since this broader throw also fires on the hidden/solo'd/not-plotted cells |
+| S2 | Restore `args.groupCol ?? canvasGroupCol(args.view.groupKey, args.view.y2Keys)` inside `waterfallWire` | RED 1 — `figureSpec` "group_col absent implies waterfall_offsets present here too, even for a view the CANVAS still splits" |
+| S3 | Drop the `groupCol,` line from `figureSpec.ts`'s `waterfallWire` call | tsc **compile error** (`groupCol` is now required, not a silently-green runtime gap — closes round 4's CONFIRMED-2 test gap structurally) |
+| S4 | `figureMode` reverts to the hand-copied predicate (`groupKey !== null && !(y2 && y2.length > 0)`) | GREEN — the two predicates are extensionally identical; the fix is a de-duplication, not new coverage (matches NIT 6's own framing) |
+
+Gate (all foreground): `npx tsc -b --force` and `npx eslint src
+--max-warnings=0` clean; `npx vitest run src/lib src/components/Stage
+src/components/workshops/figurebuilder src/store/plotRecipes.test.ts
+src/architecture.test.ts` — **350 files / 6586 tests passed, 0 failed**;
+`node scripts/freeze-regression-matrix.mjs --check` clean, no committed
+golden moved; `uv run pytest -q tests/test_repo_integrity.py` — **12
+passed**. No backend file changed. Eager bundle, three trees built after
+`npm ci` + `rm -rf node_modules/.vite` (the first two in scratch `git
+worktree`s, the third the worktree this commit was made in): `19018015` and
+`1fcc4137` both **913,249 B** (see the round-4 record correction above);
+this commit **913,181 B**, **-68 B** — comment trims (finding 1's throw
+removal, finding 2's doc rewrite) outweighing the small amount of new test
+code, none of which is eagerly reachable.
 
 ---
 

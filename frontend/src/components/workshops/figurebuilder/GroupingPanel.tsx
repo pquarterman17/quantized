@@ -12,13 +12,14 @@
 // binding, matching `StatStage.tsx`'s `facetByOptions`' "(none)" convention
 // for an optional single-column pick.
 //
-// Setting a group on a draft that also plots a secondary Y axis is a real,
-// backend-rejected combination (`figureSpec.ts`'s own check: "grouped
-// figures cannot use a secondary Y axis"). This panel does not pre-block or
-// warn about it locally -- the existing canonical-readiness banner
-// (FigureBuilderView's `f.error`) already surfaces that failure with the
-// exact reason, and duplicating the check here would just be a second,
-// potentially stale copy of the one source of truth.
+// Setting a group on a draft that also plots a secondary Y axis is a real
+// combination, but not a refused one (BUG-013 round 5): the canvas has
+// always degraded it to a plain, ungrouped overlay
+// (`plotGroupSplit.canvasGroupCol`), and the export wire now matches that
+// exactly instead of refusing a figure the screen already renders. This
+// panel invents no local warning for it -- the one source of truth for the
+// degrade lives in `figureSpecGroup.resolveGroupCol`, and duplicating it
+// here would just be a second, potentially stale copy.
 //
 // Facet editing is deliberately NOT in THIS panel -- see useFigureBuilder.ts's
 // `setGroupKey` doc for the full reasoning (F4.4, 2026-08-23, gave

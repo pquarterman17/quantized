@@ -103,6 +103,7 @@
 
 import { groupLevelLabel, levelOrderFor } from "./categorical";
 import { seriesDisplayLabel } from "./figureSpecSeries";
+import { canvasGroupCol } from "./plotGroupSplit";
 import { facetPayloads } from "./facet";
 import type { ErrorSpan } from "./errorbars";
 import type { FigureDocument } from "./figureDocument";
@@ -229,10 +230,11 @@ export function installSeriesPalette(): () => void {
  *  branch on, so they can never disagree about which mode they are in. */
 export function figureMode(document: FigureDocument): CanonicalFigure["mode"] {
   if (document.bindings.facetKey !== null) return "facet";
-  const y2 = document.bindings.y2Keys;
-  // Mirrors usePlotPayload's own degrade rule: a secondary axis wins over a
-  // group binding on screen, and figureSpec.ts refuses the combination outright.
-  if (document.bindings.groupKey !== null && !(y2 && y2.length > 0)) return "group";
+  // The ONE degrade rule (`plotGroupSplit.canvasGroupCol`), asked here
+  // instead of hand-copied: a secondary axis wins over a group binding on
+  // BOTH the screen and the export wire (BUG-013 round 5 — the export no
+  // longer refuses the combination, it degrades exactly like the canvas).
+  if (canvasGroupCol(document.bindings.groupKey, document.bindings.y2Keys) !== null) return "group";
   return "flat";
 }
 
