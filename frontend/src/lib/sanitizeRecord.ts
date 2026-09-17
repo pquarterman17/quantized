@@ -32,6 +32,28 @@
 //     passthrough" branch. Normalizing is what its own pre-BUG-014
 //     `strRecord`/`numRecord` helpers did, and this keeps that behaviour
 //     while gaining the value validation.
+//
+//     A channel index is a non-negative integer, so a key is accepted only
+//     when `key.trim()` is literally `\d+` (round-5 review F1): `Number("")`
+//     and `Number(" ")` are both `0` and finite, so bare `Number.isFinite`
+//     let a blank or whitespace-only key from a hand-edited `.dwk` silently
+//     relocate onto channel 0. The digits-only check also rejects a decimal
+//     (`"1.5"`), hex (`"0x10"`) or scientific-notation (`"1e0"`) spelling
+//     that `Number()` alone would still coerce to a finite number, and drops
+//     a negative index (`"-1"`) outright rather than parking it unreachable
+//     -- channel indices are never negative, so there is nothing for one to
+//     mean. A leading zero or surrounding whitespace is still accepted and
+//     normalized (`"01"` / `" 1 "` -> `1`), matching what the pre-BUG-014
+//     helpers did via `Number`'s own trimming.
+//
+//     A collision between two spellings of the same channel (`"1"` and
+//     `"01"`) keeps the value written under the CANONICAL (no-leading-zero)
+//     spelling: `Object.entries` always enumerates array-index-like keys --
+//     which is exactly the canonical decimal spelling -- ascending and
+//     before any other string key, regardless of the object's own source
+//     order, so processing entries in that order and keeping only the FIRST
+//     value seen for a key (never overwriting) makes the canonical spelling
+//     win either way a hand-edited file orders the two.
 
 /** Every entry of `v` whose VALUE passes `guard`, in the object's own key
  *  order; `{}` for a non-object. Never throws — a defective entry is
@@ -58,14 +80,20 @@ export function isString(x: unknown): x is string {
 /** Key-NORMALIZING sibling of `keyedRecord` for a genuinely channel-indexed
  *  map: each key runs through `Number`, so a hand-edited `"01"` lands on
  *  channel 1 the way the pre-BUG-014 helpers put it there, and a key that is
- *  not a finite number at all (`"x"`) is dropped rather than parked under
- *  `NaN`. Values are validated by `guard`, same as `keyedRecord`. */
+ *  not a non-negative integer at all -- not a finite number (`"x"`), not an
+ *  integer (`"1.5"`), or negative (`"-1"`) -- is dropped rather than parked
+ *  somewhere unreachable. Values are validated by `guard`, same as
+ *  `keyedRecord`. A collision between two spellings of the same channel
+ *  keeps the value under the CANONICAL (no-leading-zero) spelling,
+ *  regardless of which one the source object wrote first. */
 export function numKeyedRecord<T>(v: unknown, guard: (x: unknown) => x is T): Record<number, T> {
   const out: Record<number, T> = {};
   if (typeof v !== "object" || v === null) return out;
   for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    const key = Number(k);
-    if (Number.isFinite(key) && guard(val)) out[key] = val;
+    const trimmed = k.trim();
+    if (!/^\d+$/.test(trimmed)) continue;
+    const key = Number(trimmed);
+    if (Number.isInteger(key) && guard(val) && !(key in out)) out[key] = val;
   }
   return out;
 }

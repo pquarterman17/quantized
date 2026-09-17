@@ -65,4 +65,32 @@ describe("numKeyedRecord — values validated, keys NORMALIZED through Number", 
   it("degrades a non-object to an empty map instead of throwing", () => {
     for (const v of [null, undefined, 42, "str", true]) expect(numKeyedRecord(v, isString)).toEqual({});
   });
+
+  // BUG-014 round-5 review F1: `Number("")` and `Number(" ")` are both `0`
+  // and finite, so a blank or whitespace-only key silently relocated onto
+  // channel 0. A channel index is a non-negative integer, so anything that
+  // is not literally `\d+` after trimming is dropped — including a decimal,
+  // hex, scientific-notation or negative spelling that `Number()` alone
+  // would still accept.
+  it("drops an empty, whitespace-only, hex, decimal, scientific-notation or negative key", () => {
+    const out = numKeyedRecord(
+      { "": "a", " ": "b", "\n": "c", "0x10": "d", "1.5": "e", "-1": "f", "1e0": "g", "1": "kept" },
+      isString,
+    );
+    expect(out).toEqual({ 1: "kept" });
+  });
+
+  it("keeps a leading-zero or whitespace-padded key (trim only, no re-encoding of the digits)", () => {
+    expect(numKeyedRecord({ "01": "a", " 3 ": "b" }, isString)).toEqual({ 1: "a", 3: "b" });
+  });
+
+  // BUG-014 round-5 review F2: `Object.entries` always emits array-index-like
+  // keys (the canonical decimal spelling, no leading zero) before other
+  // string keys, regardless of source file order, so processing entries in
+  // that order and keeping the FIRST value written for a key makes the
+  // canonical spelling win a collision either way.
+  it("resolves a key collision to the CANONICAL spelling, in either file order", () => {
+    expect(numKeyedRecord({ "1": "one", "01": "oh-one" }, isString)).toEqual({ 1: "one" });
+    expect(numKeyedRecord({ "01": "oh-one", "1": "one" }, isString)).toEqual({ 1: "one" });
+  });
 });

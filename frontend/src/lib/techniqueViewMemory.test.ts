@@ -228,4 +228,26 @@ describe("sanitizeTechniqueViewMemory — the .dwk untrusted-boundary parse", ()
     expect(entry.seriesLabels).toEqual({ 1: "Peak" });
     expect(entry.errKeys).toEqual({ 1: 2 });
   });
+
+  // BUG-014 round-5 review F1: `remembered.labels[ch]` is read by NUMERIC
+  // index, so a blank key surviving as channel `0` silently renames channel
+  // 0 and binds a stray error column to it. A hand-edited or truncated
+  // `.dwk` is exactly the untrusted boundary this sanitizer exists for.
+  it("drops a blank or whitespace-only key instead of silently renaming channel 0", () => {
+    const out = sanitizeTechniqueViewMemory({
+      "xrd.powder": {
+        xKey: 0,
+        yKeys: [1],
+        yScale: "linear",
+        xScale: "linear",
+        seriesLabels: { "": "GHOST2" },
+        errKeys: { "": 7 },
+        labels: { "": "GHOST", "1": "Real" },
+      },
+    });
+    const entry = out["xrd.powder"]!;
+    expect(entry.labels).toEqual({ 1: "Real" });
+    expect(entry.seriesLabels).toEqual({});
+    expect(entry.errKeys).toEqual({});
+  });
 });
