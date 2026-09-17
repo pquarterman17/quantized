@@ -4107,7 +4107,12 @@ verbatim on screen and export`, on top of `da00c042`:
   (measured: `['Series B (au)', 'Series C (au)']`). Deliberately NOT papered
   over with a `" "`: which leg should move is the owner's call, and a space
   would silently change what the user typed. (The pre-fix wire rendered
-  `" (au)"` here, so this is a change from one divergence to another.)
+  `" (au)"` here, so this is a change from one divergence to another. The
+  rename UI itself cannot produce this residual — `store/useApp.ts`'s
+  `setSeriesLabel` trims and `delete`s the override on a blank/whitespace-
+  only rename — so `""` can only reach a document via a restored/hand-edited
+  `.dwk` or the `overlayCurveLabels`/dual-selection merge paths, added
+  2026-09-17, round 3 finding 4.)
 - **Finding 5 (NIT) — stale `FigureRequest` field docs.** The
   `series_styles` description already gained `legend` in `da00c042`
   (BUG-013's own review round moved it to `export_figures_schema.py` as a
@@ -4141,8 +4146,12 @@ verbatim on screen and export`, on top of `da00c042`:
   `Stage/facetGridRender.ts` (`renderFacetGrid` + `resizeFacetGrid`); the pin
   ratchets DOWN to 787. `lib/figureSpec.ts` 483, `lib/figureSpecFacets.ts`
   104, `lib/figureSpecSeries.ts` 280, `lib/spatialPageExport.ts` 287,
-  `routes/export_figures.py` 491, `routes/export_figures_schema.py` 126 —
-  all under 500, none pinned, no pin raised.
+  `routes/export_figures.py` 490, `routes/export_figures_schema.py` 125 —
+  all under 500, none pinned, no pin raised. (Corrected 2026-09-17, round 3
+  finding 5: these two Python counts were originally recorded by
+  `split("\n")`, one more than `tests/test_repo_integrity.py`'s own
+  `splitlines()` rule gives — the TS counts beside them already matched
+  `architecture.test.ts`'s `split("\n").length` exactly.)
 - Agent verification (review round): sabotage table, each reverted with
   `git checkout --` and the worktree verified clean afterwards —
 
@@ -4150,7 +4159,7 @@ verbatim on screen and export`, on top of `da00c042`:
   |---|---|
   | `figureSpecFacets.ts` composes ``` `${label} (${unit})` ``` again instead of `seriesDisplayLabel` | 5 — `figureSpecFacets.test.ts` ×4, `regressionMatrix.test.ts`'s BUG-014 facet row |
   | `facetGridRender.ts` passes `seriesLabels: undefined` to `buildOpts` | 1 — `MultiPanelStage.test.tsx` "a legend rename reaches every facet panel's legend, verbatim" |
-  | `facet.ts` returns an EMPTY `FacetPanel.channels` | 11 — `figureSpecFacets.test.ts` ×6, `regressionMatrix.test.ts` ×3 (incl. the committed `facet` golden), `MultiPanelStage.test.tsx` ×2 |
+  | `facet.ts` returns an EMPTY `FacetPanel.channels` (payload itself untouched) | 6 — `figureSpecFacets.test.ts` ×4, `regressionMatrix.test.ts` ×1, `MultiPanelStage.test.tsx` ×1. (Corrected 2026-09-17, round 3 finding 6: reaching 11 and moving the committed `facet` golden needs ALSO starving `buildColumns` of its channel list — a strictly larger edit than the reported field alone; see the round 3 entry.) |
   | `spatialPageExport.ts` builds no `legends` at all | 1 — `spatialPageExport.test.ts` "carries decoded partial legend entries as presentation…" |
   | `publicationStyles.ts` restores a string `legend` | 1 — `publicationStyles.test.ts` "deliberately does NOT restore a legend…" |
   | `series_display_name` uses `if legend:` (drops `""`) | 1 — `test_an_empty_rename_drops_the_series_from_the_rendered_legend` |
@@ -4177,6 +4186,121 @@ verbatim on screen and export`, on top of `da00c042`:
   from 890.1 kB — 8.7 kB of headroom, budget unmoved. Both builds ran in the
   same worktree with `node_modules/.vite` cleared, against a `node_modules`
   installed by `npm ci` from the same (unchanged) lockfile.
+  **Correction (2026-09-17, round 3 finding 3): `da00c042` is not this
+  commit's parent — `git rev-parse HEAD~1` of `8a8d92b1` is `caa10f88`, four
+  commits later than `da00c042`, and the three commits in between
+  (`2d8b9b57`, `0565b674`, `caa10f88`) all touch eager frontend source. The
+  **real** pair, re-measured in a scratch worktree with `node_modules/.vite`
+  cleared after `npm ci`: `caa10f88` **912,915 B** eager -> `8a8d92b1`
+  **912,953 B**, **+38 B** — the same delta by coincidence, on the correct
+  SHAs this time; do not reuse the `da00c042`/911,488/911,526 numbers above
+  for anything.
+
+#### Round 3 (2026-09-17) — closes the round-2 review's remaining findings
+
+A second adversarial review of `8a8d92b1` returned 3 CONFIRMED + 4 NITs.
+Closed by `fix(stage): BUG-014 round 3 — background facet grids honour the
+rename; a null rename derives the label`, on top of `230a174a`:
+
+- **Finding 1 (CONFIRMED) — a BACKGROUND window's facet grid still ignored
+  the rename.** `components/windows/BackgroundAltModes.tsx`'s
+  `BackgroundStackWindow` (the SECOND caller of `useMultiPanelStage` — the
+  facet grid a background window renders when it carries a durable
+  `view.facetKey`, per the L2 fix `BackgroundPlotWindow.tsx` already made)
+  passed `seriesStyles` but not `seriesLabels`, so a renamed channel read its
+  derived `"Signal (au)"` in every panel of a background window's facet grid
+  while the focused stage, the flat export, and the facet export all read
+  the rename verbatim — a fourth string for the same series, on the one leg
+  the round-2 fix did not reach. Fixed by passing `seriesLabels:
+  view.seriesLabels` beside `seriesStyles`, mirroring where the flat
+  background leg already gets it (`BackgroundPlotWindow.tsx`'s
+  `BackgroundXYWindow`). The new `useMultiPanelStage.ts` param doc claim ("a
+  background window passes nothing … it renders the stack mode only") was
+  also false — `BackgroundPlotWindow.tsx`'s own module doc says a background
+  window renders the facet grid too, for a durable `facetKey` — corrected in
+  place, net line count unchanged (787/787, zero headroom, per round-2
+  finding 7 below). Pinned by the background twin of
+  `MultiPanelStage.test.tsx`'s facet-rename test, added to
+  `BackgroundPlotWindow.test.tsx`.
+- **Finding 2 (CONFIRMED) — `seriesDisplayLabel` was `!== undefined`, not the
+  `??` its own doc claimed.** A `null` legend (reachable: `sanitizePlotView`
+  casts a restored/hand-edited `.dwk`'s `seriesLabels` to
+  `Record<number, string>` without validating each value is a string) shipped
+  `label: null` on the facet wire — a 422 on the backend — while every other
+  leg (the screen, the flat export via `series_styles[i].legend`, the
+  backend's own `if legend is not None`) degrades gracefully. One-token fix:
+  `return legend ?? (unit ? \`${label} (${unit})\` : label);`. Pinned by
+  `seriesDisplayLabel("Signal", "au", null)` -> `"Signal (au)"` and a facet
+  spec built with `seriesLabels: {1: null}` carrying the derived label in
+  `figureSpecFacets.test.ts`.
+  **`sanitizePlotView` validation — residual, not fixed.** Whether
+  `sanitizePlotView` should drop non-string `seriesLabels` entries: it
+  should (the flat and facet legs both now degrade gracefully for a `null`
+  *value* reaching `seriesDisplayLabel`, but a non-string *key-to-value* pair
+  surviving sanitization is still a latent contract gap upstream of it), but
+  `frontend/src/lib/plotview.ts` measures 981/981 lines against
+  `architecture.test.ts`'s own pin (zero headroom, the same state
+  `useMultiPanelStage.ts` was in going into round 2) — implementing the
+  filter needs a new helper, which this round does not have room for without
+  moving a pin. Recorded as a residual: `frontend/src/lib/plotview.ts:757-760`
+  (`seriesLabels: typeof o.seriesLabels === "object" && ... ? (o.seriesLabels
+  as Record<number, string>) : {}` — cast through unvalidated).
+- **Finding 3 (CONFIRMED) — record hygiene, the bundle pair, again.** See the
+  correction above this section. Also re-measured this round's OWN commit
+  against its real parent (`git rev-parse HEAD~1` = `230a174a`, a same-day
+  test-only commit that touches no frontend source): `230a174a` **912,953 B**
+  eager -> this commit **912,953 B**, **+0 B** — no new eagerly-reachable
+  module, matching the diff (a one-line param pass-through, a one-line
+  arithmetic change, and comment/doc edits only; no new import anywhere).
+  Both pairs measured in scratch worktrees (`git worktree add` off the
+  scratchpad, `npm ci`, `node_modules/.vite` cleared, `node
+  <scratchpad>/exactbytes.mjs <tree>/src/quantized/web`), per
+  `agent_rules.md`'s standing bundle-measurement rule.
+- **Nit 4 — closed.** The `""` residual note now says `setSeriesLabel`
+  trims-and-deletes a blank/whitespace-only rename, so the rename UI itself
+  cannot produce it — only a restored/hand-edited `.dwk` or the
+  `overlayCurveLabels`/dual-selection merge paths can (edited into the
+  Finding 4 entry above).
+- **Nit 5 — closed.** The round-2 "Module ceilings this round" line recorded
+  `routes/export_figures.py 491, routes/export_figures_schema.py 126` by
+  `split("\n")`; `tests/test_repo_integrity.py`'s own `splitlines()` rule
+  gives **490** / **125** (both measured against the current tree — neither
+  file changed since). Corrected in place above.
+- **Nit 6 — closed.** The round-2 sabotage table's `channels: []` row claimed
+  11 failures for "an EMPTY `FacetPanel.channels`"; the literal edit
+  (emptying only the reported field, payload untouched) gives 6. Reaching 11
+  and moving the committed `facet` golden needs ALSO starving `buildColumns`
+  of its channel list — a strictly larger edit. Reworded in place above to
+  describe the literal edit's own count, with a note on what a larger edit
+  would take.
+- **Nit 7 — follow-up recorded, not extracted.** `Stage/useMultiPanelStage.ts`
+  is still exactly on its 787-line pin after this round's doc-only edit (net
+  zero lines). The next feature touching this file will need to extract a
+  sibling module first — flagged here rather than done speculatively.
+- Agent verification (round 3): each new/changed assertion sabotaged and
+  reverted, worktree verified clean afterwards —
+
+  | # | sabotage | failing test(s) |
+  |---|---|---|
+  | 1 | `BackgroundAltModes.tsx`'s `BackgroundStackWindow` reverted to omit `seriesLabels` | 1 — `BackgroundPlotWindow.test.tsx` "a legend rename reaches every facet panel's legend, verbatim, in a BACKGROUND window too" |
+  | 2 | `seriesDisplayLabel` reverted to `if (legend !== undefined) return legend;` | 2 — `figureSpecSeries.test.ts` "degrades to the derived label for a null legend, not `!== undefined`", `figureSpecFacets.test.ts` "a null rename (a hand-edited document's `seriesLabels`) degrades to the derived label" |
+
+  Nothing stayed green under sabotage; both restores verified with
+  `npx vitest run` passing again and `git diff` clean before the real fix
+  was reapplied.
+- Gate: `npx tsc -b --force` (exit 0, no output); `npx eslint src
+  --max-warnings=0` (exit 0, no output); `npx vitest run src/lib/figureSpec
+  src/lib/regressionMatrix.test.ts src/lib/plotview src/components/Stage
+  src/components/windows src/store/plotRecipes.test.ts
+  src/architecture.test.ts` -> **66 files, 1202 tests, 0 failed** (no `FAIL`
+  lines; no GridViewport.perf / freezeRegressionMatrixCheck flakes to
+  re-run); `node scripts/freeze-regression-matrix.mjs --check` -> 1 test
+  passed (the `facet` golden unchanged — this round touches no fixture);
+  `uv run pytest -q tests/test_repo_integrity.py` -> **12 passed**.
+- Module ceilings this round: `Stage/useMultiPanelStage.ts` 787/787 (doc fix
+  only, net zero lines — see Nit 7); `lib/figureSpecSeries.ts` 279 (was 280,
+  the one-line `if`/`return` collapsed into one `return`); `lib/plotview.ts`
+  981/981 (untouched — see Finding 2's residual); no pin raised.
 
 ---
 

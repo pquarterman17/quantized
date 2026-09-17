@@ -150,8 +150,8 @@ export interface MultiPanelStageParams {
   /** Per-channel legend renames, keyed by dataset channel index (BUG-014).
    *  Facet-grid mode only — the plain stack mode gives each series its own
    *  panel title-less single-series plot and never showed a legend rename
-   *  either way. A background window passes nothing (it renders the stack
-   *  mode only), so it defaults to "no renames". */
+   *  either way. A background window renders the stack mode and, with a
+   *  durable `facetKey`, the facet grid too — it passes its own `view.seriesLabels`. */
   seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
   autoSeriesStyles?: boolean;

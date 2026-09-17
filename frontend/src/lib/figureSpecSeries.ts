@@ -240,8 +240,7 @@ export function withSeriesLegends(
  * An EMPTY rename is honoured verbatim, matching `??` on the screen side.
  */
 export function seriesDisplayLabel(label: string, unit: string, legend: string | undefined): string {
-  if (legend !== undefined) return legend;
-  return unit ? `${label} (${unit})` : label;
+  return legend ?? (unit ? `${label} (${unit})` : label);
 }
 
 /** The request's whole `series_styles` field, in the one order the wire wants:

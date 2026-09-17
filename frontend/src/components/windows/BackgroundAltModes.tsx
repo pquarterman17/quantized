@@ -140,6 +140,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null }:
     defaultTrace,
     refLines: view.refLines,
     seriesStyles: view.seriesStyles,
+    seriesLabels: view.seriesLabels,
     xKey: view.xKey,
     yKeys: view.yKeys,
     y2Keys: view.y2Keys,

@@ -71,6 +71,20 @@ describe("buildFacetSpecs — legend renames (BUG-014)", () => {
     const specs = buildFacetSpecs(data, 0, null, [2, 1], null, { 1: "Loop 1" });
     expect(specs?.[0].series.map((s) => s.label)).toEqual(["Other (au)", "Loop 1"]);
   });
+
+  // Round 3: `sanitizePlotView` casts a restored `.dwk`'s `seriesLabels`
+  // without validating its values, so a `null` can reach this function
+  // despite the `Record<number, string>` type — the same runtime case
+  // `figureSpecSeries.test.ts` pins directly on `seriesDisplayLabel`. A
+  // facet panel ships a FINISHED string (no per-series field to defer the
+  // resolution to), so this is the one place a `null` here could ship
+  // `label: null` on the wire instead of degrading like every other leg.
+  it("a null rename (a hand-edited document's `seriesLabels`) degrades to the derived label", () => {
+    const specs = buildFacetSpecs(data, 0, null, [1, 2], null, {
+      1: null as unknown as string,
+    });
+    expect(firstLabels(specs)).toEqual(["Signal (au)", "Signal (au)"]);
+  });
 });
 
 describe("a faceted export request carries the rename through (end to end)", () => {

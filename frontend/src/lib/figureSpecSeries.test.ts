@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveDisplaySeries, resolveSeriesPresentation, withSeriesLegends } from "./figureSpecSeries";
+import { resolveDisplaySeries, resolveSeriesPresentation, seriesDisplayLabel, withSeriesLegends } from "./figureSpecSeries";
 import type { DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -122,6 +122,29 @@ describe("withSeriesLegends (BUG-014)", () => {
     const styles = [{ color: "#111" }];
     withSeriesLegends(styles, ["Loop 1"]);
     expect(styles[0]).not.toHaveProperty("legend");
+  });
+});
+
+describe("seriesDisplayLabel (BUG-014 round 3)", () => {
+  it("renders the derived label for an undefined legend", () => {
+    expect(seriesDisplayLabel("Signal", "au", undefined)).toBe("Signal (au)");
+  });
+
+  it("renders the verbatim rename when given one", () => {
+    expect(seriesDisplayLabel("Signal", "au", "Loop 1")).toBe("Loop 1");
+  });
+
+  // The doc above claims `??` semantics — matching `uplotOpts.buildOpts`
+  // (`args.seriesLabels?.[i] ?? (...)`) and the backend's `if legend is not
+  // None`. A `null` is reachable at runtime despite the `string | undefined`
+  // signature: `sanitizePlotView` casts a restored `.dwk`'s `seriesLabels`
+  // without checking its values are strings, so a hand-edited document can
+  // carry one through to here. `!== undefined` would ship `label: null` on
+  // the wire; `??` degrades gracefully, same as every other leg.
+  it("degrades to the derived label for a null legend, not `!== undefined`", () => {
+    // `null` slipping past the `string | undefined` signature is exactly the
+    // runtime case under test — see the doc comment above.
+    expect(seriesDisplayLabel("Signal", "au", null as unknown as undefined)).toBe("Signal (au)");
   });
 });
 
