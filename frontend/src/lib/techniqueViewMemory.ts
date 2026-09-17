@@ -34,6 +34,7 @@
 // "generic" datasets) -- capture/apply both no-op for it.
 
 import { isAxisScale } from "./plotview";
+import { isString, keyedRecord } from "./sanitizeRecord";
 import { isValidTechnique, techniqueOf } from "./techniqueDefaults";
 import type { AxisScale, Dataset, SeriesStyle, Technique } from "./types";
 
@@ -190,15 +191,6 @@ function numRecord(v: unknown): Record<number, number> {
   return out;
 }
 
-function strRecord(v: unknown): Record<number, string> {
-  if (typeof v !== "object" || v === null) return {};
-  const out: Record<number, string> = {};
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
-    if (typeof val === "string") out[Number(k)] = val;
-  }
-  return out;
-}
-
 /** Same structural-passthrough convention `lib/plotview.ts`'s `sanitizeView`
  *  uses for `seriesStyles` -- no deep per-field validation of `SeriesStyle`,
  *  just an object-shape check. A stale/hand-edited entry degrades to `{}`. */
@@ -215,11 +207,11 @@ function sanitizeEntry(v: unknown): TechniqueViewMemory | null {
     yScale: isAxisScale(o.yScale) ? o.yScale : "linear",
     xScale: isAxisScale(o.xScale) ? o.xScale : "linear",
     seriesStyles: styleRecord(o.seriesStyles),
-    seriesLabels: strRecord(o.seriesLabels),
+    seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
     seriesOrder: Array.isArray(o.seriesOrder) ? numArray(o.seriesOrder) : null,
     errKeys: numRecord(o.errKeys),
     hiddenChannels: numArray(o.hiddenChannels),
-    labels: strRecord(o.labels),
+    labels: keyedRecord<string, number>(o.labels, isString),
   };
 }
 

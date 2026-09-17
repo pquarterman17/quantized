@@ -443,7 +443,13 @@ const MODULE_PINS: Record<string, number> = {
   // machinery `groupKey` uses — no new machinery, no extractable cohesive
   // block to fund it with. Written justification per CLAUDE.md's "raise
   // only with written justification".
-  "/lib/plotview.ts": 981,
+  // 981 -> 980 (2026-09-17, BUG-014 round 4): the unchecked `seriesLabels`
+  // cast became a one-line `sanitizeRecord.keyedRecord` call — the SAME
+  // validator the recipe and technique-memory restore paths now share — so
+  // a non-string rename is dropped here instead of crashing the canvas in
+  // `richtext.hasMarkup`. The four-line ternary went out; the call, its
+  // one-line note and the import came in: a ratchet, not a bump.
+  "/lib/plotview.ts": 980,
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {
@@ -536,7 +542,14 @@ const TS_MODULE_PINS: Record<string, number> = {
   // dash/marker cycle paid for itself — the per-cell styles/labels/legend
   // derivation moved to `lib/multipanel.spatialCellStyling`, where the spatial
   // EXPORT's own channel list already lives, so the two cannot drift.
-  "/components/Stage/useMultiPanelStage.ts": 787,
+  // 787 -> 757 (2026-09-17, BUG-014 round 4): the PLAIN STACK and paneled
+  // X-BREAK render legs moved to components/Stage/stackPanelRender.ts and
+  // breakPanelRender.ts, the siblings facetGridRender.ts already set the
+  // pattern for — which is what funded the per-leg `seriesLabels` projection
+  // (a legend rename now reaches all three multi-panel legs' y-axis labels,
+  // the way the export already carried it). An extraction, not a bump: the
+  // hook keeps mode selection, state and the effect lifecycle only.
+  "/components/Stage/useMultiPanelStage.ts": 757,
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the

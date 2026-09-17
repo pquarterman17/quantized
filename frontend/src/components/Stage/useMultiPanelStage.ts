@@ -30,16 +30,14 @@ import {
 import { resolveSecondaryAxis, secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
-import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
+import { defaultDenseChannels, effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
 import {
   DECIMATE_MIN_POINTS,
   decimationRequestEligible,
   defaultDecimateWidthHint, errorBindingsApplyToPlotted,
 } from "../../lib/plotDecimate";
 import {
-  breakPanelWidths,
   facetGridSize,
-  panelHeights,
   spatialGridSize,
   spatialCellStyling,
   spatialPlottedChannels,
@@ -57,13 +55,16 @@ import {
 } from "../../lib/panelLayout";
 import type { PageSetup } from "../../lib/pagesetup";
 import { scaleFromLog, type PlotBg } from "../../lib/plotview";
+import { analysisData } from "../../lib/rowstate";
 import type { AxisFormat, AxisScale, Dataset, DefaultTrace, RefLine, SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { Readout } from "../../lib/uplotTools";
 import type { Accent, PlotTool, Theme } from "../../store/useApp";
+import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
+import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
 import type { SpatialLegendEntry } from "./SpatialPanelLegend";
 
 /** The focused stage's uPlot cursor-sync group (all its panels crosshair
@@ -76,20 +77,6 @@ const GRID_GAP = 8;
  *  would be referentially new on every render and re-run the render effect
  *  (which depends on `seriesLabels`) for nothing. */
 const EMPTY_LABELS: Record<number, string> = {};
-const BREAK_GLYPH_W = 20;
-
-/** The visual seam between adjacent x-break panels: diagonal hash lines via a
- *  pure CSS gradient (theme-aware through the `--border` token) rather than a
- *  text glyph, so it never depends on font rendering. */
-function makeBreakGlyph(width: number): HTMLDivElement {
-  const glyph = document.createElement("div");
-  glyph.setAttribute("aria-hidden", "true");
-  glyph.style.cssText =
-    `flex:0 0 ${width}px;align-self:stretch;` +
-    "background-image:repeating-linear-gradient(65deg, var(--border) 0 2px, transparent 2px 9px);" +
-    "opacity:0.7;";
-  return glyph;
-}
 
 /** One spatial panel's fetched series plus its own error-bar map (built at
  *  fetch time — needs the panel's full DataStruct, not just the plotted
@@ -148,10 +135,20 @@ export interface MultiPanelStageParams {
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
   /** Per-channel legend renames, keyed by dataset channel index (BUG-014).
-   *  Facet-grid mode only — the plain stack mode gives each series its own
-   *  panel title-less single-series plot and never showed a legend rename
-   *  either way. A background window renders the stack mode and, with a
-   *  durable `facetKey`, the facet grid too — it passes its own `view.seriesLabels`. */
+   *  Honoured by the plain stack, the paneled x-break and the facet grid
+   *  alike (round 4): `buildOpts` sets `legend: { show: false }` and
+   *  `PlotStage.tsx` mounts this hook's view INSTEAD of `PlotViewport` +
+   *  `PlotLegend`, so a panel's y-axis label (`uplotOpts`' `soloLabel`, fed
+   *  by the same resolved `labels` array) is the one slot a series' name
+   *  appears in — while the EXPORT of every one of those views carries the
+   *  rename (`lib/figureSpec.ts`'s `series_styles[i].legend` for the stack
+   *  and break views, which export as the flat figure;
+   *  `lib/figureSpecFacets.ts` for the grid). SPATIAL is the exception: each
+   *  decoded panel carries its own labels from the source figure
+   *  (`multipanel.spatialCellStyling`). A background window renders the
+   *  stack mode and, with a durable `facetKey` or saved `plot.axisBreaks.x`
+   *  (`BackgroundPlotWindow`'s `durableComposition`), the facet grid or the
+   *  x-break arrangement too — it passes its own `view.seriesLabels`. */
   seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
   autoSeriesStyles?: boolean;
@@ -281,6 +278,27 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     () => (active ? plotted.map((ch) => buildErrorColumns(active.data, [ch], errKeys)) : []),
     [active, plotted, errKeys],
   );
+  // BUG-014 round 4: the channel-keyed renames the facet leg already
+  // projects (`facetGridRender`), projected for the two OTHER legs.
+  // STACK: one entry per plotted channel in panel order — `splitPayload`
+  // makes exactly one single-series panel per `plotted` entry, so the same
+  // indexing `styleList` uses is correct here.
+  const labelList = useMemo(() => plotted.map((ch) => seriesLabels[ch]), [plotted, seriesLabels]);
+  // BREAK: every panel is the SAME channel set sliced to its own x-segment,
+  // and `lib/facet.breakPayloads` builds each payload with `buildColumns(
+  // sliced, null, xKey, yKeys)` — so a panel's positional series list is
+  // `yKeys ?? defaultDenseChannels(...)` over the ANALYSIS view the
+  // composition was built from (`breakCompositionFromBreaks`). Fail closed:
+  // when that derivation does not match the panels' actual series count (a
+  // composition built from a selection the view no longer holds), pass NO
+  // renames rather than mislabel by position.
+  const breakLabels = useMemo(() => {
+    const data = breakMode ? (analysisData(active) ?? active?.data) : null;
+    if (!data) return undefined;
+    const chans = yKeys ?? defaultDenseChannels(data, xKey);
+    const seriesCount = breakPanels?.[0]?.payload.series.length ?? 0;
+    return chans.length === seriesCount ? chans.map((ch) => seriesLabels[ch]) : undefined;
+  }, [breakMode, active, yKeys, xKey, breakPanels, seriesLabels]);
 
   useEffect(() => {
     let cancelled = false;
@@ -571,48 +589,27 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       }
       destroyAll();
       host.replaceChildren();
-      const w = host.clientWidth || 600;
-      const h = host.clientHeight || 400;
-      const widths = breakPanelWidths(bPanels.length, w, BREAK_GLYPH_W);
-      // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
-      // panel's x axis still means "this series' x", so zooming one seam
-      // should pan/zoom the others together.
-      const onSetScale = xZoomSyncHook(() => plotsRef.current);
-      bPanels.forEach((p, i) => {
-        if (i > 0) host.appendChild(makeBreakGlyph(BREAK_GLYPH_W));
-        const div = document.createElement("div");
-        div.style.flex = `0 0 ${widths[i]}px`;
-        host.appendChild(div);
-        const opts = buildOpts(p.payload, {
-          width: widths[i],
-          height: h,
-          yScale,
-          xScale,
-          xLim: p.xRange,
-          yLim: breakYLim,
-          xFmt,
-          yFmt,
-          showGrid,
-          axisBox: showAxisBox,
-          fontSize,
-          baseLineWidth,
-          defaultTrace,
-          tool,
-          onReadout: setReadout,
-          bg,
-          linearPaths: LINEAR_PATHS,
-          pointsPaths: POINTS_PATHS,
-        });
-        opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
-        opts.hooks = { setScale: [onSetScale] };
-        plotsRef.current.push(new uPlot(opts, p.payload.data, div));
+      const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
+      plotsRef.current = renderBreakPanels(host, {
+        panels: bPanels,
+        // BUG-014 round 4: a break view's only visible label slot is the
+        // panel's y-axis label, and its EXPORT carries the rename — so the
+        // renames belong here for the same reason they belong on the facet
+        // leg below.
+        seriesLabels: breakLabels,
+        syncKey,
+        // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
+        // panel's x axis still means "this series' x", so zooming one seam
+        // should pan/zoom the others together.
+        onSetScale: xZoomSyncHook(() => plotsRef.current),
+        box,
+        cell: {
+          yScale, xScale, yLim: breakYLim, xFmt, yFmt, showGrid,
+          axisBox: showAxisBox, fontSize, baseLineWidth, defaultTrace,
+          tool, onReadout: setReadout, bg,
+        },
       });
-      const ro = new ResizeObserver(() => {
-        const width = host.clientWidth || w;
-        const height = host.clientHeight || h;
-        const ws = breakPanelWidths(bPanels.length, width, BREAK_GLYPH_W);
-        plotsRef.current.forEach((u, idx) => u.setSize({ width: ws[idx], height }));
-      });
+      const ro = new ResizeObserver(() => resizeBreakPanels(host, plotsRef.current, box));
       ro.observe(host);
       return () => {
         ro.disconnect();
@@ -666,56 +663,27 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     destroyAll();
     host.replaceChildren();
 
-    const stackedPanels = splitPayload(payload);
     const w = host.clientWidth || 600;
-    const heights = panelHeights(stackedPanels.length, host.clientHeight || 400);
-    // Propagate an x-zoom on one panel to all the others.
-    const onSetScale = xZoomSyncHook(() => plotsRef.current);
-
-    stackedPanels.forEach((pp, i) => {
-      const div = document.createElement("div");
-      host.appendChild(div);
-      const opts = buildOpts(pp, {
-        width: w,
-        height: heights[i],
-        yScale,
-        xScale,
-        xLim,
-        xFmt,
-        yFmt,
-        showGrid,
-        axisBox: showAxisBox,
-        fontSize,
-        baseLineWidth,
-        defaultTrace,
-        refLines,
-        tool,
-        onReadout: setReadout,
-        seriesStyles: styleList ? [styleList[i]] : undefined,
-        // Item A: same class of fix as the spatial multi-panel path — an
-        // Origin "Y-error" column is already dropped from `plotted` above, so
-        // its paired Y channel's own panel draws whiskers instead.
-        errorBars: errorBarsList[i],
-        bg,
-        linearPaths: LINEAR_PATHS,
-        pointsPaths: POINTS_PATHS,
-      });
-      opts.cursor = { ...opts.cursor, sync: { key: syncKey } };
-      opts.hooks = { setScale: [onSetScale] };
-      // Blank the x tick labels on every panel but the bottom (keep the axis so
-      // the plot areas stay the same width and the panels line up).
-      const isBottom = i === stackedPanels.length - 1;
-      if (!isBottom && opts.axes?.[0]) {
-        opts.axes[0] = { ...opts.axes[0], label: undefined, values: (_u, splits) => splits.map(() => "") };
-      }
-      plotsRef.current.push(new uPlot(opts, pp.data, div));
+    plotsRef.current = renderStackPanels(host, {
+      panels: splitPayload(payload),
+      // BUG-014 round 4: each stack panel is single-series, so its y-axis
+      // label IS that series' legend text — the rename has to reach it or
+      // screen and export disagree.
+      seriesLabels: labelList,
+      seriesStyles: styleList,
+      errorBars: errorBarsList,
+      syncKey,
+      // Propagate an x-zoom on one panel to all the others.
+      onSetScale: xZoomSyncHook(() => plotsRef.current),
+      box: { w, h: host.clientHeight || 400 },
+      cell: {
+        yScale, xScale, xLim, xFmt, yFmt, showGrid, axisBox: showAxisBox,
+        fontSize, baseLineWidth, defaultTrace, refLines, tool,
+        onReadout: setReadout, bg,
+      },
     });
 
-    const ro = new ResizeObserver(() => {
-      const hs = panelHeights(plotsRef.current.length, host.clientHeight || 400);
-      const width = host.clientWidth || w;
-      plotsRef.current.forEach((u, idx) => u.setSize({ width, height: hs[idx] }));
-    });
+    const ro = new ResizeObserver(() => resizeStackPanels(host, plotsRef.current, w));
     ro.observe(host);
     return () => {
       ro.disconnect();
@@ -748,6 +716,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     defaultTrace,
     refLines,
     styleList,
+    labelList,
+    breakLabels,
     seriesLabels,
     autoSeriesStyles,
     errorBarsList,

@@ -136,11 +136,11 @@ describe("seriesDisplayLabel (BUG-014 round 3)", () => {
 
   // The doc above claims `??` semantics — matching `uplotOpts.buildOpts`
   // (`args.seriesLabels?.[i] ?? (...)`) and the backend's `if legend is not
-  // None`. A `null` is reachable at runtime despite the `string | undefined`
-  // signature: `sanitizePlotView` casts a restored `.dwk`'s `seriesLabels`
-  // without checking its values are strings, so a hand-edited document can
-  // carry one through to here. `!== undefined` would ship `label: null` on
-  // the wire; `??` degrades gracefully, same as every other leg.
+  // None`. A `null` is reachable despite the `string | undefined` signature:
+  // any caller that builds a view in memory can pass one (round 4 closed the
+  // `.dwk` route — `sanitizePlotView` drops non-string values now — but not
+  // the type hole itself). `!== undefined` would ship `label: null` on the
+  // wire; `??` degrades gracefully, same as every other leg.
   it("degrades to the derived label for a null legend, not `!== undefined`", () => {
     // `null` slipping past the `string | undefined` signature is exactly the
     // runtime case under test — see the doc comment above.

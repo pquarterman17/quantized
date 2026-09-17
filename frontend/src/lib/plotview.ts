@@ -24,6 +24,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
+import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
@@ -754,10 +755,8 @@ export function sanitizePlotView(v: unknown): PlotView {
       typeof o.seriesStyles === "object" && o.seriesStyles !== null
         ? (o.seriesStyles as Record<number, SeriesStyle>)
         : {},
-    seriesLabels:
-      typeof o.seriesLabels === "object" && o.seriesLabels !== null
-        ? (o.seriesLabels as Record<number, string>)
-        : {},
+    // Values VALIDATED, not cast — see `lib/sanitizeRecord.ts` (BUG-014 r4).
+    seriesLabels: keyedRecord<string, number>(o.seriesLabels, isString),
     errKeys:
       typeof o.errKeys === "object" && o.errKeys !== null ? (o.errKeys as Record<number, number>) : {},
     seriesOrder: Array.isArray(o.seriesOrder) ? o.seriesOrder.filter((n): n is number => typeof n === "number") : null,

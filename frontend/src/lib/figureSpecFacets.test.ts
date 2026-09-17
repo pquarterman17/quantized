@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { buildFacetSpecs } from "./figureSpecFacets";
-import { defaultPlotView } from "./plotview";
+import { defaultPlotView, sanitizePlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
 
 const data: DataStruct = {
@@ -72,18 +72,29 @@ describe("buildFacetSpecs — legend renames (BUG-014)", () => {
     expect(specs?.[0].series.map((s) => s.label)).toEqual(["Other (au)", "Loop 1"]);
   });
 
-  // Round 3: `sanitizePlotView` casts a restored `.dwk`'s `seriesLabels`
-  // without validating its values, so a `null` can reach this function
-  // despite the `Record<number, string>` type — the same runtime case
-  // `figureSpecSeries.test.ts` pins directly on `seriesDisplayLabel`. A
-  // facet panel ships a FINISHED string (no per-series field to defer the
-  // resolution to), so this is the one place a `null` here could ship
-  // `label: null` on the wire instead of degrading like every other leg.
+  // Round 3: a facet panel ships a FINISHED string (no per-series field on
+  // the request to defer the resolution to), so this is the one place a
+  // non-string rename could ship `label: null` on the wire instead of
+  // degrading like every other leg. Round 4 stopped one arriving from a
+  // `.dwk` at all (`sanitizePlotView` now drops non-string values), so this
+  // pins the degrade itself — the product rule the four legs share — for any
+  // caller that hands this function one directly.
   it("a null rename (a hand-edited document's `seriesLabels`) degrades to the derived label", () => {
     const specs = buildFacetSpecs(data, 0, null, [1, 2], null, {
       1: null as unknown as string,
     });
     expect(firstLabels(specs)).toEqual(["Signal (au)", "Signal (au)"]);
+  });
+
+  // Round 4, the restore half: a NUMBER never degraded — `seriesDisplayLabel`
+  // returns it as-is (`legend ?? ...`), so the facet wire shipped
+  // `label: 42` where the schema requires a string (422), on top of crashing
+  // the canvas. It is dropped at the sanitizer now, so a document restored
+  // from that same `.dwk` ships the derived label.
+  it("a NUMBER rename in a restored view never reaches the facet wire", () => {
+    const view = sanitizePlotView({ yKeys: [1, 2], seriesLabels: { 1: 42, 2: "Loop 2" } });
+    const specs = buildFacetSpecs(data, 0, null, [1, 2], null, view.seriesLabels);
+    expect(specs?.[0].series.map((s) => s.label)).toEqual(["Signal (au)", "Loop 2"]);
   });
 });
 

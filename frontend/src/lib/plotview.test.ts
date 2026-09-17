@@ -4,7 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { PlotPayload } from "./plotdata";
 import type { FrozenPlotBundle } from "./plotsnapshot";
+import { buildOpts } from "./uplotOpts";
 import {
   cascadeGeometry,
   cascadeLayout,
@@ -19,6 +21,7 @@ import {
   nearestLegendCorner,
   nextLinkGroup,
   nextPlotBg,
+  sanitizePlotView,
   sanitizePlotWindows,
   scaleFromLog,
   snapshotView,
@@ -1042,5 +1045,58 @@ describe("dropGeometry (item 14 — drop onto empty canvas)", () => {
     const g = dropGeometry(100, 100, { width: 300, height: 200 });
     expect(g.x).toBe(0);
     expect(g.y).toBe(0);
+  });
+});
+
+
+// BUG-014 round 4. `seriesLabels` used to be cast straight out of the parsed
+// `.dwk` (`typeof o.seriesLabels === "object" ? (o.seriesLabels as
+// Record<number, string>) : {}`), so a hand-edited or corrupted document
+// could carry ANY value type into the live view. `null` was survivable (every
+// consumer uses `??`); a number was not — it reached `buildOpts`, which hands
+// the label to `richtext.hasMarkup`, whose `s.includes("$")` threw an
+// UNCAUGHT TypeError and took the Stage canvas down. The two sibling restore
+// paths (`plotRecipeIO`, `techniqueViewMemory`) already validated this field;
+// this one now shares their validator (`lib/sanitizeRecord.keyedRecord`).
+describe("sanitizePlotView — seriesLabels values (BUG-014 round 4)", () => {
+  it("keeps string renames and drops every other value type", () => {
+    const v = sanitizePlotView({
+      seriesLabels: { 1: 42, 2: "ok", 3: null, 4: { toString: () => "nope" }, 5: true },
+    });
+    expect(v.seriesLabels).toEqual({ 2: "ok" });
+  });
+
+  it("degrades a non-object seriesLabels to an empty map", () => {
+    expect(sanitizePlotView({ seriesLabels: "Loop 1" }).seriesLabels).toEqual({});
+    expect(sanitizePlotView({ seriesLabels: null }).seriesLabels).toEqual({});
+    expect(sanitizePlotView({}).seriesLabels).toEqual({});
+  });
+
+  // The canvas half of the same fix: drive the real builder with what the
+  // sanitizer returns for a hand-edited document, the way every render path
+  // does (`args.seriesLabels?.[i]`). Before the validation this threw
+  // `TypeError: s.includes is not a function` at `richtext.hasMarkup`.
+  it("leaves the canvas builder with nothing that can throw in richtext", () => {
+    const payload: PlotPayload = {
+      data: [
+        [0, 1, 2],
+        [10, 20, 30],
+      ],
+      series: [{ label: "Signal", unit: "au" }],
+      xLabel: "Field",
+      xUnit: "Oe",
+    };
+    const view = sanitizePlotView({ seriesLabels: { 0: 42 } });
+    const opts = buildOpts(payload, {
+      width: 600,
+      height: 400,
+      xScale: "linear",
+      yScale: "linear",
+      tool: "zoom",
+      seriesLabels: [view.seriesLabels[0]],
+      onReadout: () => {},
+    });
+    // Not merely "did not throw": the series falls back to its derived label.
+    expect((opts.series?.[1] as { label?: string }).label).toBe("Signal (au)");
   });
 });

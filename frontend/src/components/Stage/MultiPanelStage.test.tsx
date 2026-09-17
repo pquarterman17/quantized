@@ -10,6 +10,7 @@ import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
+import { buildStageFigureSpec } from "../../lib/figureSpec";
 import { createFigureDocument } from "../../lib/figureDocument";
 import type { SpatialPanel } from "../../lib/multipanel";
 import { defaultPlotView } from "../../lib/plotview";
@@ -725,5 +726,151 @@ describe("MultiPanelStage — a reopened document's saved x-break (BUG-012)", ()
     expect(left.data[0]).toEqual([0, 1]);
     expect(right.data[0]).toEqual([2, 3]);
     expect(left.data).toHaveLength(3); // x + both channels, not one
+  });
+});
+
+
+// BUG-014 round 4. The facet grid was fixed in round 3; the OTHER two
+// multi-panel legs (plain per-channel stack, paneled x-breaks) still called
+// `buildOpts` with no `seriesLabels`. That matters because `buildOpts` sets
+// `legend: { show: false }` and `PlotStage.tsx` mounts `MultiPanelStage`
+// INSTEAD of `PlotViewport` + `PlotLegend`: the only slot a series' resolved
+// name appears in is the panel's Y-AXIS LABEL (`uplotOpts`' `soloLabel`), so
+// these assert `opts.axes[1].label` — the thing on screen — not only the
+// series label. The EXPORT of both views already carried the rename
+// (`figureSpec.ts`'s `series_styles[i].legend`; a stack or break view exports
+// as the flat figure), so before this the two disagreed.
+const RENAME_DATA: DataStruct = {
+  time: [0, 1, 2, 3],
+  values: [
+    [10, 100],
+    [20, 200],
+    [30, 300],
+    [40, 400],
+  ],
+  labels: ["Field", "Signal"],
+  units: ["T", "au"],
+  metadata: {},
+};
+
+/** Every panel's y-axis label — the one visible label slot in a multi-panel
+ *  mode — in panel order. */
+function yAxisLabels(): (string | undefined)[] {
+  return (created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label);
+}
+
+const RENDER_OPTS = { fmt: "pdf", style: "default", dpi: 300, title: "" };
+
+describe("MultiPanelStage — a legend rename in the stack and break legs (BUG-014 round 4)", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "ds1", data: RENAME_DATA }],
+      activeId: "d1",
+      // Shared-store hygiene, the same reason the file's own `beforeEach`
+      // resets `facetKey`/`seriesLabels`: the BUG-012 describe above leaves a
+      // focused window whose DOCUMENT carries `plot.axisBreaks.x`, which
+      // `useEffectiveComposition`'s durable fallback would turn into a break
+      // arrangement under the stack tests below — and which
+      // `buildStageFigureSpec` would export THROUGH (a document-routed spec
+      // carries the document's view, not the live renames).
+      plotWindows: [],
+      focusedWindowId: null,
+    });
+  });
+
+  it("reaches the renamed channel's STACK panel verbatim, leaving the other panel's derived label alone", async () => {
+    useApp.setState({ seriesLabels: { 1: "Loop 1" } });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    // Non-vacuous: panel 0 is NOT renamed and must still read "label (unit)",
+    // so this pins the rename to the right panel rather than "any override".
+    expect(yAxisLabels()).toEqual(["Field (T)", "Loop 1"]);
+    const seriesLabels = (created as { opts: { series: { label?: string }[] } }[]).map(
+      (p) => p.opts.series[1].label,
+    );
+    expect(seriesLabels).toEqual(["Field (T)", "Loop 1"]);
+  });
+
+  it("leaves an un-renamed STACK view reading its derived labels", async () => {
+    useApp.setState({ seriesLabels: {} });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["Field (T)", "Signal (au)"]);
+  });
+
+  // The twin of `figureSpecFacets.test.ts`'s "keys renames by CHANNEL, not by
+  // series position": yKeys [1, 0] puts channel 1 in the FIRST panel, so
+  // indexing the rename map by panel position instead of by channel would put
+  // "Loop 1" on the wrong panel (and nothing on the right one).
+  it("keys a STACK rename by CHANNEL, not by panel position", async () => {
+    useApp.setState({ yKeys: [1, 0], seriesLabels: { 1: "Loop 1" } });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["Loop 1", "Field (T)"]);
+  });
+
+  it("reaches EVERY x-break panel verbatim", async () => {
+    useApp.setState({ yKeys: [1], seriesLabels: { 1: "Loop 1" } });
+    useApp.getState().breakAtGaps("d1", [[1, 2]]);
+    expect(breakPanelsOf(useApp.getState().composition)).toHaveLength(2);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["Loop 1", "Loop 1"]);
+  });
+
+  it("leaves an un-renamed x-break view reading its derived label", async () => {
+    useApp.setState({ yKeys: [1], seriesLabels: {} });
+    useApp.getState().breakAtGaps("d1", [[1, 2]]);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
+  });
+
+  // Fail-closed half of the break projection: a break panel carries no
+  // channel list of its own (unlike a `FacetPanel`), so the hook re-derives
+  // it the way `lib/facet.breakPayloads` did. Here the composition was built
+  // from one channel and the view now selects two — the derivation no longer
+  // describes the panels, so NO renames are passed rather than one landing on
+  // the wrong series by position.
+  it("passes no renames at all when the view's channel selection no longer matches the built panels", async () => {
+    useApp.setState({ yKeys: [1], seriesLabels: { 0: "WRONG", 1: "Loop 1" } });
+    useApp.getState().breakAtGaps("d1", [[1, 2]]);
+    useApp.setState({ yKeys: [0, 1] });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect(yAxisLabels()).toEqual(["Signal (au)", "Signal (au)"]);
+  });
+
+  // The parity the bug is actually about: the string on screen and the string
+  // the export wire carries for the SAME channel, in the SAME view.
+  it("SCREEN label == EXPORT legend for a renamed channel in a stack view", async () => {
+    useApp.setState({ seriesLabels: { 1: "Loop 1" } });
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const spec = buildStageFigureSpec(
+      useApp.getState,
+      { id: "d1", name: "ds1", data: RENAME_DATA },
+      "fig",
+      RENDER_OPTS,
+    );
+    const legend = spec.series_styles?.[1]?.legend;
+    expect(legend).toBe("Loop 1");
+    expect(yAxisLabels()[1]).toBe(legend);
+  });
+
+  it("SCREEN label == EXPORT legend for a renamed channel in an x-break view", async () => {
+    useApp.setState({ yKeys: [1], seriesLabels: { 1: "Loop 1" } });
+    useApp.getState().breakAtGaps("d1", [[1, 2]]);
+    render(<MultiPanelStage />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const spec = buildStageFigureSpec(
+      useApp.getState,
+      { id: "d1", name: "ds1", data: RENAME_DATA },
+      "fig",
+      RENDER_OPTS,
+    );
+    const legend = spec.series_styles?.[0]?.legend;
+    expect(legend).toBe("Loop 1");
+    expect(yAxisLabels()).toEqual([legend, legend]);
   });
 });
