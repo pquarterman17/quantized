@@ -6091,6 +6091,74 @@ describe("useApp plot windows — item 14 (drag-drop rebind + per-window pin)", 
     expect(w2.view.plotTitle).toBe("w2 title"); // display config survives, like setActive
   });
 
+  // BUG-012 review F4 / round 3, finding 7: the background branch's
+  // `resetAxisBreaks` was the one new behaviour of the review round with NO
+  // test -- sabotaging it to `false` left the whole scope green. An authored
+  // x-break is expressed in the OLD dataset's x units, and since BUG-012 the
+  // SCREEN reads it (`lib/facet.durableComposition`), so without the reset a
+  // drop panelled the dropped dataset at the previous one's gap.
+  //
+  // It is UNCONDITIONAL here, unlike the focused branch's `s.activeId !== id`
+  // gate, and the second case pins that deliberately: this branch re-applies
+  // `datasetViewDefaults` wholesale, so `xKey`, `yKeys` and `facetKey` all
+  // reset even when the SAME dataset is dropped back on. The break is that
+  // same class of binding and resets with them, rather than being the one
+  // field that survives a gesture which resets everything around it.
+  it("rebindWindow on a BACKGROUND window drops an authored x-break with the rest of the bindings", () => {
+    seedTwoDatasets();
+    const withBreak = (id: string, datasetId: string): PlotWindow => {
+      const w = win({ id, datasetId });
+      return {
+        ...w,
+        document: createFigureDocument({
+          id: `fig-${id}`,
+          name: id,
+          datasetId,
+          view: w.view,
+          axisBreaks: { x: [[2, 3]] },
+        }),
+      };
+    };
+    useApp.setState({
+      plotWindows: [win({ id: "w1", datasetId: "d1" }), withBreak("w2", "d1")],
+      focusedWindowId: "w1",
+    });
+    expect(useApp.getState().plotWindows[1].document?.plot.axisBreaks.x).toEqual([[2, 3]]);
+
+    useApp.getState().rebindWindow("w2", "d2");
+    const w2 = useApp.getState().plotWindows.find((w) => w.id === "w2")!;
+    expect(w2.datasetId).toBe("d2");
+    expect(w2.document?.plot.axisBreaks.x).toEqual([]);
+  });
+
+  it("rebindWindow drops the break even when the SAME dataset is dropped back on a background window", () => {
+    seedTwoDatasets();
+    const w = win({ id: "w2", datasetId: "d1" });
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", datasetId: "d1" }),
+        {
+          ...w,
+          view: { ...w.view, facetKey: 0 },
+          document: createFigureDocument({
+            id: "fig-w2",
+            name: "w2",
+            datasetId: "d1",
+            view: { ...w.view, facetKey: 0 },
+            axisBreaks: { x: [[2, 3]] },
+          }),
+        },
+      ],
+      focusedWindowId: "w1",
+    });
+    useApp.getState().rebindWindow("w2", "d1"); // the same dataset, re-dropped
+    const w2 = useApp.getState().plotWindows.find((w) => w.id === "w2")!;
+    // `facetKey` is reset by this branch's wholesale `datasetViewDefaults`;
+    // the break follows it, which is the consistency this pins.
+    expect(w2.document?.bindings.facetKey).toBeNull();
+    expect(w2.document?.plot.axisBreaks.x).toEqual([]);
+  });
+
   it("rebindWindow is a no-op for an unknown window or dataset id", () => {
     seedTwoDatasets();
     useApp.setState({ plotWindows: [win({ id: "w1", datasetId: "d1" })], focusedWindowId: "w1" });

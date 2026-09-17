@@ -24,11 +24,14 @@ import { resetWindowHydrationForTests, stageWorkspaceRestore } from "../../store
 import WindowCanvas from "./WindowCanvas";
 
 const { created, MockUPlot } = vi.hoisted(() => {
-  const created: { opts: unknown; data: unknown }[] = [];
+  // `target` is uPlot's own third constructor argument (the host element every
+  // call site here passes). Recorded so a test can say WHICH window a plot
+  // instance was mounted into, not merely how many exist in total.
+  const created: { opts: unknown; data: unknown; target: unknown }[] = [];
   class MockUPlot {
     scales = { x: { min: 0, max: 1 } };
-    constructor(opts: unknown, data: unknown) {
-      created.push({ opts, data });
+    constructor(opts: unknown, data: unknown, target?: unknown) {
+      created.push({ opts, data, target });
     }
     destroy(): void {}
     setSize(): void {}
@@ -650,9 +653,18 @@ describe("WindowCanvas — a reopened break panels in BACKGROUND windows too (BU
       facetKey: null,
       stackMode: false,
     });
-    render(<WindowCanvas />);
+    const { container } = render(<WindowCanvas />);
     // 2 panels in the focused window + 2 in the background one. Before the
     // fix this settled at 3 (the background window drew a single plain plot).
     await waitFor(() => expect(created.length).toBe(4));
+    // Round 3, NIT 10: the total alone would also pass if a regression moved
+    // a panel from one window to the other, which is exactly the asymmetry
+    // F5 is about. Assert the count PER FRAME instead.
+    const frames = [...container.querySelectorAll(".qzk-plotwin")];
+    expect(frames).toHaveLength(2);
+    const perFrame = frames.map(
+      (frame) => created.filter((c) => frame.contains(c.target as Node)).length,
+    );
+    expect(perFrame).toEqual([2, 2]);
   });
 });

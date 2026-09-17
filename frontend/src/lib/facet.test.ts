@@ -1,4 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+
+// Round 3, finding 2: `breakCompositionFromBreaks` must NOT resolve the
+// dataset's analysis view on the ordinary no-break path. `analysisData` is
+// wrapped (real implementation, call-counted) rather than replaced, so every
+// other test in this file -- including "honors row exclusion (analysisData)"
+// -- still exercises the genuine row pruning.
+vi.mock("./rowstate", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./rowstate")>();
+  return { ...actual, analysisData: vi.fn(actual.analysisData) };
+});
 
 import { breakPanelsOf, facetPanelsOf } from "./composition";
 import {
@@ -15,6 +25,7 @@ import {
   type FacetPanel,
 } from "./facet";
 import type { PlotPayload } from "./plotdata";
+import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
 describe("facetPayloads", () => {
@@ -275,9 +286,14 @@ describe("breakPayloads", () => {
     expect(panels[1].xRange).toEqual([2.8, 5]);
   });
 
-  it("clamps a break endpoint that sits outside the data range to the data extent", () => {
+  it("replaces the OUTER ±Infinity sentinels with the data extent", () => {
     // `render_breaks_impl` starts at the data min and ends at the data max
     // whatever the breaks say, so the outermost bounds can never exceed them.
+    // (Round 3, NIT 6: this case was named "clamps a break endpoint that sits
+    // outside the data range" but both endpoints are INSIDE [10, 13] -- what
+    // it pins is the first panel's `-Infinity` lo and the last panel's
+    // `+Infinity` hi being replaced. The genuinely out-of-range case is the
+    // one below, and it does something quite different.)
     const grid: DataStruct = {
       time: [10, 11, 12, 13],
       values: Array.from({ length: 4 }, (_unused, i) => [i]),
@@ -290,6 +306,59 @@ describe("breakPayloads", () => {
       [10, 11.5],
       [12.5, 13],
     ]);
+  });
+
+  it("drops the empty side of a break that lies WHOLLY outside the data range", () => {
+    // The genuine out-of-range case NIT 6's rename freed up. Nothing is
+    // clamped: the segment above the break has no rows at all, so it is
+    // dropped and a single panel survives -- which `breakCompositionFromData`
+    // then refuses, collapsing the screen to an ordinary plot. The export
+    // renderer draws two panels for the same document (residual below).
+    const grid: DataStruct = {
+      time: [10, 11, 12, 13],
+      values: Array.from({ length: 4 }, (_unused, i) => [i]),
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const above = breakPayloads(grid, null, [0], [[20, 21]]);
+    expect(above.map((p) => p.xRange)).toEqual([[10, 13]]);
+    const below = breakPayloads(grid, null, [0], [[1, 2]]);
+    expect(below.map((p) => p.xRange)).toEqual([[10, 13]]);
+  });
+
+  // Round 3, finding 5 -- the ONE pin on the recorded screen/export residual,
+  // in the same spirit as the matrix's `DIVERGENCE` tests: the break bounds
+  // are the export's `bounds` list ONLY while every break lies inside the data
+  // extent and leaves at least one row in every segment. `breakPayloads` drops
+  // an empty segment (`rows.length === 0` above); `calc/figure_break`'s
+  // `render_breaks_impl` emits `len(breaks) + 1` panels unconditionally
+  // (`bounds.append` per break plus the final one) and
+  // `calc/figure_overrides._validate_overrides` accepts the shape, so the same
+  // document draws 3 panels on export against these 2 on screen. Behaviour
+  // unchanged from before BUG-012's fix -- pinned so it cannot change
+  // silently, NOT asserted as correct. See BUG-012's residual list.
+  it("DIVERGENCE (residual): an EMPTY middle segment is dropped on screen, kept on export", () => {
+    const grid: DataStruct = {
+      time: [0, 1, 2, 3, 4, 5],
+      values: Array.from({ length: 6 }, (_unused, i) => [i * 10]),
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    // No row has 1.4 <= x <= 1.6, so the middle panel would be empty.
+    const panels = breakPayloads(grid, null, [0], [
+      [1.2, 1.4],
+      [1.6, 1.8],
+    ]);
+    expect(panels).toHaveLength(2); // export: 3 (bounds 0-1.2, 1.4-1.6, 1.8-5)
+    expect(panels.map((p) => p.xRange)).toEqual([
+      [0, 1.2],
+      [1.8, 5],
+    ]);
+    // Panel WIDTH RATIOS diverge with the count: 1.2 : 3.2 here against the
+    // export's 1.2 : 0.2 : 3.2 (`width_ratios=[max(hi - lo, 1e-9)]`).
+    expect(panels.map((p) => p.xRange[1] - p.xRange[0])).toEqual([1.2, 3.2]);
   });
 
   it("is a NO-OP for suggestBreaks' own output (the live breakAtGaps gesture)", () => {
@@ -512,6 +581,35 @@ describe("breakCompositionFromBreaks", () => {
     expect(breakCompositionFromBreaks(ds, [[7, 8]], null, [1])).toBeNull();
   });
 
+  // Round 3, finding 2. The NIT-17 refactor moved `analysisData(dataset)` in
+  // front of the `!breaks?.length` guard, so the ORDINARY no-break path --
+  // the focused Stage hook and EVERY background plot window, on every render
+  // of every plain XY figure -- pruned the whole dataset before discovering
+  // there was nothing to build. Measured on this tree, 50 000 rows with one
+  // excluded row, 100 calls: 561.2 ms without the guard, 0.0 ms with it (and
+  // 0.2 ms vs 0.0 ms with no exclusions at all). Asserted as
+  // the load-INVARIANT property (the analysis view is never resolved), not as
+  // a wall-clock bound.
+  describe("short-circuits before the analysis view when there is no break", () => {
+    beforeEach(() => {
+      (analysisData as Mock).mockClear();
+    });
+
+    it("no break: does not touch the dataset's analysis view at all", () => {
+      expect(breakCompositionFromBreaks(ds, null, null, [1])).toBeNull();
+      expect(breakCompositionFromBreaks(ds, undefined, null, [1])).toBeNull();
+      expect(breakCompositionFromBreaks(ds, [], null, [1])).toBeNull();
+      // The same through the shared durable entry point both canvases use.
+      expect(durableComposition(ds, null, null, null, [1])).toBeNull();
+      expect(analysisData).not.toHaveBeenCalled();
+    });
+
+    it("with a break it DOES resolve the analysis view -- the guard is not over-eager", () => {
+      expect(breakPanelsOf(breakCompositionFromBreaks(ds, [[2, 3]], null, [1]))).toHaveLength(2);
+      expect(analysisData).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("honors row exclusion (analysisData), same as a fresh breakAtGaps gesture", () => {
     // Every row above the break is excluded, so only one panel survives and
     // the arrangement is refused -- the screen then draws an ORDINARY plot
@@ -581,12 +679,39 @@ describe("break arrangements have ONE construction site (review NIT 13)", () => 
     eager: true,
   }) as Record<string, string>;
 
+  /** Drop comments, keeping string/template literals verbatim, in ONE pass --
+   *  the corpus-safe form `architecture.test.ts` arrived at (a `//` line that
+   *  merely mentions an opening block-comment marker must not swallow the
+   *  file, and a `//` inside a URL string is not a comment). Inlined rather
+   *  than imported because that one is a local inside its own describe.
+   *
+   *  Round 3, NIT 8: without this, a mere doc COMMENT naming
+   *  `breakComposition(` anywhere outside `lib/` failed the build, telling
+   *  its author to "build break panels through lib/facet.ts" -- measured by
+   *  adding one comment line to `store/plotRecipes.ts`. The invariant is
+   *  about CALLS. */
+  const stripComments = (src: string): string =>
+    src.replace(
+      /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)|\/\/[^\n]*|\/\*[\s\S]*?\*\//g,
+      (_m, str: string | undefined) => str ?? "",
+    );
+
+  it("ignores a mere COMMENT that names breakComposition( (NIT 8)", () => {
+    // Non-vacuity for the stripper itself, both ways round.
+    expect(stripComments('// breakComposition(\nconst u = "https://x";')).not.toMatch(
+      /\bbreakComposition\s*\(/,
+    );
+    expect(stripComments('const u = "https://x";\nbreakComposition(p);')).toMatch(
+      /\bbreakComposition\s*\(/,
+    );
+  });
+
   it("only lib/facet.ts calls breakComposition()", () => {
     // Non-vacuity: the glob must actually reach outside lib/ (store/, components/).
     expect(Object.keys(modules).filter((p) => p.includes("store/")).length).toBeGreaterThan(20);
     const callers = Object.entries(modules)
       .filter(([p]) => !/\.test\.(ts|tsx)$/.test(p) && !/\.testkit\.ts$/.test(p))
-      .filter(([, src]) => /\bbreakComposition\s*\(/.test(src))
+      .filter(([, src]) => /\bbreakComposition\s*\(/.test(stripComments(src)))
       .map(([p]) => p.replace(/^\.\.\//, "").replace(/^\.\//, "lib/"))
       .sort();
     expect(

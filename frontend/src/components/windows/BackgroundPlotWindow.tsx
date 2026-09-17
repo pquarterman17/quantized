@@ -100,7 +100,11 @@ export default function BackgroundPlotWindow({
   // hooks in the same order regardless of which branch below actually runs.
   // Cheap when there's nothing to derive: `durableComposition` short-circuits
   // before scanning any rows unless BOTH a dataset and a facetKey (or a saved
-  // break range) are present.
+  // break range) are present -- the `facetKey == null` and `!breaks?.length`
+  // guards in `lib/facet.ts`. Pinned there by "no break: does not touch the
+  // dataset's analysis view at all", because the break guard was briefly lost
+  // in a refactor and this comment silently became false for every plain XY
+  // figure in every background window (round 3, finding 2).
   const composition = useMemo(
     () => durableComposition(dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
     [dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],

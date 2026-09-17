@@ -1904,7 +1904,7 @@ export const useApp = create<AppState>((set, get) => ({
   // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
   // rebuilds it from `facetKey` whenever `composition` is null.
   setStackMode: (stackMode) => (
-    get().recordHistory("change plot layout"), set((s) => ({ stackMode, composition: null, facetKey: null, plotWindows: clearFocusedXBreaks(s.plotWindows, s.focusedWindowId) })) // review F3: clears the AUTHORED break too
+    get().recordHistory("change plot layout"), set((s) => ({ stackMode, composition: null, facetKey: null, plotWindows: clearFocusedXBreaks(s.plotWindows, s.focusedWindowId) })) // review F3: clears the AUTHORED break too, in BOTH directions -- a break composition pre-empts the per-channel stack (`multiPanelShowing`), so keeping it would make ON inert exactly as OFF was; see `clearFocusedXBreaks`' doc
   ),
   // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
   // advances frames<->window until a page model exists (Stage 2 opens page).

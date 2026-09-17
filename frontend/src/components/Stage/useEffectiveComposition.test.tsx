@@ -20,6 +20,7 @@ import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { shouldAutosave } from "../../useWorkspaceAutosave";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
 
 // TWO value channels, and the store below binds `xKey: 0` / `yKeys: [1, 0]`
@@ -199,6 +200,71 @@ describe("clearing an authored break (review F3/F4)", () => {
     useApp.getState().setActive("d1");
     expect(useApp.getState().plotWindows[0].document?.plot.axisBreaks.x).toEqual(BREAKS);
     expect(breakPanelsOf(effective())).toHaveLength(2);
+  });
+
+  // Round 3, finding 1: F4 covered `setActive` and `rebindWindow` but missed
+  // the IMPORT leg -- `addDataset` (import, paste, demo, merge, append) binds
+  // the focused window to a brand-new dataset through
+  // `rebindFocusedPlotWindow`, which never grew the option. It is the most
+  // common way a new dataset reaches the focused window, so F4's exact
+  // symptom survived the fix via File > Import.
+  it("F4 (import leg): a freshly imported dataset never inherits the old one's break", () => {
+    // d2 is unrelated but shares the x range, so the `< 2 panels` refusal
+    // would not have saved it either. Its x here is its `.time` -- a fresh
+    // import arrives with `datasetViewDefaults`' null `xKey` -- and it spans
+    // the old break, so the stale range really does PANEL the new dataset,
+    // not merely sit in its document. Measured with the one-line fix
+    // reverted: breaks `[[2, 3]]`, panels `[[0, 2], [3, 5]]`,
+    // `multiPanelShowing` true.
+    const imported: DataStruct = { ...DATA, time: [0, 1, 2, 3, 4, 5] };
+    useApp.getState().addDataset({ id: "d2", name: "ds2", data: imported });
+    const [w] = useApp.getState().plotWindows;
+    expect(useApp.getState().activeId).toBe("d2");
+    expect(w.datasetId).toBe("d2"); // the rebind really happened
+    expect(w.document?.plot.axisBreaks.x).toEqual([]);
+    expect(effective()).toBeNull();
+    expect(multiPanelShowing(effective(), useApp.getState().stackMode, 1)).toBe(false);
+  });
+
+  // Round 3, finding 4. The clear is unconditional on the new `stackMode`
+  // value, and that is deliberate: `multiPanelShowing` short-circuits on a
+  // break composition ahead of every `stackMode` clause, so a break left in
+  // place would pre-empt the per-channel stack the user just asked for --
+  // the ON direction would be inert exactly as OFF was before F3.
+  it("F3: the stack toggle ON clears the break too, so stacking is not pre-empted by it", () => {
+    expect(breakPanelsOf(effective())).toHaveLength(2);
+    useApp.getState().setStackMode(true);
+    expect(useApp.getState().plotWindows[0].document?.plot.axisBreaks.x).toEqual([]);
+    expect(effective()).toBeNull();
+    // 2 plotted channels + stackMode -> the plain per-channel split mounts,
+    // which is what the gesture means; with the break still there it would
+    // have been the break panels instead.
+    expect(multiPanelShowing(effective(), true, 2)).toBe(true);
+  });
+
+  // Round 3, finding 3: `Array.prototype.map` always allocates, so the toggle
+  // handed `plotWindows` a fresh identity on EVERY call -- including the
+  // overwhelmingly common one where no window carries a break at all.
+  // `useWorkspaceAutosave`'s `shouldAutosave` compares `plotWindows` by
+  // identity, so the toggle flipped the title bar's dirty marker and
+  // restarted the 800 ms autosave debounce, and re-rendered every
+  // `plotWindows` subscriber, for nothing.
+  it("F3: the toggle leaves plotWindows IDENTICAL when no window holds a break", () => {
+    reopenedWith(); // no break anywhere
+    const before = useApp.getState();
+    useApp.getState().setStackMode(true);
+    const after = useApp.getState();
+    expect(after.stackMode).toBe(true); // the toggle still did its job
+    expect(after.plotWindows).toBe(before.plotWindows);
+    expect(shouldAutosave(after, before)).toBe(false);
+  });
+
+  it("F3: clearing a real break DOES change plotWindows (the guard is not over-eager)", () => {
+    const before = useApp.getState();
+    useApp.getState().setStackMode(false);
+    const after = useApp.getState();
+    expect(after.plotWindows).not.toBe(before.plotWindows);
+    expect(shouldAutosave(after, before)).toBe(true);
   });
 });
 

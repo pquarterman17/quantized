@@ -154,11 +154,24 @@ export interface BreakPanel {
    *
    *  It is the panel's BREAK BOUNDS clamped to the data's own finite x extent
    *  — `[max(segment lo, data min), min(segment hi, data max)]` — which is
-   *  exactly the `bounds` list the export renderer builds
+   *  the `bounds` list the export renderer builds
    *  (`calc/figure_break.render_breaks_impl`: `lo = data min`, then one
    *  `(lo, b0)` per break with `lo = b1` after it, and a final `(lo, data
-   *  max)`; each panel then does `ax.set_xlim(lo, hi)`). Screen and export
-   *  therefore elide the SAME x-ranges and size their panels the same way.
+   *  max)`; each panel then does `ax.set_xlim(lo, hi)`) WHENEVER every break
+   *  lies inside the data extent and leaves at least one row in every
+   *  segment — the shape the Figure Builder and `suggestBreaks` produce. For
+   *  those, screen and export elide the SAME x-ranges and size their panels
+   *  the same way.
+   *
+   *  It is NOT the same list for three shapes the export wire still accepts
+   *  (`calc/figure_overrides._validate_overrides` rejects only `lo >= hi`,
+   *  unsorted and overlapping pairs — never an out-of-range one), because
+   *  this builder drops empty segments and clamps while `render_breaks_impl`
+   *  emits `len(breaks) + 1` panels unconditionally and clamps nothing. Those
+   *  three are a recorded BUG-012 residual (measured numbers on the entry in
+   *  `plans/BUGS_AND_ISSUES.md`), not a regression of this fix: the behaviour
+   *  is unchanged from before it. `lib/facet.test.ts` pins the empty-middle-
+   *  segment one so the residual cannot silently change.
    *
    *  It used to be the segment's own min/max data x instead (BUG-012 review
    *  F2). That agrees with the bounds only when the authored break endpoints
@@ -289,7 +302,17 @@ export function breakCompositionFromBreaks(
   xKey: number | null,
   yKeys: number[] | null,
 ): Composition | null {
-  if (!dataset) return null;
+  // `!breaks?.length` FIRST, before `analysisData` (review round 3, finding
+  // 2): this runs on EVERY render of the focused Stage hook and of every
+  // background plot window, and the overwhelmingly common case is a plain XY
+  // figure with no break at all. `analysisData` is not free -- `droppedRows`
+  // -> `pruneExcluded` copies `time` + `values` whenever the dataset has any
+  // excluded row, and re-runs the Data Filter predicate over every row when
+  // one is active. Measured on this tree, 50 000 rows with one excluded row,
+  // no facet and no break, 100 calls: 561.2 ms without this line (5.6 ms per
+  // call), 0.0 ms with it. `breakCompositionFromData` re-checks the same
+  // condition, so this line is a pure guard and changes no result.
+  if (!breaks?.length || !dataset) return null;
   return breakCompositionFromData(analysisData(dataset) ?? dataset.data, breaks, xKey, yKeys);
 }
 
