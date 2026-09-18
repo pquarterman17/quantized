@@ -236,11 +236,15 @@ let _recipeLibs: Promise<RecipeLibs> | null = null;
  *  previous synchronous workspace -> plotRecipeIO -> plotRecipe capture
  *  edge no longer exists and both expensive libraries can remain lazy. */
 export function recipeLibs(): Promise<RecipeLibs> {
-  if (!_recipeLibs) {
-    _recipeLibs = Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")]).then(
-      ([capture, match]) => ({ captureRecipe: capture.captureRecipe, resolveRecipe: match.resolveRecipe }),
-    );
-  }
+  _recipeLibs ??= Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")])
+    .then(([capture, match]) => ({ captureRecipe: capture.captureRecipe, resolveRecipe: match.resolveRecipe }))
+    .catch((e: unknown) => {
+      // Not cached on failure: drop the slot so the next gesture retries
+      // rather than replaying one transient fetch failure for the rest of
+      // the session (same pattern as `plotRecipeApplyLazy.ts`'s `inflight`).
+      _recipeLibs = null;
+      throw e;
+    });
   return _recipeLibs;
 }
 

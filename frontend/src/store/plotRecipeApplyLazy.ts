@@ -24,9 +24,12 @@
 // always done from these call sites (it is an unguarded `Promise.all` of two
 // dynamic imports), so this seam adds no new failure MODE — and, exactly like
 // that one, the rejection happens before anything has mutated, so the project
-// is provably untouched. A rejected `import()` is not cached by the module
-// registry, so the next gesture refetches; a RESOLVED one is, which is why the
-// promise is cached here only to keep concurrent callers on one fetch.
+// is provably untouched. Neither cached slot survives a rejection: this
+// module's own `inflight` is dropped in its `.catch` below, and
+// `plotRecipeApply.ts`'s `_recipeLibs` is dropped the same way in
+// `recipeLibs()`'s `.catch`, so the next gesture refetches both; a RESOLVED
+// promise IS cached, which is why each slot is cached at all — to keep
+// concurrent callers on one fetch.
 //
 // NOTE: `store/plotRecipeApply.ts` must stay free of static importers that are
 // reachable from the entry chunk, or the bundler folds it straight back in.

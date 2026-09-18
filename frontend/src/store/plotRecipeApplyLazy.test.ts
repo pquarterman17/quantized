@@ -140,7 +140,6 @@ describe("Plot Recipe apply — chunk-deferred core", () => {
 
     vi.doUnmock("./plotRecipeApply");
     vi.resetModules();
-    resetApplyCoreForTests();
     expect(await useApp.getState().applyPlotRecipe(id, "d1")).toBe(true);
     expect(useApp.getState().plotWindows.length).toBe(windowsBefore + 1);
   });

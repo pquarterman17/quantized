@@ -2387,16 +2387,23 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // below holds all three outright.
     //
     // `components/windows/PanelPlotWindow.tsx` renders `win.kind === "panel"`.
-    // A panel window exists only after the user composes one, so its renderer
-    // and the two modules only it reaches (PanelCell, PanelOverlayWindow, in
-    // DRAGGED_OUT below) had no business in the entry chunk. Measured the
-    // largest of the three by a wide margin.
+    // A panel window is composed by the user in-session, OR already present
+    // on a restored `.dwk`/crash-recovery snapshot (`kind: "panel"` is a
+    // persisted window field) — never on the DEFAULT first paint of a fresh
+    // project either way (narrowed 2026-09-18, review round, finding 4: this
+    // comment previously said "only after the user composes one",
+    // unqualified, which is false for a restore). Its renderer and the two
+    // modules only it reaches (PanelCell, PanelOverlayWindow, in DRAGGED_OUT
+    // below) had no business in the entry chunk. Measured the largest of the
+    // three by a wide margin.
     //
     // `components/Stage/PolarStage.tsx` is the third of PlotStage's runtime-
     // conditional alternate render modes and the only one that was still
-    // static; MultiPanelStage and StatStage were already `lazy()`. It is
-    // reached exactly one way, the Plot menu's polar toggle, and takes
-    // PolarStageCore + lib/polar.ts with it.
+    // static; MultiPanelStage and StatStage were already `lazy()`. Entered by
+    // the Plot toolbar's polar toggle in-session, or already active on a
+    // restored project (`polarMode` is a persisted `PlotView` field — same
+    // finding 4 narrowing as above). Takes PolarStageCore + lib/polar.ts
+    // with it.
     //
     // `store/plotRecipeApply.ts` is the apply/matching half of Plot Recipes
     // (`resolveApplyOrStage`, `applyResolvedRecipe`, `resolvedCandidates`,
@@ -2593,10 +2600,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  the exact failure this describe block exists to prevent. */
   /** SLICE 3 (2026-09-18) adds the four modules its two component seams took
    *  with them: `PanelCell`/`PanelOverlayWindow` (PanelPlotWindow was their
-   *  only eagerly-reachable importer, and PanelCell is reached BOTH directly
-   *  and through PanelOverlayWindow) and `PolarStageCore`/`lib/polar.ts`
-   *  (PolarStage's). Measured, not assumed: the eager walk went from 404
-   *  modules to 398 across the whole slice — the three seams, these four, and
+   *  only eagerly-reachable importer) and `PolarStageCore`/`lib/polar.ts`
+   *  (PolarStage's). Measured, not assumed: the eager walk went from 406
+   *  modules to 400 across the whole slice — the three seams, these four, and
    *  the one module ADDED (`store/plotRecipeApplyLazy.ts`, the loader).
    *  Together they are most of the slice's measured bytes, and none of them is
    *  a seam itself, so only reachability can hold this line. */
@@ -2643,9 +2649,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // Vacuity guard: a walk that stalls at the entry would pass everything.
     // Measured 2026-09-15 on caa10f88's tree: 400 of 901 source modules are
     // eager (corrected 2026-09-17 — see the stripper doc above for why 399/900
-    // was one commit stale). Re-measured in-test 2026-09-18 after slice 3:
-    // 398 of 912 — the corpus grew by the one module slice 3 added, and the
-    // eager set went 404 -> 398 (three seams + four dragged out, minus that
+    // was one commit stale). Re-measured in-test 2026-09-18 after slice 3,
+    // against the real parent e83c0cc8 (review round, finding 3 — the
+    // 404/912 pair recorded at landing time was one commit stale, off the
+    // cherry-pick source c1757fb1's chain, not this branch's actual base):
+    // 400 of 914 — the corpus grew by the one module slice 3 added, and the
+    // eager set went 406 -> 400 (three seams + four dragged out, minus that
     // one addition).
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
@@ -2723,11 +2732,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     expect(violations, "staticSpecifiers is blind to real static imports a naive regex still finds").toEqual([]);
   });
 
+  /** Review round, finding 7: `plotRecipeApplyLazy.ts:34` keeps a
+   *  `type ApplyCore = typeof import("./plotRecipeApply")` type alias next to
+   *  its real dynamic import — the exact same `call` text this test looks
+   *  for, in TYPE position. A plain `.toContain(call)` cannot tell the two
+   *  apart, so replacing the real `import("./plotRecipeApply")` with a
+   *  static one (leaving the type alias in place) left this arm green while
+   *  the other two SEAMS arms below correctly went red (measured: sabotage 3
+   *  in the review). Require the match not be immediately preceded by
+   *  `typeof `, which the type alias always is and a real dynamic import
+   *  never is. */
   it("each loader reaches its seam through a dynamic import()", () => {
     for (const { module, loader, call } of SEAMS) {
       const found = sources().find(([p]) => p.endsWith(loader));
       expect(found, `${loader} not found`).toBeDefined();
-      expect(found?.[1] ?? "", `${loader} must dynamically import ${module}`).toContain(call);
+      const src = found?.[1] ?? "";
+      const escapedCall = call.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const realDynamicImport = new RegExp(`(?<!typeof )${escapedCall}`);
+      expect(
+        realDynamicImport.test(src),
+        `${loader} must dynamically import ${module} (not merely name it in a \`typeof\` type position)`,
+      ).toBe(true);
     }
   });
 });
