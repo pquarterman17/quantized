@@ -233,7 +233,7 @@ export default function PlotStage() {
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).
   // P3.3 auto dash/marker cycle — the canvas half of its ONE opt-in pair (the
-  // export half is `figureSpec.buildStageFigureSpec`, same gate). See its doc.
+  // export half is `figureSpecStage.buildStageFigureSpec`, same gate). See its doc.
   const seriesCycle = useStageSeriesCycle(plotted.length);
 
   useLiveSnapshotPublish({

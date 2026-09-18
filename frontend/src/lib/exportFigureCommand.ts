@@ -7,7 +7,7 @@
 // calls the export API against the active dataset — no React/store coupling
 // beyond the `StoreGet` handle every command closure already takes.
 //
-// The spec itself is built by `lib/figureSpec.buildStageFigureSpec` (MAIN_PLAN
+// The spec itself is built by `lib/figureSpecStage.buildStageFigureSpec` (MAIN_PLAN
 // #35; routed through the canonical-document adapter as of F2.5b), shared
 // verbatim with "Copy figure" so a pasted figure and an exported one cannot
 // drift. This file now owns only the DIALOG and the download verb.

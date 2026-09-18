@@ -240,7 +240,7 @@ export function documentPinsSeriesStyles(
  *      Publication Preview's TARGET window, on that window's own view+document —
  *      it used to ask whether that window held FOCUS instead, which is how the
  *      preview came to render solid beside a dashed background canvas;
- *    - `figureSpec.buildStageFigureSpec`, for the export the focused window
+ *    - `figureSpecStage.buildStageFigureSpec`, for the export the focused window
  *      produces.
  *
  *  `on` is the `autoSeriesStyles` preference; it is a parameter rather than a

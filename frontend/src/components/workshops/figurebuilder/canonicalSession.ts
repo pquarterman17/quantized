@@ -51,7 +51,7 @@ export function sessionLiveDrifted(
  *  Only then may the preview image and its Export apply the auto dash/marker
  *  cycle, and then they MUST: the preview is the "what will I get" widget for
  *  that window's canvas, and that canvas's other export
- *  (`figureSpec.buildStageFigureSpec` — Copy figure / Export figure…) cycles the
+ *  (`figureSpecStage.buildStageFigureSpec` — Copy figure / Export figure…) cycles the
  *  same positions. It drifted before this: one focused window with the
  *  preference on gave a dashed Stage canvas, a dashed Stage export, and a SOLID
  *  Figure Builder preview and Export — a third rendering of the same figure,

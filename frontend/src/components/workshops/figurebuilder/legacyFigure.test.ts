@@ -336,11 +336,16 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
       )!;
       expect(resaved.config.seriesStyles).toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
 
-      // RE-PINNING does retire it. `exportStyles` derives a fresh array
-      // through `buildExportStyles` whenever the builder holds no pinned one
-      // (`docSeriesStyles === undefined`) — the state a figure rebuilt from
-      // the live plot is in — and every entry it writes carries a real
-      // boolean, taken from the live styles rather than guessed from a hue.
+      // RE-PINNING does retire it, through the builder's fresh state
+      // (`docSeriesStyles` undefined) rather than any specific UI action.
+      // `exportStyles` derives a fresh array through `buildExportStyles`
+      // whenever the builder holds no pinned one, and every entry it writes
+      // carries a real boolean, taken from the live styles rather than
+      // guessed from a hue. Three routes reach that state in the app (BUG-016
+      // round-5 review F6): a fresh builder mount, save-a-graph-template-
+      // then-apply-it, and `figureDocumentReimport` clearing
+      // `publication.seriesStyles`. This test drives the builder function
+      // directly, which is the first of those.
       const repinned = buildLegacyFigureDoc(
         { ...BASE, docGroupCol: null, yKeys: [0, 1], docSeriesStyles: undefined,
           seriesStyles: { 1: { color: "#ffe066" } } },

@@ -5816,7 +5816,9 @@ retires the residual for that document permanently. **[CORRECTED by round 4,
 review F1: that last sentence was false when written — `legacyFigure` returns a
 doc-seeded `docSeriesStyles` verbatim, so a reopened document re-persisted its
 flagless array unchanged. It is true as of round 4, which assigns the provenance
-at LOAD; see the round-4 section below.]**
+at LOAD; see the round-4 section below. FALSE AGAIN as of round 5, which
+removes the load-time assignment: loading and re-saving no longer retire the
+residual, only re-pinning does; see the round-5 section below.]**
 
 Also closed this round:
 
@@ -5878,7 +5880,7 @@ is `publicationStyles.ts`'s sanitizer branch, which is in the EAGER persistence
 graph; `exportStyles`/`figureSpecSeries`/`legacyFigure` are lazy as before.
 
 
-#### Round 4 — provenance is assigned ONCE, at LOAD (review F1-F9)
+#### Round 4 — provenance is assigned ONCE, at LOAD (review F1-F9) **[RETIRED by round 5]**
 
 Round 3 recorded provenance at the PRODUCER, which was right, but left a third
 state — "no flag at all" — for every array pinned before the key existed, and
@@ -6119,14 +6121,24 @@ RESIDUALS, named:
   and applied, or a dataset re-import (`figureDocumentReimport` clears
   `publication.seriesStyles`). Documents saved by any build from round 3 on are
   unaffected.
-- **A pin taken against a DIFFERENT channel SELECTION is left whole.** The
-  re-cut is index-for-index against the document's display list, so a pin whose
-  length is not that list's has no correspondence to filter and fails closed —
-  and the BUG-014 legend overlay rides that same un-recut array, so a 4-entry
-  pin against 2 `y_keys` ships 4 entries with the renames on entries 0 and 1.
-  Measured and pinned by a test rather than left unremarked (round-4 review F3
-  measured it and the entry did not mention the legend half). Re-cutting it on
-  a guess would be the silent corruption instead.
+- **A pin whose LENGTH differs from the display list's is left whole; a
+  SAME-length pin taken against a different channel SELECTION is re-cut by
+  position, not left whole.** The re-cut is index-for-index against the
+  document's display list, so a pin whose length is not that list's has no
+  correspondence to filter and fails closed — and the BUG-014 legend overlay
+  rides that same un-recut array, so a 4-entry pin against 2 `y_keys` ships 4
+  entries with the renames on entries 0 and 1. Measured and pinned by a test
+  rather than left unremarked (round-4 review F3 measured it and the entry did
+  not mention the legend half). Re-cutting it on a guess would be the silent
+  corruption instead. A pin whose length happens to MATCH the current display
+  list but was taken against a different channel selection is NOT caught by
+  this guard: it is filtered by position against a foreign index space
+  (round-5 review F3's reproduction — pin taken over `[0,1]`, selection
+  changes to `[2,3]`, channel 2 hidden -> the pin's channel-1 entry is applied
+  to channel 3). Pre-existing, not a regression: round 4's forward walk did
+  the same for the same input. Named here because the guard is length-only;
+  the pin's own index space is not persisted with it, so nothing at this
+  layer can detect the mismatch.
 - **A pinned FLAT figure keeps its pinned colours after a theme flip, by
   design.** Unchanged from round 4 — see that entry's bullet.
 
@@ -6152,7 +6164,10 @@ the fail-closed rule stated in one place, including that a dropped malformed
 flag lands in the same bucket); `figurebuilder/legacyFigure.test.ts` (4,
 rewritten — review F1's scenario end to end on the real `.dwk` load path under
 both palettes, the flat export keeping every colour, the malformed flags, and
-"re-saving adds nothing, re-pinning retires it" through the real pin action);
+"re-saving adds nothing, re-pinning retires it" through the builder's fresh
+state (`docSeriesStyles` undefined) — the three real retirement routes
+(round-5 review F6) are a fresh builder mount, save-a-graph-template-then-
+apply-it, and `figureDocumentReimport` clearing `publication.seriesStyles`);
 `lib/figureSpecSeries.test.ts` (4 — filtering by channel rather than index, a
 duplicated channel kept and hidden as a pair, the fail-closed path measured
 WITH its legend overlay, and a caller that passes no alignment);
@@ -6176,15 +6191,16 @@ re-cut without its length guard (S14b) and no re-cut at all (S14c) — all three
 GREEN in round 4 and all three RED now — plus the re-cut filtering by entry
 index, `figureSpec.ts` passing no alignment, and the backend guard not raising.
 
-Bundle, round 5: parent **`9c6abc5a`** — resolved as `git rev-parse HEAD~1` in
-the committed worktree, not from the brief, which is the rule three rounds got
-wrong — built in a scratch worktree after `npm ci` + `rm -rf node_modules/.vite`
-and measured with the same exact-bytes script on both sides: **911,785** ->
-**911,295 B (−490)**, i.e. 890.4 kB -> **889.9 kB** against the 898.8 kB
-budget, **8.9 kB under**. (The self side is the commit carrying this paragraph;
-its own hash cannot be written inside its own message, so it is reported with
-the handback rather than guessed here — `git rev-parse HEAD` on the landed
-commit is the check.) A REDUCTION, and attributable per chunk: `figureDocument`
+Bundle, round 5: parent **`c3e37a78`** (`git rev-parse f94d32d6^`; the P2.8
+round-5 commit that changed only a style value and comments) — built in a
+scratch worktree after `npm ci` + `rm -rf node_modules/.vite` and measured
+with the same exact-bytes script on both sides: **911,785** -> **911,295 B
+(−490)**, i.e. 890.4 kB -> **889.9 kB** against the 898.8 kB budget, **8.9 kB
+under**. `9c6abc5a` (P2.8 round 4, one commit further back) measures
+identically to `c3e37a78` — both 911,785 B — so the reported delta and budget
+line are correct either way; only the stated parent SHA was wrong, round 5's
+own review (F1) found it named the wrong commit again. A REDUCTION, and
+attributable per chunk: `figureDocument`
 **−554** — exactly the +554 round 4 added to that chunk — because deleting
 `isPaletteSlot` takes `seriesColor` and the 37-line `lib/color.ts` leaf back out
 of the eager persistence graph; `index` **+65** and `useApp` **−1** for the

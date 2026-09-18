@@ -125,7 +125,7 @@ export interface SeriesCycleDecision {
  * Resolve a request's P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`).
  *
  * OPT-IN, in two senses. `autoSeriesStyles` is passed by the LIVE stage export
- * (`figureSpec.buildStageFigureSpec`) and by nothing else — a saved document, a
+ * (`figureSpecStage.buildStageFigureSpec`) and by nothing else — a saved document, a
  * Figure Page panel, a Figure Builder preview and a graph template all render
  * uncycled, which is what keeps a persisted `publication.seriesStyles` array the
  * user's RAW styles and makes a document authored with the preference on reopen
@@ -264,14 +264,21 @@ export interface PinnedAlignment {
  *  code, not defence in depth (`resolveSeriesCycle`'s doc says the same ten
  *  lines up).
  *
- *  ONE guard remains and it is real: a pin whose length is not the document
- *  display list's was taken against a DIFFERENT channel selection (a graph
- *  template, or a stale pin), so there is no index-for-index correspondence to
- *  filter and the caller's own array is returned untouched. That fail-closed
+ *  ONE guard remains and it is LENGTH-only: a pin whose length differs from
+ *  the document display list's has no index-for-index correspondence to
+ *  filter, so the caller's own array is returned untouched. That fail-closed
  *  array is what `resolveSeriesPresentation` then lays legends over, so a pin
  *  of 4 against 2 `y_keys` still ships 4 entries — the pre-BUG-016 shape, and
  *  the residual recorded under BUG-016. The `align === null` arm is the same
- *  rule for a caller that passes no alignment at all. */
+ *  rule for a caller that passes no alignment at all.
+ *
+ *  A SAME-length pin taken against a DIFFERENT channel selection passes this
+ *  guard and is re-cut by position against a foreign index space (BUG-016
+ *  round 5 review F3): pin over `[0,1]`, selection changes to `[2,3]`, channel
+ *  2 hidden -> the pin's channel-1 entry lands on channel 3. Pre-existing —
+ *  round 4's walk did the same — and unchanged in severity here; the pin's
+ *  own index space is not persisted with it, so nothing at this layer can
+ *  detect the mismatch. Named residual, not fixed by this guard. */
 function alignPinnedToPlotted(
   publication: (ExportSeriesStyle | null)[],
   align: PinnedAlignment | null,

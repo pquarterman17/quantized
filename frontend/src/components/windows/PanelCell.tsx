@@ -15,7 +15,7 @@
 // composite `kind:"panel"` window has no publication export at all — it is not a
 // Figure Page panel source (`figurepage/panelResolve.panelFigure`'s "window"
 // branch requires `win.kind === "plot"`), and the Stage export commands all
-// render the FOCUSED window (`figureSpec.buildStageFigureSpec`), which a panel
+// render the FOCUSED window (`figureSpecStage.buildStageFigureSpec`), which a panel
 // window can never be: `store/windows.ts`'s `focusWindow` leaves
 // `focusedWindowId` alone for any `kind !== "plot"` target and merely raises its
 // z. So there is nothing for a cycled dash to match, and the rule this feature

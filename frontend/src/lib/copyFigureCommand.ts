@@ -5,7 +5,7 @@
 // screen resolution, so what landed in PowerPoint disagreed with what the
 // vector export produced — different fonts, line widths, tick formats, legend
 // placement, multi-panel layout. This command builds the SAME FigureSpec the
-// "Export figure…" command builds (`lib/figureSpec.buildStageFigureSpec`) and
+// "Export figure…" command builds (`lib/figureSpecStage.buildStageFigureSpec`) and
 // posts it to the SAME renderer, so screen-vs-paste parity is structural
 // rather than maintained by hand. The screen grab survives as an explicitly
 // named "Copy image (screen)" for quick notes.
