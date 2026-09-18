@@ -15,8 +15,15 @@
 //
 // WHAT IT DOES NOT OWN, deliberately:
 //   - the FIELDS themselves. They stay declared (and initialized) on
-//     `AppState` in store/useApp.ts, because `loadWorkspace` bulk-hydrates all
-//     four from a `.dwk` and is not part of this cluster. Same shape as
+//     `AppState` in store/useApp.ts. "Owns" here means this module holds
+//     every ACTION that edits them one at a time; bulk paths write them
+//     wholesale and stay outside the cluster on purpose (2026-09-17 review
+//     finding F4: an earlier version of this note claimed the fields were
+//     "touched by nothing else outside loadWorkspace's bulk hydrate", which
+//     is false) — `loadWorkspace`'s `.dwk` hydrate, store/trash.ts's delete
+//     delegates, store/trashRestore.ts's restore-from-trash,
+//     store/workbookTransfer.ts's workbook import, and
+//     store/historySnapshot.ts's undo/redo restore. Same shape as
 //     store/plotViewSettings.ts and store/corrections.ts, which write shared
 //     fields without owning them.
 //   - the CANONICAL editable figures (`editableFigures`, `FigureDocument`).

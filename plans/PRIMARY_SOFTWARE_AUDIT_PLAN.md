@@ -5184,7 +5184,9 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   (see the box below): `store/plotViewSettings.characterization.test.ts`, 119
   specs, written and run GREEN against the pre-extraction `store/useApp.ts`
   and passing byte-unchanged after the move. **Second domain done the same
-  day**: `store/reportsFigureDocs.characterization.test.ts`, 55 specs, same
+  day**: `store/reportsFigureDocs.characterization.test.ts`, 55 specs (57
+  after the 2026-09-17 review round added F3's `openFigureDocInWindow`
+  "writes ONLY" spec and F7's `renameReport` exact-string pin), same
   discipline (green before, byte-identical `md5` after), and it starts with
   the two guards the first net needed a review round to gain — every writer
   diffs the WHOLE `getState()` snapshot (so an EXTRA field written is caught,
@@ -5238,20 +5240,75 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   (170 lines) writes 40 `AppState` fields and is where every newly persisted
   field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
   (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
-  this cluster writes 15, of which the 4 it owns are touched by nothing else
-  outside `loadWorkspace`'s bulk hydrate. Verified beyond the suite: the
-  composed store is unchanged at **578 keys (372 actions)** with
+  this cluster writes 15, of which the 4 it owns means this module holds every
+  ACTION that edits them one at a time — bulk restores write them wholesale
+  and stay outside the cluster on purpose: `loadWorkspace`'s `.dwk` hydrate,
+  `store/trash.ts`'s delete delegates, `store/trashRestore.ts`'s
+  restore-from-trash, `store/workbookTransfer.ts`'s workbook import, and
+  `store/historySnapshot.ts`'s undo/redo restore. Verified beyond the suite:
+  the composed store is unchanged at **587 keys (380 functions)** with
   byte-identical initial values, the `recordHistory`/`recordMacro`/`status:`
   literal multisets are unchanged (15/10/6), and neither new module is in any
-  of the repo's 26 pre-existing runtime import cycles (type-only imports
-  erased; `reportsFigureDocs → useApp` has no runtime edge). Eager bundle,
-  both trees built after their own `npm ci` and measured byte-exactly:
-  **913,376 B at the parent `6b38cad0`** (the characterization commit, i.e.
-  `HEAD~1` of the extraction) **→ 913,440 B at `676d405a`, +64 B**; the budget
-  was not touched and keeps ~6.8 kB headroom.
+  of the repo's 26 modules across 7 pre-existing runtime import cycles
+  (type-only imports erased; `reportsFigureDocs → useApp` has no runtime
+  edge). Eager bundle, the real parent-to-landed pair: **916,718 B at the
+  parent `23914f95`** (the characterization commit, i.e. `HEAD~1` of the
+  extraction) **→ 916,782 B at `e93b193b`, +64 B**; the budget
+  (`EAGER_JS_BUDGET = 920,400`) was not touched and keeps ≈3.6 kB headroom.
   The box stays `[~]`: `store/useApp.ts` is still far
   over the 500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
   `lib/uplotOverlays.ts` are untouched by this pass.
+
+  **2026-09-17 review round — records corrected (findings closed, tests/docs
+  only; verdict CLEAN).** F1: the bundle pair above originally cited two SHAs
+  from an abandoned pre-cherry-pick worktree lineage that are unreachable from
+  this branch (the real work was cherry-picked onto a tip carrying P2.8 +
+  BUG-016 r2 first) — corrected to the real parent/landed pair above, with
+  both SHAs removed from this note. The **+64 B delta stands** (both
+  lineages differ only by the extraction), only the absolutes and headroom
+  (~6.8 kB → ≈3.6 kB) were stale. F2: "578 keys (372 actions)" was
+  the same abandoned-lineage measurement — the true parent `23914f95` (=
+  P2.8's tip) already carries the `mapView` slice (9 extra keys, 8 extra
+  functions), so the correct invariant pair is **587 keys (380 functions)**
+  before and after — the invariance claim itself was always true, only the
+  absolutes were stale. F4: "the four it owns are touched by nothing else
+  outside `loadWorkspace`'s bulk hydrate" was false — `store/trash.ts`,
+  `store/trashRestore.ts`, `store/workbookTransfer.ts` and
+  `store/historySnapshot.ts`'s undo/redo restore all touch them too; reworded
+  above (and in `store/reportsFigureDocs.ts`'s header and
+  `architecture.test.ts`'s pin justification) to what is actually true: this
+  cluster owns every INCREMENTAL action, not exclusive write access. F8: "26
+  pre-existing runtime import cycles" undercounted by conflating SCC count
+  with module count — corrected to "26 modules across 7 pre-existing
+  cycles" everywhere in this note. Also closed that round: F3, a missing
+  "writes ONLY" spec for `openFigureDocInWindow` (the one writer of the
+  twelve without one — sabotage-proven: a stray `showGrid: false` folded
+  into its `set()` passed all 55 existing specs and the whole
+  `src/store` + `architecture.test.ts` scope silently); F5, `store/gadget.ts`,
+  `store/split.ts`, `store/dataIntake.ts`, `store/derivedWorksheets.ts`,
+  `store/importDatasets.ts`, `store/workspaceIO.ts` and
+  `store/workbookTransfer.ts` repointed their `nextDatasetId`/`nextFolderId`
+  import from `./useApp` to the leaf `./idSeq` (import line only, same
+  module instance, no behavior change) — measured with Tarjan over runtime
+  imports (type-only erased): the store's main cyclic SCC shrank **15 → 9**
+  modules and the repo's cyclic-module total **26 → 20**; `gadget`, `split`,
+  `dataIntake`, `derivedWorksheets` and `workbookTransfer` left every cycle,
+  while `importDatasets`/`workspaceIO` stay in a (smaller) one via
+  `lib/plotSelectedTogether.ts`, which still needs the `useApp` VALUE import
+  and so keeps that edge alive. `useApp.ts`'s `nextDatasetId`/`nextFolderId`
+  re-export was KEPT (one real importer remains:
+  `lib/plotSelectedTogether.ts`, which reads the live `useApp` store too, not
+  just the minters). F6, three stale comments pointing the id sequence at
+  `useApp.ts` (`store/workbookIds.ts:~3,~8`, `store/figureLifecycle.ts:~19`)
+  now say `store/idSeq.ts`. F7, one spec added pinning `renameReport`'s
+  stored string EXACTLY (no `trim()`), sabotage-proven. Eager bundle for this
+  closing pass, both trees built after their own `npm ci` and a
+  `node_modules/.vite` wipe: **916,782 B at the parent `e93b193b`** →
+  **916,778 B on this commit, −4 B** (the F5 import repoint moved one chunk
+  boundary slightly; the net effect was a decrease, not a cost) — comfortably
+  inside the ≈3.6 kB headroom and `EAGER_JS_BUDGET` untouched. All findings
+  were test/doc/comment-only, plus the seven import-line repoints in F5; no
+  other runtime behavior changed.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy

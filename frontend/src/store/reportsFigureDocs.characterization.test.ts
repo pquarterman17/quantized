@@ -282,6 +282,17 @@ describe("report sheets — renameReport / setOpenReport", () => {
     expect(changedKeys(before)).toEqual(["reports"]);
   });
 
+  // F7 (2026-09-17 review): the specs above only ever check the field that
+  // moved, never the exact stored string — a future move that normalises the
+  // name (e.g. `name.trim()`) would silently drop a user's leading/trailing
+  // spaces and every spec here would still pass. Pin the string verbatim.
+  it("stores the name EXACTLY as given, with no trim/normalisation", () => {
+    useApp.getState().addReport("old", sheet(), "d1");
+    const { id } = useApp.getState().reports[0];
+    useApp.getState().renameReport(id, "  padded  ");
+    expect(useApp.getState().reports[0].name).toBe("  padded  ");
+  });
+
   it("setOpenReport opens and closes the viewer without touching the list", () => {
     useApp.getState().addReport("a", sheet());
     const { id } = useApp.getState().reports[0];
@@ -619,6 +630,63 @@ describe("figure documents — openFigureDocInWindow", () => {
     const before = poisonedSnapshot();
     useApp.getState().openFigureDocInWindow("gone");
     expect(changedKeys(before)).toEqual([]);
+  });
+
+  // F3 (2026-09-17 review of the second P4.1 extraction): the other 11
+  // writers in this file each have a "writes ONLY …" spec diffing the WHOLE
+  // poisoned snapshot; this one — the largest, and the only one whose `set`
+  // writes 10+ fields — did not, so an extra field carried along by a future
+  // move (the review's sabotage: adding `showGrid: false` to the `set`) would
+  // pass every other spec here silently. `history`/`future` are included
+  // deliberately: `createWindow` pushes its own undo entry as part of this
+  // action's effect (see "pushes exactly the window slice's own undo entry"
+  // above), so both change identity even though `future` stays logically `[]`.
+  it("writes ONLY the window/config fields it (and its createWindow/focusWindow delegates) declare", () => {
+    useApp.getState().addFigureDoc(liveDoc());
+    // Un-poison xScale/yScale to something OTHER than the doc's own "log":
+    // poisonedSnapshot's default poison ("log") is the exact value this doc
+    // writes, which would make that write invisible in the diff (the same
+    // trap the helper's own docstring names for figureBuilderOpen). Pin
+    // `showGrid` to `true` explicitly too — poisonedSnapshot does not poison
+    // it, and an earlier spec in this describe block (via a shared, un-reset
+    // module-level store) can leave it `false`; a stray `showGrid: false`
+    // write must show up as a diff regardless of test execution order.
+    const before = poisonedSnapshot({ xScale: "linear", yScale: "linear", showGrid: true });
+    useApp.getState().openFigureDocInWindow("f1");
+    expect(changedKeys(before).sort()).toEqual(
+      [
+        "plotWindows",
+        "focusedWindowId",
+        "history",
+        "future",
+        "stageTab",
+        "xKey",
+        "yKeys",
+        "groupKey",
+        "xScale",
+        "yScale",
+        "plotTitle",
+        "xAxisLabel",
+        "yAxisLabel",
+        // _focusHandoff's dataset-switch-shaped "focusTransientReset" (windows.ts):
+        // focusing a window whose dataset differs from the previously focused
+        // window's clears the same transient tool/gadget/overlay state a real
+        // dataset switch does.
+        "selectedIds",
+        "annotations",
+        "refLines",
+        "shapes",
+        "regionShades",
+        "hiddenChannels",
+        "seriesStyles",
+        "seriesLabels",
+        "errKeys",
+        "axisLabelStyles",
+        "axisLabelOffsets",
+        "xFmt",
+        "yFmt",
+      ].sort(),
+    );
   });
 
   it("does NOT restore the doc's series styles (the export shape has no inverse)", () => {

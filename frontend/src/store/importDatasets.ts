@@ -48,7 +48,8 @@ import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from 
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { toast } from "./toasts";
-import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
+import { nextDatasetId, nextFolderId } from "./idSeq";
+import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 // Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single

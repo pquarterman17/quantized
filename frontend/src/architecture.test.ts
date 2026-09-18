@@ -300,15 +300,22 @@ const STORE_PINS: Record<string, number> = {
   // where every new persisted field gets wired, and applyOriginFigure +
   // facetByColumn + breakAtGaps (342 lines) write 24 PlotView fields that
   // plotViewSettings.ts also writes; this cluster writes 15, of which the four
-  // it OWNS (reports/openReportId/figureDocs/figureDocSeed) are touched by
-  // nothing else outside `loadWorkspace`'s bulk hydrate. The FIELDS stay
-  // declared and initialized on AppState here for exactly that reason — same
-  // shape as plotViewSettings.ts. The shared `<prefix>-<t36>-<n>` id counter
+  // it OWNS (reports/openReportId/figureDocs/figureDocSeed) means this module
+  // holds every ACTION that edits them one at a time; bulk restores write
+  // them wholesale and stay outside the cluster on purpose (2026-09-17 review
+  // finding F4: corrects the earlier, false "touched by nothing else outside
+  // loadWorkspace" wording) — `loadWorkspace`'s `.dwk` hydrate,
+  // store/trash.ts's delete delegates, store/trashRestore.ts's restore-from-
+  // trash, store/workbookTransfer.ts's workbook import, and
+  // store/historySnapshot.ts's undo/redo restore. The FIELDS stay declared
+  // and initialized on AppState here for exactly that reason — same shape as
+  // plotViewSettings.ts. The shared `<prefix>-<t36>-<n>` id counter
   // moved with them, to the leaf module store/idSeq.ts (a module-level `let`
   // cannot be incremented across a module boundary, and splitting it per
   // domain would have renumbered ids); useApp.ts re-exports nextDatasetId/
   // nextFolderId from there so no importer changed.
-  // store/reportsFigureDocs.characterization.test.ts (55 specs, each writer
+  // store/reportsFigureDocs.characterization.test.ts (57 specs as of the
+  // 2026-09-17 review round's F3/F7 additions; 55 at the original move, each writer
   // diffing the WHOLE poisoned getState() snapshot) was written and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
   "/store/useApp.ts": 2012,

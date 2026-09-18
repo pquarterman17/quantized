@@ -34,7 +34,8 @@ import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectL
 import { useRecentProjects } from "./recentProjects";
 import { notifyMigrationWarnings, toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;

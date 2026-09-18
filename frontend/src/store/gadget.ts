@@ -43,7 +43,8 @@ import {
 import { expandToFull } from "../lib/rowstate";
 import type { CalcResult, DataStruct, FitOverlay } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 
 /** The ROI-gadget / quick-fit state + actions composed into `useApp`. */
 export interface GadgetSlice {
