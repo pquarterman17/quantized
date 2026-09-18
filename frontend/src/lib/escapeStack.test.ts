@@ -314,3 +314,134 @@ describe("escapeStack — the deferred defaultPrevented re-read is the only gate
     }
   });
 });
+
+// ── ROUND 5 — the claim is resolved at KEYDOWN, only the action waits ─────
+//
+// The defect these pin, measured in Chromium on `region-tool-escape` (1 run in
+// 2 at deviceScaleFactor 1.25/2.0): Escape landed with a live Integrate drag,
+// Chromium ran the queued `mouseup` 3.4 ms later — ahead of the 0 ms timer —
+// and the walk only 25 ms after that. The drag had already committed and
+// cleared its canceller, so the `gesture` surface declined and the key fell
+// through to the `app` tier, which disarmed the tool: one keystroke, a
+// committed result AND a disarmed tool.
+describe("escapeStack — a surface cannot lose its claim in the deferral gap", () => {
+  it("STOPS when the surface that owned the key at keydown is gone by the walk", async () => {
+    // The generic shape of the race: whatever the innermost surface was when
+    // the key was pressed, a LOWER layer must not act on that keystroke just
+    // because the surface above it went away while the walk was queued.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    const window1 = renderHook(() => useEscapeSurface("window", () => {
+      log.push("window");
+      return true;
+    }));
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    window1.unmount(); // the drag ends / the panel unmounts, before the walk
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(log).toEqual([]); // NOT ["app"]
+  });
+
+  it("still skips — and walks past — a surface killed DURING the walk (round 4)", async () => {
+    // The sibling case, one moment later in time: round 4's finding-4 rule is
+    // about a handler that closes a surface beneath it, and that one keeps
+    // walking. Pinned next to the case above so the two cannot be merged.
+    const log: string[] = [];
+    const unregisterMiddle = pushEscapeSurface("workspace", () => {
+      log.push("workspace");
+      return true;
+    });
+    cleanups.push(unregisterMiddle);
+    register("app", true, log, "app");
+    cleanups.push(
+      pushEscapeSurface("window", () => {
+        log.push("window");
+        unregisterMiddle();
+        return false;
+      }),
+    );
+
+    await escape();
+
+    expect(log).toEqual(["window", "app"]);
+  });
+
+  it("gives the gesture layer the key SYNCHRONOUSLY, before the walk is armed", async () => {
+    // `cancelActiveGesture()` must tear the drag's listeners down before the
+    // browser can deliver the `mouseup` that would commit it — which only
+    // works if this layer runs inside the keydown listener.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    register("gesture", true, log, "gesture");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(log).toEqual(["gesture"]); // already done, with no macrotask awaited
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(log).toEqual(["gesture"]); // and the claim stopped the walk
+  });
+
+  it("a gesture that ends between keydown and the walk cannot disarm the tool", async () => {
+    // The measured failure, end to end. `live` is the drag's own state: the
+    // handler claims while it is set, and the release clears it.
+    let live = true;
+    const log: string[] = [];
+    register("app", true, log, "app");
+    cleanups.push(
+      pushEscapeSurface("gesture", () => {
+        log.push("gesture");
+        if (!live) return false; // nothing to cancel any more
+        live = false;
+        return true;
+      }),
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    live = false; // the queued mouseup lands before the timer: drag committed
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(log).toEqual(["gesture"]); // NOT ["gesture", "app"]
+  });
+
+  it("an open menu still outranks a live gesture, and the walk still decides", async () => {
+    // The synchronous path must not smuggle the gesture past a menu: the scan
+    // stops at the first surface that is not gesture-layer, so with a menu
+    // open the whole keystroke goes to the deferred walk exactly as before.
+    const log: string[] = [];
+    register("gesture", true, log, "gesture");
+    register("menu", true, log, "menu");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(log).toEqual([]); // nothing ran synchronously
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(log).toEqual(["menu"]);
+  });
+
+  it("a claim that landed BEFORE the dispatcher still beats the gesture layer", async () => {
+    // `SymbolPalette`'s shape (document-bubble / window-capture): the flag is
+    // already set when the keydown listener runs, so the synchronous path is
+    // skipped and nothing is cancelled.
+    const handler = vi.fn(() => true);
+    cleanups.push(pushEscapeSurface("gesture", handler));
+    const claimer = (e: KeyboardEvent) => {
+      if (e.key === "Escape") e.preventDefault();
+    };
+    window.addEventListener("keydown", claimer, true);
+    try {
+      await escape();
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener("keydown", claimer, true);
+    }
+  });
+});

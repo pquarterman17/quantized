@@ -4184,6 +4184,79 @@ covers a much smaller subset and guards focus on Analyze.
     it is one of the two documented exceptions above, and closing it needs the
     hook to reach its host frame's ref.
 
+  - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
+    macrotask later.** Round 4 landed locally and was NOT pushed, because
+    `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
+    without committing a result; tool stays armed") went intermittent on it —
+    1–2 of the spec's 6 projects failing in each of three consecutive runs,
+    always at `aria-pressed` reading `"false"`: the tool was DISARMED as well
+    as the gesture cancelled.
+
+    **The measured mechanism** (instrumented build, real Chromium,
+    deviceScaleFactor 2.0 — timestamps from one run):
+
+    | t (ms) | what happened |
+    |---|---|
+    | 1525.5 | mousedown on the plot arms the Integrate drag; `setActiveGestureCancel(fn)` |
+    | 1628.9 | **Escape keydown** — the dispatcher sees the stack `gesture, app` and arms the walk with `setTimeout(…, 0)` |
+    | 1632.3 | **the queued `mouseup` is delivered FIRST** — Chromium runs a pending input task ahead of a 0 ms timer |
+    | 1632.4 | `uplotRegionTools`' own release handler clears the canceller and COMMITS the region (`dpx=430`) |
+    | 1657.3 | the walk finally runs, 25 ms late: `gesture` has nothing to cancel and declines → `app` reverts the tool |
+
+    So it is not the stack that went stale — the `gesture` entry never
+    unregisters — it is the CLAIM. Round 4 chose the acting surface inside the
+    deferred walk, so a surface could lose its claim in the gap and the key
+    fell through to a lower layer: one keystroke, a committed result AND a
+    disarmed tool, the same class rounds 2–4 kept producing.
+
+    **The fix** (`lib/escapeStack.ts`, ~+80 lines of code and rationale; no
+    new surfaces, no layer added, moved or reordered).
+    - `onKeyDown` snapshots the ordered stack, and `walk` runs THAT snapshot
+      instead of re-reading `stack`. A surface that goes away between the
+      keydown and the walk was the innermost one when the key was pressed, so
+      the walk now STOPS there rather than handing the keystroke to a lower
+      layer. Round 4's mid-walk staleness skip is kept and is now explicitly a
+      different moment in time — an entry killed DURING the walk (by a handler
+      that already ran) is still skipped, and the walk continues.
+    - The `gesture` layer is resolved SYNCHRONOUSLY, inside the keydown
+      listener (`RESOLVES_AT_KEYDOWN`). This layer cannot be deferred at all:
+      cancelling a drag means removing the listeners that would commit it, so
+      it has to happen before the browser can deliver the release. Acting there
+      costs nothing, because a claim that arrived BEFORE the dispatcher
+      (window-capture / document-bubble — how `SymbolPalette` claims) is
+      already visible in `defaultPrevented` and still wins, and nothing below
+      `gesture` may outrank it anyway. The synchronous scan stops at the first
+      surface of another layer, so an open `menu` still owns Escape and still
+      goes through the walk exactly as before.
+
+    **Evidence.** A forced-race Playwright probe dispatching the Escape
+    keydown and the drag's `mouseup` in the SAME task (the worst ordering the
+    scheduler can produce, every time) against two builds of the identical
+    tree: parent `6fd193f9` → `aria-pressed=false, chips=1`; with the fix →
+    `aria-pressed=true, chips=0`. Then `region-tool-escape` **passed 10
+    consecutive runs** (6 tests each, 11.3–11.9 s), against 3 of 3 runs
+    failing before it.
+
+    | Sabotage (round 5) | Result | Failing test(s) |
+    |---|---|---|
+    | R5-1 the walk falls through a surface that died in the gap | **RED** 1 | "STOPS when the surface that owned the key at keydown is gone by the walk" |
+    | R5-2 the `gesture` layer is resolved in the deferred walk again | **RED** 2 | "gives the gesture layer the key SYNCHRONOUSLY, before the walk is armed", "a gesture that ends between keydown and the walk cannot disarm the tool" |
+    | R5-3 the synchronous path ignores `defaultPrevented` | **RED** 2 | "a claim that landed BEFORE the dispatcher still beats the gesture layer", "leaves a live gesture alone when a closer handler already claimed the Escape" |
+    | R5-4 the synchronous scan walks past surfaces of other layers | **RED** 6 | incl. "an open menu still outranks a live gesture, and the walk still decides", "a bubble consumer that claims the key with preventDefault keeps it" |
+    | R5-5 the walk re-reads the live stack instead of the snapshot | **RED** 1 | "STOPS when the surface that owned the key at keydown is gone by the walk" |
+
+    Each applied alone against `escapeStack.test.ts` + `useGlobalShortcuts.test.ts`
+    (**40 tests**, green at baseline) and restored after.
+
+    Eager bundle: parent `6fd193f9` **889,141 B** → tip **889,423 B**,
+    **+282 B** (budget 920,400 B, **30,977 B** of headroom). Both built after
+    `rm -rf node_modules/.vite` on the same `npm ci` tree.
+
+    **Lesson.** A deferred dispatch must resolve its TARGET synchronously and
+    defer only the action — and any surface whose claim is destroyed by
+    waiting (a live drag) has to act synchronously too. Deciding later who
+    should have acted is how one keystroke becomes two actions.
+
   **Named residuals (why this is `[~]`).**
   - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
     Shortcuts, TextFormatHelp, Preferences, Help) still take no focus, trap no

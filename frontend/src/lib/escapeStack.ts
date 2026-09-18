@@ -65,6 +65,30 @@
 // per MOUNT and reads the handler through a ref, so a new callback identity —
 // or a re-render — cannot reshuffle the stack. (This is the latent defect
 // NIT 6 names in `useDialogFocus`'s trap stack, fixed there the same way.)
+//
+// ROUND 5. WHEN the ladder is resolved, not just in what order. Round 4 chose
+// the acting surface inside the deferred walk, one macrotask after the key was
+// pressed, so a surface could lose its claim in the gap and the key fell
+// THROUGH it to a lower layer — one keystroke, two actions, the class rounds
+// 2–4 kept re-creating. Measured in Chromium on `region-tool-escape`
+// (deviceScaleFactor 1.25 and 2.0, ~1 run in 2): Escape at t=1628.9 ms with a
+// live Integrate drag, the queued `mouseup` dispatched at t=1632.3 ms —
+// Chromium runs a pending input task ahead of a 0 ms timer — and the walk only
+// at t=1657.3 ms, 25 ms late. By then `uplotRegionTools`' own `mouseup` had
+// torn the drag down and COMMITTED a region, so the `gesture` surface declined
+// and the walk ran on to the `app` tier, which disarmed the tool. The user
+// pressed Escape and got a committed result plus a disarmed tool.
+//
+// So the CLAIM is resolved when the key is pressed; only the ACTION waits:
+//  - `onKeyDown` snapshots the ordered stack, and the walk runs that snapshot
+//    rather than re-reading `stack`. A surface that goes away between the
+//    keydown and the walk was the innermost one at the moment of the
+//    keystroke, so the walk STOPS there instead of handing its key down the
+//    ladder (`liveAtWalk` below). Dying DURING the walk still only skips that
+//    entry — round 4's finding-4 rule, which exists for a handler that closes
+//    a surface beneath it, and is a different moment in time.
+//  - the `gesture` layer cannot be deferred at all, because waiting is what
+//    destroys it: see `RESOLVES_AT_KEYDOWN`.
 
 import { useEffect, useRef } from "react";
 
@@ -85,7 +109,9 @@ import { useApp } from "../store/useApp";
  *  `window` — a floating `ToolWindow`, in front of the workspace behind it.
  *  `gesture` — a drag that is happening RIGHT NOW. Genuinely the innermost
  *  thing on screen: the user's hand is on it, and cancelling it must beat
- *  every surface, including the window focus happens to be in.
+ *  every surface, including the window focus happens to be in. It is also the
+ *  one layer whose claim cannot survive the deferral, so it is resolved
+ *  synchronously — see `RESOLVES_AT_KEYDOWN`.
  *  `menu` — an open menu owns Escape (GUI_INTERACTION #9). */
 export type EscapeLayer = "app" | "selection" | "workspace" | "window" | "gesture" | "menu";
 
@@ -103,6 +129,26 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
   menu: 5,
 };
 
+/** The one layer whose handler runs SYNCHRONOUSLY, in the keydown listener,
+ *  instead of in the deferred walk (round 5).
+ *
+ *  A live drag is not merely stale by walk time — it is GONE, and it took its
+ *  result with it. Measured: the queued `mouseup` beat the 0 ms timer by 25 ms,
+ *  the plugin's own release handler committed a region and cleared the
+ *  canceller, and the walk then found nothing to cancel. Cancelling a drag
+ *  means removing the listeners that would commit it, so it has to happen
+ *  before the browser can deliver that release: there is no "resolve now, act
+ *  later" for this layer.
+ *
+ *  Acting here means this layer does not see a `preventDefault()` that lands
+ *  after the dispatcher — which costs nothing, because it is the top of the
+ *  ladder bar `menu`: nothing below it may outrank it anyway, and a claim that
+ *  arrived BEFORE the dispatcher (window-capture, document-bubble — how
+ *  `SymbolPalette` claims) is already visible in `defaultPrevented` and still
+ *  wins. A `menu` open above a drag suspends the synchronous path entirely
+ *  (see `onKeyDown`), so "an open menu owns Escape" is unchanged. */
+const RESOLVES_AT_KEYDOWN: EscapeLayer = "gesture";
+
 type Entry = { layer: EscapeLayer; seq: number; handler: EscapeHandler };
 
 const stack: Entry[] = [];
@@ -111,28 +157,53 @@ let nextSeq = 0;
  *  single timer ref that each keydown OVERWROTE without clearing, so two
  *  Escapes armed two closes and a held Escape armed twelve. */
 let pending: number | null = null;
+/** The ordered stack AS IT STOOD when the pending keystroke was pressed
+ *  (round 5). The walk runs this, not a fresh read of `stack`, so nothing that
+ *  happens in the gap can change which surfaces are in the running. */
+let pendingOrder: Entry[] = [];
+
+/** The stack innermost-first: the order Escape is offered in. */
+function orderInnermostFirst(): Entry[] {
+  return [...stack].sort(
+    (a, b) => LAYER_RANK[b.layer] - LAYER_RANK[a.layer] || b.seq - a.seq,
+  );
+}
+
+/** Run one surface's handler. Returns true if it CLAIMED the keystroke.
+ *
+ *  A handler that throws must not eat the key for everything beneath it
+ *  (review NIT 5): without this, one broken surface made Escape dead for the
+ *  whole app for as long as it stayed mounted, and the exception escaped the
+ *  `setTimeout` outside any React error boundary. Treated as a decline, so the
+ *  surface below still gets its turn. */
+function offer(entry: Entry, event: KeyboardEvent): boolean {
+  try {
+    return entry.handler(event);
+  } catch (error) {
+    console.error("escapeStack: a surface handler threw; continuing the walk", error);
+    return false;
+  }
+}
 
 function walk(event: KeyboardEvent): void {
+  const ordered = pendingOrder;
   pending = null;
+  pendingOrder = [];
   if (event.defaultPrevented) return; // a consumer claimed it during the dispatch
-  const ordered = [...stack].sort(
-    (a, b) => LAYER_RANK[a.layer] - LAYER_RANK[b.layer] || a.seq - b.seq,
-  );
-  for (let i = ordered.length - 1; i >= 0; i--) {
-    const entry = ordered[i];
-    // A handler above may have closed a surface below it; skip anything that
-    // unregistered during this same walk.
+  // Which of the snapshot's surfaces made it to the walk. Read ONCE, here, so
+  // the two ways an entry can go stale stay distinguishable below.
+  const liveAtWalk = new Set(stack);
+  for (const entry of ordered) {
+    // Gone between the keydown and this walk (round 5). This surface was the
+    // innermost one when the key was pressed — whatever removed it in the gap
+    // took the keystroke with it, and handing the key to a LOWER layer now
+    // would perform an action the user aimed at something else. Stop.
+    if (!liveAtWalk.has(entry)) return;
+    // Gone DURING this walk: a handler above closed a surface below it
+    // (round 4, finding 4). Skip the dead entry and carry on — the walk that
+    // is already running is what removed it.
     if (!stack.includes(entry)) continue;
-    // A handler that throws must not eat the key for everything beneath it
-    // (review NIT 5): without this, one broken surface made Escape dead for
-    // the whole app for as long as it stayed mounted, and the exception
-    // escaped the `setTimeout` outside any React error boundary. Treated as a
-    // decline, so the surface below still gets its turn.
-    try {
-      if (entry.handler(event)) return;
-    } catch (error) {
-      console.error("escapeStack: a surface handler threw; continuing the walk", error);
-    }
+    if (offer(entry, event)) return;
   }
 }
 
@@ -157,7 +228,35 @@ function onKeyDown(event: KeyboardEvent): void {
   // that forgets to. The Shell's own menus are `menu`-layer surfaces instead.
   if (document.querySelector(".qzk-ctx")) return;
   if (stack.length === 0) return;
+
+  const ordered = orderInnermostFirst();
+  // Resolve the layer that cannot wait, NOW, inside the keydown listener.
+  // Only surfaces ABOVE the first non-synchronous one can be offered the key
+  // here: a `menu` outranks a drag, and asking a menu synchronously would
+  // defeat the deferral that the two documented `preventDefault()` claimants
+  // rely on. So the scan stops at the first entry that is not
+  // `RESOLVES_AT_KEYDOWN`, and everything from there down goes to the walk.
+  let rest = 0;
+  if (!event.defaultPrevented) {
+    while (rest < ordered.length && ordered[rest].layer === RESOLVES_AT_KEYDOWN) {
+      const entry = ordered[rest];
+      rest++;
+      if (!offer(entry, event)) continue; // nothing live: the layer declines
+      // Claimed and already acted on. Nothing below may run for this key, and
+      // a walk armed by an earlier keystroke in this same tick is void.
+      if (pending !== null) {
+        clearTimeout(pending);
+        pending = null;
+        pendingOrder = [];
+      }
+      return;
+    }
+  }
+  const snapshot = ordered.slice(rest);
+  if (snapshot.length === 0) return;
+
   if (pending !== null) clearTimeout(pending);
+  pendingOrder = snapshot;
   pending = window.setTimeout(() => walk(event), 0);
 }
 
@@ -174,6 +273,7 @@ export function pushEscapeSurface(layer: EscapeLayer, handler: EscapeHandler): (
       if (pending !== null) {
         clearTimeout(pending);
         pending = null;
+        pendingOrder = [];
       }
     }
   };

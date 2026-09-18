@@ -197,6 +197,13 @@ export function useGlobalShortcuts(): void {
   // listeners down and discards it WITHOUT committing, and the tool stays
   // armed for an immediate retry; it returns false when nothing is mid-drag,
   // which is exactly the decline this layer needs.
+  //
+  // Round 5: the registry runs THIS layer synchronously, inside the keydown
+  // listener, because a drag does not survive the walk's macrotask — the
+  // browser delivers the queued `mouseup` first, the plugin commits, and the
+  // cancel arrives to find nothing left (see `RESOLVES_AT_KEYDOWN`). Nothing
+  // changes at this call site; the handler must simply stay cheap and safe to
+  // run mid-dispatch, which tearing down a drag's listeners is.
   useEscapeSurface("gesture", () => cancelActiveGesture());
 
   // An idle-but-armed quick-fit gadget (a committed roi/cursors sitting with
