@@ -12,6 +12,7 @@ import { fireEvent, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { setActiveGestureCancel } from "./lib/gestureCancel";
+import { pressEscape } from "./test/pressEscape";
 import { saveInteractionPrefs } from "./store/prefs";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
@@ -29,95 +30,117 @@ beforeEach(() => {
 });
 
 describe("useGlobalShortcuts — Esc: live gesture wins first", () => {
-  it("cancels a registered gesture instead of reverting the tool", () => {
+  it("cancels a registered gesture instead of reverting the tool", async () => {
     const cancel = vi.fn();
     setActiveGestureCancel(cancel);
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(cancel).toHaveBeenCalledOnce();
     // The gesture-cancel consumed this Escape — the tool that was mid-drag
     // stays armed so the user can immediately retry.
     expect(useApp.getState().plotTool).toBe("fwhm");
   });
 
-  it("clears the registration so a second Escape falls through to the next tier", () => {
+  it("clears the registration so a second Escape falls through to the next tier", async () => {
     const cancel = vi.fn();
     setActiveGestureCancel(cancel);
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
+    await pressEscape();
     expect(cancel).toHaveBeenCalledOnce(); // not called again
     expect(useApp.getState().plotTool).toBe("pointer"); // 2nd Esc reverted
   });
 });
 
+describe("useGlobalShortcuts — Esc: a claimed key is not double-handled (review NIT 9)", () => {
+  it("leaves a live gesture alone when a closer handler already claimed the Escape", async () => {
+    // Round 1's `stopPropagation()` hid this: an Escape a component had
+    // already consumed reached the window listener anyway and ALSO cancelled
+    // the gesture behind it — two handlers, one key press.
+    const cancel = vi.fn();
+    setActiveGestureCancel(cancel);
+    renderHook(() => useGlobalShortcuts());
+    const claimer = (e: KeyboardEvent) => {
+      if (e.key === "Escape") e.preventDefault();
+    };
+    window.addEventListener("keydown", claimer, true);
+    try {
+      await pressEscape();
+      expect(cancel).not.toHaveBeenCalled();
+      expect(useApp.getState().plotTool).toBe("fwhm");
+    } finally {
+      window.removeEventListener("keydown", claimer, true);
+    }
+  });
+});
+
 describe("useGlobalShortcuts — Esc: idle-armed qfit gadget", () => {
-  it("clears a committed roi with no drag in progress (no tool revert yet)", () => {
+  it("clears a committed roi with no drag in progress (no tool revert yet)", async () => {
     useApp.setState({ plotTool: "qfit", qfitRoi: [1, 2] });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().qfitRoi).toBeNull();
     expect(useApp.getState().plotTool).toBe("qfit"); // stays armed for a retry
   });
 
-  it("clears committed cursors the same way", () => {
+  it("clears committed cursors the same way", async () => {
     useApp.setState({ plotTool: "qfit", gadgetCursors: [1, 3] });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().gadgetCursors).toBeNull();
   });
 });
 
 describe("useGlobalShortcuts — Esc: no gesture in progress reverts to Pointer", () => {
-  it("reverts a non-pointer tool to pointer", () => {
+  it("reverts a non-pointer tool to pointer", async () => {
     useApp.setState({ plotTool: "measure" });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().plotTool).toBe("pointer");
   });
 
-  it("is a no-op when already on pointer", () => {
+  it("is a no-op when already on pointer", async () => {
     useApp.setState({ plotTool: "pointer" });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().plotTool).toBe("pointer");
   });
 
-  it("does not revert while typing in a field", () => {
+  it("does not revert while typing in a field", async () => {
     useApp.setState({ plotTool: "stats" });
     renderHook(() => useGlobalShortcuts());
     const input = document.createElement("input");
     document.body.appendChild(input);
-    fireEvent.keyDown(input, { key: "Escape" });
+    await pressEscape(input);
     expect(useApp.getState().plotTool).toBe("stats");
     document.body.removeChild(input);
   });
 });
 
 describe("useGlobalShortcuts — persistentTool preference", () => {
-  it("keeps the tool armed on Esc when set", () => {
+  it("keeps the tool armed on Esc when set", async () => {
     saveInteractionPrefs({ persistentTool: true });
     useApp.setState({ plotTool: "integ" });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().plotTool).toBe("integ");
   });
 
-  it("still cancels a live gesture when set (only the tool-revert is skipped)", () => {
+  it("still cancels a live gesture when set (only the tool-revert is skipped)", async () => {
     saveInteractionPrefs({ persistentTool: true });
     const cancel = vi.fn();
     setActiveGestureCancel(cancel);
     useApp.setState({ plotTool: "integ" });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(cancel).toHaveBeenCalledOnce();
     expect(useApp.getState().plotTool).toBe("integ");
   });
 
-  it("defaults OFF — a fresh install still reverts to pointer", () => {
+  it("defaults OFF — a fresh install still reverts to pointer", async () => {
     useApp.setState({ plotTool: "select" });
     renderHook(() => useGlobalShortcuts());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().plotTool).toBe("pointer");
   });
 });

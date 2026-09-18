@@ -6,6 +6,7 @@
 // reaches it", which only a DOM-level test can see.
 
 import { act, render, screen, within } from "@testing-library/react";
+import { useRef, useState, type ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -15,6 +16,8 @@ import ParamDialog, { askParams } from "./ParamDialog";
 import PlotRecipeApplyDialog from "./PlotRecipeApplyDialog";
 import QuickPlotWithDialog from "./QuickPlotWithDialog";
 import RecoveryChoiceDialog from "./RecoveryChoiceDialog";
+import ToolWindow from "./ToolWindow";
+import { useFocusTrap } from "./useDialogFocus";
 import { captureRecipe } from "../../lib/plotRecipe";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
@@ -407,5 +410,142 @@ describe("stacked focus traps take turns (P3.3 round 2)", () => {
     await user.tab();
     expect(outerCancel).toHaveFocus();
     expect(screen.getByRole("button", { name: "outside" })).not.toHaveFocus();
+  });
+});
+
+// ── Round 2's three unpinned "also closed" claims (P3.3 round 3) ─────────
+// Review finding 5: reverting the no-yank guard (S18), the `FOCUSABLE`
+// widening (S19) and the `hiddenWithin` ancestor walk (S20) each left the
+// whole `components/overlays` suite green — the same defect class as round
+// 1's finding 4, which round 2 existed to close. One case each, at the DOM.
+describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
+  /** A minimal trapped surface: `useFocusTrap` is the unit under test, and a
+   *  plain box keeps the case about the trap rather than a dialog's chrome. */
+  function TrappedBox({ children }: { children: ReactNode }) {
+    const ref = useRef<HTMLDivElement | null>(null);
+    useFocusTrap(ref, true);
+    return (
+      <div ref={ref} tabIndex={-1} data-testid="box">
+        {children}
+      </div>
+    );
+  }
+
+  it("does NOT yank focus the user has already moved elsewhere (S18)", async () => {
+    // The surface closes while focus sits on a live control OUTSIDE it — a
+    // toast action, a field behind a non-modal panel. That is where the user
+    // wants to be, and the close is not what put them there.
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Opener
+          </button>
+          <button type="button" onClick={() => setOpen(false)}>
+            Toast action
+          </button>
+          {open && <ToolWindow id="yank" title="Find peaks">panel</ToolWindow>}
+        </>
+      );
+    }
+    render(<Harness />);
+    const opener = screen.getByRole("button", { name: "Opener" });
+    const toast = screen.getByRole("button", { name: "Toast action" });
+
+    await user.click(opener); // the panel latches THIS as the place to go back to
+    expect(document.querySelector(".qzk-win")).toHaveFocus();
+
+    await user.click(toast); // closes the panel; focus is already on the toast
+    expect(document.querySelector(".qzk-win")).toBeNull();
+    expect(toast).toHaveFocus();
+    expect(opener).not.toHaveFocus();
+  });
+
+  it("traps a contenteditable field, not just the classic form controls (S19)", async () => {
+    // Round 2 widened FOCUSABLE to `[contenteditable]`, `iframe`, `summary`
+    // and `audio`/`video[controls]`. With the narrow selector the rich-text
+    // field is invisible to the trap, so the wrap boundary sits one control
+    // early and Tab walks straight out of the surface.
+    const user = userEvent.setup();
+    render(
+      <TrappedBox>
+        <button type="button">First</button>
+        <div contentEditable data-testid="rich" suppressContentEditableWarning>
+          rich text
+        </div>
+      </TrappedBox>,
+    );
+    screen.getByTestId("rich").focus();
+
+    await user.tab();
+
+    expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
+  });
+
+  it("orders traps by OPEN order, so reopening an outer one does not steal Tab (NIT 6)", async () => {
+    // Measured on the round-2 tree: toggling the OUTER trap closed→open while
+    // an inner one stayed open pushed the outer on top, and Tab then cycled
+    // the dialog BEHIND the topmost one ("Outer A", "Outer B", "Outer A", …).
+    // `seq` is per component instance now, so close/reopen keeps its place.
+    const user = userEvent.setup();
+    function Stacked() {
+      const [outerOpen, setOuterOpen] = useState(true);
+      return (
+        <>
+          <button type="button" onClick={() => setOuterOpen((v) => !v)}>
+            Toggle outer
+          </button>
+          <OuterTrap open={outerOpen} />
+          <TrappedBox>
+            <button type="button">Inner A</button>
+            <button type="button">Inner B</button>
+          </TrappedBox>
+        </>
+      );
+    }
+    function OuterTrap({ open }: { open: boolean }) {
+      const ref = useRef<HTMLDivElement | null>(null);
+      useFocusTrap(ref, open);
+      if (!open) return null;
+      return (
+        <div ref={ref} tabIndex={-1}>
+          <button type="button">Outer A</button>
+          <button type="button">Outer B</button>
+        </div>
+      );
+    }
+    render(<Stacked />);
+
+    await user.click(screen.getByRole("button", { name: "Toggle outer" })); // close…
+    await user.click(screen.getByRole("button", { name: "Toggle outer" })); // …and reopen
+
+    screen.getByRole("button", { name: "Inner B" }).focus();
+    await user.tab();
+
+    expect(screen.getByRole("button", { name: "Inner A" })).toHaveFocus();
+  });
+
+  it("skips a focusable inside an aria-hidden wrapper, not only a hidden element (S20)", async () => {
+    // Round 2 made the hidden check walk ANCESTORS up to the trap root. With
+    // the element-only check the ghost button counts as the last Tab stop, so
+    // Tab lands on something the attribute exists to deny.
+    const user = userEvent.setup();
+    render(
+      <TrappedBox>
+        <button type="button">Real</button>
+        <div aria-hidden="true">
+          <button type="button">Ghost</button>
+        </div>
+      </TrappedBox>,
+    );
+    const real = screen.getByRole("button", { name: "Real" });
+    real.focus();
+
+    await user.tab();
+
+    expect(screen.getByText("Ghost")).not.toHaveFocus();
+    expect(real).toHaveFocus(); // the only Tab stop, so Tab wraps onto itself
   });
 });

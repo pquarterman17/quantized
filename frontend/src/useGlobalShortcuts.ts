@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 
 import { cancelActiveGesture } from "./lib/gestureCancel";
+import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
@@ -58,8 +59,19 @@ export function useGlobalShortcuts(): void {
       // drag in progress) clears the same way its own chip dismiss does.
       // Only then — tool not already Pointer, not typing in a field, and
       // Preferences ▸ Interaction ▸ "Persistent plot tool" not set — does
-      // Esc revert the active tool to Pointer.
+      // Esc revert the active tool to Pointer. That last tier is NOT here any
+      // more (P3.3 round 3): it is registered on the shared ordered Escape
+      // registry below, in the `app` layer, so it runs only after every open
+      // surface has declined. Keeping it inline made it `preventDefault()` an
+      // Escape that an open workspace or workshop wanted — the very inversion
+      // the registry exists to fix. The two tiers that remain here are
+      // genuinely innermost (a live drag, an idle-armed gadget), so they still
+      // claim the key during the dispatch.
+      //
+      // `defaultPrevented` at the top (review NIT 9): an Escape a closer
+      // handler already claimed must not ALSO cancel a gesture here.
       if (e.key === "Escape") {
+        if (e.defaultPrevented) return;
         if (cancelActiveGesture()) {
           e.preventDefault();
           return;
@@ -69,10 +81,6 @@ export function useGlobalShortcuts(): void {
           e.preventDefault();
           s.clearQfit();
           return;
-        }
-        if (!isEditingTarget(e.target) && s.plotTool !== "pointer" && !loadInteractionPrefs().persistentTool) {
-          e.preventDefault();
-          s.setPlotTool("pointer");
         }
         return;
       }
@@ -203,4 +211,17 @@ export function useGlobalShortcuts(): void {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // The LAST tier of the Escape ladder (GUI_INTERACTION #9): revert the armed
+  // plot tool to Pointer. Registered in the `app` layer of the shared registry
+  // so every open surface gets the key first — with Tiles or a workshop open,
+  // Escape dismisses that surface and leaves the tool armed, and the NEXT
+  // Escape (nothing left to dismiss) reverts the tool. The editing-target
+  // guard lives in the dispatcher.
+  useEscapeSurface("app", () => {
+    const s = useApp.getState();
+    if (s.plotTool === "pointer" || loadInteractionPrefs().persistentTool) return false;
+    s.setPlotTool("pointer");
+    return true;
+  });
 }

@@ -25,6 +25,7 @@
 
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 
+import { APP_ROOT_FOCUS_SELECTOR } from "../../lib/appRoot";
 import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
 
 // Deliberately NOT filtered by visibility/offsetParent. jsdom performs no
@@ -60,7 +61,13 @@ const FOCUSABLE = [
  *  Tab stop, which is exactly what that attribute exists to deny. The walk
  *  stops AT `root` and may not pass it: a dialog whose own chrome sits inside
  *  an `aria-hidden` region must still trap Tab among its controls rather than
- *  report having none. */
+ *  report having none.
+ *
+ *  Round 3 (review NIT 10): what this buys is precise — it moves the WRAP
+ *  boundary, so Tab never lands on a hidden first/last control. It does not
+ *  remove a hidden focusable from the natural tab order in between; the trap
+ *  only intervenes at the two ends. Delivering the attribute's full meaning
+ *  would need `inert`, which is a separate decision. */
 function hiddenWithin(el: HTMLElement, root: HTMLElement): boolean {
   const stop = root.parentElement;
   for (let n: HTMLElement | null = el; n !== null && n !== stop; n = n.parentElement) {
@@ -79,15 +86,28 @@ export function focusablesIn(root: HTMLElement | null): HTMLElement[] {
 /** Where focus goes when a surface closes and the element it was opened from
  *  is gone. NOT `<body>`: body focus is the documented data-loss path
  *  (`lib/focusGuard.ts` — `useGlobalShortcuts`' Delete/Backspace treats body
- *  as fair game), and it is a keyboard dead end besides. The landing spot is
- *  the one the Library's own focus-loss fallback already uses
+ *  as fair game), and it is a keyboard dead end besides.
+ *
+ *  First choice is the spot the Library's own focus-loss fallback already uses
  *  (`lib/scrollOutFocus.ts`): a `tabIndex={-1}` list container that catches
  *  orphaned focus and whose own keydown resumes arrow navigation from the
- *  roving item — a waypoint, not a dead end. When no Library view is rendered
- *  (a bare harness, CalcOnlyApp) nothing is focused and the pre-existing
- *  behaviour stands. */
+ *  roving item — a waypoint, not a dead end.
+ *
+ *  Round 3 (review finding 4): that container is rendered only by the three
+ *  VIRTUALIZED Library renderers, so with zero rows — or while Details' search
+ *  branch is behind its `Suspense` fallback — there was nothing to match and
+ *  this silently did nothing, landing the user on `<body>` while the records
+ *  promised otherwise. The shell root (`lib/appRoot.ts`) is the second choice
+ *  and always exists in the real app.
+ *
+ *  LAST RESORT, documented rather than silent: in a harness that renders
+ *  neither (a bare unit test, an embedded widget) nothing is focusable and the
+ *  browser's own `<body>` fallback stands. */
 function focusSafeLanding(): void {
-  document.querySelector<HTMLElement>(SCROLL_OUT_FOCUS_SELECTOR)?.focus();
+  const landing =
+    document.querySelector<HTMLElement>(SCROLL_OUT_FOCUS_SELECTOR)
+    ?? document.querySelector<HTMLElement>(APP_ROOT_FOCUS_SELECTOR);
+  landing?.focus();
 }
 
 /** Open trap roots, innermost LAST. Round 2 (review finding 3): both traps
@@ -98,8 +118,18 @@ function focusSafeLanding(): void {
  *  the top of this stack acts; the traps below stay mounted, keep their
  *  listeners, and resume the moment the one above pops. Module-level on
  *  purpose: the dialogs are independent components with no common ancestor to
- *  hang a context off, and there is exactly one document. */
-const trapStack: RefObject<HTMLElement | null>[] = [];
+ *  hang a context off, and there is exactly one document.
+ *
+ *  Round 3 (review NIT 6): "innermost" is decided by MOUNT order, not push
+ *  order. The first cut pushed on every `open` transition, so toggling an
+ *  OUTER dialog closed→open while an inner one stayed open put the outer on
+ *  top and trapped Tab in the dialog behind the topmost one (measured: the
+ *  sequence cycled Outer A → Outer B with Inner still mounted). `seq` is
+ *  allocated once per component instance and survives close/reopen, which is
+ *  the same rule `lib/escapeStack.ts` uses for its own ordering. */
+type TrapEntry = { ref: RefObject<HTMLElement | null>; seq: number };
+const trapStack: TrapEntry[] = [];
+let nextTrapSeq = 0;
 
 /** Keep Tab / Shift+Tab inside `ref` while `open`. Moves focus only when it
  *  would otherwise leave; an ordinary Tab between two controls is untouched.
@@ -111,11 +141,18 @@ const trapStack: RefObject<HTMLElement | null>[] = [];
  *  because a plain `Tab` check excludes it. A `defaultPrevented` Tab is left
  *  alone regardless, so a future owner of the key still wins. */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean): void {
+  const seqRef = useRef<number | null>(null);
+  if (seqRef.current === null) seqRef.current = nextTrapSeq++;
+  const seq = seqRef.current;
+
   useEffect(() => {
     if (!open) return;
-    trapStack.push(ref);
+    const entry: TrapEntry = { ref, seq };
+    trapStack.push(entry);
     const onKey = (e: KeyboardEvent) => {
-      if (trapStack[trapStack.length - 1] !== ref) return; // a dialog stacked on top owns Tab
+      // A dialog stacked on top owns Tab: the innermost open trap is the one
+      // whose component mounted last, whatever order the `open` flags flipped.
+      if (trapStack.some((other) => other.seq > seq)) return;
       if (e.key !== "Tab" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       const root = ref.current;
       if (!root) return;
@@ -143,11 +180,11 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean):
     };
     document.addEventListener("keydown", onKey, true);
     return () => {
-      const at = trapStack.lastIndexOf(ref);
+      const at = trapStack.indexOf(entry);
       if (at !== -1) trapStack.splice(at, 1);
       document.removeEventListener("keydown", onKey, true);
     };
-  }, [ref, open]);
+  }, [ref, open, seq]);
 }
 
 /** Hand focus back from a closing surface. Exported through the hook below

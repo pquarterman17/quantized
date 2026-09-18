@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryWorkspace from "./LibraryWorkspace";
 import { VIRTUALIZE_ABOVE } from "./useTileVirtualization";
 import type { Dataset } from "../../lib/types";
+import { pressEscape } from "../../test/pressEscape";
 import { useApp } from "../../store/useApp";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
@@ -298,13 +299,13 @@ describe("LibraryWorkspace — E-c3 large-Library virtualization", () => {
     expect(document.activeElement).toBe(other); // never yanked to the retry's target
   });
 
-  it("Escape from a large library still posts the canonical reveal target (Show in Library)", () => {
+  it("Escape from a large library still posts the canonical reveal target (Show in Library)", async () => {
     const onClose = vi.fn();
     seed(500);
     useApp.setState({ selectedIds: ["d123"], librarySelection: null, activeId: "d123" });
     render(<LibraryWorkspace onClose={onClose} />);
 
-    fireEvent.keyDown(screen.getByLabelText("Library workspace"), { key: "Escape" });
+    await pressEscape(screen.getByLabelText("Library workspace"));
     expect(onClose).toHaveBeenCalledOnce();
     expect(useApp.getState().revealTarget).toBe("worksheet:d123");
   });

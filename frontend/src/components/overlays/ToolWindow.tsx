@@ -16,7 +16,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-import { isEditingTarget } from "../../lib/editingTarget";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import {
   clampToolWindowPos,
   defaultToolWindowLayout,
@@ -103,9 +103,9 @@ export default function ToolWindow({
 
   // Give focus back when the panel closes (round 2, review finding 1). The
   // frame takes focus on mount (below); taking it without returning it is the
-  // exact regression `useDialogFocus`
-  // exists to prevent — Escape-closing a
-  // workshop dropped the user on `<body>`, where `useGlobalShortcuts`' Delete/Backspace removes the active dataset.
+  // exact regression `useDialogFocus` exists to prevent — Escape-closing a
+  // workshop dropped the user on `<body>`, where `useGlobalShortcuts`'
+  // Delete/Backspace removes the active dataset.
   // Same render-time opener latch as the dialogs, so the Library row or menu
   // item the workshop was opened from gets focus back. `closeNow` moves focus
   // BEFORE the panel goes away (lib/focusGuard.ts's `removeRowSafely`
@@ -123,52 +123,42 @@ export default function ToolWindow({
   // the title bar's ✕, reachable only by tabbing to it. The fix belongs here,
   // at the shared host, exactly once.
   //
-  // WHY THE CLOSE IS DEFERRED (round 2, review finding 2). The first cut
-  // called `e.stopPropagation()` and closed synchronously, and claimed that
-  // `defaultPrevented` let an Escape consumer keep the key. MEASURED: it did
-  // not. React attaches its listener at the root container, so a synthetic
-  // `stopPropagation()` also stops the NATIVE event there — and every Escape
-  // consumer in this app (`useGlobalShortcuts`' universal plot-tool cancel,
-  // Stage's draw/shape/annotation edits, `usePeakWizard`'s marker-edit pause)
-  // is a window BUBBLE listener, i.e. downstream of that root. They ran zero
-  // times; the panel closed instead. Registration order cannot fix it either:
-  // `usePeakWizard` re-registers its Escape listener when the wizard reaches
-  // step ②, long AFTER this window mounted.
+  // ROUND 3 (review findings 1+2): this is no longer a React `onKeyDown` on
+  // the frame. That shape had no way to outrank a workspace whose own
+  // `document`/`window` listener `preventDefault()`s every Escape it sees, so
+  // with Tiles or the Quick Figure Builder open the WORKSPACE closed and the
+  // focused workshop stayed put — undismissable from the keyboard. The window
+  // now registers on the shared ordered registry (`lib/escapeStack.ts`) in the
+  // `window` layer, which is in front of every workspace; that module's header
+  // carries the phase/deferral reasoning (round 2's finding 2) that used to
+  // live here.
   //
-  // So: no `stopPropagation()` (the event reaches every consumer as before),
-  // and the decision to close waits a macrotask. `defaultPrevented` is a live
-  // property of the event, so re-reading it once the dispatch is over sees a
-  // `preventDefault()` from ANY consumer, whatever phase or order it ran in —
-  // the repo's documented "this keystroke was mine" convention, now actually
-  // enforceable. A microtask would not do: the spec runs a microtask
-  // checkpoint between listeners, so it can land mid-dispatch.
-  //
-  // Two guards on top:
-  //  - `isEditingTarget(e.target)` — Escape inside a text field is the
-  //    field's, not the window's. Closing a panel out from under someone
-  //    mid-type would discard whatever they were entering. (Workshops whose
-  //    fields DO give Escape a meaning — recipelibrary/RecipeRow,
-  //    recipemanager — already `stopPropagation()`, so this never sees those.)
-  //  - a React handler on the window root, not a window listener, so this owns
-  //    Escape only while focus is INSIDE this panel — a dialog stacked on top
-  //    of a workshop still gets its own Escape.
-  const closeTimer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+  // Two guards of its own:
+  //  - focus must be INSIDE this frame. Several windows can be open at once,
+  //    and Escape belongs to the one the user is in — not to whichever mounted
+  //    last. Declining lets the walk fall through to the surface below, which
+  //    is how Escape still closes Tiles while focus is on a Library row.
+  //  - `closed` — one close per window, ever. A second Escape arriving while
+  //    the panel is on its way out (React has not yet unmounted it) must not
+  //    call `onClose` again; the round-2 shape called it once per keydown,
+  //    twelve times for a held key, the extras after unmount.
+  const closed = useRef(false);
+  const closeLatest = useRef(closeNow);
+  useEffect(() => {
+    closeLatest.current = closeNow;
+  });
+  useEscapeSurface(
+    "window",
+    (e) => {
+      const frame = winRef.current;
+      if (!frame || !(e.target instanceof Node) || !frame.contains(e.target)) return false;
+      if (closed.current) return false;
+      closed.current = true;
+      closeLatest.current();
+      return true;
     },
-    [],
+    onClose !== undefined,
   );
-  const onWindowKey = (e: React.KeyboardEvent) => {
-    if (e.key !== "Escape" || !onClose) return;
-    const native = e.nativeEvent;
-    if (native.defaultPrevented || isEditingTarget(e.target)) return;
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null;
-      if (native.defaultPrevented) return; // a consumer claimed it later in the dispatch
-      closeNow();
-    }, 0);
-  };
 
   // Take focus on open so that Escape — and Tab into the panel's controls —
   // works immediately. A workshop launched from the command palette or a menu
@@ -186,7 +176,6 @@ export default function ToolWindow({
     const frame = winRef.current;
     if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
   }, []);
-
 
   const onTitleDown = (e: React.PointerEvent) => {
     dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
@@ -238,7 +227,6 @@ export default function ToolWindow({
       ref={winRef}
       className="qzk-glass qzk-win"
       tabIndex={-1}
-      onKeyDown={onWindowKey}
       style={{
         left: layout.x,
         top: layout.y,

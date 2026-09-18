@@ -12,7 +12,10 @@ import { useEffect, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
+import Library from "../Library/Library";
+import { appRootFocusProps } from "../../lib/appRoot";
 import { scrollOutFocusProps } from "../../lib/scrollOutFocus";
+import { pressEscape } from "../../test/pressEscape";
 import { useApp } from "../../store/useApp";
 import ToolWindow from "./ToolWindow";
 
@@ -478,5 +481,93 @@ describe("ToolWindow Escape precedence (P3.3 round 2)", () => {
 
     await expect(result).resolves.toBe(false);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// ── ToolWindow round 3: one keystroke, one close ─────────────────────────
+// Review finding 3, measured on the round-2 tree: `closeTimer` was a single
+// ref that every keydown OVERWROTE without clearing, and there was no
+// `e.repeat` guard. Two Escapes called `onClose` twice (the second after the
+// panel unmounted); HOLDING Escape called it twelve times, eleven of them
+// post-unmount. Every shipped `onClose` is an idempotent store setter, so
+// nothing was corrupted — but nothing pinned it either.
+describe("ToolWindow Escape is idempotent (P3.3 round 3)", () => {
+  it("a HELD Escape closes the panel exactly once", async () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <ToolWindow id="t20" title="Find peaks" onClose={onClose}>
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+    const frame = winEl(container);
+
+    await pressEscape(frame); // the initial press…
+    for (let i = 0; i < 11; i++) await pressEscape(frame, { repeat: true }); // …then auto-repeat
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("a second Escape on a panel that is already closing does not close it again", async () => {
+    // The parent has not unmounted the panel yet (React flushes later), so the
+    // window is still mounted and still registered when the next Escape lands.
+    const onClose = vi.fn();
+    const { container } = render(
+      <ToolWindow id="t21" title="Find peaks" onClose={onClose}>
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+    const frame = winEl(container);
+
+    await pressEscape(frame);
+    await pressEscape(frame);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── The safe landing always exists (P3.3 round 3, review finding 4) ──────
+// `focusSafeLanding()` aimed only at `[data-scroll-out-focus]`, which just the
+// three VIRTUALIZED Library renderers put in the DOM. With zero rows the
+// Library takes its flat branch and renders none — its own comment calls that
+// "the most common launch state" — so `?.focus()` silently did nothing and the
+// user landed on `<body>`, the documented Delete/Backspace data-loss spot,
+// while the commit body, the plan and the test name all said "never <body>".
+// The shell root is the second choice and always exists.
+describe("ToolWindow safe landing with no Library container (P3.3 round 3)", () => {
+  function ZeroRowHarness() {
+    const [open, setOpen] = useState(false);
+    return (
+      <div {...appRootFocusProps} data-testid="app-root">
+        {/* The real Library, in the state it launches in: no datasets, so the
+            flat branch renders and NO focus-loss container exists. */}
+        <Library viewMode="tree" onViewModeChange={() => {}} />
+        {!open && (
+          <button type="button" onClick={() => setOpen(true)}>
+            Open Peaks
+          </button>
+        )}
+        {open && (
+          <ToolWindow id="zero-rows" title="Find peaks" onClose={() => setOpen(false)}>
+            <button type="button">Run</button>
+          </ToolWindow>
+        )}
+      </div>
+    );
+  }
+
+  it("lands on the app root when the Library renders no focus-loss container", async () => {
+    const user = userEvent.setup();
+    useApp.setState({ datasets: [], folders: [], workbooks: [] });
+    render(<ZeroRowHarness />);
+    // The premise, asserted rather than assumed.
+    expect(document.querySelector("[data-scroll-out-focus]")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Open Peaks" }));
+    expect(screen.queryByRole("button", { name: "Open Peaks" })).toBeNull(); // opener gone
+
+    await user.keyboard("{Escape}");
+
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByTestId("app-root")).toHaveFocus();
   });
 });

@@ -3817,7 +3817,7 @@ covers a much smaller subset and guards focus on Analyze.
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
-  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2) |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
 
   "dead" means the dialog HAD an Escape handler — on the dialog box's React
@@ -3875,8 +3875,10 @@ covers a much smaller subset and guards focus on Analyze.
     focus was still on `<body>` when the assertions ran. The unmount cleanup
     stays as the backstop for closes that do not come through the component.
     When the opener is gone (a menu item that unmounted with the click), focus
-    lands on the Library's own focus-loss container (`lib/scrollOutFocus.ts`),
-    never `<body>`. The audit table's `n/a` restore cell for ToolWindow now
+    lands on the Library's own focus-loss container (`lib/scrollOutFocus.ts`)
+    — CORRECTED in round 3: that container exists only where a virtualized
+    Library view is rendered, so the fallback now continues to the shell root
+    (`lib/appRoot.ts`) and the "never `<body>`" promise is finally true. The audit table's `n/a` restore cell for ToolWindow now
     reads the truth: it was **N**, and it was this pass that made it matter.
   - **The `defaultPrevented` guard protected nobody.** `onWindowKey` called
     `stopPropagation()` on a React SYNTHETIC event, which also stops the
@@ -3926,6 +3928,120 @@ covers a much smaller subset and guards focus on Analyze.
   Eager bundle: parent `b50f6602` **912,824 B** → tip **913,548 B**, **+724 B**
   (budget 920,400 B, so 6,852 B of headroom left). Both built after
   `rm -rf node_modules/.vite`; the tip figure reproduced twice.
+
+  **Round 3 (2026-09-18) — the review's regression, closed; the ladder made
+  one rule.** Round 2 removed `ToolWindow`'s `stopPropagation()` (correctly —
+  it was killing every window-bubble Escape consumer) but left two
+  PRE-EXISTING listeners that `preventDefault()` on every Escape they see:
+  `LibraryWorkspace` (Tiles) and `QuickFigureBuilderWorkspace`. Reproduced in
+  real Chromium: with Tiles open and a workshop focused, Escape closed the
+  WORKSPACE and left the workshop open — and the second Escape did nothing at
+  all, because closing Tiles pulled focus out of the panel onto a Library row.
+  The only keyboard dismissal a workshop has was dead exactly where a user
+  would reach for it, and no spec in the suite paired the two surfaces.
+  - **The invariant, now one mechanism: the innermost open surface claims
+    Escape, and the next Escape goes to the one below it.**
+    `frontend/src/lib/escapeStack.ts` (new, 143 lines) is a module-level
+    ordered registry. Surfaces register on open with a handler; ONE listener —
+    `window`, BUBBLE phase, the last stop on the propagation path — walks the
+    stack top-down and the first handler that returns `true` stops the walk.
+    Order is layer first (`window` ▸ `workspace` ▸ `app`), then OPEN order
+    within a layer (`useEscapeSurface` registers once per mount and reads the
+    handler through a ref, so a new callback identity cannot reshuffle the
+    stack). `ToolWindow`, `LibraryWorkspace` and `QuickFigureBuilderWorkspace`
+    stopped listening individually; `useGlobalShortcuts`' revert-the-armed-tool
+    tier moved into the `app` layer so an open surface is always dismissed
+    first. A `ToolWindow` DECLINES when focus is not inside its own frame,
+    which is how Escape from a Library row still closes Tiles with a panel
+    open, and how several open windows stay sane.
+  - Bubble phase is what keeps the other owners intact with no special case:
+    everything that already owns Escape does it by stopping propagation
+    (`ConfirmDialog` and the eight backdrop dialogs on window-capture,
+    `ContextMenu` on document-bubble, `CommandPalette` through React), so the
+    dispatcher is simply never reached. Round 2's one-macrotask deferral is
+    kept verbatim, and is what still lets `usePeakWizard` keep an Escape it
+    claimed with `preventDefault()` from inside its own window.
+  - **One keystroke, one close.** `closeTimer` was a single ref every keydown
+    OVERWROTE without clearing: two Escapes called `onClose` twice (the second
+    after unmount) and a HELD Escape called it twelve times. The registry
+    ignores `event.repeat`, clears any pending walk before arming a new one,
+    and `ToolWindow` carries a `closed` ref so a panel already on its way out
+    does not close twice.
+  - **The safe landing always exists.** `focusSafeLanding()` aimed only at
+    `[data-scroll-out-focus]`, which just the three VIRTUALIZED Library
+    renderers put in the DOM — with zero rows the Library takes its flat
+    branch and renders none, and `?.focus()` was a silent no-op that left the
+    user on `<body>`. It now falls back to the shell root
+    (`frontend/src/lib/appRoot.ts`, `tabIndex={-1}` on `App.tsx`'s `.qzk-app`),
+    and only then — in a harness that renders neither — to the browser's own
+    `<body>`, documented rather than silent. **Round 2's absolute claim
+    ("focus lands on the Library's focus-loss container …, never `<body>`") was
+    false as written and is corrected here: the landing is the Library
+    container when one is rendered, otherwise the shell root.**
+  - **Round 2's three unpinned "also closed" claims are pinned** (the no-yank
+    guard, the `FOCUSABLE` widening, the `hiddenWithin` ancestor walk), each
+    with a DOM case that goes red when the behaviour is reverted — the same
+    defect class round 2 existed to close. So are two of its NITs: the trap
+    stack now orders by MOUNT order (reopening an OUTER dialog no longer traps
+    Tab in the dialog behind the topmost one), and `useGlobalShortcuts`' Escape
+    branch has a top-level `defaultPrevented` check so a key a closer handler
+    claimed is not also double-handled here. The fifth hand-rolled `isEditing`
+    copy (`LibraryWorkspace`) is gone — that predicate is the dispatcher's now.
+  - **e2e gap closed.** `frontend/e2e/specs/workshop-escape-ladder.spec.ts`
+    pairs a workshop with Tiles in a real browser, both directions (focus
+    inside the panel, and focus on a Library row). That pairing is what the
+    56-test suite never had, which is why a real regression shipped green.
+
+  | Sabotage (round 3) | Result | Failing test |
+  |---|---|---|
+  | S-R1 `LibraryWorkspace` back to its own unconditional-`preventDefault` document listener | **RED** 1 | "Escape closes the WORKSHOP and leaves Tiles open; the next Escape closes Tiles" |
+  | S-R2 `QuickFigureBuilderWorkspace` back to its own unconditional-`preventDefault` window listener | **RED** 1 | "Escape closes the WORKSHOP and leaves the builder open; the next Escape closes the builder" |
+  | S17a registry stops ignoring an auto-repeating Escape | **RED** 1 | "a HELD Escape runs the walk once, not once per repeat" |
+  | S17b registry stops clearing the pending walk before arming a new one | **RED** 1 | "two Escapes inside one tick arm ONE walk, not two" |
+  | S17c `ToolWindow` drops the `closed` one-close-per-window guard | **RED** 1 | "a second Escape on a panel that is already closing does not close it again" |
+  | S-F4 `focusSafeLanding` loses the app-root fallback | **RED** 1 | "lands on the app root when the Library renders no focus-loss container" |
+  | S18 restore yanks focus back unconditionally | **RED** 1 | "does NOT yank focus the user has already moved elsewhere (S18)" |
+  | S19 `FOCUSABLE` reverted to the five classic form controls | **RED** 1 | "traps a contenteditable field, not just the classic form controls (S19)" |
+  | S20 `hiddenWithin` reverted to the element-only check | **RED** 1 | "skips a focusable inside an aria-hidden wrapper, not only a hidden element (S20)" |
+  | S-N6 trap stack back to push order | **RED** 1 | "orders traps by OPEN order, so reopening an outer one does not steal Tab (NIT 6)" |
+  | S-N9 `useGlobalShortcuts`' Escape branch drops its `defaultPrevented` check | **RED** 1 | "leaves a live gesture alone when a closer handler already claimed the Escape" |
+
+  Each sabotage applied alone against a 324-test scope (`lib/escapeStack`,
+  `components/overlays`, `LibraryWorkspace`, `quickfigurebuilder`,
+  `useGlobalShortcuts`), green at baseline, and restored after.
+
+  Eager bundle: parent `5e651e48` **888,455 B** → tip **889,632 B**,
+  **+1,177 B** (budget 920,400 B, so **30,768 B** of headroom left). Both
+  built after `rm -rf node_modules/.vite`, the parent in its own worktree
+  after `npm ci`.
+
+  **Named residuals added in round 3.**
+  - **R7** (round 3, review NIT 7) — the multi-Escape ladder is real and is now
+    deliberate: an Escape dismisses ONE thing, innermost first. Measured with
+    the real hook and a real `ToolWindow`:
+    · workshop open + `plotTool: "region"` → Esc① closes the window, tool stays
+      `region`; Esc② reverts it to `pointer`.
+    · a panel hook claiming Escape (the `usePeakWizard` shape) + a tool armed →
+      Esc① pauses the marker edit (window open, tool `region`); Esc② closes the
+      window (tool still `region`); Esc③ reverts the tool.
+    · Tiles open + `plotTool: "zoom"` → Esc① closes Tiles, tool stays `zoom`;
+      Esc② reverts it.
+    Round 2's order was the inverse for the workshop case (the tool reverted
+    first and the panel stayed), which is the inconsistency this fixes; the
+    workspace case already behaved this way and still does.
+  - **R9** (round 3, found while writing the e2e spec) — `App.tsx` renders
+    `LibraryWorkspace` and `QuickFigureBuilderWorkspace` LAZILY behind a
+    `Suspense` fallback that carries the same `aria-label`, and that
+    placeholder registers no Escape handler. For the few hundred ms before the
+    chunk arrives, Escape does nothing. Pre-existing (the listener always lived
+    in the real component) and invisible to a user who did not press Escape
+    within that window; recorded because it cost an afternoon to diagnose in
+    the spec, which now waits for a real tile rather than the label.
+  - **R8** (round 3, review NIT 10) — `hiddenWithin` moves the WRAP boundary
+    only. A focusable inside an `aria-hidden` wrapper is still reached by an
+    ordinary Tab BETWEEN the first and last stops, because the trap intervenes
+    at the two ends and nowhere else. Delivering the attribute's full meaning
+    needs `inert`, which is a separate decision from this pass.
 
   **Named residuals (why this is `[~]`).**
   - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
