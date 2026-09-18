@@ -15,9 +15,12 @@ document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
 **Current state (2026-09-18, review round, finding 10):** slice 3 is done.
-Budget is 920,400 B, unmoved throughout; eager is 909,888 B (measured against
-the real parent `e83c0cc8` — see slice 3's own section); headroom is
-**10,512 B**.
+Budget is 920,400 B, unmoved throughout. Slice 3's own tree (`90ea30fa`)
+measures 909,888 B eager against its real parent `e83c0cc8` (see slice 3's
+section); the branch tip at the time of this note (`b621c5fa`, after P2.8
+round 2 and BUG-016 round 3 landed on top) measures **910,371 B**, headroom
+**10,029 B** — a tree's number is only valid for that tree, so re-measure
+before quoting it as "today's".
 
 ## Reproducing this
 
@@ -286,7 +289,8 @@ not the command files themselves, are where the weight is.
 **Measured net eager delta -6,890 B - budget UNMOVED at 920,400 B**
 
 Headroom was 3,682 B (916,718 B eager) after P2.8's durable map-view contract
-landed; it is 10,512 B now. The bundle pin is NOT edited in either direction,
+landed; it was 10,512 B on slice 3's own tree (`90ea30fa`) and 10,029 B on
+the `b621c5fa` tip. The bundle pin is NOT edited in either direction,
 and the map contract stays fully eager - it was explicitly out of scope.
 
 **Review round correction (finding 3):** the pair below was originally
