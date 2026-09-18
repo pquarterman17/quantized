@@ -3580,7 +3580,82 @@ covers a much smaller subset and guards focus on Analyze.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Keyboard reachability, focus, order, cancel.
+- [~] Keyboard reachability, focus, order, cancel. **Audited in full and
+  partly fixed 2026-09-18.** Stays `[~]` rather than `[x]`: the audit covered
+  everything the box names, but the fixes deliberately stopped short of eight
+  dialogs that already have a working Escape (residuals listed below).
+
+  **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
+  workshop host, and the three Library views. Columns: focus moves INTO the
+  surface on open / Tab is trapped inside it / Escape cancels / focus returns
+  to the opener on close.
+
+  | Surface | in | trap | Esc | restore | after this pass |
+  |---|---|---|---|---|---|
+  | ConfirmDialog | Y | **N** | Y | Y | trap added |
+  | ParamDialog | partial | **N** | **dead** | **N** | all four |
+  | RecoveryChoiceDialog | **N** | **N** | **none** | **N** | all four |
+  | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
+  | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
+  | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
+  | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
+  | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | n/a | focus-in + Escape |
+  | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
+
+  "dead" means the dialog HAD an Escape handler — on the dialog box's React
+  `onKeyDown` — but nothing ever moved focus into the box, so the key never
+  reached it. That distinction is the main thing the audit bought: four of
+  these looked done by grep and were not.
+
+  **What shipped.**
+  - `components/overlays/useDialogFocus.ts` (new, no new dependency).
+    `useFocusTrap(ref, open)` wraps Tab/Shift+Tab; `useDialogFocus(ref, open)`
+    adds focus-in on open and restore-to-opener on close. The opener is read
+    during the RENDER that opens the dialog, not in the effect — by effect
+    time an `autoFocus` field has already taken focus, so an effect-time read
+    remembers a node inside the dialog and restores to nothing. Focus-in is
+    skipped when focus is already inside, so a dialog's own `autoFocus` wins.
+  - `RecoveryChoiceDialog` — the worst of the set, and a STARTUP modal: no
+    keyboard dismissal at all and focus left on `<body>`. Escape now cancels
+    (matching the backdrop, the choice that touches nothing), plus focus-in,
+    restore, `role="dialog"`/`aria-modal`/`aria-labelledby`.
+  - `ParamDialog`, `PlotRecipeApplyDialog`, `QuickPlotWithDialog`,
+    `AnnotationTextDialog` — focus-in, so their existing Escape is reachable,
+    plus trap and restore. `QuickPlotWithDialog`'s "source worksheet was
+    removed" branch had no Escape handler at all; both branches now share one.
+  - `ConfirmDialog` — trap only. Its focus-in/restore were already argued out
+    and test-pinned, and are untouched.
+  - `ToolWindow` — Escape closes a workshop, once at the shared host instead
+    of in 48 panels, guarded by the repo's editing-target convention (a text
+    field keeps Escape) and by `defaultPrevented` (the region tool keeps it).
+    The frame also takes focus on mount (`tabIndex={-1}`), because a workshop
+    opened from the command palette otherwise leaves focus on the unmounted
+    trigger, where a root-level React handler never fires.
+  - Tests: `overlays/dialogFocus.a11y.test.tsx` (7 cases) and six cases
+    appended to `overlays/ToolWindow.test.tsx`, all driven at the DOM layer
+    with `userEvent.tab()`/`userEvent.keyboard()`, because the bug class here
+    is "the handler exists but the key never reaches it". Every one is
+    sabotage-verified. Eager bundle +1,437 B (911,295 → 912,732).
+
+  **Named residuals (why this is `[~]`).**
+  - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
+    Shortcuts, TextFormatHelp, Preferences, Help) still take no focus, trap no
+    Tab, and restore nothing. Their Escape is a window-capture listener and
+    DOES work, which is why they were left for a later, lower-risk slice
+    rather than swept in here: each renders enough of its own chrome that
+    focus-in needs a per-dialog decision about which control is the safe
+    landing spot.
+  - **R2** — `CommandPalette` focuses its input but never restores focus to
+    the opener on close.
+  - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
+    plan-level promise commits to one; GUI_INTERACTION #10's recoverability
+    promise is met by title-bar clamping plus the keyboard-reachable View-menu
+    "Reset window positions". Not invented here.
+  - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
+    alone and does not say WHICH panel it closes. That belongs to the
+    accessible-names box above, not this one.
 - [~] Accessible names/state for icons, plots, trees, dialogs, progress.
   ~143 `aria-label`s already exist app-wide; this box has NOT had a full
   audit and stays `[~]` for that reason. What was verified and fixed
