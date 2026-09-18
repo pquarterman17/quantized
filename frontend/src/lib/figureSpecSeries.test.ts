@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { buildExportStyles } from "./exportStyles";
+import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
 import { resolveDisplaySeries, resolveSeriesPresentation, seriesDisplayLabel, withSeriesLegends } from "./figureSpecSeries";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct, SeriesStyle } from "./types";
@@ -245,12 +245,62 @@ describe("resolveSeriesPresentation", () => {
       // the request plots two and round 2 read slots 1 and 2 against pinned
       // entries 0 and 1 — the first survived and painted every level one hue.
       const pinned = pin({}, [0, 1, 2]);
-      const { plotted, positions } = resolveDisplaySeries(data, view({
+      const { displayChannels, plotted, positions } = resolveDisplaySeries(data, view({
         yKeys: [0, 1, 2], hiddenChannels: [0],
       }));
       expect([plotted, positions]).toEqual([[1, 2], [1, 2]]);
-      expect(resolveSeriesPresentation(plotted, {}, positions, false, [], pinned, true))
-        .toEqual([null, null, null]);
+      expect(resolveSeriesPresentation(
+        plotted, {}, positions, false, [], pinned, true, displayChannels,
+      )).toEqual([null, null]);
+    });
+
+    // ── round 4, review F7: a pinned array is re-cut to `y_keys` ───────────
+    // `y_keys` is hidden-FILTERED; a pinned array is built over the document's
+    // whole display list. Before this the two were shipped at different
+    // lengths and the backend read `styles[0]` — the HIDDEN channel's style —
+    // for the first plotted series. Measured then: pin three colours for
+    // channels 0/1/2, hide channel 0, and all three entries went on the wire
+    // against a two-entry `y_keys`.
+    it("re-aligns a PINNED array to `y_keys` when a channel was hidden after the pin", () => {
+      const pinned: (ExportSeriesStyle | null)[] = [
+        { color: "#aa0000", colorDerived: false },
+        { color: "#00aa00", colorDerived: false },
+        { color: "#0000aa", colorDerived: false },
+      ];
+      const { displayChannels, plotted, positions } = resolveDisplaySeries(data, view({
+        yKeys: [0, 1, 2], hiddenChannels: [0],
+      }));
+      expect([displayChannels, plotted]).toEqual([[0, 1, 2], [1, 2]]); // non-vacuous
+      // Entry 0 stays with channel 0 — which is not plotted, so it is dropped
+      // rather than sliding onto channel 1.
+      expect(resolveSeriesPresentation(
+        plotted, {}, positions, false, [], pinned, false, displayChannels,
+      )).toEqual([{ color: "#00aa00" }, { color: "#0000aa" }]);
+      // The legend overlay rides the same re-cut list, so a rename lands on
+      // the series it names rather than one slot early.
+      expect(resolveSeriesPresentation(
+        plotted, {}, positions, false, ["B", "C"], pinned, false, displayChannels,
+      )).toEqual([{ color: "#00aa00", legend: "B" }, { color: "#0000aa", legend: "C" }]);
+    });
+
+    it("fails closed: a pin of a DIFFERENT length is left exactly as it was", () => {
+      // The projection is index-for-index against the request's own display
+      // list. A template or a stale pin that matches neither length is not
+      // re-cut on a guess — that is the named residual, not a silent re-cut.
+      const pinned: (ExportSeriesStyle | null)[] = [{ color: "#aa0000", colorDerived: false }];
+      const { displayChannels, plotted, positions } = resolveDisplaySeries(data, view({
+        yKeys: [0, 1, 2], hiddenChannels: [0],
+      }));
+      expect(resolveSeriesPresentation(
+        plotted, {}, positions, false, [], pinned, false, displayChannels,
+      )).toEqual([{ color: "#aa0000" }]);
+      // …and an array already the length of `y_keys` is untouched.
+      const exact: (ExportSeriesStyle | null)[] = [
+        { color: "#aa0000", colorDerived: false }, { color: "#00aa00", colorDerived: false },
+      ];
+      expect(resolveSeriesPresentation(
+        plotted, {}, positions, false, [], exact, false, displayChannels,
+      )).toEqual([{ color: "#aa0000" }, { color: "#00aa00" }]);
     });
 
     it("leaves a pinned FLAT request's colours as pinned, even under a palette switch", () => {

@@ -1,15 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { MARKER_SHAPES } from "./markers";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 
 describe("sanitizeExportSeriesStyles", () => {
   it("passes through a well-formed entry, including line/marker/fill/color_by", () => {
     const out = sanitizeExportSeriesStyles([
       { color: "#ff0000", width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
     ]);
+    // `colorDerived: false` is the BUG-016 round-4 migration below deciding
+    // this flagless `#ff0000` against the live palette: no `--series-N` is
+    // set in this describe, so no slot resolves and an unvouchable colour is
+    // recorded as the user's. Every other key is untouched.
     expect(out).toEqual([
-      { color: "#ff0000", width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
+      { color: "#ff0000", colorDerived: false, width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
     ]);
   });
 
@@ -31,7 +36,8 @@ describe("sanitizeExportSeriesStyles", () => {
   // comment, the commit body and the BUG-014 entry) and the allowlist would
   // otherwise drop it only incidentally.
   it("deliberately does NOT restore a legend from a saved publication style", () => {
-    expect(sanitizeExportSeriesStyles([{ color: "#fff", legend: "X" }])).toEqual([{ color: "#fff" }]);
+    expect(sanitizeExportSeriesStyles([{ color: "#fff", legend: "X" }]))
+      .toEqual([{ color: "#fff", colorDerived: false }]);
     // An entry whose ONLY key is a legend has no valid fields left at all.
     expect(sanitizeExportSeriesStyles([{ legend: "X" }])).toEqual([null]);
   });
@@ -45,7 +51,7 @@ describe("sanitizeExportSeriesStyles", () => {
 
   it("drops an unrecognized step value without nulling the rest of the entry", () => {
     const out = sanitizeExportSeriesStyles([{ color: "#fff", step: "diagonal" }]);
-    expect(out).toEqual([{ color: "#fff" }]);
+    expect(out).toEqual([{ color: "#fff", colorDerived: false }]);
   });
 
   it("omits step when unset", () => {
@@ -85,21 +91,104 @@ describe("sanitizeExportSeriesStyles", () => {
     ]);
   });
 
-  it("leaves a PRE-PROVENANCE entry's flag ABSENT — the third state the migration rule needs", () => {
-    // Not defaulted either way on purpose: `true` would discard a colour the
-    // user chose on every grouped export of an old document, `false` would
-    // keep round 1's one-hue regression for the same documents.
-    const out = sanitizeExportSeriesStyles([{ color: "#7fb3ff", width: 2 }])!;
-    expect(out[0]).not.toHaveProperty("colorDerived");
-  });
-
-  it("drops the flag without a colour, and a non-boolean flag", () => {
+  it("drops the flag when there is no colour to describe", () => {
     // It describes `color` and says nothing on its own; a lone flag would
     // also turn an otherwise empty entry into a non-null one.
     expect(sanitizeExportSeriesStyles([{ colorDerived: true }])).toEqual([null]);
-    expect(sanitizeExportSeriesStyles([{ color: "#fff", colorDerived: "yes" }])).toEqual([
-      { color: "#fff" },
-    ]);
+    expect(sanitizeExportSeriesStyles([{ width: 2, colorDerived: false }])).toEqual([{ width: 2 }]);
+  });
+
+  // ── BUG-016 round 4: the PRE-PROVENANCE migration, resolved HERE ────────
+  // Round 3 left a flagless entry's provenance ABSENT and had the export wire
+  // guess it, once per request, against whatever palette was installed at
+  // export time. Review F1 measured the consequence: a reopened document
+  // re-persists its flagless array verbatim, so the guess never got written
+  // down and "re-saving retires the residual" was false. Deciding it at LOAD
+  // makes the array the app holds a provenance-carrying one, so the next save
+  // writes it -- and the comparison runs exactly once per document.
+  describe("pre-provenance migration (BUG-016 round 4)", () => {
+    let restorePalette: () => void = () => {};
+    beforeEach(() => {
+      restorePalette = installSeriesPalette();
+    });
+    afterEach(() => restorePalette());
+
+    it("marks a flagless colour DERIVED when it equals the slot at its own index", () => {
+      const out = sanitizeExportSeriesStyles([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: TEST_SERIES_PALETTE[1] },
+      ]);
+      expect(out).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
+        { color: TEST_SERIES_PALETTE[1], colorDerived: true },
+      ]);
+    });
+
+    it("marks it CHOSEN when it is not that index's slot", () => {
+      // Slot 0's hue pinned at index 1 is a colour that series never derived,
+      // and an off-palette literal is a pick anywhere.
+      expect(sanitizeExportSeriesStyles([null, { color: TEST_SERIES_PALETTE[0] }])).toEqual([
+        null, { color: TEST_SERIES_PALETTE[0], colorDerived: false },
+      ]);
+      expect(sanitizeExportSeriesStyles([{ color: "#ffe066", width: 2 }])).toEqual([
+        { color: "#ffe066", colorDerived: false, width: 2 },
+      ]);
+    });
+
+    it("compares case-insensitively — a pinned #7FB3FF is still the palette slot", () => {
+      expect(TEST_SERIES_PALETTE[0]).toBe("#7fb3ff"); // the hex the fold is about
+      expect(sanitizeExportSeriesStyles([{ color: "#7FB3FF" }])?.[0]).toEqual({
+        color: "#7FB3FF", colorDerived: true,
+      });
+      // The other half, so the measurement cannot rot: three-digit hexes are
+      // RESOLVED and compared, not skipped (`resolveToHex("#abc")` is
+      // `#aabbcc` in this environment).
+      expect(sanitizeExportSeriesStyles([{ color: "#abc" }])?.[0]).toEqual({
+        color: "#abc", colorDerived: false,
+      });
+    });
+
+    it("says CHOSEN when the live slot is UNRESOLVABLE rather than guessing", () => {
+      // `resolveToHex`'s documented alpha-0 return is null on BOTH sides, and
+      // without the `slot === null` guard they compare EQUAL — a colour this
+      // sanitizer happily restores would be marked derived on a coincidence
+      // of unresolvability and then dropped from every grouped export.
+      restorePalette();
+      const root = document.documentElement;
+      root.style.setProperty("--series-1", "transparent");
+      restorePalette = () => root.style.removeProperty("--series-1");
+      expect(sanitizeExportSeriesStyles([{ color: "transparent", width: 2 }])).toEqual([
+        { color: "transparent", colorDerived: false, width: 2 },
+      ]);
+    });
+
+    it("treats a MALFORMED flag as absent and migrates it by the same rule", () => {
+      // Review F3's two measured `.dwk` cases. `"no"` is truthy and `null` is
+      // falsy, so round 3's `provenance === undefined` test read them as the
+      // document's word: a CHOSEN colour was silently dropped from a grouped
+      // export, and a DERIVED one shipped (round 1's regression). Neither is
+      // a boolean, so neither is the document's word about anything.
+      expect(sanitizeExportSeriesStyles([{ color: "#ffe066", colorDerived: "no" }])).toEqual([
+        { color: "#ffe066", colorDerived: false },
+      ]);
+      expect(sanitizeExportSeriesStyles([{ color: TEST_SERIES_PALETTE[0], colorDerived: null }]))
+        .toEqual([{ color: TEST_SERIES_PALETTE[0], colorDerived: true }]);
+      expect(sanitizeExportSeriesStyles([{ color: TEST_SERIES_PALETTE[0], colorDerived: 1 }]))
+        .toEqual([{ color: TEST_SERIES_PALETTE[0], colorDerived: true }]);
+    });
+
+    it("never overrides a REAL flag with the comparison", () => {
+      // The whole point of recording provenance: a colour the user picked that
+      // happens to equal its slot stays chosen, and a derived colour under a
+      // palette that has since moved stays derived.
+      expect(sanitizeExportSeriesStyles([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: false },
+        { color: "#ffe066", colorDerived: true },
+      ])).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: false },
+        { color: "#ffe066", colorDerived: true },
+      ]);
+    });
   });
 
   // Value-checked like `line`/`step`, and against the SAME `MARKER_SHAPE_VALUES`

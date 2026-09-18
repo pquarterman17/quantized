@@ -153,20 +153,24 @@ export function buildExportStyles(
  *     positions to `[1,0]`; hiding a channel after the pin shifts the rest.
  * Recording the answer at the producer removes both inputs from the question.
  *
- * PRE-PROVENANCE ARRAYS (the one-time migration rule). An entry with a `color`
- * and NO `colorDerived` key was pinned by a build that predates this key —
- * a `FigureDoc` or graph template from an earlier save, a `FigureDocument`
- * promoted from one. Only for those, and only on a GROUPED request, the
- * colour is dropped when it resolves to exactly the palette slot at the
- * entry's OWN ARRAY INDEX: index order IS the order every pinned-array
- * producer built in (`legacyFigure`, `useGraphTemplates` and `plotSpecFigure`
- * all pass `positions = null`), so this asks about the pin's own position and
- * not the request's. The palette is still the live one, so the residual is
- * narrow and named: a pre-provenance document exported under a DIFFERENT
- * theme/preset than it was pinned under reads its derived colour as chosen
- * and paints one hue per channel, as it did before round 2. Re-saving such a
- * figure writes provenance and retires the residual for it permanently.
- * See plans/BUGS_AND_ISSUES.md, BUG-016 round 3.
+ * PRE-PROVENANCE ARRAYS ARE NOT THIS FUNCTION'S PROBLEM (round 4). Round 3
+ * put a migration rule here — a palette comparison against the slot at the
+ * entry's own index — which ran on every request, under whatever palette was
+ * installed at export time, and never wrote its answer down. It now runs
+ * ONCE, at LOAD, in `publicationStyles.sanitizeExportSeriesStyles`, which
+ * every persistence path goes through (`figuredoc.migrateConfig` for a `.dwk`
+ * FigureDoc, `figuredoc.loadGraphTemplates`, `figureDocument` for a canonical
+ * document's `publication`, `nameKeyedRecipes` for an imported template file).
+ * So an array reaching this boundary has provenance unless it was minted
+ * in-session by a producer that records it (`buildExportStyles`,
+ * `originTemplate.sanitizeImportedTemplate`).
+ *
+ * A still-absent flag is therefore UNVOUCHED, not "pre-provenance": on a
+ * GROUPED request its colour is omitted, because sending an unvouched colour
+ * paints every level one hue (round 1's regression, "worse than the bug")
+ * while omitting it falls back to matplotlib's cycle, which is what the
+ * pre-BUG-016 export did. FLAT requests are untouched either way.
+ * See plans/BUGS_AND_ISSUES.md, BUG-016 round 4.
  *
  * Returns the caller's own array by reference when nothing changed.
  */
@@ -175,13 +179,12 @@ export function toWireSeriesStyles(
   grouped: boolean,
 ): (ExportSeriesStyle | null)[] {
   let changed = false;
-  const out = styles.map((style, i) => {
+  const out = styles.map((style) => {
     if (!style) return style;
     const provenance = style.colorDerived;
-    const derived = provenance === undefined
-      ? style.color !== undefined && isPaletteSlot(style.color, i)
-      : provenance;
-    const dropColor = grouped && derived && style.color !== undefined;
+    // `?? true` is the UNVOUCHED rule above — absent means the colour cannot
+    // be vouched for, and a grouped request must not ship one it cannot.
+    const dropColor = grouped && style.color !== undefined && (provenance ?? true);
     if (provenance === undefined && !dropColor) return style;
     changed = true;
     const rest: ExportSeriesStyle = { ...style };
@@ -192,19 +195,4 @@ export function toWireSeriesStyles(
     return Object.keys(rest).length > 0 ? rest : null;
   });
   return changed ? out : styles;
-}
-
-/** The PRE-PROVENANCE migration predicate only (see `toWireSeriesStyles`):
- *  does this pinned hex still equal the palette slot for the index it was
- *  pinned at? An UNRESOLVABLE slot answers NO rather than guessing —
- *  `resolveToHex` needs a canvas for anything that is not already a 6-digit
- *  hex and returns null without one, so a real `oklch()` palette in a
- *  canvas-less environment would otherwise compare null-to-null and strip a
- *  3-digit pinned colour the user chose (`sanitizeExportSeriesStyles` accepts
- *  `#abc`). Keeping the colour is the safe side of that: it loses per-level
- *  cycling on one legacy document, where the other side loses a colour. */
-function isPaletteSlot(color: string, index: number): boolean {
-  const slot = resolveToHex(seriesColor(index));
-  if (slot === null) return false;
-  return resolveToHex(color) === slot;
 }

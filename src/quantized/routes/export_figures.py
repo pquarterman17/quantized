@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
@@ -43,6 +43,7 @@ from quantized.routes.export_figures_schema import (
     TickFormatSpec,
     _ResolvedFigure,
     _tick_fmt,
+    reject_document_only_style_keys,
 )
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -184,6 +185,14 @@ class FigureRequest(BaseModel):
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
     filename: str = "figure"
+
+    # BUG-016 round 4 (review F9): refuse a leaked DOCUMENT-only style key.
+    # The rule and why this one key is a 422 rather than a graceful degrade
+    # live with the list itself, in `export_figures_schema`. Declared on this
+    # model, so the page route inherits it through `PagePanelSpec.figure`.
+    _no_document_keys = field_validator("series_styles")(
+        reject_document_only_style_keys
+    )
 
 
 def _figure_series(req: FigureRequest) -> _ResolvedFigure:

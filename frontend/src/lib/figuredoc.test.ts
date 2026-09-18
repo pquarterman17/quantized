@@ -1,6 +1,6 @@
 // lib/figuredoc — FigureDoc sanitizers + user graph templates (#12/#15).
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   deleteGraphTemplate,
@@ -10,6 +10,7 @@ import {
   saveGraphTemplate,
   type FigureDoc,
 } from "./figuredoc";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct } from "./types";
 
 const DATA: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
@@ -104,5 +105,39 @@ describe("graph templates (#15)", () => {
     expect(deleteGraphTemplate("web").map((t) => t.name)).toEqual(["aps-tight"]);
     localStorage.setItem("qz.graphTemplates", "garbage");
     expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  // BUG-016 round 4: the SECOND persistence path for a pinned style array.
+  // A template saved (or Origin-imported) before `colorDerived` existed would
+  // otherwise reach `docSeriesStyles` via `applyStyleTemplate` with no
+  // provenance, and a grouped export would drop its colour as unvouchable.
+  describe("pre-provenance seriesStyles gain provenance at load", () => {
+    let restorePalette: () => void = () => {};
+    beforeEach(() => {
+      restorePalette = installSeriesPalette();
+    });
+    afterEach(() => restorePalette());
+
+    it("migrates a flagless stored array by the palette-slot rule", () => {
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([{
+        name: "old", style: "aps", overrides: null,
+        seriesStyles: [{ color: TEST_SERIES_PALETTE[0], width: 2 }, { color: "#ffe066" }],
+      }]));
+      expect(loadGraphTemplates()[0]!.seriesStyles).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
+        { color: "#ffe066", colorDerived: false },
+      ]);
+    });
+
+    it("keeps the tolerant shape check — a record with no seriesStyles still loads", () => {
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([
+        { name: "pre15", style: "aps" },
+      ]));
+      const loaded = loadGraphTemplates();
+      expect(loaded.map((t) => t.name)).toEqual(["pre15"]);
+      // Normalized to the explicit "this template carries none" sentinel,
+      // which is what `applyStyleTemplate` already coerced it to (`?? null`).
+      expect(loaded[0]!.seriesStyles).toBeNull();
+    });
   });
 });

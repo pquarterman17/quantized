@@ -198,7 +198,7 @@ function buildFigureSpecForView(
   // slot in the CANVAS' own index space are resolved together by
   // `lib/figureSpecSeries.ts` -- see `resolveDisplaySeries`' doc for why the
   // positions come from the canvas' list rather than this request's.
-  const { canvasChannels, plotted, positions } = resolveDisplaySeries(data, {
+  const { canvasChannels, displayChannels, plotted, positions } = resolveDisplaySeries(data, {
     yKeys: st.yKeys,
     xKey: st.xKey,
     seriesOrder: st.seriesOrder,
@@ -277,10 +277,12 @@ function buildFigureSpecForView(
 
   // The legend overrides, aligned 1:1 with `plotted` (= the wire's `y_keys`)
   // like every other per-series list here; `undefined` = not renamed (BUG-014).
-  // The trailing `groupCol !== null` is BUG-016 — see `resolveSeriesPresentation`.
+  // The trailing `groupCol !== null` and `displayChannels` are BUG-016 (round 4
+  // re-cuts a PINNED array to `y_keys`) — see `resolveSeriesPresentation`.
   const legends = plotted.map((ch) => st.seriesLabels[ch]);
   const seriesPresentation = resolveSeriesPresentation(
-    plotted, st.seriesStyles, positions, seriesCycle === true, legends, extras.publicationSeriesStyles, groupCol !== null,
+    plotted, st.seriesStyles, positions, seriesCycle === true, legends,
+    extras.publicationSeriesStyles, groupCol !== null, displayChannels,
   );
 
   return {

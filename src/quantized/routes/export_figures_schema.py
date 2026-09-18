@@ -35,6 +35,8 @@ from pydantic import BaseModel
 
 __all__ = [
     "SERIES_STYLES_DOC",
+    "DOCUMENT_ONLY_STYLE_KEYS",
+    "reject_document_only_style_keys",
     "WATERFALL_OFFSETS_DOC",
     "FigureFacet",
     "FigureFacetSeries",
@@ -74,6 +76,48 @@ SERIES_STYLES_DOC = (
     "and a client that wants the levels to keep cycling colours omits `color` "
     "rather than sending the channel's own palette slot."
 )
+
+# ── the document-only key guard (BUG-016 round 4, review F9) ───────────────
+# `colorDerived` is the frontend's PROVENANCE flag for a pinned `color`: `true`
+# = the palette slot the canvas happened to give that series, `false` = a
+# colour the user chose. It decides whether a GROUPED request may send the
+# colour at all (`lib/exportStyles.toWireSeriesStyles`), and it is DOCUMENT
+# state, never a wire field -- the client deletes it at that one boundary.
+#
+# Until this guard the promise had frontend-only enforcement: `series_styles`
+# is a loose `dict[str, Any]`, so a leaked flag was accepted and silently
+# ignored. Silence is the wrong answer for THIS key specifically. Every other
+# unrecognized key is a style the renderer does not implement, and degrading
+# gracefully is the documented contract (see SERIES_STYLES_DOC); a leaked
+# `colorDerived` instead means the client skipped the wire boundary, so the
+# colour beside it was never filtered either -- exactly the round-1 regression
+# where every level of a grouped channel painted one hue. A 422 names the bug
+# at the request that carries it instead of rendering a wrong figure.
+#
+# Deliberately a NARROW allow-nothing list, not `extra="forbid"` on a strict
+# sub-model: forbidding everything unknown would break the degrade-gracefully
+# contract the field doc promises and 422 an older client's harmless extras.
+DOCUMENT_ONLY_STYLE_KEYS = ("colorDerived",)
+
+
+def reject_document_only_style_keys(
+    styles: list[dict[str, Any] | None] | None,
+) -> list[dict[str, Any] | None] | None:
+    """Raise ``ValueError`` (pydantic -> 422) if any entry carries a key that
+    is document-only and must have been stripped at the client's wire
+    boundary. Returns ``styles`` unchanged otherwise."""
+    for index, entry in enumerate(styles or ()):
+        if entry is None:
+            continue
+        for key in DOCUMENT_ONLY_STYLE_KEYS:
+            if key in entry:
+                raise ValueError(
+                    f"series_styles[{index}] carries the document-only key "
+                    f"{key!r}; it must be stripped before the request "
+                    "(see lib/exportStyles.toWireSeriesStyles, BUG-016)"
+                )
+    return styles
+
 
 WATERFALL_OFFSETS_DOC = (
     "Per-plotted-series vertical offset in Y data units, aligned to `y_keys`: "

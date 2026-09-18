@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { toWireSeriesStyles } from "./exportStyles";
 import { loadGraphTemplates, saveGraphTemplate } from "./figuredoc";
 import {
   importOriginTemplateFile,
@@ -25,6 +26,13 @@ const WIRE = {
   overrides: { x_lim: [0, 1], legend: { show: true, loc: "upper right" } },
   seriesStyles: [{ color: "#FF0000", width: 0, marker: true }, null],
 };
+
+/** `WIRE.seriesStyles` as the import records it (BUG-016 round 4): a decoded
+ *  Origin hex is a colour someone CHOSE in Origin, so it is marked as such
+ *  rather than left unvouched and dropped from a grouped export. */
+const WIRE_STYLES_TAGGED = [
+  { color: "#FF0000", colorDerived: false, width: 0, marker: true }, null,
+];
 
 function stubFetchOk(body: unknown) {
   const mock = vi.fn().mockResolvedValue({
@@ -50,10 +58,46 @@ function stubFetch422(detail: string) {
 beforeEach(() => localStorage.clear());
 afterEach(() => vi.unstubAllGlobals());
 
+// ── BUG-016 round 4 (review F2): an Origin template's colours are CHOSEN ──
+// This is a PRODUCER of pinned style arrays, not a legacy population — every
+// template imported tomorrow arrives through it — and its hexes are decoded
+// out of the file's own curve records, so this app's palette had no part in
+// them. Unflagged they are UNVOUCHED at the wire boundary, and a grouped
+// export omits an unvouched colour: the imported template's curve colour
+// would be dropped from exactly the export it was imported to style.
+describe("BUG-016 — an imported Origin template's colour provenance", () => {
+  it("records every decoded colour as CHOSEN", () => {
+    const t = sanitizeImportedTemplate(WIRE, "fallback")!;
+    expect(t.seriesStyles).toEqual([
+      { color: "#FF0000", colorDerived: false, width: 0, marker: true }, null,
+    ]);
+  });
+
+  it("adds nothing to an entry with no colour — honestly partial stays partial", () => {
+    const t = sanitizeImportedTemplate(
+      { ...WIRE, seriesStyles: [{ width: 3, line: "dashed" }, null, "junk"] },
+      "fallback",
+    )!;
+    expect(t.seriesStyles).toEqual([{ width: 3, line: "dashed" }, null, "junk"]);
+  });
+
+  it("so the colour REACHES a grouped wire instead of being dropped", () => {
+    // The end-to-end claim, through the real boundary every producer of a
+    // request's `series_styles` runs its array through. Measured before this
+    // commit: `[{width: 0, marker: true}]` — the Origin colour gone.
+    const t = sanitizeImportedTemplate(WIRE, "fallback")!;
+    expect(toWireSeriesStyles(t.seriesStyles!, true)).toEqual([
+      { color: "#FF0000", width: 0, marker: true }, null,
+    ]);
+  });
+});
+
 describe("sanitizeImportedTemplate", () => {
   it("passes a template-shaped response through and tags its provenance", () => {
     const t = sanitizeImportedTemplate(WIRE, "fallback");
-    expect(t).toEqual({ ...WIRE, source: "origin" });
+    // `colorDerived: false` on the coloured entry is BUG-016 round 4 above —
+    // an Origin hex is a CHOSEN colour. Nothing else is added or dropped.
+    expect(t).toEqual({ ...WIRE, seriesStyles: WIRE_STYLES_TAGGED, source: "origin" });
   });
 
   it("keeps honestly-partial responses partial (null overrides/seriesStyles)", () => {
@@ -101,7 +145,7 @@ describe("importOriginTemplateFile (upload → sanitize → store)", () => {
     expect(t.source).toBe("origin");
     const stored = loadGraphTemplates();
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toEqual({ ...WIRE, source: "origin" });
+    expect(stored[0]).toEqual({ ...WIRE, seriesStyles: WIRE_STYLES_TAGGED, source: "origin" });
   });
 
   it("re-importing appends a numbered copy instead of clobbering the earlier import", async () => {

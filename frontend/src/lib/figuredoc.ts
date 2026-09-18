@@ -10,8 +10,13 @@
 
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureOverrides } from "./figureOverrides";
-import type { ExportSeriesStyle } from "./exportStyles";
 import { isAxisScale, scaleFromLog } from "./plotview";
+// The wire-style type AND its persistence sanitizer, both from the module that
+// owns them. It used to be a type-only import from `lib/exportStyles` (which
+// re-exports the type); taking it from the source lets the two `.dwk`
+// sanitizers below call `sanitizeExportSeriesStyles` without pulling the
+// export BUILDERS and the wire boundary into this module's runtime graph.
+import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import type { AxisScale, DataStruct } from "./types";
 
 /** The builder configuration a FigureDoc restores (and a run re-exports). */
@@ -92,7 +97,25 @@ function migrateConfig(v: unknown): FigureConfig | null {
   const xScale = isAxisScale(o.xScale) ? o.xScale : typeof o.xLog === "boolean" ? scaleFromLog(o.xLog) : null;
   const yScale = isAxisScale(o.yScale) ? o.yScale : typeof o.yLog === "boolean" ? scaleFromLog(o.yLog) : null;
   if (xScale === null || yScale === null) return null;
-  return { ...(o as unknown as FigureConfig), xScale, yScale };
+  // BUG-016 round 4: `config.seriesStyles` used to be spread VERBATIM out of
+  // the persisted JSON — this path never ran the app's own validator for that
+  // shape, so a `.dwk` was the one FigureDoc source whose publication styles
+  // reached the export wire unchecked. Review F3 measured the two ends of
+  // that: `colorDerived: "no"` (truthy) dropped a colour the user CHOSE from a
+  // grouped export, and `colorDerived: null` (falsy) shipped a derived one —
+  // round 1's regression. Running it through the same sanitizer
+  // `figureDocument`/`nameKeyedRecipes` use both closes that and is where a
+  // pre-provenance array now ACQUIRES its provenance (once, at load), which is
+  // what makes "re-saving writes provenance" true for this path.
+  // `undefined` (a config saved before the field existed) stays `undefined`.
+  const seriesStyles =
+    o.seriesStyles === undefined ? undefined : sanitizeExportSeriesStyles(o.seriesStyles);
+  return {
+    ...(o as unknown as FigureConfig),
+    xScale,
+    yScale,
+    ...(seriesStyles === undefined ? {} : { seriesStyles }),
+  };
 }
 
 /** Validate persisted figure docs (drop malformed; clamp dead dataset refs —
@@ -152,7 +175,19 @@ export function loadGraphTemplates(): GraphTemplate[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isGraphTemplate) : [];
+    if (!Array.isArray(parsed)) return [];
+    // BUG-016 round 4: the SECOND persistence path for a pinned style array,
+    // and the other half of "provenance is assigned once, at load". A template
+    // saved before `colorDerived` existed — or imported from an Origin file by
+    // a build that predates it — would otherwise reach `docSeriesStyles`
+    // (`useGraphTemplates.applyStyleTemplate`) and then the export wire with
+    // no provenance at all. `seriesStyles` is the only field migrated; the
+    // deliberately tolerant `isGraphTemplate` shape check above is unchanged,
+    // so a pre-#15 record still loads exactly as it always has.
+    return parsed.filter(isGraphTemplate).map((t) => ({
+      ...t,
+      seriesStyles: sanitizeExportSeriesStyles(t.seriesStyles),
+    }));
   } catch {
     return [];
   }

@@ -303,7 +303,19 @@ describe("import / export", () => {
     if (!exported.ok) throw new Error("export failed");
     localStorage.clear();
     expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
-    expect(loadGraphTemplates()[0]).toEqual(original);
+    // Lossless UP TO the one additive migration a load performs: a flagless
+    // `color` acquires its `colorDerived` provenance (BUG-016 round 4). It is
+    // decided once and then persisted, so a second round trip is a fixpoint —
+    // asserted below rather than assumed.
+    const loaded = loadGraphTemplates()[0];
+    expect(loaded).toEqual({
+      ...original, seriesStyles: [null, { color: "#ff0000", colorDerived: false }],
+    });
+    const again = exportNameKeyed("graph", original.name);
+    if (!again.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", again.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(loaded);
   });
 
   it("surfaces a parse failure as a refusal, not an exception", () => {
@@ -504,7 +516,9 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
     expect(r.ok).toBe(true);
     const stored = loadGraphTemplates()[0];
     expect(stored.overrides).toEqual({ grid: true });
-    expect(stored.seriesStyles).toEqual([{ color: "#123456" }, null]);
+    // `colorDerived` is ADDED (BUG-016 round 4's load-time provenance), while
+    // `sneaky`/`width: -5` are still dropped — the allowlist is unchanged.
+    expect(stored.seriesStyles).toEqual([{ color: "#123456", colorDerived: false }, null]);
   });
 });
 

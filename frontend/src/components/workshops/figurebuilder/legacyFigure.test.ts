@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildExportStyles } from "../../../lib/exportStyles";
-import { sanitizeExportSeriesStyles } from "../../../lib/publicationStyles";
+import { sanitizeFigureDocs } from "../../../lib/figuredoc";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "../../../lib/regressionMatrix.testkit";
 import type { DataStruct } from "../../../lib/types";
 import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
@@ -240,30 +240,81 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
       .toEqual([null, { color: "#ffe066" }]);
   });
 
-  // A PRE-PROVENANCE fixture document: the literal `config.seriesStyles` a
-  // `.dwk` saved before this commit carries, taken through the persistence
-  // sanitizer exactly as a workspace load would take it.
-  describe("a document saved before provenance existed", () => {
-    const LEGACY_DOC_STYLES: unknown = [
-      { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
-      { color: "#ffe066", width: 2 },
-    ];
+  // A PRE-PROVENANCE `.dwk` document, taken through the REAL load path
+  // (`sanitizeFigureDocs` -> `migrateConfig`) rather than through the
+  // sanitizer by hand. That distinction is the whole of review F3: round 3's
+  // test called `sanitizeExportSeriesStyles` directly and claimed it was
+  // "exactly as a workspace load would take it", while a `.dwk` FigureDoc's
+  // `config` was in fact spread VERBATIM out of the JSON and never validated.
+  describe("a `.dwk` document saved before provenance existed", () => {
+    /** The literal persisted shape, including the two malformed flags review
+     *  F3 measured flipping provenance on this path. */
+    const dwkDoc = (styles: unknown): unknown => ({
+      id: "figd-1",
+      name: "Saved",
+      datasetId: "d1",
+      live: true,
+      config: {
+        xKey: null, yKeys: [0, 1], xScale: "linear", yScale: "linear",
+        title: "", xLabel: "", yLabel: "", style: "default", fmt: "pdf", dpi: 300,
+        overrides: null, seriesStyles: styles,
+      },
+    });
+    const loadStyles = (styles: unknown): (typeof BASE)["docSeriesStyles"] =>
+      sanitizeFigureDocs([dwkDoc(styles)], new Set(["d1"]))[0]!.config.seriesStyles;
 
-    it("drops the derived colour and keeps the chosen one under the palette it was pinned with", () => {
-      const restored = sanitizeExportSeriesStyles(LEGACY_DOC_STYLES)!;
-      expect(restored[0]?.colorDerived).toBeUndefined(); // the pre-provenance shape
-      expect(buildLegacyFigureSpec(grouped({ yKeys: [0, 1], docSeriesStyles: restored }))!.series_styles)
-        .toEqual([{ width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
+    it("gains provenance AT LOAD, so the palette at export time cannot change the answer", () => {
+      const restored = loadStyles([
+        { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
+        { color: "#ffe066", width: 2 },
+      ])!;
+      expect(restored).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2, line: "dashed" },
+        { color: "#ffe066", colorDerived: false, width: 2 },
+      ]);
+      const wire = (): unknown =>
+        buildLegacyFigureSpec(grouped({ yKeys: [0, 1], docSeriesStyles: restored }))!.series_styles;
+      expect(wire()).toEqual([{ width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
+      // Round 3's residual, RETIRED for a loaded document: the same array
+      // under a palette that has since moved answers identically, where the
+      // export-time comparison shipped the derived colour and painted every
+      // level one hue.
+      flipTheme();
+      expect(wire()).toEqual([{ width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
     });
 
-    it("RESIDUAL: under a different palette its derived colour reads as chosen", () => {
-      // The documented limit of the migration rule (BUG-016 round 3). Pinned
-      // so it is a known behaviour; re-saving the figure writes provenance
-      // and retires it for that document.
-      const restored = sanitizeExportSeriesStyles(LEGACY_DOC_STYLES)!;
-      flipTheme();
-      expect(buildLegacyFigureSpec(grouped({ yKeys: [0, 1], docSeriesStyles: restored }))!.series_styles)
-        .toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
+    it("treats a MALFORMED persisted flag as absent — review F3's two cases", () => {
+      // `"no"` is truthy: round 3 read it as "the document says derived" and
+      // dropped a colour the user CHOSE. `null` is falsy: read as "chosen",
+      // shipping a derived colour — round 1's regression, back.
+      expect(loadStyles([
+        { color: "#ffe066", width: 2, colorDerived: "no" },
+        { color: TEST_SERIES_PALETTE[1], width: 2, colorDerived: null },
+      ])).toEqual([
+        { color: "#ffe066", colorDerived: false, width: 2 },
+        { color: TEST_SERIES_PALETTE[1], colorDerived: true, width: 2 },
+      ]);
+    });
+
+    it("RE-SAVING writes the provenance it gained — the residual really does retire", () => {
+      // Review F1: round 3 claimed this in three places and it was false.
+      // `legacyFigure` returns `docSeriesStyles` verbatim when a doc seeded
+      // it, so a reopened pre-provenance document re-persisted its flagless
+      // array forever. It is true now because the ARRAY the builder holds
+      // already carries the flag, assigned at load.
+      const restored = loadStyles([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
+      const resaved = buildLegacyFigureDoc(
+        grouped({ yKeys: [0], docSeriesStyles: restored }), IDENTITY, OUTPUT,
+      )!;
+      expect(resaved.config.seriesStyles).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
+      ]);
+    });
+
+    it("leaves a config with NO seriesStyles field exactly as it was", () => {
+      const docs = sanitizeFigureDocs([dwkDoc(undefined)], new Set(["d1"]));
+      expect(docs[0]!.config.seriesStyles).toBeUndefined();
+      expect(sanitizeFigureDocs([dwkDoc(null)], new Set(["d1"]))[0]!.config.seriesStyles).toBeNull();
     });
   });
 

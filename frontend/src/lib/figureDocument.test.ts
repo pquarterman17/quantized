@@ -254,7 +254,11 @@ describe("FigureDocument v2", () => {
     })!;
     expect(restored.publication).toEqual({
       overrides: { ticks: { dir: "in", minor: true }, margins: { left: 0.1 }, x_breaks: [[1, 3]], annotations: [{ x: 1, y: 2, text: "ok" }] },
-      seriesStyles: [{ color: "#abc", marker_size: 4, fill: { vs: 2 } }, null],
+      // `colorDerived: false` is the BUG-016 round-4 load-time migration: a
+      // flagless persisted colour is classified once, here, instead of being
+      // guessed at every export. No `--series-N` is installed in this file, so
+      // no slot resolves and an unvouchable colour is recorded as the user's.
+      seriesStyles: [{ color: "#abc", colorDerived: false, marker_size: 4, fill: { vs: 2 } }, null],
     });
     restored.publication!.overrides!.margins!.left = 0.8;
     restored.publication!.seriesStyles![0]!.color = "#fff";
