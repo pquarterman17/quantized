@@ -112,6 +112,18 @@ describe("map view `.dwk` persistence (P2.8)", () => {
     expect(useApp.getState().mapViews).toEqual({});
   });
 
+  // Round 4, finding 2: `mapPaintedLimits` is transient paint state, not part
+  // of the `.dwk` document, so it is never mentioned by `mapViews`'s own
+  // round-2 test above — but it is keyed by the SAME dataset ids, and a
+  // reopened project (or a sibling saved from it) can bring the SAME id back
+  // live, with the PREVIOUS project's painted pair still attached. Cleared
+  // for the same reason `mapViews` is, right beside it in `loadWorkspace`.
+  it("loadWorkspace also clears the previous project's PAINTED-limits report", () => {
+    useApp.getState().reportMapPaintedLimits("a", [7, 9]);
+    useApp.getState().loadWorkspace({ datasets: [makeDataset("a", "rsm")] });
+    expect(useApp.getState().mapPaintedLimits).toEqual({});
+  });
+
   it("a pre-P2.8 doc (no field at all) loads as the empty record", () => {
     const loaded = parseWorkspace(serializeWorkspace({ datasets: [makeDataset("a", "rsm")] }));
     expect(loaded.mapViews).toEqual({});

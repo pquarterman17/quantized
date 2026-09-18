@@ -120,6 +120,16 @@ export interface MapViewSlice {
   reportMapPaintedLimits: (datasetId: string | null, painted: [number, number] | null) => void;
 }
 
+/** The trailing `-<n>` sequence number off a `nextDatasetId`-shaped id
+ *  (`ds-<t36>-<n>`), for a short history-label disambiguator (P2.8 review
+ *  round 4, finding 8) — `"#4"` rather than the whole id. Falls back to the
+ *  id itself for anything that does not look generated (a hand-built id in a
+ *  test, or a future id shape), so the label never shows nothing at all. */
+function shortDatasetId(id: string): string {
+  const n = id.slice(id.lastIndexOf("-") + 1);
+  return n || id;
+}
+
 export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
   /** This dataset's entry as it stands (the default when it has none). */
   const at = (datasetId: string): MapViewState => mapViewFor(get().mapViews, datasetId);
@@ -138,8 +148,20 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
     // `store/workbookTransfer.ts`'s `paste workbook "<name>"`; a dataset the
     // store no longer has (removed between the gesture and the write) keeps
     // the bare label rather than inventing a name.
-    const name = get().datasets.find((d) => d.id === datasetId)?.name;
-    get().recordHistory(name ? `${label} "${name}"` : label);
+    //
+    // A NAME alone is not always enough (P2.8 review round 4, finding 8): two
+    // datasets routinely share one — the same file imported twice, or from
+    // two workbooks — and then the label is ambiguous again, right back to
+    // "which map does this belong to?". When another LIVE dataset has the
+    // same name, append the dataset's own short id (the sequence suffix
+    // `nextDatasetId` assigns, e.g. "#4") as a disambiguator; a unique name
+    // is left exactly as round 3 shipped it, so every existing label and test
+    // for the common case is untouched.
+    const datasets = get().datasets;
+    const name = datasets.find((d) => d.id === datasetId)?.name;
+    const collides = name != null && datasets.filter((d) => d.name === name).length > 1;
+    const named = name ? `${label} "${name}"${collides ? ` #${shortDatasetId(datasetId)}` : ""}` : label;
+    get().recordHistory(named);
     set((s) => ({
       mapViews: { ...s.mapViews, [datasetId]: fn(mapViewFor(s.mapViews, datasetId)) },
     }));

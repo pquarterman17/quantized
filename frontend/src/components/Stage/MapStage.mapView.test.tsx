@@ -366,6 +366,30 @@ describe("the Inspector is told what the map actually painted (round 3, finding 
     await waitFor(() => expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([150, 300]));
     expect(screen.queryByTestId("map-colour-limits-effective")).toBeNull();
   });
+
+  // Round 4, finding 1: `draw` returns null both while there is nothing to
+  // paint YET (no payload — a map still loading, or a <3-channel dataset that
+  // never gets one) and when the limits genuinely paint nothing; before this
+  // round `useMapPaint` reported both alike, so a LOADING map — with limits
+  // the data would honour just fine — flashed "nothing to paint at these
+  // limits", blaming the typed range for a regrid that just hadn't finished.
+  it("a LOADING map reports nothing — no 'effective' row, no 'nothing to paint' message", () => {
+    useApp.setState({ mapPaintedLimits: {} });
+    useApp.getState().setMapColorLimits("ds-a", [150, 300]); // a pair the map WILL honour, once it paints
+    render(
+      <>
+        <MapStage />
+        <MapColorLimits />
+      </>,
+    );
+    // Asserted synchronously, before `mapReady()`: the offline regrid is
+    // still in flight, so `payload` is still null and this is the state a
+    // real project-open or a <3-channel dataset sits in for as long as that
+    // takes.
+    expect(useApp.getState().mapPaintedLimits["ds-a"]).toBeUndefined();
+    const row = screen.queryByTestId("map-colour-limits-effective");
+    expect(row).toBeNull();
+  });
 });
 
 describe("a map subscribes to its OWN dataset's entry (round 3, finding 10)", () => {

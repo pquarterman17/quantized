@@ -121,7 +121,25 @@ const CHIP: CSSProperties = {
  *  margin (`MARGIN.bottom = 42`), across the plot and under the colourbar.
  *  Each chip now truncates with an ellipsis (the full text stays in its
  *  `title`, which is where the reason already lives), and the strip itself
- *  scrolls past four rows instead of growing. */
+ *  scrolls past four rows instead of growing.
+ *
+ *  The strip's OWN `pointerEvents` (P2.8 review round 4, finding 7): the
+ *  overlay's outer `<div>` is `pointer-events: none` end to end so the map
+ *  underneath stays clickable, and each chip individually opts back into
+ *  `auto` (below) so it alone stays clickable — the strip container itself
+ *  was left at the inherited `none`. That is fine right up until it also
+ *  scrolls: a `none` element cannot be the target of a scrollbar drag, so the
+ *  scrollbar the round-3 budget introduced could not be grabbed at all (the
+ *  content stayed reachable some other way — wheel-over-a-chip scroll-chains
+ *  up to it, and Tab scrolls a focused chip into view — but the direct
+ *  scrollbar affordance never worked). The strip is set to `auto` below,
+ *  unconditionally: it is rendered only when it holds at least one chip, and
+ *  those chips already covered essentially all of its visual footprint (each
+ *  is `auto` too), so this costs only the few pixels of gap/padding between
+ *  wrapped chips — a shape that already exists on every individual DRAWN
+ *  chip and box-select bar elsewhere in this file. */
+const PARKED_STRIP: CSSProperties = { pointerEvents: "auto" };
+
 const PARKED_CHIP: CSSProperties = {
   ...CHIP,
   border: "1px dashed var(--border)",
@@ -239,6 +257,7 @@ export default function MapSliceOverlay({
             maxWidth: "60%",
             maxHeight: 72,
             overflowY: "auto",
+            ...PARKED_STRIP,
           }}
         >
           {parkedSlices.map((def) => (

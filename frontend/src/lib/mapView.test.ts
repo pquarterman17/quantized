@@ -192,4 +192,26 @@ describe("sanitizeMapViews", () => {
     // The filtered path is unaffected: it was already bounded by the ids.
     expect(Object.keys(sanitizeMapViews(raw, new Set(["ds-7"])))).toEqual(["ds-7"]);
   });
+
+  it("the 256 cap follows JS's own key order, not file order, for an integer-like key (round 4, finding 6)", () => {
+    const raw: Record<string, MapViewState> = {};
+    for (let i = 0; i < 300; i++) raw[`ds-${i}`] = VIEW;
+    // Ordinary ids (`ds-<n>`) are not integer-like, so insertion order holds
+    // and the cap keeps exactly the first 256 written.
+    const ordinary = Object.keys(sanitizeMapViews(raw));
+    expect(ordinary).toHaveLength(256);
+    expect(ordinary[0]).toBe("ds-0");
+    expect(ordinary[255]).toBe("ds-255");
+    expect(ordinary).not.toContain("ds-256");
+
+    // A single INTEGER-LIKE key, written LAST in the object, is moved to the
+    // FRONT by the JS engine's own property order (ahead of every non-integer
+    // key) — before `sanitizeMapViews` ever runs. It is therefore among the
+    // survivors even though it is textually last, which is the documented,
+    // deterministic-by-key-order behaviour, not a bug this function can fix.
+    const withIntegerKey: Record<string, MapViewState> = { ...raw, "9999": VIEW };
+    const kept = Object.keys(sanitizeMapViews(withIntegerKey));
+    expect(kept).toHaveLength(256);
+    expect(kept[0]).toBe("9999");
+  });
 });

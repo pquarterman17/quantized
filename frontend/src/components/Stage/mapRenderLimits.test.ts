@@ -115,6 +115,19 @@ describe("effectiveColorLimits", () => {
       expect(effectiveColorLimits([0, 5], -2, 9, false)).toEqual([0, 5]);
       expect(effectiveColorLimits([5, 0], -2, 9, false)).toEqual([-2, 9]);
     });
+
+    // Review round 4, finding 5: the fix above only covered the branch that
+    // runs when the caller PASSES explicit limits. With no explicit limits at
+    // all, a non-positive `autoLo` in log mode used to come straight back out
+    // as the auto pair — a log range with a non-positive floor, the exact
+    // thing the header reserves `null` for.
+    it("…and so is a non-positive auto floor with NO explicit limits at all", () => {
+      expect(effectiveColorLimits(null, -2, 9, true)).toBeNull();
+      expect(effectiveColorLimits(null, 0, 9, true)).toBeNull();
+      // Linear mode, and a genuinely positive floor, are both untouched.
+      expect(effectiveColorLimits(null, -2, 9, false)).toEqual([-2, 9]);
+      expect(effectiveColorLimits(null, 2, 9, true)).toEqual([2, 9]);
+    });
   });
 });
 

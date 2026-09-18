@@ -199,6 +199,19 @@ describe("trash slice — dataset (unchanged behaviour, P3.7 return-envelope upd
     expect(datasetByteEstimate(ds("a"))).toBeGreaterThan(0);
   });
 
+  it("charges the carried map view's bytes too, on top of the dataset estimate (P2.8 round 4, finding 4)", () => {
+    useApp.getState().setMapColorLimits("a", [3, 9]);
+    const view = useApp.getState().mapViews["a"]!;
+    useApp.getState().removeDataset("a");
+    const entry = useApp.getState().trash[0] as DatasetTrashEntry;
+    // Pinned so `trash.ts`'s `bytes: datasetByteEstimate(dataset) + (mapView
+    // ? byteSize(mapView) : 0)` cannot silently drop the `byteSize(mapView)`
+    // term — that term is otherwise unguarded by any test (sabotage: delete
+    // it and this is the only spec that goes red).
+    expect(entry.bytes).toBe(datasetByteEstimate(ds("a")) + byteSize(view));
+    expect(entry.bytes).toBeGreaterThan(datasetByteEstimate(ds("a")));
+  });
+
   it("undo after a restore never removes the restored object again (restore is not an undo step)", async () => {
     // `trash` is not in the history snapshot, so if restore recorded history,
     // Ctrl+Z after it would remove the dataset AGAIN with its trash entry
@@ -312,6 +325,7 @@ describe("restoreFromTrash — editableFigure dependency rule (both branches)", 
     // afterwards only prunes LIVE editableFigures (removeDatasetsPatch's
     // pruneEditableFigureRefs), and "f1" is no longer among them by then.
     useApp.getState().deleteEditableFigure("f1"); // to trash, binding intact
+    useApp.getState().setMapColorLimits("d1", [3, 9]); // P2.8 round 4, finding 3: the map view rides along too
     useApp.getState().removeDataset("d1"); // to trash
     expect(useApp.getState().datasets).toHaveLength(0);
     expect(useApp.getState().editableFigures).toHaveLength(0);
@@ -323,6 +337,12 @@ describe("restoreFromTrash — editableFigure dependency rule (both branches)", 
     expect(restored.bindings.datasetId).toBe("d1");
     // the dataset's own trash entry was consumed too — not left behind
     expect(useApp.getState().trash).toHaveLength(0);
+    // the map view (`trashRestore.ts`'s `resolveDatasetDependency` ->
+    // `mapViews: r.mapViews`) is restored right along with the dataset — this
+    // path is dependency-aware exactly like the editableFigure/figureDoc
+    // restores beside it, and was unpinned before (P2.8 review round 3,
+    // finding 3).
+    expect(useApp.getState().mapViews["d1"]?.colorLimits).toEqual([3, 9]);
   });
 
   it("branch B — bound dataset gone entirely: restores the document with the binding nulled, and says so", async () => {

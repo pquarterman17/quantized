@@ -261,6 +261,31 @@ describe("map view slice (P2.8)", () => {
       useApp.getState().setMapColormap("ds-gone", "magma");
       expect(useApp.getState().history.map((h) => h.label)).toEqual(["change map colormap"]);
     });
+
+    // Round 4, finding 8: a name alone is ambiguous once two LIVE datasets
+    // share it (the same file imported twice, or from two workbooks).
+    it("two live datasets sharing a name each get a short id disambiguator", () => {
+      const twin = { ...ds("ds-123-4"), name: "rsm.xrdml" };
+      const other = { ...ds("ds-456-9"), name: "rsm.xrdml" };
+      useApp.getState().loadWorkspace({ datasets: [twin, other] });
+      useApp.setState({ mapViews: EMPTY_MAP_VIEWS, history: [], future: [] });
+
+      useApp.getState().setMapColormap("ds-123-4", "magma");
+      useApp.getState().setMapColormap("ds-456-9", "gray");
+      expect(useApp.getState().history.map((h) => h.label)).toEqual([
+        'change map colormap "rsm.xrdml" #4',
+        'change map colormap "rsm.xrdml" #9',
+      ]);
+    });
+
+    // A shared name is not enough by itself — the OTHER dataset must also be
+    // LIVE, or there is nothing to disambiguate from.
+    it("a unique name (no live collision) keeps the plain label, even if a REMOVED dataset once shared it", () => {
+      useApp.getState().loadWorkspace({ datasets: [ds("ds-only")] });
+      useApp.setState({ mapViews: EMPTY_MAP_VIEWS, history: [], future: [] });
+      useApp.getState().setMapColormap("ds-only", "magma");
+      expect(useApp.getState().history.map((h) => h.label)).toEqual(['change map colormap "ds-only.xrdml"']);
+    });
   });
 
   // -- The transient painted-limits channel (round 3, finding 2) -----------

@@ -155,7 +155,23 @@ const MAX_LABEL_CHARS = 200;
  *  CALLERS (both pass it), not of this function. A crafted `.dwk` handed
  *  straight to `sanitizeMapViews` could therefore install an unbounded record.
  *  256 is far above any real project's dataset count and far below a size that
- *  costs anything. */
+ *  costs anything.
+ *
+ *  Which 256 survive (P2.8 review round 4, finding 6): the cap keeps the
+ *  first 256 entries in `Object.entries(o)`'s order, which for a normal
+ *  document (every key a `ds-<t36>-<n>` dataset id, never a bare integer) IS
+ *  the `.dwk` file's own key order. It is NOT, in general, the file's textual
+ *  order: a JS object's own-property order lists every INTEGER-LIKE key
+ *  (`"0"`, `"9999"`, …) ascending numerically, ahead of every other key in
+ *  insertion order — a language invariant `for...in`/`Object.keys`/
+ *  `Object.entries` all share, applied by the engine when `JSON.parse` builds
+ *  the object, before this function ever sees it. By the time `raw` is a JS
+ *  object, that reordering has already happened and the original text order
+ *  of any integer-like keys is UNRECOVERABLE from here — re-parsing the raw
+ *  JSON text to read key order would be a much larger change for a
+ *  hand-edited-`.dwk` threat model already bounded by this cap. So: the cap
+ *  is deterministic BY KEY ORDER, not by file order, and the two coincide
+ *  exactly when no key is integer-like. */
 const MAX_VIEWS = 256;
 
 /** True when this dataset's view records no decision — every field is still at

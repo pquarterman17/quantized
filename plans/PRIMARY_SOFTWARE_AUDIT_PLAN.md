@@ -3263,13 +3263,107 @@ violin, bar, strip, or summary plots.
     unconditional `mapViews` allocation, and the no-op guard on the painted
     report. **15 RED, 0 survivors.**
   - **Bundle** (finding 3, re-measured against the real parent). Eager total
-    **910,371 B at the parent `b621c5fa` (`git rev-parse HEAD~1`) → 910,824 B
-    on this commit, +453 B**; both trees built after their own `npm ci` and
-    `rm -rf node_modules/.vite`, exact eager bytes on each side. 889.5 kB
-    against the 898.8 kB budget, 9.4 kB under; `EAGER_JS_BUDGET` untouched. The
-    growth is the transient painted-limits channel in the store slice and the
-    Inspector row that reads it, both eager by construction; `useMapPaint.ts`
-    rides the map chunk with the renderer it was extracted from.
+    **910,371 B at the parent `c29fc0e3` (`git rev-parse HEAD~1` of this
+    commit) → 910,824 B on this commit, +453 B**; both trees built after their
+    own `npm ci` and `rm -rf node_modules/.vite`, exact eager bytes on each
+    side. 889.5 kB against the 898.8 kB budget, 9.4 kB under; `EAGER_JS_BUDGET`
+    untouched. The growth is the transient painted-limits channel in the store
+    slice and the Inspector row that reads it, both eager by construction;
+    `useMapPaint.ts` rides the map chunk with the renderer it was extracted
+    from. (Round 4 correction: this entry originally named the parent
+    `b621c5fa`, which is `c29fc0e3`'s OWN parent, not this commit's — a
+    same-tree slip, since `c29fc0e3` touches only `plans/BUNDLE_HEADROOM.md`
+    and is therefore bundle-identical to `b621c5fa`, so the 910,371 B figure
+    itself needed no re-measurement, only the label.)
+- **Review round 4 2026-09-18** (adversarial review of `2074fba4`; both boxes
+  above stay `[x]`). Sixteen independent sabotage mutations, fourteen killed;
+  two survivors exposed a real user-visible bug and a real test gap, plus five
+  NITs, all now closed.
+  - **A loading map no longer reports "nothing to paint at these limits"**
+    (finding 1, user-visible). `draw` returns `null` both when there is
+    nothing to paint YET (no `payload` — a map mid-regrid, or a <3-channel
+    dataset that never gets one) and when the limits genuinely paint nothing;
+    `useMapPaint.ts` reported both alike, so opening a saved project with map
+    colour limits flashed the "nothing to paint" row for as long as the async
+    regrid took, blaming the typed limits for a load that just hadn't
+    finished. `useMapPaint.ts:~90` now reports only when `payload` is
+    non-null. DOM-pinned: a `MapStage` render before the offline regrid
+    resolves shows neither the "effective" row nor the "nothing to paint" one.
+  - **`loadWorkspace` also clears `mapPaintedLimits`** (finding 2,
+    user-visible). The transient painted-limits channel was reset nowhere on
+    project load, only `mapViews` was — so a `.dwk` whose dataset ids
+    collided with the PREVIOUS project's (an ordinary reopen) could show an
+    "effective" pair computed from the previous project's canvas, on the
+    eager `MapColorLimits` row, before the lazy `MapStage` chunk even loads.
+    `store/useApp.ts:1417` now resets `mapPaintedLimits: {}` in the same
+    packed line as `mapViews`, for the same cross-project-leak reason.
+  - **The figure-dependency restore's `mapViews` carry is now pinned**
+    (finding 3, test gap). `trashRestore.ts`'s `resolveDatasetDependency`
+    already carried the restored dataset's map view correctly; nothing
+    guarded it, so deleting that one line broke no test. Added to
+    `trash.test.ts`'s existing "branch A" case: after a figure-dependency
+    restore, `mapViews["d1"].colorLimits` is asserted back.
+  - **The trash entry's `bytes` now pins the carried view's own term**
+    (finding 4, test gap). `trash.ts:304`'s `bytes: datasetByteEstimate(dataset)
+    + (mapView ? byteSize(mapView) : 0)` was correct and unguarded; a new
+    `trash.test.ts` case measures the exact sum and asserts it is strictly
+    greater than the dataset-alone estimate.
+  - **`effectiveColorLimits` applies its own null rule to BOTH branches**
+    (finding 5, NIT). Round 3 fixed only the explicit-`colorLimits` branch: a
+    non-positive log floor there now returns `null`, honouring the header's
+    "null is reserved for … no positive cell at all". The no-`colorLimits`
+    branch still returned a non-positive `auto` pair as a log range.
+    `mapRender.ts:~41` now applies the same rule there; both branches agree,
+    and the header needed no change.
+  - **`sanitizeMapViews`'s 256 cap is documented as key-order, not file-order**
+    (finding 6, NIT/doc). `Object.entries` on a parsed JS object lists every
+    INTEGER-LIKE key ascending numerically ahead of every other key in
+    insertion order — a language invariant applied by the engine when
+    `JSON.parse` builds the object, before `sanitizeMapViews` ever sees it, so
+    the original `.dwk` text order of an integer-like key is unrecoverable
+    from a parsed value. The cap already iterates `Object.entries(o)`
+    directly (no re-sort), so no code changed; `lib/mapView.ts`'s `MAX_VIEWS`
+    doc now says so explicitly, and `lib/mapView.test.ts` pins the resulting,
+    documented behaviour (an integer-like key written last in the file is
+    kept FIRST).
+  - **The parked strip's own `pointer-events` is `auto`** (finding 7, NIT).
+    The strip scrolls (round 3, finding 11) but inherited `pointer-events:
+    none` from the overlay's outer click-through layer, so its scrollbar
+    could not be grabbed — the content stayed reachable some other way (wheel
+    scroll-chaining from a chip, Tab-into-view), but the direct affordance
+    never worked. `MapSliceOverlay.tsx`'s parked strip now opts into `auto`
+    unconditionally (it renders only when it holds at least one chip, and
+    each chip was already `auto`), while the overlay's outer container stays
+    `none` — pinned, with the existing click-through shape re-asserted in the
+    same test.
+  - **History labels disambiguate by dataset id when names collide** (finding
+    8, NIT). Round 3's per-dataset label names the dataset — but two live
+    datasets routinely share a NAME (the same file imported twice, or from
+    two workbooks), and the label was ambiguous again. `store/mapView.ts`'s
+    `edit()` now appends a short id disambiguator (`nextDatasetId`'s own
+    sequence suffix, e.g. `"#4"`) only when another LIVE dataset shares the
+    name; a unique name is untouched.
+  - **Sabotage.** 8 mutations, one at a time, each reverted: skipping the
+    `payload` guard before reporting (finding 1), dropping
+    `mapPaintedLimits: {}` from `loadWorkspace` (finding 2), dropping the
+    `mapViews` carry in `trashRestore.ts` (finding 3), dropping the
+    `byteSize(mapView)` term (finding 4), reverting the no-`colorLimits` log
+    branch (finding 5), reversing `sanitizeMapViews`'s entry iteration order
+    (finding 6), removing the parked strip's `pointer-events: auto` (finding
+    7), and removing the history-label disambiguator (finding 8). **8 RED, 0
+    survivors.**
+  - **Bundle** (finding 9, record only — the 910,371/910,824 B pair from
+    round 3 needed no re-measurement, only its parent's name). This round's
+    own commit: eager total **911,634 B at the parent `1b285a14`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit,
+    +151 B**; both trees built after `rm -rf node_modules/.vite` (the parent
+    from its own `npm ci`), exact eager bytes on each side via
+    `exactbytes.mjs`. 890.4 kB against the 898.8 kB budget, 8.4 kB under;
+    `EAGER_JS_BUDGET` untouched. The growth is the round-4 fixes themselves
+    (the loading-payload guard, the `loadWorkspace` reset, the
+    `effectiveColorLimits` branch, the parked strip's `pointerEvents`
+    constant, and the history-label disambiguator), all already eager by
+    construction with the code they extend.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

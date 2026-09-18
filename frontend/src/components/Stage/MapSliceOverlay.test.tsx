@@ -232,4 +232,28 @@ describe("the parked strip has a geometry budget (round 3, finding 11)", () => {
     expect(strip.style.maxHeight).toBe("72px");
     expect(strip.style.overflowY).toBe("auto");
   });
+
+  // Round 4, finding 7: the strip scrolls (above) but the scrollbar could not
+  // be grabbed — a `pointer-events: none` element cannot be a scroll-drag
+  // target. The strip itself now opts into `auto`, same as every chip in it.
+  it("the strip's OWN pointer-events is auto, so its scrollbar is grabbable, while the overlay stays click-through everywhere else", () => {
+    renderOverlay(
+      [],
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `a${i}`,
+        x: 32,
+        y: 16,
+        text: longLabel,
+        space: "q" as const,
+      })),
+      payload(30, 34),
+      "angular",
+    );
+    const strip = screen.getByTestId("map-parked-strip");
+    expect(strip.style.pointerEvents).toBe("auto");
+    // The overlay's outer container is still the click-through layer over the
+    // rest of the map — unchanged by the strip's own opt-in.
+    const outer = screen.getByTestId("map-slice-overlay");
+    expect(outer.style.pointerEvents).toBe("none");
+  });
 });

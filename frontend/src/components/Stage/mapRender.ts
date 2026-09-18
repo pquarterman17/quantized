@@ -38,7 +38,14 @@ export function effectiveColorLimits(
 ): [number, number] | null {
   const auto: [number, number] | null =
     autoLo !== null && autoHi !== null && autoHi > autoLo ? [autoLo, autoHi] : null;
-  if (!colorLimits) return auto;
+  if (!colorLimits) {
+    // Round 4, finding 5: the same non-positive-log-floor rule the explicit
+    // branch below applies to `colorLimits` also applies to `auto` here —
+    // unreachable from `draw` (which only passes `minPositive`'s
+    // null-or-positive result), but this function answers for itself.
+    if (logZ && auto && auto[0] <= 0) return null;
+    return auto;
+  }
   let lo = colorLimits[0];
   const hi = colorLimits[1];
   if (logZ && lo <= 0) {
