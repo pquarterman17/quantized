@@ -9,12 +9,10 @@ describe("sanitizeExportSeriesStyles", () => {
     const out = sanitizeExportSeriesStyles([
       { color: "#ff0000", width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
     ]);
-    // `colorDerived: false` is the BUG-016 round-4 migration below deciding
-    // this flagless `#ff0000` against the live palette: no `--series-N` is
-    // set in this describe, so no slot resolves and an unvouchable colour is
-    // recorded as the user's. Every other key is untouched.
+    // No `colorDerived`: the entry carried none, and nothing here invents one
+    // (BUG-016 round 5). Every other key is passed through untouched.
     expect(out).toEqual([
-      { color: "#ff0000", colorDerived: false, width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
+      { color: "#ff0000", width: 2, line: "dashed", marker: true, marker_size: 6, fill: "under", color_by: 2, colormap: "magma" },
     ]);
   });
 
@@ -37,7 +35,7 @@ describe("sanitizeExportSeriesStyles", () => {
   // otherwise drop it only incidentally.
   it("deliberately does NOT restore a legend from a saved publication style", () => {
     expect(sanitizeExportSeriesStyles([{ color: "#fff", legend: "X" }]))
-      .toEqual([{ color: "#fff", colorDerived: false }]);
+      .toEqual([{ color: "#fff" }]);
     // An entry whose ONLY key is a legend has no valid fields left at all.
     expect(sanitizeExportSeriesStyles([{ legend: "X" }])).toEqual([null]);
   });
@@ -51,7 +49,7 @@ describe("sanitizeExportSeriesStyles", () => {
 
   it("drops an unrecognized step value without nulling the rest of the entry", () => {
     const out = sanitizeExportSeriesStyles([{ color: "#fff", step: "diagonal" }]);
-    expect(out).toEqual([{ color: "#fff", colorDerived: false }]);
+    expect(out).toEqual([{ color: "#fff" }]);
   });
 
   it("omits step when unset", () => {
@@ -98,96 +96,107 @@ describe("sanitizeExportSeriesStyles", () => {
     expect(sanitizeExportSeriesStyles([{ width: 2, colorDerived: false }])).toEqual([{ width: 2 }]);
   });
 
-  // ── BUG-016 round 4: the PRE-PROVENANCE migration, resolved HERE ────────
-  // Round 3 left a flagless entry's provenance ABSENT and had the export wire
-  // guess it, once per request, against whatever palette was installed at
-  // export time. Review F1 measured the consequence: a reopened document
-  // re-persists its flagless array verbatim, so the guess never got written
-  // down and "re-saving retires the residual" was false. Deciding it at LOAD
-  // makes the array the app holds a provenance-carrying one, so the next save
-  // writes it -- and the comparison runs exactly once per document.
-  describe("pre-provenance migration (BUG-016 round 4)", () => {
+  // ── BUG-016 round 5: NO provenance inference, ever ──────────────────
+  // Round 3 guessed a flagless entry's provenance at the export WIRE (a
+  // palette comparison, re-run per request); round 4 moved the same guess to
+  // LOAD, here. Both read the LIVE palette, because the palette a pin was
+  // taken under is persisted in no document — so round 4 misclassified any
+  // document opened under a different theme and then FROZE that answer on the
+  // next save (review F1). The information is not in the data, so this
+  // sanitizer does not guess: it records what the document says and nothing
+  // more, and the wire boundary fails closed on what is left unsaid.
+  describe("provenance is never inferred (BUG-016 round 5)", () => {
     let restorePalette: () => void = () => {};
     beforeEach(() => {
       restorePalette = installSeriesPalette();
     });
     afterEach(() => restorePalette());
 
-    it("marks a flagless colour DERIVED when it equals the slot at its own index", () => {
-      const out = sanitizeExportSeriesStyles([
-        { color: TEST_SERIES_PALETTE[0], width: 2 },
-        { color: TEST_SERIES_PALETTE[1] },
-      ]);
-      expect(out).toEqual([
-        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
-        { color: TEST_SERIES_PALETTE[1], colorDerived: true },
-      ]);
-    });
-
-    it("marks it CHOSEN when it is not that index's slot", () => {
-      // Slot 0's hue pinned at index 1 is a colour that series never derived,
-      // and an off-palette literal is a pick anywhere.
-      expect(sanitizeExportSeriesStyles([null, { color: TEST_SERIES_PALETTE[0] }])).toEqual([
-        null, { color: TEST_SERIES_PALETTE[0], colorDerived: false },
-      ]);
-      expect(sanitizeExportSeriesStyles([{ color: "#ffe066", width: 2 }])).toEqual([
-        { color: "#ffe066", colorDerived: false, width: 2 },
-      ]);
-    });
-
-    it("compares case-insensitively — a pinned #7FB3FF is still the palette slot", () => {
-      expect(TEST_SERIES_PALETTE[0]).toBe("#7fb3ff"); // the hex the fold is about
-      expect(sanitizeExportSeriesStyles([{ color: "#7FB3FF" }])?.[0]).toEqual({
-        color: "#7FB3FF", colorDerived: true,
-      });
-      // The other half, so the measurement cannot rot: three-digit hexes are
-      // RESOLVED and compared, not skipped (`resolveToHex("#abc")` is
-      // `#aabbcc` in this environment).
-      expect(sanitizeExportSeriesStyles([{ color: "#abc" }])?.[0]).toEqual({
-        color: "#abc", colorDerived: false,
-      });
-    });
-
-    it("says CHOSEN when the live slot is UNRESOLVABLE rather than guessing", () => {
-      // `resolveToHex`'s documented alpha-0 return is null on BOTH sides, and
-      // without the `slot === null` guard they compare EQUAL — a colour this
-      // sanitizer happily restores would be marked derived on a coincidence
-      // of unresolvability and then dropped from every grouped export.
+    const PALETTE_B = ["#112233", "#223344", "#334455", "#445566", "#556677", "#667788", "#778899", "#8899aa"];
+    function installPaletteB(): void {
       restorePalette();
       const root = document.documentElement;
-      root.style.setProperty("--series-1", "transparent");
-      restorePalette = () => root.style.removeProperty("--series-1");
-      expect(sanitizeExportSeriesStyles([{ color: "transparent", width: 2 }])).toEqual([
-        { color: "transparent", colorDerived: false, width: 2 },
-      ]);
-    });
+      PALETTE_B.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+      restorePalette = () => PALETTE_B.forEach((_c, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
 
-    it("treats a MALFORMED flag as absent and migrates it by the same rule", () => {
-      // Review F3's two measured `.dwk` cases. `"no"` is truthy and `null` is
-      // falsy, so round 3's `provenance === undefined` test read them as the
-      // document's word: a CHOSEN colour was silently dropped from a grouped
-      // export, and a DERIVED one shipped (round 1's regression). Neither is
-      // a boolean, so neither is the document's word about anything.
-      expect(sanitizeExportSeriesStyles([{ color: "#ffe066", colorDerived: "no" }])).toEqual([
-        { color: "#ffe066", colorDerived: false },
-      ]);
-      expect(sanitizeExportSeriesStyles([{ color: TEST_SERIES_PALETTE[0], colorDerived: null }]))
-        .toEqual([{ color: TEST_SERIES_PALETTE[0], colorDerived: true }]);
-      expect(sanitizeExportSeriesStyles([{ color: TEST_SERIES_PALETTE[0], colorDerived: 1 }]))
-        .toEqual([{ color: TEST_SERIES_PALETTE[0], colorDerived: true }]);
-    });
-
-    it("never overrides a REAL flag with the comparison", () => {
-      // The whole point of recording provenance: a colour the user picked that
-      // happens to equal its slot stays chosen, and a derived colour under a
-      // palette that has since moved stays derived.
+    it("leaves a flagless colour UNVOUCHED even when it equals the slot at its own index", () => {
+      // The exact input round 4 marked `colorDerived: true`. It looks derived
+      // under THIS palette; under the one the document was pinned under it may
+      // have been the user's pick. Saying nothing is the only honest answer,
+      // and `toWireSeriesStyles` reads "nothing" as "not on a grouped export".
       expect(sanitizeExportSeriesStyles([
-        { color: TEST_SERIES_PALETTE[0], colorDerived: false },
-        { color: "#ffe066", colorDerived: true },
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: TEST_SERIES_PALETTE[1] },
+        { color: "#ffe066" },
       ])).toEqual([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: TEST_SERIES_PALETTE[1] },
+        { color: "#ffe066" },
+      ]);
+    });
+
+    it("gives the SAME output for the same document under two different palettes", () => {
+      // The property round 4 could not offer, and the reason this one exists:
+      // a `.dwk`, a FigureDoc, a FigureDocument and a graph template all record
+      // their colours and none records the palette those colours were resolved
+      // against, so a load that consults the theme answers a question about the
+      // READER rather than about the document. Sabotage target: reintroduce any
+      // palette read in `sanitizeExportSeriesStyles` and this goes red.
+      const stored = [
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: PALETTE_B[1], width: 2 },
+        { color: "#ffe066", colorDerived: true },
+        { color: "#abc" },
+      ];
+      const underA = sanitizeExportSeriesStyles(structuredClone(stored));
+      expect(TEST_SERIES_PALETTE[0]).not.toBe(PALETTE_B[0]); // the palettes really differ
+      installPaletteB();
+      const underB = sanitizeExportSeriesStyles(structuredClone(stored));
+      expect(underB).toEqual(underA);
+      // Non-vacuous: the two entries whose hue IS a slot in one palette or the
+      // other came back flagless both times, and the document's own `true`
+      // survived unchanged.
+      expect(underA).toEqual([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: PALETTE_B[1], width: 2 },
+        { color: "#ffe066", colorDerived: true },
+        { color: "#abc" },
+      ]);
+    });
+
+    it("DROPS a malformed flag instead of coercing it — review F3's two cases", () => {
+      // The round-4 fix that stands. `"no"` is truthy and `null` is falsy, so
+      // coercion (or round 3's raw `provenance === undefined` test) read them
+      // as the document's word: a CHOSEN colour silently dropped from a
+      // grouped export, and a DERIVED one shipped — round 1's regression.
+      // Neither is a boolean, so neither says anything, and the entry lands in
+      // the same UNVOUCHED bucket as one that never had the key.
+      expect(sanitizeExportSeriesStyles([
+        { color: "#ffe066", colorDerived: "no" },
+        { color: TEST_SERIES_PALETTE[0], colorDerived: null },
+        { color: TEST_SERIES_PALETTE[0], colorDerived: 1 },
+        { color: "#ffe066", colorDerived: {} },
+      ])).toEqual([
+        { color: "#ffe066" },
+        { color: TEST_SERIES_PALETTE[0] },
+        { color: TEST_SERIES_PALETTE[0] },
+        { color: "#ffe066" },
+      ]);
+    });
+
+    it("passes a REAL boolean through in both directions, whatever the live palette says", () => {
+      // The flag is the document's word and the only provenance there is: a
+      // colour the user picked that happens to equal its slot stays CHOSEN,
+      // and a derived colour under a palette that has since moved stays
+      // DERIVED.
+      const stored = [
         { color: TEST_SERIES_PALETTE[0], colorDerived: false },
         { color: "#ffe066", colorDerived: true },
-      ]);
+      ];
+      expect(sanitizeExportSeriesStyles(structuredClone(stored))).toEqual(stored);
+      installPaletteB();
+      expect(sanitizeExportSeriesStyles(structuredClone(stored))).toEqual(stored);
     });
   });
 

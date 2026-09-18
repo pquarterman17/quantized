@@ -2354,6 +2354,31 @@ def test_a_leaked_colorDerived_is_422_on_a_later_entry_and_on_a_page_panel() -> 
     assert "colorDerived" in page.text
 
 
+def test_a_leaked_colorDerived_is_422_on_the_hitmap_route_too() -> None:
+    # The third route that reads `FigureRequest`, and the one the two tests
+    # above left resting on model identity alone (round-4 review F7). It
+    # matters on its own terms: the hitmap is what the Figure Builder preview
+    # clicks against, so a request that skipped the wire boundary would map
+    # elements for a figure whose grouped levels are all one hue and the user
+    # would be selecting on it.
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(),
+            "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "colorDerived" in resp.text
+    assert "series_styles[0]" in resp.text
+    # Non-vacuous: the same request without the document-only key is served.
+    ok = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "series_styles": [{"color": "#7fb3ff"}]},
+    )
+    assert ok.status_code == 200
+
+
 def test_an_ordinary_unrecognized_style_key_still_renders() -> None:
     # The narrowness of the guard, pinned: `series_styles` is documented as a
     # loose dict whose unknown keys degrade gracefully. Only the document-only

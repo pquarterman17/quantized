@@ -153,24 +153,35 @@ export function buildExportStyles(
  *     positions to `[1,0]`; hiding a channel after the pin shifts the rest.
  * Recording the answer at the producer removes both inputs from the question.
  *
- * PRE-PROVENANCE ARRAYS ARE NOT THIS FUNCTION'S PROBLEM (round 4). Round 3
- * put a migration rule here — a palette comparison against the slot at the
- * entry's own index — which ran on every request, under whatever palette was
- * installed at export time, and never wrote its answer down. It now runs
- * ONCE, at LOAD, in `publicationStyles.sanitizeExportSeriesStyles`, which
- * every persistence path goes through (`figuredoc.migrateConfig` for a `.dwk`
- * FigureDoc, `figuredoc.loadGraphTemplates`, `figureDocument` for a canonical
- * document's `publication`, `nameKeyedRecipes` for an imported template file).
- * So an array reaching this boundary has provenance unless it was minted
- * in-session by a producer that records it (`buildExportStyles`,
- * `originTemplate.sanitizeImportedTemplate`).
+ * PRE-PROVENANCE ARRAYS FAIL CLOSED HERE (round 5). An array whose entry
+ * carries NO flag was pinned by a build that predates the key, and which of
+ * the two its colour is cannot be recovered: the palette a pin was taken under
+ * is persisted in no document. Round 3 guessed at this boundary (a palette
+ * comparison, re-run per request under whatever theme was installed then) and
+ * round 4 moved the same guess to LOAD, where a document opened under the
+ * wrong theme was misclassified and the next save froze it. Neither guess had
+ * the information. So an absent flag is UNVOUCHED, not "probably derived" and
+ * not "probably chosen": on a GROUPED request its colour is omitted, because
+ * sending an unvouched colour paints every level one hue (round 1's
+ * regression, "worse than the bug") while omitting it falls back to
+ * matplotlib's cycle, which is what the pre-BUG-016 export did. FLAT requests
+ * are untouched either way, so a legacy figure exported flat still carries
+ * every colour it always did.
  *
- * A still-absent flag is therefore UNVOUCHED, not "pre-provenance": on a
- * GROUPED request its colour is omitted, because sending an unvouched colour
- * paints every level one hue (round 1's regression, "worse than the bug")
- * while omitting it falls back to matplotlib's cycle, which is what the
- * pre-BUG-016 export did. FLAT requests are untouched either way.
- * See plans/BUGS_AND_ISSUES.md, BUG-016 round 4.
+ * The residual that leaves — a pre-provenance document's CHOSEN colours do not
+ * reach a GROUPED export — is retired by RE-PINNING the figure, which runs
+ * `buildExportStyles` again and records the real answer. Loading and re-saving
+ * do NOT retire it: the sanitizers deliberately add nothing
+ * (`publicationStyles.sanitizeExportSeriesStyles`).
+ *
+ * Every OTHER array reaching this boundary was minted by a producer that
+ * records provenance: `buildExportStyles` above (so the Figure Builder pin,
+ * the Graph Builder handoff through `plotSpecFigure.stylesForMark`,
+ * `useGraphTemplates.saveStyleTemplate`, `spatialPageExport` and
+ * `figureSpecSeries`' derived branch all carry it) and
+ * `originTemplate.sanitizeImportedTemplate`, whose decoded hexes are chosen by
+ * construction.
+ * See plans/BUGS_AND_ISSUES.md, BUG-016 round 5.
  *
  * Returns the caller's own array by reference when nothing changed.
  */
@@ -183,7 +194,9 @@ export function toWireSeriesStyles(
     if (!style) return style;
     const provenance = style.colorDerived;
     // `?? true` is the UNVOUCHED rule above — absent means the colour cannot
-    // be vouched for, and a grouped request must not ship one it cannot.
+    // be vouched for, and a grouped request must not ship one it cannot. The
+    // rule is deliberately the same for a flag that was never written and one
+    // that was dropped as malformed: neither is the document's word.
     const dropColor = grouped && style.color !== undefined && (provenance ?? true);
     if (provenance === undefined && !dropColor) return style;
     changed = true;

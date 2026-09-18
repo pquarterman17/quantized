@@ -10,7 +10,7 @@ import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf, spatialComposition } from "../../lib/composition";
-import { buildStageFigureSpec } from "../../lib/figureSpec";
+import { buildStageFigureSpec } from "../../lib/figureSpecStage";
 import { createFigureDocument } from "../../lib/figureDocument";
 import type { SpatialPanel } from "../../lib/multipanel";
 import { defaultPlotView } from "../../lib/plotview";

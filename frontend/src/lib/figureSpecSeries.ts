@@ -241,31 +241,44 @@ export function seriesDisplayLabel(label: string, unit: string, legend: string |
   return legend ?? (unit ? `${label} (${unit})` : label);
 }
 
+/** What a PINNED style array has to be re-cut against: the document display
+ *  list it was built over, and the channels HIDDEN since. Both come out of the
+ *  same `resolveDisplaySeries` call the request is built from
+ *  (`figureSpec.ts`), which is what makes the projection below index-for-index
+ *  rather than a search. */
+export interface PinnedAlignment {
+  displayChannels: readonly number[];
+  hiddenChannels: readonly number[];
+}
+
 /** Project a PINNED style array from the document's display list onto the
- *  request's `y_keys` (BUG-016 round 4 — see `resolveSeriesPresentation`'s
- *  `displayChannels`). Fails closed: anything that does not line up exactly
- *  returns the caller's own array untouched, which is the pre-round-4
- *  behaviour. */
+ *  request's `y_keys` (BUG-016 round 4 — see `resolveSeriesPresentation`).
+ *
+ *  `plotted` is `displayChannels` minus the hidden channels, in the same order
+ *  and by exactly this test (`resolveDisplaySeries`:
+ *  `if (v.hiddenChannels.includes(ch)) continue`), so re-cutting the pin is
+ *  the SAME filter applied to the pin's own indices. Round 4 walked the two
+ *  lists in step instead and guarded the walk three ways; review F3 measured
+ *  all three guards green under sabotage, one of them unreachable by
+ *  construction, so they are gone — a clause no sabotage can fail is dead
+ *  code, not defence in depth (`resolveSeriesCycle`'s doc says the same ten
+ *  lines up).
+ *
+ *  ONE guard remains and it is real: a pin whose length is not the document
+ *  display list's was taken against a DIFFERENT channel selection (a graph
+ *  template, or a stale pin), so there is no index-for-index correspondence to
+ *  filter and the caller's own array is returned untouched. That fail-closed
+ *  array is what `resolveSeriesPresentation` then lays legends over, so a pin
+ *  of 4 against 2 `y_keys` still ships 4 entries — the pre-BUG-016 shape, and
+ *  the residual recorded under BUG-016. The `align === null` arm is the same
+ *  rule for a caller that passes no alignment at all. */
 function alignPinnedToPlotted(
   publication: (ExportSeriesStyle | null)[],
-  plotted: readonly number[],
-  displayChannels: readonly number[] | null,
+  align: PinnedAlignment | null,
 ): (ExportSeriesStyle | null)[] {
-  if (displayChannels === null) return publication;
-  if (publication.length === plotted.length) return publication;
-  if (publication.length !== displayChannels.length) return publication;
-  const kept: (ExportSeriesStyle | null)[] = [];
-  // `plotted` IS `displayChannels` minus the hidden entries, in the same
-  // order (`resolveDisplaySeries`), so one forward walk matches them exactly —
-  // including a channel that appears twice, which `indexOf` would collapse.
-  let next = 0;
-  displayChannels.forEach((ch, i) => {
-    if (next < plotted.length && plotted[next] === ch) {
-      kept.push(publication[i] ?? null);
-      next += 1;
-    }
-  });
-  return next === plotted.length ? kept : publication;
+  if (align === null || publication.length !== align.displayChannels.length) return publication;
+  const { displayChannels, hiddenChannels } = align;
+  return publication.filter((_entry, i) => !hiddenChannels.includes(displayChannels[i]));
 }
 
 /** The request's whole `series_styles` field, in the one order the wire wants:
@@ -295,19 +308,19 @@ function alignPinnedToPlotted(
  *  colour that happens to equal a palette slot is kept on both, where round 2
  *  kept it when derived here and dropped it when pinned.
  *
- *  `displayChannels` (BUG-016 round 4, review F7) re-aligns a PINNED array to
- *  `y_keys`. A pinned array is built over the document's whole display list
+ *  `align` (BUG-016 round 4, review F7) re-cuts a PINNED array to `y_keys`.
+ *  A pinned array is built over the document's whole display list
  *  (`legacyFigure`'s `yKeys ?? all channels`, `plotSpecFigure`'s marks), while
  *  `plotted` is that list minus the channels HIDDEN since — so hiding channel
  *  0 after a pin left a 3-entry array on a 2-entry `y_keys` and the backend
  *  read entry 0 (the hidden channel's style) for the first plotted series.
  *  Measured before this: pin `[#aa0000, #00aa00, #0000aa]` for channels 0/1/2,
  *  hide channel 0 -> `y_keys [1,2]` with all three entries on the wire. The
- *  projection is index-for-index against the request's OWN display list and
- *  bails out unchanged unless the pin's length matches it exactly and every
- *  plotted channel is consumed, so a template or a stale pin of a different
- *  length is left alone rather than silently re-cut. It cannot fix a pin taken
- *  against a DIFFERENT channel selection — see the residual in BUG-016.
+ *  projection drops the pin entries whose channel is hidden and keeps the
+ *  rest in order; a pin of a different length than the display list is left
+ *  alone rather than silently re-cut, which is the one fail-closed path left.
+ *  It cannot fix a pin taken against a DIFFERENT channel selection — see the
+ *  residual in BUG-016.
  *
  *  Round 2 passed `positions` into the pinned strip, which was wrong twice
  *  over and is gone: those are THIS request's canvas positions (BUG-015's),
@@ -323,7 +336,7 @@ export function resolveSeriesPresentation(
   legends: readonly (string | undefined)[],
   publication: (ExportSeriesStyle | null)[] | null | undefined,
   grouped = false,
-  displayChannels: readonly number[] | null = null,
+  align: PinnedAlignment | null = null,
 ): (ExportSeriesStyle | null)[] | null {
   const resolved =
     publication === undefined
@@ -332,7 +345,7 @@ export function resolveSeriesPresentation(
         ? null
         // Deep-copied first: the document must not observe the wire rules
         // (or the legend overlay) applied to its own array.
-        : structuredClone(alignPinnedToPlotted(publication, plotted, displayChannels));
+        : structuredClone(alignPinnedToPlotted(publication, align));
   const base = resolved === null ? null : toWireSeriesStyles(resolved, grouped);
   return withSeriesLegends(base, legends);
 }

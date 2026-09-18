@@ -104,10 +104,12 @@ function migrateConfig(v: unknown): FigureConfig | null {
   // that: `colorDerived: "no"` (truthy) dropped a colour the user CHOSE from a
   // grouped export, and `colorDerived: null` (falsy) shipped a derived one —
   // round 1's regression. Running it through the same sanitizer
-  // `figureDocument`/`nameKeyedRecipes` use both closes that and is where a
-  // pre-provenance array now ACQUIRES its provenance (once, at load), which is
-  // what makes "re-saving writes provenance" true for this path.
-  // `undefined` (a config saved before the field existed) stays `undefined`.
+  // `figureDocument`/`nameKeyedRecipes` use closes that, and that is ALL it
+  // does for provenance (round 5): a malformed flag is dropped, an absent one
+  // stays absent, and nothing is inferred from the live palette — so a `.dwk`
+  // loads the same under every theme, and re-saving it can neither gain nor
+  // freeze a guess. `undefined` (a config saved before the field existed)
+  // stays `undefined`.
   const seriesStyles =
     o.seriesStyles === undefined ? undefined : sanitizeExportSeriesStyles(o.seriesStyles);
   return {
@@ -162,8 +164,9 @@ const KEY = "qz.graphTemplates";
  *  second hand-rolled shape check that could drift from this one. The
  *  IMPORT path layers stricter checks on top (name non-empty, `overrides`/
  *  `seriesStyles` typed when present) — deliberately NOT added here, so a
- *  pre-#15 stored record missing those fields keeps loading exactly as it
- *  always has. */
+ *  pre-#15 stored record missing those fields still PASSES this check. What
+ *  `loadGraphTemplates` does with it afterwards is not unchanged: see its own
+ *  comment on the `seriesStyles` normalization. */
 export function isGraphTemplate(v: unknown): v is GraphTemplate {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -176,14 +179,22 @@ export function loadGraphTemplates(): GraphTemplate[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // BUG-016 round 4: the SECOND persistence path for a pinned style array,
-    // and the other half of "provenance is assigned once, at load". A template
-    // saved before `colorDerived` existed — or imported from an Origin file by
-    // a build that predates it — would otherwise reach `docSeriesStyles`
-    // (`useGraphTemplates.applyStyleTemplate`) and then the export wire with
-    // no provenance at all. `seriesStyles` is the only field migrated; the
-    // deliberately tolerant `isGraphTemplate` shape check above is unchanged,
-    // so a pre-#15 record still loads exactly as it always has.
+    // The SECOND persistence path for a pinned style array (BUG-016 round 4,
+    // kept in round 5). A template saved before `colorDerived` existed — or
+    // imported from an Origin file by a build that predates it — would
+    // otherwise reach `docSeriesStyles` (`useGraphTemplates.applyStyleTemplate`)
+    // and then the export wire carrying a MALFORMED flag that the wire would
+    // read as the document's word. The sanitizer drops such a flag; it infers
+    // nothing, so this call does not read the theme (round 5) and two loads of
+    // the same store under two palettes are identical.
+    //
+    // `seriesStyles` is the only field touched, and it is NORMALIZED, not left
+    // alone: a record that never had the field comes back with an explicit
+    // `seriesStyles: null` (the "this template carries none" sentinel
+    // `applyStyleTemplate` already coerced to with `?? null`), and
+    // `saveGraphTemplate`/`deleteGraphTemplate` then persist that shape for
+    // every template in the store. The tolerant `isGraphTemplate` check above
+    // is itself unchanged.
     return parsed.filter(isGraphTemplate).map((t) => ({
       ...t,
       seriesStyles: sanitizeExportSeriesStyles(t.seriesStyles),

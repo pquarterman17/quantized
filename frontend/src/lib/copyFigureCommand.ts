@@ -29,7 +29,7 @@ import {
   copySvgAsync,
 } from "./clipboard";
 import { exportActive, type StoreGet } from "./exportActive";
-import { buildStageFigureSpec } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpecStage";
 import { toast } from "../store/toasts";
 
 /** Publication raster defaults. 300 DPI is the standard journal floor and what

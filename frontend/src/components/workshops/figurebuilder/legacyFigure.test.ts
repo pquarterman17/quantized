@@ -246,6 +246,8 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
   // test called `sanitizeExportSeriesStyles` directly and claimed it was
   // "exactly as a workspace load would take it", while a `.dwk` FigureDoc's
   // `config` was in fact spread VERBATIM out of the JSON and never validated.
+  // The sanitizer runs on this path since round 4; what it does there changed
+  // in round 5, and these tests are about that.
   describe("a `.dwk` document saved before provenance existed", () => {
     /** The literal persisted shape, including the two malformed flags review
      *  F3 measured flipping provenance on this path. */
@@ -263,52 +265,97 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
     const loadStyles = (styles: unknown): (typeof BASE)["docSeriesStyles"] =>
       sanitizeFigureDocs([dwkDoc(styles)], new Set(["d1"]))[0]!.config.seriesStyles;
 
-    it("gains provenance AT LOAD, so the palette at export time cannot change the answer", () => {
-      const restored = loadStyles([
+    it("stays UNVOUCHED at load, so its grouped export omits the colours under EVERY palette", () => {
+      // Review F1, end to end on the real path. The stored colours ARE
+      // palette A's slots 0 and 1 (the document was pinned under A), and the
+      // reader has palette B installed. Round 4 compared against B, called
+      // both colours CHOSEN, and shipped them to a grouped export — where the
+      // backend gives one channel-aligned entry to every LEVEL, painting each
+      // level one hue (round 1's regression, "worse than the bug"). Nothing
+      // infers now, so both colours are omitted and matplotlib cycles per
+      // level, which is what the canvas does and what the pre-BUG-016 export
+      // did.
+      const stored = [
         { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
-        { color: "#ffe066", width: 2 },
-      ])!;
-      expect(restored).toEqual([
-        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2, line: "dashed" },
-        { color: "#ffe066", colorDerived: false, width: 2 },
+        { color: TEST_SERIES_PALETTE[1], width: 2 },
+      ];
+      const underA = loadStyles(structuredClone(stored))!;
+      expect(underA).toEqual([
+        { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
+        { color: TEST_SERIES_PALETTE[1], width: 2 },
       ]);
-      const wire = (): unknown =>
-        buildLegacyFigureSpec(grouped({ yKeys: [0, 1], docSeriesStyles: restored }))!.series_styles;
-      expect(wire()).toEqual([{ width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
-      // Round 3's residual, RETIRED for a loaded document: the same array
-      // under a palette that has since moved answers identically, where the
-      // export-time comparison shipped the derived colour and painted every
-      // level one hue.
+      const wire = (styles: (typeof BASE)["docSeriesStyles"]): unknown =>
+        buildLegacyFigureSpec(grouped({ yKeys: [0, 1], docSeriesStyles: styles }))!.series_styles;
+      expect(wire(underA)).toEqual([{ width: 2, line: "dashed" }, { width: 2 }]);
+      // Same document, opened under a palette it was never saved under: the
+      // load is byte-identical and so is the wire. Round 4's answer flipped
+      // here, and its next save froze the flip.
       flipTheme();
-      expect(wire()).toEqual([{ width: 2, line: "dashed" }, { color: "#ffe066", width: 2 }]);
+      const underB = loadStyles(structuredClone(stored))!;
+      expect(underB).toEqual(underA);
+      expect(wire(underB)).toEqual([{ width: 2, line: "dashed" }, { width: 2 }]);
     });
 
-    it("treats a MALFORMED persisted flag as absent — review F3's two cases", () => {
+    it("keeps every colour on a FLAT export — the fail-closed rule is grouped-only", () => {
+      // The residual is scoped: a legacy figure exported the way it always was
+      // still carries exactly the colours it was saved with.
+      const restored = loadStyles([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: "#ffe066", width: 2 },
+      ])!;
+      expect(buildLegacyFigureSpec({
+        ...BASE, docGroupCol: null, yKeys: [0, 1], docSeriesStyles: restored,
+      })!.series_styles).toEqual([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: "#ffe066", width: 2 },
+      ]);
+    });
+
+    it("DROPS a malformed persisted flag — review F3's two cases", () => {
       // `"no"` is truthy: round 3 read it as "the document says derived" and
       // dropped a colour the user CHOSE. `null` is falsy: read as "chosen",
-      // shipping a derived colour — round 1's regression, back.
+      // shipping a derived colour — round 1's regression. Neither is a
+      // boolean, so both land in the same UNVOUCHED bucket as an absent key.
       expect(loadStyles([
         { color: "#ffe066", width: 2, colorDerived: "no" },
         { color: TEST_SERIES_PALETTE[1], width: 2, colorDerived: null },
       ])).toEqual([
-        { color: "#ffe066", colorDerived: false, width: 2 },
-        { color: TEST_SERIES_PALETTE[1], colorDerived: true, width: 2 },
+        { color: "#ffe066", width: 2 },
+        { color: TEST_SERIES_PALETTE[1], width: 2 },
       ]);
     });
 
-    it("RE-SAVING writes the provenance it gained — the residual really does retire", () => {
-      // Review F1: round 3 claimed this in three places and it was false.
-      // `legacyFigure` returns `docSeriesStyles` verbatim when a doc seeded
-      // it, so a reopened pre-provenance document re-persisted its flagless
-      // array forever. It is true now because the ARRAY the builder holds
-      // already carries the flag, assigned at load.
+    it("RE-SAVING adds no provenance — only RE-PINNING retires the residual", () => {
+      // Round 4 claimed a re-save wrote provenance, which was true only
+      // because the load had already guessed it; the guess could be wrong and
+      // the save made it permanent (review F1). Now a re-save round-trips the
+      // document unchanged — no gain, and nothing frozen.
       const restored = loadStyles([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
       const resaved = buildLegacyFigureDoc(
         grouped({ yKeys: [0], docSeriesStyles: restored }), IDENTITY, OUTPUT,
       )!;
-      expect(resaved.config.seriesStyles).toEqual([
-        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
+      expect(resaved.config.seriesStyles).toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
+
+      // RE-PINNING does retire it. `exportStyles` derives a fresh array
+      // through `buildExportStyles` whenever the builder holds no pinned one
+      // (`docSeriesStyles === undefined`) — the state a figure rebuilt from
+      // the live plot is in — and every entry it writes carries a real
+      // boolean, taken from the live styles rather than guessed from a hue.
+      const repinned = buildLegacyFigureDoc(
+        { ...BASE, docGroupCol: null, yKeys: [0, 1], docSeriesStyles: undefined,
+          seriesStyles: { 1: { color: "#ffe066" } } },
+        IDENTITY, OUTPUT,
+      )!;
+      expect(repinned.config.seriesStyles).toEqual([
+        { color: TEST_SERIES_PALETTE[0], colorDerived: true },
+        { color: "#ffe066", colorDerived: false },
       ]);
+      // And the re-pinned document's grouped export keeps the CHOSEN colour
+      // while still dropping the derived one — the behaviour the pre-provenance
+      // document cannot have, which is exactly what the residual says.
+      expect(buildLegacyFigureSpec(grouped({
+        yKeys: [0, 1], docSeriesStyles: repinned.config.seriesStyles,
+      }))!.series_styles).toEqual([null, { color: "#ffe066" }]);
     });
 
     it("leaves a config with NO seriesStyles field exactly as it was", () => {

@@ -107,25 +107,46 @@ describe("graph templates (#15)", () => {
     expect(loadGraphTemplates()).toEqual([]);
   });
 
-  // BUG-016 round 4: the SECOND persistence path for a pinned style array.
-  // A template saved (or Origin-imported) before `colorDerived` existed would
-  // otherwise reach `docSeriesStyles` via `applyStyleTemplate` with no
-  // provenance, and a grouped export would drop its colour as unvouchable.
-  describe("pre-provenance seriesStyles gain provenance at load", () => {
+  // BUG-016 round 4: the SECOND persistence path for a pinned style array, and
+  // the reason it is sanitized at all — a template saved (or Origin-imported)
+  // before `colorDerived` existed reaches `docSeriesStyles` via
+  // `applyStyleTemplate` and then the export wire. Round 5: the sanitizer
+  // records the document's word and infers nothing, so what this path is FOR
+  // is dropping a malformed flag and normalizing the field, not deciding
+  // provenance.
+  describe("pre-provenance seriesStyles are sanitized, never classified", () => {
     let restorePalette: () => void = () => {};
     beforeEach(() => {
       restorePalette = installSeriesPalette();
     });
     afterEach(() => restorePalette());
 
-    it("migrates a flagless stored array by the palette-slot rule", () => {
+    it("leaves a flagless stored array flagless, whatever palette is live", () => {
+      // A palette IS installed here (`installSeriesPalette`) and entry 0 is
+      // literally slot 0's hue — the input round 4 marked `colorDerived: true`.
+      // The template does not record which palette it was saved under, so that
+      // equality says nothing about the template and everything about the
+      // reader; nothing is inferred from it.
       localStorage.setItem("qz.graphTemplates", JSON.stringify([{
         name: "old", style: "aps", overrides: null,
         seriesStyles: [{ color: TEST_SERIES_PALETTE[0], width: 2 }, { color: "#ffe066" }],
       }]));
       expect(loadGraphTemplates()[0]!.seriesStyles).toEqual([
-        { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 },
-        { color: "#ffe066", colorDerived: false },
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: "#ffe066" },
+      ]);
+    });
+
+    it("DROPS a malformed flag — the reason this path is sanitized at all", () => {
+      // `"no"` is truthy and `null` falsy, so passing either through would let
+      // a hand-edited store flip provenance at the wire (review F3).
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([{
+        name: "old", style: "aps", overrides: null,
+        seriesStyles: [{ color: "#ffe066", colorDerived: "no" }, { color: "#abc", colorDerived: true }],
+      }]));
+      expect(loadGraphTemplates()[0]!.seriesStyles).toEqual([
+        { color: "#ffe066" },
+        { color: "#abc", colorDerived: true },
       ]);
     });
 

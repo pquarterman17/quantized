@@ -14,16 +14,18 @@
  * buy a comment with eager bytes. The separation that carries weight is the one
  * from `exportStyles`, and it holds.
  *
- * BUG-016 round 4 widens that import by one leaf: `color.resolveToHex`. The
- * PRE-PROVENANCE migration rule (see `sanitizeExportSeriesStyles` below) is a
- * palette comparison, and it now runs HERE, once, at load — so the colour
- * resolution this header used to disclaim is genuinely on the persistence
- * path. `lib/color.ts` is a 37-line leaf with no imports of its own, and the
- * palette lookup (`seriesColor`) was already reachable through the import
- * above; what stays out of this graph is `exportStyles` itself, with the
- * export builders and the wire boundary. */
-import { resolveToHex } from "./color";
-import { MARKER_SHAPE_VALUES, seriesColor } from "./seriesStyleCycle";
+ * ROUND 5 restored that separation where round 4 breached it. Round 4 ran a
+ * palette COMPARISON here, at load, to give a pre-provenance array a
+ * `colorDerived` flag — which put `lib/color.resolveToHex` and `seriesColor`
+ * on the persistence path. The comparison read the LIVE palette, because the
+ * palette a pin was taken under is recorded in no `.dwk`, FigureDoc,
+ * FigureDocument or graph template; a document opened under a theme other than
+ * the one it was saved under was therefore classified wrong, and round 4's
+ * next save froze that answer permanently. The ambiguity is genuine and
+ * unrecoverable from the stored data, so this file does not guess: an
+ * unflagged colour stays unflagged and the wire boundary fails closed on it.
+ * See `sanitizeExportSeriesStyles` below and BUG-016 round 5. */
+import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 
 export interface ExportSeriesStyle {
   color?: string;
@@ -66,15 +68,19 @@ export interface ExportSeriesStyle {
    *  produced for this series' display position, a colour the user never
    *  chose; `false` = the user chose it (a swatch pick or a literal).
    *
-   *  Absent = an array that has been through neither a producer nor a load.
-   *  Round 4 made that unreachable from persistence: a PRE-PROVENANCE entry —
-   *  one pinned by a build predating this key — is migrated by
-   *  `sanitizeExportSeriesStyles` below, at load, so every array the app holds
-   *  carries the flag. `toWireSeriesStyles` therefore treats a still-absent
-   *  flag as UNVOUCHED and, on a grouped request only, omits the colour: an
-   *  unvouched colour sent to a grouped export paints every level one hue
-   *  (round 1's regression), while omitting it falls back to matplotlib's own
-   *  cycle, which is what the pre-BUG-016 export did.
+   *  ABSENT = UNVOUCHED (round 5): an array pinned by a build that predates
+   *  this key, where nothing in the document says which of the two its colours
+   *  are. Nothing infers it — the palette the pin was taken under is persisted
+   *  nowhere, so any comparison is against the palette the READER happens to
+   *  have installed, which is a different question (round 4 made that
+   *  comparison at load and then froze its answer on the next save; see this
+   *  module's header). `toWireSeriesStyles` instead fails closed on a GROUPED
+   *  request and omits the colour: an unvouched colour sent to a grouped
+   *  export paints every level one hue (round 1's regression), while omitting
+   *  it falls back to matplotlib's own cycle, which is what the pre-BUG-016
+   *  export did. FLAT requests keep it. Re-pinning the figure — any action
+   *  that runs `exportStyles.buildExportStyles` again — records the real
+   *  answer and retires the residual for that document.
    *
    *  It exists because a pinned array outlives the state it was resolved
    *  against. Round 2 recovered "derived vs chosen" by re-resolving the live
@@ -100,38 +106,31 @@ const object = (value: unknown): Record<string, unknown> | null =>
     ? value as Record<string, unknown>
     : null;
 
-/** The PRE-PROVENANCE migration predicate (BUG-016 round 4): does this pinned
- *  hex equal the palette slot for the index it was pinned at? Index order IS
- *  the order every producer of a pinned array built in (`legacyFigure`,
- *  `useGraphTemplates` and `plotSpecFigure` all pass `positions = null`), so
- *  this asks about the pin's own position.
- *
- *  An UNRESOLVABLE slot answers NO rather than guessing — `resolveToHex` needs
- *  a canvas for anything that is not already a 6-digit hex and returns null
- *  without one, so a real `oklch()` palette in a canvas-less environment would
- *  otherwise compare null-to-null and mark a 3-digit pinned colour the user
- *  chose as derived (this sanitizer accepts `#abc`). "Chosen" is the safe side
- *  of that: it loses per-level cycling on one legacy document, where the other
- *  side loses a colour outright. */
-function isPaletteSlot(color: string, index: number): boolean {
-  const slot = resolveToHex(seriesColor(index));
-  if (slot === null) return false;
-  return resolveToHex(color) === slot;
-}
-
 /** Safely restore exact publication-series wire styles from persisted input.
  *
- *  This is also where a PRE-PROVENANCE array acquires its `colorDerived`
- *  provenance, once, at load (BUG-016 round 4) — see the flag's own doc above
- *  and `isPaletteSlot`. Every persistence path that can carry one runs through
+ *  It does NOT infer provenance (BUG-016 round 5). A boolean `colorDerived`
+ *  beside a colour is the document's own word and passes through; anything
+ *  else — a string, a number, `null`, or the key's absence altogether —
+ *  leaves the entry UNVOUCHED, which `exportStyles.toWireSeriesStyles` reads
+ *  as "this colour must not reach a grouped export". DROPPING a malformed flag
+ *  rather than coercing it is the round-4 fix that stands: `colorDerived: "no"`
+ *  is truthy and `null` is falsy, so coercion let a hand-edited or foreign blob
+ *  flip provenance in either direction (review F3, measured on the `.dwk` path,
+ *  which reached no sanitizer at all before round 4).
+ *
+ *  Every persistence path that can carry a pinned style array runs through
  *  here: `figuredoc.migrateConfig` for a `.dwk` FigureDoc's `config`,
  *  `figuredoc.loadGraphTemplates` for the saved graph-template store,
  *  `figureDocument` for a canonical document's `publication`, and
- *  `nameKeyedRecipes` for an imported template FILE. */
+ *  `nameKeyedRecipes` for an imported template FILE. None of them reads the
+ *  theme, so the SAME stored bytes sanitize identically under every palette —
+ *  the property round 4's load-time comparison could not offer, and the reason
+ *  re-saving a pre-provenance document can no longer freeze a wrong guess
+ *  into it. */
 export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle | null)[] | null {
   if (value === null) return null;
   if (!Array.isArray(value)) return null;
-  return value.map((entry, index): ExportSeriesStyle | null => {
+  return value.map((entry): ExportSeriesStyle | null => {
     if (entry === null) return null;
     const raw = object(entry);
     if (!raw) return null;
@@ -140,26 +139,10 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     // Restored only ALONGSIDE a colour (BUG-016 round 3): the flag describes
     // `color` and says nothing on its own, and letting a lone `colorDerived`
     // through would turn an otherwise empty entry into a non-null one below.
-    //
-    // ROUND 4: a MISSING or malformed flag beside a colour is MIGRATED here
-    // rather than left absent. Round 3 left it absent and had the wire boundary
-    // guess, once per request, off the palette live at export time; review F1
-    // then measured that a reopened document re-persists its flagless array
-    // verbatim (`legacyFigure` returns `docSeriesStyles` untouched), so the
-    // "re-saving retires the residual" promise was false and the guess was
-    // permanent. Deciding it HERE makes that promise true — the array the
-    // builder holds after a load already carries provenance, so the next save
-    // writes it — and reduces the comparison to exactly one evaluation, at the
-    // moment the document arrives, instead of one per export under whatever
-    // palette happens to be installed then. A string/number/null flag is
-    // treated as ABSENT and migrated by the same rule (review F3 measured
-    // `colorDerived: "no"` reading as `true` and `null` as `false` on the
-    // `.dwk` path, which never ran this sanitizer at all).
-    if (style.color !== undefined) {
-      style.colorDerived =
-        typeof raw.colorDerived === "boolean"
-          ? raw.colorDerived
-          : isPaletteSlot(style.color, index);
+    // A non-boolean is DROPPED rather than coerced or inferred — see this
+    // function's doc and the flag's own on `ExportSeriesStyle`.
+    if (style.color !== undefined && typeof raw.colorDerived === "boolean") {
+      style.colorDerived = raw.colorDerived;
     }
     if (typeof raw.width === "number" && Number.isFinite(raw.width) && raw.width >= 0) style.width = raw.width;
     if (raw.line === "solid" || raw.line === "dashed" || raw.line === "dotted" || raw.line === "none") style.line = raw.line;

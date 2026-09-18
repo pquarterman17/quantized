@@ -15,7 +15,7 @@
 import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { exportActive, type StoreGet } from "./exportActive";
-import { buildStageFigureSpec } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpecStage";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
  *  Export-figure dialog's own first boolean field. Exported so every OTHER

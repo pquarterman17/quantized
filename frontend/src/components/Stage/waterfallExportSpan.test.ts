@@ -17,7 +17,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildStageFigureSpec } from "../../lib/figureSpec";
+import { buildStageFigureSpec } from "../../lib/figureSpecStage";
 import { createFigureDocument } from "../../lib/figureDocument";
 import { defaultPlotView } from "../../lib/plotview";
 import { buildColumns, type PlotPayload } from "../../lib/plotdata";

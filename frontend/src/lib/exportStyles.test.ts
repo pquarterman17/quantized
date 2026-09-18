@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import type { PlotPayload } from "./plotdata";
-import type { ExportSeriesStyle } from "./publicationStyles";
+import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import { DASH, displayPositions } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
@@ -425,14 +425,37 @@ describe("BUG-016 — a grouped request's colour", () => {
     expect(toWireSeriesStyles(pinned, true)).toEqual([null, null]);
   });
 
-  // ── a flag-less entry is UNVOUCHED, not "pre-provenance" (round 4) ───────
-  // Round 3 ran the migration rule HERE — a palette comparison, on every
-  // request, under whatever palette was installed at export time, and it never
-  // wrote its answer down (review F1/F3). It now runs once, at LOAD, in
-  // `publicationStyles.sanitizeExportSeriesStyles`, which every persistence
-  // path goes through. So an array arriving here without a flag was minted by
-  // something that never recorded one, and its colour cannot be vouched for.
+  // ── a flag-less entry is UNVOUCHED and FAILS CLOSED (round 5) ──────────
+  // Round 3 guessed the missing flag HERE — a palette comparison, on every
+  // request, under whatever palette was installed at export time (review
+  // F1/F3). Round 4 moved the same guess to LOAD, where it was wrong for any
+  // document opened under a different theme and the next save froze it. The
+  // palette a pin was taken under is persisted in NO document, so neither
+  // place had the information, and round 5 removed the guess from both:
+  // `publicationStyles.sanitizeExportSeriesStyles` records what the document
+  // says and nothing more. An entry arriving here without a boolean — never
+  // written, or written malformed and dropped by the sanitizer — is one whose
+  // colour cannot be vouched for, and this boundary is where that costs
+  // something.
   describe("an UNVOUCHED entry (no colorDerived key)", () => {
+    it("FAILS CLOSED: omitted on a grouped request, kept on a flat one — the whole rule", () => {
+      // Both halves in one place, because they are one decision. Dropping the
+      // colour on GROUPED is the safe side (matplotlib cycles the levels, the
+      // pre-BUG-016 behaviour) and keeping it on FLAT is what scopes the
+      // residual to grouped exports alone.
+      const entry: ExportSeriesStyle = { color: TEST_SERIES_PALETTE[0], width: 2 };
+      expect(toWireSeriesStyles([entry], true)).toEqual([{ width: 2 }]);
+      expect(toWireSeriesStyles([entry], false)).toEqual([entry]);
+      // A flag the sanitizer DROPPED as malformed lands in the same bucket:
+      // the two are indistinguishable here by construction, which is why the
+      // sanitizer drops rather than coerces.
+      const sanitized = sanitizeExportSeriesStyles([
+        { color: TEST_SERIES_PALETTE[0], width: 2, colorDerived: "no" },
+      ])!;
+      expect(toWireSeriesStyles(sanitized, true)).toEqual([{ width: 2 }]);
+      expect(toWireSeriesStyles(sanitized, false)).toEqual([entry]);
+    });
+
     it("keeps its colour on a FLAT request — the document's word, untouched", () => {
       const pinned: (ExportSeriesStyle | null)[] = [
         { color: TEST_SERIES_PALETTE[0], width: 2 }, { color: "#ffe066" },
