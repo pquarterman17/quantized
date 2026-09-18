@@ -8,8 +8,11 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useEffect, useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
+import { scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import { useApp } from "../../store/useApp";
 import ToolWindow from "./ToolWindow";
 
@@ -316,5 +319,164 @@ describe("ToolWindow keyboard cancel (P3.3)", () => {
     );
     await user.keyboard("{Escape}");
     expect(container.querySelector(".qzk-win")).toBeInTheDocument();
+  });
+});
+
+// ── ToolWindow round 2: the pass took focus and never gave it back ───────
+// Review finding 1, measured on the round-1 tree: open a workshop from a
+// button, press Escape, and `document.activeElement === document.body` —
+// where `useGlobalShortcuts`' Delete/Backspace removes the active dataset.
+// Before the round-1 focus-on-mount there was no such hole (focus simply
+// stayed on the opener), so the pass created it.
+describe("ToolWindow focus lifecycle (P3.3 round 2)", () => {
+  /** A workshop opened from a button, the way the Library row menu / command
+   *  palette do it. `keepOpener: false` is the MENU shape: the control that
+   *  opened the panel is gone by the time the panel closes. */
+  function OpenerHarness({ keepOpener = true }: { keepOpener?: boolean }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <>
+        {/* The Library's own focus-loss landing spot (lib/scrollOutFocus.ts). */}
+        <div {...scrollOutFocusProps} data-testid="landing" />
+        {(keepOpener || !open) && (
+          <button type="button" onClick={() => setOpen(true)}>
+            Open Peaks
+          </button>
+        )}
+        {open && (
+          <ToolWindow id="peaks" title="Find peaks" onClose={() => setOpen(false)}>
+            <button type="button">Run</button>
+          </ToolWindow>
+        )}
+      </>
+    );
+  }
+
+  it("gives focus back to the opener when the panel closes", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<OpenerHarness />);
+    const opener = screen.getByRole("button", { name: "Open Peaks" });
+
+    await user.click(opener);
+    expect(winEl(container)).toHaveFocus(); // the panel took focus…
+
+    await user.keyboard("{Escape}");
+    expect(container.querySelector(".qzk-win")).toBeNull();
+    expect(opener).toHaveFocus(); // …and gave it back
+  });
+
+  it("lands on the shared safe spot, never <body>, when the opener is gone", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<OpenerHarness keepOpener={false} />);
+
+    await user.click(screen.getByRole("button", { name: "Open Peaks" }));
+    expect(screen.queryByRole("button", { name: "Open Peaks" })).toBeNull();
+
+    await user.keyboard("{Escape}");
+    expect(container.querySelector(".qzk-win")).toBeNull();
+    expect(document.body).not.toHaveFocus();
+    expect(screen.getByTestId("landing")).toHaveFocus();
+  });
+
+  it("leaves a child's autoFocus alone instead of taking focus onto the frame", () => {
+    // Review finding 5: React applies `autoFocus` during the commit and the
+    // frame's passive effect ran after it, so round 1 took focus back off any
+    // panel that opens straight into a field.
+    const { container } = render(
+      <ToolWindow id="t16" title="Curve fit" onClose={() => {}}>
+        <input aria-label="Start" defaultValue="0" autoFocus />
+      </ToolWindow>,
+    );
+    expect(screen.getByLabelText("Start")).toHaveFocus();
+    expect(winEl(container)).not.toHaveFocus();
+  });
+});
+
+// ── ToolWindow round 2: who actually owns Escape ─────────────────────────
+// Review finding 2, measured on the round-1 tree: `onWindowKey` called
+// `e.stopPropagation()` on a React synthetic event, which stops the NATIVE
+// event at React's root container — so every window-BUBBLE Escape consumer in
+// the app (useGlobalShortcuts' plot-tool cancel, the Stage draw/shape/
+// annotation edits, usePeakWizard's marker-edit pause) ran ZERO times and the
+// `defaultPrevented` guard could never see them. Probe A (bubble listener):
+// onClose 1, consumer 0. Probe B (capture listener): onClose 0, consumer 1.
+describe("ToolWindow Escape precedence (P3.3 round 2)", () => {
+  /** The `usePeakWizard` shape: a window BUBBLE listener owned by the
+   *  component that RENDERS the window, so its effect — and therefore its
+   *  registration — happens AFTER the window's own. Registration order is
+   *  exactly what a "register later" fix cannot control (usePeakWizard
+   *  re-registers when the wizard reaches step ②, long after mount), so the
+   *  decision to close is re-checked once the dispatch is over instead. */
+  function PanelOwningEscape({ onClose, onEscape }: { onClose: () => void; onEscape: () => void }) {
+    useEffect(() => {
+      const h = (e: KeyboardEvent) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault(); // "this keystroke was mine" — the repo's convention
+        onEscape();
+      };
+      window.addEventListener("keydown", h);
+      return () => window.removeEventListener("keydown", h);
+    }, [onEscape]);
+    return (
+      <ToolWindow id="t17" title="Peak Analyzer" onClose={onClose}>
+        <button type="button">Run</button>
+      </ToolWindow>
+    );
+  }
+
+  it("a panel hook that claims Escape keeps it — the window does NOT close", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onEscape = vi.fn();
+    render(<PanelOwningEscape onClose={onClose} onEscape={onEscape} />);
+
+    await user.keyboard("{Escape}");
+
+    expect(onEscape).toHaveBeenCalledTimes(1); // the panel's handler ran at all
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("an unclaimed Escape still closes the panel, and reaches the window listeners", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const seen = vi.fn();
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") seen();
+    };
+    window.addEventListener("keydown", h);
+    try {
+      render(
+        <ToolWindow id="t18" title="Find peaks" onClose={onClose}>
+          <button type="button">Run</button>
+        </ToolWindow>,
+      );
+      await user.keyboard("{Escape}");
+      expect(seen).toHaveBeenCalledTimes(1); // no stopPropagation any more
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", h);
+    }
+  });
+
+  it("a dialog stacked on the workshop still gets its own Escape", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <>
+        <ToolWindow id="t19" title="Find peaks" onClose={onClose}>
+          <button type="button">Run</button>
+        </ToolWindow>
+        <ConfirmDialog />
+      </>,
+    );
+    let result!: Promise<boolean>;
+    act(() => {
+      result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
+    });
+
+    await user.keyboard("{Escape}");
+
+    await expect(result).resolves.toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

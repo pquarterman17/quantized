@@ -21,32 +21,85 @@
 // own trigger). It is NOT rewritten onto this module — it only adopts
 // `useFocusTrap` for the one thing it lacked.
 //
-// No new dependency: this is ~60 lines of DOM, not a focus-trap package.
+// No new dependency: this is ~100 lines of DOM, not a focus-trap package.
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type RefObject } from "react";
+
+import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
 
 // Deliberately NOT filtered by visibility/offsetParent. jsdom performs no
 // layout, so every element reports zero size and `offsetParent === null`; a
 // visibility filter would make this return an empty list under test while
 // behaving differently in a browser, which is the worst of both. `hidden` and
 // `aria-hidden` are attribute-level and do work in both, so those are checked.
+//
+// Round 2 (review NIT 8): the first cut listed only the five classic form
+// controls, so a `[contenteditable]` rich-text field, an embedded `iframe`, a
+// `<summary>` disclosure or a media element with controls was invisible to
+// the trap — Tab wrapped straight past it, and while the dialog was open that
+// control could not be reached from the keyboard at all. No dialog fixed here
+// renders one today; the selector is widened now rather than when R1 extends
+// the trap to the eight remaining dialogs.
 const FOCUSABLE = [
   "a[href]",
   "button:not([disabled])",
   "input:not([disabled])",
   "select:not([disabled])",
   "textarea:not([disabled])",
+  '[contenteditable]:not([contenteditable="false"])',
+  "iframe",
+  "summary",
+  "audio[controls]",
+  "video[controls]",
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
+
+/** True when `el` — or anything between it and `root` — is hidden by
+ *  attribute. Round 2 (review NIT 9): the first cut asked only the element
+ *  itself, so a focusable inside an `aria-hidden` wrapper still counted as a
+ *  Tab stop, which is exactly what that attribute exists to deny. The walk
+ *  stops AT `root` and may not pass it: a dialog whose own chrome sits inside
+ *  an `aria-hidden` region must still trap Tab among its controls rather than
+ *  report having none. */
+function hiddenWithin(el: HTMLElement, root: HTMLElement): boolean {
+  const stop = root.parentElement;
+  for (let n: HTMLElement | null = el; n !== null && n !== stop; n = n.parentElement) {
+    if (n.hasAttribute("hidden") || n.getAttribute("aria-hidden") === "true") return true;
+  }
+  return false;
+}
 
 /** Focusable descendants of `root`, in DOM order (which is Tab order here —
  *  no dialog in this app uses a positive `tabindex`). */
 export function focusablesIn(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-    (el) => !el.hasAttribute("hidden") && el.getAttribute("aria-hidden") !== "true",
-  );
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !hiddenWithin(el, root));
 }
+
+/** Where focus goes when a surface closes and the element it was opened from
+ *  is gone. NOT `<body>`: body focus is the documented data-loss path
+ *  (`lib/focusGuard.ts` — `useGlobalShortcuts`' Delete/Backspace treats body
+ *  as fair game), and it is a keyboard dead end besides. The landing spot is
+ *  the one the Library's own focus-loss fallback already uses
+ *  (`lib/scrollOutFocus.ts`): a `tabIndex={-1}` list container that catches
+ *  orphaned focus and whose own keydown resumes arrow navigation from the
+ *  roving item — a waypoint, not a dead end. When no Library view is rendered
+ *  (a bare harness, CalcOnlyApp) nothing is focused and the pre-existing
+ *  behaviour stands. */
+function focusSafeLanding(): void {
+  document.querySelector<HTMLElement>(SCROLL_OUT_FOCUS_SELECTOR)?.focus();
+}
+
+/** Open trap roots, innermost LAST. Round 2 (review finding 3): both traps
+ *  listen on `document` in capture and each pulls focus back whenever
+ *  `document.activeElement` is outside ITS OWN root, so with two open they
+ *  fought over every Tab and the measured sequence never advanced past the
+ *  first control of either dialog — Tab was dead for the keyboard user. Only
+ *  the top of this stack acts; the traps below stay mounted, keep their
+ *  listeners, and resume the moment the one above pops. Module-level on
+ *  purpose: the dialogs are independent components with no common ancestor to
+ *  hang a context off, and there is exactly one document. */
+const trapStack: RefObject<HTMLElement | null>[] = [];
 
 /** Keep Tab / Shift+Tab inside `ref` while `open`. Moves focus only when it
  *  would otherwise leave; an ordinary Tab between two controls is untouched.
@@ -60,7 +113,9 @@ export function focusablesIn(root: HTMLElement | null): HTMLElement[] {
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean): void {
   useEffect(() => {
     if (!open) return;
+    trapStack.push(ref);
     const onKey = (e: KeyboardEvent) => {
+      if (trapStack[trapStack.length - 1] !== ref) return; // a dialog stacked on top owns Tab
       if (e.key !== "Tab" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       const root = ref.current;
       if (!root) return;
@@ -87,33 +142,65 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean):
       }
     };
     document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
+    return () => {
+      const at = trapStack.lastIndexOf(ref);
+      if (at !== -1) trapStack.splice(at, 1);
+      document.removeEventListener("keydown", onKey, true);
+    };
   }, [ref, open]);
 }
 
-/** The whole modal-dialog contract: trap Tab, move focus in on open, and give
- *  it back to the opener on close.
+/** Hand focus back from a closing surface. Exported through the hook below
+ *  rather than directly, so both the unmount backstop and an eager call from
+ *  a close handler go through the SAME rules.
  *
- *  Focus-in is SKIPPED when focus is already inside `ref` — an `autoFocus`
- *  field (ParamDialog's first row) or a dialog's own more considered choice
- *  has already run by the time this effect fires, and overriding it would
- *  silently undo it. Otherwise the first focusable control is taken, falling
- *  back to the container itself (needs `tabIndex={-1}`) for a dialog that has
- *  none.
- *
- *  The restore is guarded by `isConnected`, matching ConfirmDialog: a dialog
- *  whose action removed its own trigger must not reach for a detached node. */
-export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean): void {
-  useFocusTrap(ref, open);
+ *  Round 2 (review NIT 6): do not YANK focus. If the user has already moved
+ *  on to a live control OUTSIDE the surface — a toast action, a field behind
+ *  a non-modal panel — that is where they want to be, and the close is not
+ *  what put them there. `<body>` (or nothing) is the opposite case: the DOM
+ *  dropped focus as the surface unmounted, and this restore is all that
+ *  stands between the user and a keyboard dead end. It also makes the eager
+ *  and backstop calls idempotent: once focus is back on the opener, the
+ *  second call sees a live control outside the surface and does nothing. */
+function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null): void {
+  const active = document.activeElement as HTMLElement | null;
+  const dropped = active === null || active === document.body;
+  if (!dropped && !(root && root.contains(active))) return;
+  // `isConnected` matches ConfirmDialog: a surface whose action removed its
+  // own trigger must not reach for a detached node — it lands on the shared
+  // safe spot instead of being left on <body>.
+  if (cameFrom?.isConnected) cameFrom.focus();
+  else focusSafeLanding();
+}
 
-  // The opener is read during the RENDER that opens the dialog, not in the
-  // effect. By effect time the dialog is mounted and an `autoFocus` field
-  // (ParamDialog's first row) has already taken focus, so an effect-time read
-  // would remember a node INSIDE the dialog — and "restore" to something that
-  // is about to be unmounted, i.e. no restore at all. At render time the DOM
-  // still shows where the user actually was. The read is idempotent (nothing
-  // has moved focus yet), so a StrictMode double-render sees the same answer,
-  // and the `wasOpen` latch makes it once-per-open either way.
+/** Remember where focus came FROM when `open` goes true, and give it back
+ *  when the surface closes or unmounts. Shared by `useDialogFocus` and by
+ *  `ToolWindow` (round 2, review finding 1: the workshop host started taking
+ *  focus on mount and gave none back, so Escape-closing a panel left the user
+ *  on `<body>` with the global Delete binding live).
+ *
+ *  Returns an EAGER restore for a close handler to call just before it tears
+ *  the surface down. The unmount cleanup alone is not enough: React runs a
+ *  deleted tree's passive destroy in a later flush, so between the DOM
+ *  removal and that flush focus sits on `<body>` — exactly the window
+ *  `useGlobalShortcuts`' Delete/Backspace binding is dangerous in. Measured in
+ *  jsdom: after an Escape-close the panel was gone and `activeElement` was
+ *  still `<body>`, with the cleanup not yet run. Moving focus first, inside
+ *  the same handler that triggers the removal, is the pattern
+ *  `lib/focusGuard.ts`'s `removeRowSafely` already documents — the browser's
+ *  "focus reverts to body on unmount" never gets a turn. The cleanup stays as
+ *  the backstop for every other way a surface can close.
+ *
+ *  The opener is read during the RENDER that opens the surface, not in the
+ *  effect. By effect time the surface is mounted and an `autoFocus` field
+ *  (ParamDialog's first row) — or ToolWindow's own focus-on-mount — has
+ *  already taken focus, so an effect-time read would remember a node INSIDE
+ *  the surface and "restore" to something that is about to be unmounted, i.e.
+ *  no restore at all. At render time the DOM still shows where the user
+ *  actually was. The read is idempotent (nothing has moved focus yet), so a
+ *  StrictMode double-render sees the same answer, and the `wasOpen` latch
+ *  makes it once-per-open either way. */
+export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boolean): () => void {
   const opener = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
   if (open !== wasOpen.current) {
@@ -124,14 +211,33 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
   useEffect(() => {
     if (!open) return;
     const cameFrom = opener.current;
+    // `root` is captured at effect time because by cleanup time React has
+    // already detached the ref.
+    const root = ref.current;
+    return () => restoreFocusTo(cameFrom, root);
+  }, [ref, open]);
+
+  return useCallback(() => restoreFocusTo(opener.current, ref.current), [ref]);
+}
+
+/** The whole modal-dialog contract: trap Tab, move focus in on open, and give
+ *  it back to the opener on close.
+ *
+ *  Focus-in is SKIPPED when focus is already inside `ref` — an `autoFocus`
+ *  field (ParamDialog's first row) or a dialog's own more considered choice
+ *  has already run by the time this effect fires, and overriding it would
+ *  silently undo it. Otherwise the first focusable control is taken, falling
+ *  back to the container itself (needs `tabIndex={-1}`) for a dialog that has
+ *  none. */
+export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean): void {
+  useFocusTrap(ref, open);
+  useOpenerRestore(ref, open);
+
+  useEffect(() => {
+    if (!open) return;
     const root = ref.current;
     if (root && !(document.activeElement && root.contains(document.activeElement))) {
       (focusablesIn(root)[0] ?? root).focus();
     }
-    return () => {
-      // `isConnected` matches ConfirmDialog: a dialog whose action removed its
-      // own trigger must not reach for a detached node.
-      if (cameFrom?.isConnected) cameFrom.focus();
-    };
   }, [ref, open]);
 }

@@ -187,6 +187,30 @@ describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
     fireEvent.keyDown(window, { key: "Enter" });
     expect(result.current.markerEditActive).toBe(true);
   });
+
+  // P3.3 round 2 (review finding 2): this panel is hosted by `ToolWindow`,
+  // whose Escape-to-close re-reads `defaultPrevented` once the dispatch is
+  // over. Without the claim, ONE Escape both paused the marker-edit mode and
+  // closed the whole Peak Analyzer.
+  it("CLAIMS the Escape it consumes, so the hosting window keeps the panel open", () => {
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+
+    const paused = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
+    act(() => {
+      window.dispatchEvent(paused);
+    });
+    expect(result.current.markerEditActive).toBe(false);
+    expect(paused.defaultPrevented).toBe(true);
+
+    // A SECOND Escape has nothing left to pause, so it claims nothing and the
+    // window is free to close the panel.
+    const spare = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
+    act(() => {
+      window.dispatchEvent(spare);
+    });
+    expect(spare.defaultPrevented).toBe(false);
+  });
 });
 
 // Guard against the underlying vi.mock actually being invoked (it shouldn't

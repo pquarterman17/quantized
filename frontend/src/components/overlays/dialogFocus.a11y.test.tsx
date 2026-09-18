@@ -5,14 +5,22 @@
 // isolation: the bug class here is "the handler exists but the key never
 // reaches it", which only a DOM-level test can see.
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import AnnotationTextDialog from "./AnnotationTextDialog";
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
 import ParamDialog, { askParams } from "./ParamDialog";
+import PlotRecipeApplyDialog from "./PlotRecipeApplyDialog";
+import QuickPlotWithDialog from "./QuickPlotWithDialog";
 import RecoveryChoiceDialog from "./RecoveryChoiceDialog";
+import { captureRecipe } from "../../lib/plotRecipe";
+import { defaultPlotView } from "../../lib/plotview";
+import type { Dataset } from "../../lib/types";
 import { parseWorkspace, WORKSPACE_FORMAT } from "../../lib/workspace";
+import { askAnnotationText, useAnnotationTextDialog } from "../../store/annotationTextDialog";
+import { openQuickPlotWith, useQuickPlotWithDialog } from "../../store/quickPlotWithDialog";
 import { useRecoveryChoice, type RecoveryPrompt } from "../../store/recoveryChoice";
 import { useApp } from "../../store/useApp";
 
@@ -42,8 +50,23 @@ function recoveryPrompt(): RecoveryPrompt {
 }
 
 beforeEach(() => {
-  useApp.setState({ datasets: [], activeId: null, currentProject: null, projectDirty: false });
+  useApp.setState({
+    datasets: [],
+    activeId: null,
+    currentProject: null,
+    projectDirty: false,
+    quickPlotTemplates: [],
+    plotRecipes: [],
+    pendingRecipeApplication: null,
+    plotWindows: [],
+    editableFigures: [],
+    history: [],
+    future: [],
+    status: "",
+  });
   useRecoveryChoice.setState({ pending: null });
+  useQuickPlotWithDialog.setState({ datasetId: null, workbookId: null });
+  useAnnotationTextDialog.setState({ title: null, initial: "", resolve: null });
 });
 
 // ── RecoveryChoiceDialog: had NO keyboard cancel at all ──────────────────
@@ -198,3 +221,191 @@ describe("ConfirmDialog focus trap (P3.3)", () => {
   });
 });
 
+
+// ── The three dialogs round 1 fixed with no test at all (review finding 4) ─
+// Measured: deleting the `useDialogFocus(...)` call from PlotRecipeApplyDialog,
+// QuickPlotWithDialog and AnnotationTextDialog AT ONCE left all 226 tests of
+// `components/overlays` green. Their own suites fire Escape AT the dialog box
+// (`fireEvent.keyDown(box, { key: "Escape" })`), which passes whether or not
+// anything ever moved focus into it — precisely the distinction this pass
+// exists to make. These cases press the key the way a user does:
+// `userEvent.keyboard` dispatches at `document.activeElement`, so a dialog
+// that never took focus never sees it.
+
+/** The staging round-trip PlotRecipeApplyDialog.test.tsx uses: capture a
+ *  recipe against the ORIGINAL labels, then swap in a dataset whose
+ *  "Intensity" column was renamed — X still resolves, Y does not, which is
+ *  the unmatched-but-not-refused shape that stages a pending application. */
+function xrd(labels: string[]): Dataset {
+  return {
+    id: "d1",
+    name: "d1.xy",
+    data: {
+      time: [0, 1, 2],
+      values: [[10, 100, 1], [20, 200, 2], [30, 300, 3]],
+      labels,
+      units: ["deg", "cps", "cps"],
+      metadata: { technique: "xrd.powder" },
+    },
+  };
+}
+
+async function stagePendingRecipe(): Promise<void> {
+  useApp.setState({ datasets: [xrd(["2theta", "Intensity", "Ierr"])] });
+  const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+  const recipe = captureRecipe(useApp.getState().datasets[0], view, null, {
+    id: "r1",
+    name: "XRD Recipe",
+    appVersion: "0",
+  });
+  useApp.setState({ plotRecipes: [recipe], datasets: [xrd(["2theta", "Signal", "Ierr"])] });
+  await act(async () => {
+    await useApp.getState().applyPlotRecipe("r1", "d1");
+  });
+}
+
+describe("PlotRecipeApplyDialog keyboard cancel (P3.3 round 2)", () => {
+  it("moves focus into the dialog on open, onto Cancel — the harmless choice", async () => {
+    render(<PlotRecipeApplyDialog />);
+    await stagePendingRecipe();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("Escape discards the staged apply without a click first", async () => {
+    const user = userEvent.setup();
+    render(<PlotRecipeApplyDialog />);
+    await stagePendingRecipe();
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+
+    await user.keyboard("{Escape}");
+
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    // Cancel means "apply nothing" — no figure was created.
+    expect(useApp.getState().plotWindows).toEqual([]);
+  });
+});
+
+describe("QuickPlotWithDialog keyboard cancel (P3.3 round 2)", () => {
+  function mvsh(): Dataset {
+    return {
+      id: "d1",
+      name: "d1.dat",
+      data: {
+        time: [0, 1],
+        values: [[1, 10], [2, 20]],
+        labels: ["A", "B"],
+        units: ["", ""],
+        metadata: { technique: "magnetometry.mvsh" },
+      },
+    };
+  }
+
+  it("normal branch: focus moves in, and Escape closes the chooser", async () => {
+    const user = userEvent.setup();
+    useApp.setState({ datasets: [mvsh()] });
+    render(<QuickPlotWithDialog />);
+    act(() => openQuickPlotWith("d1"));
+
+    // With no templates in scope, Close is the only control — and the first.
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useQuickPlotWithDialog.getState().datasetId).toBeNull();
+  });
+
+  it("'source worksheet was removed' branch: focus moves in, and Escape closes it", async () => {
+    const user = userEvent.setup();
+    useApp.setState({ datasets: [] }); // the worksheet the chooser targets is gone
+    render(<QuickPlotWithDialog />);
+    act(() => openQuickPlotWith("vanished"));
+
+    expect(screen.getByText("The source worksheet was removed.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useQuickPlotWithDialog.getState().datasetId).toBeNull();
+  });
+});
+
+describe("AnnotationTextDialog keyboard cancel (P3.3 round 2)", () => {
+  it("moves focus into the editor field on open", () => {
+    render(<AnnotationTextDialog />);
+    act(() => {
+      void askAnnotationText("Edit annotation text", "Tc");
+    });
+    // RichLabelInput's <input> is the first focusable in the dialog.
+    expect(screen.getByRole("textbox")).toHaveFocus();
+  });
+
+  it("Escape resolves null — the object-menu path focused nothing before", async () => {
+    const user = userEvent.setup();
+    render(<AnnotationTextDialog />);
+    let result!: Promise<string | null>;
+    act(() => {
+      result = askAnnotationText("Edit annotation text", "Tc");
+    });
+
+    await user.keyboard("{Escape}");
+
+    await expect(result).resolves.toBeNull();
+  });
+});
+
+// ── Two traps open at once (review finding 3) ────────────────────────────
+// Measured before the fix: both traps listen on `document` in capture and
+// each pulls focus back whenever `document.activeElement` is outside ITS OWN
+// root, so the Tab sequence with two open was
+// ["Outer A","Inner A","Outer A","Inner A",…] — it never reached the SECOND
+// control of either dialog. Latent then (nothing shipped opens two at once),
+// live the moment residual R1 puts a trap on PreferencesDialog above an
+// `askConfirm` "Reset all preferences?".
+describe("stacked focus traps take turns (P3.3 round 2)", () => {
+  it("only the TOP trap acts, and closing it hands control back to the outer one", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">outside</button>
+        <RecoveryChoiceDialog />
+        <ConfirmDialog />
+      </>,
+    );
+    act(() => {
+      useRecoveryChoice.setState({ pending: recoveryPrompt() });
+    });
+    const outerCancel = screen.getByRole("button", { name: "Cancel" });
+    const recover = screen.getByRole("button", { name: "Recover autosave" });
+    expect(outerCancel).toHaveFocus();
+
+    let confirmed!: Promise<boolean>;
+    act(() => {
+      confirmed = askConfirm("Remove everything?", "gone forever", "Remove all", true);
+    });
+    const inner = within(screen.getAllByRole("dialog")[1]);
+    const innerCancel = inner.getByRole("button", { name: "Cancel" });
+    const removeAll = inner.getByRole("button", { name: "Remove all" });
+    expect(innerCancel).toHaveFocus();
+
+    // Tab cycles the TOP dialog's controls only — before the stack, the outer
+    // trap yanked focus back to its own first button on every Tab.
+    await user.tab();
+    expect(removeAll).toHaveFocus();
+    await user.tab();
+    expect(innerCancel).toHaveFocus();
+    expect(recover).not.toHaveFocus();
+
+    // Dismiss the top one by CLICKING Cancel: both dialogs own Escape on a
+    // window-capture listener, so one Escape would close both — a different
+    // question from this one.
+    await user.click(innerCancel);
+    await expect(confirmed).resolves.toBe(false);
+    expect(outerCancel).toHaveFocus(); // ConfirmDialog's own restore-to-opener
+
+    // …and the outer trap is live again: three controls, then a wrap.
+    await user.tab();
+    await user.tab();
+    expect(recover).toHaveFocus();
+    await user.tab();
+    expect(outerCancel).toHaveFocus();
+    expect(screen.getByRole("button", { name: "outside" })).not.toHaveFocus();
+  });
+});

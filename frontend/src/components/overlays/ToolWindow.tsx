@@ -16,6 +16,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { isEditingTarget } from "../../lib/editingTarget";
 import {
   clampToolWindowPos,
   defaultToolWindowLayout,
@@ -26,6 +27,7 @@ import {
 import { workshopHelpTopic } from "../../lib/workshopHelp";
 import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
+import { useOpenerRestore } from "./useDialogFocus";
 
 let zTop = 0;
 
@@ -99,41 +101,92 @@ export default function ToolWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Give focus back when the panel closes (round 2, review finding 1). The
+  // frame takes focus on mount (below); taking it without returning it is the
+  // exact regression `useDialogFocus`
+  // exists to prevent — Escape-closing a
+  // workshop dropped the user on `<body>`, where `useGlobalShortcuts`' Delete/Backspace removes the active dataset.
+  // Same render-time opener latch as the dialogs, so the Library row or menu
+  // item the workshop was opened from gets focus back. `closeNow` moves focus
+  // BEFORE the panel goes away (lib/focusGuard.ts's `removeRowSafely`
+  // pattern) — the hook's unmount cleanup is a later flush, and until it runs
+  // focus sits on <body>; it stays as the backstop for closes that do not
+  // come through this component.
+  const restoreOpener = useOpenerRestore(winRef, true);
+  const closeNow = () => {
+    restoreOpener();
+    onClose?.();
+  };
+
   // P3.3 "cancel": until this landed, NO workshop could be dismissed from the
   // keyboard — the only close affordance in the whole family of 48 panels was
   // the title bar's ✕, reachable only by tabbing to it. The fix belongs here,
   // at the shared host, exactly once.
   //
-  // Two guards, both deliberate:
-  //  - `isEditing(e.target)` — Escape inside a text field is the field's, not
-  //    the window's. Closing a panel out from under someone mid-type would
-  //    discard whatever they were entering. (Workshops whose fields DO give
-  //    Escape a meaning — recipelibrary/RecipeRow, recipemanager — already
-  //    `stopPropagation()`, so this handler never even sees those.)
-  //  - `defaultPrevented` — the same convention useGlobalShortcuts documents:
-  //    a component that consumed Escape for its own object (the region tool,
-  //    a draw-mode overlay) keeps it.
-  // A React handler on the window root, not a window listener, so this owns
-  // Escape only while focus is INSIDE this panel — a dialog stacked on top of
-  // a workshop still gets its own Escape.
+  // WHY THE CLOSE IS DEFERRED (round 2, review finding 2). The first cut
+  // called `e.stopPropagation()` and closed synchronously, and claimed that
+  // `defaultPrevented` let an Escape consumer keep the key. MEASURED: it did
+  // not. React attaches its listener at the root container, so a synthetic
+  // `stopPropagation()` also stops the NATIVE event there — and every Escape
+  // consumer in this app (`useGlobalShortcuts`' universal plot-tool cancel,
+  // Stage's draw/shape/annotation edits, `usePeakWizard`'s marker-edit pause)
+  // is a window BUBBLE listener, i.e. downstream of that root. They ran zero
+  // times; the panel closed instead. Registration order cannot fix it either:
+  // `usePeakWizard` re-registers its Escape listener when the wizard reaches
+  // step ②, long AFTER this window mounted.
+  //
+  // So: no `stopPropagation()` (the event reaches every consumer as before),
+  // and the decision to close waits a macrotask. `defaultPrevented` is a live
+  // property of the event, so re-reading it once the dispatch is over sees a
+  // `preventDefault()` from ANY consumer, whatever phase or order it ran in —
+  // the repo's documented "this keystroke was mine" convention, now actually
+  // enforceable. A microtask would not do: the spec runs a microtask
+  // checkpoint between listeners, so it can land mid-dispatch.
+  //
+  // Two guards on top:
+  //  - `isEditingTarget(e.target)` — Escape inside a text field is the
+  //    field's, not the window's. Closing a panel out from under someone
+  //    mid-type would discard whatever they were entering. (Workshops whose
+  //    fields DO give Escape a meaning — recipelibrary/RecipeRow,
+  //    recipemanager — already `stopPropagation()`, so this never sees those.)
+  //  - a React handler on the window root, not a window listener, so this owns
+  //    Escape only while focus is INSIDE this panel — a dialog stacked on top
+  //    of a workshop still gets its own Escape.
+  const closeTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
   const onWindowKey = (e: React.KeyboardEvent) => {
-    if (e.key !== "Escape" || !onClose || e.defaultPrevented) return;
-    const el = e.target as HTMLElement | null;
-    const tag = el?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
-    e.stopPropagation();
-    onClose();
+    if (e.key !== "Escape" || !onClose) return;
+    const native = e.nativeEvent;
+    if (native.defaultPrevented || isEditingTarget(e.target)) return;
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      if (native.defaultPrevented) return; // a consumer claimed it later in the dispatch
+      closeNow();
+    }, 0);
   };
 
   // Take focus on open so that Escape — and Tab into the panel's controls —
   // works immediately. A workshop launched from the command palette or a menu
   // otherwise leaves focus on the unmounted trigger, i.e. on <body>, where a
   // root-level React handler never fires. Focus lands on the FRAME
-  // (`tabIndex={-1}`), never on a control, so nothing is armed to activate and
-  // no panel's own field choice is overridden. Non-modal: nothing is trapped.
+  // (`tabIndex={-1}`), never on a control, so nothing is armed to activate.
+  // Non-modal: nothing is trapped.
+  //
+  // Round 2 (review finding 5): skipped when something inside the frame is
+  // already focused after the first commit. React applies a child's
+  // `autoFocus` during that commit and this passive effect runs after it, so
+  // the first cut took focus back off any panel that opens straight into a
+  // field — the opposite of what its own commit body claimed.
   useEffect(() => {
-    winRef.current?.focus({ preventScroll: true });
+    const frame = winRef.current;
+    if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
   }, []);
+
 
   const onTitleDown = (e: React.PointerEvent) => {
     dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
@@ -209,7 +262,9 @@ export default function ToolWindow({
             className="qzk-win-close"
             title="Close"
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={onClose}
+            // `closeNow`, not `onClose`: the ✕ unmounts the panel with focus
+            // ON ITSELF, so the restore has to run before it disappears.
+            onClick={closeNow}
           />
         )}
         <span className="grow">{title}</span>

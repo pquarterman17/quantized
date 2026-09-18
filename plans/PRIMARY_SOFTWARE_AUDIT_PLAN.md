@@ -3815,7 +3815,7 @@ covers a much smaller subset and guards focus on Analyze.
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
-  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | n/a | focus-in + Escape |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
 
   "dead" means the dialog HAD an Escape handler — on the dialog box's React
@@ -3843,15 +3843,87 @@ covers a much smaller subset and guards focus on Analyze.
     and test-pinned, and are untouched.
   - `ToolWindow` — Escape closes a workshop, once at the shared host instead
     of in 48 panels, guarded by the repo's editing-target convention (a text
-    field keeps Escape) and by `defaultPrevented` (the region tool keeps it).
-    The frame also takes focus on mount (`tabIndex={-1}`), because a workshop
-    opened from the command palette otherwise leaves focus on the unmounted
-    trigger, where a root-level React handler never fires.
+    field keeps Escape). The frame also takes focus on mount (`tabIndex={-1}`),
+    because a workshop opened from the command palette otherwise leaves focus
+    on the unmounted trigger, where a root-level React handler never fires.
+    **Round-2 correction:** as first written this ALSO claimed a
+    `defaultPrevented` guard that let another Escape consumer keep the key.
+    That claim was false — the handler called `stopPropagation()` on a React
+    synthetic event, which kills the native event at React's root container,
+    so the window-BUBBLE consumers it named never ran at all. See the round-2
+    entry below for the measurement and the fix.
   - Tests: `overlays/dialogFocus.a11y.test.tsx` (7 cases) and six cases
     appended to `overlays/ToolWindow.test.tsx`, all driven at the DOM layer
     with `userEvent.tab()`/`userEvent.keyboard()`, because the bug class here
     is "the handler exists but the key never reaches it". Every one is
     sabotage-verified. Eager bundle +1,437 B (911,295 → 912,732).
+
+  **Round 2 (2026-09-18) — the adversarial review's three findings, closed.**
+  The pass above shipped three defects of its own. Each is fixed here with the
+  test that was missing, and every claim it made that measurement contradicted
+  is corrected in place rather than left standing.
+  - **It created the very focus-loss its own hook header condemns.** The frame
+    took focus on mount and nothing gave it back, so Escape-closing a workshop
+    left the user on `<body>` — where `useGlobalShortcuts`' Delete/Backspace
+    removes the active dataset. `ToolWindow` now shares the dialogs'
+    render-time opener latch (`useOpenerRestore`, extracted from
+    `useDialogFocus`) and restores BEFORE the panel unmounts, the pattern
+    `lib/focusGuard.ts`'s `removeRowSafely` already documents: React runs a
+    deleted tree's passive destroy in a LATER flush, and measured in jsdom
+    focus was still on `<body>` when the assertions ran. The unmount cleanup
+    stays as the backstop for closes that do not come through the component.
+    When the opener is gone (a menu item that unmounted with the click), focus
+    lands on the Library's own focus-loss container (`lib/scrollOutFocus.ts`),
+    never `<body>`. The audit table's `n/a` restore cell for ToolWindow now
+    reads the truth: it was **N**, and it was this pass that made it matter.
+  - **The `defaultPrevented` guard protected nobody.** `onWindowKey` called
+    `stopPropagation()` on a React SYNTHETIC event, which also stops the
+    native event at React's root container — and every Escape consumer the
+    comment named is a window-BUBBLE listener downstream of that root.
+    Measured: with a bubble consumer, `onClose` 1 call / consumer 0; with a
+    capture consumer, `onClose` 0 / consumer 1. The `stopPropagation()` is
+    gone (the event reaches every consumer as it always should have) and the
+    close waits one macrotask, then re-reads `defaultPrevented` — a LIVE
+    property of the event — so a consumer that claimed the key wins whatever
+    phase or registration order it ran in. Registration order could not have
+    fixed this: `usePeakWizard` registers its Escape listener when the wizard
+    reaches step ②, long after the hosting window mounted. That panel now also
+    CLAIMS the key with `preventDefault()`, so one Escape pauses marker-edit
+    instead of closing the whole Peak Analyzer; a second Escape, with nothing
+    left to pause, closes the panel as usual.
+  - **Three of the six fixed dialogs had no test at all.** Sabotage S10 —
+    delete the `useDialogFocus` call from `PlotRecipeApplyDialog`,
+    `QuickPlotWithDialog` and `AnnotationTextDialog` at once — left all 226
+    `components/overlays` tests green, because each dialog's own suite fires
+    Escape AT the box (`fireEvent.keyDown(box, …)`), which passes whether or
+    not anything ever moved focus into it. Six cases (focus-in + Escape each,
+    covering BOTH QuickPlotWith branches) now press the key the way a user
+    does, via `userEvent.keyboard` at `document.activeElement`.
+
+  Also closed, from the same review: stacked traps (a module-level stack of
+  open trap roots — only the top acts, so two open dialogs no longer deadlock
+  Tab on the first control of each); the frame no longer overrides a child's
+  `autoFocus`; the restore no longer yanks focus the user has since moved to a
+  live control elsewhere; `FOCUSABLE` gained `[contenteditable]`, `iframe`,
+  `summary` and `audio`/`video[controls]`; the hidden/`aria-hidden` check
+  walks ancestors up to the trap root instead of asking only the element; and
+  the fourth hand-rolled copy of the `isEditing` predicate became one shared
+  `lib/editingTarget.ts` (`useHistoryCommands` keeps its documented WIDER
+  variant, which answers a different question).
+
+  | Sabotage (round 2) | Result | Failing tests |
+  |---|---|---|
+  | S10 `useDialogFocus` removed from all three untested dialogs | **RED** 6 | the six new focus-in/Escape cases |
+  | S11 ToolWindow's restore-to-opener removed | **RED** 2 | "gives focus back to the opener…", "lands on the shared safe spot…" |
+  | S12 safe-landing fallback removed (opener gone) | **RED** 1 | "lands on the shared safe spot, never `<body>`…" |
+  | S13 round-1 Escape restored (`stopPropagation`, close at once) | **RED** 2 | "a panel hook that claims Escape keeps it…", "an unclaimed Escape still closes the panel…" |
+  | S14 top-of-stack check removed from the trap | **RED** 1 | "only the TOP trap acts…" |
+  | S15 frame focuses on mount unconditionally | **RED** 1 | "leaves a child's autoFocus alone…" |
+  | S16 `usePeakWizard` stops claiming Escape | **RED** 1 | "CLAIMS the Escape it consumes…" |
+
+  Eager bundle: parent `b50f6602` **912,824 B** → tip **913,548 B**, **+724 B**
+  (budget 920,400 B, so 6,852 B of headroom left). Both built after
+  `rm -rf node_modules/.vite`; the tip figure reproduced twice.
 
   **Named residuals (why this is `[~]`).**
   - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
@@ -3870,6 +3942,14 @@ covers a much smaller subset and guards focus on Analyze.
   - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
     alone and does not say WHICH panel it closes. That belongs to the
     accessible-names box above, not this one.
+  - **R5** (round 2, review NIT 12) — under React StrictMode's dev-only
+    mount→cleanup→mount, `useOpenerRestore`'s cleanup restores to the opener
+    mid-open and the re-run pulls focus back in. Net-correct, one dev-only
+    flicker; not worth a latch that would complicate the real path.
+  - **R6** (round 2, review NIT 13) — a SECOND `ToolWindow` mounting takes
+    focus from the first. Correct for a user-initiated open, wrong for a panel
+    that appears by itself; `ResultsWindow` is the only auto-appear candidate
+    and nothing currently renders it, so there is no such path to fix against.
 - [~] Accessible names/state for icons, plots, trees, dialogs, progress.
   ~143 `aria-label`s already exist app-wide; this box has NOT had a full
   audit and stays `[~]` for that reason. What was verified and fixed

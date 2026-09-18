@@ -7,6 +7,7 @@
 import { useEffect } from "react";
 
 import { cancelActiveGesture } from "./lib/gestureCancel";
+import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
@@ -15,12 +16,6 @@ import { useApp } from "./store/useApp";
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
-    const isEditing = (t: EventTarget | null): boolean => {
-      const el = t as HTMLElement | null;
-      if (!el) return false;
-      const tag = el.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-    };
     const onKey = (e: KeyboardEvent) => {
       // Delete / Backspace removes the selected dataset(s) — but never while the
       // user is typing in a field (rename, tag, filter, formula, dialog input),
@@ -40,7 +35,7 @@ export function useGlobalShortcuts(): void {
       // either. Any future component that handles Delete for its own selection
       // gets this protection by calling preventDefault(), which it must do
       // anyway to stop the browser's Back navigation on Backspace.
-      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditing(e.target)) {
+      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditingTarget(e.target)) {
         const s = useApp.getState();
         if (s.datasets.length === 0) return;
         e.preventDefault();
@@ -75,19 +70,19 @@ export function useGlobalShortcuts(): void {
           s.clearQfit();
           return;
         }
-        if (!isEditing(e.target) && s.plotTool !== "pointer" && !loadInteractionPrefs().persistentTool) {
+        if (!isEditingTarget(e.target) && s.plotTool !== "pointer" && !loadInteractionPrefs().persistentTool) {
           e.preventDefault();
           s.setPlotTool("pointer");
         }
         return;
       }
       // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
-      if (e.key === "?" && !isEditing(e.target)) {
+      if (e.key === "?" && !isEditingTarget(e.target)) {
         e.preventDefault();
         useApp.getState().setShortcutsOpen(true);
         return;
       }
-      if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditing(e.target)) {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditingTarget(e.target)) {
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
           const s = useApp.getState();
@@ -103,7 +98,7 @@ export function useGlobalShortcuts(): void {
       // the arrows it handles, and without this gate the SAME keystroke also
       // stepped the global prev/next-dataset navigation — two handlers, one
       // key press.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditing(e.target)) {
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditingTarget(e.target)) {
         const s = useApp.getState();
         switch (e.key) {
           case "a":
@@ -169,7 +164,7 @@ export function useGlobalShortcuts(): void {
           // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing
           // into a field (rename, tag, formula, dialog input) — those keep the
           // browser's native paste. Command palette / Edit menu always work.
-          if (!isEditing(e.target)) {
+          if (!isEditingTarget(e.target)) {
             e.preventDefault();
             void s.pasteDataFromClipboard();
           }
