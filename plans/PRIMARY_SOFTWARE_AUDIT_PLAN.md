@@ -5734,7 +5734,7 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Chosen by measured coupling over the two larger candidates: `loadWorkspace`
   (170 lines) writes 40 `AppState` fields and is where every newly persisted
   field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
-  (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
+  (336 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
   this cluster writes 15, of which the 4 it owns means this module holds every
   ACTION that edits them one at a time — bulk restores write them wholesale
   and stay outside the cluster on purpose: `loadWorkspace`'s `.dwk` hydrate,
@@ -5811,8 +5811,10 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   `applyOriginFigure` (an imported Origin graph window, in its four branches —
   cross-book overlay, double-Y layer pair, spatial multi-panel family, and the
   single-layer fallback), `facetByColumn` (a small-multiples partition by a
-  category column) and `breakAtGaps` (a paneled x-break arrangement). 342
-  implementation lines, plus their 24 interface-declaration lines and the
+  category column) and `breakAtGaps` (a paneled x-break arrangement). 336
+  implementation lines (base `useApp.ts` 985-1320: `applyOriginFigure`
+  985-1215, `facetByColumn` 1226-1281, `breakAtGaps` 1288-1320), plus their
+  24 interface-declaration lines and the
   `ORIGIN_FIGURE_AXIS` constant all three spread, moved to the new
   `store/viewAppliers.ts` (443 lines by the repo's `split("\n")` ceiling
   metric, `ViewAppliersSlice`, composed with one import + one word on the
@@ -5836,8 +5838,11 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   import `components/` — so that `viewAppliers.ts` sits below the component
   layer and the store layering guard gains **no new grandfathered entry**.
   Characterization net: `store/viewAppliers.characterization.test.ts`, 28
-  specs, written and run GREEN against the pre-extraction `store/useApp.ts`
-  and passing byte-unchanged after the move. It pins, per action AND per
+  specs at the extraction (35 after 2026-09-18 review round 3 F1 added the
+  cross-book overlay branch's own key-set specs, closing the one branch the
+  net didn't cover — see that round's findings below), written and run GREEN
+  against the pre-extraction `store/useApp.ts` and passing byte-unchanged
+  after the move. It pins, per action AND per
   branch, the exact set of top-level store keys each call changes — a whole
   `getState()` diff against a POISONED baseline that now also poisons
   `composition`/`qfitBusy`/`qfitError`/`gadgetBusy`/`gadgetError`, so the
@@ -5850,15 +5855,68 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   rewrite them. Sabotage-proven both directions: an EXTRA key written by
   `breakAtGaps` (`plotTitle`) and a SKIPPED key in `facetByColumn`
   (`facetKey: col`) each turn the net red. Eager bundle, both trees built after
-  their own `npm ci` and a `node_modules/.vite` wipe: **911,295 B at the
-  branch base `3f43467b`** → **911,331 B on the extraction commit, +36 B**
+  their own `npm ci` and a `node_modules/.vite` wipe: **911,295 B at
+  `16535ee0`** (`HEAD~2` of the extraction; tree-identical to the branch base
+  `3f43467b` — `git rev-parse 16535ee0^{tree}` = `3f43467b^{tree}`) →
+  **911,331 B on the extraction commit, +36 B**
   (the new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched and 8.9 kB
-  under budget). `3f43467b` is `HEAD~2` of the extraction, not `HEAD~1`:
-  `HEAD~1` is the test-only characterization commit, which cannot move the
-  eager graph. The
-  box stays `[~]`: `store/useApp.ts` is still far over the 500-line module
+  under budget). `HEAD~1` is the test-only characterization commit, which
+  cannot move the eager graph. The box stays `[~]`: `store/useApp.ts` is still far over the 500-line module
   ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` / `lib/uplotOverlays.ts` are
   untouched by every pass so far.
+
+  **Review round 3, 2026-09-18 (adversarial review of `977fc5f5` +
+  `b2cde0a2`; verdict CLEAN, nine findings, all closed test/doc-only — no
+  product-code change).** F1: the cross-book OVERLAY branch of
+  `applyOriginFigure` had NO changed-key spec at all, despite this note (and
+  `architecture.test.ts`'s pin justification) claiming coverage "per action
+  AND per branch" across all four branches — closed by adding two new-overlay
+  and two already-active-overlay specs to
+  `store/viewAppliers.characterization.test.ts` (28 → 35), sabotage-proven
+  against both mutations the review reproduced (an extra carried-along
+  `plotTitle` write, and a dropped `facetKey: null` clear — the latter only
+  observable in the already-active scenario, since a genuine dataset switch
+  masks it via `setActive`'s own `datasetViewDefaults` reset). Closing that
+  gap also surfaced a real hole in the characterization file's own `poison()`
+  helper: `plotTitle` was never poisoned or reset at all, so a sabotage that
+  wrote it would silently leak into every later test's baseline within the
+  same run — fixed by adding it to `poison()`. F3: `poison()`'s `pageSetup:
+  null` matched the field's own default AND what the spatial branch actually
+  writes for every fixture (undecoded page), making that write invisible —
+  fixed to a non-default `PageSetup`, `pageSetup` added to the spatial
+  branch's expected key set, and the rest of `poison()` audited (documented
+  inline: `regionShades: []` is safe by array IDENTITY despite matching its
+  default by value; `stackMode`/`legendStatic`/`showGrid` match their own
+  defaults but are safe because no branch in this domain ever writes them
+  back to that value). F4: `breakAtGaps` had only a DIFFERENT-dataset
+  key-set spec, the one case that cannot observe its `facetKey: null` clear
+  being dropped (same masking as F1) — added the ALREADY-active-dataset
+  spec `facetByColumn` already had. F5: `recordMacro`'s LABEL argument was
+  never asserted anywhere in the file, only its `code` — added a
+  `macroLabels()` helper and label assertions for all three actions. F6:
+  `facetByColumn`'s `recordHistory`/`setActive` ordering (and the L3 dedup
+  that keeps our own undo entry over `setActive`'s pinned-window
+  `createWindow` fallback) was unpinned — added a spec that pins the pushed
+  snapshot as the PRE-rebind state and the surviving label. F9: a FIFTH
+  `breakAtGaps` no-op branch (`compositionPanelCount(composition) < 2` — an
+  explicit break list that leaves fewer than 2 panels) was untested and
+  unmentioned; "four no-op branches" corrected to five here and in
+  `architecture.test.ts`'s pin justification, and a spec added. F2: "342
+  implementation lines" was measured wrong — the removal hunk is
+  authoritative at 336 (`985-1320`, three sub-ranges above); corrected here,
+  in the earlier 2026-09-17 note's mention above, and in
+  `architecture.test.ts`'s pin justification. F7: the bundle-parent SHA
+  above was labeled `3f43467b` "`is` `HEAD~2`" when `HEAD~2` is actually
+  `16535ee0` (the #365 merge) and `3f43467b` is that merge's second
+  parent — corrected above to measure and label `16535ee0`, noting the two
+  are tree-identical so the number itself was never wrong. F8: two stale
+  `store/useApp.ts` comments pointing at the moved actions —
+  `lib/originPanels.ts:5` and `lib/exportParity2.test.ts:289` — now say
+  `store/viewAppliers.ts`. All changes were to
+  `store/viewAppliers.characterization.test.ts`, the two comment files, this
+  plan and `architecture.test.ts`'s comments; no gate command, budget or
+  pin changed, and the extraction's own byte-identical bodies (this note's
+  earlier paragraph) are untouched.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy

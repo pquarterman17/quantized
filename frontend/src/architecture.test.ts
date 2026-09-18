@@ -298,7 +298,7 @@ const STORE_PINS: Record<string, number> = {
   // clause, one creator-spread line. Chosen by COUPLING over the two larger
   // candidates: `loadWorkspace` (170 lines) writes 40 AppState fields and is
   // where every new persisted field gets wired, and applyOriginFigure +
-  // facetByColumn + breakAtGaps (342 lines) write 24 PlotView fields that
+  // facetByColumn + breakAtGaps (336 lines) write 24 PlotView fields that
   // plotViewSettings.ts also writes; this cluster writes 15, of which the four
   // it OWNS (reports/openReportId/figureDocs/figureDocSeed) means this module
   // holds every ACTION that edits them one at a time; bulk restores write
@@ -325,8 +325,10 @@ const STORE_PINS: Record<string, number> = {
   // branches — cross-book overlay, double-Y layer pair, spatial multi-panel
   // family, single-layer fallback), facetByColumn (a small-multiples
   // partition by a category column) and breakAtGaps (a paneled x-break
-  // arrangement), 342 implementation lines plus their 24 interface lines and
-  // the ORIGIN_FIGURE_AXIS constant all three spread — moved verbatim (modulo
+  // arrangement), 336 implementation lines (base useApp.ts 985-1320:
+  // applyOriginFigure 985-1215, facetByColumn 1226-1281, breakAtGaps
+  // 1288-1320) plus their 24 interface lines and the ORIGIN_FIGURE_AXIS
+  // constant all three spread — moved verbatim (modulo
   // one indentation level) to the new store/viewAppliers.ts
   // (ViewAppliersSlice), composed exactly like plotViewSettings.ts and
   // reportsFigureDocs.ts: one import line, one word on the extends clause,
@@ -342,10 +344,12 @@ const STORE_PINS: Record<string, number> = {
   // The Origin-apply PREFLIGHTS stay in store/originFigureApply.ts (one of
   // the three modules grandfathered to import components/), which is what
   // lets viewAppliers.ts sit below the component layer with no new
-  // grandfathered entry. store/viewAppliers.characterization.test.ts (28
-  // specs pinning, per action AND per branch, the exact set of top-level
-  // store keys each call changes — a poisoned whole-getState() diff — plus
-  // the applied values, undo label and macro step) was written and run green
+  // grandfathered entry. store/viewAppliers.characterization.test.ts (35
+  // specs pinning, per action AND per branch — including the cross-book
+  // overlay branch, added 2026-09-18 review round 3 F1 — the exact set of
+  // top-level store keys each call changes — a poisoned whole-getState()
+  // diff — plus the applied values, undo label and macro step) was written
+  // and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
   "/store/useApp.ts": 1639,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
