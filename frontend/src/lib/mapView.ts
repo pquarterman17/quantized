@@ -12,6 +12,19 @@
 // and `lib/workspace.ts` can reach the (de)serializers without importing a
 // store slice's actions.
 //
+// ONE VIEW PER DATASET (P2.8 review round 2, 2026-09-17). The first cut of
+// this module held ONE app-wide record carrying its own `datasetId`, rebound
+// by every mounted map through a `bindMapView` action. `MapStage` is mounted
+// in the Stage Map tab AND in every `kind:"map"` document window at the same
+// time (components/windows/DocumentWindow.tsx), so opening a second map
+// silently DESTROYED the first one's slices, colour limits and annotations —
+// and the rebind recorded no history, so it could not be undone. The record
+// is therefore keyed by dataset id (`MapViewMap`): each map reads its own
+// entry, an absent entry IS `DEFAULT_MAP_VIEW`, and merely opening a map
+// writes nothing at all. The drop-on-switch rule is gone with it — it was a
+// consequence of sharing one record, not a decision. A dataset REMOVAL still
+// drops that dataset's entry (store/removeDatasets.ts).
+//
 // WHAT IS NOT HERE, deliberately:
 //   - `mapMethod`/`mapRes`/`contour*` (store/useApp.ts). Those are REGRID
 //     inputs: change one and the payload is recomputed from the dataset.
@@ -86,12 +99,10 @@ export interface MapAnnotation {
   space: CutSpace | null;
 }
 
-/** The whole durable map view. `datasetId` is what makes the preservation
- *  rule expressible: re-activating the SAME dataset keeps every field, a
- *  genuine switch to another dataset drops the data-dependent ones (BUG-012's
- *  rule, applied in `store/mapView.ts`'s `bindMapView`). */
+/** ONE dataset's durable map view. The dataset id is the KEY in `MapViewMap`,
+ *  never a field here: a record that carries its own binding can describe only
+ *  one map at a time, which is exactly the defect this replaced. */
 export interface MapViewState {
-  datasetId: string | null;
   colormap: ColormapName;
   logZ: boolean;
   /** Explicit [lo, hi] colour limits, or null for "auto" (the payload's own
@@ -101,29 +112,54 @@ export interface MapViewState {
   annotations: MapAnnotation[];
 }
 
-/** The untouched view. Frozen: it is handed out as the reset value and as the
- *  absent-field default, so a caller mutating it would corrupt every later
- *  reset. */
+/** Every dataset's map view, keyed by dataset id. An ABSENT key is not a
+ *  missing view — it IS `DEFAULT_MAP_VIEW` (see `mapViewFor`), which is what
+ *  makes opening a map a read rather than a write. An entry that is EQUAL to
+ *  the default (edited back to it) costs the saved document nothing either:
+ *  `isDefaultMapViews` and `serializeMapViews` both judge by value. */
+export type MapViewMap = Readonly<Record<string, MapViewState>>;
+
+/** The untouched view. DEEPLY frozen — the arrays too, since `.slices.push(…)`
+ *  is exactly the mutation a careless caller would reach for, and this object
+ *  is handed out as the reset value, the absent-entry default and the value
+ *  every unvisited map reads. */
 export const DEFAULT_MAP_VIEW: MapViewState = Object.freeze({
-  datasetId: null,
   colormap: "viridis",
   logZ: false,
   colorLimits: null,
-  slices: [],
-  annotations: [],
+  slices: Object.freeze([] as MapSliceDef[]),
+  annotations: Object.freeze([] as MapAnnotation[]),
 }) as MapViewState;
 
-const COLORMAP_NAMES: readonly string[] = ["viridis", "magma", "gray", "rdbu"];
+/** The untouched record: no dataset has a view yet. */
+export const EMPTY_MAP_VIEWS: MapViewMap = Object.freeze({});
 
-/** True when nothing about the map view has been decided — nobody opened a
- *  map, or everything is still at its default. `lib/workspaceSerialize.ts`
- *  uses this to OMIT the field entirely, so a project that never touched a
- *  map serializes byte-for-byte as it did before P2.8 (BUG-017's rule: an
- *  additive field must cost an ordinary document nothing). */
+/** The colormap names a `.dwk` may name. Kept as a string list rather than a
+ *  value import of `lib/colormap`'s `COLORMAPS` because this module is EAGER
+ *  (lib/workspaceSerialize.ts reaches it) and that import would drag the
+ *  colour LUTs into the eager chunk. `lib/mapView.test.ts` pins it equal to
+ *  `Object.keys(COLORMAPS)` so a fifth colormap cannot silently start
+ *  reverting to viridis on reopen. */
+export const COLORMAP_NAMES: readonly string[] = ["viridis", "magma", "gray", "rdbu"];
+
+/** Trust-boundary caps for a hand-edited or third-party `.dwk`. Nothing in the
+ *  UI can reach them (a cut is one click and a label one dialog), but
+ *  `sanitizeMapViews` is the only thing standing between a crafted document
+ *  and the renderer. */
+const MAX_SLICES = 200;
+const MAX_ANNOTATIONS = 200;
+const MAX_LABEL_CHARS = 200;
+
+/** True when this dataset's view records no decision — every field is still at
+ *  its default. Deliberately says NOTHING about which dataset it belongs to:
+ *  opening a map is not a decision, so binding one must not make a document
+ *  dirty (P2.8 review round 2, finding 2). `lib/workspaceSerialize.ts` uses
+ *  this to OMIT the field entirely, so a project that never touched a map
+ *  serializes byte-for-byte as it did before P2.8 (BUG-017's rule: an additive
+ *  field must cost an ordinary document nothing). */
 export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
   if (!v) return true;
   return (
-    v.datasetId === null &&
     v.colormap === DEFAULT_MAP_VIEW.colormap &&
     v.logZ === DEFAULT_MAP_VIEW.logZ &&
     v.colorLimits === null &&
@@ -132,18 +168,50 @@ export function isDefaultMapView(v: MapViewState | undefined | null): boolean {
   );
 }
 
+/** True when no dataset's view records a decision. */
+export function isDefaultMapViews(m: MapViewMap | undefined | null): boolean {
+  if (!m) return true;
+  return Object.values(m).every(isDefaultMapView);
+}
+
+/** The view a map showing `datasetId` reads. An absent entry is the default —
+ *  a pure lookup, never a write, which is what makes a second open map
+ *  harmless. */
+export function mapViewFor(
+  m: MapViewMap | undefined | null,
+  datasetId: string | null,
+): MapViewState {
+  if (!m || !datasetId) return DEFAULT_MAP_VIEW;
+  return m[datasetId] ?? DEFAULT_MAP_VIEW;
+}
+
+/** True when the two [lo, hi] pairs say the same thing. Exported for the
+ *  store's no-op guard on `setMapColorLimits` (a fresh array with the same two
+ *  numbers is not a change). */
+export function sameColorLimits(
+  a: [number, number] | null,
+  b: [number, number] | null,
+): boolean {
+  if (a === b) return true;
+  return a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
+}
+
 /** Deep copy for the save path — a live store object must never be aliased
  *  into the saved document (the same rule `serializeRois`/`serializePeakTable`
- *  follow). */
-export function serializeMapView(v: MapViewState): MapViewState {
-  return {
-    datasetId: v.datasetId,
-    colormap: v.colormap,
-    logZ: v.logZ,
-    colorLimits: v.colorLimits ? [v.colorLimits[0], v.colorLimits[1]] : null,
-    slices: v.slices.map((s) => ({ ...s, a: { ...s.a }, ...(s.b ? { b: { ...s.b } } : {}) })),
-    annotations: v.annotations.map((a) => ({ ...a })),
-  };
+ *  follow). Default entries are dropped: they record nothing. */
+export function serializeMapViews(m: MapViewMap): Record<string, MapViewState> {
+  const out: Record<string, MapViewState> = {};
+  for (const [id, v] of Object.entries(m)) {
+    if (isDefaultMapView(v)) continue;
+    out[id] = {
+      colormap: v.colormap,
+      logZ: v.logZ,
+      colorLimits: v.colorLimits ? [v.colorLimits[0], v.colorLimits[1]] : null,
+      slices: v.slices.map((s) => ({ ...s, a: { ...s.a }, ...(s.b ? { b: { ...s.b } } : {}) })),
+      annotations: v.annotations.map((a) => ({ ...a })),
+    };
+  }
+  return out;
 }
 
 function num(v: unknown): number | null {
@@ -167,15 +235,22 @@ function sliceDef(raw: unknown): MapSliceDef | null {
   if (!a) return null;
   const b = point(o.b);
   if (kind === "seg" && !b) return null; // a segment without both ends is not a line
-  const space = o.space === "q" ? "q" : "angular";
+  // An unknown/future space ("hkl", a corrupted value) is DROPPED, not coerced
+  // to angular: coercion redraws the slice over the wrong axes, in the wrong
+  // place, with no warning. The annotation path below makes the same call.
+  if (o.space !== "q" && o.space !== "angular") return null;
   if (typeof o.id !== "string" || !o.id) return null; // no identity to remove/undo against
+  // width 0 is legitimate — the toolbar's own default ("single line" in
+  // angular, "nearest points only" in Q). A NEGATIVE one is malformed.
+  const width = num(o.width) ?? 0;
+  if (width < 0) return null;
   return {
     id: o.id,
     kind,
     a,
     ...(kind === "seg" && b ? { b } : {}),
-    width: num(o.width) ?? 0,
-    space,
+    width,
+    space: o.space,
   };
 }
 
@@ -190,35 +265,22 @@ function annotation(raw: unknown): MapAnnotation | null {
     id: o.id,
     x,
     y,
-    text: o.text,
+    text: o.text.slice(0, MAX_LABEL_CHARS),
     // A pre-`space` entry (and any other unknown value) reads as a plain map.
     space: o.space === "q" ? "q" : o.space === "angular" ? "angular" : null,
   };
 }
 
-/** Read a `.dwk`'s `mapView` field. Drop-malformed-never-throw, the same
+/** Read ONE dataset's stored view. Drop-malformed-never-throw, the same
  *  degrade `deserializeRois`/`sanitizeCollections` use: a hand-edited or
- *  half-written entry is skipped, never propagated and never fatal.
- *
- *  `liveDatasetIds`, when given, is the parsed document's surviving dataset
- *  ids — a `mapView` bound to a dataset that did NOT survive the load is
- *  discarded WHOLE rather than rebound, because its colour limits and slice
- *  positions are in that map's units and would silently mis-describe
- *  whatever map opens next (`store/rois.ts` makes the same call for why an
- *  unnamed box is not restored across a restart). */
-export function sanitizeMapView(
-  raw: unknown,
-  liveDatasetIds?: ReadonlySet<string>,
-): MapViewState {
+ *  half-written entry is skipped, never propagated and never fatal. */
+export function sanitizeMapView(raw: unknown): MapViewState {
   if (typeof raw !== "object" || raw === null) return DEFAULT_MAP_VIEW;
   const o = raw as Record<string, unknown>;
-  const datasetId = typeof o.datasetId === "string" ? o.datasetId : null;
-  if (datasetId !== null && liveDatasetIds && !liveDatasetIds.has(datasetId)) return DEFAULT_MAP_VIEW;
   const lim = Array.isArray(o.colorLimits) ? o.colorLimits : null;
   const lo = lim ? num(lim[0]) : null;
   const hi = lim ? num(lim[1]) : null;
   return {
-    datasetId,
     colormap:
       typeof o.colormap === "string" && COLORMAP_NAMES.includes(o.colormap)
         ? (o.colormap as ColormapName)
@@ -226,32 +288,46 @@ export function sanitizeMapView(
     logZ: o.logZ === true,
     colorLimits: lo !== null && hi !== null && hi > lo ? [lo, hi] : null,
     slices: Array.isArray(o.slices)
-      ? o.slices.map(sliceDef).filter((s): s is MapSliceDef => s !== null)
+      ? o.slices
+          .map(sliceDef)
+          .filter((s): s is MapSliceDef => s !== null)
+          .slice(0, MAX_SLICES)
       : [],
     annotations: Array.isArray(o.annotations)
-      ? o.annotations.map(annotation).filter((a): a is MapAnnotation => a !== null)
+      ? o.annotations
+          .map(annotation)
+          .filter((a): a is MapAnnotation => a !== null)
+          .slice(0, MAX_ANNOTATIONS)
       : [],
   };
 }
 
-/** The [lo, hi] the heatmap should actually paint with: the user's explicit
- *  limits when they set some, the payload's own extent otherwise. Returns
- *  null when neither is usable (an all-null grid), which is the signal the
- *  renderer already had for "nothing to blit".
+/** Read a `.dwk`'s map-view field.
  *
- *  In log mode `autoLo` is the grid's smallest POSITIVE cell (what
- *  `mapRender.draw` already passed): an explicit non-positive `lo` is raised
- *  to that floor rather than rejected, so switching a map to log never blanks
- *  it just because the linear limits started at or below 0. */
-export function effectiveColorLimits(
-  colorLimits: [number, number] | null,
-  autoLo: number | null,
-  autoHi: number | null,
-  logZ = false,
-): [number, number] | null {
-  let lo = colorLimits ? colorLimits[0] : autoLo;
-  const hi = colorLimits ? colorLimits[1] : autoHi;
-  if (logZ && lo !== null && lo <= 0) lo = autoLo;
-  if (lo === null || hi === null || !(hi > lo)) return null;
-  return [lo, hi];
+ *  Accepts BOTH shapes: the keyed record written from this round on, and the
+ *  single `{datasetId, …}` object written by the first P2.8 commit, which is
+ *  migrated into `{[datasetId]: view}`. A legacy object with no `datasetId`
+ *  described no map and is dropped.
+ *
+ *  `liveDatasetIds`, when given, is the parsed document's surviving dataset
+ *  ids — an entry keyed by a dataset that did NOT survive the load is
+ *  discarded, because its colour limits and slice positions are in that map's
+ *  units and would silently mis-describe whatever map opens next
+ *  (`store/rois.ts` makes the same call for why an unnamed box is not restored
+ *  across a restart). */
+export function sanitizeMapViews(raw: unknown, liveDatasetIds?: ReadonlySet<string>): MapViewMap {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return EMPTY_MAP_VIEWS;
+  const o = raw as Record<string, unknown>;
+  // A top-level `datasetId` is what tells the first cut's single object apart
+  // from the keyed record: it always wrote one, and a dataset id is generated
+  // (`ds-<t36>-<n>`), so it can never be that string.
+  const entries = "datasetId" in o ? [[o.datasetId, o] as const] : Object.entries(o);
+  const out: Record<string, MapViewState> = {};
+  for (const [id, entry] of entries) {
+    if (typeof id !== "string" || !id) continue;
+    if (liveDatasetIds && !liveDatasetIds.has(id)) continue;
+    const v = sanitizeMapView(entry);
+    if (!isDefaultMapView(v)) out[id] = v;
+  }
+  return out;
 }

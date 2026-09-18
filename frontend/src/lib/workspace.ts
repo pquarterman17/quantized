@@ -22,7 +22,7 @@ import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { deserializeRois } from "../store/rois";
-import { sanitizeMapView, type MapViewState } from "./mapView";
+import { sanitizeMapViews, type MapViewMap } from "./mapView";
 import { sanitizeDocumentBackedPlotWindows } from "./windowDocumentPersistence";
 import {
   librarySelectionLiveIds,
@@ -101,13 +101,15 @@ export interface WorkspaceState {
   techniqueViewMemory?: TechniqueViewMemoryMap;
   /** RSM_CUTS_PLAN item 13 — every named saved ROI (store/rois.ts); additive-optional, not the working mapRoi/mapRuler (see store/rois.ts). */
   savedRois?: RoiDef[];
-  /** Audit P2.8 — the durable 2-D map view (colour limits, colour scale,
-   *  colormap, H/V/segment slice definitions with their linked positions, map
-   *  annotations). Additive-optional: absent on every pre-P2.8 doc, and
-   *  `serializeWorkspace` OMITS it again whenever the view is untouched, so an
-   *  ordinary project round-trips byte-identically (lib/mapView.ts's
-   *  `isDefaultMapView`). */
-  mapView?: MapViewState;
+  /** Audit P2.8 — the durable 2-D map view of EACH dataset (colour limits,
+   *  colour scale, colormap, H/V/segment slice definitions with their linked
+   *  positions, map annotations), keyed by dataset id. Additive-optional:
+   *  absent on every pre-P2.8 doc, and `serializeWorkspace` OMITS it again
+   *  whenever no dataset's view was touched, so an ordinary project
+   *  round-trips byte-identically (lib/mapView.ts's `isDefaultMapViews`). The
+   *  FIRST P2.8 commit wrote a single `mapView` object instead; `parseWorkspace`
+   *  migrates that shape into this one. */
+  mapViews?: MapViewMap;
   /** PR E2 — Library tree "current" selection, L0.6 remembered child, workbook disclosure (see lib/workspaceLibraryPanel.ts). */
   librarySelection?: LibrarySelection | null;
   workbookLastChild?: Record<string, string>;
@@ -152,12 +154,12 @@ export interface LoadedWorkspace {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
-  /** P2.8 — `parseWorkspace` ALWAYS populates this (the default view when the
+  /** P2.8 — `parseWorkspace` ALWAYS populates this (the empty record when the
    *  doc has no field, or a malformed one). Declared optional, unlike its
    *  always-populated neighbours, only so the hand-built `LoadedWorkspace`
    *  fixtures scattered through the suite stay valid without restating a
    *  field they do not exercise. */
-  mapView?: MapViewState;
+  mapViews?: MapViewMap;
   quickPlotTemplates: QuickPlotTemplate[]; // PR H — always populated
   /** PR E2 — see WorkspaceState's doc; always populated. */
   librarySelection: LibrarySelection | null;
@@ -348,10 +350,11 @@ export function parseWorkspace(
   // migrationWarnings), never thrown — same degrade as editableFigures/plotWindows above.
   const savedRois = deserializeRois(o.savedRois, migrationWarnings);
   // P2.8: drop-malformed-never-throw, same degrade as `savedRois` right above.
-  // `dsIds` is passed so a map view bound to a dataset this load did NOT keep
-  // is discarded whole rather than rebound onto whatever map opens next — its
-  // colour limits and slice positions are in the missing map's own units.
-  const mapView = sanitizeMapView(o.mapView, dsIds);
+  // `dsIds` is passed so an entry keyed by a dataset this load did NOT keep is
+  // discarded rather than rebound onto whatever map opens next — its colour
+  // limits and slice positions are in the missing map's own units. `o.mapView`
+  // is the FIRST P2.8 commit's single-object shape, migrated by the sanitizer.
+  const mapViews = sanitizeMapViews(o.mapViews ?? o.mapView, dsIds);
   const librarySelection = parseLibrarySelection(
     o.librarySelection,
     selectedIds,
@@ -387,7 +390,7 @@ export function parseWorkspace(
     savedPlotSpecs,
     techniqueViewMemory,
     savedRois,
-    mapView,
+    mapViews,
     quickPlotTemplates,
     librarySelection,
     workbookLastChild,

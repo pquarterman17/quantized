@@ -1,0 +1,196 @@
+// Audit P2.8 review round 2 — the slice overlay's own contracts, at the two
+// levels the MapStage DOM suite cannot reach:
+//
+//   * GEOMETRY (finding 8). The commit's headline claim is that the overlay
+//     projects DATA coordinates "through the SAME `mapRender.dataToPx` the
+//     canvas paints with". Nothing tested it: the DOM assertions were
+//     `y1 === y2`, `x2 > x1` and "y1 unchanged after a regrid", all of which a
+//     wholesale projector swap (draw at the raw data coordinates) satisfies.
+//     Here `dataToPx` is replaced by a known affine map and the drawn
+//     attributes are compared against ITS output.
+//   * EXTENT (finding 4). An `h` slice is defined by its y; the first cut
+//     projected the whole clicked point and dropped the slice when only its
+//     UNHELD x fell outside the payload — contradicting the module's own doc.
+//
+// `projector` decides which of the two the mocked `dataToPx` is: set it and the
+// affine stand-in answers, leave it null and the REAL projector does, so the
+// extent tests exercise the shipped maths rather than a mock of it.
+
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
+import type { MapPayload } from "../../lib/mapdataFetch";
+import MapSliceOverlay from "./MapSliceOverlay";
+// Not mocked (the factory spreads the original), so this IS the shipped rect.
+import { plotRect } from "./mapRender";
+
+let projector: ((x: number, y: number) => [number, number] | null) | null = null;
+
+vi.mock("./mapRender", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./mapRender")>();
+  return {
+    ...actual,
+    dataToPx: (p: MapPayload, w: number, h: number, x: number, y: number) =>
+      projector ? projector(x, y) : actual.dataToPx(p, w, h, x, y),
+  };
+});
+
+const W = 600;
+const H = 400;
+
+function payload(xLo: number, xHi: number): MapPayload {
+  const xAxis = [xLo, (xLo + xHi) / 2, xHi];
+  const yAxis = [15, 16, 17];
+  return {
+    xAxis,
+    yAxis,
+    zGrid: yAxis.map((_, j) => xAxis.map((_v, i) => j * 3 + i)),
+    xLabel: "2Theta",
+    xUnit: "deg",
+    yLabel: "Omega",
+    yUnit: "deg",
+    zLabel: "I",
+    zUnit: "cts",
+    zMin: 0,
+    zMax: 8,
+  };
+}
+
+function renderOverlay(
+  slices: MapSliceDef[],
+  annotations: MapAnnotation[] = [],
+  p: MapPayload = payload(30, 34),
+  space: "angular" | "q" | null = "angular",
+) {
+  const onRemoveSlice = vi.fn();
+  const onRemoveAnnotation = vi.fn();
+  const view = render(
+    <MapSliceOverlay
+      payload={p}
+      w={W}
+      h={H}
+      slices={slices}
+      annotations={annotations}
+      space={space}
+      onRemoveSlice={onRemoveSlice}
+      onRemoveAnnotation={onRemoveAnnotation}
+    />,
+  );
+  return { view, onRemoveSlice, onRemoveAnnotation };
+}
+
+const slice = (over: Partial<MapSliceDef> = {}): MapSliceDef => ({
+  id: "s1",
+  kind: "h",
+  a: { x: 32, y: 16 },
+  width: 0,
+  space: "angular",
+  ...over,
+});
+
+beforeEach(() => {
+  projector = null;
+});
+afterEach(() => {
+  projector = null;
+  vi.restoreAllMocks();
+});
+
+describe("geometry comes from mapRender.dataToPx (finding 8)", () => {
+  it("a segment's endpoints ARE the projector's output", () => {
+    projector = (x, y) => [x * 10 + 1, y * 10 + 2];
+    renderOverlay([
+      slice({ kind: "seg", a: { x: 1, y: 2 }, b: { x: 3, y: 4 } }),
+    ]);
+    const line = screen.getByTestId("map-slice-line");
+    expect(line.getAttribute("x1")).toBe("11");
+    expect(line.getAttribute("y1")).toBe("22");
+    expect(line.getAttribute("x2")).toBe("31");
+    expect(line.getAttribute("y2")).toBe("42");
+  });
+
+  it("an h slice sits at the projector's y and spans the plot rect in x", () => {
+    projector = (x, y) => [x * 10 + 1, y * 10 + 2];
+    renderOverlay([slice({ a: { x: 1, y: 2 } })]);
+    const line = screen.getByTestId("map-slice-line");
+    expect(line.getAttribute("y1")).toBe("22");
+    expect(line.getAttribute("y2")).toBe("22");
+    // The x ends come from the REAL plotRect, not from the projector.
+    const rect = plotRect(payload(30, 34), W, H);
+    expect(Number(line.getAttribute("x1"))).toBe(rect.x);
+    expect(Number(line.getAttribute("x2"))).toBe(rect.x + rect.w);
+  });
+
+  it("an annotation is placed at the projector's point", () => {
+    projector = (x, y) => [x * 10 + 1, y * 10 + 2];
+    renderOverlay([], [{ id: "a1", x: 4, y: 5, text: "peak", space: "angular" }]);
+    const chip = screen.getByTestId("map-annotation");
+    expect(chip.style.left).toBe("41px");
+    expect(chip.style.top).toBe("52px");
+  });
+});
+
+describe("only the HELD coordinate decides an h/v slice's visibility (finding 4)", () => {
+  it("an h slice survives an x that left the extent — its y is what it holds", () => {
+    // Same slice, same host box: x 30..34 contains 33.5, x 31..32 does not.
+    const wide = renderOverlay([slice({ a: { x: 33.5, y: 16 } })], [], payload(30, 34));
+    const wideY = screen.getByTestId("map-slice-line").getAttribute("y1");
+    expect(screen.queryByTestId("map-parked-chip")).toBeNull();
+    wide.view.unmount();
+
+    renderOverlay([slice({ a: { x: 33.5, y: 16 } })], [], payload(31, 32));
+    const line = screen.getByTestId("map-slice-line");
+    expect(line.getAttribute("y1")).toBe(wideY); // the held y is unmoved
+    expect(screen.queryByTestId("map-parked-chip")).toBeNull();
+  });
+
+  it("…and is parked when its HELD y leaves the extent", () => {
+    renderOverlay([slice({ a: { x: 32, y: 99 } })]);
+    expect(screen.queryByTestId("map-slice-line")).toBeNull();
+    const chip = screen.getByTestId("map-parked-chip");
+    expect(chip.getAttribute("title")).toMatch(/Outside the map's current extent/);
+  });
+
+  it("a v slice holds x, so a y off the extent does not hide it", () => {
+    renderOverlay([slice({ kind: "v", a: { x: 32, y: 99 } })]);
+    const line = screen.getByTestId("map-slice-line");
+    expect(line.getAttribute("x1")).toBe(line.getAttribute("x2"));
+  });
+
+  it("a SEGMENT keeps the strict both-ends test — both are real geometry", () => {
+    renderOverlay([slice({ kind: "seg", a: { x: 32, y: 16 }, b: { x: 99, y: 16 } })]);
+    expect(screen.queryByTestId("map-slice-line")).toBeNull();
+    expect(screen.getByTestId("map-parked-chip")).toBeInTheDocument();
+  });
+});
+
+describe("every definition keeps a handle (finding 3)", () => {
+  it("a slice recorded in the other space is listed, says so, and removes", () => {
+    const { onRemoveSlice } = renderOverlay([slice({ space: "q" })], [], payload(30, 34), "angular");
+    expect(screen.queryByTestId("map-slice-line")).toBeNull();
+    const chip = screen.getByTestId("map-parked-chip");
+    expect(chip.getAttribute("title")).toMatch(/Recorded in reciprocal \(Q\) space/);
+    fireEvent.click(chip);
+    expect(onRemoveSlice).toHaveBeenCalledWith("s1");
+  });
+
+  it("an annotation recorded in the other space is listed and removes", () => {
+    const { onRemoveAnnotation } = renderOverlay(
+      [],
+      [{ id: "a1", x: 32, y: 16, text: "film peak", space: "q" }],
+      payload(30, 34),
+      "angular",
+    );
+    expect(screen.queryByTestId("map-annotation")).toBeNull();
+    const chip = screen.getByTestId("map-parked-chip");
+    expect(chip).toHaveAttribute("data-parked-kind", "annotation");
+    fireEvent.click(chip);
+    expect(onRemoveAnnotation).toHaveBeenCalledWith("a1");
+  });
+
+  it("renders nothing at all when there is nothing to keep", () => {
+    const { view } = renderOverlay([], []);
+    expect(view.container.innerHTML).toBe("");
+  });
+});

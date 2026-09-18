@@ -33,6 +33,13 @@ export type RemovableState = Pick<
   | "figureDocs"
   | "editableFigures"
   | "plotWindows"
+  // Audit P2.8 review round 2: the per-dataset map views. Keyed BY dataset id,
+  // so a removal must drop the removed datasets' entries — otherwise a colour
+  // limit and a set of slice positions in a deleted map's units outlive it in
+  // every save, and a later dataset that happens to reuse the id inherits
+  // them. Homed here (not in store/mapView.ts) so `deleteWorkbook` and
+  // `scrubDatasetsFromHistory` get the same pruning for free.
+  | "mapViews"
 >;
 
 export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): Partial<RemovableState> {
@@ -50,7 +57,8 @@ export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): 
   );
   const editableFigures = pruneEditableFigureRefs(s.editableFigures, drop);
   const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
-  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
+  const mapViews = Object.fromEntries(Object.entries(s.mapViews).filter(([id]) => !drop.has(id)));
+  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows, mapViews };
 }
 
 /** P3.7 review round: "Delete permanently" must be exactly that. Removing a

@@ -132,7 +132,7 @@ const DEFAULT_MAP_SECTOR: MapSectorState = {
 // P2.8's durable map view (`store/mapView.ts`) is composed THROUGH this slice
 // rather than through a spread of its own in useApp.ts — that module is at its
 // store-size pin with zero headroom, which is this file's own reason to exist.
-// See store/mapView.ts's header; `loadedMapView` is re-exported at the bottom
+// See store/mapView.ts's header; `loadedMapViews` is re-exported at the bottom
 // so `loadWorkspace` can reach it on the import line useApp.ts already has.
 export interface RoisSlice extends MapViewSlice {
   // Relocated verbatim from useApp.ts — see this file's header.
@@ -311,4 +311,4 @@ export function deserializeRois(v: unknown, warnings: string[]): RoiDef[] {
 
 // Re-exported for store/useApp.ts's `loadWorkspace` — see store/mapView.ts's
 // header for why the restore rides this module's existing import line there.
-export { loadedMapView } from "./mapView";
+export { loadedMapViews } from "./mapView";

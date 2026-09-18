@@ -13,11 +13,17 @@
 
 import { useEffect, useState } from "react";
 
+import { mapViewFor } from "../../lib/mapView";
 import { useApp } from "../../store/useApp";
 import { NumberField } from "../primitives/NumberField";
 
 export default function MapColorLimits() {
-  const colorLimits = useApp((s) => s.mapView.colorLimits);
+  // The Inspector describes the ACTIVE dataset, so it edits that dataset's own
+  // map view (P2.8 review round 2 — the views are keyed by dataset id, and a
+  // map document window showing some other dataset has its own entry).
+  const dsId = useApp((s) => s.activeId);
+  const mapViews = useApp((s) => s.mapViews);
+  const colorLimits = mapViewFor(mapViews, dsId).colorLimits;
   const setMapColorLimits = useApp((s) => s.setMapColorLimits);
 
   const [lo, setLo] = useState("");
@@ -32,14 +38,14 @@ export default function MapColorLimits() {
 
   const commit = (): void => {
     if (lo === "" && hi === "") {
-      if (colorLimits !== null) setMapColorLimits(null); // both blank → auto
+      if (colorLimits !== null) setMapColorLimits(dsId, null); // both blank → auto
       return;
     }
     const min = Number(lo);
     const max = Number(hi);
     if (!Number.isFinite(min) || !Number.isFinite(max) || !(min < max)) return;
     if (colorLimits && colorLimits[0] === min && colorLimits[1] === max) return; // no change, no undo entry
-    setMapColorLimits([min, max]);
+    setMapColorLimits(dsId, [min, max]);
   };
 
   return (

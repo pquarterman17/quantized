@@ -3088,25 +3088,29 @@ violin, bar, strip, or summary plots.
   coordinates + width + cut space; `lib/mapView.ts`), drawn over the heatmap
   by `components/Stage/MapSliceOverlay.tsx` through the SAME
   `mapRender.dataToPx` projector the canvas paints with. Slices survive a
-  regrid (resolution AND grid method), a colour-limit change and a
-  re-activation of the same dataset, and are cleared only by a GENUINE
-  dataset switch — BUG-012's rule, spelled in `store/mapView.ts`'s
-  `bindMapView` exactly as `focusedRebindPatch` spells it. Proven at the DOM
-  layer in `components/Stage/MapStage.mapView.test.tsx` (the drawn line, not
-  just the store field). The RSM angular⇄Q toggle is NOT a dataset change, so
-  the overlay draws only definitions recorded in the space now displayed;
-  toggling back brings them back.
+  regrid (resolution AND grid method), a colour-limit change, a re-activation
+  of the same dataset, AND a switch to another dataset and back — the views
+  are keyed by dataset id (`mapViews`), so each map keeps its own and nothing
+  is ever dropped except with the dataset itself. Proven at the DOM layer in
+  `components/Stage/MapStage.mapView.test.tsx` (the drawn line, not just the
+  store field), with the drawn pixels compared against the projector's own
+  output in `components/Stage/MapSliceOverlay.test.tsx`. The RSM angular⇄Q
+  toggle is NOT a dataset change, so the overlay draws only definitions
+  recorded in the space now displayed; toggling back brings them back, and a
+  definition that cannot be drawn right now is listed in a muted "parked"
+  strip saying why, so it can always be removed.
 - [ ] Add ROI statistics/export only from real need.
 - [x] Persist color limits/scale/map/slices/annotations. **Done 2026-09-17.**
-  The five are one durable record (`mapView`, `lib/mapView.ts` +
+  The five are one durable record PER DATASET (`mapViews`, `lib/mapView.ts` +
   `store/mapView.ts`) instead of `MapStage`'s local `useState` (colormap,
   log scale) and nothing at all (colour limits, slices, annotations — colour
   limits did not exist; the canvas always painted the payload's own z
   extent). It rides the existing persistence contract: `.dwk` save/reopen,
   autosave (`shouldAutosave` trigger + `AutosaveState`) and Pack Project's
   whole-state spread, plus undo via `HistorySnapshot`. Additive-optional and
-  written ONLY when non-default, so a project that never opened a map
-  serializes byte-identically to before — pinned as BUG-017's fix was
+  written ONLY when some dataset's view is non-default, so a project that
+  never opened a map — and one that opened a map and decided nothing —
+  serializes byte-identically to before, pinned as BUG-017's fix was
   (`lib/workspaceMapView.test.ts`). Explicit limits clip the heatmap AND its
   colourbar, verified against a real raster in
   `components/Stage/mapRenderLimits.test.ts`. NOT persisted, deliberately:
@@ -3115,6 +3119,74 @@ violin, bar, strip, or summary plots.
   `mapRoi`/`mapRuler`/`mapSector` geometry (see `store/rois.ts`). Workbook
   transfer deliberately does not carry it: that package is one workbook's
   data, and a map view belongs to the project, not to a workbook.
+- **Review round 2026-09-17** (adversarial review of the first cut,
+  `c1757fb1`; both boxes above stay `[x]` — the behaviour they claim is real,
+  but three user-visible defects and three false green lights were found and
+  are now closed).
+  - **One view per dataset.** `MapStage` mounts in the Stage Map tab AND in
+    every `kind:"map"` document window at once, and each instance ran
+    `bindMapView`, so opening a second map silently destroyed the first
+    one's slices, colour limits and annotations — outside undo, because the
+    rebind recorded no history. `mapView` became `mapViews`, a record keyed
+    by dataset id; reading a view is a pure lookup, `bindMapView` is gone,
+    and the drop-on-switch rule went with it (it was a consequence of
+    sharing one record, not a decision). A dataset REMOVAL still drops that
+    dataset's entry, in `store/removeDatasets.ts`'s one shared patch. The
+    `.dwk` field stays additive: `parseWorkspace` migrates a first-cut
+    single `mapView` object into the keyed record.
+  - **Opening a map is not an edit.** `isDefaultMapView` required
+    `datasetId === null`, so the mount-time bind wrote an all-default record,
+    made `shouldAutosave` true (hence `markProjectDirty`) and grew the saved
+    document by a field recording no decision. A view is now default by
+    VALUE; with the keyed record the bind writes nothing at all. Pinned at
+    the DOM layer.
+  - **Every slice keeps a handle.** Chips were built from the DRAWN list, so
+    a slice recorded in the other axis space or off the current extent had no
+    UI and could never be removed. Undrawable definitions are now listed in a
+    muted parked strip that says why, and remove on click.
+  - **An h/v slice is judged by its HELD coordinate only.** `endpoints`
+    projected the whole clicked point, so an `h` slice vanished when its
+    unheld x left a narrower regrid — contradicting the module's own doc. The
+    unheld component is clamped into its axis range; `seg` keeps the strict
+    both-ends test.
+  - **Log limits never blank a map that has something to paint.** The log
+    floor raise could push `lo` past an explicit `hi`
+    (`effectiveColorLimits([-1,2], 7, 9, log)` → null, i.e. no heatmap and no
+    colourbar). Any unusable explicit pair now falls back to the auto extent;
+    null is reserved for a grid with no paintable range (in log mode, no
+    positive cell).
+  - **Three false green lights, now pinned.** The "does not alias the live
+    store object" test asserted through a JSON round trip and could not fail;
+    nothing pinned that ADDING a slice is undoable; and the overlay's geometry
+    was never compared to a ground truth (a projector swap to raw data
+    coordinates left the DOM suite green). All three have failing-first pins.
+  - **Also closed:** an unknown slice `space` is dropped rather than coerced
+    to angular; the sanitizer bounds slices/annotations (200 each), label
+    length (200 chars) and rejects a negative width; `COLORMAP_NAMES` is
+    pinned equal to `Object.keys(COLORMAPS)`; `loadWorkspace` passes the live
+    dataset ids so a hand-built workspace cannot install a dangling entry;
+    `DEFAULT_MAP_VIEW` is deep-frozen; `lib/workspaceMerge.ts`'s never-merged
+    matrix names the field; the view writers early-return on an unchanged
+    value (no undo step, no dirty flag); and `MapColorLimits` has its own
+    test.
+  - **Bundle.** `effectiveColorLimits` moved from the eagerly-reachable
+    `lib/mapView.ts` (`lib/workspaceSerialize.ts` imports it) into
+    `components/Stage/mapRender.ts`, which only loads with the map itself —
+    it is a renderer decision, not part of the document contract. Measured
+    eager total 916,782 → 917,181 B (+399 B) against `e93b193b`; everything
+    left is sanitizer/serializer/store logic that is eager by construction.
+  - **Residuals, recorded not fixed.** (a) Contour levels still come from
+    `p.zMin`/`p.zMax`, not from the explicit colour limits
+    (`components/Stage/mapRender.ts:314`) — a contour level is a feature of
+    the data, and clipping the colour mapping is not a statement about where
+    the isolines are; the decision is written into that function's header.
+    (b) A blank field in `MapColorLimits` reads as 0 (`Number("")`), inherited
+    from the sibling `AxisLimits.tsx`, so "clip the top, leave the bottom
+    auto" is not expressible; pinned as it behaves in
+    `components/Inspector/MapColorLimits.test.tsx`. (c) The colormap and the
+    linear/log scale are now per-dataset rather than carried across a switch —
+    the carry was an artifact of the single shared record, and the per-dataset
+    memory is the stronger P2.8 promise.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

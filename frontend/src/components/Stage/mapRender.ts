@@ -5,12 +5,49 @@
 // transparent (gaps), matching uPlot's null = gap for 1-D.
 
 import { COLORMAPS, type ColormapName, colormapCss, normalize, sampleColormap } from "../../lib/colormap";
-import { effectiveColorLimits } from "../../lib/mapView";
 import { computeContours, contourLevels, type LevelScale, ringToCanvas } from "../../lib/contour";
 import { fitAspectRect, shouldLockAspect } from "../../lib/mapAspect";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
+
+// Homed here, NOT in lib/mapView.ts: this is a RENDERER decision, and
+// lib/mapView.ts is eagerly reachable (lib/workspaceSerialize.ts) while this
+// module is only pulled in with the map itself. Keeping it beside `draw`, its
+// one consumer, keeps the eager chunk free of it.
+/** The [lo, hi] the heatmap should actually paint with: the user's explicit
+ *  limits when they are usable, the payload's own extent otherwise.
+ *
+ *  In log mode `autoLo` is the grid's smallest POSITIVE cell (what
+ *  `mapRender.draw` passes): an explicit non-positive `lo` is raised to that
+ *  floor. The raise can push `lo` past the explicit `hi` (enter `-1 … 2` on
+ *  data that starts at 7), and the first cut returned null there — a blank
+ *  heatmap AND a blank colourbar with nothing to explain either. Any unusable
+ *  explicit pair now falls back to the AUTO extent instead, so switching to
+ *  log, or typing a range the data cannot honour, never blanks a map that has
+ *  something to paint.
+ *
+ *  Null is reserved for the genuinely empty case: no usable auto extent —
+ *  which in log mode means the grid has no positive cell at all, and there is
+ *  nothing a log scale could show. */
+export function effectiveColorLimits(
+  colorLimits: [number, number] | null,
+  autoLo: number | null,
+  autoHi: number | null,
+  logZ = false,
+): [number, number] | null {
+  const auto: [number, number] | null =
+    autoLo !== null && autoHi !== null && autoHi > autoLo ? [autoLo, autoHi] : null;
+  if (!colorLimits) return auto;
+  let lo = colorLimits[0];
+  const hi = colorLimits[1];
+  if (logZ && lo <= 0) {
+    if (autoLo === null || autoLo <= 0) return auto; // no positive floor to raise to
+    lo = autoLo;
+  }
+  if (!(hi > lo)) return auto;
+  return [lo, hi];
+}
 
 const MARGIN = { left: 58, right: 78, top: 14, bottom: 42 };
 
@@ -208,10 +245,19 @@ export function draw(
   const rect = plotRect(p, W, H);
   // Log mode floors at the smallest positive cell (0/negative -> transparent).
   // P2.8: explicit colour limits win over that auto extent; `effectiveColorLimits`
-  // keeps the log floor as the lower bound when the explicit `lo` is non-positive,
-  // so switching a clipped map to log never blanks it. Both the heatmap and the
-  // colourbar below read the SAME pair, so the scale bar cannot disagree with the
-  // pixels it labels.
+  // keeps the log floor as the lower bound when the explicit `lo` is non-positive
+  // and falls back to the auto extent when the pair is unusable, so switching a
+  // clipped map to log never blanks it. Both the heatmap and the colourbar below
+  // read the SAME pair, so the scale bar cannot disagree with the pixels it
+  // labels.
+  //
+  // RESIDUAL, recorded rather than papered over (P2.8 review round 2, finding
+  // 17): `contourLevels(...)` further down this function still derives its
+  // isolines from `p.zMin`/`p.zMax`, NOT from `limits`. With clipped limits the
+  // contours and the colourbar therefore describe different ranges. Left as-is
+  // deliberately — a contour level is a feature OF THE DATA, and clipping the
+  // colour mapping is not a statement about where the isolines are — but it is a
+  // decision, not an oversight.
   const limits = effectiveColorLimits(colorLimits, logZ ? minPositive(p.zGrid) : p.zMin, p.zMax, logZ);
   const lo = limits ? limits[0] : null;
   const hi = limits ? limits[1] : null;

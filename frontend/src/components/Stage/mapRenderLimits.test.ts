@@ -9,9 +9,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { effectiveColorLimits } from "../../lib/mapView";
 import type { MapPayload } from "../../lib/mapdataFetch";
-import { draw } from "./mapRender";
+import { draw, effectiveColorLimits } from "./mapRender";
 
 const CANVAS_OK = ((): boolean => {
   try {
@@ -63,10 +62,9 @@ describe("effectiveColorLimits", () => {
     expect(effectiveColorLimits(null, 0, 119)).toEqual([0, 119]);
   });
 
-  it("returns null when neither source gives a usable range", () => {
+  it("returns null ONLY when the auto extent itself is unusable", () => {
     expect(effectiveColorLimits(null, null, null)).toBeNull();
     expect(effectiveColorLimits(null, 5, 5)).toBeNull(); // zero span
-    expect(effectiveColorLimits([8, 2], 0, 119)).toBeNull(); // inverted
   });
 
   it("raises a non-positive explicit floor to the log floor in log mode", () => {
@@ -77,6 +75,32 @@ describe("effectiveColorLimits", () => {
     expect(effectiveColorLimits([2, 100], 0.5, 119, true)).toEqual([2, 100]);
     // Linear mode never raises it.
     expect(effectiveColorLimits([0, 100], 0.5, 119, false)).toEqual([0, 100]);
+  });
+
+  // Review round 2, finding 5: the first cut returned null whenever the
+  // explicit pair could not be honoured — a blank heatmap AND a blank
+  // colourbar, with nothing on screen to explain either, from an ordinary
+  // typo. The doc promised "switching to log never blanks it"; it did.
+  describe("an unusable explicit pair falls back to the auto extent, never to a blank map", () => {
+    it("the log-floor raise pushing lo past hi", () => {
+      expect(effectiveColorLimits([-1, 2], 7, 9, true)).toEqual([7, 9]);
+    });
+
+    it("an inverted pair, in either mode", () => {
+      expect(effectiveColorLimits([8, 2], 0, 119)).toEqual([0, 119]);
+      expect(effectiveColorLimits([8, 2], 0.5, 119, true)).toEqual([0.5, 119]);
+    });
+
+    it("a zero-span pair", () => {
+      expect(effectiveColorLimits([5, 5], 0, 119)).toEqual([0, 119]);
+    });
+
+    // The one case that genuinely has nothing to paint: in log mode `autoLo`
+    // is the smallest POSITIVE cell, so a null one means no cell is positive.
+    it("…except an all-non-positive grid in log mode, which has no floor at all", () => {
+      expect(effectiveColorLimits([0, 5], null, 9, true)).toBeNull();
+      expect(effectiveColorLimits(null, null, 0, true)).toBeNull();
+    });
   });
 });
 
@@ -90,11 +114,12 @@ describe.skipIf(!CANVAS_OK)("draw() honours explicit colour limits (real raster)
     expect(distinctColours(clipped)).toBeLessThan(distinctColours(auto));
   });
 
-  it("a nonsensical (inverted) range paints nothing rather than garbage", () => {
+  it("a nonsensical (inverted) range paints the AUTO extent rather than blanking", () => {
     const bad = document.createElement("canvas");
     draw(bad, host(), gradient(), "viridis", false, null, true, null, [62, 58]);
     const good = document.createElement("canvas");
     draw(good, host(), gradient(), "viridis", false);
-    expect(distinctColours(bad)).toBeLessThan(distinctColours(good));
+    expect(distinctColours(bad)).toBe(distinctColours(good));
+    expect(distinctColours(bad)).toBeGreaterThan(20);
   });
 });
