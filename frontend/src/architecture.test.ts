@@ -318,7 +318,36 @@ const STORE_PINS: Record<string, number> = {
   // 2026-09-17 review round's F3/F7 additions; 55 at the original move, each writer
   // diffing the WHOLE poisoned getState() snapshot) was written and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
-  "/store/useApp.ts": 2012,
+  // 2012 -> 1639 (2026-09-18, the THIRD P4.1 domain, zero headroom): the BULK
+  // VIEW APPLIERS — the three actions that install a WHOLE plot view in one
+  // gesture from a source description rather than editing one setting at a
+  // time: applyOriginFigure (an imported Origin graph window, in its four
+  // branches — cross-book overlay, double-Y layer pair, spatial multi-panel
+  // family, single-layer fallback), facetByColumn (a small-multiples
+  // partition by a category column) and breakAtGaps (a paneled x-break
+  // arrangement), 342 implementation lines plus their 24 interface lines and
+  // the ORIGIN_FIGURE_AXIS constant all three spread — moved verbatim (modulo
+  // one indentation level) to the new store/viewAppliers.ts
+  // (ViewAppliersSlice), composed exactly like plotViewSettings.ts and
+  // reportsFigureDocs.ts: one import line, one word on the extends clause,
+  // one creator-spread line. This is the larger of the two candidates the
+  // 2122 -> 2012 note above deferred; the other (loadWorkspace, 170 lines) is
+  // still in useApp.ts. Chosen now BECAUSE of that note's coupling objection
+  // rather than despite it: these three write PlotView fields that
+  // plotViewSettings.ts also writes, but they write them as one whole-view
+  // install, which is a different job from a per-setting writer — the split
+  // is by GESTURE, and plotViewSettings.ts's header already listed all three
+  // by name as the bulk-appliers it does not own. The FIELDS stay declared
+  // and initialized on AppState here, same shape as both earlier extractions.
+  // The Origin-apply PREFLIGHTS stay in store/originFigureApply.ts (one of
+  // the three modules grandfathered to import components/), which is what
+  // lets viewAppliers.ts sit below the component layer with no new
+  // grandfathered entry. store/viewAppliers.characterization.test.ts (28
+  // specs pinning, per action AND per branch, the exact set of top-level
+  // store keys each call changes — a poisoned whole-getState() diff — plus
+  // the applied values, undo label and macro step) was written and run green
+  // against the PRE-extraction code and passes byte-unchanged after the move.
+  "/store/useApp.ts": 1639,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -2290,8 +2319,9 @@ describe("storage-key registry ratchet (P3.4)", () => {
 // Lazy Origin-apply chunk guard (BUNDLE_HEADROOM slice 1, 2026-08-30).
 //
 // `lib/originFigureSelection.ts` + `lib/originSpatialPanels.ts` hold the half
-// of the Origin figure library that only an APPLY needs. `store/useApp.ts`
-// reaches them through `store/originApplyLibs.ts`'s dynamic `import()`, which
+// of the Origin figure library that only an APPLY needs. `store/viewAppliers.ts`
+// (P4.1, formerly `store/useApp.ts`) reaches them through
+// `store/originApplyLibs.ts`'s dynamic `import()`, which
 // is what keeps them — and `lib/originPanels.ts`, whose only value import is
 // there — out of the entry chunk (measured 890.2 -> 885.3 kB eager).
 //

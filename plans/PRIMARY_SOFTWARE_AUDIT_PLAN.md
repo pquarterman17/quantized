@@ -5627,6 +5627,61 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   inside the ≈3.6 kB headroom and `EAGER_JS_BUDGET` untouched. All findings
   were test/doc/comment-only, plus the seven import-line repoints in F5; no
   other runtime behavior changed.
+
+  **THIRD domain extracted 2026-09-18**, same discipline: the **bulk view
+  appliers** — the three actions that install a WHOLE plot view in one gesture
+  from a source description rather than editing one setting at a time:
+  `applyOriginFigure` (an imported Origin graph window, in its four branches —
+  cross-book overlay, double-Y layer pair, spatial multi-panel family, and the
+  single-layer fallback), `facetByColumn` (a small-multiples partition by a
+  category column) and `breakAtGaps` (a paneled x-break arrangement). 342
+  implementation lines, plus their 24 interface-declaration lines and the
+  `ORIGIN_FIGURE_AXIS` constant all three spread, moved to the new
+  `store/viewAppliers.ts` (443 lines by the repo's `split("\n")` ceiling
+  metric, `ViewAppliersSlice`, composed with one import + one word on the
+  `extends` clause + one spread, exactly like `plotViewSettings.ts` and
+  `reportsFigureDocs.ts`). `store/useApp.ts` **2,012 → 1,639 lines (−373)**;
+  its `STORE_PINS` entry ratcheted DOWN to 1,639 with a dated justification.
+  The three bodies are byte-identical modulo one indentation level (they moved
+  from an object literal at depth 1 into the creator's `return {` at depth 2);
+  nothing else changed, and nine now-unused imports left `useApp.ts` with them.
+  This is the LARGER of the two candidates the second domain's note deferred —
+  chosen now *because* of that note's coupling objection rather than despite
+  it: these three do write PlotView fields `plotViewSettings.ts` also writes,
+  but they write them as one whole-view INSTALL, which is a different job from
+  a per-setting writer, and `plotViewSettings.ts`'s own header already listed
+  all three by name as the bulk-appliers it does not own. The split is by
+  gesture, not by field. `loadWorkspace` (170 lines) is still in `useApp.ts`
+  and is the obvious next domain. Deliberately left behind as NOT this domain:
+  the Origin-apply PREFLIGHTS (`confirmOriginReapplyDiscard`,
+  `deferOriginFigureApply`, `deferOriginApplyLibs`), which stay in
+  `store/originFigureApply.ts` — one of the three modules grandfathered to
+  import `components/` — so that `viewAppliers.ts` sits below the component
+  layer and the store layering guard gains **no new grandfathered entry**.
+  Characterization net: `store/viewAppliers.characterization.test.ts`, 28
+  specs, written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing byte-unchanged after the move. It pins, per action AND per
+  branch, the exact set of top-level store keys each call changes — a whole
+  `getState()` diff against a POISONED baseline that now also poisons
+  `composition`/`qfitBusy`/`qfitError`/`gadgetBusy`/`gadgetError`, so the
+  `focusTransientReset()` a rebind performs is visible in the diff too — plus
+  the applied axis/channel/composition values, the undo label pushed (or that
+  none is) and the macro step recorded; the four no-op branches (missing
+  dataset, empty analysis view, no finite levels, no qualifying x-gap) are
+  pinned with an EMPTY changed set and their toast text. The pins are explicit
+  `toEqual` arrays, not inline snapshots, so a stray `vitest -u` cannot
+  rewrite them. Sabotage-proven both directions: an EXTRA key written by
+  `breakAtGaps` (`plotTitle`) and a SKIPPED key in `facetByColumn`
+  (`facetKey: col`) each turn the net red. Eager bundle, both trees built after
+  their own `npm ci` and a `node_modules/.vite` wipe: **911,295 B at the
+  branch base `3f43467b`** → **911,331 B on the extraction commit, +36 B**
+  (the new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched and 8.9 kB
+  under budget). `3f43467b` is `HEAD~2` of the extraction, not `HEAD~1`:
+  `HEAD~1` is the test-only characterization commit, which cannot move the
+  eager graph. The
+  box stays `[~]`: `store/useApp.ts` is still far over the 500-line module
+  ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` / `lib/uplotOverlays.ts` are
+  untouched by every pass so far.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
