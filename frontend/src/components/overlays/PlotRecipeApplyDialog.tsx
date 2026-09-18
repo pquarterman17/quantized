@@ -27,7 +27,10 @@
 //
 // Modal-backdrop convention borrowed from QuickPlotWithDialog/SplitDatasetDialog.
 
+import { useId, useRef } from "react";
+
 import { useApp } from "../../store/useApp";
+import { useDialogFocus } from "./useDialogFocus";
 import { Button } from "../primitives";
 
 /** Human-readable "recipe field -> current column" rows, built straight off
@@ -53,6 +56,13 @@ export default function PlotRecipeApplyDialog() {
   const dataset = useApp((s) => (pending ? s.datasets.find((d) => d.id === pending.datasetId) : undefined));
   const confirmPartial = useApp((s) => s.confirmPendingRecipeApplicationPartial);
   const cancel = useApp((s) => s.cancelPendingRecipeApplication);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  // P3.3: Escape lives on the dialog box's React `onKeyDown` and nothing used
+  // to move focus into the box, so Escape was dead unless the user had
+  // clicked a button first. Focus-in also traps Tab and restores the opener.
+  useDialogFocus(dialogRef, pending !== null);
 
   // Hooks above run unconditionally (SplitDatasetDialog's discipline) -- the
   // "nothing pending" return comes after.
@@ -67,13 +77,18 @@ export default function PlotRecipeApplyDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={cancel}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Escape") cancel();
           e.stopPropagation();
         }}
       >
-        <h2>Apply Plot Recipe “{pending.recipe.name}”</h2>
+        <h2 id={titleId}>Apply Plot Recipe “{pending.recipe.name}”</h2>
         {rows.length > 0 && (
           <table className="qzk-recipe-mapping" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
             <tbody>

@@ -2,11 +2,12 @@
 // Promise-based parameter dialog: askParams(title, fields) resolves with typed
 // values or null on cancel. Mount one <ParamDialog/> at the app root.
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { create } from "zustand";
 
 import { coerceParams, type ParamField, type ParamValues } from "../../lib/params";
 import { ParamFieldRow } from "./ParamFields";
+import { useDialogFocus } from "./useDialogFocus";
 import { Button } from "../primitives";
 
 export type { ParamField, ParamValues } from "../../lib/params";
@@ -47,6 +48,18 @@ export default function ParamDialog() {
   const resolve = useParamDialog((s) => s.resolve);
   const close = useParamDialog((s) => s.close);
   const [values, setValues] = useState<ParamValues>({});
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  // P3.3. Escape/Enter live on the dialog box's React `onKeyDown`, so they
+  // only work while focus is INSIDE it. `autoFocus` covers that for a
+  // number/text first row — but not for a `select`/`boolean` first row, and
+  // not at all for a dialog with zero fields (askParams is also used for
+  // confirm-shaped prompts), where focus stayed on the opener behind the
+  // backdrop and Escape did nothing. This puts focus on the first control
+  // whenever nothing else claimed it, traps Tab inside, and hands focus back
+  // to the opener on close.
+  useDialogFocus(dialogRef, title !== null);
 
   // Reset `values` to this dialog's field defaults SYNCHRONOUSLY, during
   // render, rather than in a useEffect (react.dev "adjusting state when a
@@ -94,10 +107,15 @@ export default function ParamDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={() => finish(null)}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={onKey}
       >
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         {fields.map((f, i) => (
           <ParamFieldRow
             key={f.key}

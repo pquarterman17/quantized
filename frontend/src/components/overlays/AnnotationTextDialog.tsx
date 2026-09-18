@@ -21,11 +21,12 @@
 // and this file becomes a LAZY `AppOverlays.tsx` panel like
 // SplitDatasetDialog/QuickPlotWithDialog.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "../primitives";
 import RichLabelInput from "../primitives/RichLabelInput";
 import { useAnnotationTextDialog } from "../../store/annotationTextDialog";
+import { useDialogFocus } from "./useDialogFocus";
 
 export default function AnnotationTextDialog() {
   const title = useAnnotationTextDialog((s) => s.title);
@@ -33,6 +34,14 @@ export default function AnnotationTextDialog() {
   const resolve = useAnnotationTextDialog((s) => s.resolve);
   const close = useAnnotationTextDialog((s) => s.close);
   const [draft, setDraft] = useState("");
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  // P3.3: Enter/Escape live on the dialog box's React `onKeyDown`, so they
+  // need focus inside the box. This dialog is opened by a double-click on a
+  // plot annotation OR by an object-menu entry — in the menu case focus is on
+  // a menu item that is about to unmount, so nothing was focused at all.
+  useDialogFocus(dialogRef, title !== null);
 
   useEffect(() => {
     if (title !== null) setDraft(initial);
@@ -57,8 +66,17 @@ export default function AnnotationTextDialog() {
 
   return (
     <div className="qz-overlay-backdrop" onMouseDown={() => finish(null)}>
-      <div className="qzk-glass qz-dialog" onMouseDown={(e) => e.stopPropagation()} onKeyDown={onKey}>
-        <h2>{title}</h2>
+      <div
+        className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+        onKeyDown={onKey}
+      >
+        <h2 id={titleId}>{title}</h2>
         <div className="qz-ws-row">
           <span className="k">Text</span>
           <RichLabelInput value={draft} placeholder="label text" onCommit={setDraft} live />

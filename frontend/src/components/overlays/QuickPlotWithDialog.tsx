@@ -20,12 +20,13 @@
 // functional -- a memberless-but-ALIVE workbook must not lose the ability to
 // manage the templates scoped to it.
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { quickPlotTemplateInScope, resolveTemplate, type QuickPlotTemplateResolution } from "../../lib/quickPlotTemplates";
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useQuickPlotWithDialog } from "../../store/quickPlotWithDialog";
+import { useDialogFocus } from "./useDialogFocus";
 
 const NO_WORKSHEETS: QuickPlotTemplateResolution = { ok: false, unmatched: [], reason: "workbook has no worksheets" };
 
@@ -41,6 +42,16 @@ export default function QuickPlotWithDialog() {
 
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+
+  // P3.3: Escape lived on the dialog box's React `onKeyDown`, and in the base
+  // (not-renaming) state nothing ever moved focus into the box — `autoFocus`
+  // only exists on the rename input — so Escape did nothing for a keyboard
+  // user. The "source worksheet was removed" branch below had no Escape
+  // handler at ALL; `onDialogKey` is now shared by both branches, and only
+  // ONE of the two ever renders, so the single ref is unambiguous.
+  useDialogFocus(dialogRef, datasetId !== null || workbookId !== null);
 
   // Hooks above run unconditionally (same discipline as SplitDatasetDialog)
   // -- the "closed" and "dataset vanished" returns come after.
@@ -51,11 +62,25 @@ export default function QuickPlotWithDialog() {
     setRenamingId(null);
   };
 
+  const onDialogKey = (e: React.KeyboardEvent): void => {
+    if (e.key === "Escape") close();
+    e.stopPropagation();
+  };
+
   if (datasetId !== null && !dataset) {
     return (
       <div className="qz-overlay-backdrop" onMouseDown={close}>
-        <div className="qzk-glass qz-dialog" onMouseDown={(e) => e.stopPropagation()}>
-          <h2>Quick Plot With…</h2>
+        <div
+          className="qzk-glass qz-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          ref={dialogRef}
+          tabIndex={-1}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={onDialogKey}
+        >
+          <h2 id={titleId}>Quick Plot With…</h2>
           <p className="qzk-ds-meta">The source worksheet was removed.</p>
           <div className="qz-btn-row"><Button onClick={close}>Close</Button></div>
         </div>
@@ -81,13 +106,15 @@ export default function QuickPlotWithDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") close();
-          e.stopPropagation();
-        }}
+        onKeyDown={onDialogKey}
       >
-        <h2>Quick Plot With…</h2>
+        <h2 id={titleId}>Quick Plot With…</h2>
         {rows.length === 0 && <p className="qzk-ds-meta">{emptyMessage}</p>}
         <ul className="qzk-quickplotwith-list" style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
           {rows.map(({ template, resolution }) => (
