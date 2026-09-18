@@ -3620,8 +3620,10 @@ violin, bar, strip, or summary plots.
     | S3 (F4, store) | `clearMapPaintedLimits` is a no-op | RED — 3 (the store-level "drops the entry" case + both `MapStage.mapView.test.tsx` cases) |
     | S4 (F3) | Inspector row's `onKeyDown` drops the `"Escape"` branch | RED — 1 (`MapColorLimits.test.tsx`'s new Escape case only) |
     | S5 (F8) | Both toolbar fields back under one wrapping `<label>` | RED — 1 (`MapToolbarColorLimits.test.tsx`'s new label-structure case only) |
+    | S6 (review round 7, finding 2 — coverage gap, closed by a follow-up tests-only commit) | `MapStage.tsx` forces `reportToStore: true` unconditionally (a window would win the Stage tab's store slot) | Was a SURVIVOR against the committed suite at round 7; now RED — 1 (`MapStage.windowColorLimits.test.tsx`'s new "the Inspector shows the STAGE TAB's painted pair, never a window's" case) |
+    | S7 (review round 7, finding 3 — coverage gap, closed by a follow-up tests-only commit) | `useMapPaint.ts`'s render-time reset (`paintedForRef`/`setPainted(undefined)` on a `dsId` change) deleted | Was a SURVIVOR against the committed suite at round 7; now RED — 1 (`useMapPaint.dsSwitch.test.ts`'s new "clears THIS instance's painted pair synchronously the moment dsId changes" case; the hook layer, not DOM, per the round-7 review's warning that a naive DOM reproduction races MapStage's own unrelated payload-fetch race) |
 
-    **5 for 5, 0 survivors.**
+    **5 for 5 at round 7 itself, 0 survivors; the review's own two follow-up sabotages (S6, S7) also now RED, 0 survivors.**
   - **Bundle.** Eager total **887,615 B at the parent `8a6f49ca`
     (`git rev-parse HEAD~1` of this commit) → 887,746 B on this commit, +131
     B**; both trees built after their own `npm ci` and `rm -rf

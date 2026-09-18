@@ -20,6 +20,7 @@ import type { Dataset } from "../../lib/types";
 import { serializeWorkspace } from "../../lib/workspace";
 import { useApp } from "../../store/useApp";
 import { shouldAutosave, type AutosaveState } from "../../useWorkspaceAutosave";
+import MapColorLimits from "../Inspector/MapColorLimits";
 import MapStage from "./MapStage";
 
 const W = 600;
@@ -223,6 +224,49 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     fireEvent.keyDown(min, { key: "Escape" });
     expect((min as HTMLInputElement).value).toBe("10");
     expect(viewOf("ds-b").colorLimits).toEqual([10, 50]);
+  });
+
+  // Review round 7, finding 2 (coverage gap flagged by round 7's own review
+  // record, not a defect): the Inspector's colour-limit row reads the
+  // store's per-dataset `mapPaintedLimits[dsId]` slot with NO override (see
+  // `useMapColorLimitsField.ts`'s header) — only the Stage-tab instance is
+  // meant to ever write that slot (`reportToStore: dataset === undefined` in
+  // `MapStage.tsx`). Nothing pinned that a document window on the SAME
+  // active dataset can never win it.
+  it("the Inspector shows the STAGE TAB's painted pair, never a window's, even when both share the active dataset", async () => {
+    useApp.getState().loadWorkspace({ datasets: [twoZChannelMap("ds-a")], activeId: "ds-a" });
+    useApp.setState({ mapViews: EMPTY_MAP_VIEWS, mapPaintedLimits: {}, history: [], future: [], status: "" });
+    // Both ends negative: the log floor cannot honour the typed pair at all,
+    // so the renderer falls back to each instance's own auto extent — the
+    // SAME setup `twoZChannelMap`'s own "two windows" test above uses to make
+    // the two z channels' painted pairs observably different (100–403 vs
+    // 1000–4003).
+    useApp.getState().setMapColorLimits("ds-a", [-5, -1]);
+    useApp.getState().setMapLogZ("ds-a", true);
+    const ds = useApp.getState().datasets[0]!;
+
+    render(<MapColorLimits />); // the Inspector row — describes the ACTIVE dataset
+    const stage = render(<MapStage />); // Stage tab: no `dataset` prop, follows active ds-a, defaults to Z1
+    await within(stage.container).findByTestId("map-toolbar-colour-limits-effective");
+
+    // A document window on the SAME dataset (also the active one), picked to
+    // the OTHER z channel so it paints a genuinely different range.
+    const win = render(<MapStage dataset={ds} />);
+    await within(win.container).findByTestId("map-toolbar-colour-limits-effective");
+    fireEvent.change(within(win.container).getByLabelText("Z"), { target: { value: "3" } });
+    await waitFor(() =>
+      expect(within(win.container).getByTestId("map-toolbar-colour-limits-effective")).toHaveTextContent(
+        /^eff 1000–4003$/,
+      ),
+    );
+
+    // The Inspector must still describe the Stage tab's own pair, never the
+    // window's, no matter which one painted last.
+    const inspectorRow = await screen.findByTestId("map-colour-limits-effective");
+    expect(inspectorRow).toHaveTextContent(/^effective 100 – 403$/);
+
+    win.unmount();
+    stage.unmount();
   });
 
   it("merely opening the window is not an edit — no write, no autosave, no field", async () => {
