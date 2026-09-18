@@ -11,7 +11,7 @@
 // future non-modal caller (see plotRecipes.test.ts for its own coverage,
 // including the identical-re-resolution wording fix).
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { captureRecipe } from "../../lib/plotRecipe";
@@ -114,10 +114,11 @@ describe("PlotRecipeApplyDialog — preview + actions", () => {
     render(<PlotRecipeApplyDialog />);
 
     fireEvent.click(screen.getByRole("button", { name: /Apply mapped fields/ }));
-    await Promise.resolve();
-    await Promise.resolve();
+    // The apply core is a lazy seam (bundle diet slice 3): the action crosses a
+    // dynamic import() before it writes, so wait on the STATE it produces rather
+    // than counting microtask ticks.
+    await waitFor(() => expect(useApp.getState().pendingRecipeApplication).toBeNull());
 
-    expect(useApp.getState().pendingRecipeApplication).toBeNull();
     expect(useApp.getState().editableFigures).toHaveLength(1);
     expect(useApp.getState().status).toContain("dropped 1 unmatched field");
   });
