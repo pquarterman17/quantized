@@ -11,7 +11,7 @@
 import type { ErrorPair } from "./api";
 import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
-import { buildExportStyles, stripDerivedColors, type ExportSeriesStyle } from "./exportStyles";
+import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "./exportStyles";
 import { effectiveChannels } from "./plotdata";
 import type { PlotView } from "./plotview";
 import { overlayExportsSeriesStyles, type CycleView } from "./seriesStyleCycle";
@@ -256,14 +256,24 @@ export function seriesDisplayLabel(label: string, unit: string, legend: string |
  *  one series per LEVEL and the palette slot belongs to the level, not the
  *  channel.
  *
- *  The PINNED branch obeys the same rule (BUG-016 round 2), and it has to: a
- *  pinned array is a previous `buildExportStyles` run on a FLAT request, so its
- *  `color` is the channel's palette slot whether or not the user ever chose a
- *  colour, and shipping that verbatim on a grouped request painted every level
- *  one hue — worse than the bug. `stripDerivedColors` removes exactly the
- *  entries whose colour still equals the palette slot for their position and
- *  leaves an explicit one alone; everything else in the array stays that
- *  document's final word, as before. */
+ *  Both branches then go through the SAME wire boundary (BUG-016 round 3):
+ *  whichever array this request ends up with — derived here or pinned by the
+ *  document — `toWireSeriesStyles` applies the grouped colour rule to it and
+ *  strips the `colorDerived` provenance flag. The PINNED branch has to obey
+ *  the rule: a pinned array is a previous `buildExportStyles` run on a FLAT
+ *  request, so its `color` is the channel's palette slot whenever the user
+ *  chose none, and shipping that verbatim on a grouped request painted every
+ *  level one hue — worse than the bug. Routing both branches through one
+ *  function is also what keeps them SYMMETRIC (round-2 review F3): an explicit
+ *  colour that happens to equal a palette slot is kept on both, where round 2
+ *  kept it when derived here and dropped it when pinned.
+ *
+ *  Round 2 passed `positions` into the pinned strip, which was wrong twice
+ *  over and is gone: those are THIS request's canvas positions (BUG-015's),
+ *  while a pinned array is built in plain index order by every producer of
+ *  one. `toWireSeriesStyles` needs no positions at all for a
+ *  provenance-carrying array, and keys its pre-provenance migration rule off
+ *  the entry's own index. */
 export function resolveSeriesPresentation(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
@@ -273,14 +283,15 @@ export function resolveSeriesPresentation(
   publication: (ExportSeriesStyle | null)[] | null | undefined,
   grouped = false,
 ): (ExportSeriesStyle | null)[] | null {
-  const base =
+  const resolved =
     publication === undefined
       ? buildExportStyles(plotted, seriesStyles, positions, cycle, grouped)
       : publication === null
         ? null
-        : grouped
-          ? stripDerivedColors(structuredClone(publication), positions)
-          : structuredClone(publication);
+        // Deep-copied first: the document must not observe the wire rules
+        // (or the legend overlay) applied to its own array.
+        : structuredClone(publication);
+  const base = resolved === null ? null : toWireSeriesStyles(resolved, grouped);
   return withSeriesLegends(base, legends);
 }
 

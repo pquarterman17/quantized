@@ -51,6 +51,29 @@ export interface ExportSeriesStyle {
    *  for that reason: a legend restored from a stale `publication.seriesStyles`
    *  could otherwise outvote the rename the user can still see and edit. */
   legend?: string;
+  /** PROVENANCE for `color`, and the ONE key here that is not a wire field
+   *  (BUG-016 round 3). `true` = `color` is the PALETTE slot `seriesColor`
+   *  produced for this series' display position, a colour the user never
+   *  chose; `false` = the user chose it (a swatch pick or a literal). Absent
+   *  = a PRE-PROVENANCE array, pinned by a build that predates this key.
+   *
+   *  It exists because a pinned array outlives the state it was resolved
+   *  against. Round 2 recovered "derived vs chosen" by re-resolving the live
+   *  palette at export time, which is wrong the moment the theme, the palette
+   *  preset or the request's display positions move since the pin — and then
+   *  a grouped export ships the channel's one hue to every LEVEL, which is
+   *  the regression BUG-016 round 1 created. Recording the answer at the
+   *  producer (`exportStyles.buildExportStyles`) makes it independent of all
+   *  three.
+   *
+   *  CAMEL-CASED on purpose: every other key here is the snake_case wire
+   *  spelling, so this one reads as what it is — document-only. It is removed
+   *  at the single wire boundary, `exportStyles.toWireSeriesStyles`, which
+   *  every producer of a request's `series_styles` runs its array through --
+   *  `figureSpecSeries.ts`, `figurebuilder/legacyFigure.ts` and
+   *  `spatialPageExport.ts`. Each of the three has a test asserting no entry
+   *  of the request it builds carries this key. */
+  colorDerived?: boolean;
 }
 
 const object = (value: unknown): Record<string, unknown> | null =>
@@ -68,6 +91,17 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     if (!raw) return null;
     const style: ExportSeriesStyle = {};
     if (typeof raw.color === "string") style.color = raw.color;
+    // Restored only ALONGSIDE a colour (BUG-016 round 3): the flag describes
+    // `color` and says nothing on its own, and letting a lone `colorDerived`
+    // through would turn an otherwise empty entry into a non-null one below.
+    // A missing/garbage flag stays ABSENT rather than defaulting either way —
+    // "pre-provenance, unknown" is a third state `toWireSeriesStyles` handles
+    // with its own migration rule, and collapsing it onto `true` would lose a
+    // colour the user chose while collapsing it onto `false` would keep the
+    // round-1 regression for every document saved before this key existed.
+    if (typeof raw.colorDerived === "boolean" && style.color !== undefined) {
+      style.colorDerived = raw.colorDerived;
+    }
     if (typeof raw.width === "number" && Number.isFinite(raw.width) && raw.width >= 0) style.width = raw.width;
     if (raw.line === "solid" || raw.line === "dashed" || raw.line === "dotted" || raw.line === "none") style.line = raw.line;
     if (typeof raw.marker === "boolean") style.marker = raw.marker;

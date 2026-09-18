@@ -89,8 +89,10 @@ import {
   figureDocumentToPlotView,
   type FigureDocument,
 } from "./figureDocument";
+import { buildExportStyles } from "./exportStyles";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { defaultPlotView } from "./plotview";
+import { SERIES_VARS } from "./seriesStyleCycle";
 import {
   FIXTURE_COLORS,
   MATRIX_FIXTURES,
@@ -627,6 +629,50 @@ describe("P4.2 regression matrix: divergences found (D1 through D5 since FIXED, 
       TEST_SERIES_PALETTE[2],
     ]);
     expect(style).not.toHaveProperty("color");
+  });
+
+  // BUG-016 round 3 — the same screen-vs-wire comparison for a PINNED
+  // document, with the palette CHANGED between the pin and the export. This
+  // is round-2 review F1 at the layer the user sees: round 2 classified a
+  // pinned colour by re-resolving the live palette, so after a theme flip the
+  // derived hex matched nothing, shipped, and the backend painted all three
+  // levels that one hue while the canvas cycled three new ones.
+  it("BUG-016: a PINNED grouped figure sends no derived colour after the palette changes under it", () => {
+    const base = matrixFixture("group");
+    // What the document stores: `buildExportStyles`' own output, taken under
+    // the palette that is live at pin time, provenance included.
+    const pinned = buildExportStyles([0], { 0: { width: 2, line: "dashed" } });
+    expect(pinned[0]).toEqual({
+      color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2, line: "dashed",
+    });
+    const figure: FigureDocument = {
+      ...base,
+      publication: { overrides: base.publication?.overrides ?? null, seriesStyles: pinned },
+    };
+
+    const root = document.documentElement;
+    const saved = SERIES_VARS.map((name) => root.style.getPropertyValue(name));
+    // Light and mutually distinct: the canvas runs every stroke through the
+      // same `resolveDrawColor` contrast check, and a near-black token would be
+      // substituted for the ink colour (measured: all three came back `#eee`).
+      const paletteB = ["#ffcccc", "#ccffcc", "#ccccff", "#ffffcc", "#ccffff", "#ffccff", "#ffddaa", "#ddaaff"];
+    SERIES_VARS.forEach((name, i) => root.style.setProperty(name, paletteB[i]));
+    try {
+      // SCREEN: three levels, three DIFFERENT slots of the new palette.
+      const drawn = screenDrawnStyles(figure, dataset);
+      expect(drawn.map((s) => s.color)).toEqual([paletteB[0], paletteB[1], paletteB[2]]);
+      expect(drawn.map((s) => s.dash)).toEqual([[8, 4], [8, 4], [8, 4]]);
+
+      // WIRE: the pinned entry, minus the colour the user never chose and
+      // minus the provenance flag that said so. The backend then cycles the
+      // levels, matching the screen in structure -- sending `#7fb3ff` (which
+      // is what round 2 did here) would paint all three one hue.
+      const spec = buildFigureSpecFromDocument(figure, dataset, figure.name);
+      expect(spec.group_col).toBe(6);
+      expect(spec.series_styles?.[0]).toEqual({ width: 2, line: "dashed" });
+    } finally {
+      SERIES_VARS.forEach((name, i) => root.style.setProperty(name, saved[i]));
+    }
   });
 });
 

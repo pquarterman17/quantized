@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildExportStyles, stripDerivedColors } from "./exportStyles";
+import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import type { PlotPayload } from "./plotdata";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
@@ -283,11 +283,17 @@ describe("auto dash/marker cycle — canvas/export parity (FEATURE-001 guard)", 
   });
 });
 
-// ── BUG-016: the `grouped` flag, and the pinned array that bypassed it ───────
+// ── BUG-016: the `grouped` colour rule, and the PROVENANCE it now rides on ──
 // Round 1 added `buildExportStyles`' fifth argument and nothing guarded it
-// directly: sabotaging `legacyFigure`'s use of it left 713/713 green (review
-// finding F3). Round 2 added `stripDerivedColors` for the PINNED path (F1).
-// Both are unit-pinned here, where the rule actually lives.
+// (sabotaging `legacyFigure`'s use left 713/713 green — review F3). Round 2
+// added a pinned-array strip that recovered "derived vs chosen" by comparing
+// the pinned hex against the LIVE palette at THIS request's positions, which
+// round-2 review F1/F2 measured failing on a theme flip, a palette preset and
+// a display-position shift — the round-1 one-hue regression, back whole.
+// Round 3 records the answer at the producer instead. These cases are written
+// so the recovery-by-comparison implementation CANNOT pass them: every
+// grouped assertion about a provenance-carrying array runs under a palette
+// that is NOT the one the array was pinned against.
 describe("BUG-016 — a grouped request's colour", () => {
   let restorePalette: () => void = () => {};
   beforeEach(() => {
@@ -295,12 +301,39 @@ describe("BUG-016 — a grouped request's colour", () => {
   });
   afterEach(() => restorePalette());
 
+  /** A DIFFERENT palette, installed after the pin: a theme flip
+   *  (`styles/colors.css` redefines all eight) or one of the five presets
+   *  (`lib/palettes.ts`'s `applyPalette`). Deliberately disjoint from
+   *  `TEST_SERIES_PALETTE` so an equality-based classifier misses every time. */
+  const PALETTE_B = ["#112233", "#223344", "#334455", "#445566", "#556677", "#667788", "#778899", "#8899aa"];
+  function flipTheme(): void {
+    restorePalette();
+    const root = document.documentElement;
+    PALETTE_B.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+    restorePalette = () => PALETTE_B.forEach((_c, i) => root.style.removeProperty(`--series-${i + 1}`));
+  }
+
+  // ── the producer records which branch paid for the colour ────────────────
+  it("records `colorDerived` on the colour it emits: true for the palette slot, false for a pick", () => {
+    expect(buildExportStyles([0], {})[0]).toEqual({
+      color: TEST_SERIES_PALETTE[0], colorDerived: true,
+    });
+    expect(buildExportStyles([0], { 0: { color: "#ffe066" } })[0]).toEqual({
+      color: "#ffe066", colorDerived: false,
+    });
+    // A `--series-N` SWATCH pick resolves to a palette hex and is still a
+    // pick: this is review F3's case, and it is now recorded, not guessed.
+    expect(buildExportStyles([0], { 0: { color: "--series-1" } })[0]).toEqual({
+      color: TEST_SERIES_PALETTE[0], colorDerived: false,
+    });
+  });
+
   it("`grouped` omits the palette-DERIVED colour and nothing else", () => {
     const style: Record<number, SeriesStyle> = { 0: { width: 2, line: "dashed" } };
     // Control, same call with the flag off: the colour IS baked in, so the
     // assertion below is about the flag and not about an absent palette.
     expect(buildExportStyles([0], style)[0]).toEqual({
-      color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed",
+      color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2, line: "dashed",
     });
     expect(buildExportStyles([0], style, null, false, true)[0]).toEqual({
       width: 2, line: "dashed",
@@ -310,7 +343,7 @@ describe("BUG-016 — a grouped request's colour", () => {
   it("`grouped` KEEPS an explicit colour — the canvas gives it to every level", () => {
     const style: Record<number, SeriesStyle> = { 0: { color: "#ffe066", width: 2 } };
     expect(buildExportStyles([0], style, null, false, true)[0]).toEqual({
-      color: "#ffe066", width: 2,
+      color: "#ffe066", colorDerived: false, width: 2,
     });
   });
 
@@ -321,54 +354,145 @@ describe("BUG-016 — a grouped request's colour", () => {
       .toEqual([TEST_SERIES_PALETTE[0], TEST_SERIES_PALETTE[1]]);
   });
 
-  it("strips a pinned colour that IS the palette slot for its own position", () => {
-    const pinned: (ExportSeriesStyle | null)[] = [
-      { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
-      { color: TEST_SERIES_PALETTE[1] },
-      null,
-    ];
-    expect(stripDerivedColors(pinned)).toEqual([{ width: 2, line: "dashed" }, null, null]);
+  // ── the wire boundary ────────────────────────────────────────────────────
+  it("takes the provenance flag off every request, flat or grouped", () => {
+    const flat = toWireSeriesStyles(buildExportStyles([0], { 0: { width: 2 } }), false);
+    expect(flat).toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
+    expect(Object.keys(flat[0]!)).not.toContain("colorDerived");
+    const grouped = toWireSeriesStyles(buildExportStyles([0], { 0: { color: "#ffe066" } }), true);
+    expect(grouped).toEqual([{ color: "#ffe066" }]);
   });
 
-  it("keeps a pinned colour the user actually chose", () => {
-    const pinned: (ExportSeriesStyle | null)[] = [{ color: "#ffe066", width: 2 }];
-    expect(stripDerivedColors(pinned)).toEqual([{ color: "#ffe066", width: 2 }]);
+  it("drops a DERIVED pinned colour when grouped even after a THEME FLIP", () => {
+    // The F1 case. Pinned under palette A, exported under palette B: the hex
+    // matches no live slot at all, so round 2 classified it "chosen" and the
+    // backend painted all three levels `#7fb3ff`. Provenance does not care.
+    const pinned = buildExportStyles([0], { 0: { width: 2, line: "dashed" } });
+    expect(pinned[0]?.color).toBe(TEST_SERIES_PALETTE[0]);
+    flipTheme();
+    expect(toWireSeriesStyles(pinned, true)).toEqual([{ width: 2, line: "dashed" }]);
   });
 
-  it("reads the slot at the entry's DISPLAY position, not at its array index", () => {
-    // The same pinned hex, at two different positions. At position 2 slot 0's
-    // hue is a colour that series never drew, so it is a deliberate one.
-    expect(stripDerivedColors([{ color: TEST_SERIES_PALETTE[0] }], [2])[0])
-      .toEqual({ color: TEST_SERIES_PALETTE[0] });
-    expect(stripDerivedColors([{ color: TEST_SERIES_PALETTE[2] }], [2])[0]).toBeNull();
+  it("KEEPS an explicit pinned colour when grouped after a theme flip — even one that now equals a live slot", () => {
+    // The other half of the promise, and review F3's asymmetry closed: the
+    // pick `#112233` is slot 0 of the NEW palette, so a comparison-based
+    // classifier would strip the colour the user chose. It is sent.
+    const pinned = buildExportStyles([0], { 0: { color: PALETTE_B[0], width: 2 } });
+    flipTheme();
+    expect(toWireSeriesStyles(pinned, true)).toEqual([{ color: PALETTE_B[0], width: 2 }]);
   });
 
-  it("compares case-insensitively — a pinned #7FB3FF is still the palette slot", () => {
-    expect(TEST_SERIES_PALETTE[0]).toBe("#7fb3ff"); // the hex the fold is about
-    expect(stripDerivedColors([{ color: "#7FB3FF" }])[0]).toBeNull();
+  it("asks nothing about the request's positions — the same entry decides the same way anywhere", () => {
+    // Review F2's root: round 2 read the slot at THIS request's display
+    // position, which is not the position the array was pinned at. A
+    // provenance-carrying entry has no position dependence left to exercise,
+    // so the whole array's answer is index-invariant.
+    const derived = buildExportStyles([0, 1, 2], {});
+    expect(toWireSeriesStyles(derived, true)).toEqual([null, null, null]);
+    expect(toWireSeriesStyles([derived[2]!, derived[0]!], true)).toEqual([null, null]);
   });
 
-  it("returns the caller's OWN array, unmutated, when nothing is derived", () => {
-    const entry: ExportSeriesStyle = { color: "#ffe066" };
-    const pinned: (ExportSeriesStyle | null)[] = [entry];
-    expect(stripDerivedColors(pinned)).toBe(pinned);
-    expect(entry).toEqual({ color: "#ffe066" });
+  it("leaves a FLAT pinned array's colours exactly as pinned, including under a palette switch", () => {
+    // The deliberate asymmetry: a pinned FLAT figure keeps the hex it was
+    // saved with rather than tracking the live palette. Design (a) — pin no
+    // derived colour and refill from the palette at export — would have
+    // changed this line, which is why it was not taken (BUG-016 round 3).
+    const pinned = buildExportStyles([0, 1], { 1: { color: "#ffe066" } });
+    flipTheme();
+    expect(toWireSeriesStyles(pinned, false)).toEqual([
+      { color: TEST_SERIES_PALETTE[0] }, { color: "#ffe066" },
+    ]);
   });
 
-  it("does not mutate the entries it strips from", () => {
-    const entry: ExportSeriesStyle = { color: TEST_SERIES_PALETTE[0], width: 2 };
-    stripDerivedColors([entry]);
-    expect(entry).toEqual({ color: TEST_SERIES_PALETTE[0], width: 2 });
+  it("collapses an emptied entry to null, not {}", () => {
+    const pinned = buildExportStyles([0], {});
+    flipTheme();
+    expect(toWireSeriesStyles(pinned, true)).toEqual([null]);
   });
 
-  it("strips nothing once the palette the array was built against is gone", () => {
-    restorePalette();
-    restorePalette = () => {};
-    const pinned: (ExportSeriesStyle | null)[] = [{ color: TEST_SERIES_PALETTE[0] }];
-    // With no `--series-N` set, `seriesColor` resolves to its one hardcoded
-    // fallback, which this hex is not: a colour that no longer matches any
-    // slot is treated as chosen, so the pinned array stays the document's word
-    // rather than being stripped on a guess.
-    expect(stripDerivedColors(pinned)).toBe(pinned);
+  it("does not mutate the entries it rewrites", () => {
+    const entry: ExportSeriesStyle = { color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 };
+    toWireSeriesStyles([entry], true);
+    expect(entry).toEqual({ color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2 });
+  });
+
+  it("returns the caller's OWN array when there is nothing to remove", () => {
+    // A pre-provenance array of chosen colours: no flag to strip, nothing
+    // derived, so a request pinning explicit colours is untouched by this
+    // function existing.
+    const pinned: (ExportSeriesStyle | null)[] = [{ color: "#ffe066" }, null];
+    expect(toWireSeriesStyles(pinned, true)).toBe(pinned);
+    expect(toWireSeriesStyles(pinned, false)).toBe(pinned);
+  });
+
+  // ── the PRE-PROVENANCE migration rule ────────────────────────────────────
+  // An array pinned before `colorDerived` existed. The rule, and its whole
+  // scope: on a GROUPED request only, drop a colour that still equals the
+  // palette slot at the entry's OWN ARRAY INDEX — the index every producer of
+  // a pinned array built in (`positions = null`). Flat is untouched.
+  describe("a pre-provenance pinned array (no colorDerived key)", () => {
+    it("drops a colour equal to the slot at its own pinned INDEX when grouped", () => {
+      const pinned: (ExportSeriesStyle | null)[] = [
+        { color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" },
+        { color: TEST_SERIES_PALETTE[1] },
+        null,
+      ];
+      expect(toWireSeriesStyles(pinned, true)).toEqual([{ width: 2, line: "dashed" }, null, null]);
+    });
+
+    it("keeps a colour that is not that index's slot", () => {
+      // Slot 0's hue pinned at index 1 is a colour that series never derived.
+      expect(toWireSeriesStyles([null, { color: TEST_SERIES_PALETTE[0] }], true))
+        .toEqual([null, { color: TEST_SERIES_PALETTE[0] }]);
+      expect(toWireSeriesStyles([{ color: "#ffe066", width: 2 }], true))
+        .toEqual([{ color: "#ffe066", width: 2 }]);
+    });
+
+    it("compares case-insensitively — a pinned #7FB3FF is still the palette slot", () => {
+      expect(TEST_SERIES_PALETTE[0]).toBe("#7fb3ff"); // the hex the fold is about
+      expect(toWireSeriesStyles([{ color: "#7FB3FF" }], true)[0]).toBeNull();
+    });
+
+    it("is FLAT-safe: the same array is untouched on an ungrouped request", () => {
+      const pinned: (ExportSeriesStyle | null)[] = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+      expect(toWireSeriesStyles(pinned, false)).toBe(pinned);
+    });
+
+    it("keeps the colour when the live slot is UNRESOLVABLE rather than guessing", () => {
+      // Round-2 review F4: the `slot === null` clause survived that round's
+      // sabotage untouched because no test could reach it — the case it was
+      // written for (a 3-digit `#abc` against an oklch token) is decided by
+      // the hex comparison instead. MEASURED in this environment:
+      // `resolveToHex("#abc")` -> `#aabbcc`, `resolveToHex("oklch(...)")` ->
+      // `#000000` (jsdom's canvas ignores the oklch fillStyle), so neither is
+      // null. What IS null is a colour that paints nothing at all: the
+      // function's documented "alpha 0 -> unparseable" return. With BOTH
+      // sides null and no guard, they compare EQUAL and a colour the
+      // sanitizer happily restored (it accepts any string) is stripped from a
+      // grouped export on a coincidence of unresolvability.
+      restorePalette();
+      const root = document.documentElement;
+      root.style.setProperty("--series-1", "transparent");
+      restorePalette = () => root.style.removeProperty("--series-1");
+      const pinned: (ExportSeriesStyle | null)[] = [{ color: "transparent", width: 2 }];
+      expect(toWireSeriesStyles(pinned, true)).toBe(pinned);
+    });
+
+    it("still decides an UNMARKED #abc against the slot's own resolved hex", () => {
+      // The other half of the measurement above, so the comment cannot rot:
+      // three-digit hexes are compared, not skipped. `#7fb3ff` is slot 0.
+      expect(toWireSeriesStyles([{ color: "#7FB3FF", width: 2 }], true)).toEqual([{ width: 2 }]);
+      expect(toWireSeriesStyles([{ color: "#abc", width: 2 }], true)).toEqual([{ color: "#abc", width: 2 }]);
+    });
+
+    it("RESIDUAL, recorded: under a changed palette its derived colour reads as chosen", () => {
+      // The known and documented limit of the migration rule — a document
+      // saved before provenance existed, exported under a different theme.
+      // Pinned here so the residual is a pinned behaviour and not a surprise;
+      // re-saving such a figure writes provenance and retires it.
+      const pinned: (ExportSeriesStyle | null)[] = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+      flipTheme();
+      expect(toWireSeriesStyles(pinned, true)).toBe(pinned);
+    });
   });
 });

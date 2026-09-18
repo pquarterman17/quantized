@@ -727,6 +727,29 @@ def test_a_grouped_export_with_no_series_styles_still_cycles_its_levels() -> Non
     assert not _STYLED_LINE_RE.findall(plot)  # nothing dashed
 
 
+def test_a_grouped_export_cycles_the_levels_of_a_styled_but_UNCOLOURED_channel() -> None:
+    # BUG-016 round 3, the RENDERED half of the frontend's provenance rule.
+    # `test_..._with_no_series_styles_still_cycles_its_levels` covers
+    # ``series_styles=None``; this covers the shape the client actually sends
+    # for a grouped channel whose colour was the palette's and not the user's:
+    # a real style entry with ``color`` OMITTED. Every level must take its own
+    # cycle colour, matching the canvas, which paints its three levels three
+    # different ``--series-N`` slots. Sending the channel's one slot instead --
+    # what a pinned array did before this round, and again after any theme
+    # change under round 2's palette comparison -- paints all three one hue.
+    plot = _grouped_plot_area(
+        y_keys=[0],
+        series_styles=[{"line": "dashed", "width": 3}],
+    )
+    lines = _STYLED_LINE_RE.findall(plot)
+    assert len(lines) == _GROUP_LEVELS
+    # The style half still expands onto every level...
+    assert {width for _d, _s, width in lines} == {"3"}
+    assert len({dash for dash, _s, _w in lines}) == 1
+    # ...and the colour half cycles, three distinct strokes rather than one.
+    assert len({stroke for _d, stroke, _w in lines}) == _GROUP_LEVELS
+
+
 def test_a_grouped_export_does_not_colour_map_a_level() -> None:
     # `color_by` is DROPPED on this branch, because the canvas drops it too:
     # `Stage/usePlotPayload.ts` builds its `colorByColumns` map only when

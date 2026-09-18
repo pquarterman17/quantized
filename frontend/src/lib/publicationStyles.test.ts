@@ -70,6 +70,38 @@ describe("sanitizeExportSeriesStyles", () => {
     expect(sanitizeExportSeriesStyles([{ color: "#fff" }])?.[0]).not.toHaveProperty("marker_shape");
   });
 
+  // ── BUG-016 round 3: the `colorDerived` provenance flag ─────────────────
+  // The one non-wire key here. A pinned array outlives the palette it was
+  // resolved against, so whether its `color` was CHOSEN or was the palette
+  // slot has to survive a save -- round 2 tried to recover it by comparing
+  // against the live palette at export time and lost the answer on every
+  // theme flip.
+  it("round-trips colorDerived in both directions", () => {
+    expect(sanitizeExportSeriesStyles([{ color: "#7fb3ff", colorDerived: true }])).toEqual([
+      { color: "#7fb3ff", colorDerived: true },
+    ]);
+    expect(sanitizeExportSeriesStyles([{ color: "#ffe066", colorDerived: false }])).toEqual([
+      { color: "#ffe066", colorDerived: false },
+    ]);
+  });
+
+  it("leaves a PRE-PROVENANCE entry's flag ABSENT — the third state the migration rule needs", () => {
+    // Not defaulted either way on purpose: `true` would discard a colour the
+    // user chose on every grouped export of an old document, `false` would
+    // keep round 1's one-hue regression for the same documents.
+    const out = sanitizeExportSeriesStyles([{ color: "#7fb3ff", width: 2 }])!;
+    expect(out[0]).not.toHaveProperty("colorDerived");
+  });
+
+  it("drops the flag without a colour, and a non-boolean flag", () => {
+    // It describes `color` and says nothing on its own; a lone flag would
+    // also turn an otherwise empty entry into a non-null one.
+    expect(sanitizeExportSeriesStyles([{ colorDerived: true }])).toEqual([null]);
+    expect(sanitizeExportSeriesStyles([{ color: "#fff", colorDerived: "yes" }])).toEqual([
+      { color: "#fff" },
+    ]);
+  });
+
   // Value-checked like `line`/`step`, and against the SAME `MARKER_SHAPE_VALUES`
   // set `plotspec2.ts`'s view-style sanitizer uses — a hand-edited or
   // future-client blob must not smuggle an unknown glyph as far as the backend's

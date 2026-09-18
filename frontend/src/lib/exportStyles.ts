@@ -46,7 +46,13 @@ export type { ExportSeriesStyle } from "./publicationStyles";
  *  it would paint every level the channel's one slot, which is neither what the
  *  canvas draws nor what the pre-BUG-016 export did. With no `color` key
  *  matplotlib's own cycle colours the levels, exactly as before. An EXPLICIT
- *  colour IS still sent: the canvas gives that one to every level too. */
+ *  colour IS still sent: the canvas gives that one to every level too.
+ *
+ *  Which of the two a `color` came from is RECORDED on the entry as
+ *  `colorDerived` (BUG-016 round 3) rather than inferred later, because an
+ *  array that gets pinned into a document outlives the palette and the display
+ *  positions it was resolved against. `toWireSeriesStyles` below reads that
+ *  flag and removes it; nothing else should. */
 export function buildExportStyles(
   plotted: number[],
   seriesStyles: Record<number, SeriesStyle>,
@@ -73,8 +79,20 @@ export function buildExportStyles(
     // BUG-016: a grouped request sends only an EXPLICIT colour (see `grouped`
     // above) -- `seriesColor`'s palette fallback is position-derived and this
     // list's positions are channels, not the levels the renderer draws.
-    const hex = grouped && !st?.color ? null : resolveToHex(seriesColor(pos[i] ?? i, st));
-    if (hex) spec.color = hex;
+    const chosen = Boolean(st?.color);
+    const hex = grouped && !chosen ? null : resolveToHex(seriesColor(pos[i] ?? i, st));
+    if (hex) {
+      spec.color = hex;
+      // BUG-016 round 3: record WHICH of the two `seriesColor` branches paid
+      // for that hex, here, where the answer is known for certain. Everything
+      // downstream -- a saved FigureDoc, a graph style template, a promoted
+      // FigureDocument's `publication.seriesStyles` -- only ever sees the
+      // resolved hex, and round 2 proved that hex cannot be classified after
+      // the fact: the palette it was resolved against is gone the moment the
+      // theme or the preset changes. Removed again at the wire boundary by
+      // `toWireSeriesStyles`, so no request carries it.
+      spec.colorDerived = !chosen;
+    }
     if (st?.width != null) spec.width = st.width;
     if (st?.line) spec.line = st.line;
     if (st?.marker) {
@@ -99,57 +117,94 @@ export function buildExportStyles(
 }
 
 /**
- * Drop a PALETTE-DERIVED `color` from an ALREADY-BUILT publication style array
- * (BUG-016 round 2).
+ * The ONE boundary between a stored style array and a request's
+ * `series_styles` (BUG-016 round 3). Every producer of the wire field runs its
+ * array through this: `figureSpecSeries.resolveSeriesPresentation` (the
+ * canonical document path, both the derived and the PINNED branch),
+ * `figurebuilder/legacyFigure.buildLegacyFigureSpec`, and
+ * `spatialPageExport`. It does two things, and the first is why it exists.
  *
- * `buildExportStyles`' `grouped` flag reaches only the DERIVED branch. A
- * document that pins `publication.seriesStyles` ships that array verbatim, and
- * such an array is itself this builder's output on a FLAT request — which
- * always bakes the channel's palette slot into `color`, a colour the user
- * never chose. Grouping such a document (reopening a `FigureDoc` saved before
- * BUG-016, or applying a graph style template, whose
- * `useGraphTemplates.saveStyleTemplate` builds the array flat by design so it
- * stays portable onto a flat figure) then sent that ONE hue to the backend,
- * which paints every level with it: measured `#7fb3ff`/`#ffb37f`/`#8fe08f` on
- * the canvas against `#7fb3ff`x3 in the export — the very divergence the
- * derived branch was changed to avoid, and a REGRESSION against the pre-fix
- * rendering (matplotlib's cycle, which at least cycled).
+ * 1. A GROUPED request never sends a DERIVED colour. The backend expands each
+ *    `y_keys`-aligned entry onto one synthetic series per LEVEL of the group
+ *    column (`calc.figure_group_styles`), and the canvas colours those levels
+ *    by their OWN display positions (`--series-1/2/3` for three levels,
+ *    measured). One channel-aligned entry cannot say three colours, so sending
+ *    the channel's slot paints every level that single hue — worse than the
+ *    pre-BUG-016 export, which at least cycled. An EXPLICIT colour IS always
+ *    sent: the canvas gives that one to every level too.
  *
- * The pinned array does not record whether a colour was explicit, so the truth
- * is recovered rather than trusted: an entry whose `color` resolves to exactly
- * the palette slot `seriesColor` would have produced at that entry's display
- * position IS the derived one and is stripped; anything else is a colour the
- * user chose and survives, because the canvas gives an explicit colour to
- * every level too. `positions` is the list the array was built against (`null`
- * = the builder's own index order, which is what every producer of a pinned
- * array passes).
+ * 2. The provenance flag itself is removed, on every request, grouped or not.
+ *    `ExportSeriesStyle.colorDerived` is a document field, not a wire field.
  *
- * The AMBIGUITY is deliberate and one-sided. A user who hand-picks the exact
- * hex of the palette slot their series already sits in gets the cycling
- * render — which is what the canvas draws for that series anyway, so the two
- * still agree. Guessing the other way (calling it explicit and painting three
- * levels one hue) is the regression above.
+ * WHY PROVENANCE AND NOT A COMPARISON (round 2's approach, retired here).
+ * Round 2 classified a pinned colour by re-resolving `seriesColor` at export
+ * time and calling the entry derived when the two hexes matched. Both inputs
+ * to that comparison are the CURRENT state, not the pin's:
+ *   - the palette. `--series-N` is redefined by every theme flip
+ *     (`styles/colors.css`), by all five presets (`lib/palettes.ts`) and, for
+ *     slot 1, by an accent switch. After any of those, every derived colour
+ *     failed the equality, was read as "chosen", and shipped — the round-1
+ *     one-hue regression, whole.
+ *   - the position. The comparison was fed THIS request's display positions
+ *     (`figureSpec.ts`'s BUG-015 canvas positions), while a pinned array is
+ *     built in plain index order by every one of its producers. Measured
+ *     divergences: `allowExplicitXAsY` (which
+ *     `buildFigureSpecFromDocument` passes unconditionally) moves the doc's
+ *     positions to `[1,0]`; hiding a channel after the pin shifts the rest.
+ * Recording the answer at the producer removes both inputs from the question.
  *
- * Returns the caller's own array by reference when nothing is derived, so a
- * request pinning explicit colours is unchanged by this existing.
+ * PRE-PROVENANCE ARRAYS (the one-time migration rule). An entry with a `color`
+ * and NO `colorDerived` key was pinned by a build that predates this key —
+ * a `FigureDoc` or graph template from an earlier save, a `FigureDocument`
+ * promoted from one. Only for those, and only on a GROUPED request, the
+ * colour is dropped when it resolves to exactly the palette slot at the
+ * entry's OWN ARRAY INDEX: index order IS the order every pinned-array
+ * producer built in (`legacyFigure`, `useGraphTemplates` and `plotSpecFigure`
+ * all pass `positions = null`), so this asks about the pin's own position and
+ * not the request's. The palette is still the live one, so the residual is
+ * narrow and named: a pre-provenance document exported under a DIFFERENT
+ * theme/preset than it was pinned under reads its derived colour as chosen
+ * and paints one hue per channel, as it did before round 2. Re-saving such a
+ * figure writes provenance and retires the residual for it permanently.
+ * See plans/BUGS_AND_ISSUES.md, BUG-016 round 3.
+ *
+ * Returns the caller's own array by reference when nothing changed.
  */
-export function stripDerivedColors(
+export function toWireSeriesStyles(
   styles: (ExportSeriesStyle | null)[],
-  positions: readonly number[] | null = null,
+  grouped: boolean,
 ): (ExportSeriesStyle | null)[] {
   let changed = false;
   const out = styles.map((style, i) => {
-    if (!style?.color) return style;
-    const slot = resolveToHex(seriesColor(positions?.[i] ?? i));
-    // An UNRESOLVABLE slot (`resolveToHex` needs a canvas for anything that is
-    // not already a 6-digit hex, and returns null without one) strips nothing
-    // rather than guessing: the pinned array stays the document's word
-    // wherever the derived value cannot be reconstructed.
-    if (slot === null || resolveToHex(style.color) !== slot) return style;
+    if (!style) return style;
+    const provenance = style.colorDerived;
+    const derived = provenance === undefined
+      ? style.color !== undefined && isPaletteSlot(style.color, i)
+      : provenance;
+    const dropColor = grouped && derived && style.color !== undefined;
+    if (provenance === undefined && !dropColor) return style;
     changed = true;
     const rest: ExportSeriesStyle = { ...style };
-    delete rest.color;
+    delete rest.colorDerived;
+    if (dropColor) delete rest.color;
+    // An emptied entry collapses to `null`, not `{}` — `buildExportStyles`'
+    // own trailing rule, and the shape the backend reads as "no styling".
     return Object.keys(rest).length > 0 ? rest : null;
   });
   return changed ? out : styles;
+}
+
+/** The PRE-PROVENANCE migration predicate only (see `toWireSeriesStyles`):
+ *  does this pinned hex still equal the palette slot for the index it was
+ *  pinned at? An UNRESOLVABLE slot answers NO rather than guessing —
+ *  `resolveToHex` needs a canvas for anything that is not already a 6-digit
+ *  hex and returns null without one, so a real `oklch()` palette in a
+ *  canvas-less environment would otherwise compare null-to-null and strip a
+ *  3-digit pinned colour the user chose (`sanitizeExportSeriesStyles` accepts
+ *  `#abc`). Keeping the colour is the safe side of that: it loses per-level
+ *  cycling on one legacy document, where the other side loses a colour. */
+function isPaletteSlot(color: string, index: number): boolean {
+  const slot = resolveToHex(seriesColor(index));
+  if (slot === null) return false;
+  return resolveToHex(color) === slot;
 }

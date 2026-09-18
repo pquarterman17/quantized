@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-17 (BUG-016 fixed and its review round 2 closed: a grouped figure's levels export with their channel's style, as the canvas draws them — on the pinned and Graph Builder paths too; BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
+**Updated:** 2026-09-17 (BUG-016 fixed and its review rounds 2 and 3 closed: a grouped figure's levels export with their channel's style, as the canvas draws them — on the pinned and Graph Builder paths too, and round 3 makes a pinned figure RECORD whether its colour was chosen so a theme, palette or display-position change between the pin and the export cannot bring the one-hue regression back; BUG-012 round 3 closed; BUG-017 fixed: NaN/±Infinity/-0 cells round-trip through `.dwk` save, autosave, Pack Project and workbook transfer; BUG-012 and BUG-013 review rounds closed, BUG-013 round 3 closing the live-span key, frozen-document self-containment and the canvas-less fallback; BUG-013 round 4 closing the document route's group_col degrade; UX-003 filed)  
 **Initial author:** ChatGPT-Sol (not Claude)  
 **Purpose:** A durable, additive record of defects and usability friction found while using Quantized as an OriginPro replacement.
 
@@ -40,7 +40,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
-| BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — `lib/exportStyles.stripDerivedColors` now recovers "derived vs chosen" from the palette slot itself); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets |
+| BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — `lib/exportStyles.stripDerivedColors` now recovers "derived vs chosen" from the palette slot itself); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). **Review round 3 (2026-09-18)** replaced round 2's recovery-by-comparison with PROVENANCE: `buildExportStyles` records `ExportSeriesStyle.colorDerived` on every colour it emits, the document persists it, and the single wire boundary `exportStyles.toWireSeriesStyles` applies the grouped rule and strips the flag — so a theme flip, a palette preset or a display-position shift between the pin and the export can no longer resurrect the one-hue regression, and a grouped request never sends a derived colour while an explicit one is always sent. The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets; plus one scoped migration residual for documents saved before provenance existed |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 17 `lazy()` sites, zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 
@@ -5696,7 +5696,7 @@ were partitioned into.
   the backend rule changed (review NIT 7; the test is a screen-vs-WIRE
   structural pin, which is all it claims to be).
 - Round-2 tests (2026-09-17, all sabotage-verified): the `grouped` flag and
-  `stripDerivedColors` are unit-pinned in `lib/exportStyles.test.ts` (9 cases —
+  `stripDerivedColors` are unit-pinned in `lib/exportStyles.test.ts` (10 cases —
   derived-colour omission, explicit-colour survival, display-position keying,
   hex case folding, no-mutation, by-reference return); the pinned-array strip
   in `lib/figureSpecSeries.test.ts` (6) and
@@ -5727,18 +5727,139 @@ were partitioned into.
   that is the branch that MINTS new per-level dicts, and a per-level entry
   carrying the channel's rename would read as a per-LEVEL label, which it is
   not. Recorded in the module rather than made uniform.
-- Bundle (review NIT 9). The round-1 body cited parent `fbccbe05`; the landed
-  parent is `6686c23d` (`git rev-parse 93208f66^`). Both pairs measured with
-  `npm ci`, `rm -rf node_modules/.vite`, `npm run build`, exact bytes:
-  `6686c23d` -> `93208f66` eager **913,376 -> 913,376 B (0)**, and
-  `b6408e6c` -> round 2 eager **913,376 -> 913,376 B (0)**. The repeated
-  number is real, not a stale read: every module this work touches
-  (`exportStyles`, `figureSpecSeries`, `plotSpecFigure`, `legacyFigure`) lands
-  in LAZY chunks, and that is where the growth shows — round 1 +68 B total
-  (`figureSpec` +39, `useFigureBuilder` +29) and round 2 +327 B
-  (`figureSpec` +246, `useFigureBuilder` +74, `GraphBuilderPanel` +7), with
-  the eager `index` chunk byte-identical in size across all four builds (only
-  its embedded lazy-chunk hashes, which are fixed-width, changed).
+- Bundle (review NIT 9, CORRECTED in round 3 — round-2 review F5). The round-1
+  body cited parent `fbccbe05`; the landed parent is `6686c23d` (`git rev-parse
+  93208f66^`). Round 2's own line then cited `b6408e6c`, which is the parent of
+  the WORKTREE commit `922d8a4e` was cherry-picked from, not of `922d8a4e` —
+  whose real parent is `c1757fb1` (P2.8). Re-measured on the real pair
+  (`rm -rf node_modules/.vite`, `npm run build`, exact eager bytes):
+  `c1757fb1` **916,718** -> `922d8a4e` **916,718 B (0)**. The DELTA round 2
+  recorded was right; both ABSOLUTES were an ancestor's, taken before P2.8
+  landed. Round 1's pair is left as recorded (`6686c23d` -> `93208f66`
+  913,376 -> 913,376, 0) — it was measured on its own real parent. The zero is
+  real, not a stale read: every module this work touches (`exportStyles`,
+  `figureSpecSeries`, `plotSpecFigure`, `legacyFigure`) lands in LAZY chunks,
+  and that is where the growth shows — round 1 +68 B total (`figureSpec` +39,
+  `useFigureBuilder` +29) and round 2 +327 B (`figureSpec` +246,
+  `useFigureBuilder` +74, `GraphBuilderPanel` +7), with the eager `index`
+  chunk byte-identical in size across all four builds (only its embedded
+  lazy-chunk hashes, which are fixed-width, changed).
+
+#### Round 3 — the pinned array records its own provenance (review F1-F7)
+
+Round 2's fix asked the wrong question. `stripDerivedColors` decided whether a
+pinned `color` was the user's by RE-RESOLVING `seriesColor` at export time and
+comparing hexes, which reads two pieces of state that are not the ones the
+array was pinned against:
+
+- the PALETTE. `--series-N` is redefined by every theme flip
+  (`styles/colors.css`), by all five presets (`lib/palettes.ts`'s
+  `applyPalette`) and, for slot 1, by an accent switch. After any of those the
+  pinned hex matches no live slot, every derived colour is classified "chosen",
+  and the backend paints all three levels that one hue — round 1's regression,
+  whole (review F1, measured).
+- the POSITION. The comparison was fed THIS request's canvas display positions
+  (BUG-015's), while every producer of a pinned array builds it in plain index
+  order. `buildFigureSpecFromDocument` passes `allowExplicitXAsY`
+  unconditionally, so an ordinary `xKey:1, yKeys:[1,2]` document resolves
+  positions `[1,0]`; hiding a channel after the pin shifts the rest. Both were
+  measured shipping the derived colour (review F2).
+
+So the answer is RECORDED at the producer instead of recovered later.
+`buildExportStyles` sets `ExportSeriesStyle.colorDerived` on every colour it
+emits — `true` for the palette slot, `false` for a colour the user picked
+(a literal or a `--series-N` SWATCH, which resolves to a palette hex and is
+still a pick: review F3's case, now recorded rather than guessed). It is
+camel-cased because it is the one key there that is NOT a wire field:
+`sanitizeExportSeriesStyles` persists it, and the single wire boundary
+`exportStyles.toWireSeriesStyles` removes it from every request. The grouped
+rule is applied at that same boundary, so `resolveSeriesPresentation`'s derived
+and pinned branches are now SYMMETRIC (review F3): an explicit colour that
+happens to equal a palette slot survives on both, where round 2 kept it when
+derived and dropped it when pinned. `stripDerivedColors` and its
+palette-equality comparison are gone, along with the `positions` argument the
+strip never should have had.
+
+DESIGN CHOICE, measured. The alternative considered was to pin no derived
+colour at all and let the flat export re-derive it from the palette at render
+time. It was rejected because it is not byte-identical for existing documents.
+Measured on a pre-provenance pinned flat array
+(`[{color: slot0, width: 2}, {color: "#ffe066"}, {width: 2, line: "dashed"}]`)
+through `buildLegacyFigureSpec`, `e93b193b` and this commit agree exactly:
+`[{"color":"#7fb3ff","width":2},{"color":"#ffe066"},{"width":2,"line":"dashed"}]`
+under the pinning palette AND under a switched one. Re-deriving would have
+changed 1 of those 3 entries with the palette unchanged (entry 2 has no colour
+today — the shape `plotSpecFigure` and every grouped build emit — and would
+gain one) and 2 of 3 after a palette switch. A pinned FLAT figure keeping the
+hex it was saved with is also what the round-2 test framed as desirable, and it
+stays pinned.
+
+MIGRATION, deliberate and scoped. An entry with a `color` and NO `colorDerived`
+key is a pre-provenance pin — any `.dwk` FigureDoc, graph style template or
+promoted `FigureDocument` saved before this commit, which is four producer
+paths in all (`legacyFigure.buildLegacyFigureDoc`,
+`useGraphTemplates.saveStyleTemplate`, `plotSpecFigure.plotSpecToFigureDoc`,
+and `figureDocumentPublication` promoting any of those). For those entries ONLY,
+and on a GROUPED request only, the colour is dropped when it equals the palette
+slot at the entry's OWN ARRAY INDEX — the index every one of those producers
+builds in (`positions = null`), so the question is about the pin's position and
+not the request's. Flat requests are untouched. The sanitizer deliberately does
+NOT default the missing flag either way: `true` would discard a colour the user
+chose on every grouped export of an old document, `false` would keep round 1's
+one-hue regression for the same documents. RESIDUAL, pinned by two tests rather
+than left implicit: a pre-provenance document exported under a DIFFERENT
+theme/preset than it was pinned under still reads its derived colour as chosen
+and paints one hue per channel. Re-saving such a figure writes provenance and
+retires the residual for that document permanently.
+
+Also closed this round:
+
+- **F4** — the `slot === null` unresolvable-slot clause, which round 2's
+  sabotage left green because nothing reached it. It is still live (only from
+  the migration path now) and is pinned. The case F4 named (`#abc` against an
+  `oklch` token) turns out NOT to reach it: measured in the test environment,
+  `resolveToHex("#abc")` is `#aabbcc` and `resolveToHex("oklch(...)")` is
+  `#000000`, so the hex comparison decides it — pinned as its own case so the
+  comment cannot rot. What DOES make both sides null is a colour that paints
+  nothing (`resolveToHex`'s documented alpha-0 return), and with the guard gone
+  those compare EQUAL and strip a colour the sanitizer restored.
+- **F6** — the strip is no longer applied at PERSIST time. `legacyFigure`'s
+  shared helper now returns the DOCUMENT form and `buildLegacyFigureSpec` alone
+  applies the wire rules, so "Save as figure" stops writing the stripped array
+  into `config.seriesStyles`. The saved doc keeps colour AND provenance, which
+  is what lets it reproduce the same wire under any later palette.
+- **F7** — the miscounted test list above (9 -> 10), and the round-2 test
+  "strips nothing once the palette the array was built against is gone" is
+  deleted: it framed a palette-dependent guess as the document's word, which is
+  exactly the behaviour this round removes.
+
+Round-3 tests (all sabotage-verified): `lib/exportStyles.test.ts` (19 cases in
+the BUG-016 block — provenance recording, the wire boundary, a THEME FLIP
+between pin and export in both directions, position-invariance, flat
+byte-identity under a palette switch, and the pre-provenance migration rule
+with its residual and its unresolvable-slot guard); `lib/figureSpecSeries.test.ts`
+(8, including the `allowExplicitXAsY` `[1,0]` positions and a channel hidden
+after the pin, both measured off the real `resolveDisplaySeries`);
+`figurebuilder/legacyFigure.test.ts` (10, including F6's save and a
+pre-provenance fixture document taken through `sanitizeExportSeriesStyles`);
+`lib/publicationStyles.test.ts` (3, the persistence contract and the absent
+third state); `lib/spatialPageExport.test.ts` (1, the third wire boundary);
+`lib/regressionMatrix.test.ts` (1, screen `buildOpts` vs wire for a PINNED
+grouped document under a changed palette); and the RENDERED half in
+`tests/test_export_vector_structure.py`
+(`test_a_grouped_export_cycles_the_levels_of_a_styled_but_UNCOLOURED_channel`
+— the real route, reading the SVG's own artists: the width/dash expand onto
+every level while the three strokes stay distinct).
+
+Sabotage: 17 of 17 RED (the scoped suite is 644 tests). S8 — dropping the
+`slot === null` guard — is the clause round 2's own sabotage (its S6) left
+green, and it is red now.
+
+Bundle, round 3: parent `e93b193b` (`git rev-parse HEAD~1`) **916,782** ->
+**916,866 B (+84)**, `rm -rf node_modules/.vite` + `npm run build`, exact eager
+bytes both sides. 895.4 kB against a 898.8 kB budget, 3.5 kB under. The growth
+is `publicationStyles.ts`'s sanitizer branch, which is in the EAGER persistence
+graph; `exportStyles`/`figureSpecSeries`/`legacyFigure` are lazy as before.
 
 ---
 

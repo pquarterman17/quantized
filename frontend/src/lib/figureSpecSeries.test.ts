@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { buildExportStyles } from "./exportStyles";
 import { resolveDisplaySeries, resolveSeriesPresentation, seriesDisplayLabel, withSeriesLegends } from "./figureSpecSeries";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
-import type { DataStruct } from "./types";
+import type { DataStruct, SeriesStyle } from "./types";
 
 const data: DataStruct = {
   time: [0, 1, 2],
@@ -170,12 +171,14 @@ describe("resolveSeriesPresentation", () => {
     ]);
   });
 
-  // BUG-016 round 2 (review F1). A pinned array is a previous
+  // BUG-016 round 3 (round-2 review F1/F2). A pinned array is a previous
   // `buildExportStyles` run on a FLAT request, so its `color` is the palette
-  // slot whether or not the user chose one. Shipping it verbatim on a grouped
+  // slot whenever the user chose none. Shipping it verbatim on a grouped
   // request made the backend paint every LEVEL that one hue — a regression
-  // against the pre-fix cycle. The DERIVED branch already omitted it; the
-  // pinned one now obeys the same rule.
+  // against the pre-fix cycle. Round 2 recovered "derived vs chosen" from the
+  // LIVE palette at THIS request's display positions; both inputs are the
+  // wrong ones, so every case below moves one of them between the pin and the
+  // export and still demands the rule.
   describe("a grouped request's colour", () => {
     let restorePalette: () => void = () => {};
     beforeEach(() => {
@@ -183,46 +186,94 @@ describe("resolveSeriesPresentation", () => {
     });
     afterEach(() => restorePalette());
 
+    const PALETTE_B = ["#112233", "#223344", "#334455", "#445566", "#556677", "#667788", "#778899", "#8899aa"];
+    /** A theme flip / palette preset between the pin and the export. */
+    function flipTheme(): void {
+      restorePalette();
+      const root = document.documentElement;
+      PALETTE_B.forEach((c, i) => root.style.setProperty(`--series-${i + 1}`, c));
+      restorePalette = () => PALETTE_B.forEach((_c, i) => root.style.removeProperty(`--series-${i + 1}`));
+    }
+    /** What a document actually stores: `buildExportStyles`' own output, taken
+     *  at pin time under whatever palette was then live — provenance included. */
+    const pin = (styles: Record<number, SeriesStyle>, plotted: number[] = [0]) =>
+      buildExportStyles(plotted, styles);
+
     it("derives no palette colour when grouped", () => {
       const styles = { 0: { width: 3 } };
       expect(resolveSeriesPresentation([0], styles, [0], false, [], undefined, true))
         .toEqual([{ width: 3 }]);
-      // Control: the same call, ungrouped, DOES carry the slot.
+      // Control: the same call, ungrouped, DOES carry the slot — and carries
+      // no provenance flag onto the wire.
       expect(resolveSeriesPresentation([0], styles, [0], false, [], undefined, false))
         .toEqual([{ color: TEST_SERIES_PALETTE[0], width: 3 }]);
     });
 
-    it("strips a PINNED palette colour when grouped, and only the colour", () => {
-      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2, line: "dashed" as const }];
+    it("strips a PINNED derived colour when grouped after a THEME FLIP, and only the colour", () => {
+      const pinned = pin({ 0: { width: 2, line: "dashed" } });
+      flipTheme();
       expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, true))
         .toEqual([{ width: 2, line: "dashed" }]);
-      // The document is never mutated by the strip.
-      expect(pinned[0].color).toBe(TEST_SERIES_PALETTE[0]);
+      // The document is never mutated by the wire rules.
+      expect(pinned[0]?.color).toBe(TEST_SERIES_PALETTE[0]);
     });
 
-    it("keeps a PINNED explicit colour when grouped", () => {
-      const pinned = [{ color: "#ffe066", width: 2 }];
-      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, true)).toEqual(pinned);
+    it("keeps a PINNED explicit colour when grouped after a PALETTE PRESET switch", () => {
+      const pinned = pin({ 0: { color: "#ffe066", width: 2 } });
+      flipTheme();
+      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, true))
+        .toEqual([{ color: "#ffe066", width: 2 }]);
     });
 
-    it("strips against the entry's DISPLAY position, not its array index", () => {
-      // Position 1 (a hidden earlier series): the derived colour there is slot
-      // 1, so slot 0's hue at that position is one the user chose.
-      const pinned = [{ color: TEST_SERIES_PALETTE[1] }];
-      expect(resolveSeriesPresentation([1], {}, [1], false, [], pinned, true)).toEqual([null]);
-      const explicit = [{ color: TEST_SERIES_PALETTE[0] }];
-      expect(resolveSeriesPresentation([1], {}, [1], false, [], explicit, true)).toEqual(explicit);
+    it("strips the derived colour at the `allowExplicitXAsY` positions the document really gets", () => {
+      // Round-2 review F2, row 1, and the DEFAULT document path:
+      // `buildFigureSpecFromDocument` passes `allowExplicitXAsY` always, so a
+      // doc with `xKey:1, yKeys:[1,2]` resolves positions `[1,0]` while the
+      // pinned array was built in index order. Round 2 compared the pin's
+      // entry 0 against slot 1 and shipped both colours.
+      const { plotted, positions } = resolveDisplaySeries(data, view({
+        yKeys: [1, 2], xKey: 1, allowExplicitXAsY: true,
+      }));
+      expect(positions).toEqual([1, 0]); // the shifted space, non-vacuously
+      const pinned = pin({}, plotted);
+      expect(resolveSeriesPresentation(plotted, {}, positions, false, [], pinned, true))
+        .toEqual([null, null]);
     });
 
-    it("leaves a pinned array verbatim when NOT grouped", () => {
-      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
-      expect(resolveSeriesPresentation([0], {}, [0], false, [], pinned, false)).toEqual(pinned);
+    it("strips the derived colour of a channel HIDDEN after the pin", () => {
+      // F2 row 2: pinned over three channels, one hidden before the export, so
+      // the request plots two and round 2 read slots 1 and 2 against pinned
+      // entries 0 and 1 — the first survived and painted every level one hue.
+      const pinned = pin({}, [0, 1, 2]);
+      const { plotted, positions } = resolveDisplaySeries(data, view({
+        yKeys: [0, 1, 2], hiddenChannels: [0],
+      }));
+      expect([plotted, positions]).toEqual([[1, 2], [1, 2]]);
+      expect(resolveSeriesPresentation(plotted, {}, positions, false, [], pinned, true))
+        .toEqual([null, null, null]);
+    });
+
+    it("leaves a pinned FLAT request's colours as pinned, even under a palette switch", () => {
+      const pinned = pin({ 1: { color: "#ffe066" } }, [0, 1]);
+      flipTheme();
+      expect(resolveSeriesPresentation([0, 1], {}, [0, 1], false, [], pinned, false))
+        .toEqual([{ color: TEST_SERIES_PALETTE[0] }, { color: "#ffe066" }]);
     });
 
     it("still lays a legend rename over a stripped entry", () => {
-      const pinned = [{ color: TEST_SERIES_PALETTE[0], width: 2 }];
+      const pinned = pin({ 0: { width: 2 } });
+      flipTheme();
       expect(resolveSeriesPresentation([0], {}, [0], false, ["Loop 1"], pinned, true))
         .toEqual([{ width: 2, legend: "Loop 1" }]);
+    });
+
+    it("sends no `colorDerived` on either branch — it is a document field, not a wire field", () => {
+      const derived = resolveSeriesPresentation([0], {}, [0], false, [], undefined, false)!;
+      const pinnedOut = resolveSeriesPresentation([0], {}, [0], false, [], pin({ 0: { width: 2 } }), false)!;
+      for (const entry of [...derived, ...pinnedOut]) {
+        expect(Object.keys(entry ?? {})).not.toContain("colorDerived");
+      }
+      expect(derived[0]?.color).toBe(TEST_SERIES_PALETTE[0]); // non-vacuous
     });
   });
 });

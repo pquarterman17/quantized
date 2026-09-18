@@ -51,9 +51,12 @@ describe("plotSpecToFigureDoc", () => {
 
   it("maps scatter to an honest point-only publication style", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "scatter" }), "", {});
+    // `colorDerived: true` is BUG-016 round 3's provenance: this colour is the
+    // palette slot `seriesColor` produced, not one the user picked. It rides
+    // the saved document and is removed at the wire boundary.
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), line: "none", marker: true },
-      { color: expect.any(String), line: "none", marker: true },
+      { color: expect.any(String), colorDerived: true, line: "none", marker: true },
+      { color: expect.any(String), colorDerived: true, line: "none", marker: true },
     ]);
   });
 
@@ -61,16 +64,16 @@ describe("plotSpecToFigureDoc", () => {
   it("maps step (default 'post') to a step-drawstyle publication style, no forced markers", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "step" }), "", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), step: "post" },
-      { color: expect.any(String), step: "post" },
+      { color: expect.any(String), colorDerived: true, step: "post" },
+      { color: expect.any(String), colorDerived: true, step: "post" },
     ]);
   });
 
   it("maps step + showMarkers to Origin's Line + Symbol equivalent", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "step", stepMode: "mid", showMarkers: true }), "", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), step: "mid", marker: true },
-      { color: expect.any(String), step: "mid", marker: true },
+      { color: expect.any(String), colorDerived: true, step: "mid", marker: true },
+      { color: expect.any(String), colorDerived: true, step: "mid", marker: true },
     ]);
   });
 
@@ -120,7 +123,10 @@ describe("plotSpecToFigureDoc", () => {
     expect(doc?.config.groupCol).toBe(3);
     expect(doc?.config.yKeys).toEqual([2, 1]);
     // Channel 2 chose a colour, so every level draws it -- as the canvas does.
-    expect(doc?.config.seriesStyles?.[0]).toEqual({ color: "#ffffff", width: 4, line: "dashed" });
+    // `colorDerived: false` records that this one WAS picked, so no later
+    // palette change can make the wire drop it (BUG-016 round 3).
+    expect(doc?.config.seriesStyles?.[0])
+      .toEqual({ color: "#ffffff", colorDerived: false, width: 4, line: "dashed" });
     // Channel 1 chose nothing: no palette colour on the wire, so both sides
     // keep cycling per level. `null`, not `{}` -- an entry with nothing left.
     expect(doc?.config.seriesStyles?.[1]).toBeNull();
@@ -229,8 +235,8 @@ describe("plotSpecToFigureDoc — v2 blocks win over the live arg", () => {
     // A DIFFERENT live arg proves it's ignored, not merely unused by luck.
     const doc = plotSpecToFigureDoc(spec, "Styled", { 2: { color: "#ffffff" }, 1: { width: 99 } });
     expect(doc?.config.seriesStyles).toEqual([
-      { color: "#123456", width: 4 },
-      { color: "#abcdef" },
+      { color: "#123456", colorDerived: false, width: 4 },
+      { color: "#abcdef", colorDerived: false },
     ]);
   });
 
@@ -242,8 +248,8 @@ describe("plotSpecToFigureDoc — v2 blocks win over the live arg", () => {
     });
     const doc = plotSpecToFigureDoc(spec, "Styled", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: "#123456", line: "none", marker: true },
-      { color: "#abcdef", line: "none", marker: true },
+      { color: "#123456", colorDerived: false, line: "none", marker: true },
+      { color: "#abcdef", colorDerived: false, line: "none", marker: true },
     ]);
   });
 
