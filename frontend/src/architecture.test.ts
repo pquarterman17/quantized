@@ -2462,6 +2462,87 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/plotRecipeApplyLazy.ts",
       call: 'import("./plotRecipeApply")',
     },
+    // ── SLICE 4 (2026-09-18, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // Nine content-gated render seams, measured at −25,862 B of eager JS.
+    //
+    // Seven of them are the flat Library sections. Every one of those already
+    // returned `null` until its own store collection was non-empty, and a
+    // FRESH project's collections are all empty — so on the default first
+    // paint the section bodies were pure dead weight in the entry chunk.
+    // `LibrarySections.tsx` (new, extracted from `Library.tsx`, which sits
+    // against the 400-line component ceiling) renders six of them behind
+    // `lazy()` + `Suspense fallback={null}` under the SAME emptiness test the
+    // section applies internally (`originFigures`/`originFidelity`/
+    // `figureDocs`/`reports`/`smartFolders`/`collections` length); the
+    // seventh, the multi-select bar, keeps `Library.tsx` as its loader and is
+    // gated on `selectedIds.length > 1`. The chunk is therefore requested
+    // strictly after the user authors that content, selects a second row, or
+    // opens a project that already had it — a persisted-state restore,
+    // exactly the narrowing slice 3's finding 4 had to make for the
+    // polar/panel seams, stated up front here rather than after the fact.
+    //
+    // The eighth is the on-plot result chips (∫ Integrate · ∩ FWHM · the ROI
+    // gadget family). Those results are committed by an on-canvas tool and
+    // the workspace format never serializes them, so this one really is
+    // user-action-only — no restore path reaches it. Its gate is the
+    // component's own visibility predicate, shared through
+    // `components/Stage/resultChipsVisible.ts` (the single module this slice
+    // ADDS to the eager graph) so gate and component cannot drift.
+    //
+    // The ninth is the plot canvas's own context menu, already rendered only
+    // when `menu && displayPayload` — i.e. after a right-click on the plot.
+    // It takes `lib/plotMenu.ts` and `lib/plotHitTest.ts` with it and was the
+    // single largest seam of the slice (−6,328 B). NOTE the cost, which is
+    // real and different in kind from the others: the FIRST right-click of a
+    // session waits one chunk fetch before the menu appears (later ones are
+    // instant). `lib/contextActions.ts` — the shared action registry CLAUDE.md
+    // pins as eager for right-click latency — is untouched and stays eager;
+    // only the plot-canvas menu renderer moved.
+    {
+      module: "/components/Library/SavedFiguresSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./SavedFiguresSection")',
+    },
+    {
+      module: "/components/Library/FiguresSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./FiguresSection")',
+    },
+    {
+      module: "/components/Library/CollectionsSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./CollectionsSection")',
+    },
+    {
+      module: "/components/Library/SmartFoldersSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./SmartFoldersSection")',
+    },
+    {
+      module: "/components/Library/OriginFidelitySection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./OriginFidelitySection")',
+    },
+    {
+      module: "/components/Library/ReportsSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./ReportsSection")',
+    },
+    {
+      module: "/components/Library/MultiSelectBar.tsx",
+      loader: "/components/Library/Library.tsx",
+      call: 'import("./MultiSelectBar")',
+    },
+    {
+      module: "/components/Stage/PlotResultChips.tsx",
+      loader: "/components/Stage/PlotStageOverlays.tsx",
+      call: 'import("./PlotResultChips")',
+    },
+    {
+      module: "/components/Stage/PlotContextMenu.tsx",
+      loader: "/components/Stage/PlotStageMenus.tsx",
+      call: 'import("./PlotContextMenu")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2641,6 +2722,22 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  the one module ADDED (`store/plotRecipeApplyLazy.ts`, the loader).
    *  Together they are most of the slice's measured bytes, and none of them is
    *  a seam itself, so only reachability can hold this line. */
+  /** SLICE 4 (2026-09-18) adds the six modules its nine seams took with
+   *  them, each one measured by the same eager walk this block runs rather
+   *  than assumed: `FigureRow` + `lib/originPreview.ts` (FiguresSection was
+   *  their only eagerly-reachable importer — note FigureRow is itself the
+   *  LOADER of the `OriginSavedPreviewWindow` seam above, which is unaffected:
+   *  that guard greps FigureRow's source, it does not require FigureRow to be
+   *  eager), `lib/figureCompatibility.ts` (SavedFiguresSection's),
+   *  `lib/originFidelity.ts` (OriginFidelitySection's), and
+   *  `lib/plotMenu.ts` + `lib/plotHitTest.ts` (PlotContextMenu's — most of
+   *  that seam's −6,328 B). Measured across the whole slice: the eager walk
+   *  went 400 -> 387 modules, which is the nine seams, these six, minus the
+   *  two modules ADDED (`components/Library/LibrarySections.tsx`, the loader
+   *  the six Library-section seams share, and
+   *  `components/Stage/resultChipsVisible.ts`, the shared gate predicate).
+   *  None of the six is a seam itself, so only reachability can hold this
+   *  line. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
@@ -2648,6 +2745,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/windows/PanelOverlayWindow.tsx",
     "/components/Stage/PolarStageCore.tsx",
     "/lib/polar.ts",
+    "/components/Library/FigureRow.tsx",
+    "/lib/originPreview.ts",
+    "/lib/figureCompatibility.ts",
+    "/lib/originFidelity.ts",
+    "/lib/plotMenu.ts",
+    "/lib/plotHitTest.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -2690,7 +2793,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // cherry-pick source c1757fb1's chain, not this branch's actual base):
     // 400 of 914 — the corpus grew by the one module slice 3 added, and the
     // eager set went 406 -> 400 (three seams + four dragged out, minus that
-    // one addition).
+    // one addition). Re-measured in-test 2026-09-18 after slice 4, against
+    // its real parent (3f43467b): 387 of 916 — the corpus grew by the two
+    // modules slice 4 added (`components/Library/LibrarySections.tsx` and
+    // `components/Stage/resultChipsVisible.ts`) and the eager set went
+    // 400 -> 387 (nine seams + six dragged out, minus those two additions).
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(
