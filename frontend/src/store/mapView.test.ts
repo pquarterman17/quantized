@@ -309,5 +309,43 @@ describe("map view slice (P2.8)", () => {
       expect(useApp.getState().history).toEqual([]);
       expect(useApp.getState().mapViews["ds-a"]).toBeUndefined();
     });
+
+    // Round 7, finding 4: `mapPaintedLimits` was never pruned at all, so a
+    // closed-then-reopened map went on showing a PREVIOUS mount's painted
+    // pair until its own first repaint landed.
+    describe("clearMapPaintedLimits (round 7, finding 4)", () => {
+      it("drops the entry entirely — an absent key, not a null or stale value", () => {
+        useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]);
+        expect("ds-a" in useApp.getState().mapPaintedLimits).toBe(true);
+
+        useApp.getState().clearMapPaintedLimits("ds-a");
+        expect("ds-a" in useApp.getState().mapPaintedLimits).toBe(false);
+        expect(useApp.getState().mapPaintedLimits["ds-a"]).toBeUndefined();
+      });
+
+      it("leaves every OTHER dataset's entry untouched", () => {
+        useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]);
+        useApp.getState().reportMapPaintedLimits("ds-b", [1, 2]);
+
+        useApp.getState().clearMapPaintedLimits("ds-a");
+        expect(useApp.getState().mapPaintedLimits["ds-b"]).toEqual([1, 2]);
+      });
+
+      it("records no history and never becomes a map VIEW edit", () => {
+        useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]);
+        useApp.setState({ history: [] });
+        useApp.getState().clearMapPaintedLimits("ds-a");
+        expect(useApp.getState().history).toEqual([]);
+        expect(useApp.getState().mapViews["ds-a"]).toBeUndefined();
+      });
+
+      it("is a no-op with nothing to drop — no write, same object identity, no dataset id", () => {
+        const before = useApp.getState().mapPaintedLimits;
+        useApp.getState().clearMapPaintedLimits("ds-nope"); // never reported
+        expect(useApp.getState().mapPaintedLimits).toBe(before);
+        useApp.getState().clearMapPaintedLimits(null);
+        expect(useApp.getState().mapPaintedLimits).toBe(before);
+      });
+    });
   });
 });

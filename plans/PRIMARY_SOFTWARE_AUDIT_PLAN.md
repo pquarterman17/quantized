@@ -3515,7 +3515,7 @@ violin, bar, strip, or summary plots.
     | Remove `<MapToolbarColorLimits/>` from `MapToolbar` | 5/6 in `MapStage.windowColorLimits.test.tsx` |
     | `MapStage` passes the toolbar the ACTIVE id, not the window's own | 4/6 in `MapStage.windowColorLimits.test.tsx` |
     | Hook's blank+blank branch no longer commits `null` | 1/8 `MapToolbarColorLimits.test.tsx` + 1/13 `MapColorLimits.test.tsx` |
-    | Hook's `effective` forced to `undefined` | 1/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` + 4/13 `MapColorLimits.test.tsx` |
+    | Hook's `effective` forced to `undefined` | **Correction (review round 7):** 7 tests across FOUR suites, not 6 across three — 1/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` + 4/13 `MapColorLimits.test.tsx` + 1 in `MapStage.mapView.test.tsx` ("log limits the data cannot honour are shown as the effective pair", which mounts the real `MapColorLimits` row and reads the same hook) |
     | Toolbar's `onKeyDown` drops the `"Escape"` branch | 2/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` |
     | Hook's `commit()` writes the pair twice (2nd nudged by 1e-9) | 1/8 `MapToolbarColorLimits.test.tsx` + 2/6 `MapStage.windowColorLimits.test.tsx` + 2/13 `MapColorLimits.test.tsx` |
 
@@ -3527,14 +3527,126 @@ violin, bar, strip, or summary plots.
     MapToolbar`/`MapToolbarColorLimits.tsx` are new code but sit entirely
     inside the `MapStage-*.js` lazy chunk (absent from `index.html`'s eager
     `<script type="module">`/`<link rel="modulepreload">` set, confirmed by
-    grep), so the whole toolbar control costs the eager bundle nothing. The
-    +56 B is the Inspector-side refactor: `lib/useMapColorLimitsField.ts` is
-    a new EAGER module (`MapColorLimits.tsx` is in the eager Inspector graph),
-    but it imports only what `MapColorLimits.tsx` already imported
-    (`mapViewFor`/`sameColorLimits` from the already-eager `lib/mapView.ts`,
-    `useApp`), so the delta is the small net difference between the
-    extracted hook and the component code it replaced, not a new dependency
-    edge.
+    grep), so the whole toolbar control costs the eager bundle nothing.
+    **Correction (review round 7, finding 2): the +56 B's CAUSE was
+    mis-stated here** — `Inspector-*.js` is NOT eager (it is absent from
+    `index.html` too; `grep -c "Inspector-" index.html` is 0, and it is
+    dynamically imported from `index.js`), so "`lib/useMapColorLimitsField.ts`
+    is a new eager module because `MapColorLimits.tsx` is in the eager
+    Inspector graph" does not hold — both the hook and the component it lives
+    in are LAZY. The real mechanism is chunk hoisting: the new shared hook is
+    imported by TWO lazy chunks (`Inspector-*.js` and `MapStage-*.js`), so the
+    bundler lifts it into THEIR common ancestor, the eager entry `index.js` —
+    the only eager chunk that moved (+56 B). Per-chunk deltas confirm it:
+    `index.js` 407,635→407,691 (+56, eager), `Inspector-*.js`
+    55,952→55,647 (**-305**, lazy — the Inspector chunk shrank), `MapStage-*.js`
+    51,110→52,537 (+1,427, lazy, costs the eager budget nothing). The byte
+    figure itself needed no re-measurement, only this paragraph.
+- **Review round 7 2026-09-18** (adversarial review of `b50f6602`; P2.8
+  residual (a) stays `[x]` — the feature itself was correctly built; this
+  round closes one real cross-window defect, one stale hint, two doc-vs-code
+  gaps, one dead-code guard, and one accessibility NIT). **CLOSED.**
+  - **F1 (real defect) — the painted pair is now per WINDOW, not per
+    dataset.** The "effective" hint's store slot (`mapPaintedLimits`) is keyed
+    by dataset id, but the pair `draw()` returns is a property of ONE mounted
+    `MapStage` instance's own z-channel pick — two windows on the SAME
+    dataset with different channels fought over that one slot, and every
+    toolbar but the last writer's showed a wrong pair. `useMapPaint.ts` now
+    always keeps its OWN paint in local state and returns it; `MapStage.tsx`
+    hands it to its own `MapToolbar` → `MapToolbarColorLimits`, which passes
+    it to `useMapColorLimitsField` as an explicit override that wins over the
+    store lookup. Only the Stage-tab instance (`dataset` prop omitted) still
+    mirrors into the store slot the Inspector's active-dataset row reads.
+    Test: `MapStage.windowColorLimits.test.tsx` — two real `MapStage
+    dataset={…}` mounts on ONE dataset, different z channels, each toolbar
+    asserts its OWN "eff …" text; sabotage (ignore the override prop) → RED
+    on that test and the existing clamped-log-mode test (2 failures).
+  - **F4 — a reopened window no longer shows a stale painted pair.**
+    `mapPaintedLimits` was never pruned; nothing cleared a dataset's entry on
+    unmount, so a closed-then-reopened Stage tab went on showing a PREVIOUS
+    mount's pair — a canvas that no longer exists — until its first fresh
+    repaint landed. New `clearMapPaintedLimits(datasetId)` store action, called
+    from `useMapPaint.ts`'s cleanup on unmount of the reporting instance only.
+    Tests: `store/mapView.test.ts` (drops the entry / leaves other datasets
+    alone / no history / no-op with nothing to drop) and
+    `MapStage.mapView.test.tsx` (unmount clears the store entry; a fresh mount
+    shows no "effective" row until ITS OWN repaint lands). The pre-existing
+    "records per dataset and ignores a repeat of the same pair" no-op guard on
+    `reportMapPaintedLimits` is untouched and still passes. Sabotage (drop the
+    cleanup) → RED on both new `MapStage.mapView.test.tsx` cases; sabotage
+    (no-op the store action) → RED on those two plus the store-level "drops
+    the entry" case (3 failures).
+  - **F3 — the Inspector row's Escape-to-revert is now guarded by its own
+    test.** The shared hook's Escape branch was documented as applying to
+    "both controls" since round 6, but only the toolbar's suite ever
+    exercised it. Added to `components/Inspector/MapColorLimits.test.tsx`.
+    Sabotage (drop the Escape branch from both of the row's `onKeyDown`s) →
+    RED, exactly that one test.
+  - **F5 — the hook's dead "no change, no undo entry" guard is deleted, not
+    kept.** `store/mapView.ts`'s `setMapColorLimits` already short-circuits on
+    an unchanged pair; the hook's own copy of that guard was provably dead
+    (deleting it earlier changed nothing observable — round 6's own sabotage
+    table proved as much). Deleted, with the reasoning now in `commit()`'s
+    comment instead of a redundant `if`.
+  - **F6 — the half-blank-pair asymmetry is now named in the hook's header,
+    not only in the Inspector test that pins it.** `Number("")` is `0`, so a
+    blank min with a typed max commits `[0, max]`; a typed min with a blank
+    max stays a no-op (`min < max` fails). Pre-existing, deliberately pinned
+    behaviour (`MapColorLimits.test.tsx`'s "a half-filled pair commits with
+    the blank side read as 0"), carried verbatim from the sibling
+    `AxisLimits.tsx`; the header now says so, so a reader of the hook alone
+    does not have to find the Inspector's test to learn the contract exists.
+  - **F7 — `MapCard.tsx`'s comment no longer contradicts the code.** It said
+    the colour-limit control lived "beside the grid controls rather than in
+    the float toolbar" — as of round 6 the float toolbar carries it too.
+    Comment corrected to say both exist and why neither is redundant with the
+    other (one binds to the active dataset, the other to its own window's).
+  - **F8 — each toolbar colour-limit field now sits in its OWN `<label>`.**
+    A single `<label>` wrapping both inputs only formally associates with the
+    FIRST (an HTML implicit-label rule), so "clim" named the min field alone;
+    both inputs' `aria-label`s were already correct and are untouched — only
+    which field(s) "clim" is associated with changes. Test: each field is
+    inside its own `<label>`, plus the existing `aria-label`-based queries
+    keep working unmodified. Sabotage (one wrapping label again) → RED,
+    exactly that one test.
+  - **Sabotage.** 5 mutations, one at a time, each reverted (S1–S3 target the
+    component/hook layer per finding above; S4 targets the store action
+    directly; S5 covered under F8 above):
+
+    | # | Mutation | Result |
+    |---|---|---|
+    | S1 (F1) | `MapToolbarColorLimits` ignores the `painted` prop override entirely | RED — 2 (`MapStage.windowColorLimits.test.tsx`: the new two-window test + the existing clamped-log-mode test) |
+    | S2 (F4) | `useMapPaint.ts`'s unmount cleanup does nothing | RED — 2 (`MapStage.mapView.test.tsx`'s two new cases) |
+    | S3 (F4, store) | `clearMapPaintedLimits` is a no-op | RED — 3 (the store-level "drops the entry" case + both `MapStage.mapView.test.tsx` cases) |
+    | S4 (F3) | Inspector row's `onKeyDown` drops the `"Escape"` branch | RED — 1 (`MapColorLimits.test.tsx`'s new Escape case only) |
+    | S5 (F8) | Both toolbar fields back under one wrapping `<label>` | RED — 1 (`MapToolbarColorLimits.test.tsx`'s new label-structure case only) |
+
+    **5 for 5, 0 survivors.**
+  - **Bundle.** Eager total **887,615 B at the parent `8a6f49ca`
+    (`git rev-parse HEAD~1` of this commit) → 887,746 B on this commit, +131
+    B**; both trees built after their own `npm ci` and `rm -rf
+    node_modules/.vite`, exact eager bytes on each side via `exactbytes.mjs`.
+    866.9 kB against the 898.8 kB (920,400 B) budget, 31.9 kB under;
+    `EAGER_JS_BUDGET` untouched. Per-chunk diff (matched by stripping each
+    build's content hash from the filename): every other eager chunk is
+    BYTE-IDENTICAL between the two trees except `plural-*.js`, 51,862→51,993
+    (+131) — `index-*.js` itself is unchanged (382,829 both sides), unlike
+    round 6, because the chunk graph has been reshaped by intervening
+    bundle-diet commits since then, and the shared ancestor that absorbs code
+    reachable from both the Inspector and MapStage lazy chunks is now this
+    "plural" chunk rather than the entry. It carries the new
+    `clearMapPaintedLimits` store action (confirmed: its name is a literal
+    object-property string in the built chunk, `grep -c clearMapPaintedLimits
+    plural-*.js` = 1) plus the small amount of added branching in the shared
+    `useMapColorLimitsField.ts` hook — both already-eager modules this round
+    only extends, not a new dependency edge.
+  - **F2 (record, not code) — the round-6 bundle entry's stated CAUSE for its
+    +56 B was corrected above** (`Inspector-*.js` is lazy, not eager; the
+    growth is chunk hoisting of the new shared hook into the eager entry
+    because two LAZY chunks import it, not "a new eager module"), and the
+    round-6 sabotage table's "Hook's `effective` forced to `undefined`" row
+    is corrected from 6 tests/three suites to 7 tests/four suites (a fourth
+    failure in `MapStage.mapView.test.tsx` was omitted).
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

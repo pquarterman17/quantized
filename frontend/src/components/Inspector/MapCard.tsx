@@ -47,9 +47,14 @@ export default function MapCard() {
         onChange={(e) => setMapRes(Number(e.target.value))}
       />
 
-      {/* Audit P2.8 — the map's explicit z (colour) limits. Beside the grid
-          controls rather than in the float toolbar because it is two typed
-          fields, the same shape as the Axes card's own X/Y Limits row. */}
+      {/* Audit P2.8 — the map's explicit z (colour) limits for the ACTIVE
+          dataset, beside the grid controls (two typed fields, the same shape
+          as the Axes card's own X/Y Limits row). Since review round 7 the
+          float toolbar ALSO carries this control, per window
+          (components/Stage/MapToolbarColorLimits.tsx) — this row is not
+          redundant with it: the toolbar control edits whatever dataset that
+          ONE window is bound to, while this row always edits the active
+          dataset, which is what lets it sit in the Inspector at all. */}
       <MapColorLimits />
 
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>

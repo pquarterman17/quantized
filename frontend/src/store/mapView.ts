@@ -116,8 +116,22 @@ export interface MapViewSlice {
    *  is overwritten the next time a map for that id paints. */
   mapPaintedLimits: Readonly<Record<string, readonly [number, number] | null>>;
   /** Renderer → store. A no-op when the pair is unchanged, so a repaint that
-   *  changes nothing causes no store update and no re-render. */
+   *  changes nothing causes no store update and no re-render. Called ONLY by
+   *  the one `MapStage` instance `useMapPaint.ts` marks `reportToStore`
+   *  (the Stage tab, never a `kind:"map"` document window — review round 7,
+   *  finding 1: the slot is per DATASET, and only one open instance per
+   *  dataset may claim it without two windows fighting over it). */
   reportMapPaintedLimits: (datasetId: string | null, painted: [number, number] | null) => void;
+  /** Drop a dataset's entry entirely (review round 7, finding 4) — called on
+   *  unmount of the reporting instance, so a closed-then-reopened map does
+   *  not go on showing a PREVIOUS mount's painted pair until its first fresh
+   *  repaint lands. Distinct from reporting `null` (which means "painted,
+   *  and nothing was paintable"): an absent entry means "nothing has painted
+   *  since this dataset's map was last open", the same meaning a dataset that
+   *  has never been mapped at all already has. A no-op when there is no
+   *  entry to drop, for the same no-churn reason `reportMapPaintedLimits`
+   *  guards an unchanged pair. */
+  clearMapPaintedLimits: (datasetId: string | null) => void;
 }
 
 /** The trailing `-<n>` sequence number off a `nextDatasetId`-shaped id
@@ -176,6 +190,13 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
       const prev = get().mapPaintedLimits[datasetId];
       if (prev !== undefined && sameColorLimits(prev === null ? null : [prev[0], prev[1]], painted)) return;
       set((s) => ({ mapPaintedLimits: { ...s.mapPaintedLimits, [datasetId]: painted } }));
+    },
+    clearMapPaintedLimits: (datasetId) => {
+      if (!datasetId || !(datasetId in get().mapPaintedLimits)) return;
+      set((s) => {
+        const { [datasetId]: _dropped, ...rest } = s.mapPaintedLimits;
+        return { mapPaintedLimits: rest };
+      });
     },
 
     setMapColormap: (datasetId, colormap) => {

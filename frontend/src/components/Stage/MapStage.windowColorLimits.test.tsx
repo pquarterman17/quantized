@@ -49,6 +49,28 @@ function plainMap(id: string): Dataset {
   };
 }
 
+// Two independent z-like channels on the SAME dataset — Z1 100…403 (the
+// `plainMap` formula, unchanged), Z2 1000…4003 (same shape, one decade up) —
+// so two windows on this ONE dataset, each picked to a different z channel,
+// paint two genuinely different ranges (round 7, finding 1).
+function twoZChannelMap(id: string): Dataset {
+  const values: number[][] = [];
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 4; j++) values.push([i, j, 100 * (i + 1) + j, 1000 * (i + 1) + j]);
+  }
+  return {
+    id,
+    name: `${id}.xrdml`,
+    data: {
+      time: values.map((_, k) => k),
+      values,
+      labels: ["X", "Y", "Z1", "Z2"],
+      units: ["", "", "counts", "counts"],
+      metadata: {},
+    },
+  };
+}
+
 const viewOf = (id: string) => mapViewFor(useApp.getState().mapViews, id);
 
 let widthSpy: PropertyDescriptor | undefined;
@@ -147,6 +169,48 @@ describe("a map DOCUMENT WINDOW on a non-active dataset has a colour-limit contr
     const row = await screen.findByTestId("map-toolbar-colour-limits-effective");
     // z on this fixture runs 100…403, so the smallest positive cell is 100.
     expect(row).toHaveTextContent(/^eff 100–403$/);
+  });
+
+  // Review round 7, finding 1 (real defect): the painted pair is a property
+  // of the WINDOW (its own z-channel pick), but before this round the store
+  // slot that reported it was keyed by DATASET alone. Two windows on the
+  // SAME dataset with different z channels fought over that one slot — every
+  // window's toolbar ended up showing whichever window painted LAST.
+  it("two windows on the SAME dataset with different z channels each show their OWN painted pair", async () => {
+    useApp.getState().loadWorkspace({ datasets: [twoZChannelMap("ds-a")], activeId: "ds-a" });
+    useApp.setState({ mapViews: EMPTY_MAP_VIEWS, mapPaintedLimits: {}, history: [], future: [], status: "" });
+    // An explicit pair the log floor cannot honour at all (both ends
+    // negative) so the renderer falls all the way back to each window's own
+    // auto extent — that extent is what differs between the two channels,
+    // and only because `colorLimits` (null-checked) is non-null does
+    // `effective` ever render, so the hint is observable in the DOM.
+    useApp.getState().setMapColorLimits("ds-a", [-5, -1]);
+    useApp.getState().setMapLogZ("ds-a", true);
+    const ds = useApp.getState().datasets[0]!;
+
+    const win1 = render(<MapStage dataset={ds} />); // defaults to Z1 (channel 2)
+    const win1Effective = await within(win1.container).findByTestId("map-toolbar-colour-limits-effective");
+    expect(win1Effective).toHaveTextContent(/^eff 100–403$/);
+
+    const win2 = render(<MapStage dataset={ds} />); // also defaults to Z1 at first
+    await within(win2.container).findByTestId("map-toolbar-colour-limits-effective");
+    // Switch window 2's own Z channel to Z2 (channel 3, index 3 in the
+    // picker's options) — window 1 never touches this control.
+    fireEvent.change(within(win2.container).getByLabelText("Z"), { target: { value: "3" } });
+    await waitFor(() =>
+      expect(within(win2.container).getByTestId("map-toolbar-colour-limits-effective")).toHaveTextContent(
+        /^eff 1000–4003$/,
+      ),
+    );
+
+    // Window 1's own toolbar is still painting Z1 — it must still say so,
+    // not window 2's Z2 pair (the bug: both toolbars read one shared slot).
+    expect(within(win1.container).getByTestId("map-toolbar-colour-limits-effective")).toHaveTextContent(
+      /^eff 100–403$/,
+    );
+
+    win1.unmount();
+    win2.unmount();
   });
 
   it("Escape reverts the window field without committing", async () => {

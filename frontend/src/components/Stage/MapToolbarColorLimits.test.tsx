@@ -63,6 +63,22 @@ describe("MapToolbarColorLimits — P2.8 residual (a)", () => {
     expect((lo() as HTMLInputElement).value).toBe(""); // auto, nothing typed
   });
 
+  // Review round 7, finding 8: a single <label> wrapping both inputs only
+  // formally associates with the FIRST one (an HTML implicit-label rule) —
+  // "clim" named the min field alone. Each field now sits in its own
+  // <label>, so BOTH are formally named, without touching either field's
+  // own (already-correct, already-tested) `aria-label`.
+  it("each field is inside its OWN <label>, so 'clim' names both", () => {
+    const { container } = render(<MapToolbarColorLimits datasetId="ds-b" />);
+    const labels = Array.from(container.querySelectorAll("label"));
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).toContainElement(lo());
+    expect(labels[1]).toContainElement(hi());
+    // The specific accessible names are untouched either way.
+    expect(lo()).toHaveAccessibleName("Map window colour minimum");
+    expect(hi()).toHaveAccessibleName("Map window colour maximum");
+  });
+
   it("typing + Enter/blur commits to the WINDOW's dataset, never the active one", () => {
     render(<MapToolbarColorLimits datasetId="ds-b" />);
     fireEvent.change(lo(), { target: { value: "10" } });

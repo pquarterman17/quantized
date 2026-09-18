@@ -38,6 +38,12 @@ export interface MapToolbarProps {
    *  it writes through `setMapColorLimits(datasetId, …)`, never the
    *  app-wide active dataset (P2.8 residual (a)). */
   datasetId: string | null;
+  /** What THIS map instance's own last paint used as its colour range —
+   *  `undefined` before its first paint, `null` when nothing was paintable
+   *  (review round 7, finding 1). Forwarded to `MapToolbarColorLimits` so its
+   *  "effective" hint describes what THIS toolbar's own canvas is doing,
+   *  never another open map's, even when they share a dataset. */
+  painted: readonly [number, number] | null | undefined;
 
   /** Angular ⇄ Q axis toggle (only shown when the dataset carries both). */
   qAvailable: boolean;
@@ -95,6 +101,7 @@ export interface MapToolbarProps {
 export default function MapToolbar(props: MapToolbarProps) {
   const {
     datasetId,
+    painted,
     qAvailable,
     isAngular,
     isQ,
@@ -174,7 +181,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       >
         ∿
       </button>
-      <MapToolbarColorLimits datasetId={datasetId} />
+      <MapToolbarColorLimits datasetId={datasetId} painted={painted} />
       {cutSpace != null && (
         <>
           <span className="qzk-tool-sep" />
