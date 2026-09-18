@@ -7,7 +7,8 @@
 // and rendered DOM.
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
 import ToolWindow from "./ToolWindow";
@@ -234,5 +235,86 @@ describe("View-menu reset command reaches a mounted ToolWindow", () => {
     expect(el.style.top).toBe("90px");
     expect(el.style.width).toBe("360px");
     expect(screen.getByText("panel body")).toBeInTheDocument(); // uncollapsed too
+  });
+});
+// ── ToolWindow: the shared workshop host had no keyboard dismissal ───────
+describe("ToolWindow keyboard cancel (P3.3)", () => {
+  it("takes focus on open so the panel is immediately keyboard-live", () => {
+    const { container } = render(
+      <ToolWindow id="t1" title="Find peaks" onClose={() => {}}>
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+    expect(container.querySelector(".qzk-win")).toHaveFocus();
+  });
+
+  it("Escape closes the panel", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ToolWindow id="t2" title="Find peaks" onClose={onClose}>
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape from a control inside the panel also closes it", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ToolWindow id="t3" title="Find peaks" onClose={onClose}>
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+
+    screen.getByRole("button", { name: "Run" }).focus();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("Escape while TYPING belongs to the field, not the window", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ToolWindow id="t4" title="Find peaks" onClose={onClose}>
+        <input aria-label="Threshold" defaultValue="3" />
+      </ToolWindow>,
+    );
+
+    await user.click(screen.getByLabelText("Threshold"));
+    await user.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("does not steal Escape from a panel that already consumed it", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ToolWindow id="t5" title="Region tool" onClose={onClose}>
+        {/* Stands in for a workshop that owns Escape for its own object
+            (the region tool's in-progress shade, a draw-mode overlay). */}
+        <button type="button" onKeyDown={(e) => e.key === "Escape" && e.preventDefault()}>
+          Draw
+        </button>
+      </ToolWindow>,
+    );
+
+    screen.getByRole("button", { name: "Draw" }).focus();
+    await user.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("a panel with no close action is unaffected by Escape", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <ToolWindow id="t6" title="Pinned">
+        <button type="button">Run</button>
+      </ToolWindow>,
+    );
+    await user.keyboard("{Escape}");
+    expect(container.querySelector(".qzk-win")).toBeInTheDocument();
   });
 });

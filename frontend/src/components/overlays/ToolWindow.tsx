@@ -99,6 +99,42 @@ export default function ToolWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // P3.3 "cancel": until this landed, NO workshop could be dismissed from the
+  // keyboard — the only close affordance in the whole family of 48 panels was
+  // the title bar's ✕, reachable only by tabbing to it. The fix belongs here,
+  // at the shared host, exactly once.
+  //
+  // Two guards, both deliberate:
+  //  - `isEditing(e.target)` — Escape inside a text field is the field's, not
+  //    the window's. Closing a panel out from under someone mid-type would
+  //    discard whatever they were entering. (Workshops whose fields DO give
+  //    Escape a meaning — recipelibrary/RecipeRow, recipemanager — already
+  //    `stopPropagation()`, so this handler never even sees those.)
+  //  - `defaultPrevented` — the same convention useGlobalShortcuts documents:
+  //    a component that consumed Escape for its own object (the region tool,
+  //    a draw-mode overlay) keeps it.
+  // A React handler on the window root, not a window listener, so this owns
+  // Escape only while focus is INSIDE this panel — a dialog stacked on top of
+  // a workshop still gets its own Escape.
+  const onWindowKey = (e: React.KeyboardEvent) => {
+    if (e.key !== "Escape" || !onClose || e.defaultPrevented) return;
+    const el = e.target as HTMLElement | null;
+    const tag = el?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
+    e.stopPropagation();
+    onClose();
+  };
+
+  // Take focus on open so that Escape — and Tab into the panel's controls —
+  // works immediately. A workshop launched from the command palette or a menu
+  // otherwise leaves focus on the unmounted trigger, i.e. on <body>, where a
+  // root-level React handler never fires. Focus lands on the FRAME
+  // (`tabIndex={-1}`), never on a control, so nothing is armed to activate and
+  // no panel's own field choice is overridden. Non-modal: nothing is trapped.
+  useEffect(() => {
+    winRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const onTitleDown = (e: React.PointerEvent) => {
     dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -148,6 +184,8 @@ export default function ToolWindow({
     <div
       ref={winRef}
       className="qzk-glass qzk-win"
+      tabIndex={-1}
+      onKeyDown={onWindowKey}
       style={{
         left: layout.x,
         top: layout.y,
