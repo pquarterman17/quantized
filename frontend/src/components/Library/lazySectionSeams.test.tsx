@@ -24,7 +24,7 @@
 // such site at once, not something these seams introduced or can fix locally,
 // so there is deliberately no load-failure test here.
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Library from "./Library";
@@ -58,6 +58,7 @@ vi.mock("./SavedFiguresSection", track("SavedFiguresSection"));
 vi.mock("./ReportsSection", track("ReportsSection"));
 vi.mock("./SmartFoldersSection", track("SmartFoldersSection"));
 vi.mock("./CollectionsSection", track("CollectionsSection"));
+vi.mock("./MultiSelectBar", track("MultiSelectBar"));
 
 const ds = (id: string, workbookId?: string): Dataset => ({
   id,
@@ -215,14 +216,28 @@ describe("Library flat sections — chunk-deferred renderers", () => {
 
 describe("multi-select bar — chunk-deferred renderer", () => {
   it("renders only after its chunk resolves, and only from the second selected row", async () => {
+    // The gate half: `MultiSelectBar` also returns null internally when
+    // `selectedIds.length < 2`, so a DOM assertion alone cannot tell a real
+    // gate from `{true && <Suspense>...}` — only the import record can.
+    // Nothing earlier in this file renders `Library`, so this is the first
+    // chance for the module to have been fetched at all.
+    expect([...loaded]).not.toContain("MultiSelectBar");
+
     useApp.setState({ datasets: [ds("a"), ds("b")], selectedIds: ["a"] });
     const { rerender } = render(<Library />);
     expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
+    // Flush the microtask queue with the gate still closed (n=1): a real
+    // gate never starts the dynamic import at all, so this is the point that
+    // actually distinguishes it from a deleted gate, which starts the import
+    // on this very first render regardless of `selectedIds.length`.
+    await act(async () => {});
+    expect([...loaded]).not.toContain("MultiSelectBar");
 
     useApp.setState({ selectedIds: ["a", "b"] });
     rerender(<Library />);
     // Gate open, chunk in flight: the count is not in the DOM on this flush.
     expect(screen.queryByText("2 selected")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("2 selected")).toBeInTheDocument());
+    expect([...loaded]).toContain("MultiSelectBar");
   });
 });

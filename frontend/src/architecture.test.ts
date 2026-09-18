@@ -2467,23 +2467,29 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       call: 'import("./plotRecipeApply")',
     },
     // ── SLICE 4 (2026-09-18, plans/BUNDLE_HEADROOM.md) ────────────────────
-    // Nine content-gated render seams, measured at −25,862 B of eager JS.
+    // Nine content-gated render seams. The nine per-seam deltas sum to
+    // −25,862 B; adding the +199 B honest cost of the `LibrarySections.tsx`
+    // extraction below (required to stay under the ceiling) gives −25,663 B
+    // — see `plans/BUNDLE_HEADROOM.md` slice 4 for both figures and for the
+    // separately measured, landed-tree net delta against the real parent
+    // (−25,209 B; the −25,862/−25,663 pair above is the pre-merge worktree's).
     //
-    // Seven of them are the flat Library sections. Every one of those already
+    // Six of them are the flat Library sections. Every one of those already
     // returned `null` until its own store collection was non-empty, and a
     // FRESH project's collections are all empty — so on the default first
     // paint the section bodies were pure dead weight in the entry chunk.
     // `LibrarySections.tsx` (new, extracted from `Library.tsx`, which sits
-    // against the 400-line component ceiling) renders six of them behind
+    // against the 400-line component ceiling) renders those six behind
     // `lazy()` + `Suspense fallback={null}` under the SAME emptiness test the
     // section applies internally (`originFigures`/`originFidelity`/
-    // `figureDocs`/`reports`/`smartFolders`/`collections` length); the
-    // seventh, the multi-select bar, keeps `Library.tsx` as its loader and is
-    // gated on `selectedIds.length > 1`. The chunk is therefore requested
-    // strictly after the user authors that content, selects a second row, or
-    // opens a project that already had it — a persisted-state restore,
-    // exactly the narrowing slice 3's finding 4 had to make for the
-    // polar/panel seams, stated up front here rather than after the fact.
+    // `figureDocs`/`reports`/`smartFolders`/`collections` length). A seventh,
+    // the multi-select bar — not a flat section, just gated the same way —
+    // keeps `Library.tsx` as its loader and is gated on
+    // `selectedIds.length > 1`. The chunk is therefore requested strictly
+    // after the user authors that content, selects a second row, or opens a
+    // project that already had it — a persisted-state restore, exactly the
+    // narrowing slice 3's finding 4 had to make for the polar/panel seams,
+    // stated up front here rather than after the fact.
     //
     // The eighth is the on-plot result chips (∫ Integrate · ∩ FWHM · the ROI
     // gadget family). Those results are committed by an on-canvas tool and
@@ -2797,11 +2803,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // cherry-pick source c1757fb1's chain, not this branch's actual base):
     // 400 of 914 — the corpus grew by the one module slice 3 added, and the
     // eager set went 406 -> 400 (three seams + four dragged out, minus that
-    // one addition). Re-measured in-test 2026-09-18 after slice 4, against
-    // its real parent (3f43467b): 387 of 916 — the corpus grew by the two
-    // modules slice 4 added (`components/Library/LibrarySections.tsx` and
+    // one addition). Slice 4's real parent is b50f6602, not 3f43467b — the
+    // implementer's worktree was rooted two commits back at 3f43467b and the
+    // commit was merged forward (review round, finding 1); the "387 of 916"
+    // first recorded here was measured against that wrong tree and was also
+    // arithmetically off (review round, finding 4). Re-measured against the
+    // real parent b50f6602: 402 of 920 -> 389 of 922 — the corpus grew by the
+    // two modules slice 4 added (`components/Library/LibrarySections.tsx` and
     // `components/Stage/resultChipsVisible.ts`) and the eager set went
-    // 400 -> 387 (nine seams + six dragged out, minus those two additions).
+    // 402 -> 389 (nine seams + six dragged out, minus those two additions) —
+    // the same shape as originally claimed, corrected absolutes. Nothing here
+    // is asserted against these counts; see the `expect`s below.
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(

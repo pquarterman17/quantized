@@ -15,11 +15,15 @@ document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
 **Current state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
-4 measures 885,632 B eager against its parent `3f43467b`'s 911,295 B
-(−25,663 B), which is **34,768 B of headroom** against the unmoved 920,400 B
-budget — the first time this campaign has cleared the 25–40 kB its own history
-calls healthy. A tree's number is only valid for that tree; re-measure before
-quoting it.
+4's real parent is `b50f6602` (`git rev-parse 8a6f49ca^`), not `3f43467b`
+(that's `HEAD~2` — the implementer's worktree was rooted there and the commit
+was merged forward; `3f43467b`'s numbers below are that pre-merge worktree's,
+kept as a labelled per-seam breakdown, not the landed measurement). Measured
+against the real pair: landed tip 887,615 B eager against parent `b50f6602`'s
+912,824 B (**−25,209 B**), which is **32,785 B of headroom** against the
+unmoved 920,400 B budget — the first time this campaign has cleared the
+25–40 kB its own history calls healthy. A tree's number is only valid for that
+tree; re-measure before quoting it.
 
 **Earlier note (2026-09-18, review round, finding 10):** slice 3 is done.
 Budget is 920,400 B, unmoved throughout. Slice 3's own tree (`90ea30fa`)
@@ -459,21 +463,44 @@ loss until a real build says otherwise.
 
 ### Slice 4 — nine content-gated render seams — **DONE (2026-09-18)**
 
-**Measured net eager delta −25,663 B — budget UNMOVED at 920,400 B**
+**Measured net eager delta −25,209 B — budget UNMOVED at 920,400 B**
 
-Headroom was 9,105 B on this slice's parent and is **34,768 B** on its own
-tree. The bundle pin is NOT edited in either direction. This is the first
-slice whose result clears the 25–40 kB this file's own history calls healthy.
+Headroom is **32,785 B** against the unmoved 920,400 B budget, measured on
+the landed pair below. The bundle pin is NOT edited in either direction. This
+is the first slice whose result clears the 25–40 kB this file's own history
+calls healthy.
+
+**Real parent vs the implementer's build chain (2026-09-18 review round,
+finding 1):** the commit's real parent is `b50f6602`
+(`git rev-parse 8a6f49ca^`), not `3f43467b`. The implementer's worktree was
+rooted two commits back at `3f43467b` and the commit was merged forward, so
+every number originally recorded in this section — including the per-seam
+table below — describes that pre-merge worktree, a tree that was never
+committed. The per-seam table is kept because it is still the real,
+individually-measured delta of each seam over `3f43467b`'s starting point and
+its shape (which seam won how much, in what order) is unaffected by the
+mislabel; it is now labelled explicitly as the `3f43467b` chain. The
+authoritative before/after pair for this slice's own landed effect is the
+`b50f6602` → `8a6f49ca` row below.
 
 Bundle pair, exact bytes (the eager `<script type=module>` + `modulepreload`
 count out of `dist/index.html`, not the rounded kB `check-bundle-size.mjs`
-prints), both built in the same worktree after `npm ci` with
-`node_modules/.vite` wiped before every single build:
+prints):
 
-| tree | SHA | eager bytes |
-|---|---|---:|
-| parent (`git rev-parse HEAD~1`) | `3f43467b` | **911,295** |
-| this commit (its own SHA) | slice 4 | **885,632** |
+| tree | SHA | eager bytes | built by |
+|---|---|---:|---|
+| real parent (`git rev-parse 8a6f49ca^`) | `b50f6602` | **912,824** | orchestrator, `npm ci` + `.vite` wiped |
+| this commit, as landed | `8a6f49ca` | **887,615** | orchestrator, `npm ci` + `.vite` wiped |
+| — net delta — | — | **−25,209** | — |
+
+The `3f43467b` chain below (the implementer's pre-merge worktree, ~1,529 B
+lighter at the start than the real parent — the map colour-limits work in
+`b50f6602` that chain never contained):
+
+| tree | SHA | eager bytes | built by |
+|---|---|---:|---|
+| `3f43467b`-chain start (mislabelled "parent"/"`HEAD~1`" originally) | `3f43467b` | 911,295 | implementer, same-worktree `npm ci` + `.vite` wiped |
+| `3f43467b`-chain end (pre-merge worktree tip) | slice 4 (pre-merge) | 885,632 | implementer, same-worktree `npm ci` + `.vite` wiped |
 
 #### How the candidates were ranked
 
@@ -519,11 +546,15 @@ bytes alone and ignore the shared set.** Slice 3's own component seams
 
 Cumulative, in the order the seams were measured — each row is a full
 `npm run build` on the same machine, same Node, `.vite` wiped first. Every
-seam measured a REDUCTION, so none was rejected on measurement.
+seam measured a REDUCTION, so none was rejected on measurement. **This table
+is the `3f43467b` chain** (the implementer's pre-merge worktree, per the note
+above) — the per-seam shape and ordering are real, but `3f43467b` is
+`HEAD~2` of the landed commit, not its parent; do not quote this table's start
+or end row as "the commit's" totals. Use the landed pair above for that.
 
 | # | seam (module deferred) | loader | gate | bound | eager B | delta |
 |---|---|---|---|---:|---:|---:|
-| — | parent `3f43467b` | — | — | — | 911,295 | — |
+| — | `3f43467b` chain start (not this commit's parent — see above) | — | — | — | 911,295 | — |
 | 1 | `components/Library/SavedFiguresSection.tsx` | Library.tsx† | `figureDocs.length > 0` | 5,652 | 905,950 | **−5,345** |
 | 2 | `components/Library/FiguresSection.tsx` | Library.tsx† | `originFigures.length > 0` | 3,912 | 902,454 | **−3,496** |
 | 3 | `components/Library/CollectionsSection.tsx` | Library.tsx† | `collections.length > 0` | 2,717 | 900,019 | **−2,435** |
@@ -539,9 +570,17 @@ seam measured a REDUCTION, so none was rejected on measurement.
 to 417 lines, over the 400-line component ceiling, so the six flat sections
 were then lifted into a new `components/Library/LibrarySections.tsx`, which
 is now their loader — and an extra eager module plus its chunk glue, the
-+199 B in the last row. That is the honest cost of staying under the ceiling
-and it is included in the −25,663 B total; the per-seam deltas above were all
-measured before it and carry no part of it.
++199 B in the last row.
+
+**Pre- vs post-extraction totals (2026-09-18 review round, finding 3):** the
+nine seam deltas alone (rows 1–9 above, summed) are **−25,862 B** — this is
+the number `architecture.test.ts`'s SEAMS comment carries. Adding the
+`LibrarySections.tsx` extraction's +199 B honest cost gives **−25,663 B** —
+the number this file (and the commit body) carry elsewhere. The two are not
+in tension: one is the sum before paying the ceiling-compliance cost, the
+other after. Both are the `3f43467b`-chain figures per the note above; the
+landed net delta over the real parent `b50f6602` is the different, separately
+measured **−25,209 B** at the top of this section.
 
 Seam 6 (`ReportsSection`, −518 B against a 792 B bound) is the scale check
 this slice owes the file: a section that is mostly JSX over a small helper set
@@ -608,15 +647,41 @@ dragged out with them in `DRAGGED_OUT`: `FigureRow.tsx` + `lib/originPreview.ts`
 `OriginSavedPreviewWindow` seam; that guard greps FigureRow's source and does
 not require FigureRow to be eager, so it is unaffected.
 
-Measured with the guard's own `eagerlyReachable()` walk against the real parent
-`3f43467b`: **400 eager modules of 914 before, 387 of 916 after** — the nine
-seams, the six dragged out, minus the two modules ADDED
-(`components/Library/LibrarySections.tsx`, `components/Stage/resultChipsVisible.ts`).
+Recorded originally as "400 eager modules of 914 before, 387 of 916 after,
+against `3f43467b`" — wrong on two counts (2026-09-18 review round, finding
+4): `3f43467b` is not this commit's parent (see above), and the walk was
+mis-measured against it regardless. Re-measured with the guard's own
+`eagerlyReachable()`/`sources()` against the REAL parent `b50f6602`: **402
+eager modules of 920 before, 389 of 922 after** — the shape of the original
+claim holds exactly (−13 eager modules, +2 corpus modules: the nine seams,
+the six dragged out, minus the two modules ADDED —
+`components/Library/LibrarySections.tsx`, `components/Stage/resultChipsVisible.ts`).
+Nothing in `architecture.test.ts` asserts on these absolute counts (only
+`> 200` plus an empty-intersection check), so no test was ever at risk — this
+was a documentation defect only.
 
 DOM coverage is `components/Library/lazySectionSeams.test.tsx` and
 `components/Stage/lazyStageSeams.test.tsx`, in the shape slice 3's
 `lazyRenderSeams.test.tsx` established: nothing on the first synchronous flush,
-the real content once the chunk resolves.
+the real content once the chunk resolves. Both files pin the render-gate half
+of seams 7 (`MultiSelectBar`) and 8 (`PlotResultChips`) too — their own
+`resultChipsVisible(...)`/`selectedIds.length > 1` checks return `null`
+internally regardless of the outer gate, so a DOM-only assertion cannot tell
+a real gate from one deleted; an import-recording seam (`vi.hoisted` +
+`vi.mock` factory) added in the 2026-09-18 review round closes that hole by
+asserting the module was never imported while the gate stayed closed.
+
+**Residual (2026-09-18 review round, finding 7, NOT fixed by this slice):**
+seam 9 (`PlotContextMenu`) also defers `ContextMenu.tsx`'s own
+`mousedown`/`keydown`(Escape)/`scroll`/`resize` dismissal listeners, since
+`ContextMenu` is rendered by `PlotContextMenu` inside the deferred chunk.
+During the one-chunk window after a session's first right-click, nothing owns
+Escape or an outside click, so a user who dismisses that way in that window
+still sees the menu once the chunk lands (menu `x`/`y` are captured at
+right-click time, so position is unaffected). The window is one localhost
+fetch, once per session, so this is minor and left as a named residual rather
+than fixed here; a future slice that touches this seam should either move the
+dismissal listeners to the eager loader or accept and re-state this cost.
 
 **Test lesson this slice adds: a DOM-only test cannot see a render gate.**
 Every one of these sections ALSO returns null internally when its collection is
@@ -635,9 +700,12 @@ tests.
 **Blast-radius sweep for tick-counting**, per slice 3's own lesson: every test
 touching a seam or its loader was grepped for `await Promise.resolve()` after
 an action that now crosses a seam. The section tests render the sections
-DIRECTLY and are unaffected. Four assertions in `Library.test.tsx` did read
-state on the synchronous flush and are now DOM state waits
-(`await screen.findByText(...)`), not counted ticks.
+DIRECTLY and are unaffected. Five assertions across four tests in
+`Library.test.tsx` did read state on the synchronous flush and are now DOM
+state waits (`await screen.findByText(...)`), not counted ticks: `"2
+selected"`, `"Clear"`, `"Smart folders"`, and `"Origin fidelity"` twice (one
+test asserts it on two separate lines) — corrected 2026-09-18, review round,
+finding 9 (originally undercounted as four).
 
 #### What was left on the table
 

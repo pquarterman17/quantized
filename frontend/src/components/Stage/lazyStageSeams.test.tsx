@@ -18,12 +18,21 @@
 // unconditionally would fetch its chunk on the plot's first paint and give
 // back none of the deferral this slice was measured for.
 //
+// `PlotResultChips` also returns null internally when nothing is committed
+// (`resultChipsVisible` is the same predicate on both sides), so with no
+// result the DOM looks identical whether the outer gate is real or deleted —
+// a `querySelector` cannot tell those apart. The `loaded` import recorder
+// below (same pattern as `lazySectionSeams.test.tsx`) pins that half
+// directly. `PlotContextMenu`'s gate needs no such recorder: deleting
+// `menu &&` dereferences `menu.x` on a null menu and throws, so the existing
+// DOM test already catches it.
+//
 // Both boundaries inherit the repo-wide `lazy()` caveat: a chunk that will not
 // load has no reporting of its own and unmounts the React root at the nearest
 // boundary. That is UX-003 in `plans/BUGS_AND_ISSUES.md` for all such sites at
 // once, not something these two introduced or can fix locally.
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
 
@@ -51,6 +60,25 @@ vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../store/annotationTextDialog")>()),
   askAnnotationText: vi.fn(),
 }));
+
+// Records whether `PlotResultChips` has actually been IMPORTED. The DOM
+// assertions below cannot distinguish a real gate from an unconditionally
+// mounted `<Suspense>{"<PlotResultChips>"}</Suspense>`: with no committed
+// result the chip renders nothing either way, so a gate deleted in
+// `PlotStageOverlays.tsx` (mounting the boundary, and fetching the chunk, on
+// every plot's first paint) would be invisible to `querySelector`. Same
+// `vi.hoisted` recorder pattern as `lazySectionSeams.test.tsx`.
+const { loaded, track } = vi.hoisted(() => {
+  const loaded = new Set<string>();
+  const track =
+    (name: string) =>
+    async (importOriginal: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => {
+      loaded.add(name);
+      return await importOriginal();
+    };
+  return { loaded, track };
+});
+vi.mock("./PlotResultChips", track("PlotResultChips"));
 
 const actions: PlotStageActions = {
   resetView: vi.fn(),
@@ -154,12 +182,23 @@ beforeEach(() => {
 
 describe("plot result chips — chunk-deferred renderer", () => {
   it("renders a committed ∫ result only after the chunk resolves", async () => {
+    // The gate half: with nothing committed the gate stays closed, so a
+    // render+flush must not start the dynamic import at all — a deleted gate
+    // (`{true && <Suspense>...}`) starts it on every plot's first paint
+    // regardless of `resultChipsVisible(...)`, which a DOM assertion alone
+    // cannot see (the closed-gate DOM is empty either way).
+    const closed = render(overlays());
+    await act(async () => {});
+    expect([...loaded]).not.toContain("PlotResultChips");
+    closed.unmount();
+
     const { container } = render(overlays({ integral: { xlo: 0, xhi: 4, area: 8 } }));
     // The seam itself: the gate is open, the boundary is mounted, and its
     // fallback is null — so no chip exists on this flush.
     expect(container.querySelector(".qzk-result-chip")).toBeNull();
     await waitFor(() => expect(container.querySelector(".qzk-result-chip")).not.toBeNull());
     expect(container.textContent).toContain("∫");
+    expect([...loaded]).toContain("PlotResultChips");
   });
 
   it("stays absent with no committed result, chunk or no chunk", async () => {
