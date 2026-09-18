@@ -1,13 +1,14 @@
 // useAnnotationEdit — the MAIN #18 pointer-mode bridge + object-menu hook.
 // Same renderHook/fireEvent convention as useGadgetChip.test.ts.
 
-import { fireEvent, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
 vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
@@ -239,16 +240,16 @@ describe("useAnnotationEdit — Frame preset menu (MAIN #27 text box)", () => {
 });
 
 describe("useAnnotationEdit — Escape deselects", () => {
-  it("clears selectedAnnotationId on Escape while something is selected", () => {
+  it("clears selectedAnnotationId on Escape while something is selected", async () => {
     useApp.setState({ selectedAnnotationId: "a1" });
     renderHook(() => useAnnotationEdit("pointer"));
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().selectedAnnotationId).toBeNull();
   });
 
-  it("is a no-op when nothing is selected", () => {
+  it("is a no-op when nothing is selected", async () => {
     renderHook(() => useAnnotationEdit("pointer"));
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().selectedAnnotationId).toBeNull();
   });
 });

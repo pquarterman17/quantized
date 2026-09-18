@@ -23,7 +23,7 @@
 //
 // No new dependency: this is ~100 lines of DOM, not a focus-trap package.
 
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import { APP_ROOT_FOCUS_SELECTOR } from "../../lib/appRoot";
 import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
@@ -141,9 +141,14 @@ let nextTrapSeq = 0;
  *  because a plain `Tab` check excludes it. A `defaultPrevented` Tab is left
  *  alone regardless, so a future owner of the key still wins. */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean): void {
-  const seqRef = useRef<number | null>(null);
-  if (seqRef.current === null) seqRef.current = nextTrapSeq++;
-  const seq = seqRef.current;
+  // Lazy per-instance id. `useState`'s initializer, not `if (ref.current ===
+  // null) ref.current = next++` during render (review NIT 11): the latter
+  // mutates module state in the render phase, which StrictMode's double render
+  // and any future concurrent re-render are both allowed to run more than
+  // once. The null-guard made it idempotent, but the initializer is the idiom
+  // that is correct by construction. `escapeStack` never had the problem — its
+  // seq is allocated inside the effect.
+  const [seq] = useState(() => nextTrapSeq++);
 
   useEffect(() => {
     if (!open) return;

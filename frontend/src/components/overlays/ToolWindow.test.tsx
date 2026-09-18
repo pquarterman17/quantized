@@ -14,6 +14,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
 import Library from "../Library/Library";
 import { appRootFocusProps } from "../../lib/appRoot";
+import { useEscapeSurface } from "../../lib/escapeStack";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 import { scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import { pressEscape } from "../../test/pressEscape";
 import { useApp } from "../../store/useApp";
@@ -507,21 +509,105 @@ describe("ToolWindow Escape is idempotent (P3.3 round 3)", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("a second Escape on a panel that is already closing does not close it again", async () => {
-    // The parent has not unmounted the panel yet (React flushes later), so the
-    // window is still mounted and still registered when the next Escape lands.
-    const onClose = vi.fn();
+  it("a panel that DOES unmount on close closes exactly once under a held key", async () => {
+    // The shipped shape: `onClose` flips the parent's flag and the window goes
+    // away. The registry's repeat guard is what makes the burst one close —
+    // and the panel is gone before any later keystroke could reach it.
+    function Host() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <ToolWindow id="t21" title="Find peaks" onClose={() => setOpen(false)}>
+          <button type="button">Run</button>
+        </ToolWindow>
+      ) : null;
+    }
+    const { container } = render(<Host />);
+    const frame = winEl(container);
+
+    await pressEscape(frame);
+    for (let i = 0; i < 5; i++) await pressEscape(frame, { repeat: true });
+
+    expect(container.querySelector(".qzk-win")).toBeNull();
+  });
+});
+
+// ── ROUND 4, review finding 1: a DECLINED close keeps the key ────────────
+// Not every `onClose` unmounts the window. `usePageLifecycle.requestClose`
+// asks "Close without saving?" for a saved page with unsaved edits and leaves
+// the panel mounted when the user says no; `PackProjectPanel` stays put by
+// design while packing or cancelling. Round 3's per-mount `closed` ref latched
+// on the FIRST Escape and was never reset, so for those panels every later
+// Escape was dead — and because the guard DECLINED rather than doing nothing,
+// the walk fell through and the workspace behind the focused panel closed
+// instead. Measured on the round-3 tree: Escape ① → onClose×1; Escape ② →
+// onClose×1 (unchanged) and the workspace below closed.
+describe("ToolWindow when onClose does not unmount it (P3.3 round 4)", () => {
+  function DeclinedCloseHarness({ onWorkspaceClose }: { onWorkspaceClose: () => void }) {
+    // A `workspace`-layer surface behind the panel — what Tiles / the Quick
+    // Figure Builder register. It must never see these keystrokes.
+    useEscapeSurface("workspace", () => {
+      onWorkspaceClose();
+      return true;
+    });
+    return null;
+  }
+
+  it("claims Escape every time, and the workspace behind it never sees the key", async () => {
+    const onClose = vi.fn(); // the declined confirm: the panel stays mounted
+    const onWorkspaceClose = vi.fn();
     const { container } = render(
-      <ToolWindow id="t21" title="Find peaks" onClose={onClose}>
-        <button type="button">Run</button>
-      </ToolWindow>,
+      <>
+        <DeclinedCloseHarness onWorkspaceClose={onWorkspaceClose} />
+        <ToolWindow id="t22" title="Figure page" onClose={onClose}>
+          <button type="button">Save</button>
+        </ToolWindow>
+      </>,
     );
     const frame = winEl(container);
 
     await pressEscape(frame);
-    await pressEscape(frame);
-
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onWorkspaceClose).not.toHaveBeenCalled();
+
+    // A LATER, separate keypress is a second intent: the confirm reappears.
+    await pressEscape(frame);
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(onWorkspaceClose).not.toHaveBeenCalled();
+    expect(container.querySelector(".qzk-win")).not.toBeNull();
+  });
+});
+
+// ── ROUND 4, review finding 3: an IDLE gadget is not innermost ───────────
+// The module header and the plan both state the invariant flatly ("the
+// innermost open surface claims Escape"). Round 3 left the idle-armed
+// quick-fit tier claiming inline with `preventDefault()`, so it was false:
+// measured with a real focused `ToolWindow` over a committed ROI, Escape
+// cleared the ROI and left the window open (windowClosed=0, qfitRoi=null).
+// A LIVE drag genuinely is innermost and still outranks everything; a
+// committed ROI sitting behind a focused window is Stage selection state.
+describe("ToolWindow vs an idle quick-fit ROI (P3.3 round 4)", () => {
+  function WindowOverIdleRoi() {
+    const [open, setOpen] = useState(true);
+    useGlobalShortcuts();
+    return open ? (
+      <ToolWindow id="t23" title="Find peaks" onClose={() => setOpen(false)}>
+        <button type="button">Run</button>
+      </ToolWindow>
+    ) : null;
+  }
+
+  it("the focused window closes first; the committed ROI survives until the next Escape", async () => {
+    useApp.setState({ plotTool: "qfit", qfitRoi: [1, 2], gadgetCursors: null });
+    const { container } = render(<WindowOverIdleRoi />);
+    const frame = winEl(container);
+
+    await pressEscape(frame);
+    expect(container.querySelector(".qzk-win")).toBeNull(); // the window went…
+    expect(useApp.getState().qfitRoi).toEqual([1, 2]); // …and the ROI stayed
+
+    await pressEscape(document.activeElement ?? document);
+    expect(useApp.getState().qfitRoi).toBeNull();
+    expect(useApp.getState().plotTool).toBe("qfit"); // still armed for a retry
   });
 });
 

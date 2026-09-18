@@ -46,44 +46,17 @@ export function useGlobalShortcuts(): void {
         requestDatasetRemoval(s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : []);
         return;
       }
-      // Esc: universal plot-tool cancel (GUI_INTERACTION #9). A capture-phase
-      // dialog (ConfirmDialog/PreferencesDialog/…) or a bubble-phase menu
-      // (ContextMenu) that stopPropagation()s on Escape already wins over
-      // this — it's a plain window-level bubble listener, the same
-      // composition priority as every other Esc consumer in components/Stage.
-      // A live drag (integrate/FWHM/measure/stats/pan/quick-fit ROI/gadget
-      // cursors) wins next — cancelActiveGesture() tears down its listeners
-      // and discards the gesture WITHOUT committing, and the tool stays
-      // armed so the user can immediately retry. With nothing mid-drag: an
-      // idle-but-armed qfit gadget (a committed roi/cursors sitting with no
-      // drag in progress) clears the same way its own chip dismiss does.
-      // Only then — tool not already Pointer, not typing in a field, and
-      // Preferences ▸ Interaction ▸ "Persistent plot tool" not set — does
-      // Esc revert the active tool to Pointer. That last tier is NOT here any
-      // more (P3.3 round 3): it is registered on the shared ordered Escape
-      // registry below, in the `app` layer, so it runs only after every open
-      // surface has declined. Keeping it inline made it `preventDefault()` an
-      // Escape that an open workspace or workshop wanted — the very inversion
-      // the registry exists to fix. The two tiers that remain here are
-      // genuinely innermost (a live drag, an idle-armed gadget), so they still
-      // claim the key during the dispatch.
-      //
-      // `defaultPrevented` at the top (review NIT 9): an Escape a closer
-      // handler already claimed must not ALSO cancel a gesture here.
-      if (e.key === "Escape") {
-        if (e.defaultPrevented) return;
-        if (cancelActiveGesture()) {
-          e.preventDefault();
-          return;
-        }
-        const s = useApp.getState();
-        if (s.qfitRoi || s.gadgetCursors) {
-          e.preventDefault();
-          s.clearQfit();
-          return;
-        }
-        return;
-      }
+      // Esc is not handled in this listener at all any more (P3.3 round 4).
+      // All three of its tiers — cancel the live drag, clear the idle-armed
+      // quick-fit gadget, revert the armed tool to Pointer — are surfaces on
+      // the shared ordered registry at the bottom of this file, so that
+      // "the innermost open surface claims Escape" is one walk rather than a
+      // race between listener phases. Round 3 moved only the third tier and
+      // left the other two claiming inline with `preventDefault()`, ahead of
+      // every registered surface; measured consequence, with Tiles open over a
+      // committed ROI: Escape destroyed the ROI and left Tiles open.
+      // Returning here keeps Escape out of the single-key tool branch below.
+      if (e.key === "Escape") return;
       // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
       if (e.key === "?" && !isEditingTarget(e.target)) {
         e.preventDefault();
@@ -212,12 +185,43 @@ export function useGlobalShortcuts(): void {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // The LAST tier of the Escape ladder (GUI_INTERACTION #9): revert the armed
-  // plot tool to Pointer. Registered in the `app` layer of the shared registry
-  // so every open surface gets the key first — with Tiles or a workshop open,
-  // Escape dismisses that surface and leaves the tool armed, and the NEXT
-  // Escape (nothing left to dismiss) reverts the tool. The editing-target
-  // guard lives in the dispatcher.
+  // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──
+  // All three are registry surfaces as of round 4. Each DECLINES when it has
+  // nothing to do, so an Escape nothing wanted still falls all the way
+  // through. The editing-target / command-palette / open-menu guards live in
+  // the dispatcher, one copy for the whole app.
+
+  // TOP of the whole ladder: a drag that is happening right now. The user's
+  // hand is on it, so it outranks every surface — including the window focus
+  // happens to be sitting in. `cancelActiveGesture()` tears the drag's
+  // listeners down and discards it WITHOUT committing, and the tool stays
+  // armed for an immediate retry; it returns false when nothing is mid-drag,
+  // which is exactly the decline this layer needs.
+  useEscapeSurface("gesture", () => cancelActiveGesture());
+
+  // An idle-but-armed quick-fit gadget (a committed roi/cursors sitting with
+  // NO drag in progress) clears the same way its own chip dismiss does. Round
+  // 3 left this inline, claiming ahead of everything; measured, that cleared a
+  // committed ROI out from under a focused workshop while the window stayed
+  // open (review finding 3). It is a Stage SELECTION, so it belongs below any
+  // open surface. Registered only while there IS something to dismiss — the
+  // same "listen while it matters" shape the four Stage deselect hooks use,
+  // which also makes the most recently armed selection the one Escape clears.
+  // The boolean selector is deliberate: `qfitRoi` changes on every mousemove
+  // of a live drag, but this value only flips at its edges.
+  const hasIdleGadget = useApp((s) => s.qfitRoi !== null || s.gadgetCursors !== null);
+  useEscapeSurface(
+    "selection",
+    () => {
+      useApp.getState().clearQfit();
+      return true;
+    },
+    hasIdleGadget,
+  );
+
+  // The LAST tier: revert the armed plot tool to Pointer. With Tiles or a
+  // workshop open, Escape dismisses that surface and leaves the tool armed,
+  // and the NEXT Escape (nothing left to dismiss) reverts the tool.
   useEscapeSurface("app", () => {
     const s = useApp.getState();
     if (s.plotTool === "pointer" || loadInteractionPrefs().persistentTool) return false;

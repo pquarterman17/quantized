@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MenuBar from "./MenuBar";
 import { PALETTE_LABEL, useCommands, type Action } from "../../store/commands";
+import { pressEscape } from "../../test/pressEscape";
+import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 const actions: Action[] = [
   { id: "imp", group: "File", label: "Import data…", run: vi.fn() },
@@ -87,5 +90,31 @@ describe("MenuBar", () => {
     fireEvent.click(screen.getByText("Analyze"));
     fireEvent.click(screen.getByText("Curve fit…"));
     expect(run).toHaveBeenCalledOnce();
+  });
+});
+
+// ── ROUND 4 (review of round 3, NIT 7): an open menu OWNS Escape ─────────
+// The dispatcher advertises GUI_INTERACTION #9 ("an open menu OWNS Escape")
+// and carries a `.qzk-ctx` belt-and-braces guard, but only `ContextMenu` wears
+// that class. This menu closed on a plain document-keydown with no
+// `preventDefault`/`stopPropagation`, so the shared registry ALSO walked:
+// measured, the menu closed AND the armed plot tool reverted to pointer on one
+// keystroke. It is a `menu`-layer surface now — the top of the ladder.
+describe("MenuBar Escape ownership (P3.3 round 4)", () => {
+  it("closes the open menu and claims the key, so nothing below also acts", async () => {
+    useApp.setState({ plotTool: "zoom" });
+    renderHook(() => useGlobalShortcuts());
+    render(<MenuBar actions={actions} onOpenPalette={vi.fn()} />);
+    fireEvent.click(screen.getByText("Analyze"));
+    expect(screen.getByText("Curve fit…")).toBeInTheDocument();
+
+    await pressEscape();
+
+    expect(screen.queryByText("Curve fit…")).not.toBeInTheDocument(); // menu closed…
+    expect(useApp.getState().plotTool).toBe("zoom"); // …and ONLY the menu closed
+
+    // The next Escape, with no menu open, reaches the tool-revert tier.
+    await pressEscape();
+    expect(useApp.getState().plotTool).toBe("pointer");
   });
 });

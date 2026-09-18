@@ -10,9 +10,10 @@
 // the ⌘K palette and the selection mini-toolbar. The swatch/opacity/width
 // pickers (parameterized, not discrete actions) stay hand-built here.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { buildMenuItems } from "../../lib/contextActions";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { SERIES_VARS, cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
 import { DEFAULT_SHAPE_WIDTH, resolveShapeOpacity } from "../../lib/uplotShapes";
 import { useApp } from "../../store/useApp";
@@ -45,15 +46,21 @@ export function useShapeEdit(tool: string): ShapeEditResult {
   const hasShapes = useApp((s) => s.shapes.length > 0);
   const [menu, setMenu] = useState<ShapeMenuState | null>(null);
 
-  // Escape deselects (same window-keydown pattern as useAnnotationEdit's).
-  useEffect(() => {
-    if (!selectedShapeId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedShapeId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedShapeId, setSelectedShapeId]);
+  // Escape deselects (same registry shape as useAnnotationEdit's). Round 4:
+  // this was a bare window-keydown listener that did not `preventDefault`, so
+  // it fired ALONGSIDE whatever else claimed the key — measured, one Escape
+  // closed the Tiles workspace AND deselected the shape behind it. It is a
+  // Stage selection, so it sits in the `selection` layer, below any open
+  // surface; registering only while something IS selected keeps the decline
+  // implicit and makes the most recent selection the one Escape clears.
+  useEscapeSurface(
+    "selection",
+    () => {
+      setSelectedShapeId(null);
+      return true;
+    },
+    Boolean(selectedShapeId),
+  );
 
   const openMenu = (id: string, clientX: number, clientY: number, conv: ShapeConv) => {
     const s = useApp.getState().shapes.find((x) => x.id === id);

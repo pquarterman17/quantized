@@ -10,9 +10,10 @@
 // the ⌘K palette and the selection mini-toolbar. Only the Frame submenu (a
 // parameterized picker, not a discrete action) stays hand-built here.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { buildMenuItems } from "../../lib/contextActions";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { cssVar, type BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Annotation } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -52,16 +53,19 @@ export function useAnnotationEdit(tool: string): AnnotationEditResult {
   const hasAnnotations = useApp((s) => s.annotations.length > 0);
   const [menu, setMenu] = useState<AnnotationMenuState | null>(null);
 
-  // Escape deselects (same window-keydown pattern as useGadgetChip's
-  // Escape-dismiss) — only listens while something IS selected.
-  useEffect(() => {
-    if (!selectedAnnotationId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedAnnotationId(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedAnnotationId, setSelectedAnnotationId]);
+  // Escape deselects — registered only while something IS selected. Round 4:
+  // this was a bare window-keydown listener that did not `preventDefault`, so
+  // it fired ALONGSIDE whatever else claimed the key (one Escape, two
+  // actions). A Stage selection sits in the `selection` layer, below any open
+  // surface and above the whole-app tool revert.
+  useEscapeSurface(
+    "selection",
+    () => {
+      setSelectedAnnotationId(null);
+      return true;
+    },
+    Boolean(selectedAnnotationId),
+  );
 
   // MAIN #27 "text box": set/replace the frame wholesale (a preset click) or
   // patch just its opacity (the Opacity submenu, preserving any existing

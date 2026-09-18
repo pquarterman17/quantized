@@ -3817,7 +3817,7 @@ covers a much smaller subset and guards focus on Analyze.
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
-  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3) |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
 
   "dead" means the dialog HAD an Escape handler — on the dialog box's React
@@ -3940,7 +3940,12 @@ covers a much smaller subset and guards focus on Analyze.
   The only keyboard dismissal a workshop has was dead exactly where a user
   would reach for it, and no spec in the suite paired the two surfaces.
   - **The invariant, now one mechanism: the innermost open surface claims
-    Escape, and the next Escape goes to the one below it.**
+    Escape, and the next Escape goes to the one below it.** **(Overstated as
+    written — CORRECTED in round 4 below: two of `useGlobalShortcuts`' three
+    tiers were still claiming inline ahead of every registered surface, and
+    the Stage's four deselect listeners still fired alongside whatever claimed
+    the key. Round 4 moved every one of them into the registry and restates the
+    invariant with its two documented exceptions.)**
     `frontend/src/lib/escapeStack.ts` (new, 143 lines) is a module-level
     ordered registry. Surfaces register on open with a handler; ONE listener —
     `window`, BUBBLE phase, the last stop on the propagation path — walks the
@@ -4042,6 +4047,142 @@ covers a much smaller subset and guards focus on Analyze.
     ordinary Tab BETWEEN the first and last stops, because the trap intervenes
     at the two ends and nowhere else. Delivering the attribute's full meaning
     needs `inert`, which is a separate decision from this pass.
+
+  **Round 4 (2026-09-18) — every Escape consumer is in the ladder, and a
+  declined close keeps the key.** Rounds 2 and 3 each shipped a fix that
+  inverted Escape somewhere else, because each was verified only where it was
+  aimed. Round 3's review found two NEW user-visible inversions of the same
+  class the registry exists to kill, plus an unpinned guard and seven nits.
+  This round closes all of them and states the invariant so it is true as
+  written.
+
+  **The corrected invariant.** *The innermost open surface claims Escape, ONE
+  Escape performs ONE action, and the next Escape goes to the surface below.*
+  Round 3's wording ("the innermost open surface claims Escape") was false on
+  two counts: two of `useGlobalShortcuts`' three tiers still claimed inline
+  ahead of every registered surface, and four Stage listeners fired
+  ALONGSIDE whatever claimed the key. The invariant now has exactly two
+  documented exceptions, both named in `lib/escapeStack.ts`'s header and both
+  conditional on their own surface being present (so neither can swallow an
+  Escape nothing wanted): `SymbolPalette`, a popover opened FROM a text field,
+  which must keep Escape in the one state the dispatcher deliberately gives to
+  the field (`isEditingTarget`); and `usePeakWizard`'s marker-edit pause, a
+  window-bubble claim from inside its own `ToolWindow`.
+
+  **The ladder as it now stands**, top (innermost) to bottom. The first four
+  layers are new or newly populated this round.
+
+  | Layer | Consumer | Why it sits there |
+  |---|---|---|
+  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). |
+  | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. |
+  | `window` | `ToolWindow` (all 48 workshop hosts, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. |
+  | `workspace` | `LibraryWorkspace` (Tiles), `QuickFigureBuilderWorkspace` | Full-Stage workspaces; mutually exclusive in `App.tsx`, so two can never co-exist. |
+  | `selection` | the four Stage deselects (`useShapeEdit`, `useAnnotationEdit`, `useShapeDraw`, `worksheet/useWorksheetView`) + the idle-armed quick-fit gadget | A live selection or an idle-armed gadget is BELOW any open surface (finding 3: a committed ROI sitting behind a focused window is not innermost) and ABOVE the tool revert (clearing a selection is a smaller undo than disarming the tool that made it). Each registers only while it has something to clear, so the most recently armed one claims first. |
+  | `app` | `useGlobalShortcuts` → revert the armed plot tool to Pointer | The whole-app fallback: it only ever sees an Escape every surface declined. |
+
+  Never reached, because they stop propagation upstream: `ConfirmDialog` and
+  the eight backdrop dialogs (window capture), `ContextMenu` (document bubble,
+  plus the dispatcher's `.qzk-ctx` belt-and-braces), `CommandPalette` (React
+  synthetic, plus the dispatcher's `cmdkOpen` early-out). Guarded away by the
+  dispatcher's one `isEditingTarget` check: every rename / cell-edit /
+  label-edit `onKeyDown`. Deliberately NOT surfaces: `TooltipLayer` (dismissing
+  a passive hint alongside another action is correct) and `LibraryTree`'s
+  Escape-blur (a focus move, not a dismissal — and the e2e ladder spec depends
+  on an Escape from a Library row still reaching Tiles).
+
+  **What changed.**
+  - **Finding 1 — a declined close no longer kills the key** (`ToolWindow.tsx`).
+    The per-mount `closed` ref was set before `onClose()` ran and never reset.
+    Two shipped panels legitimately do not unmount on close
+    (`usePageLifecycle.requestClose` on a declined "Close without saving?",
+    `PackProjectPanel` while packing/cancelling), and for those the latch stuck
+    on: every later Escape was dead AND, because the guard DECLINED rather than
+    doing nothing, the walk fell through and the workspace behind the focused
+    panel closed instead. The window now claims whenever it is the innermost
+    surface and invoked `onClose` — claiming is not conditional on unmounting.
+    One-keystroke-one-close stays entirely in the registry, where it belongs
+    (`event.repeat` + the pending-walk clear); a later, separate keypress is a
+    second intent and brings the confirm back.
+  - **Findings 2+3 — the two tiers left inline moved in**
+    (`useGlobalShortcuts.ts`). Round 3 re-homed only the tool-revert. Measured
+    on that tree: with Tiles open over a committed `qfitRoi`, Escape destroyed
+    the ROI and left Tiles open (the parent closed Tiles and kept the ROI); and
+    with a focused workshop over an idle committed ROI, the ROI was cleared
+    while the window stayed open. Escape is now handled in NO raw listener in
+    that file — the gesture cancel is a `gesture` surface, the idle gadget a
+    `selection` surface, the tool revert the `app` surface.
+  - **The deleted `stopPropagation`'s promise, restored.** `LibraryWorkspace`'s
+    removed shield was commented "This workspace owns the keystroke"; the four
+    Stage deselect listeners (none of which `preventDefault`) had been firing
+    alongside the workspace close ever since — two actions, one key. All four
+    are `selection` surfaces now.
+  - **Finding 4 — the mid-walk staleness skip is pinned.**
+    `escapeStack.ts`'s `if (!stack.includes(entry)) continue;` was deletable
+    with the whole suite still green.
+  - **NIT 5** — a handler that throws no longer eats the key for every surface
+    below it: the walk catches, logs and continues (it is treated as a
+    decline). Previously the exception escaped the `setTimeout` outside any
+    React error boundary and recurred on every Escape.
+  - **NIT 6** — the Quick Figure Builder's new editing guard is disclosed here,
+    not only in a code comment: Escape in one of that builder's own fields now
+    belongs to the field, so pressing it on its one `<select>` (dropdown
+    closed) no longer dismisses the builder.
+  - **NIT 7 — the menus own Escape.** `MenuBar` and `AppearanceMenu` are
+    `menu`-layer surfaces. `SymbolPalette` could not join (see the exceptions
+    above) and instead claims explicitly with `preventDefault()`, which the
+    walk's re-read honours — so it too is now one Escape, one action.
+  - **NIT 8 — `OriginSavedPreviewWindow` joined the registry.** Its bespoke
+    window-CAPTURE listener with `stopPropagation()` and no focus / editing /
+    palette / menu guard swallowed every Escape in the app while the preview
+    was open — including one aimed at a text field — and its own `ToolWindow`
+    entry never ran. Deleted; the host's `window`-layer entry does the same
+    close, correctly scoped to focus inside the frame.
+  - **NIT 10 — one `defaultPrevented` gate, not two.** The synchronous copy in
+    `onKeyDown` could only ever fire for a document-bubble claimant, which the
+    deferred re-read catches too (along with every claim that lands after the
+    keydown, which the synchronous copy could not see). Removed, and the
+    re-read is pinned by a document-bubble case of its own.
+  - **NIT 11** — `useFocusTrap`'s lazy per-instance id is `useState(() =>
+    nextTrapSeq++)` instead of a render-phase module mutation.
+
+  | Sabotage (round 4) | Result | Failing test(s) |
+  |---|---|---|
+  | R4-1 `ToolWindow` gets its per-mount `closed` latch back | **RED** 1 | "claims Escape every time, and the workspace behind it never sees the key" |
+  | R4-2 the idle-gadget tier claims inline again (round 3 shape) | **RED** 2 | "closes Tiles and PRESERVES a committed quick-fit ROI (finding 2)", "the focused window closes first; the committed ROI survives until the next Escape" |
+  | R4-3 `useShapeEdit` back to a bare window-keydown deselect | **RED** 1 | "one Escape performs ONE action: the Stage deselect does not fire with it" |
+  | R4-4 the `gesture` layer drops to rank 0 | **RED** 2 | "cancels a registered gesture instead of reverting the tool", "ranks menu ▸ gesture ▸ window ▸ workspace ▸ selection ▸ app" |
+  | R4-5 `walk` drops the mid-walk staleness skip (finding 4) | **RED** 1 | "does not call a handler that unregistered during this same walk" |
+  | R4-6 the walk stops catching a throwing handler (NIT 5) | **RED** 1 | "logs it, and the surface below still gets its turn" |
+  | R4-7 `MenuBar` stops registering (NIT 7) | **RED** 1 | "closes the open menu and claims the key, so nothing below also acts" |
+  | R4-8 `OriginSavedPreviewWindow` keeps its capture-phase swallow (NIT 8) | **RED** 1 | "does not swallow an Escape aimed at a text field" |
+  | R4-9 `walk` stops re-reading `defaultPrevented` (NIT 10) | **RED** 5 | incl. "a DOCUMENT-bubble consumer that preventDefaults still stops the walk", "a panel hook that claims Escape keeps it — the window does NOT close" |
+  | R4-10 every focus trap gets the same seq (NIT 11's ordering) | **RED** 1 | "only the TOP trap acts, and closing it hands control back to the outer one" |
+
+  Each applied alone against a 12-file / **253-test** scope (`escapeStack`,
+  `ToolWindow`, `LibraryWorkspace`, `useGlobalShortcuts`, `MenuBar`,
+  `AppearanceMenu`, the three Stage deselect hooks, `Worksheet`,
+  `FiguresSection`, `dialogFocus.a11y`), green at baseline, and restored after.
+
+  Eager bundle: parent `eb696722` **889,632 B** → tip **889,141 B**,
+  **−491 B** (the deleted listeners outweigh the new registrations; budget
+  920,400 B, so **31,259 B** of headroom). Both built after
+  `rm -rf node_modules/.vite`, the parent in its own worktree after `npm ci`.
+
+  **Named residuals added in round 4.**
+  - **R10** — `components/windows/PlotWindowFrame.tsx` (multi-plot document
+    windows) still has no Escape dismissal and no registry entry, so Escape
+    with focus inside one falls through to the `workspace`/`selection`/`app`
+    layers. Deliberately left as a hole rather than filled: a plot window is a
+    DURABLE container with saved layout, not a transient workshop panel, and
+    giving it Escape-to-close is a product decision for the owner, not an a11y
+    fix. Recorded so the ladder has no silent gaps.
+  - **R11** — `usePeakWizard`'s marker-edit pause claims Escape with
+    `preventDefault()` without checking that focus is inside its own window, so
+    at step ② it can pause the edit from a keystroke aimed elsewhere. Narrow
+    (step ② only, and only while there is something to pause) and pre-existing;
+    it is one of the two documented exceptions above, and closing it needs the
+    hook to reach its host frame's ref.
 
   **Named residuals (why this is `[~]`).**
   - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,

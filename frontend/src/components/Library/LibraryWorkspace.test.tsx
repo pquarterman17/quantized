@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import LibraryWorkspace from "./LibraryWorkspace";
 import ToolWindow from "../overlays/ToolWindow";
 import { useGlobalShortcuts } from "../../useGlobalShortcuts";
+import { useShapeEdit } from "../Stage/useShapeEdit";
 import { pressEscape } from "../../test/pressEscape";
 import { createPageDocument } from "../../lib/pageDocumentActions";
 import type { Dataset } from "../../lib/types";
@@ -556,5 +557,73 @@ describe("LibraryWorkspace + workshop Escape ladder (P3.3 round 3)", () => {
 
     expect(closeTiles).toHaveBeenCalledOnce();
     expect(useApp.getState().plotTool).toBe("zoom");
+  });
+});
+
+// ── ROUND 4: the tiers that were still claiming ahead of the walk ────────
+// Review of round 3, findings 2+3. Round 3 re-homed only ONE of
+// `useGlobalShortcuts`' three Escape tiers; the gesture-cancel and the
+// idle-armed-gadget tiers stayed inline and `preventDefault()`ed ahead of
+// EVERY registered surface, and the deferred walk then declined. Measured on
+// the round-3 tree with Tiles open over a committed `qfitRoi: [1, 2]`:
+// Tiles stayed open (0 closes) and the ROI was destroyed — the parent tree
+// closed Tiles and kept the ROI. The same shield loss let the Stage's four
+// deselect listeners fire ALONGSIDE the workspace close: two actions, one key.
+describe("LibraryWorkspace Escape vs the Stage's own tiers (P3.3 round 4)", () => {
+  it("closes Tiles and PRESERVES a committed quick-fit ROI (finding 2)", async () => {
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      plotTool: "qfit",
+      qfitRoi: [1, 2],
+    });
+    renderHook(() => useGlobalShortcuts());
+    render(<LibraryWorkspace onClose={closeTiles} />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(useApp.getState().qfitRoi).toEqual([1, 2]); // the ROI survives
+    // …and the ROI is what the NEXT Escape clears, once Tiles is gone.
+    expect(useApp.getState().plotTool).toBe("qfit");
+  });
+
+  it("one Escape performs ONE action: the Stage deselect does not fire with it", async () => {
+    // The `stopPropagation()` that round 3 deleted carried this promise in a
+    // comment ("This workspace owns the keystroke"). It is the ladder's job
+    // now: a Stage selection is a `selection`-layer surface, BELOW the
+    // workspace, so it waits its turn instead of firing alongside.
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      selectedShapeId: "s1",
+      plotTool: "pointer",
+    });
+    renderHook(() => useShapeEdit("pointer"));
+    // A host that really unmounts the workspace, so the second Escape has
+    // somewhere to fall through TO — a bare `vi.fn()` would keep Tiles
+    // registered and claim it again.
+    function TilesHost() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <LibraryWorkspace
+          onClose={() => {
+            closeTiles();
+            setOpen(false);
+          }}
+        />
+      ) : null;
+    }
+    render(<TilesHost />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(useApp.getState().selectedShapeId).toBe("s1"); // NOT also deselected
+
+    // The second Escape is the one that clears the selection.
+    await pressEscape(document.activeElement ?? document);
+    expect(useApp.getState().selectedShapeId).toBeNull();
   });
 });

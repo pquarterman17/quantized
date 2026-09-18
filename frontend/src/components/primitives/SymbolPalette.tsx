@@ -222,8 +222,21 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
     const onDown = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) onClose();
     };
+    // THE ONE IN-FIELD EXCEPTION to the shared Escape registry
+    // (`lib/escapeStack.ts`, round 4). This palette is opened FROM a rich-label
+    // text field (Ctrl+. in `RichLabelInput`) and has to keep owning Escape
+    // while focus is still IN that field — and `isEditingTarget` in the
+    // dispatcher deliberately gives that exact state to the field, so the
+    // palette cannot be expressed as a `menu`-layer surface. It therefore
+    // claims on document-bubble, ahead of the walk. `preventDefault()` is the
+    // claim: the registry's deferred re-read of `defaultPrevented` sees it, so
+    // nothing below acts on the same keystroke (round 4 "one Escape, one
+    // action"). The claim is conditional on the palette being mounted, so it
+    // can never swallow an Escape nothing wanted.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      onClose();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);

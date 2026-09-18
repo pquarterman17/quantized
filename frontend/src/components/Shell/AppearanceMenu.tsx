@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
@@ -39,16 +40,24 @@ export default function AppearanceMenu() {
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Escape closes the dropdown (GUI_INTERACTION #9). Round 4: this was a plain
+  // document-keydown listener with no `preventDefault`, so the shared registry
+  // also walked and a surface below acted on the same keystroke. As a
+  // `menu`-layer surface it is the top of the ladder — one Escape, one action.
+  useEscapeSurface(
+    "menu",
+    () => {
+      setOpen(false);
+      return true;
+    },
+    open,
+  );
 
   return (
     <div ref={ref} style={{ position: "relative" }}>

@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Dataset } from "../../lib/types";
 import { loadOriginApplyLibs } from "../../store/originApplyLibs";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
 import FiguresSection from "./FiguresSection";
 
 const d1: Dataset = {
@@ -232,7 +233,10 @@ describe("FiguresSection", () => {
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
-    fireEvent.keyDown(window, { key: "Escape" });
+    // Round 4 (NIT 8): the bespoke window-CAPTURE listener that swallowed every
+    // Escape in the app is gone — the preview closes through its `ToolWindow`
+    // registry entry, which (rightly) wants focus inside its own frame.
+    await pressEscape(document.activeElement ?? window);
     expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).not.toBeInTheDocument();
   });
 
@@ -284,5 +288,44 @@ describe("FiguresSection", () => {
     expect(screen.getByRole("button", { name: /Graph1/ })).toBeInTheDocument();
     fireEvent.click(screen.getByText("Figures"));
     expect(screen.queryByRole("button", { name: /Graph1/ })).not.toBeInTheDocument();
+  });
+});
+
+// ── ROUND 4 (review of round 3, NIT 8) ──────────────────────────────────
+// `OriginSavedPreviewWindow` was the last surface outranking the shared
+// registry unconditionally: its own window-CAPTURE listener with
+// `stopPropagation()` and no focus / editing / palette / menu guard. While the
+// preview was open it swallowed EVERY Escape in the app — including one aimed
+// at a text field, where Escape means "revert what I typed" — and its own
+// `ToolWindow` registry entry never ran at all.
+describe("OriginSavedPreviewWindow is in the Escape registry (P3.3 round 4)", () => {
+  it("does not swallow an Escape aimed at a text field", async () => {
+    useApp.setState({
+      originFigures: [{
+        id: "preview", stem: "XAS", datasetId: "d1", siblingIds: ["d1"],
+        figure: {
+          name: "GraphPreview", x_from: 0, x_to: 1, x_log: false,
+          y_from: 0, y_to: 1, y_log: false, n_curves: 1, annotations: [],
+          saved_preview: {
+            format: "png", mime: "image/png", width: 200, height: 155,
+            sha256: "a".repeat(64), data: "iVBORw0KGgo=",
+            confidence: "exact_page", page_name: "GraphPreview",
+          },
+        },
+      }],
+    });
+    render(<FiguresSection />);
+    fireEvent.click(screen.getByTitle("Open saved Origin preview for comparison"));
+    await screen.findByAltText(/Saved Origin preview of GraphPreview/);
+
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    try {
+      await pressEscape(input);
+      // The field's Escape is the FIELD's; the preview stays put.
+      expect(screen.queryByAltText(/Saved Origin preview of GraphPreview/)).toBeInTheDocument();
+    } finally {
+      input.remove();
+    }
   });
 });

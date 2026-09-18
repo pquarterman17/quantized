@@ -133,16 +133,33 @@ export default function ToolWindow({
   // carries the phase/deferral reasoning (round 2's finding 2) that used to
   // live here.
   //
-  // Two guards of its own:
+  // One guard of its own:
   //  - focus must be INSIDE this frame. Several windows can be open at once,
   //    and Escape belongs to the one the user is in — not to whichever mounted
   //    last. Declining lets the walk fall through to the surface below, which
   //    is how Escape still closes Tiles while focus is on a Library row.
-  //  - `closed` — one close per window, ever. A second Escape arriving while
-  //    the panel is on its way out (React has not yet unmounted it) must not
-  //    call `onClose` again; the round-2 shape called it once per keydown,
-  //    twelve times for a held key, the extras after unmount.
-  const closed = useRef(false);
+  // ROUND 4 (review of round 3, finding 1): there used to be a second guard
+  // here — a per-mount `closed` ref, set before `onClose()` ran and never
+  // reset. It was wrong twice over, and both halves were user-visible.
+  //
+  // Not every `onClose` unmounts the window. `usePageLifecycle.requestClose`
+  // asks "Close without saving?" for a saved page with unsaved edits and
+  // leaves the panel mounted when the user says no; `PackProjectPanel`
+  // deliberately stays put while packing or cancelling. For those panels the
+  // latch stuck on after the first Escape, so (a) every later Escape was dead
+  // — the panel was mouse-closable and keyboard-undismissable, the exact shape
+  // of round 2's defect — and (b) the guard DECLINED rather than doing
+  // nothing, so the walk fell straight through and the workspace behind the
+  // focused panel closed instead. Measured on the round-3 tree: Escape ①
+  // called `onClose` once, Escape ② called it 0 more times and closed Tiles.
+  //
+  // So the window CLAIMS the key whenever it is the innermost surface and it
+  // invoked `onClose` — claiming is not conditional on unmounting. "One
+  // keystroke, one close" is the registry's job and stays entirely there: it
+  // ignores `event.repeat` (a held key) and clears any pending walk before
+  // arming a new one (two Escapes in one tick), so a single burst runs the
+  // walk exactly once. A later, SEPARATE keypress is a second intent and must
+  // reach the panel again — that is how the declined confirm reappears.
   const closeLatest = useRef(closeNow);
   useEffect(() => {
     closeLatest.current = closeNow;
@@ -152,8 +169,6 @@ export default function ToolWindow({
     (e) => {
       const frame = winRef.current;
       if (!frame || !(e.target instanceof Node) || !frame.contains(e.target)) return false;
-      if (closed.current) return false;
-      closed.current = true;
       closeLatest.current();
       return true;
     },

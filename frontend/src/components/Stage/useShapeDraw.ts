@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo } from "react";
 
+import { useEscapeSurface } from "../../lib/escapeStack";
 import type { BuildOptsArgs } from "../../lib/uplotOpts";
 import type { Shape } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -48,18 +49,25 @@ export function useShapeDraw(): ShapeDrawResult {
   const setSelectedShapeId = useApp((s) => s.setSelectedShapeId);
   const setPlotTool = useApp((s) => s.setPlotTool);
 
-  // Status-line hint while a mode is active; Escape cancels it (mirrors
-  // useAnnotationEdit's Escape-deselect pattern — only listens while a mode
-  // IS active).
+  // Status-line hint while a mode is active.
   useEffect(() => {
     if (!drawShapeKind) return;
     useApp.getState().setStatus(DRAW_HINTS[drawShapeKind]);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawShapeKind(null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [drawShapeKind, setDrawShapeKind]);
+  }, [drawShapeKind]);
+
+  // Escape cancels the mode (mirrors useAnnotationEdit's Escape-deselect —
+  // registered only while a mode IS active). Round 4: this was a bare
+  // window-keydown listener that did not `preventDefault`, so it fired
+  // alongside whatever else claimed the key; an armed draw mode is Stage
+  // selection state, so it belongs in the `selection` layer.
+  useEscapeSurface(
+    "selection",
+    () => {
+      setDrawShapeKind(null);
+      return true;
+    },
+    Boolean(drawShapeKind),
+  );
 
   const shapeDraw = useMemo<NonNullable<BuildOptsArgs["shapeDraw"]> | null>(() => {
     if (!drawShapeKind) return null;

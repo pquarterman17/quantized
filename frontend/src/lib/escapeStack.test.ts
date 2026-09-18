@@ -208,3 +208,109 @@ describe("escapeStack — who else owns Escape", () => {
     }
   });
 });
+
+// ── ROUND 4 (review of round 3: finding 4 and NITs 5 + 10) ───────────────
+describe("escapeStack — the full six-layer ladder (P3.3 round 4)", () => {
+  it("ranks menu ▸ gesture ▸ window ▸ workspace ▸ selection ▸ app", async () => {
+    // Registered in the order the real app mounts them — bottom first — so
+    // nothing but LAYER_RANK can produce the expected walk.
+    const log: string[] = [];
+    register("app", false, log, "app");
+    register("selection", false, log, "selection");
+    register("workspace", false, log, "workspace");
+    register("window", false, log, "window");
+    register("gesture", false, log, "gesture");
+    register("menu", false, log, "menu");
+
+    await escape();
+    expect(log).toEqual(["menu", "gesture", "window", "workspace", "selection", "app"]);
+  });
+
+  it("a Stage selection sits BELOW an open workspace, so one Escape does one thing", async () => {
+    const log: string[] = [];
+    register("selection", true, log, "selection");
+    register("workspace", true, log, "workspace");
+
+    await escape();
+    expect(log).toEqual(["workspace"]); // the selection waits its turn
+  });
+});
+
+describe("escapeStack — a surface that closed mid-walk is skipped (finding 4)", () => {
+  it("does not call a handler that unregistered during this same walk", async () => {
+    // `walk` iterates a SNAPSHOT of the stack, so a handler that tears down a
+    // surface below it (a workspace close that unmounts a Stage selection —
+    // the real shape) leaves a stale entry in that snapshot. Without the
+    // `stack.includes` skip the stale handler is still invoked: a second
+    // action from one keystroke, on a surface that no longer exists.
+    const log: string[] = [];
+    const below = vi.fn(() => {
+      log.push("below");
+      return true;
+    });
+    const unregisterBelow = pushEscapeSurface("selection", below);
+    cleanups.push(unregisterBelow);
+    cleanups.push(
+      pushEscapeSurface("workspace", () => {
+        log.push("workspace");
+        unregisterBelow(); // closing the workspace unmounts the surface below
+        return false; // …and DECLINES, so the walk continues downward
+      }),
+    );
+
+    await escape();
+
+    expect(log).toEqual(["workspace"]);
+    expect(below).not.toHaveBeenCalled();
+  });
+});
+
+describe("escapeStack — a throwing handler does not eat the key (review NIT 5)", () => {
+  it("logs it, and the surface below still gets its turn", async () => {
+    // Measured on the round-3 tree: the exception escaped the `setTimeout` as
+    // an uncaught error (outside any React error boundary), the surface below
+    // never ran, and it recurred on every Escape while the broken surface
+    // stayed mounted — Escape was dead for everything underneath it.
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const log: string[] = [];
+    cleanups.push(
+      pushEscapeSurface("workspace", () => {
+        log.push("workspace");
+        return true;
+      }),
+    );
+    cleanups.push(
+      pushEscapeSurface("window", () => {
+        throw new Error("boom");
+      }),
+    );
+
+    await escape();
+
+    expect(log).toEqual(["workspace"]);
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+  });
+});
+
+describe("escapeStack — the deferred defaultPrevented re-read is the only gate (NIT 10)", () => {
+  it("a DOCUMENT-bubble consumer that preventDefaults still stops the walk", async () => {
+    // The synchronous `defaultPrevented` check in `onKeyDown` was removed as
+    // redundant; this is the one case it could ever have caught.
+    // `SymbolPalette` claims exactly this way — document-bubble runs before
+    // window-bubble, so the flag is already set when the dispatcher arms the
+    // walk, and the walk re-reads it before touching a single surface.
+    const handler = vi.fn(() => true);
+    cleanups.push(pushEscapeSurface("menu", handler));
+    const claimer = (e: KeyboardEvent) => {
+      if (e.key === "Escape") e.preventDefault();
+    };
+    document.addEventListener("keydown", claimer);
+    try {
+      await escape(document.body);
+      expect(handler).not.toHaveBeenCalled();
+    } finally {
+      document.removeEventListener("keydown", claimer);
+    }
+  });
+});

@@ -1,12 +1,13 @@
 // useShapeEdit — the MAIN #27 pointer-mode SHAPE bridge + object-menu hook.
 // Same renderHook/act convention as useAnnotationEdit.test.ts.
 
-import { fireEvent, renderHook } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
 import { useShapeEdit } from "./useShapeEdit";
 
 // A stand-in conv (mirrors useAnnotationEdit.test.ts's CONV) — the plugin's
@@ -186,16 +187,16 @@ describe("useShapeEdit — page/data anchor toggle (MAIN #27)", () => {
 });
 
 describe("useShapeEdit — Escape deselects", () => {
-  it("clears selectedShapeId on Escape while something is selected", () => {
+  it("clears selectedShapeId on Escape while something is selected", async () => {
     useApp.setState({ selectedShapeId: "s1" });
     renderHook(() => useShapeEdit("pointer"));
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().selectedShapeId).toBeNull();
   });
 
-  it("is a no-op when nothing is selected", () => {
+  it("is a no-op when nothing is selected", async () => {
     renderHook(() => useShapeEdit("pointer"));
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().selectedShapeId).toBeNull();
   });
 });
