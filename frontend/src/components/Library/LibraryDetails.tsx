@@ -1,28 +1,26 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import DetailsHeaderRow from "./DetailsHeaderRow";
-import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import DetailsRow, { isTextEditorTarget, type DetailsRenameState } from "./DetailsRow";
+import { useDetailsDragDropContext } from "./useDetailsDragDrop";
+import { isSelected } from "./libraryOpen";
 import { useLibraryDetailsVirtualization } from "./useLibraryDetailsVirtualization";
 import {
   detailsNavIndex,
   libraryDetailsRows,
   sortLibraryDetailsRows,
-  type LibraryDetailsRow,
   type LibraryDetailsSortDirection,
   type LibraryDetailsSortKey,
 } from "../../lib/libraryDetails";
 import { LIBRARY_DETAILS_COLUMNS } from "../../lib/libraryDetailsColumns";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { libraryNodeMatches } from "../../lib/librarySearch";
+import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import { parseQuery } from "../../lib/smartfolders";
-import { requestDatasetRemoval } from "../../lib/datasetRemoval";
-import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
-import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { BatchMetadataPatch } from "../../store/datasetMeta";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
-import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
 import LibraryDetailsColumnsMenu from "./LibraryDetailsColumnsMenu";
 
@@ -70,7 +68,6 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   const selection = useLibraryStore((s) => s.librarySelection);
   const [sortKey, setSortKey] = useState<LibraryDetailsSortKey>("manual");
   const [direction, setDirection] = useState<LibraryDetailsSortDirection>("asc");
-  const [artifactMenu, setArtifactMenu] = useState<{ x: number; y: number; node: ArtifactNode } | null>(null);
   // PR L slice 2 (L0.56): the user's selected metadata columns — now the
   // store field (store/libraryDetailsColumns.ts), .dwk-persisted (additive;
   // absent on an older doc loads as today's original seven, unchanged).
@@ -100,6 +97,16 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
   // and the browser keeps focus on a moved element, so `focusKey` survives a
   // sort untouched.
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  // L1.4 review round: the ONE open inline rename editor — which row owns it
+  // and the live draft — belongs here, beside `focusKey`, not inside the row.
+  // Under virtualization a row unmounts the moment it scrolls out of the
+  // window, and React fires no blur on unmount, so row-local state would
+  // silently destroy a half-typed name with nothing committed. Held here the
+  // draft survives the scroll and the editor comes back when the row does.
+  const [rename, setRename] = useState<DetailsRenameState | null>(null);
+  // ONE set of drag/drop store subscriptions for the whole table (the per-row
+  // hook used to hold five each — 200 for a 40-row window).
+  const dndContext = useDetailsDragDropContext();
   // Sol's PR #141 follow-on: the EIGHT sort headers were eight more Tab
   // stops. Same roving pattern as the rows — one header in the Tab order
   // (the last-focused, else the current sort column, else the first);
@@ -141,7 +148,55 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed off the row list only
   }, [rows]);
 
+  // ORGANIC-SCROLL focus fallback (lib/scrollOutFocus). A mouse-wheel scroll
+  // that unmounts the focused <tr> orphans focus to <body> with no keystroke
+  // to recover it — the scroll wrapper takes it instead, and onNavKeyDown
+  // resumes from the roving row. `effectiveRovingKey` is a DIFFERENT fact: it
+  // keeps the rendered window TABBABLE, which says nothing about where live
+  // DOM focus sits. Declared AFTER the removal recovery above so that effect
+  // gets first claim on an orphaned focus (the shared predicate also excludes
+  // the removal case outright, via `stillInModel`).
+  //
+  // Keyed on `focusKey`, NOT `rovingKey` (focus-review fix, 2026-09-14):
+  // `rovingKey` is non-null even when NO row has ever been focused (it falls
+  // back to the selected row, then rows[0]) — a wrapper predicate that used
+  // it would claim focus off a pure wheel-browse of an untouched table (no
+  // click, no keystroke, no selection) and, from then on, silently swallow
+  // the global Delete-selection shortcut. `focusKey` is set only by a row's
+  // real `onFocusRow`, so it is null until a row has genuinely held focus —
+  // exactly the fact this predicate needs. The RESUME branch in
+  // `onNavKeyDown` below still uses `rovingKey`: once the wrapper legitimately
+  // holds focus, resuming from the model's current roving position (not
+  // necessarily the row that scrolled out) is correct.
+  useEffect(() => {
+    const selector = focusKey != null ? `[data-lib-row="${CSS.escape(focusKey)}"]` : null;
+    const stillInModel = rows.some((r) => r.node.key === focusKey);
+    if (needsScrollOutFocusFallback(virt.virtualized, selector, stillInModel, scrollRef.current)) {
+      scrollRef.current?.focus();
+    }
+  }, [virt.virtualized, virt.start, virt.end, rows, focusKey, scrollRef]);
+
   const onNavKeyDown = (event: React.KeyboardEvent): void => {
+    // The SCROLL WRAPPER itself holds focus — the scroll-out fallback effect
+    // above put it there when an organic scroll unmounted the focused row. A
+    // nav key resumes from the roving row's model position; everything else,
+    // Delete included, falls through to the belt below, which
+    // consumes it rather than let it reach the global dataset handlers.
+    if (event.target === scrollRef.current) {
+      const resume = detailsNavIndex(rows.length, keyIndex(rovingKey), event.key);
+      if (resume != null) {
+        event.preventDefault();
+        focusRowAt(resume);
+        return;
+      }
+    }
+    // L1.4: a row's inline rename input owns its own keys. `.closest(
+    // "[data-lib-row]")` below resolves ANY descendant — including that
+    // input — to its ancestor row, which is exactly how LibraryTree's P2
+    // "keyboard hijack" bug let Up/Down escape a text editor as roving
+    // navigation. Must run FIRST, and must not preventDefault: the cursor
+    // keys are the editor's.
+    if (isTextEditorTarget(event.target as Element)) return;
     const target = (event.target as Element).closest("[data-lib-row]");
     if (!target) {
       // P1 review fix, belt half: a keystroke inside the table area that
@@ -229,8 +284,11 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
        *  keyboard entry lands directly on the current row and a focused
        *  wrapper can never leak Up/Down past onNavKeyDown's row check to
        *  the global dataset navigator. The accessible name lives on the
-       *  <table> itself, where it labels a real role. */}
-      <div className="qzk-details-scroll" ref={scrollRef} onKeyDown={onNavKeyDown}>
+       *  <table> itself, where it labels a real role. `tabIndex={-1}` (from
+       *  scrollOutFocusProps) keeps that true — it makes the wrapper
+       *  focusable by SCRIPT only, for the scroll-out fallback, and adds no
+       *  sequential stop. */}
+      <div className="qzk-details-scroll" ref={scrollRef} {...scrollOutFocusProps} onKeyDown={onNavKeyDown}>
         {/* REVIEW ROUND: a VIRTUALIZED table must declare its true size. Without
             `aria-rowcount` a screen reader announces only the rendered window
             (~40 rows) as the entire table, so a 5,000-row Library sounds like a
@@ -261,114 +319,27 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
             {virt.padTop > 0 && (
               <tr aria-hidden="true" style={{ height: virt.padTop }}><td colSpan={colSpan} /></tr>
             )}
-            {rendered.map((row, i) => {
-              const selected = isSelected(row.node, selectedIdSet, selection);
-              // Absolute position in the FULL model, not the window: 1-based
-              // with the header row occupying index 1 (see the table's note).
-              const absoluteRowIndex = (virt.virtualized ? virt.start + i : i) + 2;
-              const title = `${row.node.name} — ${row.type}; ${row.location}; ${row.dimensions}; ${row.source}`;
-              return (
-                <tr
-                  key={row.node.key}
-                  className={selected ? "selected" : undefined}
-                  data-lib-row={row.node.key}
-                  {...(virt.virtualized ? { "aria-rowindex": absoluteRowIndex } : {})}
-                  data-ds-id={row.node.kind === "worksheet" ? row.node.entityId : undefined}
-                  tabIndex={row.node.key === effectiveRovingKey ? 0 : -1}
-                  aria-selected={selected}
-                  title={title}
-                  onFocus={() => setFocusKey(row.node.key)}
-                  onClick={() => selectLibraryNode(row.node)}
-                  onDoubleClick={() => openLibraryNode(row.node)}
-                  onContextMenu={(event) => {
-                    selectLibraryNode(row.node);
-                    if (!isArtifactNode(row.node)) return;
-                    event.preventDefault();
-                    setArtifactMenu({ x: event.clientX, y: event.clientY, node: row.node });
-                  }}
-                  onKeyDown={(event) => {
-                    // Match LibraryTree's focused-row contract: a Details row
-                    // owns Delete/Backspace before the window-level fallback
-                    // can target stale selectedIds (or the active plot). Only
-                    // worksheets and artifacts (E-b2) route to their
-                    // canonical delete flows; the remaining kinds
-                    // (folder/workbook) consume the key here.
-                    if (isContextMenuKeyEvent(event) && isArtifactNode(row.node)) {
-                      event.preventDefault();
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setArtifactMenu({ x: rect.left + 8, y: rect.bottom, node: row.node });
-                      return;
-                    }
-                    if (event.key === "Delete" || event.key === "Backspace") {
-                      event.preventDefault();
-                      if (row.node.kind === "worksheet") {
-                        const ids = useApp.getState().selectedIds;
-                        requestDatasetRemoval(
-                          ids.length > 0 && ids.includes(row.node.entityId) ? ids : [row.node.entityId],
-                        );
-                      } else if (isArtifactNode(row.node)) {
-                        // E-b2: the canonical registry delete (shared confirm
-                        // + dependency warning; fail-closed on source-managed
-                        // recovered Origin figures).
-                        deleteArtifactConfirmed(row.node);
-                      }
-                      return;
-                    }
-                    if (event.key === "Enter") {
-                      // D2: Enter on the focused reveal BUTTON is the
-                      // button's own activation — let the native click fire
-                      // instead of opening the row it sits in.
-                      if ((event.target as Element).closest(".qzk-details-reveal")) return;
-                      event.preventDefault();
-                      openLibraryNode(row.node);
-                    }
-                  }}
-                >
-                  <td
-                    className="qzk-details-name"
-                    style={{ paddingLeft: !searching && sortKey === "manual" ? 8 + row.node.depth * 10 : 8 } as CSSProperties}
-                  >
-                    <span aria-hidden="true">{row.node.kind === "folder" ? "▦" : row.node.kind === "workbook" ? "▤" : "·"}</span>
-                    <span>{row.node.name}</span>
-                    <small>{row.location} · {row.dimensions}</small>
-                  </td>
-                  {/* PR L (L0.56): generic over the user's selected columns —
-                   *  `columns` always starts with NAME_COLUMN (rendered
-                   *  specially above), so this covers everything after it. */}
-                  {columns.slice(1).map((col) => (
-                    <td key={col.key} className={col.className}>
-                      {row[col.key as Exclude<keyof LibraryDetailsRow, "node" | "manualIndex">]}
-                    </td>
-                  ))}
-                  {searching && (
-                    <td className="qzk-details-actions">
-                      {/* Rides the roving row's tab stop: reachable by Tab
-                       *  only from the focused row (one extra stop while
-                       *  searching, matching the two-stop philosophy). */}
-                      <button
-                        type="button"
-                        className="qzk-details-reveal"
-                        aria-label="Show in Library"
-                        title="Show in Library"
-                        tabIndex={row.node.key === effectiveRovingKey ? 0 : -1}
-                        onClick={(event) => {
-                          event.stopPropagation(); // never also select/open the row
-                          onShowInLibrary?.(row.node);
-                        }}
-                        onDoubleClick={(event) => event.stopPropagation()}
-                      >
-                        {/* Compact glyph at narrow container widths, full text
-                         *  at ≥300px — the accessible name lives on the button
-                         *  either way (review round 2: the text button clipped
-                         *  outside its cell at the default 210px panel). */}
-                        <span className="qzk-reveal-glyph" aria-hidden="true">⌖</span>
-                        <span className="qzk-reveal-text">Show in Library</span>
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+            {rendered.map((row, i) => (
+              <DetailsRow
+                key={row.node.key}
+                row={row}
+                columns={columns}
+                // Absolute position in the FULL model, not the window: 1-based
+                // with the header row occupying index 1 (see the table's note).
+                ariaRowIndex={virt.virtualized ? (virt.start + i) + 2 : null}
+                selectedIdSet={selectedIdSet}
+                selectedIds={selectedIds}
+                selection={selection}
+                rovingKey={effectiveRovingKey}
+                indent={!searching && sortKey === "manual" ? 8 + row.node.depth * 10 : 8}
+                searching={searching}
+                renameDraft={rename?.key === row.node.key ? rename.draft : null}
+                onRenameChange={setRename}
+                dndContext={dndContext}
+                onFocusRow={setFocusKey}
+                onShowInLibrary={onShowInLibrary}
+              />
+            ))}
             {virt.padBottom > 0 && (
               <tr aria-hidden="true" style={{ height: virt.padBottom }}><td colSpan={colSpan} /></tr>
             )}
@@ -380,14 +351,6 @@ export default function LibraryDetails({ hierarchy, searchQuery, onShowInLibrary
           </div>
         )}
       </div>
-      {artifactMenu && (
-        <ContextMenu
-          x={artifactMenu.x}
-          y={artifactMenu.y}
-          items={buildArtifactMenu(artifactMenu.node)}
-          onClose={() => setArtifactMenu(null)}
-        />
-      )}
     </div>
   );
 }

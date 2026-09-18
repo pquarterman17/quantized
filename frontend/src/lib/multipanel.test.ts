@@ -6,11 +6,13 @@ import {
   cellSize,
   facetGridSize,
   panelHeights,
+  spatialCellStyling,
   spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
 } from "./multipanel";
 import type { PlotPayload } from "./plotdata";
+import type { SeriesStyle } from "./types";
 
 const PAYLOAD: PlotPayload = {
   data: [
@@ -192,5 +194,58 @@ describe("xZoomSyncHook", () => {
     b.setScale.mockImplementation(() => hook(b as unknown as uPlot, "x"));
     expect(() => hook(a as unknown as uPlot, "x")).not.toThrow();
     expect(b.setScale).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── P3.3: the spatial cell's styling, canvas + legend from ONE derivation ───
+// `useMultiPanelStage.ts` builds a cell's uPlot options from `cellStyles` +
+// `cellCycle` and portals `legendEntries` beside it. Deriving them apart is how
+// the legend ended up showing a solid swatch next to a dashed curve; deriving
+// them here makes that unrepresentable, and pins it.
+describe("spatialCellStyling (P3.3)", () => {
+  const panel = {
+    yKeys: [1, 2, 3],
+    seriesLabels: { 1: "A", 2: "B", 3: "C" },
+    seriesStyles: {} as Record<number, SeriesStyle>,
+  };
+
+  it("OFF: no cycle, and the legend carries the raw stored style", () => {
+    const out = spatialCellStyling(panel, false);
+    expect(out.cellCycle).toBeNull();
+    expect(out.legendEntries.map((e) => e.style)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("ON: the legend swatch carries the SAME resolved style the cell canvas gets", () => {
+    const out = spatialCellStyling(panel, true);
+    expect(out.cellStyles).toEqual([undefined, undefined, undefined]); // canvas gets RAW…
+    expect(out.cellCycle).toEqual([0, 1, 2]); // …plus these positions
+    // …so the swatch must show what `buildOpts` will resolve from that pair.
+    expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "dashed", "dotted"]);
+    expect(out.legendEntries.map((e) => e.displayIndex)).toEqual([0, 1, 2]);
+  });
+
+  it("hidden channels drop out of BOTH the positions and the legend", () => {
+    // `spatialPlottedChannels` filters hidden for the canvas AND for
+    // `spatialPageExport`'s request, so unlike the single-figure path there is
+    // no unfiltered list to reconcile — the cycle is plain display order over
+    // what survives, on every side.
+    const out = spatialCellStyling({ ...panel, hiddenChannels: [2] }, true);
+    expect(out.plottedChannels).toEqual([1, 3]);
+    expect(out.cellCycle).toEqual([0, 1]);
+    expect(out.legendEntries.map((e) => e.label)).toEqual(["A", "C"]);
+    expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "dashed"]);
+  });
+
+  it("an unlabelled channel takes a cycle position but no legend row", () => {
+    // `flatMap` drops the entry; the POSITION still belongs to that channel, so
+    // the labelled ones must not slide up to fill the gap.
+    const out = spatialCellStyling({ ...panel, seriesLabels: { 1: "A", 3: "C" } }, true);
+    expect(out.legendEntries.map((e) => e.displayIndex)).toEqual([0, 2]);
+    expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "dotted"]);
+  });
+
+  it("an explicit per-series style still wins in the legend", () => {
+    const out = spatialCellStyling({ ...panel, seriesStyles: { 2: { line: "solid" } } }, true);
+    expect(out.legendEntries.map((e) => e.style?.line)).toEqual(["solid", "solid", "dotted"]);
   });
 });

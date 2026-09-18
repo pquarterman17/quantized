@@ -15,15 +15,21 @@ import { fmtNum } from "../../lib/format";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import { nearestLegendCorner } from "../../lib/plotview";
 import { frameAnchorStyle } from "../../lib/uplotFrameVars";
-import type { SeriesStyle } from "../../lib/types";
+import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import LegendSample from "./LegendSample";
+import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 
 interface PlotLegendProps {
   series: PlotSeriesSpec[];
   /** Per-display-series style overrides (for the swatch color), 1:1 with series. */
   styleList?: (SeriesStyle | undefined)[];
+  /** P3.3 (`lib/seriesStyleCycle.ts`): the SAME display positions the canvas
+   *  beside this legend was built with. Absent = no cycle, which is what every
+   *  legend rendered next to an uncycled plot passes. Without it the swatch
+   *  would show the raw stored style and contradict the line it labels. */
+  seriesCycle?: SeriesCycle;
   /** Dataset channel index for each plotted display-series (overlays excluded). */
   plotted: number[];
   /** Per-display-series visibility (true = hidden), 1:1 with series. */
@@ -43,12 +49,13 @@ interface PlotLegendProps {
    *  switch exactly like the canvas does. */
   inkColor?: string;
   /** Global trace fallback when a series has no explicit style. */
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
 }
 
 export default function PlotLegend({
   series,
   styleList,
+  seriesCycle,
   plotted,
   hidden,
   colorByColumns,
@@ -231,7 +238,7 @@ export default function PlotLegend({
         if (editing && editing.channel === channel) {
           return (
             <div className="it" key={s.label}>
-              <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
+              <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null)} defaultTrace={defaultTrace} />
               <input
                 className="qz-input"
                 autoFocus
@@ -299,7 +306,7 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <LegendSample color={swatch} style={styleList?.[i]} defaultTrace={defaultTrace} />
+            <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null)} defaultTrace={defaultTrace} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
             {interactive && plotted.length > 1 && (

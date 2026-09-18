@@ -1,0 +1,48 @@
+{
+  "rows": 2,
+  "cols": 2,
+  "panels": [
+    {
+      "row": 0,
+      "col": 0,
+      "label": null,
+      "title": null,
+      "figure": "panel 0"
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "label": null,
+      "title": "custom panel title",
+      "figure": "panel 1"
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "label": null,
+      "title": null,
+      "figure": "panel 2"
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "label": "(iv)",
+      "title": null,
+      "figure": "panel 3"
+    }
+  ],
+  "resolvedLabels": [
+    "(a)",
+    "(b)",
+    "(c)",
+    "(iv)"
+  ],
+  "layout": {
+    "linkX": true,
+    "linkY": true,
+    "rowGap": 0.05,
+    "colGap": 0.04,
+    "alignLabels": false,
+    "resizeMode": "constrained"
+  }
+}

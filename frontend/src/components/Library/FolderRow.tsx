@@ -187,9 +187,15 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         const zone = dropZone ?? dropZoneAt(e.currentTarget.getBoundingClientRect(), e.clientY);
         setDropZone(null);
         setDropPointer(null);
+        // Review round (Details' identical hole): a drop onto the container
+        // the node is ALREADY in must not reach a store action — both actions
+        // record their undo step BEFORE doing anything, so a no-op move would
+        // leave a do-nothing entry on the history stack.
         if (e.dataTransfer.types.includes(WORKBOOK_DND)) {
           const id = e.dataTransfer.getData(WORKBOOK_DND);
           if (!id) return;
+          const workbook = useApp.getState().workbooks.find((w) => w.id === id);
+          if (!workbook || (workbook.folderId ?? null) === folder.id) return;
           e.preventDefault();
           e.stopPropagation();
           moveWorkbookToFolder(id, folder.id);
@@ -202,6 +208,11 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
           e.preventDefault();
           e.stopPropagation();
           if (zone === "into") {
+            // Already this folder's child: nothing to reparent.
+            if (useApp.getState().folders.find((f) => f.id === draggedId)?.parentId === folder.id) {
+              expand();
+              return;
+            }
             moveFolder(draggedId, folder.id); // reparent — becomes a new child, appended
             expand();
           } else {

@@ -6,7 +6,14 @@ import type uPlot from "uplot";
 
 import type { ColorScatterSpec } from "./colorscatter";
 import { resolveDrawColor } from "./contrastColor";
-import { FILLED_SHAPES, markerPaths } from "./markers";
+import { seriesPoints } from "./markers";
+// The palette (cssVar / SERIES_VARS / seriesColor) now lives beside the P3.3
+// cycle in ./seriesStyleCycle: hue by display position there, dash and glyph by
+// display position there too, one position space for both. Moved to fund this
+// file's shrink-only pin, and so lib/exportStyles.ts no longer imports the whole
+// plot builder to resolve a colour; re-exported so no importer had to change.
+export { cssVar, SERIES_VARS, seriesColor } from "./seriesStyleCycle";
+import { cssVar, DASH, resolveSeriesStyle, seriesColor, type SeriesCycle } from "./seriesStyleCycle";
 import type { Measurement } from "./measure";
 import type { FwhmResult } from "./peakwidth";
 import type { PlotBg } from "./plotview";
@@ -15,7 +22,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import type { Annotation, AxisFormat, AxisScale, LineStyle, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
+import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
 import {
   annotationPlugin,
@@ -27,6 +34,7 @@ import {
   regionShadePlugin,
   type AnnotationEditOpts,
 } from "./uplotOverlays";
+import { regionLiveBoxHook, regionSelectPick } from "./uplotRegionBox";
 import { richLabelsPlugin, type AxisLabelEditOpts } from "./uplotRichLabels";
 import { shapesPlugin, type ShapeEditOpts } from "./uplotShapes";
 import { gadgetCursorsPlugin, quickFitPlugin } from "./uplotGadgets";
@@ -56,13 +64,6 @@ export type PlotTool =
   | "integ"
   | "fwhm"
   | "qfit";
-
-/** Exported for `useAnnotationEdit`'s Frame "Solid" preset (MAIN #27), which
- *  needs a concrete resolved surface color to draw behind text — a canvas
- *  `fillStyle` can't take a live `var(--x)` reference the way DOM CSS can. */
-export function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
 
 /** uPlot concatenates every plugin hook value and later calls each entry.
  * Optional draw-only hooks are represented as `undefined` by several plugin
@@ -131,24 +132,6 @@ export function resolvePlotBg(bg?: PlotBg): PlotBgTokens {
     isDark: true,
   };
 }
-
-export const SERIES_VARS = [
-  "--series-1",
-  "--series-2",
-  "--series-3",
-  "--series-4",
-  "--series-5",
-  "--series-6",
-  "--series-7",
-  "--series-8",
-];
-
-/** Dash patterns (canvas setLineDash arrays) per line style; solid = no dash. */
-const DASH: Record<LineStyle, number[] | undefined> = {
-  solid: undefined,
-  dashed: [8, 4],
-  dotted: [2, 4],
-};
 
 /** A uPlot axis `values` callback: maps tick split values to label strings. */
 type TickValues = (
@@ -572,15 +555,6 @@ export function xIsAscending(xs: readonly (number | null)[]): boolean {
   return true;
 }
 
-/** Effective stroke for display-series `i`: an explicit override (token name or
- *  literal hex) wins, else the palette color by position. A `"--token"` color is
- *  resolved through `cssVar` so it stays re-themeable; a literal passes through. */
-export function seriesColor(i: number, style?: SeriesStyle): string {
-  const c = style?.color;
-  if (c) return c.startsWith("--") ? cssVar(c) || c : c;
-  return cssVar(SERIES_VARS[i % SERIES_VARS.length]) || "#8b5cf6";
-}
-
 export interface BuildOptsArgs {
   width: number;
   height: number;
@@ -592,9 +566,9 @@ export interface BuildOptsArgs {
   xScale: AxisScale;
   tool: PlotTool;
   onReadout: (r: Readout | null) => void;
-  /** In `region` tool: called with the two data-x edges of a completed drag
-   *  (unordered). Used by the baseline "Fit from region" rubber-band. */
-  onRegionSelect?: (x0: number, x1: number) => void;
+  /** In `region` tool: the drag's x edges (unordered); y0/y1 too past
+   *  `MIN_BOX_HEIGHT_PX` (2-D box, GAP #96/#20). Baseline's region fit. */
+  onRegionSelect?: (x0: number, x1: number, y0?: number, y1?: number) => void;
   /** #50 plot-brush: drag-end x-band edges for the "select" tool. */
   onRangeSelect?: (x0: number, x1: number) => void;
   /** In `measure` tool: called with the live Δx/Δy/slope while dragging the
@@ -698,6 +672,17 @@ export interface BuildOptsArgs {
   /** Per-display-series style overrides, aligned 1:1 with `payload.series`
    *  (undefined entries — e.g. overlays — keep the defaults). */
   seriesStyles?: (SeriesStyle | undefined)[];
+  /** P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`): the DISPLAY
+   *  POSITION of each series, or `null`/absent to draw exactly what this
+   *  builder drew before the cycle existed. Absent is the default on purpose —
+   *  a render path cycles only once someone has wired an export that renders
+   *  the same dash/glyph for the same series, so a NEW caller is uncycled until
+   *  it does. Three of this builder's eight call sites pass one: a PLOT WINDOW's
+   *  plain XY overlay (focused or background, via `useStageSeriesCycle`, paired
+   *  with `figureSpec.ts`), its inset, and the spatial cells (paired with
+   *  `spatialPageExport.ts`). The other five, and a snapshot window (whose frozen
+   *  bundle carries RESOLVED styles), pass nothing — table in P3.3. */
+  seriesCycle?: SeriesCycle;
   /** Dataset-channel index for each plotted display-series (`usePlotPayload`'s
    *  `plotted` array — the same space `SeriesStyle.fill`'s `vs` and `colorBy`
    *  are expressed in). Only needed to resolve a `fill: {vs: channel}`
@@ -738,7 +723,7 @@ export interface BuildOptsArgs {
   /** Default trace shape for series without an explicit per-series style
    *  (Preferences ▸ Plot ▸ Default trace): "Line" | "Line + markers" | "Scatter"
    *  | "Step". Per-series overrides still win. */
-  defaultTrace?: string;
+  defaultTrace?: DefaultTrace;
   /** Enable wheel-to-zoom over the plot (Preferences ▸ Interaction ▸ Mouse wheel). */
   wheelZoom?: boolean;
   /** Completed box-zoom/pan/wheel gesture, coalesced to one view-history step. */
@@ -1304,7 +1289,12 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     // non-monotonic x (hysteresis loops, swept-back scans) must scan all points.
     { sorted: xAscending ? 1 : 0 },
     ...payload.series.map((s, i) => {
-      const style = seriesStyles?.[i];
+      // The EFFECTIVE style: this series' own, plus P3.3's auto dash/glyph at
+      // this series' DISPLAY POSITION — but only for a caller that opted in by
+      // passing `seriesCycle` (the identity function otherwise, returning the
+      // caller's own reference). The SAME resolver, at the SAME position,
+      // `lib/exportStyles.ts` calls — see `seriesStyleCycle.ts`'s header.
+      const style = resolveSeriesStyle(seriesStyles?.[i], i, args.seriesCycle ?? null);
       // Literal per-series overrides (e.g. an Origin-imported figure's
       // saved line colour) are checked for contrast against THIS window's
       // effective background and swapped for the ink token when they'd be
@@ -1341,23 +1331,14 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
       // Default trace shape (Preferences) when the series has no explicit style:
       // Scatter = markers, no line; Line + markers = both; Step = stepped line.
       const trace = args.defaultTrace ?? "Line";
-      const scatter = trace === "Scatter";
-      const width = style?.width ?? (scatter ? 0 : (args.baseLineWidth ?? 1.5));
+      const width = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const dash = style?.line ? DASH[style.line] : undefined;
-      // Optional markers. Default is a filled circle (uPlot built-in); other
-      // glyphs supply a custom paths builder. Open glyphs (+/✕/✳) stroke only;
-      // closed glyphs fill with the series colour.
-      let points: uPlot.Series.Points = { show: false };
-      if (style?.marker) {
-        const size = style.markerSize ?? 5;
-        const shape = style.markerShape ?? "circle";
-        const paths = markerPaths(shape, size);
-        points = paths
-          ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
-          : { show: true, size };
-      } else if (scatter || trace === "Line + markers") {
-        points = { show: true, size: 5 };
-      }
+      // Markers: glyph + size for an explicit `marker` style, or the plain 5px
+      // circle of the Scatter / Line + markers default trace —
+      // `markers.seriesPoints` owns that decision now, and its doc records why
+      // the two branches must NOT be merged (the export emits a marker only for
+      // an explicit `marker`).
+      const points = seriesPoints(style, trace, stroke);
       // Fill-under (MAIN #13): uPlot's native `series.fill`/`fillTo`, derived
       // from this series' own resolved stroke. `{vs}` band fills are NOT a
       // per-series prop — see `resolveFillBands` below (opts.bands).
@@ -1375,9 +1356,11 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
           : style.step === "mid" ? args.steppedPathsMid
           : args.steppedPaths;
         if (builder) def.paths = xAscending ? builder : fullLine(builder);
-      } else if (trace === "Step" && !style?.line && args.steppedPaths) {
+      } else if (trace === "Step" && !seriesStyles?.[i]?.line && args.steppedPaths) {
         // Stepped trace: apply the caller-supplied step-after path builder
         // (there's no per-series line-shape override, so it's a global default).
+        // RAW list, not the resolved `style`: a P3.3 auto dash is a DEFAULT and
+        // must not read as an explicit choice, or the pref would un-step this.
         def.paths = xAscending ? args.steppedPaths : fullLine(args.steppedPaths);
       } else if (!xAscending && width > 0 && args.linearPaths) {
         // Loop rendering: draw the line over every point in acquisition order.
@@ -1395,32 +1378,30 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     width,
     height,
     ...(args.title?.trim() ? { title: args.title.trim() } : {}),
-    // Box-zoom in zoom AND pointer mode (MAIN #18 — empty-canvas drag keeps
-    // the muscle-memory box-zoom gesture even in the new default tool; an
-    // object hit takes capture-phase priority over it, see annotationPlugin/
-    // refLinePlugin); region drags an x-band without rescaling
-    // (setScale:false), so setSelect can read it back; pan/cursor disable drag.
-    // Pointer mode ALSO suppresses uPlot's own dashed crosshair (x/y: false)
-    // — the owner's "reads as measurement mode" complaint — while every
-    // other tool keeps it (uPlot's default, unset here).
+    // Box-zoom in zoom/pointer (MAIN #18); select drags x-only, region also
+    // tracks y (2-D box, MATLAB `onBGMouseUp` parity, GAP #96/#20), neither
+    // rescales; pan/cursor disable drag; pointer hides the dashed crosshair.
     cursor: {
       drag:
-        tool === "region" || tool === "select"
-          ? { x: true, y: false, setScale: false, uni: 1 }
-          : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
+        tool === "region" ? { x: true, y: true, setScale: false, uni: 1 }
+        : tool === "select" ? { x: true, y: false, setScale: false, uni: 1 }
+        : { x: tool === "zoom" || tool === "pointer", y: tool === "zoom" || tool === "pointer", uni: 1 },
       ...(tool === "pointer" ? { x: false, y: false } : {}),
     },
-    // Region / select rubber-band: on drag end, hand the two data-x edges to the
-    // matching caller. posToVal does the pixel->data mapping (linear or log x);
-    // the caller orders/clamps. Guard width>0 so a click (zero-width) is ignored.
+    // Region/select rubber-band -> matching caller (posToVal maps px->data;
+    // caller orders/clamps); width<=0 (click) ignored. region's drag-end pick
+    // (incl. the y0/y1 threshold + read-back scale, and hiding the just-
+    // painted sliver box) is extracted to `regionSelectPick` — see its doc.
     hooks: {
+      setCursor: [regionLiveBoxHook(tool)],
       setSelect: [
         (u: uPlot): void => {
-          const cb = tool === "region" ? onRegionSelect : tool === "select" ? args.onRangeSelect : null;
-          if (!cb) return;
-          const w = u.select.width;
-          if (w <= 0) return;
-          cb(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + w, "x"));
+          if (u.select.width <= 0) return;
+          if (tool === "select") {
+            return void args.onRangeSelect?.(u.posToVal(u.select.left, "x"), u.posToVal(u.select.left + u.select.width, "x"));
+          }
+          if (tool !== "region" || !onRegionSelect) return;
+          regionSelectPick(u, payload, hasY2, onRegionSelect);
         },
       ],
     },

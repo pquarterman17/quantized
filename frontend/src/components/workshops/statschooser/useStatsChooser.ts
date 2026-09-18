@@ -171,7 +171,7 @@ export function useStatsChooser(): StatsChooserState {
       });
       addReport(`${rec.recommendation} — ${active.name}`, report, active.id);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "report failed", "danger");
+      toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
     } finally {
       setBusy(false);
     }

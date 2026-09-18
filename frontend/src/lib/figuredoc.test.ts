@@ -1,6 +1,6 @@
 // lib/figuredoc — FigureDoc sanitizers + user graph templates (#12/#15).
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   deleteGraphTemplate,
@@ -10,6 +10,7 @@ import {
   saveGraphTemplate,
   type FigureDoc,
 } from "./figuredoc";
+import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct } from "./types";
 
 const DATA: DataStruct = { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} };
@@ -104,5 +105,60 @@ describe("graph templates (#15)", () => {
     expect(deleteGraphTemplate("web").map((t) => t.name)).toEqual(["aps-tight"]);
     localStorage.setItem("qz.graphTemplates", "garbage");
     expect(loadGraphTemplates()).toEqual([]);
+  });
+
+  // BUG-016 round 4: the SECOND persistence path for a pinned style array, and
+  // the reason it is sanitized at all — a template saved (or Origin-imported)
+  // before `colorDerived` existed reaches `docSeriesStyles` via
+  // `applyStyleTemplate` and then the export wire. Round 5: the sanitizer
+  // records the document's word and infers nothing, so what this path is FOR
+  // is dropping a malformed flag and normalizing the field, not deciding
+  // provenance.
+  describe("pre-provenance seriesStyles are sanitized, never classified", () => {
+    let restorePalette: () => void = () => {};
+    beforeEach(() => {
+      restorePalette = installSeriesPalette();
+    });
+    afterEach(() => restorePalette());
+
+    it("leaves a flagless stored array flagless, whatever palette is live", () => {
+      // A palette IS installed here (`installSeriesPalette`) and entry 0 is
+      // literally slot 0's hue — the input round 4 marked `colorDerived: true`.
+      // The template does not record which palette it was saved under, so that
+      // equality says nothing about the template and everything about the
+      // reader; nothing is inferred from it.
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([{
+        name: "old", style: "aps", overrides: null,
+        seriesStyles: [{ color: TEST_SERIES_PALETTE[0], width: 2 }, { color: "#ffe066" }],
+      }]));
+      expect(loadGraphTemplates()[0]!.seriesStyles).toEqual([
+        { color: TEST_SERIES_PALETTE[0], width: 2 },
+        { color: "#ffe066" },
+      ]);
+    });
+
+    it("DROPS a malformed flag — the reason this path is sanitized at all", () => {
+      // `"no"` is truthy and `null` falsy, so passing either through would let
+      // a hand-edited store flip provenance at the wire (review F3).
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([{
+        name: "old", style: "aps", overrides: null,
+        seriesStyles: [{ color: "#ffe066", colorDerived: "no" }, { color: "#abc", colorDerived: true }],
+      }]));
+      expect(loadGraphTemplates()[0]!.seriesStyles).toEqual([
+        { color: "#ffe066" },
+        { color: "#abc", colorDerived: true },
+      ]);
+    });
+
+    it("keeps the tolerant shape check — a record with no seriesStyles still loads", () => {
+      localStorage.setItem("qz.graphTemplates", JSON.stringify([
+        { name: "pre15", style: "aps" },
+      ]));
+      const loaded = loadGraphTemplates();
+      expect(loaded.map((t) => t.name)).toEqual(["pre15"]);
+      // Normalized to the explicit "this template carries none" sentinel,
+      // which is what `applyStyleTemplate` already coerced it to (`?? null`).
+      expect(loaded[0]!.seriesStyles).toBeNull();
+    });
   });
 });

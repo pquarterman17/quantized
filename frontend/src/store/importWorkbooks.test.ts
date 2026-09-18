@@ -91,6 +91,41 @@ describe("single-file import creates one workbook (L0.2)", () => {
     expect(new Set(st.datasets.map((d) => d.workbookId)).size).toBe(2);
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN "Acceptance scenarios": "Import three CSV files
+  // together: one folder may contain three distinct workbooks, each
+  // retaining its own source provenance." L0.46 resolves the target folder
+  // ONCE per batch from `librarySelection` (importTargetFolder.ts), so all
+  // three land in the SAME folder while each import call still runs
+  // `addFromPayload` separately -- the case that would surface a mix-up
+  // (workbook B's own provenance carrying workbook A's path) if the batch
+  // loop or deriveWorkbooks ever shared state across files.
+  it("importing three plain files together into one folder creates three distinct workbooks, each with its own source path", async () => {
+    useApp.setState({
+      folders: [{ id: "f1", name: "Run", parentId: null, order: 0 }],
+      librarySelection: { kind: "folder", id: "f1" },
+    });
+    const paths = ["/data/a.csv", "/data/b.csv", "/data/c.csv"];
+    await useApp.getState().importPaths(paths);
+    const st = useApp.getState();
+
+    expect(st.datasets).toHaveLength(3);
+    expect(st.workbooks).toHaveLength(3);
+    expect(new Set(st.datasets.map((d) => d.workbookId)).size).toBe(3); // distinct, not merged
+    expect(st.workbooks.every((wb) => wb.folderId === "f1")).toBe(true); // one folder, per L0.46
+
+    // Each workbook's provenance traces back to the RIGHT file -- never
+    // scrambled or duplicated across the batch.
+    const byPath = new Map(st.workbooks.map((wb) => [wb.source?.path, wb]));
+    expect(byPath.size).toBe(3);
+    for (const path of paths) {
+      const wb = byPath.get(path);
+      expect(wb).toBeDefined();
+      expect(wb!.source).toEqual({ kind: "path", path });
+      const member = st.datasets.find((d) => d.workbookId === wb!.id);
+      expect(member?.source).toEqual({ kind: "path", path }); // the member's own provenance agrees
+    }
+  });
+
   it("a single-book Origin project (no `books` array — the backend omits it for len<=1) creates one Origin workbook", async () => {
     // routes/parsers.py's _import_with_books only attaches `books` when
     // len(books) > 1; a single-book project's top-level payload IS the one

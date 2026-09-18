@@ -1290,7 +1290,276 @@ import { fileURLToPath } from "node:url";
  *  different order, and that is the kind of silent wrongness this whole group
  *  exists to remove.
  */
-const EAGER_JS_BUDGET = 918_800;
+/*  NO MOVE (2026-09-12, Group AB: baseline "Fit from region" — the
+ *  optional 2-D y-box, MATLAB `onBGMouseUp` parity, PORT_CHECKLIST's last
+ *  "Remaining (optional)" item on that row). Built on fe40adb5 it measured
+ *  919,177 after `npm ci` (377 over the 918,800 budget of the time) and moved
+ *  the pin to 920,201; integrated on top of Group U's 920,400 move below, the
+ *  combined tree measures 919,699 B (898.1 kB) after `npm ci`, inside that budget,
+ *  so this entry records the cost and its reductions without a second move.
+ *
+ *  WHAT THE WEIGHT IS, and why none of it can be lazy: the rubber-band gesture
+ *  itself — `lib/uplotOpts.ts`'s `cursor.drag`/`setSelect` (region now tracks y
+ *  too, past a pixel threshold) and `components/Stage/usePlotStageActions.ts`'s
+ *  `onRegionSelect` (clamps the y span to the plotted y-extent) plus
+ *  `lib/regionSelect.ts`'s `withYRange`. All three sit on the plot's core drag
+ *  path, built and wired the instant the Stage mounts — the same reachability
+ *  every OTHER interactive plot tool (zoom/pan/measure/select) already has, not
+ *  a baseline-specific add. The baseline-specific HALF (the workshop's y-min/
+ *  y-max fields, `useBaseline.ts`'s params, the request wiring) costs nothing
+ *  here: `BaselinePanel`/`useBaseline.ts` load only from `AppOverlays.tsx`'s
+ *  `lazyPanel()`, so that half was already off this budget before it was written.
+ *
+ *  TWO REDUCTIONS WERE TAKEN FIRST:
+ *    1. The y-extent scan reuses `plotDecimate.xExtent` (already eager via
+ *       PlotViewport) per plotted series instead of a duplicate min/max loop —
+ *       measured in isolation (uplotOpts.ts held at its pre-feature version):
+ *       342 B added with a self-contained loop, 329 B with the reused scanner.
+ *       Saved 13 B.
+ *    2. Two UI hint strings ("Drag to select a background range…") gained a
+ *       "(drag down too for a y-box)" aside in `lib/plotToolbarDefs.ts` and
+ *       `components/Stage/PlotReadouts.tsx`. Both reverted to their original
+ *       text — the region tool's own box-edge fields already show the y-range
+ *       once picked, so the aside was decoration, not the readout. Saved 56 B
+ *       (919,233 -> 919,177).
+ *
+ *  A THIRD "REDUCTION" WAS REJECTED: dropping the y-extent clamp (send the raw
+ *  drag's y0/y1 straight through) would read as a savings but is a behavior
+ *  cut, not an implementation one — it is the one bit of parity with the
+ *  existing x-only clamp (`clampPlottedRange`) this feature exists to extend,
+ *  and `usePlotStageActions.test.ts`'s own "clamps the y-range to the plotted
+ *  y-extent" case would go red for real, not as a sabotage.
+ */
+/*  918,800 -> 920,400 (2026-09-12, Group U: the P3.3 opt-in auto dash/marker
+ *  cycle). REWRITTEN 2026-09-13, FOURTH review round — AGAIN measured against
+ *  an ancestor rather than the real parent, the same mistake this block exists
+ *  to police. The budget itself is unchanged and is NOT moved again.
+ *
+ *  Why rewritten three times, for three shapes of the same mistake.
+ *
+ *  The ORIGINAL block measured against `3145fe33`, which is not in this
+ *  branch's history at all (it lived only on the first rework's worktree).
+ *
+ *  The SECOND rework measured against `2b60d4e6`, which IS an ancestor — but
+ *  FIVE commits behind the actual parent of that work, `5f65ec8a`: `78cbc808`
+ *  (a twelve-finding Library fix, the most likely mover), `d8c6f0f3` (a
+ *  test-only pin) and `55870ed8` (a plans-only docs commit) came first, and
+ *  only the last two, `ed596ec3` and `5f65ec8a` itself, are the region 2-D
+ *  y-box work that block blamed alone. So its "156 B smaller than the tree it
+ *  builds on, 810 B under budget" came off a stale baseline: `1b60872a`
+ *  measures 920,089 here, which is 311 B under budget, not 810. That is not
+ *  the whole story either — the second round ALSO mis-measured its OWN tree:
+ *  it claimed 919,590 B for `1b60872a`/`dc0dbae9`, and that same tree checks
+ *  out at 920,089 here, 499 B off. A stale baseline explains a wrong DELTA; it
+ *  cannot explain a wrong measurement of one's own build — that was a second,
+ *  separate mistake the second block never named.
+ *
+ *  The THIRD rework then repeated the identical mistake in a new shape: it
+ *  measured against `dc0dbae9`, an ancestor of THIS commit's real parent
+ *  `6797e77c` — two commits back, across `d6e67fb7` (P3.4's export-cancel
+ *  work), which moved substantial frontend code onto lazy import paths and
+ *  shifted the bundle by roughly 4.4 kB. Every headline figure in that block
+ *  ("parent 920,089", "this work 920,031", "58 B smaller", "369 B under
+ *  budget") reproduces exactly on `dc0dbae9` and is off by ~4.45 kB here.
+ *  AN ANCESTOR IS NOT A PARENT — measure against the tree you are actually
+ *  building, not a tree that happens to still be in the branch's history.
+ *
+ *  MEASURED HERE, each one a clean `npm ci` and a `node_modules/.vite` wipe
+ *  followed by `npm run build` (the workflow's own two steps), eager total
+ *  summed exactly as this script sums it:
+ *
+ *    6797e77c   915,638   the THIRD round's real parent on this branch
+ *    95a211fc   915,587   the third round's commit
+ *
+ *  So the third round was 51 B SMALLER than the tree it actually built on, and
+ *  4,813 B under the 920,400 budget. (The FOURTH round's own numbers are the
+ *  cd402c1b / 916,102 table below — a different parent, because the export-
+ *  cancel work landed in between.) The saving is a wash rather than a diet:
+ *  the display-list refusal moved OUT of `figureSpec.ts` and the three-clause
+ *  cycle gate the four call sites each spelled out became one shared
+ *  `seriesStyleCycle.windowCyclesSeriesStyles`, which paid for the two new
+ *  `CycleView` fields and the Publication Preview's window lookup.
+ *
+ *  THIS ROUND'S OWN FIX COST, measured against ITS real parent. That parent is
+ *  NOT `95a211fc`: the P3.4 export-cancel fix round (`cd402c1b`) landed on the
+ *  branch in between, and it is the commit that took the bundle from 915,587
+ *  to 916,102 (+515 B, recorded in its own dated entry below). The fourth
+ *  round's fix agent measured its work against `95a211fc` and charged that
+ *  515 B to F4 — the ancestor-is-not-a-parent mistake, a fourth time, caught
+ *  by the orchestrator re-measuring both trees before the push. Measured
+ *  after `npm ci` and a `node_modules/.vite` wipe, summed exactly as this
+ *  script sums (module script + modulepreload):
+ *
+ *    cd402c1b   916,102   this commit's real parent on this branch
+ *    this work  916,102   F4 applied (round four)
+ *
+ *  F4 (`canonicalSession.ts` now calls `store/windowDocuments.ts`'s
+ *  `plotWindowView(target)` instead of reading `target.view` directly, so an
+ *  unfocused target is judged from its DOCUMENT, the same projection the
+ *  canvas uses) costs 0 B: `figureDocumentToPlotView`'s dependency graph was
+ *  already reachable from this chunk, so the import moved no boundary. The
+ *  agent also tried inlining `figureDocumentToPlotView(target.document)` and
+ *  measured the same 916,102 either way, which is consistent with a zero-cost
+ *  import rather than the "no free shape exists" it concluded. Kept the
+ *  import: calling the actual shared function `WindowCanvas.tsx` also calls is
+ *  the point of the fix, and a hand-inlined reimplementation would create
+ *  exactly the drift risk this file's own header warns against. 4,298 B under
+ *  the unmoved 920,400 budget.
+ *
+ *  ONE MEASUREMENT WORTH KEEPING FROM THE THIRD ROUND, because it cost 626 B
+ *  before it was caught — measured on that round's own (superseded) tree, not
+ *  reproduced here. The first shape of that round had
+ *  `figurebuilder/canonicalSession.ts` import the focused-window selector from
+ *  `components/Stage/useStageSeriesCycle.ts`. That is one import of one
+ *  already-eager function, and it measured 920,715 on that tree — 315 B OVER
+ *  that tree's budget, +626 B against `dc0dbae9`. Moving the shared decision
+ *  down into `lib/seriesStyleCycle.ts` (which both files already imported)
+ *  avoided it with identical behaviour. A cross-directory import can move a
+ *  chunk boundary; an import into a module both sides already pull does not.
+ *  Build before assuming a one-line import is free. (The FOURTH round's own
+ *  F4 fix added a different cross-directory import —
+ *  `canonicalSession.ts` -> `store/windowDocuments.ts`'s `plotWindowView` —
+ *  and re-measured it directly on the real tree rather than trusting this
+ *  lesson to generalize; see the F4 entry in PRIMARY_SOFTWARE_AUDIT_PLAN.md.)
+ *
+ *  WHY THE BUDGET STAYS AT 920,400 rather than dropping to match. It was moved
+ *  for the COMBINED Group U + Group AB tree (see the Group AB block above, which
+ *  records the same tree at 919,699 before later commits landed), and those
+ *  groups are still landing in parallel; a pin lowered to this branch's number
+ *  would fail the next group's merge for a reason that has nothing to do with
+ *  its own weight. The `EAGER_JS_BUDGET - SLACK` floor is 880,400, so this
+ *  measurement is nowhere near forcing a reduction.
+ *
+ *  WHAT THE WEIGHT IS. The cycle itself is small: one resolver, two
+ *  vocabulary arrays and four predicates in lib/seriesStyleCycle.ts. The cost is
+ *  the PARITY WIRING, which is the whole point. The first cut kept the on/off
+ *  flag in a module-level singleton that every `buildOpts`/`buildExportStyles`
+ *  caller inherited silently, and review found five render paths cycling on
+ *  screen with no export that could reproduce them. The fix makes the cycle an
+ *  explicit argument — display POSITIONS — that a call site must pass, so each
+ *  canvas and the export that reproduces it are wired as one pair and a path
+ *  that has not wired its export stays uncycled by default. That threading — two
+ *  hooks, three props, one extras field on each of two entry points, and one
+ *  resolve-before-publish in the snapshot seam — is the byte cost, and it cannot
+ *  be lazy: it runs during the first paint of the default plot.
+ *
+ *  REDUCTIONS TAKEN, measured on the THIRD round's (superseded) tree rather
+ *  than argued, and not re-measured here — see the note above about
+ *  quoting off-tree deltas forward:
+ *    1. The "Vary dash & marker" checkbox is hand-written `qz-check` markup
+ *       rather than `primitives/Checkbox`, which is deliberately NOT in the eager
+ *       bundle (its header records that every other consumer is a lazy panel).
+ *       Measured both ways on that tree: 920,133 with the import, 920,031
+ *       without — 102 B. Worth recording that this number MOVES with the
+ *       module graph: the first review predicted ~590 B off the original
+ *       commit's graph, the first rework measured 74 B off its own, the
+ *       second 111 B, and it was 102 B on the third. Re-measure it; do not
+ *       quote it forward.
+ *    2. `DefaultTrace` went to lib/types.ts beside `LineStyle`/`MarkerShape`
+ *       rather than to lib/markers.ts, because eight of the ten files that need
+ *       it already import from lib/types and could take it on an EXISTING import
+ *       line. That was a line-ceiling decision first (two of those files sit
+ *       exactly on shrink-only pins) and it costs nothing here.
+ *    3. `resolveSeriesStyle` still carries no "nothing left to assign" fast path
+ *       and no `Number.isFinite` index guard (kept from the first rework). The
+ *       positions array is the gate, so an out-of-range index simply has no entry
+ *       and the function returns the caller's own reference.
+ *
+ *  A REDUCTION REJECTED, for the second time: collapsing the two marker branches
+ *  into one (an explicit `style.marker` and the ambient Scatter / Line + markers
+ *  default trace) is shorter code and is exactly what the first cut did. It is
+ *  also findings 5 (round one) and 1 (round two) — the export emits a marker only
+ *  for an explicit `style.marker`, so a glyph taken from the default trace is
+ *  drawn on screen and dropped from the PDF. `markers.markerDecision` keeps the
+ *  two branches in ONE function precisely so they can be shared without being
+ *  merged. Bytes do not buy that back.
+ *
+ *  A SECOND ONE REJECTED: splitting the palette (`cssVar`/`SERIES_VARS`/
+ *  `seriesColor`) back out of lib/seriesStyleCycle.ts into its own module would
+ *  make lib/publicationStyles.ts's "persistence never pulls screen colour code
+ *  in" header literally true again — the first rework folded the palette in, and
+ *  that header's own `MARKER_SHAPE_VALUES` import then crossed it. Folding those
+ *  modules together is what the first rework measured at -379 B, so unfolding
+ *  them to satisfy a comment would spend real bytes on prose. The header was
+ *  rewritten to state what actually holds (the separation from lib/exportStyles,
+ *  which is the one that carries weight) instead.
+ *
+ *  FOR THE RECORD, the numbers from the three superseded blocks, none of which
+ *  should be quoted forward: the ORIGINAL block's base of 918,658 (against
+ *  `3145fe33`, not in this history) and its "residual 593 B is parity wiring",
+ *  which conflated the amount OVER the old budget with the feature's cost; the
+ *  SECOND block's 918,459 / 919,746 / 919,590 triple with its "156 B smaller,
+ *  810 B under budget", whose 919,746 baseline is `2b60d4e6` rather than the
+ *  parent `5f65ec8a` (and whose own 919,590 was itself 499 B off, above); and
+ *  the THIRD block's `dc0dbae9` 920,089 / this-work 920,031 pair, whose
+ *  baseline is two commits short of the real parent `6797e77c` (915,638) — the
+ *  intervening `d6e67fb7` moved ~4.4 kB, so every headline number in that block
+ *  reproduces cleanly on its own (wrong) tree and is off by the same ~4.45 kB
+ *  here. The feature's whole-history cost is deliberately not restated:
+ *  `d28fcd6e` IS an ancestor, but its 918,459 was measured in the second round
+ *  and not here, and the only numbers this block stands behind are the two it
+ *  measured itself.
+ *
+ *  2026-09-13 — P3.4 export-cancel (d6e67fb7): export-csv/export-hdf5/
+ *  export-page's command bodies moved off the eager path to the SAME
+ *  click-only dynamic-import pattern export-figure/export-origin already
+ *  used, as a side effect of giving each its own cancellable pendingOps
+ *  entry rather than letting store/commands.ts's runAction wrap the
+ *  returned promise in a second, non-cancellable op (see lib/
+ *  exportActive.ts's header). Measured after `npm ci`: 920,089 -> 915,638
+ *  B, -4,451 B net (despite the new cancel machinery being added, not
+ *  removed). EAGER_JS_BUDGET stays at 920,400 — SLACK is 40,000, so
+ *  915,638 is nowhere near the `EAGER_JS_BUDGET - SLACK` floor (880,400)
+ *  that would force a lower pin.
+ *
+ *  Same day, adversarial-review fix round on the commit above (silent-
+ *  cancel-during-resolve, the ParamDialog-backdrop-swallows-Cancel bug, and
+ *  unhandled dynamic-import rejections — see lib/exportActive.ts's
+ *  `cancelled`/`gerund` additions and commands/fileCommands.ts's
+ *  `runLazy`). REWRITTEN 2026-09-13 (second adversarial-review round, same
+ *  day): the original entry here recorded 916,153 B, "+515 B over the
+ *  915,638 above", "4,247 B under budget" — the delta was measured against
+ *  `d6e67fb7` (the P3.4 feature commit itself), not this commit's actual
+ *  parent, and the absolute figure was 51 B too high (exactly what
+ *  `95a211fc`, the dash/marker-cycle block above, shaved off on the same
+ *  day) — the tree that produced 916,153 did not contain that change.
+ *  Correct, measured against the real parent: 916,102 B, +515 B over the
+ *  parent's 915,587 B (`d6e67fb7` itself measured 915,638 B), 4,298 B under
+ *  budget.
+ *
+ *  Second adversarial-review round on THAT commit (honest clipboard-cancel
+ *  docs and status wording, the export-figure double-registration guard,
+ *  exportActive's silent resolve-to-`undefined` return, per-op Cancel
+ *  accessible names, a widened weak-wait-ratchet regex, and a couple of
+ *  test-hygiene fixes — see this same round's additions to
+ *  lib/exportActive.ts, lib/clipboard.ts, components/Shell/StatusBar.tsx,
+ *  and commands/fileCommands.ts). Its REAL parent on this branch is
+ *  `51346052` (the dash/marker-cycle round-four fix, which measures 916,102 B
+ *  — F4 there cost 0 B, so cd402c1b and 51346052 measure the same), NOT
+ *  `95a211fc`: the fix agent measured against 95a211fc and reported "+595 B",
+ *  which is the two export-cancel fix rounds ADDED TOGETHER. Both trees
+ *  re-measured by the orchestrator after `npm ci` and a `.vite` wipe:
+ *
+ *    51346052   916,102   this commit's real parent on this branch
+ *    this work  916,182   +80 B for the round-two fixes
+ *
+ *  4,218 B under the unmoved 920,400 budget, nowhere near the
+ *  `EAGER_JS_BUDGET - SLACK` floor.
+ *
+ *  2026-09-13 — BUG-010 (`migrationWarnings` reach the user on every load
+ *  path): one shared `notifyMigrationWarnings` toast helper in
+ *  store/toasts.ts, called from lib/applyRecoveryChoice.ts (already lazy,
+ *  free), useWorkspaceAutosave.ts, store/workspaceIO.ts and
+ *  store/workbookTransfer.ts — three eager sites plus the helper. The fix
+ *  agent measured its work on a stale tree (500cc64d, budget then 918,800)
+ *  and raised the pin there; that raise was DROPPED on cherry-pick because
+ *  this tree has headroom. Measured here by the orchestrator against the
+ *  real parent (`npm ci`-fresh node_modules, `.vite` wiped):
+ *
+ *    bc8f14fa   916,182   parent (greyscale export commit)
+ *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
+ */
+const EAGER_JS_BUDGET = 920_400;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

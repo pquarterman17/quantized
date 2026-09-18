@@ -26,9 +26,17 @@ import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
 
 /** The focused plot's live composed display bundle — field-for-field the
- *  slice of `usePlotPayload`'s result that `PlotViewport` renders from. */
+ *  slice of `usePlotPayload`'s result that `PlotViewport` renders from, with one
+ *  documented exception: `styleList` below. */
 export interface LivePlotSnapshot {
   payload: PlotPayload;
+  /** `usePlotPayload`'s style list with the P3.3 auto dash/marker cycle already
+   *  RESOLVED into it (`Stage/useLiveSnapshotPublish.ts` applies
+   *  `resolveSeriesStyle` before publishing). Frozen means frozen: a snapshot
+   *  window passes no cycle and must not re-derive one, or a plot snapshotted
+   *  while the preference was on would turn solid the moment it was turned off.
+   *  With the preference off the resolver is the identity and this is the
+   *  caller's own array, unchanged. */
   styleList: (SeriesStyle | undefined)[] | undefined;
   labelList: (string | undefined)[] | undefined;
   errorBars: Map<number, (number | null)[]>;

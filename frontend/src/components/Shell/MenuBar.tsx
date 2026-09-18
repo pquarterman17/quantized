@@ -91,19 +91,42 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     removeRowSafely(navRef.current, () => useApp.getState().removeRecent(name));
   };
 
-  function title(label: string) {
+  // `onOpen` fires only on a closed→open transition (click from nothing, or
+  // hover-switch from a different menu) — never on close, never as a repeat
+  // while already open. Only the Help title below passes one, to warm the
+  // "Copy diagnostics" chunk (see there for why).
+  function title(label: string, onOpen?: () => void) {
     const isOpen = open === label;
+    const openMenu = () => {
+      if (open !== label) onOpen?.();
+      setOpen(label);
+    };
     return (
       <span
         className={`qzk-menu${isOpen ? " open" : ""}`}
-        onClick={() => setOpen(isOpen ? null : label)}
+        onClick={() => (isOpen ? setOpen(null) : openMenu())}
         // Once a menu is open, hovering siblings switches to them (menubar feel).
-        onMouseEnter={() => open && setOpen(label)}
+        onMouseEnter={() => open && openMenu()}
       >
         {label}
       </span>
     );
   }
+
+  // P3.4 review round (2026-09-14, finding 3): "Copy diagnostics" dynamically
+  // imports `store/diagnostics.ts` on click, kept out of the eager bundle on
+  // purpose (see that command's comment in `commands/uiCommands.ts`) — but an
+  // AWAITED import still sits inside the click's user gesture the first time
+  // it runs. Opening the Help menu is a strong signal the user is about to
+  // reach for it, so warm the chunk here: fire-and-forget, not a static or
+  // eager import (the bundle-size ratchet is exactly the reason the click
+  // handler defers it at all), so this never lands in `dist/index.html`'s
+  // modulepreload list. A failed warm (offline, a 404'd chunk after a
+  // redeploy) is silently swallowed — the click handler's own `.catch` is
+  // what actually reports that failure to the user.
+  const warmDiagnosticsChunk = () => {
+    void import("../../store/diagnostics").catch(() => {});
+  };
 
   const now = Date.now();
 
@@ -195,7 +218,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
       })}
 
       <div className="qzk-menu-wrap">
-        {title("Help")}
+        {title("Help", warmDiagnosticsChunk)}
         {open === "Help" && (
           <div className="qzk-menu-pop">
             {allActions

@@ -5,11 +5,12 @@
 // source immutability) are covered at the hook level in usePeaks.test.ts —
 // this file only exercises the actual button a user clicks.
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { findPeaks, fitMultiPeak, fitPeak } from "../../../lib/api/peaks";
 import { askParams } from "../../overlays/ParamDialog";
+import { peakDataFingerprint, peakTableFromFit, withPeakExcluded } from "../../../lib/peakTableFit";
 import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
@@ -391,5 +392,211 @@ describe("PeaksPanel — peak row selection (RULING 1/3)", () => {
     fireEvent.click(fittedRows[0]);
     expect(fittedRows[0]).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("button", { name: "Label 1 selected fitted peak…" })).toBeInTheDocument();
+  });
+});
+
+describe("PeaksPanel — durable table exclusion column (P2.1)", () => {
+  const FIT = {
+    peaks: [
+      { center: 1.1, fwhm: 0.8, height: 5, bg: 1, eta: null, area: 4, status: "fitted(global)", model: "Lorentzian" },
+      { center: 3.1, fwhm: 0.9, height: 6, bg: 1, eta: null, area: 5, status: "fitted(global)", model: "Lorentzian" },
+    ],
+    bgCoeffs: [1, 0],
+    R2: 0.99,
+    rmse: 0.02,
+    nPeaks: 2,
+    model: "Lorentzian",
+  };
+
+  it("every fitted peak starts included, and unticking one excludes it in the durable table", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    const box1 = screen.getByRole("checkbox", { name: "include peak 1" });
+    const box2 = screen.getByRole("checkbox", { name: "include peak 2" });
+    expect(box1).toBeChecked();
+    expect(box2).toBeChecked();
+
+    fireEvent.click(box2);
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].peakTable?.peaks.map((p) => p.excluded)).toEqual([
+        false,
+        true,
+      ]),
+    );
+    expect(screen.getByRole("checkbox", { name: "include peak 2" })).not.toBeChecked();
+    expect(screen.getByText(/1 excluded/)).toBeInTheDocument();
+  });
+
+  it("ticking it back re-includes the peak", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "include peak 1" }));
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(true),
+    );
+    fireEvent.click(screen.getByRole("checkbox", { name: "include peak 1" }));
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(false),
+    );
+    expect(screen.queryByText(/excluded/)).not.toBeInTheDocument();
+  });
+
+  it("ticking the box does not also move the row selection", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "include peak 1" }));
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(true),
+    );
+    // The button text names the SELECTED count once a row is selected; the
+    // checkbox must leave it at "all".
+    expect(screen.getByRole("button", { name: "Label all 2 fitted peaks…" })).toBeInTheDocument();
+  });
+
+  it("Space on a focused checkbox toggles it and does NOT move the row selection", async () => {
+    // The row is a selection target whose own onKeyDown calls preventDefault()
+    // on " " and selects, so before this fix Space cancelled the browser's own
+    // checkbox activation AND moved the selection: the box was a Tab stop that
+    // did nothing except the one thing the mouse path is careful to prevent.
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    const box2 = screen.getByRole("checkbox", { name: "include peak 2" });
+    box2.focus();
+    // Not cancelled: the native activation (and therefore onChange) survives.
+    expect(fireEvent.keyDown(box2, { key: " " })).toBe(true);
+    fireEvent.click(box2); // jsdom does not synthesize the native activation
+
+    await waitFor(() =>
+      expect(useApp.getState().datasets[0].peakTable?.peaks.map((p) => p.excluded)).toEqual([
+        false,
+        true,
+      ]),
+    );
+    // "Label all …" means no row got selected; a selection renames the button.
+    expect(screen.getByRole("button", { name: "Label all 2 fitted peaks…" })).toBeInTheDocument();
+  });
+
+  it("Enter on a focused checkbox likewise leaves the row selection alone", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    const box1 = screen.getByRole("checkbox", { name: "include peak 1" });
+    box1.focus();
+    expect(fireEvent.keyDown(box1, { key: "Enter" })).toBe(true);
+    expect(screen.getByRole("button", { name: "Label all 2 fitted peaks…" })).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].peakTable?.peaks[0].excluded).toBe(false);
+  });
+
+  it("a row keypress still selects — the checkbox stopper must not disarm the table", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("button", { name: "Label all 2 fitted peaks…" });
+
+    const rows = within(screen.getByRole("table", { name: "fitted peaks" })).getAllByRole("row");
+    fireEvent.keyDown(rows[1], { key: " " });
+    expect(
+      screen.getByRole("button", { name: "Label 1 selected fitted peak…" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders no checkbox rather than a MISPAIRED one when the table isn't this fit's", async () => {
+    // `peakTable` is a reactive store read, `fitResult` is local state set in
+    // usePeaks' effect, so on a dataset switch the paint before that effect has
+    // B's table beside A's rows. Positional `peakTable.peaks[i]` then gave row i
+    // the wrong durable id and `excluded` flag — a click in that frame would
+    // have excluded a peak in a different dataset's table.
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    await screen.findByRole("checkbox", { name: "include peak 1" });
+
+    const mine = useApp.getState().datasets[0].peakTable!;
+    act(() => {
+      useApp.setState({
+        datasets: [
+          {
+            ...useApp.getState().datasets[0],
+            // A table from another dataset: same rows, different owner.
+            peakTable: { ...mine, provenance: { ...mine.provenance, datasetId: "d2" } },
+          },
+        ],
+      });
+    });
+
+    expect(screen.getByRole("table", { name: "fitted peaks" })).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "include peak 1" })).not.toBeInTheDocument();
+  });
+
+  it("does NOT re-present a saved fit once the data it was measured from changed", async () => {
+    // The review's sharpest finding: this panel rehydrates the durable table
+    // on every dataset/data change, so a cell edit used to re-show the
+    // PRE-EDIT fit over the post-edit data.
+    const saved = peakTableFromFit(FIT, {
+      datasetId: "d1",
+      datasetName: "x.dat",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: null,
+      fingerprint: peakDataFingerprint({
+        id: "d1",
+        name: "x.dat",
+        data: { ...DATA, values: [[1], [5], [2], [6], [2], [99]] },
+      }),
+    });
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: saved }],
+      activeId: "d1",
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    expect(screen.queryByRole("table", { name: "fitted peaks" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "include peak 1" })).not.toBeInTheDocument();
+  });
+
+  it("shows a reopened project's saved table, checkboxes and all, with no fit", async () => {
+    const saved = peakTableFromFit(FIT, {
+      datasetId: "d1",
+      datasetName: "x.dat",
+      method: "simultaneous",
+      bgDegree: 1,
+      linkMode: "None",
+      constrain: false,
+      wavelengthA: null,
+    });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "x.dat", data: DATA, peakTable: withPeakExcluded(saved, saved.peaks[0].id, true) },
+      ],
+      activeId: "d1",
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("checkbox", { name: "include peak 1" });
+    expect(screen.getByRole("checkbox", { name: "include peak 1" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "include peak 2" })).toBeChecked();
+    expect(fitMultiPeak).not.toHaveBeenCalled();
   });
 });

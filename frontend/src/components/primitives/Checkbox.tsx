@@ -9,14 +9,18 @@ export function Checkbox({
   onChange,
   children,
   disabled = false,
+  title,
 }: {
   checked: boolean;
   onChange?: (checked: boolean) => void;
   children?: ReactNode;
   disabled?: boolean;
+  /** Optional hover hint on the whole label (input + text) — e.g. a
+   *  behavior note too long for the visible label itself. */
+  title?: string;
 }) {
   return (
-    <label className={clsx("qz-check", disabled && "qz-disabled")}>
+    <label className={clsx("qz-check", disabled && "qz-disabled")} title={title}>
       <input
         type="checkbox"
         checked={checked}

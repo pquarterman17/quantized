@@ -42,24 +42,82 @@
 // `set()` call touching every affected array together, so undo restores the
 // pre-paste project in one step.
 
-import { copyText } from "../lib/clipboard";
+import { copyTextAsync } from "../lib/clipboard";
 import { plural } from "../lib/plural";
-import {
-  buildTransferPackage,
-  parseTransferPackage,
-  pasteTransferPackage,
-  type TransferExistingIds,
-  type TransferIdGenerators,
-} from "../lib/workbookTransfer";
+import type { TransferExistingIds, TransferIdGenerators } from "../lib/workbookTransfer";
 import type { AppState } from "./useApp";
-import { nextDatasetId } from "./useApp";
+import { nextDatasetId } from "./idSeq";
 import { nextWorkbookId } from "./workbookIds";
 import { nextFigureId } from "./figureLifecycle";
-import { toast } from "./toasts";
+import { notifyMigrationWarnings, toast } from "./toasts";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-type PasteResult = ReturnType<typeof pasteTransferPackage>;
+
+/** `lib/workbookTransfer.ts` — the pure build/parse/paste core: the package
+ *  envelope, the fresh-id rewrite and the lineage repair — is reached from
+ *  NOTHING in the entry graph except the four actions below, and all four were
+ *  already `async` (Copy and Duplicate await `resolvePendingDatasets`, Paste
+ *  and the Paste-availability probe await the clipboard). Loading it on the
+ *  first Copy/Paste/Duplicate of a session instead of at startup therefore
+ *  changes no public signature: every action still returns the same `Promise`
+ *  it did before, resolving after the same single `recordHistory` entry and
+ *  the same one `set()`.
+ *
+ *  A chunk-load failure is reported through this slice's OWN `fail()` (status
+ *  line + danger toast), exactly like every other refusal here, rather than
+ *  surfacing as an unhandled rejection — and, like them, it returns before
+ *  anything mutates, so the project is provably untouched. `canPasteWorkbook`
+ *  answers `false` instead: its contract is already "false covers no bridge,
+ *  not our format, and read denied alike", and a core that will not load
+ *  cannot paste either. A failed load is not cached, so the next gesture
+ *  retries. Measured: 912,461 -> 910,631 B eager.
+ *
+ *  Copy is the one action that does NOT simply `await` the core first — see
+ *  `buildForCopy` below for why the clipboard write has to start before it. */
+type TransferCore = typeof import("../lib/workbookTransfer");
+type PasteResult = ReturnType<TransferCore["pasteTransferPackage"]>;
+
+/** The transfer core, or null after reporting that `what` could not run. */
+async function transferCore(get: SliceGet, what: string): Promise<TransferCore | null> {
+  try {
+    return await import("../lib/workbookTransfer");
+  } catch (e) {
+    fail(get, `${what} failed: ${e instanceof Error ? e.message : "error"}`);
+    return null;
+  }
+}
+
+/** Copy's half of the seam, as a promise the caller STARTS INSIDE the click's
+ *  own task and hands, still pending, to `copyTextAsync`.
+ *
+ *  `copyTextAsync` (lib/clipboard.ts) wraps it in a `Promise<Blob>` and hands
+ *  that to `ClipboardItem`, so `navigator.clipboard.write` is reached with
+ *  ZERO awaits after the gesture while the chunk fetch and the package build
+ *  are still in flight.
+ *  Awaiting the core first — the first cut of this seam did — spends the
+ *  transient user activation the Clipboard API requires, and the copy then
+ *  fails reporting "clipboard unavailable", which is not what went wrong.
+ *  It is the same rule that kept `lib/openWorkspaceCommand.ts` out of the
+ *  bundle diet: its `openFilePicker()` must run in the click's own task too.
+ *
+ *  Rejects with the COMPLETE user-facing message so the caller reports it
+ *  verbatim — both wordings Copy has always used are unchanged. */
+async function buildForCopy(
+  workbookId: string,
+  name: string,
+  get: SliceGet,
+): Promise<{ text: string; count: number }> {
+  let core: TransferCore;
+  try {
+    core = await import("../lib/workbookTransfer");
+  } catch (e) {
+    throw new Error(`copy "${name}" failed: ${e instanceof Error ? e.message : "error"}`);
+  }
+  const built = core.buildTransferPackage(workbookId, get());
+  if (!built.ok) throw new Error(`copy "${name}" unavailable: ${built.reason}`);
+  return { text: built.text, count: built.pkg.datasets.length };
+}
 
 let _reportSeq = 0;
 /** Own generator (not useApp.ts's private `nextReportId`, which is
@@ -162,7 +220,13 @@ export interface WorkbookTransferSlice {
   copyWorkbookToClipboard: (workbookId: string) => Promise<void>;
   /** Is there a compatible workbook package on the clipboard right now?
    *  `false` covers "no bridge", "not our format", and "clipboard read
-   *  denied" alike — a UI Paste command gates on this rather than guessing. */
+   *  denied" alike — a UI Paste command gates on this rather than guessing.
+   *  NOTE (2026-09-15): no production caller reads it yet. The shipped Paste
+   *  command (`commands/workbookTransferCommands.ts`) is unconditionally
+   *  enabled and there is no paste shortcut, so the "must not toast / must
+   *  not flip a menu item falsely disabled" contract below is currently held
+   *  only by this slice's own tests. It is stated as the contract a future
+   *  gate must meet, not as a description of a live one. */
   canPasteWorkbook: () => Promise<boolean>;
   /** Paste — read the clipboard, validate the package, and land a fresh-id
    *  workbook + its members at `targetFolderId` (undefined = Library root).
@@ -192,18 +256,24 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
           return;
         }
       }
-      const built = buildTransferPackage(workbookId, get());
-      if (!built.ok) {
-        fail(get, `copy "${name}" unavailable: ${built.reason}`);
+      // Start the build and the clipboard write TOGETHER, the write first —
+      // see `buildForCopy` above. A refusal from the build is reported in
+      // preference to the write's own `false`, because it is the specific
+      // reason; "clipboard unavailable" is only ever the fallback wording.
+      const build = buildForCopy(workbookId, name, get);
+      const wrote = await copyTextAsync(build.then((b) => b.text));
+      let built: { text: string; count: number };
+      try {
+        built = await build;
+      } catch (e) {
+        fail(get, e instanceof Error ? e.message : `copy "${name}" failed: error`);
         return;
       }
-      const wrote = await copyText(built.text);
       if (!wrote) {
         fail(get, `copy "${name}" failed: clipboard unavailable`);
         return;
       }
-      const copied = built.pkg.datasets.length;
-      get().setStatus(`copied "${name}" (${copied} worksheet${plural(copied)})`);
+      get().setStatus(`copied "${name}" (${built.count} worksheet${plural(built.count)})`);
       toast(`copied "${name}"`, "ok");
     },
 
@@ -211,7 +281,10 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       try {
         const text = await navigator.clipboard?.readText();
         if (typeof text !== "string") return false;
-        return parseTransferPackage(text).ok;
+        // Not `transferCore()`: this probe answers a plain boolean and must
+        // never toast — a Paste command merely asking "is anything pastable?"
+        // has not failed at anything the user did.
+        return (await import("../lib/workbookTransfer")).parseTransferPackage(text).ok;
       } catch {
         return false;
       }
@@ -230,18 +303,26 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         fail(get, "paste workbook: clipboard read denied");
         return;
       }
-      const parsed = parseTransferPackage(text);
+      const core = await transferCore(get, "paste workbook");
+      if (!core) return;
+      const parsed = core.parseTransferPackage(text);
       if (!parsed.ok) {
         fail(get, `paste workbook: ${parsed.reason}`);
         return;
       }
       // Build fully BEFORE touching history/state (frozen-scope item 5) —
       // pasteTransferPackage is pure and cannot itself fail past this point.
-      const result = pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), targetFolderId);
+      const result = core.pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), targetFolderId);
       get().recordHistory(`paste workbook "${parsed.pkg.workbook.name}"`);
       applyPasteResult(set, result);
       const n = result.datasets.length;
       succeed(get, result, `pasted "${result.workbook.name}" (${n} worksheet${plural(n)})`);
+      // BUG-010: a package built by an OLDER instance can carry a
+      // FigureDocument version this build no longer understands
+      // (parseTransferPackage skips it and records why) — the only place
+      // that can be non-empty, since a same-session duplicate below always
+      // round-trips already-current-version live data.
+      notifyMigrationWarnings(parsed.migrationWarnings);
     },
 
     duplicateWorkbook: async (workbookId) => {
@@ -257,21 +338,23 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
           return null;
         }
       }
-      const built = buildTransferPackage(workbookId, get());
+      const core = await transferCore(get, `duplicate "${name}"`);
+      if (!core) return null;
+      const built = core.buildTransferPackage(workbookId, get());
       if (!built.ok) {
         fail(get, `duplicate "${name}" unavailable: ${built.reason}`);
         return null;
       }
       // Same core as Paste (frozen-scope item 6) — round-tripped through the
       // identical parse validation for one code path, not two.
-      const parsed = parseTransferPackage(built.text);
+      const parsed = core.parseTransferPackage(built.text);
       if (!parsed.ok) {
         // Unreachable in practice (buildTransferPackage's own output always
         // parses) — defensive, never silently duplicates something broken.
         fail(get, `duplicate "${name}" failed: ${parsed.reason}`);
         return null;
       }
-      const raw = pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), workbook?.folderId);
+      const raw = core.pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), workbook?.folderId);
       // Duplicate's one deliberate divergence from Paste: the workbook's own
       // display name gets the same "X copy" convention every other
       // Duplicate in this app uses (store/figureLifecycle.ts's `duplicateEditableFigure`)

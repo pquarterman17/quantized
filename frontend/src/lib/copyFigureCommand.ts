@@ -5,7 +5,7 @@
 // screen resolution, so what landed in PowerPoint disagreed with what the
 // vector export produced — different fonts, line widths, tick formats, legend
 // placement, multi-panel layout. This command builds the SAME FigureSpec the
-// "Export figure…" command builds (`lib/figureSpec.buildStageFigureSpec`) and
+// "Export figure…" command builds (`lib/figureSpecStage.buildStageFigureSpec`) and
 // posts it to the SAME renderer, so screen-vs-paste parity is structural
 // rather than maintained by hand. The screen grab survives as an explicitly
 // named "Copy image (screen)" for quick notes.
@@ -29,7 +29,7 @@ import {
   copySvgAsync,
 } from "./clipboard";
 import { exportActive, type StoreGet } from "./exportActive";
-import { buildStageFigureSpec } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpecStage";
 import { toast } from "../store/toasts";
 
 /** Publication raster defaults. 300 DPI is the standard journal floor and what
@@ -56,7 +56,7 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
   }
   await exportActive(
     s,
-    async (stem, ds) => {
+    async (stem, ds, signal) => {
       const spec = buildStageFigureSpec(
         s,
         ds,
@@ -72,7 +72,7 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
         { transparent: s().copyFigureTransparent },
       );
       s().setStatus("rendering vector figure for the clipboard…");
-      const ok = await copySvgAsync(renderFigureBlob(spec));
+      const ok = await copySvgAsync(renderFigureBlob(spec, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },
@@ -93,7 +93,7 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
 
   await exportActive(
     s,
-    async (stem, ds) => {
+    async (stem, ds, signal) => {
       const spec = buildStageFigureSpec(
         s,
         ds,
@@ -118,7 +118,7 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       // Hand the PENDING render to the clipboard rather than awaiting first —
       // see copyImageAsync: awaiting can drop the user activation the
       // Clipboard API requires, and the copy then fails invisibly.
-      const ok = await copyImageAsync(renderFigureBlob(spec));
+      const ok = await copyImageAsync(renderFigureBlob(spec, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },

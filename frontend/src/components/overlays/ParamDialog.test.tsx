@@ -19,6 +19,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import ParamDialog, { askParams, type ParamField } from "./ParamDialog";
+import { GREYSCALE_FIELD } from "../../lib/exportFigureCommand";
 import type { ParamValues } from "../../lib/params";
 
 /** Open the dialog inside act() so the render-time value reset commits. */
@@ -126,5 +127,37 @@ describe("ParamDialog / askParams", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
     const resolved = await result;
     expect(resolved?.dpi).toBe(0);
+  });
+
+  // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" export
+  // checkbox (lib/exportFigureCommand.ts) is a `type: "boolean"` ParamField
+  // -- the ONE field type this file had never exercised at all before this
+  // test (every fixture above is select/number/text). Imports the REAL
+  // field object (no hand-copied duplicate to drift), so this pins the
+  // actual production shape, not a generic stand-in.
+
+  it("a boolean field defaults to unchecked and resolves false untouched", async () => {
+    render(<ParamDialog />);
+    const result = open("Export figure", [...EXPORT_FIELDS, GREYSCALE_FIELD]);
+    const checkbox = screen.getByRole("checkbox");
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await expect(result).resolves.toMatchObject({ greyscale: false });
+  });
+
+  it("clicking the greyscale checkbox toggles the resolved value to true", async () => {
+    render(<ParamDialog />);
+    const result = open("Export figure", [...EXPORT_FIELDS, GREYSCALE_FIELD]);
+    const checkbox = screen.getByRole("checkbox");
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    await expect(result).resolves.toMatchObject({ greyscale: true });
+  });
+
+  it("the field label carries the export-only-divergence warning as its title (the field's `hint`)", () => {
+    render(<ParamDialog />);
+    void open("Export figure", [GREYSCALE_FIELD]);
+    expect(screen.getByText(GREYSCALE_FIELD.label)).toHaveAttribute("title", GREYSCALE_FIELD.hint);
   });
 });

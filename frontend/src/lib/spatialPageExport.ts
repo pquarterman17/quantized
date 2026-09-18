@@ -45,10 +45,12 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import { buildExportStyles } from "./exportStyles";
+import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
+import { withSeriesLegends } from "./figureSpecSeries";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
 import { pageValidRects } from "./panelLayout";
+import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
 import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
@@ -65,6 +67,24 @@ export interface SpatialPageAppearance {
   yFmt: AxisFormat;
   showGrid: boolean;
   showAxisBox: boolean;
+  /** P3.3 auto dash/marker cycle (`lib/seriesStyleCycle.ts`) — the EXPORT half
+   *  of the spatial pair. `useMultiPanelStage.ts` opts each cell canvas in from
+   *  the same preference, and both index the cycle by plain display position
+   *  over the same `spatialPlottedChannels(panel)` list, so a cell's curve and
+   *  its page panel get the same dash. Absent/false = no cycle, byte-identical
+   *  to before the cycle existed. */
+  autoSeriesStyles?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: one page-level "print
+   *  safe" choice, applied to EVERY panel's own `FigureSpec.greyscale` (the
+   *  backend's `PagePanel.greyscale` is genuinely per-panel, but this
+   *  composer offers no per-panel UI — see `lib/exportPageCommand.ts`'s own
+   *  doc). Omitted/false = today's coloured export, byte-identical, mirroring
+   *  the single-figure dialog's own wire convention (`lib/figureSpec.ts`'s
+   *  `...(o.greyscale ? { greyscale: true } : {})`). A facet panel would be a
+   *  documented no-op (`FigureSpec.greyscale`'s own doc: never applies once
+   *  `.facets` is set) — moot today since `spatialPanelFigure` below never
+   *  emits `.facets`. */
+  greyscale?: boolean;
 }
 
 function panelOverrides(
@@ -144,17 +164,17 @@ function spatialPanelFigure(
   const y2Set = new Set(y2Axis?.keys ?? []);
   const decodedLabels = panel.seriesLabels ?? {};
   const hasLegend = Object.keys(decodedLabels).length > 0 || !!panel.legendTitle;
-  // Matplotlib suppresses labels beginning with "_". For a partial decoded
-  // Origin legend this preserves ONLY proven entries instead of inventing
-  // captions for the remaining curves. This is a request-local copy.
-  const exportDataset = hasLegend
-    ? {
-        ...dataset,
-        labels: dataset.labels.map((label, ch) =>
-          plotted.includes(ch) ? (decodedLabels[ch] ?? "_nolegend_") : label,
-        ),
-      }
-    : dataset;
+  // BUG-014 review round: a decoded Origin caption is PRESENTATION, so it
+  // rides `series_styles[i].legend` (used verbatim by
+  // `calc.figure_labels.series_display_name`) instead of being written over
+  // `dataset.labels` -- which is the same double-composition BUG-014 fixed on
+  // the single-figure path ("Decoded caption" came back as "Decoded caption
+  // (au)"). The wire dataset now keeps the DATA's own column names, which is
+  // also what this function's own `fallbackYLabel` has always read.
+  // Matplotlib suppresses labels beginning with "_": `_nolegend_` for a
+  // channel the decode did NOT caption preserves ONLY proven entries instead
+  // of inventing captions for the remaining curves.
+  const legends = hasLegend ? plotted.map((ch) => decodedLabels[ch] ?? "_nolegend_") : [];
   // The single-channel Y-label fallback derives from the PRIMARY axis only
   // (mirrors calc.figure._figure_series' own `primary_only` derivation) — a
   // panel with exactly one primary channel plus a y2 overlay must not
@@ -168,7 +188,7 @@ function spatialPanelFigure(
       : dataset.labels[only];
   const minorTicks = panel.xLog || panel.yLog || secondaryAxisIsLog(y2Axis);
   return {
-    dataset: exportDataset,
+    dataset,
     x_key: panel.xKey ?? undefined,
     y_keys: plotted,
     x_log: panel.xLog,
@@ -181,7 +201,24 @@ function spatialPanelFigure(
     y_fmt: appearance ? axisFmtParam(appearance.yFmt) : undefined,
     x_step: panel.xStep,
     y_step: panel.yStep,
-    series_styles: buildExportStyles(plotted, panel.seriesStyles ?? {}),
+    // No `positions`: this `plotted` is `spatialPlottedChannels(panel)`, the
+    // SAME hidden-filtered list the cell canvas draws from, so plotted order IS
+    // display order here (unlike `figureSpec.ts` — BUG-015).
+    // `?? undefined` is a type bridge only: `withSeriesLegends` propagates a
+    // NULL base (a document that omits `series_styles`), and this path's base
+    // is always `buildExportStyles`' array, so the branch is unreachable here.
+    // `toWireSeriesStyles(..., false)` is this path's wire boundary: a spatial
+    // page cell is never grouped (no `group_col` on this request), so its only
+    // job here is removing the `colorDerived` provenance flag the builder
+    // records (BUG-016 round 3). The colours themselves are untouched.
+    series_styles:
+      withSeriesLegends(
+        toWireSeriesStyles(
+          buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+          false,
+        ),
+        legends,
+      ) ?? undefined,
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {
       y2Plotted: y2Axis !== null,
       minorTicks,
@@ -239,7 +276,7 @@ export function buildSpatialPageRequest(
   }
   const { rows, cols } = spatialGridSize(panels);
   const { width_in, height_in } = pageSizeInches(pageSetup);
-  return {
+  const spec: FigurePageSpec = {
     rows,
     cols,
     panels: panelSpecs,
@@ -247,4 +284,10 @@ export function buildSpatialPageRequest(
     width_in,
     height_in,
   };
+  // P3.3 residual close: the ONE construction site for the page-wide
+  // greyscale choice (lib/pageGreyscale.ts's own doc) -- rather than this
+  // path spreading the wire literal itself, which is how it and the two
+  // PageDocument-rooted paths (panelResolve.ts, usePagePreviewExport.ts)
+  // would drift.
+  return withPageGreyscale(spec, appearance?.greyscale);
 }

@@ -17,10 +17,20 @@
 // (figuredoc.ts) and the export wire's `FigureSpec.group_col` now carry
 // that split through, so `calc.plotting.build_grouped_series` (the
 // backend's faithful port of `buildXY`) can reproduce it server-side.
-// Per-level styling is intentionally NOT carried (see `displayToSeriesStyles`
-// call site below) — `FigureConfig.seriesStyles` is 1:1-with-`yKeys`, which
-// doesn't align with the synthetic per-level series, and the screen doesn't
-// assign per-level colors either (`buildXY` never touches `seriesStyles`).
+// The CHANNEL's styling is carried through with it (BUG-016 round 2). This
+// path used to drop `seriesStyles` outright for a grouped spec on the ground
+// that "the screen doesn't assign per-level colors either", which is the exact
+// half-truth `routes/export_figures.py` was corrected for: the live Stage
+// hands EVERY level of a channel that channel's one style object
+// (`Stage/usePlotPayload.ts`'s `styleList` over
+// `plotGroupSplit.groupSplitChannelMap`), so a dashed 2 px grouped plot opened
+// in Publication Preview exported solid and default-width. It is carried under
+// the same `grouped` rule the other producers use: the backend expands each
+// `yKeys`-aligned entry onto that channel's levels
+// (`calc.figure_group_styles`), and a palette-DERIVED colour is omitted
+// because the palette slot belongs to the level's display position, not to the
+// channel — an EXPLICIT colour still ships, exactly as the canvas gives it to
+// every level.
 // A grouped spec still fails closed if it ALSO uses the secondary (Y2)
 // axis — `buildXY` never assigns a grouped series to axis 1, so there's no
 // sound semantic for the combination (see `specUsesY2` below).
@@ -40,8 +50,11 @@ export function plotSpecFigureReason(spec: PlotSpec): string | null {
 function stylesForMark(
   spec: PlotSpec,
   seriesStyles: Record<number, SeriesStyle>,
+  grouped: boolean,
 ): (ExportSeriesStyle | null)[] {
-  const base = buildExportStyles(spec.zones.y.map((r) => r.channel), seriesStyles);
+  const base = buildExportStyles(
+    spec.zones.y.map((r) => r.channel), seriesStyles, null, false, grouped,
+  );
   if (spec.mark === "line") {
     return spec.showMarkers ? base.map((style) => ({ ...(style ?? {}), marker: true })) : base;
   }
@@ -119,9 +132,12 @@ export function plotSpecToFigureDoc(
   const liveSeriesStyles = spec.display ? displayToSeriesStyles(spec.display) : seriesStyles;
 
   const groupCol = spec.zones.group?.channel ?? null;
-  // Error wells (#51 phase 3): same groupCol gate as seriesStyles below --
-  // a grouped spec's synthetic per-level series have no sound 1:1 mapping to
-  // the wells' y-index pairing, so errors are omitted rather than misapplied.
+  // Error wells (#51 phase 3) stay gated on groupCol -- unlike the styles
+  // below, which the backend now expands per level (BUG-016). A style is the
+  // SAME for every level of a channel, so one `yKeys`-aligned entry says it
+  // completely; an error SPAN is per-row, so a channel's one well cannot be
+  // split across the levels its rows were partitioned into. Omitted rather
+  // than misapplied.
   const errors: ErrorBinding[] = groupCol === null ? specErrorBindings(spec) : [];
 
   return {
@@ -143,11 +159,12 @@ export function plotSpecToFigureDoc(
       dpi: 300,
       overrides,
       errors,
-      // A grouped spec's yKeys don't align 1:1 with the rendered synthetic
-      // per-level series (see the module doc comment) -- there's no sound
-      // per-channel style to carry, so styling is omitted entirely and
-      // matplotlib's default color cycle takes over, matching the screen.
-      seriesStyles: groupCol !== null ? null : stylesForMark(spec, liveSeriesStyles),
+      // BUG-016 round 2: carried for a grouped spec too. Each entry is the
+      // style the screen gives to EVERY level of that channel, and the backend
+      // expands it onto them (`calc.figure_group_styles`); the `grouped` flag
+      // drops only the palette-derived colour, which belongs to the level's
+      // display position rather than to the channel. See the module doc.
+      seriesStyles: stylesForMark(spec, liveSeriesStyles, groupCol !== null),
     },
   };
 }

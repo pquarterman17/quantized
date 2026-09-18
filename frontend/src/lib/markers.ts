@@ -5,7 +5,7 @@
 
 import type uPlot from "uplot";
 
-import type { MarkerShape } from "./types";
+import type { DefaultTrace, MarkerShape, SeriesStyle } from "./types";
 
 export const MARKER_SHAPES: { value: MarkerShape; label: string }[] = [
   { value: "circle", label: "● circle" },
@@ -94,4 +94,66 @@ export function markerPaths(
     }
     return { stroke: path, fill: closed ? path : null };
   };
+}
+
+/**
+ * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
+ * (`seriesPoints` below) and the legend swatch (`Stage/LegendSample.tsx`) both
+ * call, shared rather than restated, because the legend restating it is exactly
+ * how it drifted: with P3.3's cycle on and a `Scatter` / `Line + markers`
+ * default trace, the legend drew circle/square/triangle from
+ * `style.markerShape` while the canvas drew three plain circles and the export
+ * emitted no marker at all.
+ *
+ * The publication export is NOT a third caller, and stating it as one would
+ * overstate the agreement. `exportStyles.buildExportStyles` shares only the
+ * EXPLICIT half of this rule (`if (st?.marker)`); it has no `defaultTrace` to
+ * consult, because that preference never rides the wire. So an ambient
+ * `Scatter` / `Line + markers` series draws markers on screen and exports with
+ * none — a pre-existing gap, unrelated to the cycle and not narrowed by it,
+ * which is precisely WHY the default-trace branch below must not cycle a glyph:
+ * doing so would widen a gap the export cannot follow.
+ *
+ * The two branches are SEPARATE on purpose. An explicit `marker` honours
+ * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,
+ * the P3.3 auto glyph cycle, which arrives here already applied. The ambient
+ * default trace draws uPlot's own 5px circle and reads NEITHER field, because
+ * `buildExportStyles` emits a marker only for an EXPLICIT `style.marker`: a
+ * shape or size taken from a default-trace series would be drawn on screen and
+ * silently dropped from the PDF. Merging the two branches did exactly that, and
+ * also made a stored `{marker:false, markerShape:"star", markerSize:11}` — a
+ * combination `Inspector/SeriesStyleCard.tsx` keeps when "Markers" is unticked
+ * — render an 11px star on a Scatter plot with the P3.3 preference OFF.
+ */
+export function markerDecision(
+  style: SeriesStyle | undefined,
+  trace: DefaultTrace,
+): { show: boolean; shape: MarkerShape; size: number } {
+  if (style?.marker) {
+    return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? 5 };
+  }
+  return { show: trace === "Scatter" || trace === "Line + markers", shape: "circle", size: 5 };
+}
+
+/**
+ * The uPlot `points` config for one series, from `markerDecision` above — which
+ * `uplotOpts.ts` used to spell out inline (the move funds that file's
+ * shrink-only module pin).
+ *
+ * `stroke` is the series' resolved colour: open glyphs (+ x *) stroke only,
+ * closed ones fill with it. A circle returns no paths builder — uPlot's own
+ * built-in draws it, which is also what makes the default-trace branch above
+ * come back out of here as the plain `{show:true, size:5}` it always was.
+ */
+export function seriesPoints(
+  style: SeriesStyle | undefined,
+  trace: DefaultTrace,
+  stroke: string,
+): uPlot.Series.Points {
+  const { show, shape, size } = markerDecision(style, trace);
+  if (!show) return { show: false };
+  const paths = markerPaths(shape, size);
+  return paths
+    ? { show: true, size, paths, stroke, ...(FILLED_SHAPES.has(shape) ? { fill: stroke } : {}) }
+    : { show: true, size };
 }

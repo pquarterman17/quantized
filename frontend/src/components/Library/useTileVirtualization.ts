@@ -24,6 +24,7 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
 
 import { computeAxisWindow } from "../../lib/gridwindow";
+import { SCROLL_OUT_FOCUS_ATTR } from "../../lib/scrollOutFocus";
 
 export const VIRTUALIZE_ABOVE = 80;
 const OVERSCAN_ROWS = 2;
@@ -171,8 +172,8 @@ export function useTileVirtualization(
  *  anything it doesn't own — an input the user clicked, OR a DIFFERENT
  *  tile they focused mid-retry. Focus it may legitimately move FROM:
  *  <body> (the origin unmounted), the origin element itself (`from`), a
- *  grid container carrying `data-tile-grid-focus` (the scroll-out
- *  fallback holder), or the target once rendered. */
+ *  grid container carrying lib/scrollOutFocus's marker attribute (the
+ *  scroll-out fallback holder), or the target once rendered. */
 export function focusTileWhenRendered(key: string, from?: string | null): void {
   let attempts = 0;
   const tryFocus = (): void => {
@@ -180,7 +181,7 @@ export function focusTileWhenRendered(key: string, from?: string | null): void {
     if (active instanceof HTMLElement && active !== document.body) {
       const activeTile = active.getAttribute("data-library-tile");
       const owned =
-        activeTile === key || (from != null && activeTile === from) || active.hasAttribute("data-tile-grid-focus");
+        activeTile === key || (from != null && activeTile === from) || active.hasAttribute(SCROLL_OUT_FOCUS_ATTR);
       if (!owned) return;
     }
     const tile = document.querySelector(`[data-library-tile="${CSS.escape(key)}"]`) as HTMLElement | null;

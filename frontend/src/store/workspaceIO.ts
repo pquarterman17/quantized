@@ -32,9 +32,10 @@ import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
-import { toast } from "./toasts";
+import { notifyMigrationWarnings, toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
@@ -79,6 +80,22 @@ async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
     }
   }
   const s = get();
+  // BUG-011 residual (2026-09-13): `resolvePendingDatasets()` only awaits the
+  // books that were PENDING when it was called — a lazy import landing while
+  // that `Promise.all` is still in flight is never in that snapshot, so the
+  // re-read above can still carry a dataset whose `pending` came back true
+  // AFTER the resolve step finished with it. Refuse rather than serialize its
+  // downsampled preview rows, mirroring `store/packProjectContent.ts`'s own
+  // post-await re-check (BUG-011 finding #2) — same status + toast shape as
+  // the catch block just above (which reports the thrown reason and names no
+  // book); the by-name refusal itself mirrors `packProjectContent.ts`.
+  const stillPending = s.datasets.find((d) => d.pending);
+  if (stillPending) {
+    const msg = `save failed — couldn't load full data for every book: "${stillPending.name}" was still loading`;
+    get().setStatus(msg);
+    toast(msg, "danger");
+    return null;
+  }
   // PLOT_WORKFLOW_PLAN item 5: fold the FOCUSED window's still-live view into
   // its technique's memory slot before saving — mirrors `windowsForSave()`'s
   // "save is a sanctioned snapshot point" so unswitched-away edits aren't lost.
@@ -425,7 +442,14 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
     return;
   }
   if (result === null) {
-    const msg = `save failed — could not write to ${project.path} (try Save As)`;
+    // P3.4 error-quality audit (2026-09-14): this message now says the thing
+    // this function's own header already promised it would ("the atomic
+    // temp-file-plus-`os.replace` write already guarantees the previous good
+    // file on disk is untouched, so the only job left here is to say so
+    // plainly") — it named the failure and the remedy but never the fact the
+    // user is actually anxious about, which is whether the save half-wrote
+    // over their project.
+    const msg = `save failed — could not write to ${project.path}; the file on disk is unchanged (try Save As)`;
     get().setStatus(msg);
     toast(msg, "danger");
     return;
@@ -467,4 +491,8 @@ export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorks
   const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
   set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
   toast(msg, "ok");
+  // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
+  // parsed) has no status-line fold here at all — this never routes through
+  // loadWorkspace — so the toast is its only surface.
+  notifyMigrationWarnings(ws.migrationWarnings);
 }

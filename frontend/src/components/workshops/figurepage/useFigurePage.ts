@@ -79,6 +79,9 @@ export function useFigurePage() {
   const style = draft.output.stylePreset;
   const fmt = draft.output.format;
   const dpi = draft.output.dpi;
+  // P3.3: absent === off (PageOutputSettings.greyscale's own doc) -- surfaced
+  // to the view as a plain boolean so the checkbox never sees `undefined`.
+  const greyscale = draft.output.greyscale ?? false;
   const layout = draft.layout; // F3.5: gap/link/align/resize-mode controls
 
   const [slots, setSlots] = useState<PageSlot[]>(() => emptySlots(2, 2));
@@ -87,7 +90,9 @@ export function useFigurePage() {
   const lifecycle = usePageLifecycle(draft, setDraft, slots, setSlots, setSelected);
   // F3.6: the ONE spec-derivation path (buildSpec) plus preview/export/copy —
   // see usePagePreviewExport.ts's header for why this extracted out.
-  const pv = usePagePreviewExport(slots, { rows, cols, style, labelFormat, labelPos, layout, fmt, dpi });
+  const pv = usePagePreviewExport(slots, {
+    rows, cols, style, labelFormat, labelPos, layout, fmt, dpi, greyscale,
+  });
   const { labels } = lifecycle;
 
   const datasetIds = useMemo(() => new Set(datasets.map((dataset) => dataset.id)), [datasets]);
@@ -162,6 +167,20 @@ export function useFigurePage() {
 
   function setDpi(next: number): void {
     setDraft((prev) => ({ ...prev, output: { ...prev.output, dpi: next } }));
+  }
+
+  /** P3.3 page-wide print-safe output. Turning it OFF deletes the key rather
+   *  than writing `greyscale: false`, keeping the single canonical shape the
+   *  sanitizer produces (PageOutputSettings.greyscale's own doc) — so a page
+   *  toggled on and then off again is identical to one that never had it and
+   *  does NOT read as dirty. */
+  function setGreyscale(next: boolean): void {
+    setDraft((prev) => {
+      const output = { ...prev.output };
+      if (next) output.greyscale = true;
+      else delete output.greyscale;
+      return { ...prev, output };
+    });
   }
 
   function setLabelFormat(next: PageLabelFormat): void {
@@ -346,6 +365,8 @@ export function useFigurePage() {
     setFmt,
     dpi,
     setDpi,
+    greyscale,
+    setGreyscale,
     layout,
     setLayout,
     windowSources,

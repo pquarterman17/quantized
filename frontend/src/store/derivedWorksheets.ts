@@ -27,7 +27,8 @@ import { recomputeFromBase } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 
 export interface DerivedWorksheetsSlice {
   /** Create a linked derived worksheet (L0.50) inside `sourceId`'s workbook:

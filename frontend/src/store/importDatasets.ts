@@ -48,7 +48,8 @@ import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from 
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp } from "./pendingOps";
 import { toast } from "./toasts";
-import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
+import { nextDatasetId, nextFolderId } from "./idSeq";
+import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
 // Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
@@ -448,7 +449,12 @@ async function runImport<T>(
   // caller that has its own `withHistoryBatch` wrapped around this call, per
   // `ImportPathsOptions.presentOutcome`'s own doc.
   if (added > 0 && presentOutcome) await presentBatchOutcome(get, added, createdIds, targetFolderId);
-  if (lastError) toast(`${lastError}${hint}`, "danger");
+  // P3.4 error-quality audit (2026-09-14, deduped in the review round): the
+  // toast carries the "whether data changed" fact too. The status line said
+  // "imported 3/5 — failed …" while the toast — what actually appears over
+  // the stage — named only the broken file. Reuses `summary`, already built
+  // above to this exact string, rather than re-interpolating it.
+  if (lastError) toast(summary, "danger");
   return createdIds;
 }
 

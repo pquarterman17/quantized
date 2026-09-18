@@ -10,9 +10,11 @@ import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
-import { liveViewOverrides } from "./figureSpec";
+import { liveViewOverrides } from "./figureViewOverrides";
 import { defaultPlotView, type PlotWindow } from "./plotview";
 import type { Annotation, RefLine, RegionShade, Shape } from "./types";
+import { usePendingOps } from "../store/pendingOps";
+import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
 vi.mock("./api/figures", () => ({
@@ -221,6 +223,69 @@ describe("liveViewOverrides", () => {
   });
 });
 
+describe("runExportFigureCommand — P3.3 greyscale (print-safe) export option", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10], [2, 20]],
+            labels: ["A", "B"],
+            units: ["u", "v"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("omits greyscale from the wire when the dialog's default (false) goes unchanged", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({
+      fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "", greyscale: false,
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect("greyscale" in body).toBe(false);
+  });
+
+  it("sends greyscale: true when the dialog checkbox was turned on", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce({
+      fmt: "pdf", style: "default", dpi: 300, title: "", x_label: "", y_label: "", greyscale: true,
+    });
+    await runExportFigureCommand(useApp.getState);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.greyscale).toBe(true);
+  });
+});
+
 describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -303,7 +368,10 @@ describe("runExportFigureCommand — MAIN #24 x_fmt/y_fmt wiring", () => {
     const body = vi.mocked(exportFigure).mock.calls[0][0];
     expect(body.x_key).toBe(1);
     expect(body.y_keys).toEqual([0]);
-    expect(body.dataset.labels).toEqual(["Measured signal", "B", "C"]);
+    // BUG-014: the rename rides its own per-series presentation field; the wire
+    // dataset keeps the DATA's labels so the backend cannot re-append the unit.
+    expect(body.series_styles?.[0]?.legend).toBe("Measured signal");
+    expect(body.dataset.labels).toEqual(["A", "B", "C"]);
     // The imported workbook itself remains untouched.
     expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B", "C"]);
   });
@@ -706,20 +774,115 @@ describe("runExportFigureCommand — F2.5b (routes through the focused window's 
     expect(body.group_col).toBeUndefined();
   });
 
-  it("surfaces a grouped+secondary-axis document as an export-failed status, not an unhandled rejection", async () => {
-    // grouping + a secondary axis is a backend-invalid combination; groupKey
-    // is live-singleton-synced (P1.5), same reasoning as the test above.
+  // BUG-013 round 5: this combination used to THROW (round 4), surfaced here
+  // as an export-failed status. The canvas has always degraded it to a
+  // plain, ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys
+  // — no plotted/hidden distinction), so the export now succeeds and matches
+  // the screen the user was already looking at, rather than refusing.
+  it("exports a grouped+secondary-axis document as a degraded, ungrouped spec — no refusal (round 5)", async () => {
+    // groupKey is live-singleton-synced (P1.5), same reasoning as the test above.
     useApp.setState({ yKeys: [0, 1], y2Keys: [1], groupKey: 1 });
     const document = createFigureDocument({
-      id: "figure-w1-invalid",
-      name: "Window invalid",
+      id: "figure-w1-degraded",
+      name: "Window degraded",
       datasetId: DATASET_ID,
       view: defaultPlotView(),
       groupKey: 1,
     });
     useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
     await expect(runExportFigureCommand(useApp.getState)).resolves.toBeUndefined();
-    expect(exportFigure).not.toHaveBeenCalled();
-    expect(useApp.getState().status).toContain("grouped figures cannot use a secondary Y axis");
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(body.group_col).toBeUndefined();
+    expect(body.y2_keys).toEqual([1]);
+    expect(useApp.getState().status ?? "").not.toContain("grouped figures cannot use a secondary Y axis");
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations) —
+// the "figure" export kind. exportActive.test.ts covers the shared cancel
+// mechanism generically; this pins that "Export figure…" reaches it wired
+// correctly: the AbortSignal it registers actually lands on the exportFigure
+// call, and a cancel clears the busy op without a download or a toast.
+describe("runExportFigureCommand — safe cancel (P3.4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    usePendingOps.setState({ ops: [] });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: {
+            time: [0, 1],
+            values: [[1, 10, 100], [2, 20, 200]],
+            labels: ["A", "B", "C"],
+            units: ["u", "v", "w"],
+            metadata: {},
+          },
+        },
+      ],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      y2Keys: null,
+      xScale: "linear",
+      yScale: "linear",
+      xFmt: { mode: "auto", digits: 2 },
+      yFmt: { mode: "auto", digits: 2 },
+      y2Fmt: null,
+      xStep: null,
+      yStep: null,
+      seriesStyles: {},
+      seriesLabels: {},
+      seriesOrder: null,
+      hiddenChannels: [],
+      xLim: null,
+      yLim: null,
+      showGrid: true,
+      showAxisBox: false,
+      plotTitle: "",
+      xAxisLabel: "",
+      yAxisLabel: "",
+      status: "",
+    });
+  });
+
+  it("threads a real, abortable AbortSignal into exportFigure", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    let reject!: (e: unknown) => void;
+    vi.mocked(exportFigure).mockImplementation((_body, signal) => {
+      capturedSignal = signal;
+      return new Promise((_r, rj) => (reject = rj));
+    });
+
+    const p = runExportFigureCommand(useApp.getState);
+    await vi.waitFor(() => expect(capturedSignal).toBeInstanceOf(AbortSignal));
+    expect(capturedSignal!.aborted).toBe(false);
+
+    usePendingOps.getState().ops[0].cancel!();
+    expect(capturedSignal!.aborted).toBe(true);
+
+    reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await p;
+
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(useToasts.getState().toasts).toEqual([]); // no error toast, no success toast
+  });
+
+  it("registers the op with a Cancel affordance while the render is in flight", async () => {
+    let reject!: (e: unknown) => void;
+    vi.mocked(exportFigure).mockReturnValue(new Promise((_r, rj) => (reject = rj)));
+
+    const p = runExportFigureCommand(useApp.getState);
+    await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+    expect(usePendingOps.getState().ops[0].label).toBe("Exporting scan.dat…");
+    expect(typeof usePendingOps.getState().ops[0].cancel).toBe("function");
+
+    usePendingOps.getState().ops[0].cancel!();
+    reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+    await p;
+    expect(usePendingOps.getState().ops).toHaveLength(0); // busy indicator cleared
   });
 });

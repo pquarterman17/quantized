@@ -153,6 +153,64 @@ describe("PagesSection", () => {
       expect(exportFigurePage).not.toHaveBeenCalled();
     });
 
+    // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: the saved page's own page-wide
+    // print-safe choice, honoured WITHOUT reopening the page. Pinned at the
+    // request layer (what actually rides the wire) in both directions --
+    // present on every panel when on, ABSENT entirely when off/absent.
+    it("threads the saved page's greyscale onto EVERY panel of the export request", async () => {
+      const figure = createFigureDocument({
+        id: "figure-1", name: "Loop", datasetId: "d1", view: defaultPlotView(),
+      });
+      const second = createFigureDocument({
+        id: "figure-2", name: "Loop 2", datasetId: "d1", view: defaultPlotView(),
+      });
+      const page = createPageDocument({
+        id: "p1",
+        name: "Print-safe page",
+        rows: 1,
+        cols: 2,
+        panels: [
+          { figureId: "figure-1", label: null, title: null },
+          { figureId: "figure-2", label: null, title: null },
+        ],
+        output: { greyscale: true },
+      });
+      useApp.setState({
+        pages: [page],
+        editableFigures: [figure, second],
+        datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
+      });
+      render(<PagesSection />);
+      fireEvent.click(screen.getByTitle('export "Print-safe page" without reopening it'));
+      await waitFor(() => expect(useApp.getState().status).toBe("exported figure_page.pdf"));
+      const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+      expect(body.panels).toHaveLength(2);
+      expect(body.panels.map((panel) => panel.figure.greyscale)).toEqual([true, true]);
+    });
+
+    it("omits greyscale entirely when the saved page never turned it on", async () => {
+      const figure = createFigureDocument({
+        id: "figure-1", name: "Loop", datasetId: "d1", view: defaultPlotView(),
+      });
+      const page = createPageDocument({
+        id: "p1",
+        name: "Coloured page",
+        rows: 1,
+        cols: 1,
+        panels: [{ figureId: "figure-1", label: null, title: null }],
+      });
+      useApp.setState({
+        pages: [page],
+        editableFigures: [figure],
+        datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
+      });
+      render(<PagesSection />);
+      fireEvent.click(screen.getByTitle('export "Coloured page" without reopening it'));
+      await waitFor(() => expect(useApp.getState().status).toBe("exported figure_page.pdf"));
+      const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+      expect("greyscale" in body.panels[0].figure).toBe(false);
+    });
+
     it("fails visibly, naming the panel, when a figure reference is dangling", async () => {
       const page = createPageDocument({
         id: "p1",

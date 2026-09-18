@@ -6,13 +6,15 @@
 // shape-editing hooks needed the offset — same reasoning as
 // useShapeEdit/useShapeDraw's own extraction).
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import type { ColorScatterSpec } from "../../lib/colorscatter";
-import type { FacetPanel } from "../../lib/facet";
-import type { SpatialPanel } from "../../lib/multipanel";
+import type { Composition } from "../../lib/composition";
 import type { PlotPayload } from "../../lib/plotdata";
 import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
+import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
+import { publishLiveWaterfallSpan, waterfallSpan } from "../../lib/waterfallOffset";
+import { multiPanelShowing } from "./useEffectiveComposition";
 
 export interface LiveSnapshotArgs {
   active: Dataset | null;
@@ -20,9 +22,32 @@ export interface LiveSnapshotArgs {
   statMode: boolean;
   stackMode: boolean;
   plottedCount: number;
-  spatialPanels: SpatialPanel[] | null;
-  facetPanels: FacetPanel[] | null;
+  /** The arrangement PlotStage derived ONCE (`useEffectiveComposition`) and
+   *  hands both to `MultiPanelStage` and to this hook — never re-derived
+   *  here, and never split back into per-kind panel arrays: `altModeShowing`
+   *  below asks the same `multiPanelShowing` predicate PlotStage's own mount
+   *  gate does, so the two cannot disagree about what is on screen. */
+  composition: Composition | null;
   displayPayload: PlotPayload | null;
+  /** The RAW fetched payload, pre-compose (`usePlotPayload`'s own `payload`).
+   *  Published as a y-span, not a bundle: `displayPayload` above has already
+   *  had the waterfall ADDED to it (and then been masked and overlaid), so the
+   *  span the canvas staggered by is no longer recoverable from it. See
+   *  `lib/waterfallOffset.ts`'s header for why the export needs this number
+   *  rather than re-measuring the DataStruct. */
+  payload: PlotPayload | null;
+  /** The id of the dataset `payload` above was FETCHED for — `usePlotPayload`'s
+   *  own `payloadDatasetId`, which travels in the same `useState` as the rows.
+   *  NOT `active.id` (BUG-013 round 3): the store advances `active`
+   *  SYNCHRONOUSLY on a dataset switch while the new dataset's fetch is still in
+   *  flight, so publishing the span under `active.id` handed `readLive-
+   *  WaterfallSpan(newDataset)` a span measured from the OLD dataset's rows for
+   *  the whole round trip — measured at 200 for a dataset whose own span is 2,
+   *  i.e. a stagger 100x too large and wider than the figure. Keying by the
+   *  payload's own id makes the seam unable to name a dataset it has not seen:
+   *  mid-flight the old dataset's (still drawn) span is published under the OLD
+   *  id, and the new one simply has no published span until its rows arrive. */
+  payloadDatasetId: string | null;
   // Matches usePlotPayload's own return type exactly (each `| undefined`
   // while the payload is still being composed) — PlotStage passes these
   // straight through from that hook.
@@ -32,36 +57,77 @@ export interface LiveSnapshotArgs {
   plotted: number[];
   colorByColumns: Map<number, ColorScatterSpec>;
   hidden: boolean[] | undefined;
+  /** P3.3: the cycle positions the Stage canvas was built with, or null. See
+   *  `resolvedStyles` below — this hook RESOLVES the styles before publishing
+   *  rather than passing the cycle on, because a snapshot must stay frozen. */
+  seriesCycle: SeriesCycle;
 }
 
 /** Whether an alternate render mode (polar/stats/multi-panel stack) is
  *  ACTUALLY showing right now — the XY bundle `usePlotPayload` computed
  *  isn't what's on screen then, so the snapshot publish below must no-op
- *  instead of freezing the wrong thing. Also gates PlotStage's own early
- *  returns to the alternate-mode components. */
+ *  instead of freezing the wrong thing. The multi-panel half is
+ *  `multiPanelShowing` (`useEffectiveComposition.ts`), the SAME predicate
+ *  PlotStage's own early return to `MultiPanelStage` calls — it used to be
+ *  restated here from the panel arrays PlotStage passed in, which is a
+ *  divergence waiting to happen (BUG-012 added a break clause to it). */
 function altModeShowing(
-  a: Pick<LiveSnapshotArgs, "active" | "polarMode" | "statMode" | "stackMode" | "plottedCount" | "spatialPanels" | "facetPanels">,
+  a: Pick<LiveSnapshotArgs, "active" | "polarMode" | "statMode" | "stackMode" | "plottedCount" | "composition">,
 ): boolean {
   return (
     (!!a.active && (a.polarMode || a.statMode)) ||
-    (a.stackMode && (a.plottedCount >= 2 || (a.spatialPanels?.length ?? 0) >= 2 || (a.facetPanels?.length ?? 0) >= 1))
+    multiPanelShowing(a.composition, a.stackMode, a.plottedCount)
   );
 }
 
 /** Runs the publish effect (cleared on unmount — the Plot tab switching
  *  away). PlotStage's own early-return gates to the alternate-mode
- *  components recompute this same condition inline from `nPlotted`/
- *  `spatialPanels`/`facetPanels` directly — this hook doesn't need to hand
- *  it back out. */
+ *  components call `multiPanelShowing` on the same `composition` it passes
+ *  in here — this hook doesn't need to hand its answer back out. */
 export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   const alt = altModeShowing(args);
-  const { displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden } = args;
+  const { displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, seriesCycle } = args;
+  // BUG-013 review round: the y-span the canvas measured its waterfall stagger
+  // from — `payload.data[0]` is x, the rest are the value columns
+  // `applyWaterfall` scans. Recomputed here rather than returned by
+  // `usePlotPayload` so the hook's three call sites (only ONE of which is the
+  // focused Stage) cannot each publish a competing span.
+  const datasetId = args.payloadDatasetId;
+  const rawPayload = args.payload;
+  const span = useMemo(
+    () =>
+      rawPayload
+        ? waterfallSpan((rawPayload.data as unknown as (number | null)[][]).slice(1))
+        : null,
+    [rawPayload],
+  );
+  // P3.3: the bundle carries the RESOLVED styles — the cycle applied, not the
+  // cycle itself. A snapshot window has no export and no live view; its whole
+  // contract (this module's header, and `plotsnapshot.ts`'s) is "freezes exactly
+  // what's on screen". Passing the raw styles and a cycle would have made the
+  // frozen plot re-derive its dashes from whatever the preference happens to be
+  // later, so a snapshot of a dashed plot rendered solid once the preference was
+  // turned off — a frozen figure silently changing after the fact. Resolving
+  // here freezes the dashes with the data. With no cycle `resolveSeriesStyle` is
+  // the identity function and returns each caller's own entry, so this is
+  // byte-identical to before the feature whenever the preference is off.
+  const resolvedStyles = useMemo(
+    () => (seriesCycle && styleList ? styleList.map((st, i) => resolveSeriesStyle(st, i, seriesCycle)) : styleList),
+    [styleList, seriesCycle],
+  );
   useEffect(() => {
     publishLivePlotSnapshot(
       displayPayload && !alt
-        ? { payload: displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden }
+        ? { payload: displayPayload, styleList: resolvedStyles, labelList, errorBars, plotted, colorByColumns, hidden }
         : null,
     );
     return () => publishLivePlotSnapshot(null);
-  }, [displayPayload, styleList, labelList, errorBars, plotted, colorByColumns, hidden, alt]);
+  }, [displayPayload, resolvedStyles, labelList, errorBars, plotted, colorByColumns, hidden, alt]);
+  // Same gate, own effect: the span survives a compose the bundle publish
+  // re-runs for (an overlay, a brush) without re-deriving, and clears on the
+  // same unmount/alternate-mode transitions.
+  useEffect(() => {
+    publishLiveWaterfallSpan(span != null && !alt ? { datasetId, span } : null);
+    return () => publishLiveWaterfallSpan(null);
+  }, [span, datasetId, alt]);
 }

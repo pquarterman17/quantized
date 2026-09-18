@@ -7,6 +7,7 @@
 import { useApp } from "../../store/useApp";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
+import MapColorLimits from "./MapColorLimits";
 
 const METHODS = [
   { value: "natural", label: "natural (Sibson)" },
@@ -45,6 +46,11 @@ export default function MapCard() {
         value={String(res)}
         onChange={(e) => setMapRes(Number(e.target.value))}
       />
+
+      {/* Audit P2.8 — the map's explicit z (colour) limits. Beside the grid
+          controls rather than in the float toolbar because it is two typed
+          fields, the same shape as the Axes card's own X/Y Limits row. */}
+      <MapColorLimits />
 
       <label className="qzk-field-lbl" style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 6 }}>
         <input type="checkbox" checked={contourOn} onChange={(e) => setContourOn(e.target.checked)} />

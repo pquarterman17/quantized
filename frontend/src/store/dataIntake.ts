@@ -28,7 +28,8 @@ import { installBookData } from "../lib/bookData";
 import { lit } from "../lib/macro";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 
 export interface DataIntakeSlice {
   // Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): fire-and-forget fetch
@@ -169,7 +170,10 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         get().setStatus(msg);
         toast(msg, "ok");
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "paste import failed";
+        // P3.4 error-quality audit (2026-09-14): a bare `e.message` here is
+        // whatever the parser threw ("no delimiter found", or an HTTP status
+        // line) — true, but it names neither the operation nor the outcome.
+        const msg = `could not create a dataset from the pasted text: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`;
         get().setStatus(msg);
         toast(msg, "danger");
       }

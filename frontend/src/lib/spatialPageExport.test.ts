@@ -87,7 +87,12 @@ describe("buildSpatialPageRequest", () => {
     expect(fig.x_step).toBe(0.5);
   });
 
-  it("preserves only decoded partial legend entries and never mutates the workbook labels", () => {
+  // BUG-014 review round: the decoded caption is PRESENTATION and rides
+  // `series_styles[i].legend`, so the wire dataset keeps the workbook's own
+  // column names (it used to ship `["a", "Measured", "_nolegend_"]` as
+  // `dataset.labels`, which the backend then re-composed as
+  // "Measured (au)" -- BUG-014's symptom on this builder).
+  it("carries decoded partial legend entries as presentation, leaving the data labels real", () => {
     const dataset = ds();
     const p = panel({
       seriesLabels: { 1: "Measured" },
@@ -99,15 +104,44 @@ describe("buildSpatialPageRequest", () => {
       new Map([["ds1", dataset]]),
       defaultPageSetup(),
     )!.panels[0].figure;
-    expect(fig.dataset).not.toBe(dataset);
-    expect(fig.dataset.labels).toEqual(["a", "Measured", "_nolegend_"]);
+    expect(fig.dataset).toBe(dataset);
+    expect(fig.dataset.labels).toEqual(["a", "b", "c"]);
     expect(dataset.labels).toEqual(["a", "b", "c"]);
+    // `y_keys` is [1, 2] here, so entry 0 is the captioned channel and entry 1
+    // is the uncaptioned one matplotlib suppresses by its leading "_".
+    expect(fig.series_styles?.map((st) => st?.legend)).toEqual(["Measured", "_nolegend_"]);
     expect(fig.overrides?.legend).toEqual({
       show: true,
       loc: "axes",
       anchor: [0.2, 0.3],
       title: "SLD",
     });
+  });
+
+  // BUG-016 round 3: `buildExportStyles` records `colorDerived` on every
+  // colour it emits so a PINNED array can say later whether the user chose
+  // it. That flag is a document field and must never reach a request -- this
+  // path is one of the three wire boundaries that removes it.
+  it("sends no colorDerived provenance flag on a page panel's styles", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({ seriesStyles: { 1: { width: 3 } } })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    const styles = fig.series_styles ?? [];
+    expect(styles.length).toBeGreaterThan(0);
+    for (const st of styles) expect(Object.keys(st ?? {})).not.toContain("colorDerived");
+    // Non-vacuous: the panel's own styling still rides along.
+    expect(styles.map((st) => st?.width)).toContain(3);
+  });
+
+  it("adds no legend field at all when the panel decoded no captions", () => {
+    const fig = buildSpatialPageRequest(
+      [panel()],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    for (const st of fig.series_styles ?? []) expect(st == null || !("legend" in st)).toBe(true);
   });
 
   it("does not invent a legend when the panel has no decoded legend content", () => {
@@ -308,5 +342,107 @@ describe("buildSpatialPageRequest", () => {
 
   it("null when a panel's dataset isn't in the resolved map (dead source)", () => {
     expect(buildSpatialPageRequest([panel()], new Map(), defaultPageSetup())).toBeNull();
+  });
+});
+
+// ── P3.3 auto dash/marker cycle: the spatial page's half ────────────────────
+// The spatial cells are the second (and only other) render pair that cycles.
+// The first cut skipped them on the grounds that "its per-panel index space
+// does not line up with the per-cell style lists" — it does, exactly:
+// `useMultiPanelStage.ts` builds its cell styles, its legend entries AND this
+// request's `series_styles` from the same `spatialPlottedChannels(panel)` list,
+// hidden channels already dropped on both sides. So plain display order is one
+// shared position space and the two can be pinned against each other.
+describe("auto dash/marker cycle — spatial page export (P3.3)", () => {
+  const appearance = {
+    xFmt: { mode: "auto" as const, digits: 2 },
+    yFmt: { mode: "auto" as const, digits: 2 },
+    showGrid: true,
+    showAxisBox: false,
+  };
+  const request = (over: Partial<SpatialPanel>, autoSeriesStyles: boolean) =>
+    buildSpatialPageRequest([panel(over)], new Map([["ds1", ds()]]), defaultPageSetup(), {
+      ...appearance,
+      autoSeriesStyles,
+    });
+  const lines = (spec: ReturnType<typeof buildSpatialPageRequest>) =>
+    (spec!.panels[0].figure.series_styles ?? []).map((s) => s?.line);
+
+  it("OFF: no dash is encoded — the request is what it was before the cycle", () => {
+    expect(lines(request({ yKeys: [1, 2] }, false))).toEqual([undefined, undefined]);
+  });
+
+  it("ON: each panel's series cycle by their position within THAT panel", () => {
+    // Per-panel, not page-wide: the cell canvas indexes its own series list
+    // from 0, so panel 2's first curve is solid there and must be solid here.
+    expect(lines(request({ yKeys: [1, 2] }, true))).toEqual(["solid", "dashed"]);
+  });
+
+  it("ON: a hidden channel is dropped on BOTH sides, so positions still line up", () => {
+    // `spatialPlottedChannels` filters hidden for the canvas and for this
+    // request alike — unlike the single-figure path, there is no unfiltered
+    // list to reconcile against, and this pins that it stays that way.
+    const spec = request({ yKeys: [1, 2], hiddenChannels: [1] }, true);
+    expect(spec!.panels[0].figure.y_keys).toEqual([2]);
+    expect(lines(spec)).toEqual(["solid"]);
+  });
+
+  it("ON: an explicit per-series line still wins", () => {
+    const spec = request({ yKeys: [1, 2], seriesStyles: { 2: { line: "solid" } } }, true);
+    expect(lines(spec)).toEqual(["solid", "solid"]);
+  });
+
+  it("no appearance bag at all leaves the request uncycled (the default)", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect((spec!.panels[0].figure.series_styles ?? []).map((s) => s?.line)).toEqual([
+      undefined,
+      undefined,
+    ]);
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: `appearance.greyscale` is
+// ONE page-level choice, threaded onto EVERY panel's own `FigureSpec`
+// (lib/exportPageCommand.ts applies it uniformly — this composer has no
+// per-panel UI), byte-identical to before when off/omitted (mirrors the
+// single-figure dialog's own wire convention).
+describe("greyscale (print-safe) page export — P3.3 residual", () => {
+  const baseAppearance = {
+    xFmt: { mode: "auto" as const, digits: 2 },
+    yFmt: { mode: "auto" as const, digits: 2 },
+    showGrid: true,
+    showAxisBox: false,
+  };
+
+  it("threads greyscale: true onto EVERY panel's figure spec when opted in", () => {
+    const spec = buildSpatialPageRequest(
+      [panel(), panel({ col: 1, pageRect: { left: 0.55, top: 0.2, width: 0.3, height: 0.4 } })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      { ...baseAppearance, greyscale: true },
+    );
+    expect(spec!.panels).toHaveLength(2);
+    expect(spec!.panels[0].figure.greyscale).toBe(true);
+    expect(spec!.panels[1].figure.greyscale).toBe(true);
+  });
+
+  it("omits greyscale from every panel when off, matching the single-figure wire convention", () => {
+    const spec = buildSpatialPageRequest(
+      [panel()],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+      { ...baseAppearance, greyscale: false },
+    );
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
+  });
+
+  it("omits greyscale when the appearance bag omits it entirely (today's default)", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup(), baseAppearance);
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
+  });
+
+  it("omits greyscale with no appearance bag at all", () => {
+    const spec = buildSpatialPageRequest([panel()], new Map([["ds1", ds()]]), defaultPageSetup());
+    expect("greyscale" in spec!.panels[0].figure).toBe(false);
   });
 });

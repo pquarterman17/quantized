@@ -204,4 +204,50 @@ describe("sanitizeTechniqueViewMemory — the .dwk untrusted-boundary parse", ()
     };
     expect(sanitizeTechniqueViewMemory(JSON.parse(JSON.stringify(raw)))).toEqual(raw);
   });
+
+  // BUG-014 round 5: every map on this entry is CHANNEL-indexed and read back
+  // by numeric index (`remembered.labels[ch]`) or through `Number(key)`, so a
+  // hand-edited `"01"` has to normalize onto channel 1 — the behaviour the
+  // file's own private `strRecord`/`numRecord` had before the shared
+  // sanitizer landed. `lib/plotview.ts`'s map is the one with the opposite
+  // (verbatim) policy; see `sanitizeRecord.test.ts`.
+  it("normalizes a non-canonical numeric key onto its channel, and drops a non-numeric one", () => {
+    const out = sanitizeTechniqueViewMemory({
+      "xrd.powder": {
+        xKey: 0,
+        yKeys: [1],
+        yScale: "linear",
+        xScale: "linear",
+        seriesLabels: { "01": "Peak", abc: "dropped", "2": 42 },
+        errKeys: { "01": 2, xyz: 3 },
+        labels: { "01": "Intensity" },
+      },
+    });
+    const entry = out["xrd.powder"]!;
+    expect(entry.labels).toEqual({ 1: "Intensity" });
+    expect(entry.seriesLabels).toEqual({ 1: "Peak" });
+    expect(entry.errKeys).toEqual({ 1: 2 });
+  });
+
+  // BUG-014 round-5 review F1: `remembered.labels[ch]` is read by NUMERIC
+  // index, so a blank key surviving as channel `0` silently renames channel
+  // 0 and binds a stray error column to it. A hand-edited or truncated
+  // `.dwk` is exactly the untrusted boundary this sanitizer exists for.
+  it("drops a blank or whitespace-only key instead of silently renaming channel 0", () => {
+    const out = sanitizeTechniqueViewMemory({
+      "xrd.powder": {
+        xKey: 0,
+        yKeys: [1],
+        yScale: "linear",
+        xScale: "linear",
+        seriesLabels: { "": "GHOST2" },
+        errKeys: { "": 7 },
+        labels: { "": "GHOST", "1": "Real" },
+      },
+    });
+    const entry = out["xrd.powder"]!;
+    expect(entry.labels).toEqual({ 1: "Real" });
+    expect(entry.seriesLabels).toEqual({});
+    expect(entry.errKeys).toEqual({});
+  });
 });

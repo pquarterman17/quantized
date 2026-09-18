@@ -71,9 +71,10 @@ export function lastBookError(id: string, source: BookSource): string | null {
 /** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
  *  ARRAY, which `lib/api/http.ts` stringifies rather than rejecting. Neither
  *  belongs verbatim in a one-line status or a refusal reason, so cap it and say
- *  it was cut. Lives here, beside the record, because BOTH consumers of a
- *  recorded reason need it — `store/pendingEdit.ts` and
- *  `lib/workbookTransfer.ts` — and the second one was interpolating it raw. */
+ *  it was cut. Lives here, beside the record, because all three consumers of a
+ *  recorded reason need it — `store/pendingEdit.ts`, `lib/workbookTransfer.ts`
+ *  (which was interpolating it raw), and `store/packProjectContent.ts`'s own
+ *  pack refusal (BUG-011). */
 export function truncateReason(reason: string): string {
   const flat = reason.replace(/\s+/g, " ").trim();
   return flat.length > 120 ? `${flat.slice(0, 119)}\u2026` : flat;

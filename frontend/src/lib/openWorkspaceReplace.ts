@@ -11,7 +11,7 @@ import { useProjectLock, type LockProvider } from "../store/projectLock";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { useRelink } from "../store/relink";
-import { toast } from "../store/toasts";
+import { notifyMigrationWarnings, toast } from "../store/toasts";
 import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { parentDirectory } from "./importEntry";
@@ -149,6 +149,12 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
   // through; closePanel is idempotent when the panel isn't open.
   useRelink.getState().closePanel();
   s().loadWorkspace(ws);
+  // BUG-010 (review): `loadWorkspace`'s own `migrationNotice` status-line
+  // fold above is real here (nothing downstream in this function overwrites
+  // `status`), but a status line is easy to miss on a big load — every
+  // OTHER load path joins the toast channel too, so File ▸ Open does the
+  // same instead of being the one loader that doesn't.
+  notifyMigrationWarnings(ws.migrationWarnings);
   // P3: reserve the lock machine's `path` at the NEW identity BEFORE
   // `setCurrentProject` flips `useApp.currentProject` — see
   // `reserveLockForSwitch`'s doc for why the ordering itself is the fix.
@@ -168,6 +174,7 @@ export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?
   s().recordHistory("open workspace without layout");
   useRelink.getState().closePanel(); // C1 review F4 — see replaceWorkspace's identical comment
   s().loadWorkspace(ws, { skipLayout: true });
+  notifyMigrationWarnings(ws.migrationWarnings); // BUG-010 (review) — see replaceWorkspace's identical comment
   const priorLock = reserveLockForSwitch(native); // P3 — see replaceWorkspace's identical comment
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);

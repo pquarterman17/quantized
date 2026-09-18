@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { autosaveHealth, setAutosaveBackend } from "./lib/autosave";
 import { memoryBackend } from "./lib/autosaveBackend";
 import { createBrowserLockProvider } from "./lib/browserLockProvider";
+import { FIGURE_DOCUMENT_SCHEMA } from "./lib/figureDocument";
 import { STALE_AFTER_MS } from "./lib/lockState";
+import { EMPTY_MAP_VIEWS } from "./lib/mapView";
 import { serializeWorkspace } from "./lib/workspace";
 import { useAutosaveStatus } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
@@ -36,6 +38,7 @@ async function flush() {
 }
 
 const base: AutosaveState = {
+  mapViews: EMPTY_MAP_VIEWS, // P2.8 — the per-dataset durable map views (untouched)
   datasets: [],
   folders: [],
   activeId: null,
@@ -272,6 +275,23 @@ describe("startup recovery choice (P1.2 box 5)", () => {
 
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["a.dat"]);
     expect(useRecoveryChoice.getState().pending).toBeNull();
+  });
+
+  // BUG-010: this silent-restore branch's own `setStatus` call has never had
+  // a toast at all (unlike the "unclean" branch just below it) — it just
+  // never surfaced the loadWorkspace status-line fold in the first place.
+  it("toasts a migrationWarnings notice on a silent restore (BUG-010)", async () => {
+    useToasts.setState({ toasts: [] });
+    const raw = JSON.parse(serializeWorkspace({ datasets: [ds] })) as Record<string, unknown>;
+    raw.editableFigures = [{ schema: FIGURE_DOCUMENT_SCHEMA, version: 99, id: "future-fig" }];
+    setAutosaveBackend(memoryBackend([{ at: 500, text: JSON.stringify(raw) }]));
+    // recentProjects stays empty (set in beforeEach) -> silent-restore path.
+
+    renderHook(() => useWorkspaceAutosave());
+    await flush();
+
+    expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["a.dat"]);
+    expect(useToasts.getState().toasts.some((t) => /unsupported version 99/.test(t.msg))).toBe(true);
   });
 
   it("silently restores when the autosave is NOT newer than the last project", async () => {

@@ -103,27 +103,70 @@ export async function postForm<T>(path: string, form: FormData, signal?: AbortSi
   return unwrap<T>(await fetch(path, { method: "POST", body: form, signal }));
 }
 
-/** POST JSON -> raw response bytes (the server-rendered preview images). */
-export async function postBlob(path: string, body: unknown): Promise<Blob> {
+/** Throws the same `AbortError` `fetch` itself would throw for `signal` — the
+ *  export-cancel race guard (PRIMARY_SOFTWARE_AUDIT_PLAN P3.4): a click on
+ *  Cancel between the response arriving and the blob being written/saved
+ *  can't be caught by `fetch`'s own abort wiring (the network part is
+ *  already done), so `postBlob`/`postDownload` call this themselves, in the
+ *  same synchronous turn as the write, right after decoding the body and
+ *  before ever touching the clipboard or the disk — no `await` runs between
+ *  this check and that write, so nothing can race it.
+ *
+ *  That "nothing can race it" claim is exact for `postDownload`: `saveBlob`
+ *  is a synchronous DOM call, so this check is genuinely the last word. It
+ *  is only PARTIAL for `postBlob`'s clipboard callers: this closes the race
+ *  up to the moment `postBlob` returns. `lib/clipboard.ts`'s copyImageAsync/
+ *  copySvgAsync re-check the same signal again, one microtask later, when
+ *  they build the `ClipboardItem` — that narrows the gap between this
+ *  return and that construction, nothing more. A cancel landing AFTER that
+ *  second check (while the browser is still reading the value promise, or
+ *  performing the write itself) is not observable from JS on any engine,
+ *  and the clipboard write completes regardless — see that module's own
+ *  doc, and `lib/exportActive.ts`'s post-`fn` abort check for how the
+ *  residual is honestly reported rather than mis-reported as "cancelled". */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+}
+
+/** POST JSON -> raw response bytes (the server-rendered preview images).
+ *  `signal` — see postJSON; also re-checked right before returning (see
+ *  `throwIfAborted`'s doc) so a caller handing the still-pending Blob to the
+ *  clipboard (copyImageAsync/copySvgAsync) can never resolve IT with a
+ *  post-cancel blob — closing the race up to this function's own return;
+ *  the clipboard write itself happens later still and needs its own re-check
+ *  (see clipboard.ts). */
+export async function postBlob(path: string, body: unknown, signal?: AbortSignal): Promise<Blob> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
-  return (await ensureOk(res)).blob();
+  const blob = await (await ensureOk(res)).blob();
+  throwIfAborted(signal);
+  return blob;
 }
 
 /** POST JSON, then download the response body as a file (Content-Disposition
  *  attachment) — the export routes. Lives here rather than lib/download so
  *  its error handling rides `ensureOk`; the DOM save helpers stay in
- *  lib/download (which does no fetching). */
-export async function postDownload(path: string, body: unknown, fallbackName: string): Promise<void> {
+ *  lib/download (which does no fetching). `signal` — see postJSON; also
+ *  re-checked right before `saveBlob` (see `throwIfAborted`'s doc) so a
+ *  cancelled export can never still trigger the download. */
+export async function postDownload(
+  path: string,
+  body: unknown,
+  fallbackName: string,
+  signal?: AbortSignal,
+): Promise<void> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   const blob = await (await ensureOk(res)).blob();
+  throwIfAborted(signal);
   saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
 }
 

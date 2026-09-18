@@ -12,15 +12,19 @@
 // early-returns use (polar > stat > stack > plain XY) — so a window whose
 // snapshot carries `polarMode`/`statMode`/`stackMode` shows that mode even
 // while unfocused, fed from its OWN view while the singletons hold whatever
-// the focused window is doing. Spatial/break stay transient SINGLETON state
+// the focused window is doing. SPATIAL stays transient SINGLETON state
 // (focused-only, no durable binding to rebuild from) — a background stack
-// window is always the plain per-channel stack for THOSE two. FACET is
-// different (F4.4 review round L2): `facetKey` is bindings-owned (this
-// window's OWN `view.facetKey`, not the live singleton), so a background
-// window derives its OWN facet grid straight from it
-// (`lib/facet.facetCompositionFromBinding`) instead of silently degrading to
-// a plain plot the moment it loses focus — the "a window silently changing
-// appearance on focus move" dishonest-preview class this review flagged.
+// window is always the plain per-channel stack for it. FACET is different
+// (F4.4 review round L2): `facetKey` is bindings-owned (this window's OWN
+// `view.facetKey`, not the live singleton), so a background window derives
+// its OWN facet grid straight from it instead of silently degrading to a
+// plain plot the moment it loses focus — the "a window silently changing
+// appearance on focus move" dishonest-preview class this review flagged. An
+// x-axis BREAK is bindings-owned in exactly the same way since BUG-012 (this
+// window's OWN `document.plot.axisBreaks.x`), so both are derived here
+// through the one shared `lib/facet.durableComposition` — precedence and all
+// — and mounted through the one shared `multiPanelShowing` predicate the
+// focused `PlotStage` asks (BUG-012 review F5).
 // Cross-window link groups (item 13) stay XY-only: the `linkGroup` prop is
 // threaded into the XY path's viewport ONLY, never into the alternate mode
 // cores (a stack window's panels sync among THEMSELVES via a per-window key
@@ -36,7 +40,7 @@ import { useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import type { ErrorBinding } from "../../lib/errorRoles";
-import { facetCompositionFromBinding } from "../../lib/facet";
+import { durableComposition } from "../../lib/facet";
 import type { FigureDocument } from "../../lib/figureDocument";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
@@ -47,7 +51,9 @@ import { windowSyncKey } from "../../lib/windowsync";
 import { useApp } from "../../store/useApp";
 import InsetPlot from "../Stage/InsetPlot";
 import PlotViewport from "../Stage/PlotViewport";
+import { multiPanelShowing } from "../Stage/useEffectiveComposition";
 import { usePlotPayload } from "../Stage/usePlotPayload";
+import { useWindowSeriesCycle } from "../Stage/useStageSeriesCycle";
 import {
   BackgroundPolarWindow,
   BackgroundStackWindow,
@@ -92,12 +98,16 @@ export default function BackgroundPlotWindow({
   // null/non-null across renders of the SAME mounted instance (its dataset
   // removed/restored), and React requires every render to call the same
   // hooks in the same order regardless of which branch below actually runs.
-  // Cheap when there's nothing to derive: `facetCompositionFromBinding`
-  // short-circuits before scanning any rows unless BOTH a dataset and a
-  // facetKey are present.
-  const facetComposition = useMemo(
-    () => facetCompositionFromBinding(dataset, view.facetKey, view.xKey, view.yKeys),
-    [dataset, view.facetKey, view.xKey, view.yKeys],
+  // Cheap when there's nothing to derive: `durableComposition` short-circuits
+  // before scanning any rows unless BOTH a dataset and a facetKey (or a saved
+  // break range) are present -- the `facetKey == null` and `!breaks?.length`
+  // guards in `lib/facet.ts`. Pinned there by "no break: does not touch the
+  // dataset's analysis view at all", because the break guard was briefly lost
+  // in a refactor and this comment silently became false for every plain XY
+  // figure in every background window (round 3, finding 2).
+  const composition = useMemo(
+    () => durableComposition(dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys),
+    [dataset, view.facetKey, document?.plot.axisBreaks.x, view.xKey, view.yKeys],
   );
   if (!dataset) {
     return (
@@ -110,18 +120,23 @@ export default function BackgroundPlotWindow({
     );
   }
   // Item 15 mode dispatch — the same precedence as PlotStage's focused
-  // early-returns (polar wins, then stats, then stack). The stack gate
-  // mirrors PlotStage's `nPlotted >= 2 || facetPanels >= 1` gate (L2: facet
-  // is no longer singleton-only — see the module doc; spatial/break stay so).
+  // early-returns (polar wins, then stats, then stack). The stack gate IS
+  // PlotStage's: the shared `multiPanelShowing` predicate, so a background
+  // window and the focused one cannot disagree about whether an arrangement
+  // mounts (BUG-012 review F5 — before this, the gate was a local restatement
+  // that had no break clause, so a workspace reopened with several break
+  // figures drew the break in the focused window and one continuous line in
+  // every other one: BUG-012's original symptom, per window).
   if (view.polarMode) return <BackgroundPolarWindow dataset={dataset} view={view} />;
   if (view.statMode) return <BackgroundStatWindow dataset={dataset} view={view} />;
   if (
-    view.stackMode &&
-    (effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder)
-      .length >= 2 ||
-      facetComposition !== null)
+    multiPanelShowing(
+      composition,
+      view.stackMode,
+      effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder).length,
+    )
   )
-    return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} composition={facetComposition} />;
+    return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} composition={composition} />;
   return (
     <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} />
   );
@@ -186,6 +201,17 @@ function BackgroundXYWindow({
       defaultTrace,
     });
 
+  // P3.3 (`lib/seriesStyleCycle.ts`): the SAME opt-in the focused Stage makes,
+  // from THIS window's own view and document. A background window is a live
+  // preview tiled beside the focused one for side-by-side comparison, so focus
+  // must not decide how a series looks: before this, series 2 and 3 were dashed
+  // in the focused window and solid in the one next to it, and clicking either
+  // one swapped them — the "window silently changing appearance on focus move"
+  // class this file's header names. It is export-backed for the same reason:
+  // this window's own publication export (`buildStageFigureSpec`, reached the
+  // moment it is focused) cycles these exact positions.
+  const seriesCycle = useWindowSeriesCycle(view, document, plotted.length);
+
   return (
     <>
       <PlotViewport
@@ -226,6 +252,7 @@ function BackgroundXYWindow({
         annotations={view.annotations}
         regionShades={view.regionShades}
         seriesStyles={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
@@ -245,7 +272,7 @@ function BackgroundXYWindow({
           zoom/close affordances are moot here: the frame's capture-phase
           pointerdown focuses the window first (decision #2). */}
       {view.insetMode && displayPayload && (
-        <InsetPlot payload={displayPayload} styleList={styleList} />
+        <InsetPlot payload={displayPayload} styleList={styleList} seriesCycle={seriesCycle} />
       )}
     </>
   );

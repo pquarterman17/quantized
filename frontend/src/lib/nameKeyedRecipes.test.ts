@@ -303,7 +303,20 @@ describe("import / export", () => {
     if (!exported.ok) throw new Error("export failed");
     localStorage.clear();
     expect(importNameKeyed("graph", exported.text)).toEqual({ ok: true, name: original.name });
-    expect(loadGraphTemplates()[0]).toEqual(original);
+    // Lossless, full stop, since BUG-016 round 5: the load sanitizer records
+    // what the file says and adds nothing, so there is no additive migration
+    // left for a round trip to be lossless "up to". (Round 4 stamped a
+    // `colorDerived` on this flagless `#ff0000` by comparing it to the live
+    // palette; the file does not say which palette it was written under, so
+    // that stamp was a guess about the reader.) A second round trip is
+    // therefore the same fixpoint it always was — asserted below, not assumed.
+    const loaded = loadGraphTemplates()[0];
+    expect(loaded).toEqual(original);
+    const again = exportNameKeyed("graph", original.name);
+    if (!again.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("graph", again.text)).toEqual({ ok: true, name: original.name });
+    expect(loadGraphTemplates()[0]).toEqual(loaded);
   });
 
   it("surfaces a parse failure as a refusal, not an exception", () => {
@@ -504,6 +517,9 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
     expect(r.ok).toBe(true);
     const stored = loadGraphTemplates()[0];
     expect(stored.overrides).toEqual({ grid: true });
+    // `sneaky`/`width: -5` are dropped by the allowlist, and no `colorDerived`
+    // is invented for the surviving colour (BUG-016 round 5) — the sanitizer
+    // subtracts what it cannot vouch for and adds nothing.
     expect(stored.seriesStyles).toEqual([{ color: "#123456" }, null]);
   });
 });

@@ -77,8 +77,22 @@ export async function copyImage(blob: Blob): Promise<boolean> {
  *
  *  Falls back to awaiting the blob and writing it normally when the browser
  *  rejects a promise value, so a stricter engine degrades to "might lose the
- *  gesture" rather than "never copies". Resolves false if both routes fail. */
-export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boolean> {
+ *  gesture" rather than "never copies". Resolves false if both routes fail.
+ *
+ *  `signal` (P3.4 safe-cancel-for-export residual, optional): re-checked a
+ *  second time here, but narrower than it first looks. `asBlob()` runs
+ *  EAGERLY — it is invoked synchronously by `new ClipboardItem({ "image/png":
+ *  asBlob() })` below, so this check happens one microtask after `pending`
+ *  settles, NOT at "the browser's own read" of the value promise. It closes
+ *  only the gap between `postBlob`'s own check (lib/api/http.ts) returning
+ *  and this function building the `ClipboardItem`. A cancel that lands AFTER
+ *  that — while the browser is still reading the value promise, or actually
+ *  performing the write — is not observable from this module (there is no
+ *  JS hook for either half, on any engine), and the clipboard write
+ *  completes regardless. See `lib/exportActive.ts`'s post-`fn` abort check
+ *  for how that residual is reported to the user rather than mis-reported as
+ *  "cancelled". */
+export async function copyImageAsync(pending: Promise<Blob | null>, signal?: AbortSignal): Promise<boolean> {
   if (!clipboardImageSupported()) {
     await pending.catch(() => null); // don't leave an unhandled rejection behind
     return false;
@@ -86,6 +100,7 @@ export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boo
   const asBlob = async (): Promise<Blob> => {
     const blob = await pending;
     if (!blob) throw new Error("render produced no image");
+    if (signal?.aborted) throw new DOMException("aborted", "AbortError");
     return blob;
   };
   try {
@@ -96,6 +111,59 @@ export async function copyImageAsync(pending: Promise<Blob | null>): Promise<boo
   }
   try {
     return await copyImage(await asBlob());
+  } catch {
+    return false;
+  }
+}
+
+/** Write text the caller is still BUILDING, without losing the user gesture —
+ *  `copyText`'s counterpart to `copyImageAsync`, and it exists for the same
+ *  MAIN #35 reason. `store/workbookTransfer.ts`'s Copy has to `await` a
+ *  dynamic `import()` of its package builder before it has any text at all;
+ *  doing that BEFORE touching the clipboard drops the transient user
+ *  activation the Clipboard API requires, and the copy then fails reporting
+ *  "clipboard unavailable" when the clipboard was fine. The spec allows a
+ *  `ClipboardItem` value to be a promise, so handing the still-pending text
+ *  straight to the constructor keeps the write inside the originating
+ *  gesture while the chunk and the package are still in flight.
+ *
+ *  The capability gate is `clipboardImageSupported()`: despite its name it
+ *  tests exactly `navigator.clipboard.write` + `ClipboardItem`, which is the
+ *  same pair a promise-valued TEXT write needs.
+ *
+ *  The value handed to `ClipboardItem` is a `Promise<Blob>`, not the bare
+ *  `Promise<string>` (2026-09-15 review round 2, finding 3). The spec allows
+ *  `DOMString or Blob`, but Blob is the shape every engine that has
+ *  `ClipboardItem` at all has accepted since it shipped, and it is what
+ *  `copyImage`/`copyImageAsync`/`copySvgAsync` above already pass. On an
+ *  engine that refuses the string shape the `catch` below would drop into the
+ *  gesture-losing fallback and this function would silently no-op its whole
+ *  reason for existing; wrapping costs one synchronous `.then` registration
+ *  and changes no timing (the write still starts in the caller's task).
+ *
+ *  Fallback — an engine with no `ClipboardItem`, or one that refuses a promise
+ *  value — awaits the text and calls `copyText`. That path RE-OPENS the very
+ *  window this function exists to close (the gesture can be spent before the
+ *  write), so on those engines the behaviour degrades to "might lose the
+ *  gesture", not to "never copies". Resolves false if both routes fail. */
+export async function copyTextAsync(pending: Promise<string>): Promise<boolean> {
+  if (clipboardImageSupported()) {
+    const asBlob = pending.then((text) => new Blob([text], { type: "text/plain" }));
+    // An engine whose write() resolves WITHOUT reading the value promise never
+    // attaches a handler to it, so a build failure would land as an unhandled
+    // rejection while the caller's own `await build` still reports the real
+    // reason (measured 2026-09-15, review round 2 finding 2). Same guard
+    // `copyImageAsync` uses above.
+    asBlob.catch(() => {});
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "text/plain": asBlob })]);
+      return true;
+    } catch {
+      /* promise-valued ClipboardItem unsupported, or the text never built */
+    }
+  }
+  try {
+    return await copyText(await pending);
   } catch {
     return false;
   }
@@ -145,8 +213,11 @@ export function clipboardSvgSupported(): boolean {
 
 /** Write a PENDING SVG render to the clipboard, keeping the user gesture alive
  *  the same way `copyImageAsync` does. Resolves false when the browser will not
- *  take SVG, so the caller can say why rather than failing silently. */
-export async function copySvgAsync(pending: Promise<Blob | null>): Promise<boolean> {
+ *  take SVG, so the caller can say why rather than failing silently.
+ *  `signal` — see copyImageAsync's own doc: the same eager `asBlob()` re-check,
+ *  the same residual (a cancel landing after that check still lets the write
+ *  complete). */
+export async function copySvgAsync(pending: Promise<Blob | null>, signal?: AbortSignal): Promise<boolean> {
   if (!clipboardSvgSupported()) {
     await pending.catch(() => null); // no unhandled rejection left behind
     return false;
@@ -155,6 +226,7 @@ export async function copySvgAsync(pending: Promise<Blob | null>): Promise<boole
     const asBlob = (async () => {
       const blob = await pending;
       if (!blob) throw new Error("render produced no image");
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError");
       return blob;
     })();
     await navigator.clipboard.write([new ClipboardItem({ [SVG_MIME]: asBlob })]);

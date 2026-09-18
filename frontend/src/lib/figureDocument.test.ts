@@ -254,6 +254,11 @@ describe("FigureDocument v2", () => {
     })!;
     expect(restored.publication).toEqual({
       overrides: { ticks: { dir: "in", minor: true }, margins: { left: 0.1 }, x_breaks: [[1, 3]], annotations: [{ x: 1, y: 2, text: "ok" }] },
+      // No `colorDerived` on the way out: the persisted entry carried none and
+      // the sanitizer adds none (BUG-016 round 5 — the palette this colour was
+      // resolved against is not in the document, so there is nothing to
+      // classify it with). It reaches the wire UNVOUCHED, which costs it its
+      // colour on a grouped export only.
       seriesStyles: [{ color: "#abc", marker_size: 4, fill: { vs: 2 } }, null],
     });
     restored.publication!.overrides!.margins!.left = 0.8;

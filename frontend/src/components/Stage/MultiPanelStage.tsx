@@ -105,6 +105,13 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const defaultTrace = useApp((s) => s.defaultTrace);
   const refLines = useApp((s) => s.refLines);
   const seriesStyles = useApp((s) => s.seriesStyles);
+  // BUG-014: the facet grid renders a legend rename verbatim, exactly as
+  // the flat plot and the facet EXPORT do.
+  const seriesLabels = useApp((s) => s.seriesLabels);
+  // P3.3: read here and handed down, never read inside the hook — that file's
+  // header keeps it store-free (types only) so a background window can drive it
+  // from its own snapshot. Only the SPATIAL mode acts on it; see the param doc.
+  const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -136,6 +143,8 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     defaultTrace,
     refLines,
     seriesStyles,
+    seriesLabels,
+    autoSeriesStyles,
     xKey,
     yKeys,
     y2Keys,

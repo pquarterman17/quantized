@@ -21,6 +21,7 @@ import {
 import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct, Dataset } from "./types";
+import { usePendingOps } from "../store/pendingOps";
 
 vi.mock("./api/figures", () => ({
   renderFigureBlob: vi.fn(),
@@ -103,6 +104,7 @@ function fakeGet(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   vi.mocked(clipboardImageSupported).mockReturnValue(true);
   vi.mocked(clipboardSvgSupported).mockReturnValue(true);
   vi.mocked(copySvgAsync).mockResolvedValue(true);
@@ -257,13 +259,18 @@ describe("F2.5b — Stage copy routes through the focused window's canonical doc
     expect(spec.group_col).toBeUndefined();
   });
 
-  it("surfaces a grouped+secondary-axis document as a copy-failed toast/status, not an unhandled rejection", async () => {
+  // BUG-013 round 5: this combination used to THROW (round 4), surfaced here
+  // as a copy-failed toast. The canvas has always degraded it to a plain,
+  // ungrouped overlay instead (`canvasGroupCol` reads the RAW y2Keys — no
+  // plotted/hidden distinction), so the copy now succeeds and matches the
+  // screen the user was already looking at, rather than refusing.
+  it("copies a grouped+secondary-axis document as a degraded, ungrouped spec — no refusal (round 5)", async () => {
     const document = createFigureDocument({
-      id: "w1-doc-invalid",
-      name: "Window invalid",
+      id: "w1-doc-degraded",
+      name: "Window degraded",
       datasetId: "d1",
       view: { ...defaultPlotView(), yKeys: [0, 1], y2Keys: [1] },
-      groupKey: 1, // grouping + a secondary axis is a backend-invalid combination
+      groupKey: 1,
     });
     await expect(
       runCopyFigureCommand(
@@ -273,12 +280,56 @@ describe("F2.5b — Stage copy routes through the focused window's canonical doc
         }),
       ),
     ).resolves.toBeUndefined();
-    expect(renderFigureBlob).not.toHaveBeenCalled();
+    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.group_col).toBeUndefined();
+    expect(spec.y2_keys).toEqual([1]);
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
-    expect(
-      messages.some(
-        (m) => m.startsWith("copy failed") && m.includes("grouped figures cannot use a secondary Y axis"),
-      ),
-    ).toBe(true);
+    expect(messages.some((m) => m.startsWith("copy failed"))).toBe(false);
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P3.4 (safe cancel for long export operations) —
+// the "copy-to-clipboard" export kind. exportActive.test.ts covers the
+// shared cancel mechanism generically; this pins that "Copy figure" reaches
+// it wired correctly, with copy-specific wording ("Copying…"/"copy
+// cancelled") and no clipboard write once cancelled.
+describe("runCopyFigureCommand — safe cancel (P3.4)", () => {
+  it("threads a real, abortable AbortSignal into renderFigureBlob, and cancelling reports 'copy cancelled' with no clipboard write", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    // A realistic stand-in for what the real transport (postBlob/fetch) does
+    // on abort: the pending render REJECTS once the signal fires.
+    vi.mocked(renderFigureBlob).mockImplementation((_spec, signal) => {
+      capturedSignal = signal;
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () =>
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+        );
+      });
+    });
+    // copyImageAsync's own documented fallback (lib/clipboard.ts): a pending
+    // render that fails resolves to `false` rather than throwing — simulate
+    // that outcome directly rather than re-exercising its internals here.
+    vi.mocked(copyImageAsync).mockImplementation(async (pending) => {
+      await pending.catch(() => null);
+      return false;
+    });
+
+    const p = runCopyFigureCommand(fakeGet());
+    await vi.waitFor(() => expect(capturedSignal).toBeInstanceOf(AbortSignal));
+    expect(capturedSignal!.aborted).toBe(false);
+    expect(usePendingOps.getState().ops[0].label).toBe("Copying scan.dat…");
+
+    usePendingOps.getState().ops[0].cancel!();
+    expect(capturedSignal!.aborted).toBe(true);
+    await p;
+
+    expect(setStatus).toHaveBeenCalledWith("copy cancelled");
+    expect(usePendingOps.getState().ops).toHaveLength(0); // busy indicator cleared
+    // No status call ever reports success ("copied scan") or a hard failure
+    // ("copy failed: ...") once cancelled.
+    const messages = setStatus.mock.calls.map((c) => String(c[0]));
+    expect(messages.some((m) => m.startsWith("copied"))).toBe(false);
+    expect(messages.some((m) => m.startsWith("copy failed"))).toBe(false);
   });
 });

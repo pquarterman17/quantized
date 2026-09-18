@@ -6,7 +6,7 @@
 import { openRecentProject } from "../commands/recentProjectsCommands";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
-import { toast } from "../store/toasts";
+import { notifyMigrationWarnings, toast } from "../store/toasts";
 import { stageWorkspaceRestore } from "../store/windowHydration";
 
 /** "Recover autosaved work" — load the autosave candidate into the live
@@ -31,8 +31,11 @@ export function applyRecoverAutosave(prompt: RecoveryPrompt): void {
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   const n = prompt.datasetCount;
   const msg = `recovered ${n} dataset${n === 1 ? "" : "s"} from autosave — newer than "${prompt.lastProject.name}"`;
+  // BUG-010: this setStatus overwrites loadWorkspace's own migrationNotice
+  // status-line fold — the toast is the only channel that survives it.
   s().setStatus(msg);
   toast(`${msg}. Save to keep it.`, "info");
+  notifyMigrationWarnings(prompt.workspace.migrationWarnings);
   useRecoveryChoice.getState().clearRecovery();
 }
 

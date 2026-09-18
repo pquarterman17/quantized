@@ -10,6 +10,7 @@
 import { setFormatOpts, type Notation } from "../lib/format";
 import { applyPalette, normalizePalette } from "../lib/palettes";
 import type { PanelFit } from "../lib/panelLayout";
+import type { DefaultTrace } from "../lib/types";
 import type {
   Accent,
   AppState,
@@ -41,7 +42,7 @@ export const ACCENT_SWATCHES: { id: string; c: string }[] = [
 ];
 const DENSITIES = ["compact", "regular", "comfy"];
 const NOTATIONS = ["auto", "scientific", "fixed"];
-const TRACES = ["Line", "Line + markers", "Scatter", "Step"];
+const TRACES: readonly DefaultTrace[] = ["Line", "Line + markers", "Scatter", "Step"];
 const ORIGIN_BOOK_CLICK_OPENS = ["worksheet", "plot"];
 // The app-wide multi-panel fit DEFAULT is aspect-preserving vs fill only —
 // "page" is a per-window choice (needs a page model), never a global default.
@@ -58,9 +59,20 @@ export interface Prefs {
   accent: Accent;
   density: Density;
   palette: string;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 — the NON-colour half of the series
+   *  cycle. On, a series with no explicit dash/marker glyph gets one by
+   *  display position, so two series differ by more than hue on screen, in
+   *  print and in the publication export (`lib/seriesStyleCycle.ts`).
+   *  OFF by default: opt-in, and off reproduces the previous rendering
+   *  exactly. Lives beside `palette` because it varies the same thing by
+   *  another channel — but UNLIKE `palette` it is not pushed into a lib
+   *  singleton by `syncPrefs`: only the render paths that have a matching
+   *  export read it, as an explicit argument. See that function and
+   *  `lib/seriesStyleCycle.ts`'s header for why. */
+  autoSeriesStyles: boolean;
   reduceMotion: boolean;
   wheelZoom: boolean;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   defaultLineWidth: number;
   defaultGrid: boolean;
   antialias: boolean;
@@ -90,6 +102,7 @@ export const PREF_DEFAULTS: Prefs = {
   accent: "violet",
   density: "regular",
   palette: "default",
+  autoSeriesStyles: false,
   reduceMotion: false,
   wheelZoom: true,
   defaultTrace: "Line",
@@ -118,9 +131,10 @@ export function loadPrefs(): Prefs {
       accent: ACCENTS.includes(p.accent as string) ? (p.accent as Accent) : fb.accent,
       density: DENSITIES.includes(p.density as string) ? (p.density as Density) : fb.density,
       palette: normalizePalette(p.palette),
+      autoSeriesStyles: bool(p.autoSeriesStyles, fb.autoSeriesStyles),
       reduceMotion: bool(p.reduceMotion, fb.reduceMotion),
       wheelZoom: bool(p.wheelZoom, fb.wheelZoom),
-      defaultTrace: TRACES.includes(p.defaultTrace as string) ? (p.defaultTrace as string) : fb.defaultTrace,
+      defaultTrace: TRACES.includes(p.defaultTrace as DefaultTrace) ? (p.defaultTrace as DefaultTrace) : fb.defaultTrace,
       defaultLineWidth: num(p.defaultLineWidth, fb.defaultLineWidth, 0.5, 4),
       defaultGrid: bool(p.defaultGrid, fb.defaultGrid),
       copyFigureTransparent: bool(p.copyFigureTransparent, fb.copyFigureTransparent),
@@ -154,6 +168,7 @@ export function prefsOf(s: AppState): Prefs {
     accent: s.accent,
     density: s.density,
     palette: s.palette,
+    autoSeriesStyles: s.autoSeriesStyles,
     reduceMotion: s.reduceMotion,
     wheelZoom: s.wheelZoom,
     defaultTrace: s.defaultTrace,
@@ -176,6 +191,13 @@ export function prefsOf(s: AppState): Prefs {
  *  data-* attributes; data-reduce-motion drives the motion-killing rule). */
 export function syncPrefs(s: AppState): void {
   applyPalette(s.palette);
+  // `autoSeriesStyles` deliberately gets NO push-into-a-pure-lib line here,
+  // unlike applyPalette above and setFormatOpts below. A module-level flag is
+  // read by whoever happens to call the resolver, which is exactly how the
+  // first cut cycled five render paths whose exports could not follow. The
+  // cycle is instead handed to the two render pairs that have export parity, as
+  // an explicit argument, from the store field directly — see
+  // `lib/seriesStyleCycle.ts`'s header.
   const el = document.documentElement;
   el.dataset.theme = s.theme;
   el.dataset.accent = s.accent;

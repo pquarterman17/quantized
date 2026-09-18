@@ -11,7 +11,19 @@ import { APP_VERSION, BUILD_SHA } from "../lib/buildInfo";
 import { hasDesktopShell } from "../lib/desktopBridge";
 import { buildDiagnostics, type DiagnosticsSnapshot } from "../lib/diagnostics";
 import { isKnownStorageKey } from "../lib/storageKeys";
+import { useAutosaveStatus } from "./autosaveStatus";
+import { getBackendHealth, type BackendInfo } from "./backendHealth";
+import { usePendingOps } from "./pendingOps";
+import { useRecoveryChoice } from "./recoveryChoice";
+import { notificationCounts } from "./toasts";
 import { useApp } from "./useApp";
+
+/** Whole seconds since `at`, or null when there is no such moment. Clamped at
+ *  zero so a clock that stepped backwards reads as "just now" rather than
+ *  printing a negative age. */
+function ageSec(at: number | null, now: number): number | null {
+  return at === null ? null : Math.max(0, Math.round((now - at) / 1000));
+}
 
 /** Byte sizes of this app's own persisted slots. Keys and sizes only — a
  *  value is measured and immediately discarded, never included.
@@ -67,11 +79,14 @@ function osReduceMotion(): boolean {
   }
 }
 
-export function collectDiagnostics(): DiagnosticsSnapshot {
+export function collectDiagnostics(backend: BackendInfo = getBackendHealth()): DiagnosticsSnapshot {
   const s = useApp.getState();
   const slots = storageSlots();
   const rows = s.datasets.map((d) => d.data.time.length);
   const cols = s.datasets.map((d) => d.data.labels.length);
+  const now = Date.now();
+  const health = useAutosaveStatus.getState().health;
+  const notifications = notificationCounts();
 
   return {
     takenAt: new Date().toISOString(),
@@ -113,10 +128,33 @@ export function collectDiagnostics(): DiagnosticsSnapshot {
     },
     storage: slots.known,
     otherStorage: slots.other,
+    backend,
+    session: {
+      lastAutosaveAgeSec: ageSec(health.savedAt, now),
+      // `error` is the failure REASON; only whether it is set crosses into the
+      // bundle. See lib/diagnostics.ts's header for that decision.
+      autosaveFailing: health.error !== null,
+      autosaveGenerations: health.count,
+      recoveryPromptOpen: useRecoveryChoice.getState().pending !== null,
+      pendingOps: usePendingOps.getState().ops.length,
+      notifications: {
+        total: notifications.totalCount,
+        errors: notifications.errorCount,
+        lastErrorAgeSec: ageSec(notifications.lastErrorAt, now),
+      },
+    },
   };
 }
 
-/** The text a user copies. */
+/** The text a user copies.
+ *
+ *  Synchronous end to end (P3.4 review round, 2026-09-14): this used to
+ *  `await probeBackend()` — a fresh `/api/health` fetch, up to 1.5 s, on
+ *  every call — which put a network round-trip directly between the user's
+ *  click and the clipboard write. See `store/backendHealth.ts`'s header for
+ *  why that is a real hazard in this app (the same one `lib/clipboard.ts`
+ *  already documents for the PNG-copy path) and why the fix is reading the
+ *  app's own startup handshake back instead of re-probing. */
 export function diagnosticsText(): string {
   return buildDiagnostics(collectDiagnostics());
 }

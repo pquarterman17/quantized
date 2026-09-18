@@ -23,6 +23,10 @@ import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike, NDArray  # noqa: E402
 
+from quantized.calc.figure_colorscatter import (  # noqa: E402
+    draw_color_scatter as _draw_color_scatter,
+)
+from quantized.calc.figure_greyscale import apply_greyscale  # noqa: E402
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides  # noqa: E402
@@ -114,33 +118,6 @@ def _apply_fill(
             n = min(len(xv), len(yv), len(other))
             if n > 0:
                 ax.fill_between(xv[:n], yv[:n], other[:n], color=color, alpha=_FILL_ALPHA)
-
-
-def _draw_color_scatter(
-    fig: Any,
-    ax: Any,
-    xv: NDArray[np.float64],
-    yv: NDArray[np.float64],
-    label: str,
-    spec: Mapping[str, Any],
-    st: FigureStyle,
-) -> Any:
-    """Colour-mapped scatter (MAIN #14): each point coloured by a THIRD
-    channel's value -- ``spec["color_by"]``, already resolved by
-    ``calc.plotting.resolve_style_channels`` to a concrete per-row array (this
-    module never sees a raw channel index). Replaces the normal line draw
-    entirely for this series -- screen-side parity: ``uplotOpts.ts`` hides the
-    native line/points the same way whenever a series' ``colorBy`` is set.
-    Adds a colourbar so the mapping is legible. Returns the ``PathCollection``
-    artist (for the figure-hitmap element collector)."""
-    z = np.asarray(spec["color_by"], dtype=float)
-    n = min(len(xv), len(yv), len(z))
-    size = float(spec.get("marker_size") or st.marker_size) ** 2
-    sc = ax.scatter(
-        xv[:n], yv[:n], c=z[:n], cmap=str(spec.get("colormap") or "viridis"), s=size, label=label
-    )
-    fig.colorbar(sc, ax=ax)
-    return sc
 
 
 def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
@@ -303,6 +280,19 @@ def _render_impl(
     # preset's opaque background. Matters for pasting a figure onto a
     # coloured slide; ignored in practice by formats that have no alpha.
     transparent: bool = False,
+    # P3.3 print-safe export mode: overrides every series' colour to a
+    # position-based grey ramp and forces the dash/marker cycle (see
+    # `calc.figure_greyscale`'s module doc) -- applied uniformly to this
+    # function's own single-axes/y2/x-breaks paths (every one of them draws
+    # through `_plot_kwargs` off the SAME `series_styles` list mutated just
+    # below), so it also covers a `group_col`-resolved request (that path's
+    # `series_styles` is `None`, which `apply_greyscale` treats as "no
+    # explicit style on any series" and still ramps). Facets render through
+    # a completely separate module (`calc.figure_facets`) that never reaches
+    # `series_styles` at all -- this flag is a documented no-op there (see
+    # `routes.export_figures._render_facets_bytes`, which does not forward
+    # it) rather than silently doing nothing while looking wired.
+    greyscale: bool = False,
     overrides: Mapping[str, Any] | None = None,
     collect_map: bool = False,
     x_fmt: Mapping[str, Any] | None = None,
@@ -350,6 +340,10 @@ def _render_impl(
     ``figure_y2.render_with_secondary_axis``'s doc). Not compatible with
     ``x_breaks`` (raises ``ValueError``) -- a broken figure has several
     axes already and gains no coherent secondary-axis meaning.
+    ``greyscale`` (P3.3 print-safe export) rewrites ``series_styles`` via
+    :func:`quantized.calc.figure_greyscale.apply_greyscale` before any of
+    the branches below run -- see that function's doc for exactly what it
+    overrides and what it deliberately leaves alone.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -363,6 +357,8 @@ def _render_impl(
     y_label = safe_mathtext_label(y_label)
     y2_label = safe_mathtext_label(y2_label)
     series = [(safe_mathtext_label(label), y) for label, y in series]
+    if greyscale:
+        series_styles = apply_greyscale(series_styles, len(series))
     st = figure_style(style)
     ov = dict(overrides or {})
     _validate_overrides(ov)

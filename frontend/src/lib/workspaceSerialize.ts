@@ -17,12 +17,14 @@ import type { FigureDocument } from "./figureDocument";
 import type { PageDocument } from "./pageDocument";
 import type { PipelineStep } from "./pipeline";
 import type { SavedPlotSpec } from "./plotspec";
+import { serializePeakTable } from "./peakTable";
 import type { PlotRecipe } from "./plotRecipe";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { serializeRois } from "../store/rois";
+import { isDefaultMapViews, serializeMapViews, type MapViewMap } from "./mapView";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { RecalcMode } from "./recalc";
 import type { ReportEntry } from "./report";
@@ -35,6 +37,7 @@ import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
+import { encodeDataStruct, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
@@ -87,8 +90,16 @@ function serializeDatasetSource(source: DatasetSource, projectDir: string | unde
 
 /** A serialized dataset entry — `Dataset` with its `source` field widened to
  *  `SerializedSource` (the on-disk `kind: "path"` | `kind: "bundle"` union,
- *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`. */
-type SerializedDataset = Omit<Dataset, "source"> & { source?: SerializedSource };
+ *  P1.7 PR 3) in place of the in-memory-only `DatasetSource`, and its two
+ *  DataStruct-valued fields widened to `WireDataStruct` (BUG-017 — a cell
+ *  JSON cannot represent is written as a sentinel string; see
+ *  lib/nonFiniteCells.ts for the encoding and why it costs an ordinary
+ *  document nothing). */
+type SerializedDataset = Omit<Dataset, "source" | "data" | "raw"> & {
+  source?: SerializedSource;
+  data: WireDataStruct;
+  raw?: WireDataStruct;
+};
 
 /** A serialized workbook entry — `WorkbookNode` with its `source` field
  *  (PR 3 review finding #4) widened the same way `SerializedDataset` widens
@@ -123,6 +134,9 @@ interface WorkspaceDoc {
   savedPlotSpecs: SavedPlotSpec[];
   techniqueViewMemory: TechniqueViewMemoryMap;
   savedRois: RoiDef[];
+  /** Audit P2.8 — additive-OPTIONAL, and written only when at least one
+   *  dataset's map view is non-default (see the serializer below). */
+  mapViews?: MapViewMap;
   quickPlotTemplates: QuickPlotTemplate[];
   librarySelection: LibrarySelection | null;
   workbookLastChild: Record<string, string>;
@@ -184,6 +198,16 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     // RSM_CUTS_PLAN item 13: named ROIs only (see WorkspaceState's doc) — the
     // actual (de)serialize logic lives in store/rois.ts, this module just calls it.
     savedRois: serializeRois(ws.savedRois ?? []),
+    // Audit P2.8: the per-dataset durable map views, written ONLY when some
+    // dataset's view actually records a decision. BUG-017's rule for an
+    // additive field — a project that never opened a map serializes
+    // byte-for-byte as it did before this field existed, so no schema bump and
+    // no diff on an untouched document. OPENING a map is a pure lookup and
+    // writes no entry, so it cannot grow the document either. The copy goes
+    // through lib/mapView's own serializer for the same reason `savedRois`
+    // goes through `serializeRois`: a live store object must never be aliased
+    // into the saved doc.
+    ...(ws.mapViews && !isDefaultMapViews(ws.mapViews) ? { mapViews: serializeMapViews(ws.mapViews) } : {}),
     // PR E2: passed through verbatim, same plain-serializer convention as
     // every other field here.
     librarySelection: ws.librarySelection ?? null,
@@ -195,8 +219,14 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
-      data: d.data,
-      ...(d.raw ? { raw: d.raw } : {}),
+      // BUG-017: `data`/`raw` cross the JSON boundary through
+      // lib/nonFiniteCells' encoder, which maps the four values
+      // `JSON.stringify` cannot round-trip (NaN, ±Infinity, -0) to sentinel
+      // strings and returns the SAME object untouched for every other
+      // dataset — so a workspace of ordinary finite data still serializes
+      // byte-for-byte as it did before.
+      data: encodeDataStruct(d.data),
+      ...(d.raw ? { raw: encodeDataStruct(d.raw) } : {}),
       ...(d.corrections ? { corrections: d.corrections } : {}),
       ...(d.bgRef ? { bgRef: d.bgRef } : {}),
       ...(d.notes ? { notes: d.notes } : {}),
@@ -214,14 +244,60 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
       ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
-      // ORIGIN_FILE_DECODE_PLAN #38: an explicit "Save workspace (.dwk)…"
-      // resolves every pending dataset FIRST (App.tsx's save command calls
-      // `resolvePendingDatasets` before this runs), so `d.pending` is never
-      // set in a real exported .dwk — only autosave (lib/autosave.ts, which
-      // reuses this same serializer for its localStorage snapshot) can
-      // legitimately still have one, and it's fine for that round-trip to
-      // carry it: the render-side ensureBookData hooks re-fetch it the next
-      // time that dataset is shown after a reload.
+      // Audit P2.1: the durable fitted-peak table, additive-optional (absent =
+      // no table, so a pre-P2.1 doc round-trips byte-identically). Copied
+      // through lib/peakTable's own serializer for the same reason `savedRois`
+      // goes through `serializeRois` — a live store object must never be
+      // aliased into the saved doc.
+      ...(d.peakTable ? { peakTable: serializePeakTable(d.peakTable) } : {}),
+      // ORIGIN_FILE_DECODE_PLAN #38: EVERY explicit export path resolves
+      // every pending dataset FIRST, and aborts with a named status/toast
+      // if a book can't be fetched rather than exporting the preview —
+      // Save and Save As (store/workspaceIO.ts's `prepareWorkspaceState`,
+      // resolve at line 73, abort block 69-80), workbook Copy/Duplicate
+      // (store/workbookTransfer.ts:189 and :260 — its own package
+      // serializer, same rule), and Pack Project
+      // (store/packProjectContent.ts's `serializeCurrentWorkspaceForPack`,
+      // both its preview and Start-pack callers — added by BUG-011's fix,
+      // which is why this comment previously named only the first of the
+      // three and claimed autosave was the sole route).
+      //
+      // BUG-011 REVIEW (2026-09-13): "resolve first" alone does not
+      // guarantee `pending` is unset by the time the payload is built — a
+      // NEW lazy book can start pending DURING that resolve await (an
+      // import finishing mid-fetch), after the snapshot the resolve step
+      // awaited was already taken. Pack Project's serializer re-reads the
+      // store after its await and REFUSES if anything is still `pending`
+      // rather than trusting the resolve alone (packProjectContent.ts,
+      // same file/function as above), so that path is closed there.
+      //
+      // ROUND 2 CORRECTION: a following paragraph here used to say this SAME
+      // window was open on "the two workbook-transfer paths" too. That was
+      // FALSE — both call `buildTransferPackage` (lib/workbookTransfer.ts)
+      // AFTER their own resolve await, and that function re-reads `pending`
+      // on the fresh state it is handed and refuses if anything still is
+      // (lib/workbookTransfer.ts:182-183) — a re-check of its own, closing
+      // this for workbook Copy/Duplicate already.
+      //
+      // BUG-011 RESIDUAL CLOSED (2026-09-13): Save/Save As
+      // (store/workspaceIO.ts's `prepareWorkspaceState`) carried the
+      // identical narrower window — it re-read the store after its own
+      // resolve await but did not re-check `pending` on it — recorded above
+      // as an open residual while store/workspaceIO.ts was being edited
+      // concurrently for BUG-010. Closed the same way as Pack Project's own
+      // fix: a post-await re-check (`prepareWorkspaceState`, resolve at
+      // `:73`, re-check at `:81-96`) refuses the save by name
+      // ("… was still loading") rather than serializing the preview.
+      //
+      // So the guarantee now holds on every explicit export path — Save,
+      // Save As, workbook Copy/Duplicate, and Pack Project all resolve
+      // pending datasets first AND refuse rather than serialize a book that
+      // turns pending again during that resolve — and `d.pending` should
+      // never reach any of their payloads. Only autosave (lib/autosave.ts,
+      // which reuses this same serializer for its localStorage snapshot) can
+      // LEGITIMATELY still have one — that round-trip is fine, since the
+      // render-side ensureBookData hooks re-fetch it the next time that
+      // dataset is shown after a reload.
       ...(d.pending ? { pending: d.pending } : {}),
       ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —

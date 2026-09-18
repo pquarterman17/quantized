@@ -13,6 +13,13 @@ import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import { pxToData, type FigureHitmap } from "../../../lib/previewmap";
 import type { DataStruct, Shape } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { plotWindowView } from "../../../store/windowDocuments";
+// P3.3: the canvas half of the parity assertions below — the preview must match
+// the TARGET window's own canvas, so both are rendered in the same test.
+import {
+  useStageSeriesCycle,
+  useWindowSeriesCycle,
+} from "../../Stage/useStageSeriesCycle";
 import { FIGURE_STYLE_DPI, useFigureBuilder } from "./useFigureBuilder";
 
 vi.mock("../../../lib/api", () => ({
@@ -56,6 +63,8 @@ beforeEach(() => {
     figureDocSeed: null,
     figurePublicationSession: null,
     figureBuilderOpen: false,
+    autoSeriesStyles: false, // P3.3 default; the cycle block below opts in per test
+    polarMode: false, // ditto: one cycle case drives the live view into polar
     status: "",
   });
 });
@@ -309,7 +318,12 @@ describe("useFigureBuilder", () => {
     expect(result.current.canApply).toBe(false);
   });
 
-  it("reports an incompatible canonical spec while retaining its resolved source data", () => {
+  // BUG-013 round 5: a group bound with a REALLY rendered secondary axis used
+  // to be reported "invalid-spec" (round 4's throw). The canvas has always
+  // degraded this to a plain, ungrouped overlay instead (`canvasGroupCol`
+  // reads the RAW y2Keys, no plotted/hidden distinction), so the draft is now
+  // "ready" and previews/exports exactly what the screen already shows.
+  it("degrades (not refuses) a group bound with a REALLY rendered secondary axis — ready, not invalid-spec (round 5)", async () => {
     const document = createFigureDocument({
       id: "grouped-y2",
       name: "Grouped y2",
@@ -321,13 +335,14 @@ describe("useFigureBuilder", () => {
       figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
     });
     const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
 
-    expect(result.current.canonicalReadiness).toBe("invalid-spec");
-    expect(result.current.error).toContain("figure configuration is not previewable");
-    expect(result.current.error).toContain("grouped figures cannot use a secondary Y axis");
+    expect(result.current.canonicalReadiness).toBe("ready");
     expect(result.current.data).toEqual(DATA);
-    expect(result.current.canExport).toBe(false);
-    expect(renderFigureHitmap).not.toHaveBeenCalled();
+    expect(result.current.canExport).toBe(true);
+    const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
+    expect(preview?.group_col).toBeUndefined();
+    expect(preview?.y2_keys).toEqual([0]);
   });
 
   it("renders and patches one canonical draft without dropping rich document state", async () => {
@@ -622,6 +637,208 @@ describe("useFigureBuilder", () => {
   // `window`), and `canApply`'s dirty-check branch (only `new-editable`
   // skips it) all already treat `library` exactly like `window` with no code
   // changes here -- this end-to-end pass is what proves that.
+  // ── P3.3: the preview is the "what will I get" widget ────────────────────
+  // One focused window with the preference on used to give four answers: a
+  // dashed Stage canvas, a dashed Stage export, a SOLID Figure Builder preview
+  // and a solid Figure Builder Export. MAIN #35's whole point is that Copy and
+  // Export render through ONE path; this was a third and fourth. The preview and
+  // Export now apply the cycle exactly when the session's TARGET window cycles
+  // per `windowCyclesSeriesStyles` (its own view + document), focused or not.
+  describe("auto dash/marker cycle (P3.3)", () => {
+    const win = (id: string): PlotWindow => ({
+      id, kind: "plot", title: id, datasetId: "d1",
+      geometry: { x: 0, y: 0, w: 400, h: 300 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+    });
+    const doc = () =>
+      createFigureDocument({ id: "figure-cyc", name: "Live plot", datasetId: "d1", view: defaultPlotView() });
+    const windowSession = (windowId: string) => {
+      const baseline = doc();
+      return { target: "window" as const, windowId, baseline, draft: baseline };
+    };
+    const previewLines = () => {
+      const calls = vi.mocked(renderFigureHitmap).mock.calls;
+      const spec = calls[calls.length - 1][0] as { series_styles?: ({ line?: string } | null)[] };
+      return (spec.series_styles ?? []).map((st) => st?.line);
+    };
+
+    it("cycles the preview for a session previewing the FOCUSED window's figure", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual(["solid", "dashed"]);
+    });
+
+    it("and its Export emits the same dashes the preview showed", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      const spec = vi.mocked(exportFigure).mock.calls[0][0] as {
+        series_styles?: ({ line?: string } | null)[];
+      };
+      expect((spec.series_styles ?? []).map((st) => st?.line)).toEqual(["solid", "dashed"]);
+    });
+
+    it("does NOT cycle with the preference off — unchanged from before the feature", async () => {
+      useApp.setState({
+        autoSeriesStyles: false,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    // FOCUS IS NOT A STYLING INPUT, and this is where that leaked. The selector
+    // used to require `session.windowId === state.focusedWindowId`, while the
+    // canvas half (`useWindowSeriesCycle`) has never gated on focus: with the
+    // preview open on w1 and w2 focused, w1's background canvas dashed while
+    // w1's preview and its Export rendered solid — the same screen-vs-export
+    // divergence, one layer over. Both sides asserted here, in one test.
+    it("still cycles when the target window is UNFOCUSED — its canvas does, so its preview must", async () => {
+      const target = win("w1");
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
+      // The target window's own canvas, judged from its own view + document.
+      const canvas = renderHook(() =>
+        useWindowSeriesCycle(target.view, target.document, 2),
+      ).result.current;
+      expect(canvas).toEqual([0, 1]);
+
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual(["solid", "dashed"]);
+
+      // ...and its Export emits what the preview showed.
+      await act(async () => {
+        await result.current.exportNow();
+      });
+      const spec = vi.mocked(exportFigure).mock.calls[0][0] as {
+        series_styles?: ({ line?: string } | null)[];
+      };
+      expect((spec.series_styles ?? []).map((st) => st?.line)).toEqual(["solid", "dashed"]);
+    });
+
+    // The target window's OWN view decides, not the live singletons and not the
+    // draft. An unfocused window in a mode whose export cannot reproduce it
+    // (here polar) refuses on both sides even though the live view is plain.
+    // The window carries a DOCUMENT (as every real plot window does) whose
+    // derived view is polar — a bare `view.polarMode` with no document is a
+    // shape no real window is ever in, since `plotWindowView` reads the
+    // document over the view once one exists.
+    it("does NOT cycle when the UNFOCUSED target window's own view refuses", async () => {
+      const polarDoc = createFigureDocument({
+        id: "figure-cyc", name: "Live plot", datasetId: "d1",
+        view: { ...defaultPlotView(), polarMode: true },
+      });
+      const target: PlotWindow = {
+        ...win("w1"),
+        document: polarDoc,
+        view: figureDocumentToPlotView(polarDoc),
+      };
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
+      expect(
+        renderHook(() => useWindowSeriesCycle(plotWindowView(target), target.document, 2)).result
+          .current,
+      ).toBeNull();
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    // F4 (round 4): the DOCUMENT decides, not a stale `view` mirror. A real
+    // window keeps them in sync, but the selector must not depend on that —
+    // it reads `plotWindowView(target)`, the SAME projection the unfocused
+    // canvas (`WindowCanvas.tsx`) uses, which derives from the document
+    // whenever one exists. Sabotage: reading `target.view` directly here
+    // (its stale, non-polar copy) would wrongly cycle.
+    it("does NOT cycle when the UNFOCUSED target's DOCUMENT refuses even though its stale view field does not", async () => {
+      const polarDoc = createFigureDocument({
+        id: "figure-cyc", name: "Live plot", datasetId: "d1",
+        view: { ...defaultPlotView(), polarMode: true },
+      });
+      // The record's own `view` field is deliberately left at the plain
+      // default — stale relative to the polar document — to prove the
+      // document wins regardless of what that mirror says.
+      const target: PlotWindow = { ...win("w1"), document: polarDoc, view: defaultPlotView() };
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [target, win("w2")],
+        focusedWindowId: "w2",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    // Item 7: a FOCUSED target reads the LIVE singletons, because that is what
+    // its canvas draws from and a window record's `view` copy lags them.
+    // Toggling polar on the window behind the non-modal dialog therefore stops
+    // the preview dashing in the same store notification it stops the canvas.
+    it("does NOT cycle when the FOCUSED target window's LIVE view is switched to polar", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+        polarMode: true,
+      });
+      expect(renderHook(() => useStageSeriesCycle(2)).result.current).toBeNull();
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    it("does NOT cycle when the target window is gone — there is no canvas to match", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: windowSession("w1"),
+        plotWindows: [win("w2")],
+        focusedWindowId: "w2",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+
+    it("does NOT cycle a detached (new-editable) session — a document with no canvas beside it", async () => {
+      useApp.setState({
+        autoSeriesStyles: true,
+        figurePublicationSession: { target: "new-editable", windowId: null, baseline: doc(), draft: doc() },
+        plotWindows: [win("w1")],
+        focusedWindowId: "w1",
+      });
+      const { result } = renderHook(() => useFigureBuilder());
+      await waitFor(() => expect(result.current.preview).not.toBeNull());
+      expect(previewLines()).toEqual([undefined, undefined]);
+    });
+  });
+
   describe("library-target Apply (edit a saved figure in place)", () => {
     const savedFigure = (id: string) => createFigureDocument({
       id, name: "Library figure", datasetId: "d1", view: defaultPlotView(),

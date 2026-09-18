@@ -167,7 +167,12 @@ export function applyResolvedRecipe(
   // hydrates this window's document into the live singleton facade, which
   // `MultiPanelStage.tsx`'s `facetCompositionFromBinding` fallback then turns
   // into an actual small-multiples grid -- closing `store/plotRecipes.ts`'s
-  // own documented GAP note for the facet case (spatial/break still open).
+  // own documented GAP note for the facet case. BUG-012 closed the BREAK case
+  // the same way: `axisBreaks` above rides the document's canonical
+  // `plot.axisBreaks.x`, which `lib/facet.durableComposition` (the other half
+  // of that same fallback) rebuilds into paneled x-breaks once this window is
+  // focused -- see store/plotRecipes.test.ts's "applyPlotRecipe rebuilds a
+  // live paneled x-break" for the end-to-end pin. SPATIAL is still open.
   get().focusWindow(windowId);
   // P3.5 "recently used". This is the ONE commit seam every plot-recipe apply
   // entry point funnels through (`resolveApplyOrStage`'s clean-match branch
@@ -231,11 +236,15 @@ let _recipeLibs: Promise<RecipeLibs> | null = null;
  *  previous synchronous workspace -> plotRecipeIO -> plotRecipe capture
  *  edge no longer exists and both expensive libraries can remain lazy. */
 export function recipeLibs(): Promise<RecipeLibs> {
-  if (!_recipeLibs) {
-    _recipeLibs = Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")]).then(
-      ([capture, match]) => ({ captureRecipe: capture.captureRecipe, resolveRecipe: match.resolveRecipe }),
-    );
-  }
+  _recipeLibs ??= Promise.all([import("../lib/plotRecipe"), import("../lib/plotRecipeMatch")])
+    .then(([capture, match]) => ({ captureRecipe: capture.captureRecipe, resolveRecipe: match.resolveRecipe }))
+    .catch((e: unknown) => {
+      // Not cached on failure: drop the slot so the next gesture retries
+      // rather than replaying one transient fetch failure for the rest of
+      // the session (same pattern as `plotRecipeApplyLazy.ts`'s `inflight`).
+      _recipeLibs = null;
+      throw e;
+    });
   return _recipeLibs;
 }
 

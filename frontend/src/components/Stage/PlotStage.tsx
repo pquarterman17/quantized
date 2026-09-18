@@ -10,10 +10,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
-import { facetPanelsOf, spatialPanelsOf } from "../../lib/composition";
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
 import { resolveTemplate } from "../../lib/plotTemplates";
+import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -23,16 +23,19 @@ import AxisDropZones from "./AxisDropZones";
 import PlotStageMenus from "./PlotStageMenus";
 import PlotStageOverlays from "./PlotStageOverlays";
 import PlotViewport from "./PlotViewport";
-import PolarStage from "./PolarStage";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
 // E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-
 // conditional alternate modes, never the default-plot first paint.
 const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
 const StatStage = lazy(() => import("./StatStage"));
+// plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode and
+// was the only one still static — reached one way, the Plot menu's polar
+// toggle. Same UX-003 caveat as every lazy() here (no error reporting).
+const PolarStage = lazy(() => import("./PolarStage"));
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
-import { useEffectiveComposition } from "./useEffectiveComposition";
+import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
 import { useGadgetChip } from "./useGadgetChip";
 import { useLiveSnapshotPublish } from "./useLiveSnapshotPublish";
 import { usePlotPayload } from "./usePlotPayload";
@@ -127,13 +130,13 @@ export default function PlotStage() {
   // stack/inset/polar values gate the alternate render modes here; their toggle
   // setters live in PlotToolbar, which owns the tool dock.
   const stackMode = useApp((s) => s.stackMode);
-  // The panel arrangement (#54 pass A): a spatial/facet arrangement is its own
-  // explicit-intent gate (0/1 plotted channels can still show one). Durable-
-  // fallback-aware (F4.4 K1) -- see useEffectiveComposition's doc; also fed
-  // to MultiPanelStage as a prop below (L4 -- one derivation, not two).
+  // The panel arrangement (#54 pass A): a spatial/facet/break arrangement is
+  // its own explicit-intent gate (0/1 plotted channels can still show one).
+  // Durable-fallback-aware (F4.4 K1, BUG-012) -- see useEffectiveComposition's
+  // doc; also fed to MultiPanelStage as a prop below (L4 -- one derivation,
+  // not two) and to the snapshot publish, which asks the SAME
+  // `multiPanelShowing` predicate this file's mount gate below does.
   const composition = useEffectiveComposition(active);
-  const spatialPanels = spatialPanelsOf(composition);
-  const facetPanels = facetPanelsOf(composition);
   const insetMode = useApp((s) => s.insetMode);
   const polarMode = useApp((s) => s.polarMode);
   const statMode = useApp((s) => s.statMode);
@@ -153,6 +156,8 @@ export default function PlotStage() {
   const [statsSel, setStatsSel] = useState<RegionStats | null>(null);
 
   const {
+    payload,
+    payloadDatasetId,
     displayPayload,
     plotted,
     styleList,
@@ -220,32 +225,26 @@ export default function PlotStage() {
     if (active?.pending) useApp.getState().ensureBookData(active.id);
   }, [active?.id, active?.pending]);
 
-  const {
-    resetView,
-    smartScale,
-    savePng,
-    copyData,
-    copyFigure,
-    copyFigureSvg,
-    snapshot,
-    onRegionSelect,
-    onRangeSelect,
-  } = usePlotStageActions(
-    plotRef,
-    displayPayload,
-    active,
-  );
+  // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
+  // this file is on the 400-line component ceiling. Same nine names.)
+  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect } =
+    usePlotStageActions(plotRef, displayPayload, active);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).
+  // P3.3 auto dash/marker cycle — the canvas half of its ONE opt-in pair (the
+  // export half is `figureSpecStage.buildStageFigureSpec`, same gate). See its doc.
+  const seriesCycle = useStageSeriesCycle(plotted.length);
+
   useLiveSnapshotPublish({
     active,
     polarMode,
     statMode,
     stackMode,
     plottedCount: plotted.length,
-    spatialPanels,
-    facetPanels,
+    composition,
+    payload,
+    payloadDatasetId,
     displayPayload,
     styleList,
     labelList,
@@ -253,15 +252,13 @@ export default function PlotStage() {
     plotted,
     colorByColumns,
     hidden,
+    seriesCycle,
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
-  if (polarMode && active) return <PolarStage />;
+  if (polarMode && active) return <Suspense fallback={null}><PolarStage /></Suspense>;
   if (statMode && active) return <Suspense fallback={null}><StatStage /></Suspense>;
-  if (
-    stackMode &&
-    (plotted.length >= 2 || (spatialPanels?.length ?? 0) >= 2 || (facetPanels?.length ?? 0) >= 1)
-  )
+  if (multiPanelShowing(composition, stackMode, plotted.length))
     return <Suspense fallback={null}><MultiPanelStage composition={composition} /></Suspense>; // L4: prop, not re-derived
 
   return (
@@ -324,6 +321,7 @@ export default function PlotStage() {
         shapeDraw={shapeDraw}
         regionShades={regionShades}
         seriesStyles={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         seriesLabels={labelList}
         errorBars={errorBars}
@@ -378,6 +376,7 @@ export default function PlotStage() {
         insetMode={insetMode}
         showLegend={showLegend}
         styleList={styleList}
+        seriesCycle={seriesCycle}
         plotted={plotted}
         hidden={hidden}
         colorByColumns={colorByColumns}

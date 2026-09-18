@@ -60,10 +60,14 @@ export async function querySqlite(req: SqliteQueryRequest): Promise<DataStruct> 
   return postJSON<DataStruct>("/api/database/sqlite/query", req);
 }
 
-export async function health(): Promise<{ status: string }> {
+/** The launcher's identity handshake. `app`/`version` are the same
+ *  server-generated constants `store/backendHealth.ts` caches from `App.tsx`'s
+ *  startup call — widened (P3.4 review round, 2026-09-14) from `{status}` so
+ *  that one call site, not two, hits `/api/health`. */
+export async function health(): Promise<{ status: string; app?: string; version?: string }> {
   const res = await fetch("/api/health");
   if (!res.ok) throw new Error(`health ${res.status}`);
-  return (await res.json()) as { status: string };
+  return (await res.json()) as { status: string; app?: string; version?: string };
 }
 
 /** Import a local file path (auto-detect format) → DataStruct. `signal` lets
@@ -157,25 +161,29 @@ export function fitModel(req: FitRequest): Promise<CalcResult> {
 }
 
 // ── Export (file downloads) ─────────────────────────────────────────────────
-/** Export XRD data as CSV / Origin ASCII; triggers a browser download. */
+/** Export XRD data as CSV / Origin ASCII; triggers a browser download.
+ *  `signal` lets a caller abort mid-request (P3.4 safe-cancel-for-export —
+ *  see lib/exportActive.ts) the same way importFile's does; the backend may
+ *  still finish rendering server-side, the client just stops waiting and the
+ *  download never fires (postDownload's own abort-race guard). */
 export function exportXrdCsv(body: {
   dataset: DataStruct;
   fmt?: string;
   intensity?: string;
   include_metadata?: boolean;
   filename?: string;
-}): Promise<void> {
-  return postDownload("/api/export/xrd-csv", body, "export.csv");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/xrd-csv", body, "export.csv", signal);
 }
 
 /** Export a DataStruct (+ optional corrected view) as a self-describing HDF5
- *  file; triggers a browser download. */
+ *  file; triggers a browser download. `signal` — see exportXrdCsv. */
 export function exportHdf5(body: {
   dataset: DataStruct;
   corrected?: DataStruct | null;
   filename?: string;
-}): Promise<void> {
-  return postDownload("/api/export/hdf5", body, "export.h5");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/hdf5", body, "export.h5", signal);
 }
 
 /** Current plot-state snapshot for the .ogs GRAPH block (item 26) — mirrors
@@ -201,8 +209,8 @@ export function exportOrigin(body: {
   log_y?: boolean;
   make_graph?: boolean;
   graph?: OriginGraphSpec;
-}): Promise<void> {
-  return postDownload("/api/export/origin", body, "export.zip");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/origin", body, "export.zip", signal);
 }
 
 /** Whether COM "Send to Origin" is usable right now (Windows + pywin32 +

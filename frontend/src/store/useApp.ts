@@ -37,7 +37,7 @@ import {
   scaleFromLog, snapshotView,
 } from "../lib/plotview";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
-import { nextStageTab, plotIntentStageTab, type StageTab } from "../lib/stagetab";
+import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
 // rebind helpers are imported back for setActive/addDataset/loadWorkspace.
@@ -50,7 +50,7 @@ import {
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
-import { rebindFocusedPlotWindow, withWindowDocumentErrors } from "./windowDocuments";
+import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
@@ -82,7 +82,7 @@ import { recomputeStaleDatasets } from "./recalcDatasets";
 import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
-import { createTrashSlice, removeFigureDocWithTrash, removeReportWithTrash, type TrashSlice } from "./trash";
+import { createTrashSlice, type TrashSlice } from "./trash";
 import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
@@ -97,33 +97,35 @@ import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./q
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
-import { createRoisSlice, type RoisSlice } from "./rois";
+import { createRoisSlice, loadedMapViews, type RoisSlice } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import { breakComposition, facetComposition, spatialComposition, type Composition } from "../lib/composition";
-import { breakPayloads, facetPayloads, suggestBreaks } from "../lib/facet";
-import type { ReportEntry, ReportSheet } from "../lib/report";
+import { compositionPanelCount, facetComposition, spatialComposition, type Composition } from "../lib/composition";
+import { breakCompositionFromData, facetPayloads, suggestBreaks } from "../lib/facet";
+import type { ReportEntry } from "../lib/report";
 import { buildOverlayDataset, originOverlayDataset, overlayCurveLabels, overlayCurveStyles } from "../lib/originOverlay";
-import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
+import type { PanelFit } from "../lib/panelLayout";
 import { pageSetupFromDecoded, type PageSetup } from "../lib/pagesetup";
 import type { FwhmResult } from "../lib/peakwidth";
-import { effectiveChannels } from "../lib/plotdata";
-import { docRenderable, type FigureDoc } from "../lib/figuredoc";
+import type { FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { analysisData } from "../lib/rowstate";
+import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
+import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { toast } from "./toasts";
 import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
+import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
 import type {
   Annotation,
   AxisFormat, AxisScale,
   BaselineOverlay,
   ChannelRole,
   Dataset,
-  DataStruct,
+  DataStruct, DefaultTrace,
   FitOverlay, FitSpec,
   FolderNode,
   ModelingType,
@@ -150,15 +152,12 @@ export const recompute = (d: Dataset): Dataset => {
   const { data, errors } = recomputeWithErrors(asAlreadyComputed(d.data), d.formulas);
   return { ...d, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 };
-let _refSeq = 0;
-let _annSeq = 0;
-let _idSeq = 0;
-// Exported for store/split.ts (nextWindowId/panels.ts precedent) — a split
-// mints several dataset ids + one folder id from the SAME sequence used
-// everywhere else, so they can never collide with an id minted here.
-export const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
-export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
-const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
+// The shared `<prefix>-<t36>-<n>` object-id sequence moved to store/idSeq.ts
+// (P4.1): a module-level `let` cannot be incremented across a module boundary,
+// and store/reportsFigureDocs.ts mints `rep-`/`figd-` ids from it. Re-exported
+// so every existing `import { nextDatasetId } from "./useApp"` still resolves
+// (split.ts, importDatasets.ts, gadget.ts, workspaceIO.ts, ...).
+export { nextDatasetId, nextFolderId } from "./idSeq";
 // (window ids: see store/windows.ts — the MDI slice owns its own sequence)
 
 // (single-flight lazy-book resolution — ORIGIN_FILE_DECODE_PLAN #38 —
@@ -273,7 +272,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -328,11 +327,14 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   accent: Accent;
   density: Density;
   palette: string; // series colour-cycle preset (overrides --series-1..8)
+  // P3.3: the non-colour half of that cycle — auto dash/marker by series
+  // position, opt-in. Full rationale on `Prefs.autoSeriesStyles` (prefs.ts).
+  autoSeriesStyles: boolean;
   // Behavioural prefs (Preferences dialog). reduceMotion + sigFigs/notation apply
   // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
   reduceMotion: boolean;
   wheelZoom: boolean;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   defaultLineWidth: number;
   defaultGrid: boolean;
   /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */
@@ -424,9 +426,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // ABOVE this line are the FOCUSED window's LIVE view — see the facade doc
   // on WindowsSlice.
   plotTool: PlotTool;
-  // Last x-range picked by the region rubber-band ([x_min,x_max]); the baseline
-  // workshop consumes it then resets to null. Drag direction is normalized away.
-  regionPicked: [number, number] | null;
   // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
   // result chip or a dataset change (reset alongside the per-dataset view state).
   integral: IntegralResult | null;
@@ -537,28 +536,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // No-op (with a toast) when the dataset is missing, has no
   // rows in the analysis view, or no qualifying gap/override breaks exist.
   breakAtGaps: (datasetId: string, breaks?: [number, number][], gapFactor?: number) => void;
-  // Report sheets (#36): add opens the viewer on the new report.
-  addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
-  removeReport: (id: string) => void;
-  renameReport: (id: string, name: string) => void;
-  setOpenReport: (id: string | null) => void;
   // Recalc engine (#1): mark everything downstream of a data change, run the
   // dirty set now, and record/clear a dataset's re-runnable fit spec.
-  // Figure documents (#12).
-  addFigureDoc: (doc: FigureDoc) => void;
-  removeFigureDoc: (id: string) => void;
-  renameFigureDoc: (id: string, name: string) => void;
-  duplicateFigureDoc: (id: string) => void;
-  /** Open an ephemeral or saved FigureDoc without adding it to the library. */
-  openFigureDraft: (doc: FigureDoc) => void;
-  openFigureDoc: (id: string) => void;
-  // Item 9's figure-doc half: opens a NEW window bound to the doc's dataset
-  // and applies its channel/scale/label config (xKey/yKeys/log flags/titles)
-  // onto it. Live docs with a resolved dataset only — a frozen doc's data
-  // snapshot isn't a live `Dataset` a window can bind to (that's Tier 3 item
-  // 11's "snapshot-as-window" kind); a no-op otherwise.
-  openFigureDocInWindow: (id: string) => void;
-  clearFigureDocSeed: () => void;
   setRecalcMode: (mode: RecalcMode) => void;
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
@@ -640,70 +619,17 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Generic pref setter (used by the Preferences dialog); applies + persists.
   setPref: (key: PrefKey, value: string | number | boolean) => void;
   setPrefsOpen: (open: boolean) => void;
-  setYScale: (yScale: AxisScale) => void;
-  setXScale: (xScale: AxisScale) => void;
-  setShowGrid: (showGrid: boolean) => void;
-  setShowLegend: (showLegend: boolean) => void;
-  setLegendPos: (pos: LegendPos) => void;
-  setLegendStatic: (v: boolean) => void;
-  setPlotTemplate: (template: string) => void;
-  setShowAxisBox: (show: boolean) => void;
-  setStackMode: (stackMode: boolean) => void;
-  setPanelFit: (mode: PanelFit) => void; // #54
-  cyclePanelFit: () => void; // #54 — frames<->window, +page when a pageSetup exists
-  setPageSetup: (pageSetup: PageSetup | null) => void; // #54
-  setInsetMode: (insetMode: boolean) => void;
-  setPolarMode: (polarMode: boolean) => void;
-  setStatMode: (statMode: boolean) => void;
-  setXLim: (xLim: [number, number] | null) => void;
-  setYLim: (yLim: [number, number] | null) => void;
-  // Secondary (right) Y axis: expose the already-rendered y2Scale/y2Lim fields
-  // so the plot context menu can edit an Origin double-Y import's right axis.
-  // Only meaningful when y2Keys is non-empty (otherwise there is no y2 scale).
-  setY2Scale: (y2Scale: AxisScale | null) => void;
-  setY2Lim: (y2Lim: [number, number] | null) => void;
-  setXFmt: (xFmt: AxisFormat) => void;
-  setYFmt: (yFmt: AxisFormat) => void;
-  setY2Fmt: (y2Fmt: AxisFormat | null) => void;
-  setPlotTitle: (plotTitle: string) => void;
-  setXAxisLabel: (xAxisLabel: string) => void;
-  setYAxisLabel: (yAxisLabel: string) => void;
-  setY2AxisLabel: (y2AxisLabel: string) => void;
-  setXKey: (xKey: number | null) => void;
-  setYKeys: (yKeys: number[] | null) => void;
-  setGroupKey: (groupKey: number | null) => void;
-  setY2Keys: (y2Keys: number[] | null) => void;
-  addRefLine: (axis: "x" | "y", value: number) => void;
-  removeRefLine: (id: string) => void;
-  updateRefLine: (id: string, value: number) => void;
-  /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
-   *  the caller (e.g. `usePeaks`' "Label peaks" batch) so this add folds
-   *  into that batch's one undo entry instead of pushing its own — same
-   *  pattern as `addDataset`'s own `historyToken` (see its doc). Omitted by
-   *  every ordinary call site (manual "Add text here…", the object menu's
-   *  Duplicate, plotspec apply), which keep recording their own independent
-   *  entry exactly as before. */
-  addAnnotation: (x: number, y: number, text: string, historyToken?: HistoryBatchToken) => string;
-  removeAnnotation: (id: string) => void;
-  setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
-  resetSeriesStyle: (channel: number) => void;
-  setSeriesLabel: (channel: number, label: string) => void;
-  setErrKey: (channel: number, errChannel: number | null) => void;
+  // (setYScale … setErrKey and setSeriesOrder/toggleHidden/soloChannel/
+  //  setWaterfall — every writer of singleton PlotView state — are declared
+  //  on PlotViewSettingsSlice; see store/plotViewSettings.ts.)
   setChannelRole: (channel: number, role: ChannelRole | null) => void;
   setChannelType: (id: string, channel: number, t: ModelingType | null) => void;
   // (Row exclusion (#50), the row `selection` that feeds it, and the per-column
   // data filter (#53) are declared on RowStateSlice — store/rowState.ts, which
   // also carries their BUG-009 pending guards.)
-  setSeriesOrder: (order: number[] | null) => void;
-  toggleHidden: (channel: number) => void;
-  // Solo one plotted channel (hide all others); null = show all. The column
-  // switcher's engine — kept in the store so it's testable.
-  soloChannel: (channel: number | null) => void;
-  setWaterfall: (waterfall: number) => void;
   // (createWindow … windowsForSave — the window-management actions — are
   // declared on WindowsSlice; see store/windows.ts.)
   setPlotTool: (tool: PlotTool) => void;
-  setRegionPicked: (range: [number, number] | null) => void;
   setIntegral: (integral: IntegralResult | null) => void;
   setFwhmResult: (result: FwhmResult | null) => void;
   // (the quick-fit / ROI-gadget family's state + actions moved to
@@ -829,6 +755,8 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkbookCombineSlice(set, get),
   ...createWorkbookSeparateSlice(set, get),
   ...createWorkbookTransferSlice(set, get),
+  ...createPlotViewSettingsSlice(set, get),
+  ...createReportsFigureDocsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -847,23 +775,15 @@ export const useApp = create<AppState>((set, get) => ({
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
-  theme: _initialPrefs.theme,
-  accent: _initialPrefs.accent,
-  density: _initialPrefs.density,
-  palette: _initialPrefs.palette,
-  reduceMotion: _initialPrefs.reduceMotion,
-  wheelZoom: _initialPrefs.wheelZoom,
-  defaultTrace: _initialPrefs.defaultTrace,
-  defaultLineWidth: _initialPrefs.defaultLineWidth,
-  defaultGrid: _initialPrefs.defaultGrid,
-  copyFigureTransparent: _initialPrefs.copyFigureTransparent,
-  antialias: _initialPrefs.antialias,
-  excludedDisplay: _initialPrefs.excludedDisplay,
-  originBookClickOpens: _initialPrefs.originBookClickOpens,
-  sigFigs: _initialPrefs.sigFigs,
-  notation: _initialPrefs.notation,
-  confirmRemove: _initialPrefs.confirmRemove,
-  defaultPanelFit: _initialPrefs.defaultPanelFit,
+  // Every `Prefs` key IS an AppState field of the same name — that is how
+  // `prefsOf(s)` reads them straight back out — so the persisted blob seeds
+  // them in ONE spread instead of a hand-maintained line per preference that
+  // every new pref had to remember to add (the same anti-drift move
+  // `PrefKey = keyof Prefs` made for the key union; #35's note above records
+  // the 18 lines that union cost before it was derived). `libraryPanelWidth`
+  // is re-assigned here with the IDENTICAL value `createLibraryPanelSlice`
+  // above was already constructed from, so the order of the two is immaterial.
+  ..._initialPrefs,
   prefsOpen: false,
   yScale: "linear",
   xScale: "linear",
@@ -909,7 +829,6 @@ export const useApp = create<AppState>((set, get) => ({
   hiddenChannels: [],
   waterfall: 0,
   plotTool: "pointer",
-  regionPicked: null,
   integral: null,
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in
@@ -1383,8 +1302,8 @@ export const useApp = create<AppState>((set, get) => ({
       toast("no large x-gaps found to break at", "danger");
       return;
     }
-    const panels = breakPayloads(data, xKey, yKeys, useBreaks);
-    if (panels.length < 2) {
+    const composition = breakCompositionFromData(data, useBreaks, xKey, yKeys);
+    if (compositionPanelCount(composition) < 2) {
       toast("not enough data on both sides of a break to panel", "danger");
       return;
     }
@@ -1396,7 +1315,7 @@ export const useApp = create<AppState>((set, get) => ({
     // this, a later focus round-trip resurrects the REPLACED facet grid
     // instead of this break arrangement (`useEffectiveComposition`'s
     // fallback reads facetKey whenever `composition` itself is null again).
-    set({ stackMode: true, composition: breakComposition(panels), facetKey: null });
+    set({ stackMode: true, composition, facetKey: null });
     get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
   },
   // Replace the whole library with a restored workspace (from a .dwk file).
@@ -1495,7 +1414,7 @@ export const useApp = create<AppState>((set, get) => ({
         figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
         savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
         quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
-        savedRois: ws.savedRois ?? [], // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3
+        savedRois: ws.savedRois ?? [], mapViews: loadedMapViews(ws.mapViews, dsIds), mapPaintedLimits: {}, // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3; and P2.8's per-dataset durable map views — .dwk v4 additive, MUST be explicit for the same cross-project-leak reason `workbooks` above is (their colour limits and slice positions are in the PREVIOUS project's units), and `dsIds` so a hand-built WorkspaceState cannot install an entry for a dataset this load does not have. `mapPaintedLimits` is reset the same way and for the same reason (P2.8 review round 3, finding 2): it is transient per-dataset paint state, and a reopened project's dataset ids can collide with the previous project's, leaving a stale "effective" pair on screen. Packed onto one line, not its own: this module is AT its store-size pin (architecture.test.ts) with zero headroom, which is also why the slice composes through store/rois.ts — see store/mapView.ts's header.
         collections: ws.collections ?? [], // saved-search Collections (PR L, L0.48/L0.49) — .dwk v4 additive
         // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
         // serialized by the whole-state-spread save path (workspaceIO.ts /
@@ -1719,7 +1638,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
       toast(`merged ${picks.length} datasets`, "ok");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "merge failed";
+      const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`; // P3.4 error audit 2026-09-14: `addDataset` runs after the throwing call, so "nothing was added" holds
       get().setStatus(msg);
       toast(msg, "danger");
     }
@@ -1855,7 +1774,7 @@ export const useApp = create<AppState>((set, get) => ({
       return {
         smartFolders: [
           ...s.smartFolders,
-          { id: `smf-${Date.now().toString(36)}-${++_idSeq}`, name: nm, query: query.trim() },
+          { id: nextSmartFolderId(), name: nm, query: query.trim() },
         ],
       };
     });
@@ -1890,126 +1809,9 @@ export const useApp = create<AppState>((set, get) => ({
     syncPrefs(get());
   },
   setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
-  setYScale: (yScale) => {
-    get().recordHistory("change Y scale"); set({ yScale });
-    get().recordMacro(`Y axis ${yScale}`, `qz.setYScale(${lit(yScale)})`);
-  },
-  setXScale: (xScale) => {
-    get().recordHistory("change X scale"); set({ xScale });
-    get().recordMacro(`X axis ${xScale}`, `qz.setXScale(${lit(xScale)})`);
-  },
-  setShowGrid: (showGrid) => { get().recordHistory("toggle grid"); set({ showGrid }); },
-  setShowLegend: (showLegend) => { get().recordHistory("toggle legend"); set({ showLegend }); },
-  setLegendPos: (legendPos) => { get().recordHistory("move legend"); set({ legendPos }); },
-  setLegendStatic: (legendStatic) => { get().recordHistory("change legend mode"); set({ legendStatic }); },
-  setPlotTemplate: (plotTemplate) => { get().recordHistory("apply plot template"); set({ plotTemplate }); },
-  setShowAxisBox: (showAxisBox) => { get().recordHistory("toggle axis box"); set({ showAxisBox }); },
-  // A manual toggle (on OR off) always drops any spatial arrangement from a
-  // prior Origin multi-panel apply, or a prior facet-by-column arrangement
-  // (gap #21 residual) — the plain per-channel split (or leaving stack mode)
-  // is what the user asked for, never a stale spatial/facet grid.
-  // F4.4: also clears `facetKey` -- without it, toggling OFF a facet
-  // (`composition: null` here) then toggling stack mode back ON via the
-  // plain "Stack" button (never through `facetByColumn`) would resurrect the
-  // old facet grid, since `MultiPanelStage.tsx`'s render-layer fallback
-  // rebuilds it from `facetKey` whenever `composition` is null.
-  setStackMode: (stackMode) => (
-    get().recordHistory("change plot layout"), set({ stackMode, composition: null, facetKey: null })
-  ),
-  // #54: the spatial multi-panel fit mode (PlotView field). `cyclePanelFit`
-  // advances frames<->window until a page model exists (Stage 2 opens page).
-  setPanelFit: (panelFit) => { get().recordHistory("change panel fit"); set({ panelFit }); },
-  cyclePanelFit: () => { get().recordHistory("change panel fit"); set((s) => ({ panelFit: nextPanelFit(s.panelFit, s.pageSetup != null) })); },
-  setPageSetup: (pageSetup) => { get().recordHistory("change page setup"); set({ pageSetup }); },
-  setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
-  setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
-  setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
-  // Clears the paired decoded step too: a manual/Inspector range (or the
-  // smart auto-scale reset to null) is no longer the Origin figure that
-  // produced xStep/yStep, so a stale step must never leak onto it.
-  setXLim: (xLim) => set({ xLim, xStep: null }),
-  setYLim: (yLim) => set({ yLim, yStep: null }),
-  // A manual y2 range is no longer the Origin figure that decoded y2Step, so
-  // drop the stale step alongside it (mirrors setYLim / yStep above).
-  setY2Scale: (y2Scale) => { get().recordHistory("change Y2 scale"); set({ y2Scale }); },
-  setY2Lim: (y2Lim) => { get().recordHistory("change Y2 limits"); set({ y2Lim, y2Step: null }); },
-  setXFmt: (xFmt) => { get().recordHistory("format X axis"); set({ xFmt }); },
-  setYFmt: (yFmt) => { get().recordHistory("format Y axis"); set({ yFmt }); },
-  setY2Fmt: (y2Fmt) => { get().recordHistory("format Y2 axis"); set({ y2Fmt }); },
-  setPlotTitle: (plotTitle) => {
-    get().recordHistory("edit plot title"); set({ plotTitle });
-    get().recordMacro(`Title → ${plotTitle || "(none)"}`, `qz.setPlotTitle(${lit(plotTitle)})`);
-  },
-  setXAxisLabel: (xAxisLabel) => { get().recordHistory("edit X axis title"); set({ xAxisLabel }); },
-  setYAxisLabel: (yAxisLabel) => { get().recordHistory("edit Y axis title"); set({ yAxisLabel }); },
-  setY2AxisLabel: (y2AxisLabel) => { get().recordHistory("edit Y2 axis title"); set({ y2AxisLabel }); },
-  setXKey: (xKey) => {
-    get().recordHistory("change X channel"); set({ xKey });
-    get().recordMacro(`X axis → channel ${xKey ?? "time"}`, `qz.setXKey(${lit(xKey)})`);
-  },
-  // P1.5: durable live grouping -- committed by useGraphBuilder's commitToPlot
-  // (replacing the old "preview-only" toast) and editable directly once a
-  // window exists. Mirrors setXKey exactly (undo history + macro record);
-  // syncPlotWindow/updateFigureDocumentFromPlotView (windowDocuments.ts /
-  // figureDocument.ts) then carry this singleton into the focused window's
-  // canonical FigureDocument on the next view sync, same as every other
-  // PlotView field.
-  setGroupKey: (groupKey) => {
-    get().recordHistory("change group");
-    set({ groupKey });
-    get().recordMacro(`Group by channel ${groupKey ?? "none"}`, `qz.setGroupKey(${lit(groupKey)})`);
-  },
-  setYKeys: (yKeys) => {
-    get().recordHistory("change Y channels"); set({ yKeys });
-    get().recordMacro(`Y channels → ${yKeys ? yKeys.join(",") : "all"}`, `qz.setYKeys(${lit(yKeys)})`);
-  },
-  setY2Keys: (y2Keys) => {
-    get().recordHistory("change Y2 channels");
-    set({ y2Keys, ...(y2Keys ? {} : { y2Lim: null, y2Scale: null, y2Step: null, y2AxisLabel: "" }) });
-    get().recordMacro(
-      `Y2 channels → ${y2Keys ? y2Keys.join(",") : "none"}`,
-      `qz.setY2Keys(${lit(y2Keys)})`,
-    );
-  },
-  addRefLine: (axis, value) => { get().recordHistory("add reference line"); set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })); },
-  removeRefLine: (id) => { get().recordHistory("delete reference line"); set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })); },
-  // Move a reference line to a new value (drag commit). No-op for an unknown id.
-  updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },
-  // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
-  addAnnotation: (x, y, text, historyToken) => {
-    const id = `ann-${++_annSeq}`;
-    get().recordHistory("add annotation", historyToken);
-    set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
-    return id;
-  },
-  removeAnnotation: (id) => { get().recordHistory("delete annotation"); set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })); },
-  setSeriesStyle: (channel, patch) => (get().recordHistory("style curve"),
-    set((s) => ({
-      seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },
-    }))),
-  resetSeriesStyle: (channel) => (get().recordHistory("reset curve style"),
-    set((s) => {
-      const next = { ...s.seriesStyles };
-      delete next[channel];
-      return { seriesStyles: next };
-    })),
-  // Rename a channel's legend/series label. Blank (or whitespace) clears the
-  // override, reverting to the dataset's own label.
-  setSeriesLabel: (channel, label) => (get().recordHistory("rename curve"),
-    set((s) => {
-      const next = { ...s.seriesLabels };
-      const t = label.trim();
-      if (t) next[channel] = t;
-      else delete next[channel];
-      return { seriesLabels: next };
-    })),
-  setErrKey: (channel, errChannel) => (get().recordHistory("change error bars"),
-    set((s) => {
-      const next = { ...s.errKeys };
-      if (errChannel == null) delete next[channel];
-      else next[channel] = errChannel;
-      return { errKeys: next };
-    })),
+  // (the PlotView-settings action implementations moved to
+  // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice
+  // at the top of this literal.)
   // Set (or clear, role=null) a column role on the ACTIVE dataset. Roles live on
   // the dataset (persist across switches + round-trip .dwk); the map empties to
   // undefined to keep saved files clean.
@@ -2057,40 +1859,9 @@ export const useApp = create<AppState>((set, get) => ({
   // Row state (#50): the single source of truth for per-row exclusion. Excluded
   // rows persist on the dataset (round-trip .dwk) so every view can honor them —
   // no view should keep its own local row mask.
-  // Persist an explicit plotted-channel draw order (a permutation of the current
-  // plotted channels). effectiveChannels reorders by it; stale entries (channels
-  // no longer plotted) are ignored and newly-plotted channels append in order.
-  setSeriesOrder: (seriesOrder) => { get().recordHistory("reorder curves"); set({ seriesOrder }); },
-  toggleHidden: (channel) => {
-    get().recordHistory("toggle curve visibility");
-    set((s) => ({
-      hiddenChannels: s.hiddenChannels.includes(channel)
-        ? s.hiddenChannels.filter((c) => c !== channel)
-        : [...s.hiddenChannels, channel],
-    }));
-  },
-  // Solo = hide every plotted channel except `channel` (the column switcher's
-  // engine). null clears. View state like toggleHidden — not macro-recorded.
-  soloChannel: (channel) => {
-    get().recordHistory("solo curve");
-    set((s) => {
-      if (channel == null) return { hiddenChannels: [] };
-      const ds = s.datasets.find((d) => d.id === s.activeId);
-      if (!ds) return {};
-      const plotted = effectiveChannels(ds.data, s.yKeys, s.xKey, ds.channelRoles, s.seriesOrder);
-      if (!plotted.includes(channel)) return {};
-      return { hiddenChannels: plotted.filter((c) => c !== channel) };
-    });
-  },
-  setWaterfall: (waterfall) => {
-    get().recordHistory("change waterfall offset");
-    set({ waterfall });
-    get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
-  },
   // (the window-management action implementations moved to store/windows.ts —
   // composed via createWindowsSlice at the top of this literal.)
   setPlotTool: (plotTool) => set({ plotTool }),
-  setRegionPicked: (regionPicked) => set({ regionPicked }),
   setIntegral: (integral) => set({ integral }),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
@@ -2111,98 +1882,6 @@ export const useApp = create<AppState>((set, get) => ({
   setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),
   setImportWizardOpen: (importWizardOpen) => set({ importWizardOpen }),
   setPipelineOpen: (pipelineOpen) => set({ pipelineOpen }),
-  // Report sheets (#36). Adding opens the viewer on the new report so the
-  // producing workshop's "→ Report" lands somewhere visible immediately.
-  addReport: (name, report, datasetId) =>
-    set((s) => {
-      const entry: ReportEntry = {
-        id: nextReportId(),
-        name,
-        datasetId: datasetId ?? null,
-        report,
-      };
-      return {
-        reports: [...s.reports, entry],
-        openReportId: entry.id,
-        status: `report "${name}" created`,
-      };
-    }),
-  removeReport: (id) => removeReportWithTrash(get, set, id),
-  renameReport: (id, name) =>
-    set((s) => ({
-      reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
-    })),
-  setOpenReport: (openReportId) => set({ openReportId }),
-  // ── Figure documents (#12) ──────────────────────────────────────────────
-  addFigureDoc: (doc) => set((s) => ({
-    figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
-  })),
-  removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
-  renameFigureDoc: (id, name) => set((s) => ({
-      figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
-  })),
-  duplicateFigureDoc: (id) =>
-    set((s) => {
-      const src = s.figureDocs.find((f) => f.id === id);
-      if (!src) return {};
-      const copy: FigureDoc = {
-        ...src,
-        id: `figd-${Date.now().toString(36)}-${++_idSeq}`,
-        name: `${src.name} copy`,
-      };
-      return { figureDocs: [...s.figureDocs, copy] };
-  }),
-  openFigureDraft: (doc) => {
-    if (get().figurePublicationSession) { toast("finish or cancel the current Publication Preview first", "danger"); set({ status: "finish or cancel the current Publication Preview first" }); return; } if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
-    if (doc.live && doc.datasetId) get().setActive(doc.datasetId);
-    set({ figureDocSeed: doc, figureBuilderOpen: true });
-  },
-  openFigureDoc: (id) => {
-    const doc = get().figureDocs.find((f) => f.id === id);
-    if (doc) get().openFigureDraft(doc);
-  },
-  // Item 9's figure-doc half: a live doc only (a frozen doc's snapshot isn't
-  // a live `Dataset` a window can bind to — that gap is Tier 3 item 11's
-  // "snapshot-as-window"). Creates + focuses a new window bound to the doc's
-  // dataset, then applies the config's channel/scale/label fields — NOT its
-  // `seriesStyles` (a `FigureConfig` carries the EXPORT style shape,
-  // `ExportSeriesStyle[]`, which has no inverse back to the live
-  // `Record<number,SeriesStyle>`; the window opens with default series styling.
-  openFigureDocInWindow: (id) => {
-    const doc = get().figureDocs.find((f) => f.id === id);
-    if (!doc || !doc.live || !doc.datasetId) return;
-    const s = get();
-    if (!s.datasets.some((dataset) => dataset.id === doc.datasetId)) return;
-    const title = dedupeWindowTitle(
-      doc.name,
-      s.plotWindows.map((w) => displayedWindowTitle(w, s.datasets)),
-    );
-    const winId = s.createWindow(doc.datasetId, undefined, title);
-    s.focusWindow(winId);
-    const c = doc.config;
-    const targetDs = s.datasets.find((d) => d.id === doc.datasetId);
-    set((current) => ({
-      // Plot-intent (item 1): "open in new window" always means look at the
-      // plot, so surface it regardless of which tab was showing.
-      ...(targetDs ? { stageTab: plotIntentStageTab(targetDs) } : {}),
-      xKey: c.xKey,
-      yKeys: c.yKeys,
-      // P1.5: a legacy FigureDoc's own grouping (Graph Builder's
-      // plotSpecToFigureDoc is the only producer) now carries over into the
-      // opened window's live groupKey too, same as xKey/yKeys just above --
-      // previously this whole binding was silently dropped on "open in window".
-      groupKey: c.groupCol ?? null,
-      xScale: c.xScale,
-      yScale: c.yScale,
-      plotTitle: c.title,
-      xAxisLabel: c.xLabel,
-      yAxisLabel: c.yLabel,
-      // Item 3: the doc's own error bindings, if any (else createWindow's dataset-seeded errorRoles stand).
-      ...(c.errors ? withWindowDocumentErrors(current.plotWindows, winId, c.errors) : {}),
-    }));
-    get().recordMacro(`Open figure "${doc.name}" in new window`, `qz.openFigureDocInWindow(${lit(id)})`);
-  },
-  clearFigureDocSeed: () => set({ figureDocSeed: null }),
   // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
   // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
   // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already

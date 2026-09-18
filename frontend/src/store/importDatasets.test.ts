@@ -994,6 +994,25 @@ describe("finding 3 — a failed recipe-suggestion lookup never swallows the fai
   });
 });
 
+// P3.4 error-quality audit (2026-09-14): "errors say what failed, whether data
+// changed, and next action". The failed-file toast had the first and the third
+// and not the second — the status line carried "imported 1/2" while the toast,
+// which is what actually appears over the stage, named only the broken file.
+describe("a partly-failed batch says how much of it landed", () => {
+  it("the failure toast carries the imported count, not just the failure", async () => {
+    vi.mocked(importFile)
+      .mockRejectedValueOnce(new Error("file not found"))
+      .mockResolvedValueOnce(payload());
+
+    await useApp.getState().importPaths(["/gone.dat", "/ok.dat"]);
+
+    const failure = toastMsgs().find((m) => m.includes("file not found"));
+    expect(failure, "the failed file still gets a danger toast").toBeDefined();
+    expect(failure, "whether data changed").toContain("imported 1/2");
+    expect(failure, "next action").toMatch(/import wizard/i);
+  });
+});
+
 describe("L0.46 — import lands in the selected folder", () => {
   const files = (...names: string[]) => names.map((n) => new File(["x"], n));
 

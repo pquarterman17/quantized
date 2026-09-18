@@ -101,15 +101,16 @@ const NO_DATASETS: Dataset[] = [];
 
 export interface BackgroundStackWindowProps extends BackgroundModeProps {
   bg?: PlotBg;
-  /** L2: this window's OWN facet arrangement, derived by the caller
-   *  (`BackgroundPlotWindow.tsx`) from its `view.facetKey` — null renders
+  /** L2: this window's OWN durable arrangement, derived by the caller
+   *  (`BackgroundPlotWindow.tsx`) from its `view.facetKey` and — since
+   *  BUG-012 review F5 — its `document.plot.axisBreaks.x` — null renders
    *  the plain per-channel stack, same as before this field existed. */
   composition?: Composition | null;
 }
 
-/** Per-channel stack (or, with a facet binding, a facet grid) from the
- *  window's own view (focused twin: `MultiPanelStage`, which can
- *  additionally show the spatial/break arrangements — those stay
+/** Per-channel stack (or, with a facet binding or saved x-breaks, that
+ *  arrangement) from the window's own view (focused twin: `MultiPanelStage`,
+ *  which can additionally show the SPATIAL arrangement — that one stays
  *  focused-only, see the module doc). */
 export function BackgroundStackWindow({ dataset, view, bg, composition = null }: BackgroundStackWindowProps) {
   const theme = useApp((s) => s.theme);
@@ -139,6 +140,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null }:
     defaultTrace,
     refLines: view.refLines,
     seriesStyles: view.seriesStyles,
+    seriesLabels: view.seriesLabels,
     xKey: view.xKey,
     yKeys: view.yKeys,
     y2Keys: view.y2Keys,

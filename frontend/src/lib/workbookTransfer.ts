@@ -99,6 +99,7 @@
 // see workbookTransfer.test.ts's collision + edge-closure assertions.
 
 import type { FigureDocument } from "./figureDocument";
+import { encodeDatasetCells } from "./nonFiniteCells";
 import { plural } from "./plural";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
 import type { ReportEntry } from "./report";
@@ -224,7 +225,16 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
     reports,
     quickPlotTemplates,
   };
-  const text = JSON.stringify(pkg);
+  // BUG-017: the CLIPBOARD TEXT encodes each dataset's NaN/±Infinity/-0 cells
+  // as sentinel strings (lib/nonFiniteCells.ts) — this path has the identical
+  // hole `.dwk` save had, because `parseTransferPackage` below feeds the text
+  // back through `parseWorkspace`, so a plain `JSON.stringify` here turned a
+  // blank inserted row's NaN into `null` and made Paste/Duplicate refuse the
+  // whole workbook with "has an invalid data structure". `pkg` itself keeps
+  // the LIVE datasets (its only other consumer reads `pkg.datasets.length`),
+  // and the encoder returns each dataset unchanged when nothing needs a
+  // sentinel, so an ordinary package is byte-identical to before.
+  const text = JSON.stringify({ ...pkg, datasets: pkg.datasets.map(encodeDatasetCells) });
   if (text.length > MAX_TRANSFER_PACKAGE_CHARS) {
     return {
       ok: false,
@@ -235,7 +245,19 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
 }
 
 export type ParseTransferResult =
-  | { ok: true; pkg: WorkbookTransferPackage }
+  | {
+      ok: true;
+      pkg: WorkbookTransferPackage;
+      /** BUG-010: load-time compatibility notices from the `parseWorkspace`
+       *  reuse below (e.g. a carried FigureDocument whose version this build
+       *  no longer understands, skipped rather than failing the whole
+       *  paste) — mirrors `LoadedWorkspace.migrationWarnings`'s own doc. A
+       *  sibling of `pkg` rather than a field ON it: `buildTransferPackage`
+       *  has no equivalent (a live session cannot itself hold a version-
+       *  skipped figure), so there is no shared shape to keep in sync, only
+       *  a parse-time result to report. */
+      migrationWarnings: string[];
+    }
   | { ok: false; reason: string };
 
 /** Validate + sanitize a package read back from clipboard/file text. Never
@@ -308,6 +330,7 @@ export function parseTransferPackage(text: string): ParseTransferResult {
         (t) => t.scope.kind === "workbook" && t.scope.workbookId === workbookId,
       ),
     },
+    migrationWarnings: loaded.migrationWarnings,
   };
 }
 

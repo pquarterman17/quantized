@@ -1,0 +1,128 @@
+{
+  "mode": "flat",
+  "xBinding": null,
+  "series": [
+    {
+      "channel": 0,
+      "label": "Signal (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": "#ffe066",
+      "width": 2,
+      "dash": [
+        8,
+        4
+      ],
+      "marker": {
+        "shape": "square",
+        "size": 7
+      },
+      "step": null,
+      "fill": "under"
+    },
+    {
+      "channel": 1,
+      "label": "Reference (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": "#66ffd9",
+      "width": 1,
+      "dash": [
+        2,
+        4
+      ],
+      "marker": null,
+      "step": "post",
+      "fill": null
+    }
+  ],
+  "errors": [
+    [],
+    []
+  ],
+  "grouping": {
+    "channel": null,
+    "levelOrder": null,
+    "levelLabels": null
+  },
+  "facet": {
+    "channel": null,
+    "panels": null
+  },
+  "y2Positions": [],
+  "xBreaks": [],
+  "waterfallOffset": 0,
+  "axes": {
+    "x": {
+      "label": "Index",
+      "scale": "linear",
+      "limits": [
+        0,
+        5
+      ]
+    },
+    "y": {
+      "label": "Signal (au)",
+      "scale": "linear",
+      "limits": [
+        -1,
+        4
+      ]
+    },
+    "y2": null
+  },
+  "decor": {
+    "legend": {
+      "show": true,
+      "position": "se",
+      "title": "Runs"
+    },
+    "annotations": [
+      {
+        "x": 1,
+        "y": 0.5,
+        "text": "onset"
+      },
+      {
+        "x": 4,
+        "y": 2.5,
+        "text": "plateau"
+      }
+    ],
+    "shapes": [
+      {
+        "kind": "arrow",
+        "x1": 1,
+        "y1": 1,
+        "x2": 3,
+        "y2": 2
+      },
+      {
+        "kind": "rect",
+        "x1": 2,
+        "y1": 0,
+        "x2": 4,
+        "y2": 1
+      }
+    ],
+    "refLines": [
+      {
+        "axis": "x",
+        "value": 2.5
+      },
+      {
+        "axis": "y",
+        "value": 1.5
+      }
+    ],
+    "regionShades": [
+      {
+        "x1": 0.5,
+        "x2": 1.5,
+        "y1": 0,
+        "y2": 3,
+        "fill": "#334455"
+      }
+    ]
+  }
+}

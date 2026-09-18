@@ -21,6 +21,7 @@ import {
   type LegendPos,
 } from "./plotview";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
+import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
 import { isValidTechnique } from "./techniqueDefaults";
 import type { AxisFormat, SeriesStyle, TickMode } from "./types";
@@ -228,18 +229,6 @@ function sanitizeAxisBreaks(v: unknown): RecipeAxisBreaks {
   return { x: ranges(o.x), y: ranges(o.y), y2: ranges(o.y2) };
 }
 
-/** Structural passthrough for `seriesStyles` (like `lib/plotview.ts`'s
- *  `sanitizePlotView` does for the same field) -- no deep per-field
- *  `SeriesStyle` validation, just an object-shape + string-key check.
- *  `seriesLabels` gets the stricter string-value check since its values are
- *  meant for display verbatim. */
-function strKeyedRecord<T>(v: unknown, guard: (x: unknown) => x is T): Record<string, T> {
-  if (typeof v !== "object" || v === null) return {};
-  const out: Record<string, T> = {};
-  for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (guard(val)) out[k] = val;
-  return out;
-}
-
 function isSeriesStyle(v: unknown): v is SeriesStyle {
   return typeof v === "object" && v !== null;
 }
@@ -271,8 +260,12 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     stackMode: typeof o.stackMode === "boolean" ? o.stackMode : fb.stackMode,
     waterfall: typeof o.waterfall === "number" && Number.isFinite(o.waterfall) ? o.waterfall : fb.waterfall,
     plotTemplate: typeof o.plotTemplate === "string" ? o.plotTemplate : fb.plotTemplate,
-    seriesStyles: strKeyedRecord<SeriesStyle>(o.seriesStyles, isSeriesStyle),
-    seriesLabels: strKeyedRecord<string>(o.seriesLabels, (x): x is string => typeof x === "string"),
+    // Structural passthrough for `seriesStyles` -- no deep per-field
+    // `SeriesStyle` validation, just an object-shape check; `seriesLabels`
+    // gets the stricter string-value check since its values are meant for
+    // display verbatim.
+    seriesStyles: keyedRecord<SeriesStyle>(o.seriesStyles, isSeriesStyle),
+    seriesLabels: keyedRecord<string>(o.seriesLabels, isString),
     seriesOrder: Array.isArray(o.seriesOrder)
       ? o.seriesOrder.filter((x): x is string => typeof x === "string")
       : null,

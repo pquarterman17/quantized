@@ -55,6 +55,12 @@ const FIELDS: Record<BaselineMethod, ParamField[]> = {
   region: [
     { label: "Box x-min", key: "regionXMin", allowEmpty: true, placeholder: "auto" },
     { label: "Box x-max", key: "regionXMax", allowEmpty: true, placeholder: "auto" },
+    // Optional 2-D y-box (MATLAB `onBGMouseUp` parity, GAP #96/#20): unlike
+    // the x edges, empty here means "no y constraint" — never a full-range
+    // default — so the placeholder reads "none", not "auto". This doubles
+    // as the region readout: a drag that carried a y-range fills these in.
+    { label: "Box y-min", key: "regionYMin", allowEmpty: true, placeholder: "none" },
+    { label: "Box y-max", key: "regionYMax", allowEmpty: true, placeholder: "none" },
     { label: "Poly order", key: "order" },
   ],
   anchor: [],

@@ -84,7 +84,7 @@ import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
-import { toast } from "./store/toasts";
+import { notifyMigrationWarnings, toast } from "./store/toasts";
 import { useApp, type AppState } from "./store/useApp";
 import { stageWorkspaceRestore } from "./store/windowHydration";
 
@@ -341,6 +341,13 @@ export type AutosaveState = Pick<
   // unsaved until some unrelated field also changed.
   | "workbooks"
   | "savedRois"
+  // Audit P2.8: the per-dataset durable map views — persist (lib/workspace.ts)
+  // and mutate on their own (store/mapView.ts's colour-limit/scale/colormap/
+  // slice/annotation writers), so without a trigger here a colour limit typed
+  // into the Inspector or a slice taken on the map left the title bar showing
+  // clean right up to a crash. Same completeness-sweep class as `savedRois`
+  // above. Merely OPENING a map is a pure lookup and changes nothing here.
+  | "mapViews"
   // P2-1: PR L's saved-search Collections — persist, mutate independently
   // (store/collections.ts), had no trigger here. A Collection rename/save
   // left the title bar showing clean right up to a crash.
@@ -384,6 +391,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.expandedWorkbookIds === prev.expandedWorkbookIds &&
     state.workbooks === prev.workbooks &&
     state.savedRois === prev.savedRois &&
+    state.mapViews === prev.mapViews &&
     state.collections === prev.collections &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
     state.plotRecipes === prev.plotRecipes
@@ -427,8 +435,13 @@ export function useWorkspaceAutosave(): void {
         setStatus(`recovered ${what} after an unexpected close`);
         toast(`Recovered ${what} after an unexpected close — check your latest edits`, "info");
       } else {
+        // BUG-010: this setStatus overwrites loadWorkspace's own
+        // migrationNotice status-line fold — the toast below is the only
+        // channel that survives it (both branches restore silently, so
+        // neither has any other confirmation surface for it).
         setStatus(`restored ${what} from autosave`);
       }
+      notifyMigrationWarnings(restored.migrationWarnings);
     });
     return () => {
       cancelled = true;

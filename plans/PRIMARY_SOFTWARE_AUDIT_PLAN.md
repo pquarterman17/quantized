@@ -2640,8 +2640,355 @@ reusable recipe, and figure in one flow.
 
 **Models:** Sol high/Opus 4.8 for scientific contracts; Sonnet 5 for bounded UI.
 
-- [ ] Connect peak results to Williamson-Hall and available Pawley capability.
-- [ ] Durable peak identity, uncertainty, exclusion, model, and provenance.
+**Reconciliation, 2026-09-14 (verified against the code before building).**
+This item's first two boxes were NOT stale — but neither was the gap in the
+physics, which already existed and was already golden. The map:
+
+- **Williamson-Hall — present and correct, end to end.**
+  `calc/reductions.py::williamson_hall` implements the uniform-strain model
+  (β·cosθ vs 4·sinθ, K factor, instrumental broadening subtracted in
+  quadrature with MATLAB's 1e-16 clamp), exposed by
+  `routes/reductions.py::williamson_hall_route` (POST
+  `/api/reductions/williamson-hall`), wrapped by `lib/api/reductions.ts`, and
+  driven by `components/workshops/reductions/{useWilliamsonHall.ts,
+  WilliamsonHallSection.tsx}`. No formula was added or changed by this work.
+- **The gap was WIRING plus DATA MODEL, not UI and not physics.**
+  `useWilliamsonHall.ts`'s own header stated it: the Peaks workshop's fitted
+  peaks "live only in ITS OWN component state, never published to the store,
+  so there is nothing durable to prefill from without new cross-workshop
+  plumbing". `usePeaks.ts` held the fit in `useState<MultiFitResult>` and
+  cleared it on every dataset change; the user retyped every 2θ/FWHM by hand.
+- **DATA MODEL, specifically.** `FittedPeak`/`MultiFitResult` (then in
+  `lib/types.ts`, now in `lib/peakTable.ts`) carried center/fwhm/height/bg/
+  eta/area/status/model and nothing else — no stable id, no uncertainty, no
+  exclusion flag, no provenance — and `lib/workspaceSerialize.ts` /
+  `lib/workspaceDatasetParse.ts` named no peak field at all, so nothing about
+  a fit survived a save. That is what `Dataset.peakTable` now closes.
+- **Pawley is not "available capability".** `calc/pawley.py::pawley_refine`
+  is implemented and invariant-tested, but has no route, no API wrapper and no
+  UI, and its inputs (whole pattern + a `phase_info` unit cell) are not
+  derivable from a peak table — so it got its own box below rather than a
+  wire-up here.
+- **Uncertainties are modelled, not measured.** Neither fit engine returns a
+  covariance, and `williamson_hall` accepts no weights; the columns are
+  durable, the numbers are a separate box that needs a MATLAB golden first.
+- Boxes 3-5 ("Manual peak edits and reviewed batch recipe",
+  "Technique-specific plot recipe…", "Validate on representative owner
+  instruments/phases") were checked and are genuinely NOT shipped; left
+  untouched.
+
+- [x] Connect peak results to Williamson-Hall. **(2026-09-14)** One "Use
+  fitted peaks" action fills the Williamson-Hall peak list from the active
+  dataset's durable peak table, honouring the per-peak `excluded` flags and
+  adopting the wavelength recorded at fit time. Tests:
+  `WilliamsonHallSection.test.tsx`'s "Williamson-Hall — Use fitted peaks
+  (P2.1)" suite — "one click fills the table from the fitted peaks instead of
+  manual entry", "omits peaks excluded in the Peaks workshop, and says so"
+  (asserts the API call carries only the included peaks), "adopts the
+  wavelength the pattern was measured at", "names the provenance of the loaded
+  rows", "drops the provenance line the moment a row is edited by hand".
+- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
+  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
+  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
+  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
+  and over `frontend/src` returns exactly one hit — a doc comment in
+  `lib/peakTableFit.ts` naming a future entry point, added by this item).
+  It is also NOT a peak-table consumer — it refines a unit cell
+  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
+  cell, so the missing piece is a route + phase-cell entry point, not the
+  wiring this item shipped.
+- [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
+  **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
+  `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,
+  `center`/`fwhm`/`height` with `centerErr`/`fwhmErr`/`heightErr` slots, the
+  per-row `model`, a user-controlled `excluded` flag, and a
+  `PeakTableProvenance` naming the source dataset id/name, the fit method and
+  its parameters, R²/RMSE, the instrument wavelength and the fit instant. It
+  hangs off `Dataset.peakTable` (additive-optional, absent = no table, no
+  `WORKSPACE_VERSION` bump) and round-trips the `.dwk`. Tests:
+  `lib/peakTable.test.ts` (24 cases incl. id uniqueness, exclusion carry-over
+  across a re-fit, sanitizer fail-soft), `store/peakTables.test.ts`,
+  `lib/workspace.test.ts`'s "workspace durable peak table
+  (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)" save→reopen suite, and
+  `PeaksPanel.test.tsx`'s "durable table exclusion column (P2.1)".
+**Review round, 2026-09-14 (adversarial re-read of the two boxes above).**
+The physics held exactly — `git diff` over `src/quantized/` is empty, and the
+one-click path sends the byte-identical request the manual path sends — but the
+DURABILITY half did not. Three confirmed defects, three plausible, seven nits;
+all thirteen closed in one commit, with the findings recorded here because every
+one of them was a claim this plan had already ticked.
+
+- **The table was durable but never INVALIDATED.** `Dataset.peakTable` survived
+  every change to the data it was fit from: an `applyCorrections` xOff moved
+  `data.time` to `[10.5, 20.5, …]` while `peaks[0].center` stayed `20.0`; a
+  column-changing `reimportDataset` cleared `fitSpec` and kept the table
+  verbatim; a `setCellValue` re-ran detection and the panel effect then
+  RESTORED the pre-edit fit over the changed data. Williamson-Hall's "Use
+  fitted peaks" would then load centers and widths measured from data that no
+  longer exists, under a provenance line asserting they came from this dataset.
+  FIXED two ways, both needed: `PeakTableProvenance.fingerprint` — a
+  deterministic digest of the dataset's numbers (`lib/peakTableFit.ts`'s
+  `peakDataFingerprint`: row/column counts, the x channel's first/last/min/max,
+  FNV-1a over every value's float bytes — *this composition was widened in
+  round 2 below*) stamped at publish time and compared
+  on every read — plus outright clears wherever `fitSpec` already clears
+  (`store/reimport.ts`'s column branch, `store/corrections.ts`'s
+  `applyCorrections` and `rowsChangedGuard`, `store/cellEdit.ts`'s
+  `setCellValue`). The Peaks workshop refuses to rehydrate a mismatched table
+  and Williamson-Hall disables the action with the reason. Deliberately NOT a
+  `peaks:<id>` node in `lib/recalc.ts`: that graph marks artifacts an EXECUTOR
+  re-derives automatically (`recalcDatasets.ts`/`recalcFits.ts`), a peak table
+  has none — re-deriving it means a new peak search plus a user-chosen model —
+  and its only writer, `touchDataset`, returns early when `recalcMode` is
+  "off". The fingerprint also survives a `.dwk` reopen, which no in-memory
+  stale list does.
+- **The "incl." checkbox was not keyboard-operable**, and the one keystroke a
+  user would try did what the mouse path is careful to prevent: the enclosing
+  `<tr>` handles `" "`/`"Enter"` with `preventDefault()` + select, so Space on a
+  focused box cancelled the browser's own toggle AND moved the row selection.
+  FIXED with an `onKeyDown` stopper beside the existing `onClick` one.
+- **"Use fitted peaks" left the previous result on screen**, newly captioned by
+  the fresh provenance line — a number computed from inputs that had just been
+  replaced wholesale. FIXED: `loadFittedPeaks` clears the result, and a
+  hand-typed wavelength now drops the provenance line like every other edit.
+- **No x-channel identity was recorded**, so a q-axis pattern in Å⁻¹ loaded
+  silently into the 2θ column and produced a plausible grain size (`canCompute`
+  only checks `0 < 2θ < 180`). FIXED: the provenance records the x label and
+  unit — TEXT, never a column index, so `architecture.test.ts`'s
+  `DATASET_CHANNEL_REMAP_EXCLUDED` reason stays true — and the reduction
+  refuses anything whose unit is present and not degrees. An unrecorded unit
+  still loads; most XRD files carry none. *(That last rule was the round-1
+  fix's weak point and was replaced in round 2 below: a substring test passed
+  `degC`, and "an unrecorded unit still loads" re-admitted the very q-axis
+  case this box exists to refuse, because a unit-less q CSV is the common
+  spelling of it.)*
+- **Exclusion carry-over across a re-fit was positional** with only a length
+  guard, and `fitEach` publishes only the SUCCESSES — so an N-of-M run whose
+  success count merely happened to match carried the user's exclusions onto
+  different physical peaks. FIXED: matched by nearest centre within half the
+  smaller FWHM, each prior exclusion claiming at most one row, unmatched
+  exclusions dropped.
+- **`lib/xrdWavelength.ts` documented four metadata keys; two are dead.**
+  Measured over `src/quantized/io/`: `wavelength_a` (xrdml, `_xrdml_scan`) and
+  `alpha_average` (bruker_raw) are written; `k_alpha1`/`kAlpha1` are written by
+  no parser (`xrd_csv.py:285` is the ASCII EXPORTER reading them back out, and
+  `xrdml.py:86` is an XML element name), so the stated "explicit Kα1 beats the
+  average" preference could never fire. FIXED in the frontend: the dead keys
+  are gone and the preference now names `wavelength_a`, which IS the Kα1 line.
+  The Bruker half stays open — `bruker_raw.py` documents `alpha1` at byte 624
+  and emits only `alpha_average` (Cu: 1.5418 vs 1.540598, +0.08 % into
+  `D = Kλ/intercept`), so every Bruker RAW pattern still adopts the average;
+  decoding byte 624 is a backend change and is the box below.
+- **Nits, all closed:** `lib/workspace.test.ts`'s "does not alias the live
+  record" was vacuous (`serializeWorkspace` returns a JSON STRING, so
+  `serializePeakTable = (t) => t` left it green) and now asserts the copy on the
+  helper itself; the `lib/types.ts` pin comment said `1053 -> 1008` above a pin
+  of 1009 (`wc -l` vs the split-length convention) and now says 1009; the Pawley
+  grep claim above is corrected to its measured one hit; `PeaksPanel`'s fitted
+  rows no longer pair a reactive `peakTable` read with local `fitResult` state
+  positionally across a dataset switch; and `duplicateDataset` still does NOT
+  carry the table — documented in `lib/peakTable.ts`'s header, because a
+  duplicate is an INDEPENDENT dataset that carries no derived analysis at all
+  (not `fitSpec`, not `excludedRows`) and the copied provenance would name the
+  SOURCE dataset's id.
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| 1 | `peakTableMatchesData` always true | `peakTable.test.ts` "does NOT match once a value changed"; `usePeaks.test.ts` "does NOT rehydrate a table whose data moved under it"; `PeaksPanel.test.tsx` "does NOT re-present a saved fit…"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" |
+| 2 | drop the checkbox `onKeyDown` stopper | `PeaksPanel.test.tsx` "Space on a focused checkbox…", "Enter on a focused checkbox…" |
+| 3 | `loadFittedPeaks` keeps the previous result | `WilliamsonHallSection.test.tsx` "clears the result when one click swaps every input" |
+| 4 | `peakTableXIsDegrees` always true | `peakTable.test.ts` "refuses a reciprocal-space or real-space axis"; `WilliamsonHallSection.test.tsx` "refuses a table fit on a q axis…" |
+| 5 | exclusion carry-over back to positional | `peakTable.test.ts` "carries an exclusion onto the peak at the same CENTRE…", "drops an exclusion whose peak the re-fit no longer found", "refuses to carry an exclusion onto a centre that moved…" |
+| 6 | `applyCorrections` keeps the table | `corrections.test.ts` "drops a fit measured from data the correction just re-derived" |
+| 7 | `rowsChangedGuard` keeps the table | `corrections.test.ts` "names peakTable alongside excludedRows on a row-count change" |
+| 8 | column-changing reimport keeps the table | `reimport.test.ts` "clears it on a COLUMN-changing re-import…" |
+| 9 | `setCellValue` keeps the table | `cellEdit.test.ts` "drops a fit measured from the value that was just typed over"; `usePeaks.test.ts` "a cell edit re-runs detection and does not bring the pre-edit fit back" |
+| 10 | `setWavelength` stops clearing `fittedSource` | `WilliamsonHallSection.test.tsx` "a hand-typed wavelength drops the provenance line…" |
+| 11 | `serializePeakTable = (t) => t` | `workspace.test.ts` "routes the saved table through serializePeakTable's defensive copy" (the vacuous predecessor stayed GREEN under this exact mutation) |
+| 12 | `xrdWavelength` reads `k_alpha1` again | `xrdWavelength.test.ts` "ignores `k_alpha1`/`kAlpha1` — NO parser writes either" |
+| 13 | `PeaksPanel` pairs the table positionally again | `PeaksPanel.test.tsx` "renders no checkbox rather than a MISPAIRED one…" |
+| 14 | `publishFitResult` stamps no fingerprint / x identity | `peakTables.test.ts` "stamps a fingerprint of the LIVE data…", "names the x axis from the time column's Origin metadata…", "names the x axis from the PLOTTED column…" |
+
+**Gate (2026-09-14).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,118 tests passed**; `uv run pytest -q tests/test_repo_integrity.py`
+**12 passed**. Backend untouched (`git diff --stat -- src` empty). Eager bundle,
+exact bytes on clean `npm ci` builds either side: **919,781 -> 919,693, a delta
+of -88 B** against a 920,400 budget left where it was (headroom 619 -> 707 B) —
+everything new is in the lazy-only `lib/peakTableFit.ts`, and the eager
+additions are funded by a shared `str()` coercion in `lib/peakTable.ts` and by
+folding `clearOverlaysFor`'s four identical `if`s into one typed loop.
+
+**Review round 2, 2026-09-15 (adversarial re-review of the fix commit above).**
+The round-1 CONFIRMEDs 2 and 3 were re-probed and are genuinely closed, and the
+backend is still untouched. Four new CONFIRMEDs and five nits, all closed in one
+commit; the theme is that round 1's invalidation was right in shape and too
+narrow in every detail that had been reduced to a summary statistic.
+
+- **The bulk sibling of the fixed cell writer did not clear, and the digest
+  could not see the write either.** `setCellValue` got `peakTable: undefined`;
+  `setCellBlock` twenty lines below — reachable from the same worksheet by
+  PASTING instead of typing — did not, and the fingerprint reduced the x
+  channel to `length/first/last/min/max`, so an INTERIOR 2θ paste changed
+  nothing it could see. Measured through the real panel and the real store:
+  after `setCellBlock("d1", [{row: 3, col: -1, value: 3.4}], "paste")` the
+  table was still present, `peakTableMatchesData` still returned **true**, and
+  the Peaks workshop re-presented the pre-paste fit over the moved abscissa.
+  FIXED both ways: `setCellBlock` and `setCategoricalCell` (the third cell
+  writer, safe only because a level code lands in `values`) now clear like
+  `setCellValue`, and the digest hashes the whole x column.
+- **The x-axis rule still passed a q axis whenever the unit string was
+  EMPTY**, which is the common spelling of the case round 1 set out to refuse
+  (a unit-less CSV) — probed end to end: `xLabel: "q"`, `xUnit: ""`, button
+  enabled, `two_theta_deg: [2.15, 3.04]` posted. The same expression's
+  `includes("deg")`/`includes("°")` also passed `degC` and `°C`, i.e. a
+  magnetometry M(T) curve in Celsius, whose 0..180 range clears `canCompute`
+  too. FIXED, and THE EXACT RULE IS NOW THIS, in `peakTableXIsDegrees`:
+  1. the unit is trimmed and lower-cased; a PRESENT unit passes only on an
+     EXACT match against `{"deg", "°", "degree", "degrees"}` — exact, never
+     substring, so `degC`/`°C`/`deg C`/`degrees C` are refused;
+  2. an EMPTY unit passes only on LABEL evidence — `xLabel` matching
+     `/2\s*-?\s*(theta|θ)|two[_ -]?theta/i`, i.e. `2Theta`, `2-Theta`,
+     `2 theta`, `2θ`, `two_theta`, `Two Theta`. A unit-less `q`/`Q`/`d` axis,
+     and a record naming no axis at all, are refused.
+  Real files clear clause 1 without needing clause 2 (`io/_xrdml_scan.py`
+  writes `x_column_name: "2-Theta"` AND `x_column_unit: "deg"`).
+- **Nearest-centre exclusion carry-over inherited an exclusion onto a peak the
+  user had explicitly KEPT.** Measured at Kα1/Kα2 spacing (0.20° apart, FWHM
+  0.50°, tolerance 0.25°): old table `[20.00 EXCLUDED, 20.20 INCLUDED]`, re-fit
+  finds only `[20.20]`, and the surviving peak — the one the user kept — came
+  back excluded and dropped silently out of Williamson-Hall. Under the OLD
+  positional rule the 2→1 length change abandoned the mapping, so for this
+  shape round 1 was a regression. FIXED: the match must be MUTUALLY nearest —
+  an old exclusion may claim a new row only when no other row of the whole
+  prior table (excluded or not) is as close to that row's centre. A tie (the
+  merged-peak case: 30.0 excluded + 30.1 kept re-fit as one 30.05) resolves to
+  NOT carrying, because an ambiguous inheritance that silently drops a peak
+  from a reduction is worse than a checkbox the user re-ticks.
+- **A row-state change moved the fit's real input while the digest said "still
+  valid".** The digest was taken from `ds.data`; the fit runs on
+  `analysisData(ds)` (`selectedFitData`, and `peakInputs`'s fallback). Probed:
+  fit over 6 rows, set `excludedRows = [3]`, detection re-ran on the 5-row
+  subset and the same effect rehydrated the 6-row fit over it. The header's
+  stated reason ("those select a SUBSET of unchanged measurements and the Peaks
+  workshop already re-runs detection on them") did not survive the measurement,
+  because re-running DETECTION never refreshes the FIT. FIXED by taking the
+  digest over the analysis view on both sides.
+- **The digest was widened ONCE, and that one edit retires three findings**
+  (the interior-x hole, this row-state hole, and the nit below about a stale
+  unit). It is now a single FNV-1a pass over `analysisData(ds) ?? ds.data`
+  covering: every x value's float bytes, every value column's float bytes,
+  every column label and unit (UTF-16 code units, each terminated so `["ab"]`
+  and `["a","b"]` differ), plus the kept row count, the column count and the
+  RAW row count in the prefix. The four x order statistics are gone — the
+  whole-column hash replaces them and the min/max loop, so this is not a second
+  pass (round-2 NIT 5's concern). The prefix is versioned `2:`; a round-1
+  fingerprint therefore reads as a mismatch, which asks for a re-fit — the safe
+  direction — rather than trusting a digest whose fields meant something else.
+- **Nits, all closed.** (2) `publishFitResult` stamped `st.xKey` while
+  `peakInputs` falls back to `data.time` whenever `effectiveChannels(...)[0]`
+  is undefined (`lib/fitselection.ts:48-49`), so the provenance could name a
+  channel the fit never touched; `peakInputs` now returns the `xKeyUsed` it
+  actually took and that is what is stamped. (3) closed by the digest above.
+  (4) the Williamson-Hall refusal now names the REMEDY ("this dataset has
+  changed since the fit — re-fit the peaks in the Peaks workshop") rather than
+  a cause that reads as wrong to a user who only added a computed column; the
+  q-axis note spells an empty unit as "no unit recorded" instead of "()".
+  (5) closed by hashing the x column in the one pass. (1) was the commit
+  trailer, which is this session's standing convention, not a code finding.
+  `peakInputs` moved to its own `components/workshops/peaks/peakInputs.ts` so
+  `usePeaks.ts` did not grow toward its ceiling (497 -> 478 by the split rule).
+
+**Invalidation completeness, as it now stands** — every store path that writes
+a dataset's numbers: (a) clears the table, (b) carries it and the fingerprint
+REJECTS at read time, (c) carries it and it still matches.
+
+| Path | Site | Verdict |
+|---|---|---|
+| `applyCorrections` | `corrections.ts:211` | **(a)** unconditional |
+| `rowsChangedGuard` (trims, derived recompute) | `corrections.ts:105` | **(a)** |
+| column-changing `reimportDataset` | `reimport.ts:242` | **(a)** |
+| same-shape `reimportDataset` | `reimport.ts:177` | **(b)** — correctly KEPT when the bytes are identical |
+| `setCellValue` | `cellEdit.ts:273` | **(a)** |
+| `setCellBlock` (value cells AND the x column) | `cellEdit.ts:341` | **(a)** — round 2's fix |
+| `setCategoricalCell` | `cellEdit.ts:397` | **(a)** — round 2's fix |
+| `insertRows` / `deleteRows` | `cellEdit.ts:149-212` | (b) |
+| `addFormula` / `removeFormula` | `computedColumns.ts` | (b) |
+| `recomputeStaleDatasets`, derived-sheet branch | `recalcDatasets.ts:94-104` | (a) on a row-count change, else (b) |
+| `recomputeStaleDatasets`, bgRef branch | `recalcDatasets.ts:110+` | (a) — delegates to `applyCorrections` |
+| `levelOrder` / `recode` | `levelOrder.ts:274`, `recode.ts` | (b) |
+| `splitDatasetByColumn`, `mergeSelected`, `duplicateDataset`, `createDerivedWorksheet` | `split.ts:153`, `useApp.ts:1731`, `derivedWorksheets.ts` | whitelist constructions — no table carried |
+| `setDatasetFilter` / row-exclusion toggle | `rowState.ts` | **(b)** — was (c); closed by digesting the analysis view |
+| same-shape `reimportDataset` with changed headers (labels/units) | `reimport.ts:177` | **(b)** — was uncaught; closed by digesting labels/units. (No in-app path writes labels/units today — `grep -rn "renameColumn\|setColumnLabel\|setColumnUnit\|setColumnMeta"` over `frontend/src` is 0 hits, and `components/Inspector/ChannelsCard.tsx` renders `labels`/`units` read-only; this row names the real path a re-read of a file whose headers changed while the shape did not.) |
+
+No (c) rows remain. Readers are all gated exactly as round 1 left them, except
+that `publishFitResult`'s unchecked read into the exclusion matcher is now safe
+for the neighbour case as well (the mutual-nearest rule above).
+
+**Sabotage (every new guard broken, its tests run, restored — all 14 caught).**
+
+| # | Mutation | Caught by |
+|---|---|---|
+| S1 | x column no longer hashed (round-1 order statistics) | `peakTable.test.ts` "changes when an INTERIOR x value moves and the extremes do not", "changes when the x channel is shifted…", "does NOT match once an interior x cell is pasted over"; `WilliamsonHallSection.test.tsx` "disables the action, and says why…" (4) |
+| S2 | labels/units no longer hashed | `peakTable.test.ts` "changes when a column LABEL or UNIT is corrected", "does NOT match once a column is renamed", "does not split labels ambiguously…" (3) |
+| S3 | digest the RAW data, not `analysisData` | `peakTable.test.ts` "changes when a row is EXCLUDED…", "does NOT match once a row is excluded"; `peakTables.test.ts` "stamps a fingerprint of the LIVE data…"; `usePeaks.test.ts` "does NOT re-present the fit once a ROW IS EXCLUDED"; `WilliamsonHallSection.test.tsx` "disables the action once a ROW IS EXCLUDED…" (5) |
+| S4 | drop `fnvText`'s string terminator | `peakTable.test.ts` "does not split labels ambiguously — ['ab'] and ['a','b'] differ" |
+| S5 | fold `ds.id` into the digest (non-data input) | `peakTable.test.ts` "still matches a structurally IDENTICAL re-import of the same numbers" |
+| S6 | `setCellBlock` stops clearing | `cellEdit.test.ts` "setCellBlock drops it too — a PASTE is the bulk sibling of typing", "…for a VALUE-column paste as well" (2) |
+| S7 | `setCategoricalCell` stops clearing | `cellEdit.test.ts` "setCategoricalCell drops it — a level code IS a number in `values`" |
+| S8 | drop the mutual-nearest guard (nearest-only again) | `peakTable.test.ts` "does NOT inherit a vanished exclusion onto the neighbour the user KEPT", "does NOT inherit onto a peak that MERGED an excluded and a kept one" (2) |
+| S9 | mutual-nearest never holds (the over-correction) | `peakTable.test.ts` 6 carry-over tests incl. "still carries when the excluded peak IS the nearest prior row"; `peakTables.test.ts` "re-fitting keeps the exclusions the user set…" (7) |
+| S10 | unit test back to `includes("deg")`/`includes("°")` | `peakTable.test.ts` "refuses a unit that merely CONTAINS a degree spelling (degC, °C)"; `WilliamsonHallSection.test.tsx` "refuses a Celsius axis…" (2) |
+| S11 | an empty unit always passes (round-1 rule) | `peakTable.test.ts` "refuses a unit-less axis with no 2θ evidence in its label"; `WilliamsonHallSection.test.tsx` "refuses a UNIT-LESS q axis…" (2) |
+| S12 | an empty unit always refused (over-correction) | `peakTable.test.ts` "accepts an unrecorded unit only on 2θ LABEL evidence…"; `WilliamsonHallSection.test.tsx` "still loads a unit-less table whose LABEL names the 2θ axis" (2) |
+| S13 | stamp the plotted `xKey` again, not `xKeyUsed` | `usePeaks.test.ts` "stamps the x axis the fit RAN on, not the plotted one" |
+| S14 | refusal text stops naming the remedy | `WilliamsonHallSection.test.tsx` "disables the action, and says why…", "disables the action once a ROW IS EXCLUDED…" (2) |
+
+**Gate (2026-09-15).** `npx tsc -b --force` exit 0; `npx eslint src
+--max-warnings=0` exit 0; `npx vitest run src/lib src/store
+src/components/workshops/peaks src/components/workshops/reductions
+src/architecture.test.ts` **362 files / 7,147 tests passed**; `uv run pytest -q
+tests/test_repo_integrity.py` **12 passed**; `node scripts/check-bundle-size.mjs`
+OK. Backend untouched. Eager bundle, exact bytes on clean `npm ci` builds either
+side (`ff45a200` -> this commit): **919,693 -> 919,674, a delta of −19 B**
+against the 920,400 budget left where it was (headroom 707 -> 726 B). The two
+new eager `peakTable: undefined` clears in `store/cellEdit.ts` cost 34 B and are
+funded by hoisting that file's twice-spelled paste-skip reason into one
+`PASTE_SKIP_REASON` constant (−53 B, measured); everything else new is in the
+lazy-only `lib/peakTableFit.ts` and the lazy peaks/reductions workshops.
+
+**Review round 3, 2026-09-15 (adversarial re-review of the round-2 fix commit,
+`b8cb5e16`).** Verdict **CLEAN** — 0 confirmed defects; every round-2 CONFIRMED
+and NIT re-probed through the real store and re-verified closed. Seven nits
+(documentation/plan accuracy or pre-existing, none behavioural): NITs 1, 2, 3,
+5 and 6 were closed in this same commit (the invalidation-table row above now
+names the real `reimportDataset` path instead of a nonexistent Inspector
+rename/unit-correction UI; the digest-prefix comment names all four emitted
+fields; the x-axis rule documents clause 2 as positive-evidence-only; the NaN-
+hash header now states the "stable, distinct from 0" guarantee is per bit
+pattern, fail-safe direction only; `peakInputs.ts`'s `fullX` doc now says
+exactly what it returns on each branch instead of "the same x channel"). NIT 4
+(the `.dwk` round trip losing `-0`/`NaN`, pre-existing and outside this
+commit's diff) is filed as **BUG-017** in `plans/BUGS_AND_ISSUES.md` rather
+than fixed here. NIT 7 (the commit trailer) is this session's standing
+attribution convention, not a code finding, and is not actionable from inside
+a plan edit.
+
+- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+  documented Kα1-over-average preference can fire for Bruker patterns.
+  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
+  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
+  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
+  Backend change; needs a golden RAW fixture.
+- [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
+  `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
+  `*Err` columns above are always null today; `calc/reductions.
+  williamson_hall` likewise takes no weights. Filling either in is new
+  numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
+  deliberately not invented here.
 - [ ] Manual peak edits and reviewed batch recipe.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
@@ -2732,9 +3079,360 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P0.4
 (SATISFIED 2026-07-27 — the profile exists; see below).
 
-- [ ] Preserve existing H/V/segment slices and link positions.
+- [x] Preserve existing H/V/segment slices and link positions. **Done
+  2026-09-17.** Before this, nothing was preserved because nothing was kept:
+  an H/V click and a segment drag fired a backend cut and landed a 1-D
+  dataset, and the map retained no record of WHERE the cut was taken — there
+  was no slice object, no position, and nothing drawn. A committed cut now
+  also records a durable `MapSliceDef` (kind + linked position in map DATA
+  coordinates + width + cut space; `lib/mapView.ts`), drawn over the heatmap
+  by `components/Stage/MapSliceOverlay.tsx` through the SAME
+  `mapRender.dataToPx` projector the canvas paints with. Slices survive a
+  regrid (resolution AND grid method), a colour-limit change, a re-activation
+  of the same dataset, AND a switch to another dataset and back — the views
+  are keyed by dataset id (`mapViews`), so each map keeps its own and nothing
+  is ever dropped except with the dataset itself. Proven at the DOM layer in
+  `components/Stage/MapStage.mapView.test.tsx` (the drawn line, not just the
+  store field), with the drawn pixels compared against the projector's own
+  output in `components/Stage/MapSliceOverlay.test.tsx`. The RSM angular⇄Q
+  toggle is NOT a dataset change, so the overlay draws only definitions
+  recorded in the space now displayed; toggling back brings them back, and a
+  definition that cannot be drawn right now is listed in a muted "parked"
+  strip saying why, so it can always be removed.
 - [ ] Add ROI statistics/export only from real need.
-- [ ] Persist color limits/scale/map/slices/annotations.
+- [x] Persist color limits/scale/map/slices/annotations. **Done 2026-09-17.**
+  The five are one durable record PER DATASET (`mapViews`, `lib/mapView.ts` +
+  `store/mapView.ts`) instead of `MapStage`'s local `useState` (colormap,
+  log scale) and nothing at all (colour limits, slices, annotations — colour
+  limits did not exist; the canvas always painted the payload's own z
+  extent). It rides the existing persistence contract: `.dwk` save/reopen,
+  autosave (`shouldAutosave` trigger + `AutosaveState`) and Pack Project's
+  whole-state spread, plus undo via `HistorySnapshot`. Additive-optional and
+  written ONLY when some dataset's view is non-default, so a project that
+  never opened a map — and one that opened a map and decided nothing —
+  serializes byte-identically to before, pinned as BUG-017's fix was
+  (`lib/workspaceMapView.test.ts`). Explicit limits clip the heatmap AND its
+  colourbar, verified against a real raster in
+  `components/Stage/mapRenderLimits.test.ts`. NOT persisted, deliberately:
+  the regrid inputs `mapMethod`/`mapRes`/`contour*` (app-wide render
+  settings with their own HISTORY_EXCLUDED entries) and the working
+  `mapRoi`/`mapRuler`/`mapSector` geometry (see `store/rois.ts`). Workbook
+  transfer deliberately does not carry it: that package is one workbook's
+  data, and a map view belongs to the project, not to a workbook.
+- **Review round 2026-09-17** (adversarial review of the first cut,
+  `c1757fb1`; both boxes above stay `[x]` — the behaviour they claim is real,
+  but three user-visible defects and three false green lights were found and
+  are now closed).
+  - **One view per dataset.** `MapStage` mounts in the Stage Map tab AND in
+    every `kind:"map"` document window at once, and each instance ran
+    `bindMapView`, so opening a second map silently destroyed the first
+    one's slices, colour limits and annotations — outside undo, because the
+    rebind recorded no history. `mapView` became `mapViews`, a record keyed
+    by dataset id; reading a view is a pure lookup, `bindMapView` is gone,
+    and the drop-on-switch rule went with it (it was a consequence of
+    sharing one record, not a decision). A dataset REMOVAL still drops that
+    dataset's entry, in `store/removeDatasets.ts`'s one shared patch. The
+    `.dwk` field stays additive: `parseWorkspace` migrates a first-cut
+    single `mapView` object into the keyed record.
+  - **Opening a map is not an edit.** `isDefaultMapView` required
+    `datasetId === null`, so the mount-time bind wrote an all-default record,
+    made `shouldAutosave` true (hence `markProjectDirty`) and grew the saved
+    document by a field recording no decision. A view is now default by
+    VALUE; with the keyed record the bind writes nothing at all. Pinned at
+    the DOM layer.
+  - **Every slice keeps a handle.** Chips were built from the DRAWN list, so
+    a slice recorded in the other axis space or off the current extent had no
+    UI and could never be removed. Undrawable definitions are now listed in a
+    muted parked strip that says why, and remove on click.
+  - **An h/v slice is judged by its HELD coordinate only.** `endpoints`
+    projected the whole clicked point, so an `h` slice vanished when its
+    unheld x left a narrower regrid — contradicting the module's own doc. The
+    unheld component is clamped into its axis range; `seg` keeps the strict
+    both-ends test.
+  - **Log limits never blank a map that has something to paint.** The log
+    floor raise could push `lo` past an explicit `hi`
+    (`effectiveColorLimits([-1,2], 7, 9, log)` → null, i.e. no heatmap and no
+    colourbar). Any unusable explicit pair now falls back to the auto extent;
+    null is reserved for a grid with no paintable range (in log mode, no
+    positive cell).
+  - **Three false green lights, now pinned.** The "does not alias the live
+    store object" test asserted through a JSON round trip and could not fail;
+    nothing pinned that ADDING a slice is undoable; and the overlay's geometry
+    was never compared to a ground truth (a projector swap to raw data
+    coordinates left the DOM suite green). All three have failing-first pins.
+  - **Also closed:** an unknown slice `space` is dropped rather than coerced
+    to angular; the sanitizer bounds slices/annotations (200 each), label
+    length (200 chars) and rejects a negative width; `COLORMAP_NAMES` is
+    pinned equal to `Object.keys(COLORMAPS)`; `loadWorkspace` passes the live
+    dataset ids so a hand-built workspace cannot install a dangling entry;
+    `DEFAULT_MAP_VIEW` is deep-frozen; `lib/workspaceMerge.ts`'s never-merged
+    matrix names the field; the view writers early-return on an unchanged
+    value (no undo step, no dirty flag); and `MapColorLimits` has its own
+    test.
+  - **Bundle.** `effectiveColorLimits` moved from the eagerly-reachable
+    `lib/mapView.ts` (`lib/workspaceSerialize.ts` imports it) into
+    `components/Stage/mapRender.ts`, which only loads with the map itself —
+    it is a renderer decision, not part of the document contract. Eager total
+    **909,888 B at the parent `90ea30fa` → 910,287 B on `35b97380`, +399 B**
+    (both trees built after their own `npm ci` and a `node_modules/.vite`
+    wipe). Everything left is sanitizer/serializer/store logic that is eager
+    by construction. **Record corrected 2026-09-18** (review round 3, finding
+    3): this pair was first recorded as 916,782 → 917,181 B "against
+    `e93b193b`", which is NOT this commit's parent — `git rev-parse HEAD~1` is
+    `90ea30fa`, the lazy-seam bundle diet that landed in between, so both
+    absolutes (and the headroom they implied, by ≈7 kB) belonged to an older
+    tree. The +399 B delta was right; only the baseline was. Second occurrence
+    of exactly this on this branch — see the P4.1 review's F1 below.
+  - **Residuals, recorded not fixed.** (a) Contour levels still come from
+    `p.zMin`/`p.zMax`, not from the explicit colour limits — a contour level
+    is a feature of the data, and clipping the colour mapping is not a
+    statement about where the isolines are. The levels are derived in
+    `drawContours`, which `draw` calls after painting the heatmap, and the
+    decision is written into `drawContours`' own header (corrected in round 3,
+    finding 6: both this sentence and `draw`'s own comment placed the code
+    inside `draw`, where it is not).
+    (b) A blank field in `MapColorLimits` reads as 0 (`Number("")`), inherited
+    from the sibling `AxisLimits.tsx`, so "clip the top, leave the bottom
+    auto" is not expressible; pinned as it behaves in
+    `components/Inspector/MapColorLimits.test.tsx`. (c) The colormap and the
+    linear/log scale are now per-dataset rather than carried across a switch —
+    the carry was an artifact of the single shared record, and the per-dataset
+    memory is the stronger P2.8 promise.
+- **Review round 3 2026-09-18** (adversarial review of `35b97380`; both boxes
+  above stay `[x]`). Round 2's five user-visible fixes and three pins were
+  re-attacked and held — ten independent sabotage mutations, all killed — and
+  three things were found: one new way to lose work, one half-landed promise
+  from round 1, and a bundle record measured against the wrong parent.
+  - **Trash ▸ Restore keeps the map view** (finding 1, the only user-visible
+    one). Round 2 put `mapViews` in `RemovableState`, correctly — but
+    `removeDatasets` is ALSO the send-to-Trash path, and the trash entry
+    carried only the `Dataset`. Restore re-added it under the same id with its
+    colour limits, slices and annotations gone for good; **Undo** of the same
+    delete restored them (`HistorySnapshot.mapViews`), so the loss depended on
+    which recovery the user reached for. The view now travels ON the
+    `DatasetTrashEntry` (captured in `sendToTrash`, the one chokepoint every
+    delete path goes through) and `restoreDatasetInto` re-installs it in the
+    same transaction — dependency-aware exactly like the
+    `editableFigure`/`figureDoc` restores beside it. A view that came back some
+    other way (an undo, a re-import) WINS: restore never overwrites a live
+    entry. Pinned at the store layer, delete → Restore → entry-identical.
+  - **The Colour limits row says what is being painted** (finding 2, the
+    unlanded half of round 1's finding 5). `effectiveColorLimits` can replace
+    the stored pair — in log mode a non-positive `lo` is raised to the grid's
+    smallest positive cell, and a pair unusable after that raise falls back to
+    the auto extent — and the Inspector went on showing the pair the renderer
+    was ignoring (type `-1 … 2` in log mode on data starting at 7 and the map
+    paints 7 … 9). `draw` now RETURNS the pair it painted;
+    `components/Stage/useMapPaint.ts` reports it into a transient, per-dataset
+    `mapPaintedLimits` (not persisted, not undoable — its own
+    `HISTORY_EXCLUDED` entry), and `MapColorLimits` shows an "effective 7 – 9"
+    line beside the fields, ONLY when the two differ. The typed pair stays in
+    the fields, editable and recoverable. Proven end to end at the DOM layer:
+    a real `MapStage` paint on the RSM fixture drives the Inspector row to
+    `effective 100 – 403`.
+  - **Also closed.** (4) The first-cut migration is detected by a `datasetId`
+    STRING, so a keyed record holding a dataset id of literally `"datasetId"`
+    no longer discards every other dataset's entry with it. (5)
+    `effectiveColorLimits` returns null — not a non-positive auto pair — when
+    log mode has no positive floor, honouring its own header. (6) The contour
+    residual is attributed to `drawContours`, in the code and in residual (a)
+    above. (7) `sanitizeMapViews` caps the ENTRY count at 256 unconditionally;
+    the other three caps already were, and this one was a property of its
+    callers. (9) Every map history label names its dataset
+    (`change map colormap "rsm.xrdml"`) — with two maps open the label was the
+    only disambiguator and it had none. (10) `MapStage` subscribes to its OWN
+    dataset's entry, pinned with a React `Profiler` commit count: another
+    dataset's map edit now re-renders it zero times. (11) The parked strip has
+    a geometry budget (per-chip `max-width` + ellipsis, `max-height` +
+    scroll) — a 200-character label, the sanitizer's own cap, used to render
+    as one 202-character row and wrap the strip up across the plot. (12)
+    `removeDatasetsPatch` allocates a new `mapViews` only when it actually
+    prunes one.
+  - **New residual, named** (finding 8): a `kind:"map"` document window on a
+    NON-active dataset still has no colour-limit control. The Inspector
+    describes the active dataset by rule, and that rule is what makes the
+    per-dataset keying coherent; the window's own toolbar covers colormap and
+    scale, and a per-window limits control is a toolbar change this round did
+    not take. Deliberate, not an oversight — recorded beside residuals (a)–(c).
+  - **Sabotage.** 15 mutations, one at a time, each reverted: dropping the
+    restore, dropping the trash capture, letting the restore overwrite a live
+    entry, never reporting the painted pair, reporting the STORED pair instead,
+    hiding the effective row, the bare `"datasetId" in o`, removing the entry
+    cap, the non-positive log floor, the bare history label, the wide
+    `mapViews` selector, the chip's text budget, the strip's height budget, the
+    unconditional `mapViews` allocation, and the no-op guard on the painted
+    report. **15 RED, 0 survivors.**
+  - **Bundle** (finding 3, re-measured against the real parent). Eager total
+    **910,371 B at the parent `c29fc0e3` (`git rev-parse HEAD~1` of this
+    commit) → 910,824 B on this commit, +453 B**; both trees built after their
+    own `npm ci` and `rm -rf node_modules/.vite`, exact eager bytes on each
+    side. 889.5 kB against the 898.8 kB budget, 9.4 kB under; `EAGER_JS_BUDGET`
+    untouched. The growth is the transient painted-limits channel in the store
+    slice and the Inspector row that reads it, both eager by construction;
+    `useMapPaint.ts` rides the map chunk with the renderer it was extracted
+    from. (Round 4 correction: this entry originally named the parent
+    `b621c5fa`, which is `c29fc0e3`'s OWN parent, not this commit's — a
+    same-tree slip, since `c29fc0e3` touches only `plans/BUNDLE_HEADROOM.md`
+    and is therefore bundle-identical to `b621c5fa`, so the 910,371 B figure
+    itself needed no re-measurement, only the label.)
+- **Review round 4 2026-09-18** (adversarial review of `2074fba4`; both boxes
+  above stay `[x]`). Sixteen independent sabotage mutations, fourteen killed;
+  two survivors exposed a real user-visible bug and a real test gap, plus five
+  NITs, all now closed.
+  - **A loading map no longer reports "nothing to paint at these limits"**
+    (finding 1, user-visible). `draw` returns `null` both when there is
+    nothing to paint YET (no `payload` — a map mid-regrid, or a <3-channel
+    dataset that never gets one) and when the limits genuinely paint nothing;
+    `useMapPaint.ts` reported both alike, so opening a saved project with map
+    colour limits flashed the "nothing to paint" row for as long as the async
+    regrid took, blaming the typed limits for a load that just hadn't
+    finished. `useMapPaint.ts:~90` now reports only when `payload` is
+    non-null. DOM-pinned: a `MapStage` render before the offline regrid
+    resolves shows neither the "effective" row nor the "nothing to paint" one.
+  - **`loadWorkspace` also clears `mapPaintedLimits`** (finding 2,
+    user-visible). The transient painted-limits channel was reset nowhere on
+    project load, only `mapViews` was — so a `.dwk` whose dataset ids
+    collided with the PREVIOUS project's (an ordinary reopen) could show an
+    "effective" pair computed from the previous project's canvas, on the
+    eager `MapColorLimits` row, before the lazy `MapStage` chunk even loads.
+    `store/useApp.ts:1417` now resets `mapPaintedLimits: {}` in the same
+    packed line as `mapViews`, for the same cross-project-leak reason.
+  - **The figure-dependency restore's `mapViews` carry is now pinned**
+    (finding 3, test gap). `trashRestore.ts`'s `resolveDatasetDependency`
+    already carried the restored dataset's map view correctly; nothing
+    guarded it, so deleting that one line broke no test. Added to
+    `trash.test.ts`'s existing "branch A" case: after a figure-dependency
+    restore, `mapViews["d1"].colorLimits` is asserted back.
+  - **The trash entry's `bytes` now pins the carried view's own term**
+    (finding 4, test gap). `trash.ts:304`'s `bytes: datasetByteEstimate(dataset)
+    + (mapView ? byteSize(mapView) : 0)` was correct and unguarded; a new
+    `trash.test.ts` case measures the exact sum and asserts it is strictly
+    greater than the dataset-alone estimate.
+  - **`effectiveColorLimits` applies its own null rule to BOTH branches**
+    (finding 5, NIT). Round 3 fixed only the explicit-`colorLimits` branch: a
+    non-positive log floor there now returns `null`, honouring the header's
+    "null is reserved for … no positive cell at all". The no-`colorLimits`
+    branch still returned a non-positive `auto` pair as a log range.
+    `mapRender.ts:~41` now applies the same rule there; both branches agree,
+    and the header needed no change.
+  - **`sanitizeMapViews`'s 256 cap is documented as key-order, not file-order**
+    (finding 6, NIT/doc). `Object.entries` on a parsed JS object lists every
+    INTEGER-LIKE key ascending numerically ahead of every other key in
+    insertion order — a language invariant applied by the engine when
+    `JSON.parse` builds the object, before `sanitizeMapViews` ever sees it, so
+    the original `.dwk` text order of an integer-like key is unrecoverable
+    from a parsed value. The cap already iterates `Object.entries(o)`
+    directly (no re-sort), so no code changed; `lib/mapView.ts`'s `MAX_VIEWS`
+    doc now says so explicitly, and `lib/mapView.test.ts` pins the resulting,
+    documented behaviour (an integer-like key written last in the file is
+    kept FIRST).
+  - **The parked strip's own `pointer-events` is `auto`** (finding 7, NIT).
+    The strip scrolls (round 3, finding 11) but inherited `pointer-events:
+    none` from the overlay's outer click-through layer, so its scrollbar
+    could not be grabbed — the content stayed reachable some other way (wheel
+    scroll-chaining from a chip, Tab-into-view), but the direct affordance
+    never worked. `MapSliceOverlay.tsx`'s parked strip now opts into `auto`
+    unconditionally (it renders only when it holds at least one chip, and
+    each chip was already `auto`), while the overlay's outer container stays
+    `none` — pinned, with the existing click-through shape re-asserted in the
+    same test.
+  - **History labels disambiguate by dataset id when names collide** (finding
+    8, NIT). Round 3's per-dataset label names the dataset — but two live
+    datasets routinely share a NAME (the same file imported twice, or from
+    two workbooks), and the label was ambiguous again. `store/mapView.ts`'s
+    `edit()` now appends a short id disambiguator (`nextDatasetId`'s own
+    sequence suffix, e.g. `"#4"`) only when another LIVE dataset shares the
+    name; a unique name is untouched.
+  - **Sabotage.** 8 mutations, one at a time, each reverted: skipping the
+    `payload` guard before reporting (finding 1), dropping
+    `mapPaintedLimits: {}` from `loadWorkspace` (finding 2), dropping the
+    `mapViews` carry in `trashRestore.ts` (finding 3), dropping the
+    `byteSize(mapView)` term (finding 4), reverting the no-`colorLimits` log
+    branch (finding 5), reversing `sanitizeMapViews`'s entry iteration order
+    (finding 6), removing the parked strip's `pointer-events: auto` (finding
+    7), and removing the history-label disambiguator (finding 8). **8 RED, 0
+    survivors.**
+  - **Bundle** (finding 9, record only — the 910,371/910,824 B pair from
+    round 3 needed no re-measurement, only its parent's name). This round's
+    own commit: eager total **911,634 B at the parent `1b285a14`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit,
+    +151 B**; both trees built after `rm -rf node_modules/.vite` (the parent
+    from its own `npm ci`), exact eager bytes on each side via
+    `exactbytes.mjs`. 890.4 kB against the 898.8 kB budget, 8.4 kB under;
+    `EAGER_JS_BUDGET` untouched. The growth is the round-4 fixes themselves
+    (the loading-payload guard, the `loadWorkspace` reset, the
+    `effectiveColorLimits` branch, the parked strip's `pointerEvents`
+    constant, and the history-label disambiguator), all already eager by
+    construction with the code they extend.
+- **Review round 5 2026-09-18** (adversarial review of `9c6abc5a`; both boxes
+  above stay `[x]`). One real, measured finding — round 4's own fix for its
+  finding 7 introduced a new click-blocking regression it had no way to
+  measure (jsdom lays nothing out); everything else that round re-checked
+  held.
+  - **The parked strip no longer intercepts the plot underneath it** (finding
+    1, user-visible regression). Round 4 opted the WHOLE strip container into
+    `pointer-events: auto` so its scrollbar could be grabbed. A real-browser
+    hit-test (Chromium via Playwright, not jsdom) on the shipped CSS shape
+    measured that this made the container's FULL bounding box — not just its
+    chips — swallow clicks and drags on the map underneath: `justify-content:
+    flex-end`-wrapped rows rarely fill exactly to `max-width`, so the box
+    routinely holds real, non-trivial dead space that was never a chip
+    (≈21% of the strip's own box in the reviewer's fixture). That directly
+    contradicted round 2's click-through guarantee, in exactly the corner a
+    long-running project with several parked slices is most likely to also
+    want to pan or box-select. `MapSliceOverlay.tsx`'s `PARKED_STRIP` is back
+    to `pointerEvents: "none"` — only each chip opts into `auto` (unchanged) —
+    and the round-4 `maxHeight: 72` + `overflowY: "auto"` clip/scroll budget
+    is REMOVED along with it: a scrollbar under `pointer-events: none` was
+    never reachable (the very defect round 4 was trying to fix), and a hard
+    clip with no way to reach it would HIDE parked chips outright, breaking
+    round 2's "every slice stays removable" guarantee. The strip wraps and
+    grows instead of clipping; the per-chip text budget (`max-width` +
+    ellipsis, round 3 finding 11) is untouched. A very large parked set can
+    now visually cover map area, but it can never BLOCK a pointer event on
+    the map underneath — only its own chips can, each over its own tight
+    content box, the same shape every DRAWN chip in this file already has.
+    Also fixed: the round-4 comment's "a shape that already exists on every
+    individual DRAWN chip and box-select bar elsewhere in this file" named a
+    "box-select bar" that does not exist anywhere in `MapSliceOverlay.tsx`
+    (`grep -n pointerEvents` finds exactly the chip style and the strip
+    constant) — the comment is corrected, with the DRAWN-chip comparison kept
+    (it is accurate) and the fabricated one dropped.
+  - **Measured with a real hit-test, not just DOM assertions.** jsdom cannot
+    lay anything out, so the DOM-level test suite could not have caught round
+    4's regression (or verify this round's fix) on its own; a standalone
+    Playwright/Chromium probe against the shipped CSS shape (absolute strip,
+    `right`/`bottom`, `flex-wrap`, `justify-content: flex-end`, five chips of
+    varied width) sampled 420 points across the strip's bounding box, found
+    153 empty (non-chip) points, and **zero** resolved to the strip `<div>` —
+    all fell through to the canvas underneath (`elementFromPoint` at an empty
+    corner point → `CANVAS`), and a real mouse click at that point fired the
+    plot's own `onclick`. Not run as part of the Playwright e2e suite (no
+    spec references this DOM, and the change is a style-value-only diff with
+    no role/tabindex/class change on Library, Details, Stage or Shell, so the
+    "run the full e2e suite" rule does not apply) — the DOM-level pointer-
+    events assertions in `MapSliceOverlay.test.tsx` are the lasting pin;
+    the hit-test was a one-time, out-of-band confirmation.
+  - **Sabotage.** 3 mutations, one at a time, each reverted: restoring
+    `pointerEvents: "auto"` on `PARKED_STRIP` (test "the strip container's own
+    pointer-events is none; every chip's is auto" → RED), adding back
+    `maxHeight: 72`/`overflowY: "auto"` (test "has no maxHeight/overflowY
+    budget…" → RED), and dropping the chip's `maxWidth`/ellipsis budget
+    (round-3 test "a chip is width-capped and truncates instead of growing" →
+    RED). **3 RED, 0 survivors.** A fourth test — 40 parked chips, all 40
+    remove buttons present and clickable, removing the last one removes that
+    exact entry from the live `mapViews` store (not just firing a mocked
+    callback) — has no dedicated sabotage of its own; it is a direct
+    behavioural pin on the "every slice stays removable" guarantee this round
+    protects, and passed unmodified throughout.
+  - **Bundle.** Eager total **911,785 B at the parent `9c6abc5a`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit, +0 B**;
+    both trees built after their own `npm ci` and `rm -rf node_modules/.vite`,
+    exact eager bytes on each side via `exactbytes.mjs`. 890.4 kB against the
+    898.8 kB budget, 8.4 kB under, unchanged from round 4; `EAGER_JS_BUDGET`
+    untouched. Zero delta because this round only changes a style-object
+    property VALUE and a comment — no import, export, or code-shape change
+    for the bundler to see.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid
@@ -2773,12 +3471,50 @@ Expose the existing backend only if GOTO Q8 and a real project justify it.
 **Current evidence:** roughly 94 command labels exist, while searchable help
 covers a much smaller subset and guards focus on Analyze.
 
-- [ ] One metadata source for name, one-sentence tooltip, keywords, context,
-  shortcut, and help target.
-- [ ] Generate help coverage/tests from it.
+- [x] One metadata source for name, one-sentence tooltip, keywords, context,
+  shortcut, and help target. **Verified 2026-09-13:** `store/commands.ts`'s
+  `Action` interface carries all of it in one place — `label` (name),
+  `description` (one-sentence tooltip, `>20` chars enforced), `keywords`,
+  `group`/`section` (context), `shortcut`, and `id` (the help target key
+  both `actionToHelpItem` and the command palette resolve by) — consumed
+  identically by `lib/helpContent.ts` and the palette so the two discovery
+  surfaces cannot drift into parallel catalogs.
+- [x] Generate help coverage/tests from it. **Verified 2026-09-13, tests
+  run:** `helpContent.test.ts`'s "documents every curated command at its
+  command definition" fails the build if any of the >80 `buildAppActions`
+  commands lacks a `description`; `workshopHelp.test.ts` fails if a
+  `WORKSHOP_HELP` entry stops matching a real command. Ran
+  `npx vitest run src/lib/helpContent.test.ts src/lib/workshopHelp.test.ts
+  src/components/overlays/HelpDialog.test.tsx` — 81 passed.
 - [ ] Small contextual `?` links on complex workshops/property groups.
 - [ ] Progressive disclosure; tooltips remain one sentence.
-- [ ] Audit stale capability wording.
+- [x] Audit stale capability wording. **Audited 2026-09-13** against the
+  three most recent capability changes: P3.3's dash/marker cycle (this
+  branch's HEAD, `1b60872a`), L1.4 Details parity (LIBRARY_WORKBOOK_UX_PLAN
+  L1.4), and the baseline "Fit from region" 2-D y-box (`65097f6e`/
+  `ed596ec3`/`5f65ec8a`). Grepped help/tooltip/description strings across
+  `frontend/src` for each.
+  - P3.3 dash/marker cycle and L1.4 Details parity: no stale wording found.
+    `AppearanceMenu.tsx`'s "Vary dash & marker" copy and comment already
+    describe the shipped one-function/one-position invariant; the
+    `SeriesStyleCard.tsx` "STORED choice, not the drawn one" comment and its
+    PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 cross-reference (~3141-3145, "Deliberately
+    NOT done") both describe a still-current, deliberate limitation, not a
+    stale claim. `DetailsRow.tsx`'s header describes the Tree/Details parity
+    change accurately as before/after history, and its "available in Tiles
+    view" disabled-Browse tooltip is accurate — Browse is not one of L1.4's
+    seven parity verbs.
+  - 2-D region box: ONE real gap found, already on record but not
+    cross-referenced here — `frontend/src/lib/plotToolbarDefs.ts:78`'s
+    `REGION_TOOL.desc` ("Drag to select a background range for baseline
+    fitting") never mentions that a taller drag also picks a y-range, even
+    though the y-box shipped. Not editing it here per this item's own
+    scope (the string lives in `frontend/src`, not `plans/`); it is also
+    already recorded, in more detail, as PORT_CHECKLIST.md's own "Residual"
+    note on the 2-D y-box entry (~line 96: "a hint update was dropped for
+    bundle bytes, so the feature is discoverable only by trying it or
+    reading this checklist") — a deliberate, budget-driven omission, not an
+    oversight.
 
 **Progress**
 
@@ -2858,6 +3594,15 @@ covers a much smaller subset and guards focus on Analyze.
   untouched). Covered by `StatusBar.test.tsx`'s "StatusBar pending-op live
   region (accessibility gap)" describe block. No other icon/plot/tree/dialog
   accessible-name gap was investigated as part of this slice.
+  **Fixed 2026-09-13 (round-2 review, F5):** the P3.4 F6 fix (one Cancel
+  control per concurrent op, instead of only the oldest) had multiplied
+  this exact gap instead of closing it — every Cancel control
+  still rendered the identical `aria-label="Cancel"`/`title="Cancel"`, so two
+  concurrent ops gave a screen-reader user "Cancel button, Cancel button"
+  with nothing to distinguish them. Each control's name/title is now
+  `Cancel ${op.label}` (e.g. "Cancel Importing a.dat…"), using the label
+  already in hand. Pinned by `StatusBar.test.tsx`'s "shows a Cancel control
+  for EVERY visible op … each with a distinct accessible name" test.
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 
@@ -2872,22 +3617,893 @@ covers a much smaller subset and guards focus on Analyze.
   - Per-series `line` style (`solid`/`dashed`/`dotted`) and eight marker SHAPES
     (`lib/types.ts` `MarkerShape`), both settable and both honoured on screen.
 
-  DOES NOT EXIST, and this is the real gap:
-  - **No automatic non-colour differentiator.** Plot five series and touch
-    nothing and they differ ONLY by hue — `uplotOpts.ts`'s dash is applied only
-    when a per-series `style.line` was explicitly set, and markers only when
-    explicitly enabled or via a plot-wide default-trace preference. Dash and
-    marker shape are available but never cycled. A colour-blind reader, or
-    anyone printing greyscale, gets no help by default. Closing this means an
-    opt-in auto dash/marker cycle mirroring the palette mechanism, WITH export
-    parity — booked, not built.
-  - `contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
+  DID NOT EXIST at the 2026-09-09 audit. The FIRST of the three is now built
+  (2026-09-12, detail below); the other two are still open, which is why this
+  box stays `[~]`:
+  - ~~**No automatic non-colour differentiator.**~~ **BUILT 2026-09-12 — the
+    auto dash/marker cycle now exists, opt-in, with export parity.** What
+    shipped, precisely:
+
+    - **The preference.** `autoSeriesStyles` in the `qz.prefs` blob
+      (`store/prefs.ts`: `Prefs` field, `PREF_DEFAULTS` **false**, guarded
+      `loadPrefs` parse, `prefsOf` snapshot), reached through the existing
+      generic `setPref`. Unlike `palette`, `syncPrefs` does **not** push it into
+      a lib singleton — see "how parity is guaranteed" below for why that was
+      the first cut's central mistake; the render paths that have a matching
+      export read the store field directly and pass it on as an argument.
+      Exposed as a **"Vary dash & marker"** checkbox in
+      `Shell/AppearanceMenu.tsx` **directly under "Series palette"** — the same
+      menu, because it is the same cycle: the palette varies hue, this varies
+      what survives greyscale. (Hand-written `qz-check` markup rather than
+      `primitives/Checkbox`, which is deliberately not in the eager bundle.)
+      Pinned by `store/prefs.test.ts` (default off, persists, survives a
+      localStorage round-trip, a non-boolean falls back) and
+      `AppearanceMenu.test.tsx`.
+    - **The cycles** (`lib/seriesStyleCycle.ts`, new). Dash:
+      `solid → dashed → dotted`, three entries because `LineStyle` and the wire
+      type `ExportSeriesStyle.line` → `calc.figure._LINESTYLE` carry exactly
+      those three, so the cycle uses the vocabulary that already round-trips
+      (3 dashes × 8 palette colours = 24 combinations before a repeat).
+      Markers: `circle, square, triangle, diamond, downtriangle, plus, cross,
+      star` — all eight `MarkerShape`s, closed glyphs first. **Both start at the
+      value that reproduces today's look for series 1** (`solid`/`circle`).
+      Assignment is by SERIES DISPLAY POSITION and deterministic.
+    - **Explicit always wins**, including an explicit `"solid"`/`"circle"` —
+      that is a deliberate "no encoding here", not an absence.
+    - **Off is the identity, with ONE stated exception.** `resolveSeriesStyle`
+      returns the CALLER'S OWN reference with no cycle (asserted with `toBe`, not
+      `toEqual` — a copy would compare equal and still break prop identity
+      downstream), and `buildOpts` output for an unstyled plot is pinned
+      dash-free/marker-free. "Off" means two things that are both pinned: the
+      preference is off, OR the call site passed no positions — an explicit
+      `null` cycle is asserted deep-equal to omitting the argument entirely.
+
+      THE EXCEPTION, stated because "with it off every render path is
+      byte-identical to before the feature" was claimed twice and is false for
+      one of them. The LEGEND SWATCH changed with the preference off, and the
+      change is correct rather than accidental. `Stage/LegendSample.tsx` used to
+      decide markers locally — `showMarker = marker || scatter || line+markers`,
+      then `shape = style.markerShape ?? "circle"` — so a stored
+      `{marker:false, markerShape:"diamond", markerSize:9}` on a `Scatter` series
+      (the combination `Inspector/SeriesStyleCard.tsx` leaves behind when
+      "Markers" is unticked) rendered `data-marker="diamond"` at a 4.5px polygon
+      while `buildOpts` drew uPlot's plain 5px circle and `buildExportStyles`
+      emitted no marker at all. Sharing `markers.markerDecision` corrects the
+      swatch to a 2.5px circle: the legend was describing a glyph nothing else
+      drew. Frozen as a literal expectation in `PlotLegend.test.tsx` ("the
+      deliberate OFF-state change"). The 32-combination differential OFF proof
+      beside it CANNOT see this — it compares `PlotLegend` against the
+      post-change `LegendSample`, i.e. the component against itself — so it
+      proves the cycle argument is inert, not that the swatch is unchanged from
+      before the feature. Those are two different claims and only the first one
+      holds everywhere.
+    - **How parity is guaranteed** (this is the FEATURE-001 lesson applied, and
+      the first cut of it got this WRONG — see "what the review found" below).
+      The cycle is an **explicit argument**, not an ambient flag: a
+      `SeriesCycle` is the list of DISPLAY POSITIONS of the series a render path
+      draws, and both `uplotOpts.buildOpts` (via `BuildOptsArgs.seriesCycle`)
+      and `exportStyles.buildExportStyles` (via a third parameter) are the
+      identity function without one. A render path therefore cycles only if
+      somebody wired its export and passed positions, and a NEW render path is
+      uncycled until they do. The backend is still handed an **ordinary explicit
+      `line`/`marker_shape`** and never learns a cycle exists.
+
+      **THE UNIT THAT CYCLES IS A PLOT WINDOW**, not the focused Stage, and the
+      rule is one sentence: a canvas cycles exactly when an export that
+      reproduces THAT canvas's current appearance cycles the same series at the
+      same positions. Focus is a transient UI state, so it is not an input; and
+      anything that renders a STORED artifact rather than a live canvas stays
+      uncycled, so a document's output never depends on the reader's preference.
+      The complete, verified table (second review round, 2026-09-13):
+
+      | Canvas on screen | The export that reproduces it | Cycles? |
+      |---|---|---|
+      | A plot window's plain single-panel XY overlay while FOCUSED (`PlotStage` → `PlotViewport`, plus `PlotLegend`'s swatch and `InsetPlot`), via `useStageSeriesCycle` | `figureSpec.buildStageFigureSpec` → `buildExportStyles` (Copy figure, Copy figure (vector), Export figure…) | **yes** |
+      | The SAME window while UNFOCUSED (`BackgroundPlotWindow` → `PlotViewport` + `InsetPlot`), via `useWindowSeriesCycle` on ITS OWN view | the same `buildStageFigureSpec`, produced the moment it is focused | **yes** — focus is not a styling input |
+      | Publication Preview's preview image AND its Export, for a `window`-target session whose TARGET WINDOW cycles — focused or not (`canonicalReadiness` / `previewExport`, gated by `canonicalSession.selectSessionCyclesSeriesStyles`) | itself — the same `buildFigureSpecFromDocument` opt-in | **yes** — focus is not a styling input here either |
+      | Spatial page cells (`useMultiPanelStage` → `multipanel.spatialCellStyling`, incl. `SpatialPanelLegend`'s entries) | `spatialPageExport.spatialPanelFigure` → `buildExportStyles` (Export page…) | **yes** |
+      | Grouped (`group_col`) view | `series_styles` **not applied** — `routes/export_figures.py:114-117` | no, both sides |
+      | Faceted view | `series_styles` **unused once `facets` is set** — `:125-127` | no, both sides |
+      | Stacked / x-break panels (`stackMode`) | one single-panel figure; the screen shows N panels | no, both sides |
+      | POLAR (`PolarStage`) / STATISTICS (`StatStage`) | `buildStageFigureSpec` is not gated on the render mode and still emits a plain XY figure | no, both sides |
+      | Any window whose document SETS `publication.seriesStyles` at all — an exact array, an empty array, or `null` | the array shipped verbatim, or (for `null`) no `series_styles` key at all; `buildExportStyles` is never called either way | no, both sides |
+      | A view whose X channel is ALSO in `yKeys` (two clicks: `setXKey` does not prune it) — `allowExplicitXAsY` keeps it in the document export's list AS a Y series, which the canvas always drops | there is no shared position space to resolve against | no, both sides |
+      | Waterfall (`WaterfallView`), reflectometry (`ReflPanel`) | none | no |
+      | Composite `kind:"panel"` window cells (`PanelCell`) | none — a panel window is not a Figure Page source (`panelResolve` requires `win.kind === "plot"`), and `focusWindow` never moves `focusedWindowId` to a non-`plot` kind, so the focused-window export commands can never serve one | no |
+      | Snapshot window (`SnapshotPlotWindow`) | none | no cycle is re-derived; the styles were frozen ALREADY RESOLVED (below) |
+      | Figure Page panels, graph templates, saved Library figures, `plotSpecFigure`, `legacyFigure` | server-rendered from a STORED document/template | no, both sides |
+
+      Every **plot-window** row above is decided by **ONE function**,
+      `seriesStyleCycle.windowCyclesSeriesStyles(on, view, document)`, which is
+      the preference AND the two predicates under it: the view test
+      `overlayExportsSeriesStyles({groupKey, facetKey, stackMode, polarMode,
+      statMode, xKey, yKeys})` — whose last clause is `displayListsAgree`, the
+      X-also-in-`yKeys` refusal — and the document test
+      `documentPinsSeriesStyles(document)`. Both canvases
+      (`useStageSeriesCycle` / `useWindowSeriesCycle`), the Publication Preview
+      gate (`canonicalSession.selectSessionCyclesSeriesStyles`) and the Stage
+      export (`buildStageFigureSpec`) all call that one function, and
+      `buildFigureSpecForView` calls the view half again on the spec it is
+      actually building, so none of them can drift into a different opinion about
+      which views cycle. `buildStageFigureSpec` asks against the LIVE view
+      because the document it may route through carries its own copy of that
+      view — and its document refusal is load bearing for the FALLBACK branch
+      (`buildFigureSpec`, taken when the focused document's dataset disagrees
+      with the one being exported), which never sees `document.publication` at
+      all. Two row families above are NOT decided by it: spatial page cells (a
+      "yes" row) go through a bare `displayPositions(autoSeriesStyles, n)`,
+      identically on both sides (`lib/multipanel.ts:240` canvas,
+      `lib/spatialPageExport.ts:195` export) — neither predicate is consulted,
+      so there is no parity bug, only a narrower claim than "every row"; and
+      every "no" row is a render path that simply passes no cycle at all, which
+      is those modules' own design, not this function's.
+
+      THE THIRD ROUND'S TWO HOLES IN THAT SENTENCE, both now closed. (a) The
+      Publication Preview gate asked `session.windowId === focusedWindowId`
+      while `useWindowSeriesCycle` has never gated on focus, so with the preview
+      open on w1 and w2 focused, w1's background canvas dashed while w1's preview
+      and its Export rendered solid. It now asks the same function over the
+      target window's own document and view — the live singletons when that
+      window holds focus (what its canvas draws from), its own record otherwise.
+      (b) The display-list agreement test lived as a local `xAlsoPlotted`
+      expression inside `figureSpec.ts`, invisible to both canvases: with
+      `xKey:1, yKeys:[1,2,3]` the canvas drew channels 2 and 3 solid/dashed and
+      the PDF drew all three solid. It is `displayListsAgree` inside the shared
+      predicate now, so both sides refuse together (pinned by a test that
+      asserts the canvas hook and the real export builder in the same case).
+
+      **A snapshot freezes the RESOLVED styles, not the cycle.** `plotsnapshot`
+      and `useLiveSnapshotPublish` both promise the snapshot command "freezes
+      exactly what's on screen". Carrying the raw styles plus a cycle broke that
+      twice over: a snapshot of a dashed plot rendered solid, and — worse — a
+      snapshot taken months earlier would have changed retroactively the moment
+      somebody toggled the preference. `useLiveSnapshotPublish` therefore applies
+      `resolveSeriesStyle` before publishing the bundle, and
+      `SnapshotPlotWindow` passes no cycle. With the preference off the resolver
+      is the identity and returns the caller's own array, so the frozen bundle is
+      byte-identical to before the feature.
+
+      **RESIDUALS, stated rather than hidden.** Two, and neither is a
+      screen-vs-export STYLING divergence:
+
+      1. A Figure Page panel sourced from a live plot WINDOW (`panelResolve`'s
+         `"window"` branch) renders that window's document uncycled, while the
+         same window's own Stage export cycles. Deliberate: a page is a composed
+         artifact, not a screenshot of a window, and cycling it would make a
+         page's appearance depend on the preference of whoever last rendered it —
+         exactly the "saved documents never bake the cycle in" property below. It
+         is recorded because it IS a screen-vs-export difference, just one whose
+         two sides are different products rather than two renderings of the same
+         one.
+      2. The Publication Preview IMAGE is built from the session's DRAFT
+         document, so an edit made to the live window behind the non-modal dialog
+         is not reflected in the picture until the session is reopened. The
+         mechanism, exactly: `useFigureBuilder` -> `computeCanonicalReadiness` ->
+         `buildFigureSpecFromDocument(publicationSession.draft, …)`, and the
+         draft is only ever patched by the dialog's own controls
+         (`patchFigurePublicationDraft`). `selectSessionLiveDrifted` detects the
+         divergence and blocks Apply with "the plot changed while previewing —
+         Cancel and reopen Publication Preview to pick up the changes", so it is
+         reported rather than silent, but the stale image stays on screen until
+         then. The third round checked whether the CYCLE rode that staleness —
+         toggling polar on the live window leaving the preview dashed — and it no
+         longer can: `selectSessionCyclesSeriesStyles` reads the LIVE singletons
+         for a focused target, so the dashes stop in the same store notification
+         the canvas's do (pinned). What remains is the general draft-vs-live
+         staleness of the picture, which is item 1's territory and not this
+         feature's.
+
+      **Hidden series resolve at the same position on both sides.** The canvas
+      leaves a hidden series in `payload.series` with `show:false`, so a
+      channel's display position is its index in the UNFILTERED plotted list;
+      the export drops hidden channels from `y_keys` entirely. Two
+      independently-derived indices meant channel B drew dashed on screen and
+      solid in the PDF. `figureSpec` now keeps the unfiltered `displayChannels`
+      list and hands `buildExportStyles` each surviving channel's position in
+      IT. The positions also stop at `plotted.length`, so the fit / baseline /
+      peak / derivative overlays spliced on after the channels — which no export
+      draws — stay undashed.
+
+      **The palette rides the same positions**, but only when the cycle is on.
+      `seriesColor(i)` had the identical skew (a hidden series shifted every
+      later channel's hue in the PDF but not on screen); `buildExportStyles`
+      now indexes it by the supplied position too. RESIDUAL, stated precisely:
+      with the preference **off** the export passes no positions, so that
+      pre-existing palette skew remains exactly as it was — deliberate, because
+      "off is byte-identical to before" is the stronger invariant and is pinned
+      by a test ("OFF: a hidden series leaves the export byte-identical to
+      before the cycle"). Turning the preference on fixes the hue skew as a side
+      effect; that is tested too.
+
+      **Guards.** `exportStyles.test.ts`'s "canvas/export parity (FEATURE-001
+      guard)" block drives both real builders over one plot and asserts the two
+      resolved sets are **EQUAL series-for-series** — over a NON-IDENTITY
+      plotted list (`[2,0,1]`, a reordered legend) and with a hidden series,
+      because with `plotted[i] === i` resolving by channel and resolving by
+      position are the same function and the guard proves nothing.
+      `figureSpec.test.ts` pins the same thing end to end through the real
+      request builders, plus every "no, both sides" row above.
+      `useStageSeriesCycle.test.ts` pins the canvas half of those refusals, for
+      the focused Stage AND for a background window, including that the two agree.
+      `PlotLegend.test.tsx` and `multipanel.test.ts` pin that the two legends
+      resolve through the same function as their own canvases —
+      `PlotLegend.test.tsx` also carries the legend's differential OFF proof (32
+      style x trace combinations, each asserted to render the SAME markup as
+      handing `LegendSample` the raw stored style, which is the call the component
+      made before the cycle existed) and the ambient-default-trace glyph cases the
+      first cut's legend test never set. `markers.test.ts` pins the shared
+      `markerDecision` rule directly. `BackgroundPlotWindow.test.tsx` and
+      `SnapshotPlotWindow.test.tsx` pin the two window paths at their uPlot
+      options, `useLiveSnapshotPublish.test.ts` pins that a snapshot freezes the
+      RESOLVED styles (and that with no cycle it publishes the caller's own
+      array), and `useFigureBuilder.test.ts` pins that the Publication Preview
+      image and its Export cycle exactly when the TARGET window's own canvas
+      does — including UNFOCUSED, where it renders that window's canvas cycle in
+      the same test, and NOT when the target's own view (unfocused) or the live
+      view (focused) refuses, nor when the target window is gone.
+      `useStageSeriesCycle.test.ts` carries the two-sided display-list pin: the
+      canvas hook and the real `buildFigureSpecFromDocument` asserted in ONE test
+      to refuse together on `xKey:1, yKeys:[1,2,3]` and to cycle together on
+      `xKey:0`. `PlotLegend.test.tsx` carries the frozen literal for the
+      deliberate OFF-state legend change.
+      Backend half in `tests/test_calc_figure.py`: three cycle positions map to
+      three distinct matplotlib linestyles/markers, and both reach the rendered
+      output.
+    - **Saved documents never bake the cycle in.** `publication.seriesStyles`
+      is an "exact" array (the F2.1a contract), so a cycled `line` frozen into
+      one would keep exporting dashed on a machine whose preference is off. The
+      producers that PERSIST styles — `legacyFigure`'s `saveAsFigure`,
+      `useGraphTemplates` — pass no cycle at all, so what they store is the raw
+      user style; and `buildFigureSpecFromDocument` cycles only when a caller
+      whose LIVE CANVAS is on screen explicitly asks it to — the focused window's
+      Stage export, and the Publication Preview of a `window`-target session on
+      that same window. Nothing that renders a stored artifact asks. A document
+      authored with the preference ON and reopened with it OFF therefore renders
+      identically, and vice versa — both directions tested, along with "an exact
+      publication style array stays exact". And an exact array does not merely
+      survive: it now switches the CANVAS off too (`documentPinsSeriesStyles`),
+      because a document that pins every style is one `buildExportStyles` never
+      sees at all — and so does an explicit `null`, which drops `series_styles`
+      from the request entirely and reaches `buildExportStyles` just as little.
+    - **The marker rule is shared, not restated.** `markers.markerDecision` is the
+      ONE function that decides whether a series draws markers and with which
+      glyph; `markers.seriesPoints` (canvas) and `Stage/LegendSample.tsx` (legend
+      swatch) both call it. `buildExportStyles` is NOT a third caller and calling
+      its explicit-`marker` gate "the third side of the same rule" overstated the
+      agreement: it shares only the EXPLICIT half, because it has no
+      `defaultTrace` to consult — that preference never rides the wire. So an
+      ambient `Scatter` / `Line + markers` series shows markers on screen and
+      none in the export. That gap PREDATES the cycle and is not narrowed by it;
+      it is precisely why the default-trace branch must not cycle a glyph, since
+      doing so would widen a divergence the export cannot follow. (It is filed as
+      a known gap, not fixed here: sending the resolved default-trace marker
+      would change every existing ambient-Scatter export.) The legend restating
+      the rule is exactly how it drifted: it took the glyph from
+      `style.markerShape` whenever markers showed
+      at all, so with the preference on and a `Scatter` / `Line + markers` default
+      trace it drew circle / square / triangle (measured) while the canvas drew
+      three plain 5px circles and the export emitted no marker whatsoever. Sharing
+      the rule also stops the legend showing a stored
+      `{marker:false, markerShape:"star", markerSize:11}` as an 11px star on a
+      default-trace series the canvas has always drawn as a plain circle — a
+      legend-only divergence that predates the cycle.
+    - **Two things the work turned up.** (1) `sanitizeExportSeriesStyles` never
+      restored `marker_shape`, so a saved FigureDocument's exact publication
+      styles came back shape-less and every marker reverted to a circle on
+      re-export — the same parity break the `_MARKER` table closed, one layer
+      down; fixed, and now value-checked against `MARKER_SHAPE_VALUES` like
+      `line`/`step` beside it rather than accepting any string. (2) Sabotaging
+      the opt-in gate exposed a REAL bug in the first cut: `uplotOpts`'s
+      ambient-`Step`-trace branch tests `!style.line`, so with the cycle on
+      every series had a dash and the plot silently stopped stepping. Fixed by
+      reading the RAW style list there — an auto dash is a DEFAULT and must
+      never impersonate the user's explicit choice. Both halves pinned.
+    - **Ceilings hit.** Growth was funded by extraction every time, never by
+      raising a pin. `lib/uplotOpts.ts` (pinned 1446) gave up three cohesive
+      siblings: the `DASH` table and the palette (`cssVar` / `SERIES_VARS` /
+      `seriesColor`) to `lib/seriesStyleCycle.ts` — which also stops
+      `lib/exportStyles.ts` importing the whole plot builder to resolve one
+      colour — and the marker `points` decision to `lib/markers.seriesPoints`.
+      Pin → **1428**. `lib/figureSpec.ts` had FOUR lines of headroom under the
+      general 500-line ceiling, so the screen-parity override projection moved to
+      `lib/figureViewOverrides.ts` (unchanged, three importers repointed).
+      `components/Stage/PlotStage.tsx` had ZERO — it sat exactly ON the 400-line
+      component ceiling — so its opt-in is a named hook, `useStageSeriesCycle`.
+      (Both numbers were one too high in the first rework's own text. The guard
+      counts `src.split("\n").length`, which is `wc -l` PLUS ONE for the trailing
+      newline, so a file at `wc -l` 495 counts as 496 against a ceiling of 500,
+      and one at 399 counts as 400. Worth recording because every ceiling claim
+      in this repo is off by one if read as `wc -l`.)
+      `useMultiPanelStage.ts` (pinned 791) paid for the spatial opt-in by moving
+      its per-cell styles/labels/legend derivation to
+      `multipanel.spatialCellStyling` — where the spatial EXPORT's own channel
+      list already lives, so the two cannot drift. Pin unchanged.
+      `lib/plotspec2.ts` → **636** (its private `MARKER_SHAPE_VALUES` moved to
+      the shared module). `store/useApp.ts` → **2328**, funded by replacing 17
+      hand-maintained `x: _initialPrefs.x` lines with one `..._initialPrefs`
+      spread.
+
+      SECOND ROUND (2026-09-13), same discipline, no pin raised anywhere:
+      `lib/types.ts` gained the `DefaultTrace` union (the `defaultTrace`
+      preference's four values, previously a bare `string` through ten
+      declarations) inside its existing headroom, pin **1053** and a counted 1052
+      — ONE UNDER, not "held at": the second round's own text said "unchanged",
+      which is true of the pin but reads as "at it". `lib/uplotOpts.ts` is the
+      same shape: counted **1427** against a pin of 1428, one under, where that
+      round said "held at 1428". Both are shrink-only pins, so one line of
+      headroom is the whole difference between the next edit fitting and not.
+      `store/useApp.ts` and `useMultiPanelStage.ts` each took the new type on an
+      EXISTING `lib/types` import line rather than a new one, so both stayed
+      exactly at their pins; `useFigureBuilder.ts`, at zero headroom, funded its
+      one new store subscription by collapsing the three-line `canonicalData`
+      ternary, and now sits AT the general ceiling (counted 499 of 500 — one line
+      left) — the next slice there must extract first.
+
+      THIRD ROUND (2026-09-13): no pin raised and none approached. The shared
+      `windowCyclesSeriesStyles` collapsed a three-clause gate that FOUR call
+      sites each spelled out (both `useStageSeriesCycle` hooks,
+      `buildStageFigureSpec` and `buildFigureSpecForView`), plus ONE more, the
+      Publication Preview, that spelled it WRONG, so `lib/figureSpec.ts` came
+      DOWN — counted 483 of 500, from 493 —
+      and `components/Stage/useStageSeriesCycle.ts` went from seven store
+      subscriptions to one.
+
+      **Eager bundle, measured on THIS tree after `npm ci` and a
+      `node_modules/.vite` wipe (2026-09-13, re-measured in the FOURTH round
+      against the THIRD round's real parent):** parent `6797e77c` **915,638 B**;
+      third-round commit `95a211fc` **915,587 B** — 51 B smaller, and 4,813 B
+      under the 920,400 budget, which therefore does NOT move. The fourth
+      round's own fix measures 916,102 -> 916,102 against ITS parent
+      `cd402c1b` (0 B; see round-four finding 2 below).
+
+      All three earlier blocks' numbers are superseded and must not be quoted
+      forward, for three rounds of the same mistake. The original measured
+      against `3145fe33`, which is not in this branch's history at all. The
+      second measured against `2b60d4e6`, which IS an ancestor but sits FIVE
+      commits behind the actual parent of that work, `5f65ec8a` — `78cbc808`
+      (a twelve-finding Library fix, the most likely mover), `d8c6f0f3` (a
+      test-only pin) and `55870ed8` (a plans-only docs commit) came first, and
+      only the last two, `ed596ec3` and `5f65ec8a` themselves, are the region
+      2-D y-box work — so its "810 B under budget" was really 311 B
+      (`1b60872a` measures 920,089 here). That is not the whole story: the
+      second round ALSO
+      mis-measured its OWN tree — it claimed 919,590 B, and that same tree
+      checks out at 920,089 here, 499 B off — which a stale baseline cannot
+      explain, because a stale baseline moves the DELTA, not a measurement of
+      one's own build. The third round then repeated the identical mistake in
+      a new shape: it measured against `dc0dbae9`, an ancestor of this
+      commit's real parent `6797e77c` — two commits back, across `d6e67fb7`
+      (P3.4's export-cancel work), which moved substantial frontend code onto
+      lazy import paths and shifted the bundle by roughly 4.4 kB. Naming an
+      ancestor "this round's PARENT" is exactly the error the paragraph above
+      exists to warn against. Corrected in full in `scripts/check-bundle-size.mjs`.
+      It also records the one measurement worth keeping from the third round,
+      measured on that (superseded) tree rather than this one: having
+      `figurebuilder/canonicalSession.ts` import the focused-window selector from
+      `components/Stage/useStageSeriesCycle.ts` cost **626 B** (920,715 — over
+      that tree's budget), because that single cross-directory import moved a
+      chunk boundary. Putting the shared decision in `lib/seriesStyleCycle.ts`,
+      which both files already imported, avoided it with identical behaviour.
+      The checkbox reduction re-measured at 102 B on that same superseded tree
+      (74 B, then 111 B, in the two earlier rounds — it moves with the module
+      graph, so it is re-measured every round).
+    - **Deliberately NOT done.** The glyph cycle does **not** reach the ambient
+      `Scatter` / `Line + markers` default trace, and `markers.seriesPoints`
+      keeps those two branches apart on purpose: the export emits a marker only
+      for an EXPLICIT `style.marker`, so a glyph taken from the default trace
+      would be drawn on screen and dropped from the PDF. (The first cut merged
+      them, which both widened that gap and made a stored
+      `{marker:false, markerShape:"star", markerSize:11}` — reachable, since
+      `SeriesStyleCard` keeps both fields when "Markers" is unticked — start
+      rendering an 11px star with the preference OFF.) The Inspector's "Line"
+      picker and the plot context menu still show the STORED value, so an
+      unstyled series reads "solid" there while the canvas draws its cycled
+      dash; picking an entry still does exactly what it says, and the stored
+      value then wins everywhere, but the display is a known gap. `thumbnailSvg`
+      draws no dashes at all (it never did). No fourth dash pattern (it would
+      need the Inspector picker, the wire type and `_LINESTYLE` extended
+      together).
+    - **What the adversarial review found**, and what the rework did about it.
+      All twelve findings were confirmed by a reviewer who ran them. The first
+      cut kept the on/off flag in a module-level singleton that `syncPrefs`
+      pushed in, on the argument that threading it was "a dozen chances to miss
+      one". The opposite was true: an ambient flag meant every `buildOpts` and
+      `buildExportStyles` caller opted in by default, and five render paths
+      (facets, `group_col`, waterfall, reflectometry, stacked panels) cycled on
+      screen with no export that could reproduce them. The singleton is gone;
+      the positions argument replaced it, and forgetting it now fails safe. The
+      other confirmed findings, all addressed above: the hidden-series position
+      skew; the widened default-trace marker divergence; `SpatialPanelLegend`
+      contradicting its own canvas (whose "index spaces do not line up"
+      justification was simply false — both come from
+      `spatialPlottedChannels`); parity tests that used an identity `plotted`
+      and so could not catch a channel-vs-position mix-up; a legend half that no
+      test exercised; an SVG-bytes backend test that could not fail because
+      matplotlib stamps `<dc:date>` (now `fmt="png"`, with a determinism
+      assertion above it so the comparison means something); cycled styles
+      frozen into saved documents; `marker_shape` restored without value
+      validation; and a bundle number measured off a warm vite cache.
+
+      **The SECOND review round** (2026-09-13) confirmed all twelve were closed
+      and found eight more, every one of them a place the "cycles on screen IFF
+      the export renders the same dash at the same position" rule had a hole.
+      Fixed, in the order the table above now states them: the legend drew a
+      cycled GLYPH for the ambient default trace that neither the canvas nor the
+      export drew (finding 1, now `markerDecision`); background, snapshot and
+      composite-panel windows drew SOLID beside a dashed focused window, so a
+      window changed appearance on focus move and a "frozen" snapshot rendered
+      solid (2 — background windows cycle from their own view, snapshots freeze
+      the resolved styles, panel cells have no export and are recorded as such);
+      `allowExplicitXAsY` gave the export a display list the canvas never drew
+      from, shifting every later channel (3); a document with an EXACT
+      publication style array bypassed `buildExportStyles` while the canvas
+      cycled anyway (4); the Figure Builder preview and Export — the "what will I
+      get" widget for the focused window — were a third and fourth drifting
+      render path (5); `polarMode`/`statMode` were missing from the shared
+      predicate, so "Export figure…" dashed a figure the screen never dashed
+      (6); the bundle justification block measured against a commit that was
+      never an ancestor of this branch (7); and a batch of stale or contradictory
+      comments the rework itself introduced (8). Two of the eight were purely
+      about honesty rather than behaviour, and both are recorded above rather
+      than quietly corrected: the ceiling-headroom off-by-one, and the
+      publication-styles module header whose "never pulls screen colour code in"
+      claim its own import had made false.
+
+      **THE THIRD REVIEW ROUND** (2026-09-13) confirmed seven more, every one
+      again a place the "cycles on screen IFF the export renders the same dash at
+      the same position" rule leaked, and all seven are fixed above with a test
+      that fails when the fix is reverted:
+
+      1. The Publication Preview gate kept FOCUS as a styling input
+         (`session.windowId === focusedWindowId`) after the canvas half had
+         stopped doing so — a dashed background canvas beside a solid preview and
+         Export. It asks the target window's own view+document now.
+      2. The display-list agreement test (`allowExplicitXAsY`) lived only in
+         `figureSpec.ts`, so the canvases could not see it and `xKey:1,
+         yKeys:[1,2,3]` — two clicks, since `setXKey` does not prune the channel
+         out of `yKeys` — dashed on screen and drew solid in the PDF. It is
+         `displayListsAgree`, inside the shared predicate, asserted on both sides
+         in one test.
+      3. `documentPinsSeriesStyles` returned false for `publication.seriesStyles
+         === null`, but `figureSpec` maps `null` to "drop `series_styles`
+         entirely" — the canvas dashed a figure the PDF had no per-series styling
+         for at all. Reachable through `useGraphTemplates`. `null` pins now (the
+         predicate is `!== undefined`, so ONLY an absent field derives styles),
+         and `[]` counting as pinned is stated at the code.
+      4. The bundle justification block measured against `2b60d4e6`, an ancestor
+         FIVE commits behind that round's actual parent `5f65ec8a` (only the
+         last two of them region y-box work) — the second round repeating the
+         first round's mistake in a subtler form, and the 810 B of headroom it
+         claimed was really 311 B. The third round then rewrote it against
+         `dc0dbae9`, which was ITSELF an ancestor and not the parent; the fourth
+         round re-measured against the real parent `6797e77c` (see below).
+      5. "With it OFF every render path is byte-identical to before the feature"
+         is false for the legend swatch, and the change is CORRECT rather than
+         accidental. Narrowed to what holds, with the exact case frozen as a
+         literal expectation; the 32-combination differential proof structurally
+         cannot see it.
+      6. `PanelCell.tsx` cited `store/windows.ts` for an export-path exclusion of
+         `kind:"panel"` that does not exist there. The real reason is that
+         `focusWindow` never moves `focusedWindowId` to a non-`plot` kind, so the
+         focused-window export commands can never serve a panel. Citation fixed.
+      7. The Publication Preview cycling off the DRAFT view while the live window
+         behind the dialog changed mode. Closed by fix 1 (a focused target reads
+         the live singletons); the remaining draft-vs-live staleness of the
+         preview IMAGE is recorded as residual 2 above with its mechanism.
+
+      Plus two nits: the two ceiling claims that read as "at the pin" when both
+      files are one line UNDER it, and `markers.ts`'s "third side of the same
+      rule", which overstated how much of the marker decision
+      `buildExportStyles` shares.
+
+      **THE FOURTH REVIEW ROUND** (2026-09-13) confirmed six more findings, all
+      fixed:
+
+      1. Two consumer comments still asserted fix 1's own premise — that the
+         preview cycles only for a session previewing the FOCUSED window's own
+         figure — after fix 1 had made that false: `canonicalReadiness.ts` and
+         `previewExport.ts` reworded to "a session whose TARGET window cycles
+         per `windowCyclesSeriesStyles`, focused or not".
+      2. `canonicalSession.ts` judged an unfocused target by `target.view`, a
+         DIFFERENT projection than the one the canvas it is meant to agree with
+         actually uses — `WindowCanvas.tsx` passes `plotWindowView(win)`, which
+         derives the view from the DOCUMENT when one exists
+         (`store/windowDocuments.ts`). The two agreed only because every writer
+         of a document-backed window already re-derives `view` from the
+         document; nothing enforced it, and no real window is document-less.
+         Now calls `plotWindowView(target)` directly, so the preview gate reads
+         the same projection the canvas draws from by construction rather than
+         by every writer's discipline. Measured against the commit's REAL
+         parent `cd402c1b` (the export-cancel fix round, which sits between
+         `95a211fc` and this work): 916,102 -> 916,102, 0 B. The fix agent
+         first charged +515 B to this change by measuring against `95a211fc`
+         — the ancestor-is-not-a-parent mistake a fourth time; the 515 B is
+         `cd402c1b`'s own, recorded in its own bundle entry. Inlining
+         `figureDocumentToPlotView(target.document)` instead of importing
+         `plotWindowView` measured the same bytes; the import is kept rather
+         than a duplicate, drift-prone reimplementation. Still 4,298 B under
+         the unmoved 920,400 budget.
+      3. The table's summary sentence overstated "every row above is decided by
+         ONE function" — narrowed to every plot-WINDOW row, above.
+      4. `windowCyclesSeriesStyles` — the one function this round's whole
+         subject is about — had no direct unit test of its own; it was
+         exercised only through its four callers. Added a dedicated block to
+         `seriesStyleCycle.test.ts`: off; on with a pinning document (`null` and
+         `[]`); on with each of the view-disagreement clauses in turn
+         (`groupKey`, `facetKey`, `stackMode`, `polarMode`, `statMode`, and the
+         X-also-in-`yKeys` case); and on with a clean view and no document.
+      5. The bundle justification block measured against `dc0dbae9`, an
+         ancestor two commits behind this commit's real parent `6797e77c` —
+         repeating, in a new shape, the exact "ancestor is not a parent"
+         mistake the block exists to police, and miscounting the second
+         round's own history error as three commits rather than five. Rewritten
+         against the real parent, measured here (see "Eager bundle" above).
+      6. `useFigureBuilder.test.ts`'s unfocused-target pin built a window with
+         `view: {…, polarMode:true}` and no `document` — a shape no real window
+         can be in. Rebuilt with a document whose derived view is polar and a
+         stale, non-polar `view` left on the record, so the pin actually
+         exercises fix 2: a sibling case (stale `view` polar, document not) now
+         proves the DOCUMENT wins, not whichever field happens to be read.
+
+      Plus four nits: `lib/seriesStyleCycle.ts`'s header still said "the one
+      residual" after the plan came to list two; `useStageSeriesCycle.test.ts`
+      built a window record with `x/y/w/h` instead of `geometry`, through
+      `as unknown as` — a shape `PlotWindow` does not have; the "three call
+      sites... and a fourth spelled WRONG" text undercounted by one
+      (`buildFigureSpecForView` was a fourth site that spelled it out, so it
+      was four plus one wrong — fixed above); and the `[]` half of fix 3 — an
+      empty `seriesStyles` array ships as `series_styles: []` on the wire — had
+      no test, now pinned in `figureSpec.test.ts`.
+  - ~~`contrastColor.ts` checks series-vs-BACKGROUND legibility only. Nothing
     checks series-vs-SERIES distinguishability under colour-vision deficiency;
-    there is no CVD simulation anywhere. `plans/design/DESIGN_GUIDE.md` calls
-    the palette "color-blind-aware", which is a claim about palette CHOICE, not
-    a check.
-  - No greyscale/print-safe export mode. `export_figures.py`'s `style` presets
-    (aps/report/web) have no greyscale variant.
+    there is no CVD simulation anywhere.~~ **CLOSED as a CHECK (2026-09-13) —
+    and the check FOUND the palette does not clear its own bar, which is now
+    an OPEN OWNER DECISION.** `lib/cvd.ts` (pure, canvas-free) adds: CVD
+    simulation for protan/deutan/tritan via the Machado, Oliveira & Fernandes
+    (2009) severity-1.0 matrices applied in linear RGB; CIE76 ΔE in CIELAB;
+    `seriesDistinguishability` (worst pairwise ΔE, per simulation, with the
+    losing pair's indices); `distinguishabilityVerdict` (pass/fail against a
+    documented default threshold of 10 — well above the ~2.3 ΔE "just
+    noticeable difference" floor, sized for confident at-a-glance reading of
+    thin plotted lines, not a side-by-side swatch comparison). Known-answer
+    tests in `lib/cvd.test.ts` (11 cases as of round 2: red-vs-green contrast
+    collapses under protan/deutan and mostly survives tritan; grey is
+    invariant; a hand-built quartet's deutan-only-confusable pair is found
+    correctly; fewer-than-2-colours is a non-vacuous fail, not a silent
+    pass).
+    `styles/seriesPalette.cvd.test.ts` is THE CHECK THAT MATTERS: it decodes
+    the actual `--series-1..8` OKLCH tokens out of `styles/colors.css` (both
+    themes' base blocks; a pure OKLCH decoder transcribed from the CSS Color
+    4 spec's reference implementation, because the `canvas` package this
+    repo's tests run on does not parse `oklch()` — verified directly, and
+    documented in the test file so no one "fixes" it back to the silently-
+    wrong canvas path) and runs the real audit. Series-vs-background
+    legibility is reused (not reimplemented) via `contrastColor.ts`'s own
+    `resolveDrawColor` and is unregressed. **Measured result: the shipped
+    8-series cycle FAILS `distinguishabilityVerdict` (threshold 10) in BOTH
+    themes** — dark theme's global worst is series-1 vs series-6 under
+    deutan simulation (ΔE 3.23, versus ΔE 38.50 for that same pair under
+    normal vision), light theme's global worst is series-5 vs series-7
+    under deutan (ΔE ~1.98, i.e. below even the raw ~2.3 JND floor; light
+    theme's own normal-vision worst pair, series-4 vs series-7, is already
+    only ΔE ~6.62 before any CVD simulation is applied). Full per-simulation
+    breakdown for both themes is in the test file's header comment and the
+    closing commit body. Per this plan's stated policy, the failure is NOT
+    hidden by loosening the threshold or silently reshuffling the palette:
+    both audit assertions are kept as documented `it.fails` (a real palette
+    fix must flip them back to `it`, or the ratchet catches the silent case
+    where they start passing without anyone noticing).
+
+    **Round 2 (2026-09-13, adversarial review of 07a05241):** the review found
+    the decoder had no known-answer assertions (a broken decoder made the
+    audit "fail as expected" for the wrong reason — fixed with pinned OKLCH
+    known-answers plus the full dark/light hex lists in
+    `seriesPalette.cvd.test.ts`), the `it.fails` audits had no floor (a
+    palette regression that stayed failing would go unnoticed — fixed with
+    non-`it.fails` companion floor tests at today's measured worst ΔE), and —
+    the material finding — **the audit never covered `lib/palettes.ts`'s
+    runtime presets, the actual remedy a user reaches for.** Table-driven
+    coverage added there (`seriesPalette.cvd.test.ts`'s "shipped palette
+    presets" describe block) measures all four: `okabe-ito` PASSES threshold
+    10 (worst ΔE ~14.9, deutan) and serves as this suite's positive control
+    for the threshold — independent, externally-documented CB-safe design
+    clearing it comfortably is the strongest evidence 10 isn't arbitrary.
+    `tol-bright` shipped `#4477AA` as BOTH series-1 and series-8 (an exact
+    duplicate — 0 ΔE under every condition, including normal vision, not
+    just a CVD failure); fixed by giving slot 8 `#332288` (indigo, borrowed
+    from Tol's companion "muted" scheme — "bright" itself defines only 7
+    colours and has no official 8th), which also newly PASSES threshold 10
+    (worst ΔE ~13.2, tritan) — **superseded in round 3 below: `#332288` fails
+    this app's own dark-canvas legibility floor.** `tableau10` and `viridis`
+    failing at 10 is recorded, not fixed — neither claims to be CB-safe. The
+    "color-blind-aware" provenance claim about the default palette ("several
+    derive from Okabe-Ito") is dropped from this entry: nothing in the repo
+    supports it, and the default's own measured numbers (ΔE 3.23/1.98
+    worst-case) are far below Okabe-Ito's (~14.9), so the two are evidently
+    not the same design.
+
+    **Round 3 (2026-09-13, adversarial review of `48556a04`, round 2's fix
+    commit):** the review found round 2's `#332288` choice fails
+    `lib/contrastColor.ts`'s own dark-canvas legibility floor (MIN_CONTRAST
+    2.2; measured contrast 1.54), so `resolveDrawColor` would silently
+    substitute the ink token at render time and the legend would disagree
+    with the canvas — the preset labelled CB-safe would never actually show
+    the audited indigo. Fixed by re-picking slot 8 as `#999933` (Tol-muted
+    olive): contrast 6.21 on dark / 2.85 on light (both clear 2.2), and the
+    distinguishability verdict is unchanged (still worst ΔE ~13.2, tritan,
+    series-1 vs series-3 — that pair never involves slot 8). The existing
+    dark-canvas legibility guard (`seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe) is now extended to cover
+    every `PALETTES` preset, not just the default theme tokens, as an
+    explicit per-preset ratchet: a NEW substitution fails the suite; today's
+    one pre-existing substitution (`viridis` slot 1, `#482878`, contrast
+    1.65) is recorded, not fixed. Also fixed: the gamut-diagnostic header's
+    claim that the naive clamp diverges from CSS Color 4 §13.2 was backwards
+    — measured `deltaEOK(clip(origin), origin)` = 0.0179/0.0111/0.0111 for
+    the three out-of-gamut light tokens, all under §13.2's own 0.02 JND, so
+    §13.2 returns the clip unchanged and the naive clamp is spec-equivalent;
+    the two `[approximate]` annotations and the "would move under spec-
+    correct mapping" claim are removed, and the check is now a real
+    assertion (`deltaEOK(...) < 0.02`) rather than prose. The
+    `LIGHT_OKLCH`/`DARK_OKLCH` literals are now cross-checked against the
+    tokens parsed from `colors.css` (previously independent, so an edit to
+    one and not the other could silently audit a stale palette). The
+    "this test does NOT change the palette" claim is narrowed to the
+    default theme tokens — the tol-bright preset hex IS changed by this
+    round, on the design owner's behalf (see below).
+
+    **OPEN OWNER DECISION** (unchanged in substance, reframed by the above):
+    the default 8-slot series cycle still fails its own distinguishability
+    bar in both themes. What round 2 changes is that this is no longer a
+    choice between "redesign the default" and "accept the gap" in a vacuum —
+    **two PASSING CB-safe presets (`okabe-ito`, and now `tol-bright`) already
+    ship one dropdown away** (`lib/palettes.ts`), so an immediate low-cost
+    mitigation (default new users to one of them, or surface the CVD-safe
+    presets more prominently) exists independent of any future default-
+    palette redesign. Owner still needs to decide whether to redesign the
+    default 8-slot cycle, narrow the "safe" simultaneous series count, make
+    a CB-safe preset the default, or accept the default's gap as-is for a
+    niche 8-series plot.
+
+    **Also needs owner ratification (round 3):** `tol-bright`'s 8th slot is
+    now `#999933` (Tol-muted olive) — chosen by this audit to fix a
+    legibility bug (round 2's `#332288` failed the dark-canvas contrast
+    floor), not by design-owner sign-off. Owner should ratify `#999933` or
+    substitute a preferred distinct 8th hue that clears both
+    `lib/contrastColor.ts`'s MIN_CONTRAST (2.2, both themes) and the ΔE-10
+    distinguishability verdict — `seriesPalette.cvd.test.ts`'s "shipped
+    palette presets" and extended "series-vs-background legibility" describe
+    blocks will catch a regression on either axis if one is picked.
+    **Round 4 (2026-09-14, light-canvas twin of the round-3 preset ratchet):**
+    round 3's dark-canvas legibility ratchet covered every `PALETTES` preset
+    only against the DARK axes background; a per-window override (`PlotBg`)
+    can pin a window to the LIGHT background independent of the app's global
+    theme, and that side was unratcheted. `seriesPalette.cvd.test.ts`'s
+    "series-vs-background legibility" describe now adds the light-canvas
+    mirror (`resolveDrawColor(hex, false)`), table-driven the same way.
+    Measured, pre-existing, none introduced by this round: `okabe-ito` slots
+    0/1/3/7 (contrast 2.12/2.18/1.25/1.81), `tol-bright` slots 3/4/6
+    (1.84/1.73/1.81), `tableau10` slots 3/5/7 (2.16/1.52/1.86), `viridis`
+    slots 6/7 (1.88/1.19) — all below the 2.2 floor, all recorded rather than
+    fixed, matching the counts already noted in this test file's "Shipped
+    palette presets" header comment (4/3/3/2). No preset colour changed. A
+    companion assertion pins both the dark and light substitution tables
+    verbatim so a future silent addition or removal on either canvas fails
+    the suite instead of quietly changing what counts as "pre-existing".
+    - [ ] Owner decision recorded above (P3.3 CVD default-palette gap).
+    - [ ] Owner has ratified (or replaced) `tol-bright`'s `#999933` 8th slot.
+  - ~~**No greyscale/print-safe export mode.**~~ **BUILT — a `greyscale`
+    export option now exists, opt-in, EXPORT-ONLY.** What shipped, precisely:
+
+    - **The field.** `FigureRequest.greyscale: bool = False`
+      (`routes/export_figures.py`), forwarded into `render_figure`/
+      `render_figure_map` (`calc/figure.py`). An EXPORT-ONLY divergence from
+      the canvas by design: the on-screen plot stays coloured regardless —
+      this is a user-chosen export transform, not a derived style, so it
+      does not touch the P3.3 dash/marker-cycle parity invariant
+      (`series_styles`/`overlayExportsSeriesStyles`) at all.
+    - **The mapping** (`calc/figure_greyscale.py`, new, pure/no matplotlib
+      import). NOT a naive per-colour luminance conversion — two series
+      that differ only in hue (exactly what a categorical palette is built
+      to keep apart) can sit at nearly the same relative luminance, so that
+      approach can collapse two on-screen-distinct series into
+      indistinguishable greys. Instead every series gets an EVENLY SPACED
+      grey by DISPLAY POSITION alone, spanning CIE L* 15..70
+      (`greyscale_ramp`), independent of its actual colour — a guaranteed
+      minimum step regardless of how close the original hues were.
+    - **The forced dash/marker cycle** (`apply_greyscale`). A grey ramp
+      alone runs out of separable steps well before a realistic series
+      count, so greyscale mode ALSO forces the P3.3 auto dash cycle
+      (`solid → dashed → dotted`) by display position, and the marker-SHAPE
+      cycle for any series that already draws a marker — the same
+      `LINE_CYCLE`/`MARKER_SHAPES` vocabularies
+      `frontend/src/lib/seriesStyleCycle.ts`'s `AUTO_DASH_CYCLE`/
+      `AUTO_MARKER_CYCLE` use, copied verbatim and pinned equal by a test
+      that reads the TS source directly (`test_calc_figure_greyscale.py`),
+      so the two cannot drift apart unnoticed. Explicit per-series choices
+      still win (an explicit `line`/`marker_shape` is kept, exactly like
+      the frontend cycle's own contract); greyscale never turns a marker ON
+      for a series that did not request one.
+    - **Where it applies.** Every path that reaches `_render_impl`'s
+      `series_styles` list: the flat single-panel render, the y2
+      (secondary-axis) split, manual x-axis breaks, AND a `group_col`
+      grouped-series request (whose `series_styles` is `None` today but
+      still draws through the same `draw_series_axes` — greyscale still
+      ramps it). Error bars and fills inherit their series' drawn colour
+      automatically (`artist.get_color()`), so they follow the grey ramp
+      with no extra code. A `color_by` colour-mapped scatter (MAIN #14) is
+      passed through UNCHANGED, colourmap included — its colour IS the
+      plotted quantity, not a categorical distinction, so forcing it grey
+      would delete information rather than make the figure print-safe; this
+      is a deliberate, documented residual, not an oversight.
+    - **RESIDUAL — facets stay a no-op, honestly.** A faceted small-
+      multiples request (`FigureRequest.facets`) renders through
+      `calc.figure_facets`, which never resolves per-series colour at all
+      today (FEATURE-001, `plans/BUGS_AND_ISSUES.md` — the screen's own
+      facet grid draws default matplotlib colours too, so there is nothing
+      for a per-series style to override). `greyscale` is therefore a
+      documented no-op there: the route never threads it into the facet
+      renderer, pinned byte-identical by
+      `test_figure_facets_greyscale_is_a_no_op` (`tests/test_api_export.py`).
+      Fixing this for real is FEATURE-001's job (screen AND export
+      together), not this item's.
+    - **REVIEW FIX (2026-09-13) — `/api/export/figure-page` was a silent
+      no-op; `/api/export/map-figure` documented.** An adversarial review of
+      this item (commit `bc8f14fa`) found `PagePanelSpec.figure` is this SAME
+      `FigureRequest`, so `greyscale` was already part of the figure-page
+      OpenAPI schema and 200'd, but `export_figure_page`
+      (`routes/export_page.py`) never read `f.greyscale` and
+      `calc.figure_page.PagePanel` had no such field — exactly the "silently
+      doing nothing while looking wired" failure mode this item's own doc
+      says it avoided, just on the sibling route. Fixed: `PagePanel.greyscale`
+      (per panel, not page-wide — a page can mix a greyscale panel next to a
+      coloured one), applied in `_draw_panel` via the same one-line
+      `apply_greyscale` call `_render_impl` uses, before either the flat or
+      the y2-twinx draw path. `/api/export/map-figure` (contour/heatmap/
+      surface/**waterfall**) has no `greyscale` field at all and stays that
+      way, now documented in its own field doc, `figures.ts`'s JSDoc, and
+      pinned by a byte-identity test (an unrecognized `greyscale` key on that
+      route's JSON body is silently ignored by pydantic, same result as
+      never having sent it) — every `kind` there colours by a continuous
+      z-value (`cmap`), the same "colour IS the plotted quantity" case this
+      flag already leaves untouched for a `color_by` scatter, so there is no
+      categorical palette for a print-safe ramp to replace. ~~**RESIDUAL —
+      page-route greyscale is API-only today.**~~ **CLOSED.** The spatial
+      page composer's "Export page…" dialog (`lib/exportPageCommand.ts`)
+      now reuses `lib/exportFigureCommand.ts`'s own `GREYSCALE_FIELD`
+      (never a duplicate definition) and threads the answer as ONE
+      page-level choice onto EVERY panel's own `FigureSpec.greyscale`
+      (`lib/spatialPageExport.ts`'s `SpatialPageAppearance.greyscale` ->
+      `spatialPanelFigure`) — `PagePanel.greyscale` stays genuinely
+      per-panel on the backend, but this dialog has no per-panel UI, so
+      "on" means "on for the whole page". Omitted/false is byte-identical
+      to before, mirroring the single-figure dialog's own wire convention.
+      A facet panel would be a documented no-op (`FigureSpec.greyscale`
+      never applies once `.facets` is set) — moot today since
+      `spatialPanelFigure` never emits `.facets`. Tests:
+      `exportPageCommand.test.ts` pins the field's presence (identical to
+      `GREYSCALE_FIELD`) and the threaded/omitted wire value across every
+      panel; `spatialPageExport.test.ts` pins the same at the request-
+      builder layer. ~~**A SEPARATE residual remained — the two `PageDocument.output`
+      export paths.**~~ **CLOSED 2026-09-14.** The Figure Page composer
+      (`components/workshops/figurepage/`, its own export path with no modal
+      dialog) and Library's export-a-saved-page-without-reopening
+      (`components/Library/PagesSection.tsx`) now offer it. Greyscale is a
+      PAGE-WIDE output setting on those paths: `PageOutputSettings.greyscale`
+      (`lib/pageDocument.ts`), ADDITIVE (absent === off, no schema version
+      bump — the same convention `createdAt`/`modifiedAt` use, and unlike
+      `layout`'s v1->v2, since an
+      older build ignoring the field still renders exactly what it always
+      did). `sanitizeOutput` keeps only a literal `true`, and the composer's
+      setter DELETES the key when unticked, so "off" has one canonical shape:
+      a page toggled on and off again is byte-identical to one that never had
+      it and does not read as dirty. The route is per-panel, so one shared
+      pure helper (`lib/pageGreyscale.ts`'s `withPageGreyscale`, an identity
+      when off) spreads `greyscale: true` onto EVERY panel's own figure spec
+      for both paths — `buildPageSpecFromDocument` (Library's "export a saved
+      page without reopening it", `components/Library/PagesSection.tsx`) and
+      the Figure Page composer's `buildSpec`
+      (`workshops/figurepage/usePagePreviewExport.ts`). Applying it inside
+      `buildSpec` — the ONE spec-derivation path that feeds the file export,
+      the debounced PNG preview and the clipboard copy alike — is deliberate:
+      the preview is the same server route, so the on-screen page is the page
+      that gets exported (`greyscale` joined the preview effect's dep list for
+      that reason). The composer's control is one "Greyscale" checkbox beside
+      the existing format/style/DPI controls (`FigurePageView.tsx`), and the
+      flag rides the saved PageDocument, so a reopened page remembers it and
+      Library's export-without-reopening honours it. Tests:
+      `FigurePageView.test.tsx` (new — the checkbox at the DOM layer, both
+      directions), `useFigurePage.test.ts` (export/preview/copy all carry
+      `greyscale: true` on every panel, absence when off, the off-again key
+      removal, and a save -> reopen persistence round trip),
+      `PagesSection.test.tsx` (the saved page's own flag on every panel of the
+      export request, and its ABSENCE when the page never turned it on), and
+      `pageDocument.test.ts` (a pre-P3.3 document loads unchanged with the key
+      absent; a saved `greyscale: true` survives the JSON round trip; `false`
+      and junk both load as absent). The spatial close's review (2026-09-13)
+      also found and fixed a vector-only defect: error-bar CAPS (`capsize=2`)
+      kept a chromatic `fill: #1f77b4` in SVG/PDF output even in greyscale mode
+      (invisible in raster only because the cap glyph's fill path happens to
+      be degenerate) — `calc/figure_errorbars.py` now sets the cap markers'
+      face/edge colour explicitly from the series' own (now grey) colour.
+      **A second, latent fix riding the same change:** this also corrects the
+      ORDINARY COLOURED case — before it, every series' cap FACE stayed
+      matplotlib's default C0 regardless of that series' own colour, so a
+      coloured multi-series vector export with error bars silently drew every
+      cap in series 1's colour (measured: two series + error bars, coloured
+      SVG, `fill:` hexes went from `{#1f77b4: 20}` to `{#1f77b4: 10, #ff7f0e:
+      10}`). Pinned by
+      `test_greyscale_error_span_caps_use_their_own_series_colour_when_coloured`
+      (`tests/test_calc_figure.py`), a non-greyscale render.
+    - **Frontend.** A "Greyscale (print-safe)" checkbox in the "Export
+      figure…" dialog (`lib/exportFigureCommand.ts`, a `ParamField` of
+      `type: "boolean"` — the Export-figure dialog's own first boolean
+      field; `ParamDialog`/`ParamFields` already rendered `type: "boolean"`
+      for three other production call sites (`LibraryDetails.tsx`,
+      `BookFamiliesSection.tsx`, `worksheetTransformCommands.ts`) before this
+      one, so review finding F7 narrowed the claim to the dialog it is
+      actually true of), titled with the export-only-divergence warning
+      verbatim. Threaded through `FigureRenderOpts.greyscale`
+      (`lib/figureSpec.ts`) onto the wire only when true (`{ greyscale: true
+      }` spread) — omitted/false is byte-identical to before this option
+      existed. Review finding F8: this truthiness-gating convention is NOT
+      "matching every other optional boolean field's own convention" as
+      originally claimed here — the nearest analogue, `transparent`
+      (`figureSpec.ts`), gates on `undefined` instead and DOES send
+      `transparent: false` on the wire. greyscale's own convention (omit
+      when false) is deliberate and correctly pinned by `figureSpec.test.ts`;
+      the two fields are simply not aligned, and that is fine. NOT persisted: the
+      dialog does not persist `fmt`/`style`/`dpi`/labels across opens
+      either (every field re-defaults each time it opens), so `greyscale`
+      mirrors that — no new store, per the design brief's own instruction.
+      Classified `unsupported` (not `output`) in `figureContract.ts`'s
+      FigureSpec census: it is a per-export dialog choice, never part of a
+      saved FigureDocument's canonical/output state, so a document's own
+      `series_styles`/`overrides` stay the RAW authored (coloured) choices
+      regardless of whether any one export of it happened to be greyscaled.
+      "Copy figure"/"Copy figure (vector)" — which render with no dialog at
+      all, by design — do not gain a greyscale option; that is consistent
+      with those commands never exposing `style` either.
+    - **Tests.** Backend: `tests/test_calc_figure_greyscale.py` (ramp order/
+      min-step/pinned values, `apply_greyscale`'s explicit-wins/no-op-for-
+      color_by/never-mutates behaviour, the frontend-vocabulary drift
+      guard) plus render-level assertions in `test_calc_figure.py` (a
+      greyscale PNG differs from the coloured one; every SVG stroke is
+      achromatic; three unstyled series produce >=2 distinct
+      `stroke-dasharray` patterns; the facets no-op). Frontend:
+      `figureSpec.test.ts` pins `greyscale: true` on the wire when opted in
+      and its ABSENCE when off or omitted, through both the live-view and
+      document-routed builders; `ParamDialog.test.tsx` gained the dialog's
+      first-ever boolean-field coverage (unchecked default, click-to-toggle,
+      the hint surfacing as the label's title); `exportFigureCommand.test.ts`
+      pins the command threading the dialog's answer onto the wire.
+      **Review-fix pass (2026-09-13) added:** figure-page route-level tests
+      (a panel's bytes/SVG differ with `greyscale: true`, mixed
+      grey+coloured panels on one page both render correctly); a
+      `map-figure` no-op byte-identity test (mirrors the facets one); a
+      real `group_col`/y2/x_breaks route-level greyscale test each (the prior
+      `group_col` "coverage" called `render_figure` directly, the SAME path
+      the flat-series test already covered — it never actually went through
+      the route's `group_col` branch, so it proved nothing extra); a
+      greyscale + `error_spans` and a greyscale + `fill` route test; and
+      `test_greyscale_explicit_line_style_is_kept` now asserts the actual
+      dashed pattern is present for an explicit-line series AND that a
+      same-position series with NO explicit line renders solid (LINE_CYCLE's
+      position 0) — deleting the explicit-wins check silently reverts the
+      explicit series to solid too, which the old "some dasharray exists
+      somewhere" assertion could not detect (LINE_CYCLE's other positions
+      already guarantee a non-empty dasharray regardless).
+      **Round-2 review-fix pass (2026-09-13) added:** the stroke-only
+      achromatic guards (`test_greyscale_svg_every_stroke_is_achromatic`,
+      `test_greyscale_applies_when_series_styles_is_none`, and
+      `test_api_export.py`'s shared `_assert_only_achromatic_strokes`) now
+      check `fill:` as well as `stroke:`, closing the same fill-blind-spot
+      F6 fixed for the two error-bar/fill unit tests but had left open on
+      every route-level (group_col/y2/x_breaks/figure-page) and default
+      3-series path; the cap-colour test above pins the non-greyscale
+      latent fix; and a figure-page facet-panel byte-identity test
+      (`test_figure_page_facet_panel_greyscale_is_a_no_op`) closes the one
+      of the three documented facet no-ops that had no guard.
 
   Two things the audit turned up on the way. One was a real bug and is FIXED;
   the other looked like a bug, was investigated properly, and turned out to be a
@@ -3052,14 +4668,620 @@ Prioritized slices (in pain order):
   Re-verified 2026-09-09: `tests/test_calc_decimate.py` +
   `tests/test_api_plot.py` — 54 passed, 1 skipped;
   `usePlotPayload.test.ts` + `lib/plotdata.test.ts` — 116 passed.
+- [x] ~~**Slice 5 — export cancel**~~ SHIPPED 2026-09-13 (the audit's
+  remaining "export" gap from the 2026-07-26 evidence table — import and
+  the DREAM/bumps fit already had cancel). CSV/HDF5 export, figure export,
+  Origin (.ogs) export, and figure copy (PNG + vector SVG) all route
+  through the shared `lib/exportActive.ts` chokepoint, which now registers
+  a cancellable pendingOps entry the same way `runImport` (slice 1) does:
+  one `AbortController` per call, a StatusBar Cancel button via
+  `beginOp`/`endOp`, `controller.signal.aborted` (never the shape of a
+  caught error) deciding "this was a cancel". The spatial "Export page…"
+  composer (`lib/exportPageCommand.ts`) does not route through
+  `exportActive` (N panel datasets + its own params dialog, not one active
+  dataset) so it wires the identical AbortController/pendingOps shape
+  itself rather than a second mechanism. `signal?: AbortSignal` threaded
+  through `postJSON`/`postForm`'s existing pattern into `postBlob`/
+  `postDownload` (`lib/api/http.ts`). **Corrected 2026-09-13** (adversarial
+  review): NOT "every export wrapper that calls them" as originally
+  claimed here — only 5 of the 16 `postDownload` call sites across the
+  frontend actually take a `signal` (the ones this slice's own commands
+  use: `lib/api.ts`'s xrd-csv/hdf5/origin wrappers, `lib/api/figurePage.ts`'s
+  `exportFigurePage`, `lib/api/figures.ts`'s `exportFigure`). The other 11
+  `postDownload` sites — `lib/api/exportMultivar.ts` (4), `lib/api/
+  report.ts` (1), and 5 more in `lib/api/figures.ts` (corner/ternary/field/
+  statplot/categorical) — plus every consuming component that calls one of
+  them without ever building an AbortController to pass, stay uncancelled;
+  see the acceptance-criteria bullet below for the full residual list.
+  HONEST RESIDUAL: `routes/export*.py` (`export.py`,
+  `export_figures.py`, `export_page.py`) are synchronous `def`s with no
+  `Request` parameter or disconnect check, so the backend renders to
+  completion regardless of a client abort — cancel is "stop waiting and
+  discard the result," not "stop the server," for every export kind. That
+  result can never be written late: `postDownload`/`postBlob` re-check the
+  SAME signal synchronously, right before `saveBlob`/returning the blob
+  (no `await` in between), closing the race where the response lands the
+  instant Cancel is clicked — covered by `lib/api/http.test.ts`'s
+  abort-race-guard tests. "Send to Origin (COM)" and "Export consolidated
+  CSV" (`commands/fileCommandsLazy.ts`'s `runSendToOrigin`/
+  `runExportConsolidated`) are bulk, multi-dataset operations with no
+  single active-dataset chokepoint to hang cancel off, and are left
+  uncancelled — a deliberate carve-out, not an oversight, matching slice
+  1's own "import wizard `importParse` left unwired" precedent. Tests:
+  `lib/exportActive.test.ts` (new, the shared mechanism), kind-specific
+  cancel cases added to `lib/exportFigureCommand.test.ts` (figure),
+  `lib/exportPageCommand.test.ts` (page), `lib/copyFigureCommand.test.ts`
+  (copy-to-clipboard), the abort-race guard in `lib/api/http.test.ts`, a
+  double-pendingOps-registration regression guard in
+  `commands/fileCommands.test.ts`, and a DOM-level StatusBar integration
+  test in `components/Shell/StatusBar.test.tsx`. Bundle: moving
+  `export-csv`/`export-hdf5`/`export-page`'s command bodies to the same
+  click-only dynamic-import pattern `export-figure`/`export-origin`
+  already used took `lib/exportActive.ts`/`lib/exportPageCommand.ts`
+  (and this slice's own growth) off the eager path entirely — eager JS
+  measured 920,089 → 915,638 B after `npm ci` (net DOWN despite the new
+  cancel machinery), budget unchanged at 920,400 B.
 
 Original acceptance criteria (unchanged):
 
-- [ ] Consistent progress location and job identity.
-- [ ] Safe cancel for long import/fit/batch/export.
-- [ ] Errors say what failed, whether data changed, and next action.
-- [ ] Copyable diagnostic bundle excludes raw/private data by default.
-- [ ] Persistent recovery/write-failure notices.
+- [~] Consistent progress location and job identity. **Narrowed
+  2026-09-13:** slices 1-4 gave import, command-palette actions, and
+  workspace open ONE shared location (`StatusBar.tsx`'s `.qzk-pending`
+  span reading `store/pendingOps.ts`) and ONE identity scheme (`OpId`, a
+  monotonic `beginOp`/`endOp` sequence number). Verified NOT extended to
+  the job-queue path: `useBumpsFit.ts` keeps its own `progress` state and
+  `job_id` (`jobRef`, from `lib/jobs.ts`'s poll loop), rendered only inside
+  `BumpsSection.tsx`'s own panel — `StatusBar.tsx` imports only
+  `usePendingOps` and never reads a job-queue id, so a DREAM/fit-scan job's
+  progress and identity are invisible to the shared location. Two
+  progress systems coexist, not one; box stays open for that specific gap.
+- [~] Safe cancel for long import/fit/batch/export. **Narrowed 2026-09-13**
+  (adversarial review of the export-cancel commit): import (slice 1) and
+  the DREAM/bumps fit shipped earlier and are unaffected. Export cancel
+  shipped above (slice 5), but only at the File-menu single-dataset export
+  chokepoint (`lib/exportActive.ts`: CSV/HDF5/Origin export + figure copy)
+  and the spatial "Export page…" command (`lib/exportPageCommand.ts`) —
+  with the honest caveat already recorded: cancel means "stop waiting,
+  discard the result," since the export routes don't honor a client
+  disconnect server-side (and — new this round — a sync route occupies one
+  of the backend's ~40 anyio threadpool workers to completion regardless,
+  so repeated cancels of a slow render can saturate it faster than the
+  client-side UI suggests). Two carve-outs were already named (Send to
+  Origin COM, Export consolidated CSV); this round's review found the rest
+  of the surface was neither wired NOR named. The full residual — every
+  `postDownload`/`postBlob` call with no `signal` and no `pendingOps` entry
+  — stays uncancelled and untracked: `components/workshops/figurepage/
+  usePagePreviewExport.ts:204,235` (the Figure Page composer's OWN export +
+  clipboard copy — the longest render in the app, and the most-requested
+  cancel target of anything on this list), `components/workshops/
+  figurebuilder/previewExport.ts:53,77`, `components/Library/
+  PagesSection.tsx:37`, `lib/api/exportMultivar.ts:31,54,80,98`, `lib/api/
+  figures.ts:169,188,210,265,309` (recounted 2026-09-13, round-2 review N7 —
+  this same commit's own doc edits to that file shifted these by a few
+  lines and the citation was not re-measured), `lib/api/report.ts:37`,
+  `components/Library/MultiSelectBar.tsx:83`,
+  `components/Stage/useStatStage.ts:485`.
+  None of these registers a `pendingOp`, so none shows a Cancel control or
+  even a busy indicator today — this is a partial win on the acceptance
+  criterion, not the full one. **Narrowed further 2026-09-13 (round-2
+  review, F1):** even inside the wired chokepoint, a clipboard copy (Copy
+  figure / Copy figure as SVG) is not actually cancellable once its render
+  blob is produced. `postBlob`'s own signal check (`lib/api/http.ts`) and
+  `lib/clipboard.ts`'s `copyImageAsync`/`copySvgAsync` re-check close the
+  race only up to the point the `ClipboardItem` is CONSTRUCTED — one
+  microtask after the render settles — not at the browser's own read of
+  that value promise or its actual write, for which there is no JS hook on
+  any engine. Cancel clicked after that point still stops the STATUS from
+  lying (fixed the same round: `exportActive.ts` no longer reports "copy
+  cancelled" when the write already went through) but does not, and cannot,
+  stop the clipboard write itself. Also found and left as a named residual
+  rather than fixed (F5/N6): the same unguarded `void import(...)` shape
+  F5 fixed via `runLazy` in `commands/fileCommands.ts` survives at
+  `components/Stage/usePlotStageActions.ts:134,140` (Copy figure / Copy
+  figure as SVG — the same P3.4 export/copy surface, just routed through a
+  different File menu), `components/Library/MultiSelectBar.tsx:83`,
+  `components/Library/PagesSection.tsx:82`,
+  `components/Library/EditableFiguresSection.tsx:67`,
+  `components/windows/useWindowCommands.ts:190`, and the three startup
+  loads in `App.tsx:82,101,146` (recipe hydration and the two lock
+  providers) — a failed chunk load at any of these is still a silent no-op
+  plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
+  is NOT on this list: it carries its own explicit `.catch` with a
+  fire-and-forget rationale, so its failure is a deliberate silent no-op.)
+- [~] Errors say what failed, whether data changed, and next action.
+  **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
+  intended as the whole user-facing failure surface, not a sample; the first
+  pass fell short of that by construction (below), fixed in this pass.
+  A single-line `grep` over `frontend/src` excluding tests found **132**
+  `toast(…, "danger")` call sites. That grep structurally cannot see a call
+  wrapped across lines — and this pass's own `ReportPanel.tsx` fix (below) is
+  exactly that shape — so it is not "the whole surface" on its own. A
+  brace-matched scan (walks `toast(` to its matching close-paren; written for
+  this pass, kept under the scratchpad rather than the repo) found **7** more,
+  for **139** total. Two of the seven have a conditional kind
+  (`components/Library/folderOps.ts:183`, `components/workshops/pipeline/
+  useTemplates.ts:153`); the other five were unlisted before this pass —
+  `store/figureLifecycle.ts:289`, `store/dataIntake.ts:101`,
+  `lib/plotSelectedTogether.ts:57`, `commands/projectLockCommands.ts:40`, and
+  `components/workshops/report/ReportPanel.tsx:148` (this pass's own fix,
+  listed in the FIXED table below) — with rubric verdicts for the first four
+  added below.
+
+  Separately, **263** total `setStatus(` sites. **83** ("of which 34 sit
+  beside a toast built from the same `msg` variable — this codebase's
+  established shape, one message/one status line/one toast, see
+  `store/workbookTransfer.ts`'s `fail()` — and 49 status-line-only") is a
+  CLASSIFICATION against the rubric below, not a grep figure — the previous
+  wording of this box implied it had the same "measured by grep" provenance
+  as the 132/139, which is not reproducible with one grep. The reproducible
+  grep bounds it is built from: **52** `setStatus(` sites whose own line
+  carries failure wording (`fail|error|could not|unable|refus|cannot|
+  unavailable|invalid|nothing`, case-insensitive; corrected in the 2026-09-14
+  re-review — **60** only reproduces against the paren-less `setStatus`
+  pattern, a 334-site superset that also counts declarations, types and
+  comments, not the 263-site `setStatus(` figure this box is about) and
+  **26** inside a brace-matched `catch` block. **52 corrected to 51 in the
+  round-3 re-review**: `grep -rn` prefixes every output line with
+  `path:lineno:` before the pattern is matched, so a file whose PATH
+  contains a failure word inflates the count — `components/Inspector/
+  ErrorRolesCard.tsx:126`'s own `setStatus(` line carries no failure wording
+  (its message is on the following line) and matched only on "Error" in the
+  filename. Reproducible method: strip the `path:lineno:` prefix before
+  matching (`grep -rnE 'setStatus\(' … | grep -v '\.test\.' | sed
+  's/^[^:]*:[0-9]*://' | grep -icE '…'`), or equivalently `grep -rhE` (no
+  filename) in place of `-rnE`.
+
+  Rubric, because "all three facts in every message" would be noise in most of
+  them:
+  - **(a) what failed** — the message names the OPERATION, not only the
+    underlying error. A bare `e.message` FAILS this: `lib/api/http.ts`'s
+    `ensureOk` throws the backend's `detail` or, failing that, the status line,
+    and `fetch` itself throws `TypeError: Failed to fetch` — so the user can be
+    shown "500 Internal Server Error" with no hint of what they had clicked.
+  - **(b) whether data changed** — required EXPLICITLY where the operation's
+    target is data or a file the user ALREADY HAS (save over a project,
+    re-import over a dataset, a batch that is part-way through), i.e. where
+    "did I just lose or half-change what I had?" is the question the message
+    leaves open. Satisfied structurally, and not demanded in the text, for a
+    precondition refusal (nothing was attempted) or an operation that can only
+    add (a failed merge creates nothing) or only read (export, copy, report,
+    preview). One sharper line inside the save flow: only the path where the
+    write was actually ATTEMPTED (`store/workspaceIO.ts:444`) leaves the
+    "is my existing file damaged?" question open; the gates that refuse before
+    the write — `:77/:95` (books still loading), `:212/:241/:257/:297`
+    (backend refusal), `:368/:381` (read-only / offline), `:429/:440` (lock
+    lost) — answer it by saying the save was refused.
+  - **(c) next action** — required where the user can do something. Recorded
+    EXCEPTION class: a transient backend or chunk-load failure whose only
+    remedy is retry, raised from a control still on screen — the affordance IS
+    the next action, and "try again" appended to forty messages is noise
+    rather than guidance.
+
+  Every site was classified against that rubric. The ones that FAILED are
+  listed below; the rest pass through its structural clauses — refusals that
+  are themselves the instruction ("select at least 2 datasets first", "Find
+  (or fit) peaks before labeling.", `store/figureLifecycle.ts`'s "publication
+  figure was not found; no editable copy created"), and read-only failures
+  that name the operation ("export page failed: …", "clipboard image
+  unavailable — use Save as PNG or Export figure"). Two sites already carried
+  all three facts and were used as the model for the fixes:
+  `store/reimportAllRun.ts:410` ("reimport all: N problems — nothing changed")
+  and `components/Stage/worksheet/useWorksheetBlockOps.ts:165` ("clipboard
+  unavailable — nothing was cut").
+
+  Four more, brought in by the brace-matched re-scan above (multi-line, so the
+  original single-line grep missed them) — all PASS, added here rather than
+  to the FIXED table:
+  - `store/figureLifecycle.ts:289` — "the plot changed while previewing —
+    Cancel and reopen Publication Preview to pick up the changes." Names the
+    state (the preview target changed) and the recovery (Cancel + reopen);
+    the session's draft is untouched, satisfying (b) structurally the same
+    way a precondition refusal does.
+  - `lib/plotSelectedTogether.ts:57` — "need at least N plottable datasets to
+    overlay…". A precondition refusal (nothing was attempted) that is itself
+    the instruction, same class as "select at least 2 datasets first".
+  - `commands/projectLockCommands.ts:40` — "Take Over Editing is not
+    available — the other instance is still responding" / "nothing to take
+    over — this project is not locked by another instance". Both branches are
+    precondition refusals naming the reason; nothing is attempted either way.
+  - `store/dataIntake.ts:101` — "couldn't load full data for "<name>" —
+    <why>". Names the operation (loading that dataset's full data); falls
+    under the recorded retry exception for (c) since `ensureBookData` is
+    re-triggered the next time the pending dataset is touched. NOTE: this
+    site's message embeds the dataset NAME — evidence for, not against, the
+    toast-ring redaction rationale in the diagnostics-bundle box below,
+    which is exactly why that ring never recorded message text.
+
+  FIXED this pass — message text only; no flow, no control flow, no new state.
+  Each says a fact the code already guaranteed and simply did not voice:
+
+  | Site | Missing | Now says / test |
+  |---|---|---|
+  | `store/importDatasets.ts:456` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `imported 1/2 — failed <file>: <why> — try the Import wizard`. The status line already said "imported 1/2"; the TOAST — what actually appears over the stage — named only the broken file. `importDatasets.test.ts` › "the failure toast carries the imported count, not just the failure". |
+  | `store/workspaceIO.ts:451-453` (msg + setStatus + toast — corrected 2026-09-14 re-review, the prior correction's 451-452 range covered msg+setStatus but dropped the toast line) | (b) | `save failed — could not write to <path>; the file on disk is unchanged (try Save As)`. `runSaveWorkspace`'s own header had already promised this sentence — "the atomic temp-file-plus-`os.replace` write (desktop_bridge.py) already guarantees the previous good file on disk is untouched, so the only job left here is to say so plainly" — and the message never said it. `workspaceIO.test.ts` › "surfaces a clear error and does NOT fall back to a browser download when the write fails" (extended to all three facts). |
+  | `store/reimport.ts:335` (the toast call — corrected 2026-09-14 review round, was cited at the comment above it) | (b) | `re-import "<name>" failed: <why> — the dataset is unchanged`. True by construction: `applyReimportMerge` is the last STORE-MUTATING statement of the `try` (the comment originally said "the LAST statement", which is wrong — a `setStatus`/`toast` follow it; neither touches the store), so any throw lands before the store is touched. Re-import exists to overwrite data the user already has, which is exactly what makes "failed" alone unreadable. `reimport.test.ts` › "a failed re-import says the dataset is unchanged, and it really is". |
+  | `store/useApp.ts:1712` | (a), (b) | `could not merge the selected datasets: <why> — nothing was added` (was a bare `e.message`). `addDataset` runs after the throwing call. |
+  | `store/dataIntake.ts:175-177` (msg + toast — corrected 2026-09-14 review round, was cited at the comment above them) | (a), (b) | `could not create a dataset from the pasted text: <why> — nothing was added` (was a bare parser message). `useApp.test.ts` › "surfaces the backend's error message and adds nothing on a parse failure" (extended). |
+  | 9 × "Add to report" — `components/Stage/useGadgetChip.ts`, `components/workshops/{variability,peaks/PeaksPanel,curvefit,tabulate,peakwizard,statschooser,fityx,distribution}` | (a) | `could not add to report — <why>` (all nine were a bare `e.message`, so an HTTP failure reported itself without ever mentioning reports). |
+  | `components/workshops/report/ReportPanel.tsx:148` | (a), (b) | `could not export the report as <format> — <why>; nothing was saved`. |
+
+  REMAINING — not reachable by a message edit, so this box stays open:
+  - `components/workshops/roicuts/useRoiBatch.ts:265` — "batch failed: …" is
+    the OUTER catch of a loop that has already landed `newIds` datasets. It can
+    honestly claim neither "nothing changed" nor a count without the flow
+    handing it the partial outcome.
+  - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
+    raised from inside `withHistoryBatch`, where some annotations may already
+    have been added; same shape, same reason it is not a rename.
+  - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
+    "recalculation failed" say nothing about which worksheets took the new
+    values and which kept the old ones.
+  All three need the operation to report its own partial outcome — a flow
+  change, and the shape `store/reimportAllRun.ts:410` already has.
+- [x] Copyable diagnostic bundle excludes raw/private data by default.
+  **Verified shipped 2026-09-14** (it landed with #267/#268 and their
+  follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
+  → `commands/uiCommands.ts` → `store/diagnostics.ts` (the impure collector,
+  dynamically imported so none of it is on the eager path) → `lib/diagnostics.ts`
+  (a pure renderer over an explicit `DiagnosticsSnapshot`). The exclusion is
+  STRUCTURAL rather than filtered: a field absent from that type cannot be
+  collected, and `lib/storageKeys.ts` plus the storage-key ratchet in
+  `architecture.test.ts` stop even a `localStorage` KEY name from becoming a
+  back door. Tests: `store/diagnostics.test.ts` › "omits the dataset name,
+  column label, path and both kinds of cell value" — a real store holding a
+  distinctive numeric value, a distinctive TEXT cell, a collaborator's compound
+  as a column label and an absolute source path, none of which (nor the
+  directory part, nor the basename) reaches the output — with "still describes
+  THAT dataset by shape, so the exclusion test is not vacuous" as its
+  non-vacuity companion; `components/Shell/copyDiagnosticsMenu.test.tsx`
+  asserts both properties of the bytes that actually reach the clipboard when
+  the REAL Help menu item is clicked (neither pure-module test would catch a
+  command wired to `JSON.stringify(useApp.getState())`); `lib/diagnostics.test.ts`
+  holds the renderer's own redaction and usefulness cases.
+  EXTENDED the same day, since a bundle that cannot say what state the session
+  was in is half a bug report: the backend identity from `/api/health`
+  (`{app, version}` — the launcher's existing handshake route, so no new
+  endpoint; "unreachable" when nothing answers, which is itself an answer), and
+  a Session-health section — autosave ok/FAILING, generations kept,
+  last-autosave age, whether a recovery prompt is open, operations in flight,
+  and notification counts with the age of the last error.
+  DELIBERATE DEVIATION, recorded because it is the interesting half: the last N
+  toast/status MESSAGES are NOT included, and neither is the autosave failure
+  reason. Message text in this app IS project content — the audit table above
+  is the evidence, message after message embedding a dataset name, a column
+  label or an absolute source path. `store/toasts.ts` therefore keeps three
+  content-free, monotonic counters (`totalCount`/`errorCount`/`lastErrorAt`,
+  corrected from a bounded `{kind, at}` ring in the 2026-09-14 review round
+  below — a ring is a window, not a total, and could under-report both), which
+  answer the triage question ("were errors firing, and how recently?") and
+  cannot leak by construction rather than by review. The wording stays on
+  screen, where the user can read it and quote it deliberately.
+
+  **Review round, 2026-09-14** (a later pass over the same-day P3.4
+  diagnostics-bundle commit): adversarial review found 2 CONFIRMED issues, 1
+  PLAUSIBLE, and 8 nits, all fixed in one follow-up commit. Findings and
+  fixes:
+  1. **CONFIRMED — the notification ring could under-report both counts.**
+     `store/toasts.ts`'s old `{kind, at}[]` ring evicted past `MARKS_MAX = 50`
+     entries; a `"danger"` push followed by 50 later `"ok"`/`"info"` pushes
+     evicted it, so `errors`/`lastErrorAgeSec` read `0`/`never` even though an
+     error really had fired, and a 500-push burst reported `total 50` with no
+     way to tell "exactly 50" from "500, 449 evicted". Fixed: `totalCount`,
+     `errorCount`, `lastErrorAt` are monotonic scalars incremented once per
+     `push` and never trimmed; the ring is gone (nothing else read it).
+     `lib/diagnostics.ts`'s doc updated to match (the `NotificationMark`
+     reference no longer exists).
+  2. **CONFIRMED — the danger-toast census was grep-shaped and missed 5
+     multi-line sites (139 real total, not 132).** A single-line `grep` for
+     `toast(…, "danger")` cannot see a call wrapped across lines, and this
+     same commit's own `ReportPanel.tsx` fix was exactly that shape. A
+     brace-matched scan (kept under the scratchpad, not the repo) found 132
+     single-line + 7 multi-line = 139 sites; 2 of the 7 were already noted
+     (conditional kind); the other 5 — `store/figureLifecycle.ts:289`,
+     `store/dataIntake.ts:101`, `lib/plotSelectedTogether.ts:57`,
+     `commands/projectLockCommands.ts:40`, and this commit's own
+     `ReportPanel.tsx:148` — are now in the audit table above with rubric
+     verdicts (all PASS). The "83 failure `setStatus(` sites" figure was also
+     presented as "measured by grep" when it is a classification; the box
+     above now says so and gives the reproducible grep bounds (263 total / 52
+     failure-worded / 26 in catch blocks — corrected from 60 in the 2026-09-14
+     re-review below, see nit 4 there).
+  3. **PLAUSIBLE — an awaited network probe sat between the click and the
+     clipboard write.** `diagnosticsText()` used to `await probeBackend()` (a
+     fresh `/api/health` fetch, up to 1.5 s) on every "Copy diagnostics"
+     click — the same hazard `lib/clipboard.ts` already documents for the
+     PNG-copy path (an awaited round-trip can drop the transient
+     user-activation `navigator.clipboard.writeText` requires), and one that
+     degrades exactly when the backend is slow or hung, i.e. the situation
+     this bundle exists to report. Fixed: `App.tsx`'s existing startup
+     `health()` call now also records the result into a new, deliberately
+     tiny `store/backendHealth.ts` module (kept separate from
+     `store/diagnostics.ts` so `App.tsx` does not drag that whole
+     dynamically-imported chunk into the eager bundle); `collectDiagnostics`/
+     `diagnosticsText` read it back synchronously and `probeBackend` plus its
+     1.5 s timeout are deleted outright — no sync fallback needed one, since
+     the startup probe runs at startup; a click before it answers reads "not
+     yet answered" (corrected in the 2026-09-14 re-review below — the
+     original wording, "already runs before any click is possible", conflated
+     STARTING with ANSWERING). `lib/api.ts`'s `health()` return type widened
+     from `{status}` to `{status, app?, version?}` so `App.tsx` has the data
+     to record.
+  4. NITs fixed: control characters stripped/length-clamped from the echoed
+     backend `app`/`version` (`lib/diagnostics.ts`'s new `sanitizeServerString`
+     — these are server-generated but same-origin-relative, and the sibling
+     `fermiviewer` answers the same shape on the same default port);
+     `store/reimport.ts`'s comment corrected from "the LAST statement" to "the
+     last STORE-MUTATING statement" (a `setStatus`/`toast` actually follow it);
+     `resetNotificationMarks` renamed `resetNotificationCountsForTests` to
+     match the repo's `…ForTests` convention (`store/windowHydration.ts`,
+     `store/packProject.ts`, `store/originApplyLibs.ts`); `store/importDatasets.ts`'s
+     danger toast now reuses `summary` instead of re-interpolating the same
+     string; the four fix-table line refs that had drifted onto comments were
+     re-pointed at the actual message/toast lines (all four; `useApp.ts`,
+     `ReportPanel.tsx` and the three REMAINING refs already landed exactly,
+     confirmed unchanged). Not fixed, with reasons: the `age()`/`takenAt`
+     privacy-vs-readability wording (kept `takenAt` at full precision — several
+     tests pin the literal ISO string, and reducing it would be a real behavior
+     change, not a nit — so the comment was reworded to drop the privacy claim
+     instead); `probeBackend`'s missing `AbortController`/`clearTimeout` is
+     moot, since finding 3 deletes the function entirely; a BUG-009-style reset
+     ratchet for `store/backendHealth.ts`'s new module state was considered and
+     NOT added at the time — **the stated reason was wrong and is corrected in
+     the 2026-09-14 re-review below (nit 9)**: the module state IS reachable by
+     the POISONING failure mode the precedent exists to catch (a stale
+     `{reachable: true, app, version}` left by an earlier test in the same file
+     can misdirect a later test asserting `backend unreachable`); the honest
+     reason to decline the ratchet is narrower — no test recorded backend
+     health at the time, so nothing was poisoning anything YET, not that the
+     module structurally cannot be poisoned.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1a | `store/toasts.ts`: cap `totalCount` at 50 (re-introduce ring-style eviction) | caught — `toasts.test.ts`'s "500 pushes report a total of 500" AND "a danger toast survives 50 later ok toasts" both fail |
+  | 1b | (same file) — confirms both new tests are load-bearing, not just one | see above |
+  | 2 | n/a — finding 2 is a documentation/census fix, nothing to sabotage in code | — |
+  | 3 | `commands/uiCommands.ts`: reinsert `await fetch("/api/health")` before building the diagnostics text | caught — `copyDiagnosticsMenu.test.tsx`: 3 of 4 tests fail, including the new "completes the clipboard write without awaiting any network call" test (the 4th, "carries none of the workspace's names/values/paths", passes VACUOUSLY on an empty copied string — the same shape the review's own S2 sabotage found) |
+  | nit (dedup) | `store/importDatasets.ts`: revert the toast to the pre-fix `` toast(`${lastError}${hint}`) `` | caught — `importDatasets.test.ts`'s "the failure toast carries the imported count, not just the failure" |
+  | nit (control chars) | `lib/diagnostics.ts`: make `sanitizeServerString` a no-op | caught — `diagnostics.test.ts`'s "strips control characters from the echoed backend identity" |
+
+  Gate: `npx tsc -b --force` clean; `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — 99 files, 1941 passed, 0
+  failed; `uv run pytest -q tests/test_repo_integrity.py` — 12 passed.
+  `store/useApp.ts` untouched (2321 lines, exactly its pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does): this commit's parent (`git rev-parse HEAD~1`
+  = `a7e158bc`, matching the commit this review round repairs) measured
+  **917,224 B** in a scratch worktree (`npm ci`'d node_modules); this commit
+  (HEAD) measured **917,385 B** — **+161 B**, from the comment/doc growth and
+  the `sanitizeServerString` call plus the `backendHealth.ts` module (tiny;
+  most of its lines are comments, stripped by minification). `EAGER_JS_BUDGET`
+  is 920,400 B (`check-bundle-size.mjs`), unchanged — the commit lands 3,015 B
+  under budget, no pin edit owed.
+
+  **Re-review round, 2026-09-14** (an adversarial re-review of the review-
+  round commit above, `d4c06387`): found 3 CONFIRMED issues and 8 nits, all
+  fixed in one follow-up commit. Findings and fixes:
+  1. **CONFIRMED — `sanitizeServerString` turned a non-string `app`/`version`
+     into a total loss of the report.** `lib/api.ts`'s `health()` response is
+     an unchecked `as`-cast; a hostile or buggy backend answering with a
+     number or object for `app`/`version` made `v.replace` throw, and the
+     throw propagated out of `diagnosticsText()` into the command's outer
+     `.catch` — no report at all, exactly the case the sanitizer exists to
+     harden against. Fixed at BOTH layers: `sanitizeServerString` now calls
+     `String(v)` before `.replace`, and `App.tsx`'s mount effect guards the
+     recording site itself (`typeof info.app === "string" ? info.app : null`,
+     same for `version`) so `BackendInfo` stays honest at its source. Hostile
+     test extended with a `42` and a `{}` — both render as text (`"42"`,
+     `"[object Object]"`), neither throws.
+  2. **CONFIRMED — the `backend` row became a startup snapshot rendered as
+     live state.** `recordBackendHealth` has exactly one non-test caller, in
+     a mount effect that runs once; nothing ever refreshed or invalidated it,
+     so a backend that died minutes ago still read as "quantized 0.25.0" and
+     a click before the handshake settled read as "unreachable" —
+     indistinguishable from a truly dead backend. Fixed: `store/backendHealth.ts`
+     now stamps `Date.now()` at record time and computes the age at READ
+     time (not cached at record time, so it keeps growing while the report
+     sits open); the row renders `quantized 0.25.0 (startup handshake, 2520 s
+     ago)` (`age()`'s convention is seconds, not minutes — see
+     `store/diagnostics.test.ts:~245`), and the unreachable case renders
+     `unreachable or not yet answered`, honestly covering THREE indistinguishable cases (dead
+     backend, offline/file-served page, click before the handshake answers)
+     instead of the two the field doc used to enumerate — `lib/diagnostics.ts`'s
+     `backend` field doc corrected to say so. The finding-3 paragraph above
+     also had the same conflation ("the startup probe already runs before
+     any click is possible") — corrected there to "runs at startup; a click
+     before it answers reads 'not yet answered'". Tests: before any
+     `recordBackendHealth` call → "not yet answered"; immediately after →
+     the timestamped row at 0 s; and (new) recording under fake timers, then
+     advancing 42 minutes before reading → the row shows 2520 s, proving the
+     age is computed at read time and not frozen at record time.
+  3. **CONFIRMED (doc-promise) — "depends on nothing but synchronous module
+     state" was false on the first click.** `commands/uiCommands.ts` still
+     does `await import("../store/diagnostics")` before building the text;
+     that chunk is deliberately excluded from the eager bundle, so in
+     production the first "Copy diagnostics" click of a session can fetch it
+     over the network inside the user gesture — the same hazard class the
+     network probe removal was for, one order of magnitude rarer (once per
+     page load). Fixed two ways: the claims in `store/backendHealth.ts`'s
+     header and the `copyDiagnosticsMenu.test.tsx` test title are narrowed to
+     "removes the app's own `/api/health` round-trip; the one remaining await
+     is the lazily-imported renderer chunk"; and `components/Shell/MenuBar.tsx`
+     now warms that chunk (`void import("../../store/diagnostics").catch(() =>
+     {})`) when the Help menu opens (a closed→open transition only, via a
+     small `onOpen` callback added to the shared `title()` helper — no static
+     or eager import, so it stays off `dist/index.html`'s modulepreload list;
+     verified by diffing the eager-ref list before/after, unchanged at 35
+     files). From the SECOND "Copy diagnostics" click of a session onward the
+     import resolves from the module cache instantly; the FIRST click of a
+     session can still be waiting on a real fetch for the chunk if the user
+     reaches the command before the warm import (started when they opened
+     Help) has finished — narrower than the pre-fix hazard (every click) but
+     not eliminated. **Corrected in the round-3 re-review (finding 2
+     below):** the LATENCY the warm import saves is genuinely not testable
+     in vitest — it resolves a mocked or real dynamic import from the
+     in-process module graph effectively instantly regardless of whether
+     `warmDiagnosticsChunk` ran, the same limitation the original review's
+     own F3 probe used a manual `vi.mock` + `sleep` harness to work around,
+     not a per-commit test — but that is a narrower claim than "an automated
+     test cannot distinguish 'warmed early' from 'fetched cold'", which
+     conflated timing with the regression that actually matters: whether the
+     chunk is imported when the Help menu opens, before any item is clicked.
+     That IS observable, and is now pinned by
+     `components/Shell/copyDiagnosticsMenu.test.tsx`'s "Help menu warms the
+     diagnostics chunk" tests.
+  4. NIT — the census bound was not reproducible with the pattern it named:
+     the plan claimed **60** `setStatus(` sites carry failure wording, but
+     that number only reproduces against the paren-less `setStatus` pattern
+     (334 sites, a superset that also counts declarations/types/comments);
+     the reproducible figure for `setStatus(` (263 sites, matching the box's
+     other number) is **52**. Re-measured independently with a plain grep
+     over non-test `frontend/src`; both boxes above corrected to 52.
+     **Corrected again to 51 in the round-3 re-review**: `grep -rn` matches
+     the pattern against each output line's `path:lineno:code` haystack,
+     not just `code` — `components/Inspector/ErrorRolesCard.tsx:126` counted
+     only because "Error" appears in the FILENAME, the exact class of defect
+     this nit was originally filed for. Corrected method: strip the
+     `path:lineno:` prefix before matching (or use `grep -rhE`, which omits
+     the filename) — see the box above for the reproducible command.
+  5. NIT — the plan's recorded gate run (99 files, 1941 passed) predates this
+     commit's own five new tests (1936 prior + 5 = 1941, i.e. it was the
+     PARENT's run). Re-measured — **corrected twice more since**: the figure
+     first written here (100 files, 1954 passed) turned out to be the
+     PARENT's run again (`5af88343`, not this commit), caught by the
+     round-3 re-review; this commit's own count at the time was 101 files,
+     1962 passed (`store/backendHealth.test.ts` new at +5,
+     `lib/diagnostics.test.ts` +2, `store/diagnostics.test.ts` +1, over
+     `5af88343`'s 100/1954). The round-3 fixes below (a new warm-import test
+     plus doc/plan edits) move the count again — see this entry's closing
+     Gate line for the number that is actually current, measured from a
+     fresh worktree of the finished commit rather than the working tree that
+     produced it, per the round-3 reviewer's own suggested guard.
+  6. NIT — the sanitizer regex (`/[\x00-\x1f\x7f]+/g`) stripped only ASCII C0
+     controls plus DEL; U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR and
+     U+0085 NEL are ALSO forced line breaks under CSS Text, and U+202E
+     RIGHT-TO-LEFT OVERRIDE reorders rendered text — none of them were
+     caught, so a hostile backend identity pasted into a `<pre>` (a GitHub
+     issue) could still break the column layout or forge a heading. Fixed:
+     `/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu` (Unicode control + format + line/
+     paragraph separator categories). Hostile test extended with all four.
+  7. NIT — the truthiness check ran BEFORE sanitizing, so a control-
+     character-only identity (`"\n\n"`) was "present", sanitized to `""`,
+     and rendered with the app slot simply missing — indistinguishable from
+     a field that was never collected. Fixed: sanitize first, then
+     `|| "unknown app"`. New test: `"\n\n"` renders "unknown app".
+  8. NIT — one of the four re-pointed plan line refs from the prior round
+     still missed: `workspaceIO.ts:451-452` covers msg+setStatus but drops
+     the toast line at `:453`. Corrected to `451-453`.
+  9. NIT — the stated reason for declining a BUG-009-style reset ratchet on
+     `store/backendHealth.ts` was wrong: it claimed the module "cannot
+     produce" the poisoning failure mode the ratchet exists to catch, but it
+     can — a stale `{reachable: true, app, version}` left by an earlier test
+     in the same file would misdirect a later test asserting `backend
+     unreachable`, and `copyDiagnosticsMenu.test.tsx` was exactly such a
+     test, passing only because the file never called
+     `resetBackendHealthForTests`. Verified by temporarily removing that
+     call and injecting a leaked `recordBackendHealth` in an earlier test in
+     the same file: the later "unreachable" assertion failed, reproducing
+     the exact scenario described. Fixed: `resetBackendHealthForTests()`
+     added to `copyDiagnosticsMenu.test.tsx`'s `beforeEach`; the plan's
+     stated reason corrected to the honest one — no test recorded backend
+     health at the time, not that the module structurally cannot be
+     poisoned.
+  10. NIT — the network-call exclusion test asserted the property only
+      through `vi.waitFor`'s default-timeout backstop, which proves "under
+      about a second," not "fetch was never called." Added a direct,
+      unconditional `expect(hungFetch).not.toHaveBeenCalled()` outside any
+      `waitFor` (exempt from the weak-wait ratchet, which only flags
+      `waitFor(() => expect(mock).toHaveBeenCalled())`).
+  11. NIT — `BACKEND_UNREACHABLE` was an exported, unfrozen object handed out
+      by reference (`getBackendHealth()` returns it directly when nothing has
+      been recorded); any consumer that wrote to it would poison the shared
+      constant for the rest of the session. Fixed: `Object.freeze`, matching
+      the repo's frozen `DataStruct` convention. New test asserts both
+      `Object.isFrozen` and that an assignment attempt throws.
+  12. NIT (**fixed in the round-3 re-review, 2026-09-14**, not this commit) —
+      `lib/diagnostics.ts`'s `DIAGNOSTICS_SCHEMA_VERSION` did not move even
+      though the `backend` row's rendered layout changed in BOTH this round
+      and the round above it: `"backend  quantized 0.23.2"` became
+      `"backend  quantized 0.23.2 (startup handshake, 12 s ago)"`, and
+      `"backend  unreachable"` became `"backend  unreachable or not yet
+      answered"` — both breaking for a line-scoped parser (`/^backend\s+
+      unreachable$/` no longer matches; an "app version" split now picks up
+      extra tokens), and this commit had to rewrite its own regexes in three
+      test files as a direct result, which is the evidence the layout truly
+      changed. Precedent: `3cbc115b`, which bumped 1 → 2 for *adding* the
+      `backend` row, a strictly smaller change than reshaping its content.
+      Fixed: `DIAGNOSTICS_SCHEMA_VERSION = 3`. No in-repo consumer reads the
+      constant; the only test asserts the stamp against the constant itself
+      (`lib/diagnostics.test.ts`'s "stamps the report schema..."), so the
+      bump needed no test changes beyond the constant.
+
+  Sabotage (all verified failing, then reverted):
+
+  | # | Mutation | Result |
+  |---|---|---|
+  | 1 | `lib/diagnostics.ts`: drop `String(v)` from `sanitizeServerString` | caught — `diagnostics.test.ts`'s "renders a numeric or object backend identity as text rather than throwing" |
+  | 2a | `store/backendHealth.ts`: hardcode `ageSec = 0` instead of computing it from `recordedAt` | caught — `store/backendHealth.test.ts`'s "computes the age at READ time..." AND `store/diagnostics.test.ts`'s "ages the recorded backend identity..." |
+  | 2b | `lib/diagnostics.ts`: revert `backendRow`'s unreachable case to `"unreachable"` | caught — `diagnostics.test.ts`, `store/diagnostics.test.ts` and `copyDiagnosticsMenu.test.tsx` all fail (3 files) |
+  | 6 | `lib/diagnostics.ts`: narrow the sanitizer regex back to `/[\x00-\x1f\x7f]+/g` | caught — `diagnostics.test.ts`'s "strips control, format and line/paragraph-separator characters..." |
+  | 7 | `lib/diagnostics.ts`: check truthiness before sanitizing (revert order) | caught — `diagnostics.test.ts`'s "renders a control-character-only identity as 'unknown app'..." |
+  | 9 | `copyDiagnosticsMenu.test.tsx`: remove `resetBackendHealthForTests()` from `beforeEach` AND record a leaked backend identity in an earlier test | caught — the later "unreachable" assertion fails, reproducing the exact poisoning scenario nit 9 describes |
+  | 10 | `commands/uiCommands.ts`: reinsert a fire-and-forget `void fetch("/api/health")` in the click handler (does not stall the clipboard write) | caught by the new DIRECT assertion (`hungFetch` called once) — a `waitFor`-only check would have missed this, since nothing stalls |
+  | 11 | `store/backendHealth.ts`: drop `Object.freeze` from `BACKEND_UNREACHABLE` | caught — `store/backendHealth.test.ts`'s "freezes BACKEND_UNREACHABLE..." |
+  | 12 (round-3) | `components/Shell/MenuBar.tsx`: revert `title("Help", warmDiagnosticsChunk)` to `title("Help")` in a scratch copy | caught — `copyDiagnosticsMenu.test.tsx`'s "opening Help imports the chunk exactly once, before any item is clicked" fails (`diagnosticsEvals.length` stays `0`); reverted |
+
+  **Round-3 re-review, 2026-09-14** (closing the round-3 adversarial
+  re-review of this commit): fixed finding 1 (this Gate line and nit 5 above
+  both recorded the PARENT's test count, not this commit's own — a third
+  recurrence of the exact mistake nit 5 itself was filed to correct; see nit
+  5's text above, now corrected) and finding 2 (item 12 above: the warm
+  import shipped with no test — added and sabotage-verified) as CONFIRMED,
+  and nits 3/4/5 (this section's items 2 and 12, and the two boxes corrected
+  to 51 earlier in this P3.4 entry) as NITs. The round-3 re-review found the
+  CODE clean on every one of the 11 prior items it re-probed (nothing there
+  needed a fix); its two CONFIRMED findings and three nits are all
+  record/test-level — item 12's new test and the `DIAGNOSTICS_SCHEMA_VERSION`
+  bump above are the only code changes this round, everything else is the
+  plan's own record catching up to what the code already did.
+
+  Gate (measured in THIS worktree, after all round-3 edits landed, so it is
+  this commit's own run — not a parent's): `npx tsc -b --force` clean;
+  `npx eslint src --max-warnings=0` clean;
+  `npx vitest run src/lib/diagnostics.test.ts src/store src/commands
+  src/components/Shell src/architecture.test.ts` — **101 files, 1965 passed,
+  0 failed**; `uv run pytest -q tests/test_repo_integrity.py`
+  — 12 passed.
+  `store/useApp.ts` untouched (`wc -l` 2321, unchanged, at its 2322 pin).
+
+  Bundle (eager JS = entry + modulepreload chunks, measured the same way
+  `check-bundle-size.mjs` does, via a standalone byte-exact re-implementation
+  since the script itself only prints rounded kB): this commit's parent
+  (`git rev-parse HEAD~1` = `1593cdee`, the branch tip this round started
+  from) measured **917,739 B** in a scratch worktree (`git worktree add` +
+  `npm ci`); this commit (HEAD) measured **918,124 B** — **+385 B**, from the
+  doc/comment growth, the `App.tsx` guard, `MenuBar.tsx`'s `warmDiagnosticsChunk`,
+  and `backendHealth.ts`'s `recordedAt`/age arithmetic. `EAGER_JS_BUDGET` is
+  920,400 B, unchanged — the commit lands 2,276 B under budget, well clear of
+  the `EAGER_JS_BUDGET - SLACK` (880,400 B) floor that would force a lower
+  pin, no pin edit owed. Confirmed the warm import stayed lazy: `dist/assets/`
+  contains a `diagnostics-*.js` chunk that appears in neither build's
+  `index.html` (no `<script type="module">`, no `<link rel="modulepreload">`),
+  and the eager-ref list is the same 35 files before and after (three files'
+  content hashes shifted from unrelated upstream edits — `index`,
+  `contextActions`, `datasetRemoval` — no file added or removed).
+- [x] Persistent recovery/write-failure notices. **Verified 2026-09-13:**
+  write-failure — `StatusBar.tsx`'s `role="alert"` autosave banner
+  (`health.error`, MAIN_PLAN #32) "stays visible until the next SUCCESS"
+  (`store/autosaveStatus.ts` header) rather than a toast that scrolls away.
+  Recovery — `RecoveryChoiceDialog.tsx` (P1.2) has no auto-dismiss and no
+  default action ("Cancel touches nothing... there is no default/auto
+  action" per its own header); it stays up until the user makes an
+  explicit Cancel/Keep/Recover choice. Both notices persist until resolved
+  rather than expiring on their own.
 
 ### P3.5 — Unified recipe library
 
@@ -3223,8 +5445,188 @@ eager against a 949.2 kB budget**, leaving only 3.7 kB headroom.
 boundary before adding substantial UI" item below is now IMMINENT: the
 next eager feature cannot land without it.)
 
-- [ ] Characterization tests before moves.
-- [ ] Split one owned domain per PR with unchanged behavior/contracts.
+**2026-09-14 — lazy-seam diet, `EAGER_JS_BUDGET` unmoved at 920,400 B.**
+Headroom was under 1 kB again (919,781 B on the branch tip `4aafd3a3`).
+Four modules left the eager entry graph behind dynamic `import()` seams —
+`lib/worksheetTransformCommands.ts` (the four Data-menu reshapes),
+`components/Library/OriginSavedPreviewWindow.tsx` (with
+`overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`, which nothing else
+eager reached), `lib/workbookTransfer.ts` (the Copy/Paste/Duplicate core,
+whose four callers were already `async`, so no signature changed) and
+`lib/pageSetupCommand.ts`. Measured cumulatively with `npm run build` after
+`npm ci` and a `node_modules/.vite` wipe, summed exactly as
+`check-bundle-size.mjs` sums: **919,781 → 910,172 B, −9,609 B**, leaving
+10.2 kB of headroom and staying well clear of the
+`EAGER_JS_BUDGET - SLACK` floor (880,400 B) that would force a lower pin.
+This is `plans/BUNDLE_HEADROOM.md` slice 2's shape (metadata eager, handler
+lazy), not its whole scope — the command *metadata* stays eager, so the
+palette, menus and Help search are untouched. A fifth seam
+(`lib/originTemplate.ts` behind the "Import Origin template…" picker) was
+built, measured at **+219 B** — Rollup's new chunk boundary cost more than
+the ~1 kB of modules it moved — and **reverted**, the same way the
+2026-09-09 `DatasetRowPreview` split was. Seams rejected without building,
+on this file's and `check-bundle-size.mjs`'s own recorded grounds:
+`lib/contextActions.ts` / `PlotContextMenu` (right-click latency),
+the command registry itself (first press of every shortcut),
+`lib/openWorkspaceCommand.ts` (its `openFilePicker()` must stay in the
+click's own task or a browser blocks the dialog) and every first-paint
+Library section.
+
+**2026-09-15 review round — two narrower claims and the trees the numbers
+were measured on.** *Failure reporting:* seams 1, 3 and 4 do report a
+chunk-load failure and do retry on the next gesture — the reshape and
+Page-setup commands through `runLazy`'s danger toast, Copy/Paste/Duplicate
+through that slice's own status line + toast. **Seam 2 does neither.**
+`FigureRow`'s `lazy()` + `Suspense` inherits what all 17 `lazy()` sites in
+`frontend/src` already do: measured 2026-09-15, there is no error boundary
+anywhere under `frontend/src` (0 files match
+`componentDidCatch|getDerivedStateFromError|ErrorBoundary`), so a failed
+chunk unmounts the React root with no toast and no status, and React caches
+the rejected payload so the next gesture does not retry. That is a
+pre-existing class the seam is merely consistent with, not something it
+introduced; it is filed as `plans/BUGS_AND_ISSUES.md` **UX-003** and a root
+error boundary is its own task, deliberately not done here. *Measurement
+trees:* both absolutes above (919,781 and 910,172 B) were measured on
+`4aafd3a3`, an ANCESTOR of the commit that landed the work (`b749f804`,
+whose real parent is `50b30a04`, five commits later). The **−9,609 B delta**
+is the load-bearing figure; `EAGER_JS_BUDGET` was not edited, so nothing in
+the repo depends on those absolutes — re-measure them on the branch before
+the pin is next touched. Also closed that round: `copyTextAsync`
+(`lib/clipboard.ts`) so seam 3's Copy starts its clipboard write inside the
+click's own task instead of after the chunk `await` (the same
+user-activation rule `openWorkspaceCommand` was rejected on), and the
+two-argument `.then(onRun, onLoadFailure)` form at every `runLazy` call site
+so a loaded handler's own throw is no longer swallowed with the load's.
+
+- [~] Characterization tests before moves. **First domain done 2026-09-17**
+  (see the box below): `store/plotViewSettings.characterization.test.ts`, 119
+  specs, written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing byte-unchanged after the move. **Second domain done the same
+  day**: `store/reportsFigureDocs.characterization.test.ts`, 55 specs (57
+  after the 2026-09-17 review round added F3's `openFigureDocInWindow`
+  "writes ONLY" spec and F7's `renameReport` exact-string pin), same
+  discipline (green before, byte-identical `md5` after), and it starts with
+  the two guards the first net needed a review round to gain — every writer
+  diffs the WHOLE `getState()` snapshot (so an EXTRA field written is caught,
+  not only a missing one) against a POISONED baseline (so a write that
+  "clears" a field back to its own default still shows as a diff). Still
+  `[~]` because the practice is per-domain and `store/useApp.ts` has more
+  domains left.
+- [~] Split one owned domain per PR with unchanged behavior/contracts.
+  **ONE domain extracted 2026-09-17**, characterization tests first: the
+  singleton **PlotView writers** — axis scales/limits/steps/tick formats/
+  titles, legend/grid/axis-box flags, stack mode + panel fit + page setup,
+  the x/y/y2/group channel keys, reference lines, annotations, per-channel
+  series styles/labels/error pairings, draw order, hidden/solo channels and
+  the waterfall offset (43 actions) — moved verbatim from `store/useApp.ts`
+  to the new `store/plotViewSettings.ts` (277 lines by the repo's
+  `split("\n")` ceiling metric, `PlotViewSettingsSlice`, composed like
+  `datasetMeta.ts`/`gadget.ts`). `store/useApp.ts` **2,322 →
+  2,122 lines (−200)**; its `architecture.test.ts` STORE_PINS entry ratcheted
+  DOWN to 2,122 with a dated justification. Eager bundle for the landed pair:
+  913,336 B at parent `7a1ebd43` (the characterization commit — its body named
+  an orphaned pre-amend twin `7961f865`, same tree, unreachable SHA; corrected
+  here per review F3) → 913,376 B at `6686c23d` (+40 B). Chosen by measured
+  coupling, not size: nothing in the cluster writes `datasets`, so the
+  pending-edit ratchet has nothing to say about it. Deliberately left behind
+  as NOT this domain:
+  `setChannelRole`/`setChannelType` (per-dataset channel config that
+  round-trips the `.dwk`, not view state), the preference setters and the
+  shell-layout toggles.
+  **SECOND domain extracted 2026-09-17**, same discipline: the **report-sheet
+  (#36) and figure-document (#12) lifecycle** — `addReport`, `removeReport`,
+  `renameReport`, `setOpenReport`, `addFigureDoc`, `removeFigureDoc`,
+  `renameFigureDoc`, `duplicateFigureDoc`, `openFigureDraft`, `openFigureDoc`,
+  `openFigureDocInWindow`, `clearFigureDocSeed` (12 actions) — moved to the new
+  `store/reportsFigureDocs.ts` (183 lines, `ReportsFigureDocsSlice`, composed
+  with one import + one word on the `extends` clause + one spread, exactly like
+  `plotViewSettings.ts`). `store/useApp.ts` **2,122 → 2,012 lines (−110)**; its
+  `STORE_PINS` entry ratcheted DOWN to 2,012 with a dated justification.
+  11 of the 12 bodies are byte-identical after whitespace normalisation;
+  the twelfth (`duplicateFigureDoc`) differs by exactly one expression,
+  `` `figd-${Date.now().toString(36)}-${++_idSeq}` `` → `nextFigureDocId()`,
+  because a module-level `let` cannot be incremented across an ES-module
+  boundary. Rather than split the counter per domain (which would renumber
+  ids), the whole shared sequence moved to the new leaf module
+  `store/idSeq.ts` (45 lines, imports nothing); `store/useApp.ts` re-exports
+  `nextDatasetId`/`nextFolderId` from there, so none of its eight importers
+  changed, and `addSmartFolder` — which stays behind — now calls
+  `nextSmartFolderId()`. One characterization spec pins the property that
+  makes this safe: `addReport`, `duplicateFigureDoc`, `addSmartFolder` and
+  `nextDatasetId` still draw four CONSECUTIVE suffixes from one counter.
+  Chosen by measured coupling over the two larger candidates: `loadWorkspace`
+  (170 lines) writes 40 `AppState` fields and is where every newly persisted
+  field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
+  (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
+  this cluster writes 15, of which the 4 it owns means this module holds every
+  ACTION that edits them one at a time — bulk restores write them wholesale
+  and stay outside the cluster on purpose: `loadWorkspace`'s `.dwk` hydrate,
+  `store/trash.ts`'s delete delegates, `store/trashRestore.ts`'s
+  restore-from-trash, `store/workbookTransfer.ts`'s workbook import, and
+  `store/historySnapshot.ts`'s undo/redo restore. Verified beyond the suite:
+  the composed store is unchanged at **587 keys (380 functions)** with
+  byte-identical initial values, the `recordHistory`/`recordMacro`/`status:`
+  literal multisets are unchanged (15/10/6), and neither new module is in any
+  of the repo's 26 modules across 7 pre-existing runtime import cycles
+  (type-only imports erased; `reportsFigureDocs → useApp` has no runtime
+  edge). Eager bundle, the real parent-to-landed pair: **916,718 B at the
+  parent `23914f95`** (the characterization commit, i.e. `HEAD~1` of the
+  extraction) **→ 916,782 B at `e93b193b`, +64 B**; the budget
+  (`EAGER_JS_BUDGET = 920,400`) was not touched and keeps ≈3.6 kB headroom.
+  The box stays `[~]`: `store/useApp.ts` is still far
+  over the 500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
+  `lib/uplotOverlays.ts` are untouched by this pass.
+
+  **2026-09-17 review round — records corrected (findings closed, tests/docs
+  only; verdict CLEAN).** F1: the bundle pair above originally cited two SHAs
+  from an abandoned pre-cherry-pick worktree lineage that are unreachable from
+  this branch (the real work was cherry-picked onto a tip carrying P2.8 +
+  BUG-016 r2 first) — corrected to the real parent/landed pair above, with
+  both SHAs removed from this note. The **+64 B delta stands** (both
+  lineages differ only by the extraction), only the absolutes and headroom
+  (~6.8 kB → ≈3.6 kB) were stale. F2: "578 keys (372 actions)" was
+  the same abandoned-lineage measurement — the true parent `23914f95` (=
+  P2.8's tip) already carries the `mapView` slice (9 extra keys, 8 extra
+  functions), so the correct invariant pair is **587 keys (380 functions)**
+  before and after — the invariance claim itself was always true, only the
+  absolutes were stale. F4: "the four it owns are touched by nothing else
+  outside `loadWorkspace`'s bulk hydrate" was false — `store/trash.ts`,
+  `store/trashRestore.ts`, `store/workbookTransfer.ts` and
+  `store/historySnapshot.ts`'s undo/redo restore all touch them too; reworded
+  above (and in `store/reportsFigureDocs.ts`'s header and
+  `architecture.test.ts`'s pin justification) to what is actually true: this
+  cluster owns every INCREMENTAL action, not exclusive write access. F8: "26
+  pre-existing runtime import cycles" undercounted by conflating SCC count
+  with module count — corrected to "26 modules across 7 pre-existing
+  cycles" everywhere in this note. Also closed that round: F3, a missing
+  "writes ONLY" spec for `openFigureDocInWindow` (the one writer of the
+  twelve without one — sabotage-proven: a stray `showGrid: false` folded
+  into its `set()` passed all 55 existing specs and the whole
+  `src/store` + `architecture.test.ts` scope silently); F5, `store/gadget.ts`,
+  `store/split.ts`, `store/dataIntake.ts`, `store/derivedWorksheets.ts`,
+  `store/importDatasets.ts`, `store/workspaceIO.ts` and
+  `store/workbookTransfer.ts` repointed their `nextDatasetId`/`nextFolderId`
+  import from `./useApp` to the leaf `./idSeq` (import line only, same
+  module instance, no behavior change) — measured with Tarjan over runtime
+  imports (type-only erased): the store's main cyclic SCC shrank **15 → 9**
+  modules and the repo's cyclic-module total **26 → 20**; `gadget`, `split`,
+  `dataIntake`, `derivedWorksheets` and `workbookTransfer` left every cycle,
+  while `importDatasets`/`workspaceIO` stay in a (smaller) one via
+  `lib/plotSelectedTogether.ts`, which still needs the `useApp` VALUE import
+  and so keeps that edge alive. `useApp.ts`'s `nextDatasetId`/`nextFolderId`
+  re-export was KEPT (one real importer remains:
+  `lib/plotSelectedTogether.ts`, which reads the live `useApp` store too, not
+  just the minters). F6, three stale comments pointing the id sequence at
+  `useApp.ts` (`store/workbookIds.ts:~3,~8`, `store/figureLifecycle.ts:~19`)
+  now say `store/idSeq.ts`. F7, one spec added pinning `renameReport`'s
+  stored string EXACTLY (no `trim()`), sabotage-proven. Eager bundle for this
+  closing pass, both trees built after their own `npm ci` and a
+  `node_modules/.vite` wipe: **916,782 B at the parent `e93b193b`** →
+  **916,778 B on this commit, −4 B** (the F5 import repoint moved one chunk
+  boundary slightly; the net effect was a decrease, not a cost) — comfortably
+  inside the ≈3.6 kB headroom and `EAGER_JS_BUDGET` untouched. All findings
+  were test/doc/comment-only, plus the seven import-line repoints in F5; no
+  other runtime behavior changed.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
@@ -3254,8 +5656,102 @@ next eager feature cannot land without it.)
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels.
-- [ ] Screen/export/reopen structural and visual equivalence.
+- [x] ~~Goldens for plain/errors/group/facet/y2/break/waterfall/2-D/decor/panels~~
+  SHIPPED 2026-09-14 (tests only): eight committed figure goldens plus a
+  page golden under `frontend/src/lib/__fixtures__/regressionMatrix/` (`plain`, `errors`,
+  `group`, `facet`, `y2`, `break`, `waterfall`, `decor`, `page`), each the
+  canonical structural projection of a deterministic TS-built fixture
+  (`lib/regressionMatrixFixtures.testkit.ts`). **2-D could not be built and is
+  deliberately absent:** this repo has no first-class 2-D/heatmap FIGURE —
+  `/api/export/map-figure` has no frontend wrapper at all (stated in
+  `lib/api/figures.ts`), `PLOT_MARKS` has no 2-D member, and `FigureDocument`
+  therefore cannot express one, so it has no place on the document path the
+  three legs share. How to add a fixture: add a builder, list it in
+  `MATRIX_FIXTURES`, regenerate with `node
+  frontend/scripts/freeze-regression-matrix.mjs` (added 2026-09-14; `--check`
+  diffs without writing), commit the JSON.
+- [x] ~~Screen/export/reopen STRUCTURAL equivalence~~ SHIPPED 2026-09-14
+  (tests only — no production code changed): `frontend/src/lib/
+  regressionMatrix.test.ts` asserts SCREEN ≡ EXPORT ≡ REOPEN on one canonical
+  structural payload for every fixture, where screen reads the real uPlot
+  options object (`lib/uplotOpts.ts`'s `buildOpts` over `usePlotPayload`'s own
+  pipeline), export reads the real `FigureSpec`
+  (`buildFigureSpecFromDocument`), and reopen reads the FigureDocument that
+  comes back out of `serializeWorkspace` -> `parseWorkspace`; the page leg adds
+  `buildPageSpecFromDocument` vs `resolvePagePanel`/`pagePanelLabels`.
+  Extractors: `lib/regressionMatrix.testkit.ts` (payload + shared helpers),
+  `lib/regressionMatrixLegs.testkit.ts` (screen + export),
+  `lib/regressionMatrixReopen.testkit.ts` (reopen),
+  `lib/regressionMatrixPage.testkit.ts` (the page). The box's wording was
+  narrowed from "structural **and visual** equivalence" to "STRUCTURAL
+  equivalence" on 2026-09-14 so the strike-through matches the delivered scope;
+  the visual half is its own open box below.
+  **Five divergences found, each filed as a bug and pinned by a test asserting
+  BOTH concrete values, none fixed here** (all in `regressionMatrix.test.ts`'s
+  "divergences found" block): D1/BUG-012 a document's `plot.axisBreaks.x`
+  reaches the export wire and survives reopen but NOTHING on screen renders it
+  (`PlotView`, the canvas's whole input, has no break field;
+  `useEffectiveComposition`'s durable fallback covers `facetKey` only and the
+  on-screen break is the transient `composition` from `breakAtGaps`);
+  D2/BUG-013 the canvas offsets every series by `view.waterfall` (measured
+  0.8125 on the fixture) while `FigureSpec` has no waterfall field, so the
+  export draws un-offset curves; D3/BUG-014 a legend rename replaces the whole
+  on-screen label but only `dataset.labels[ch]` on the wire, so the exported
+  legend re-appends the unit ("Loop 1 (au)"); D4/BUG-015 hiding a series shifts
+  later series' palette positions on export (`buildExportStyles` with
+  `cycle: null` over the hidden-FILTERED list) but not on the canvas;
+  D5/BUG-016 a grouped figure's per-series styling reaches the canvas (every
+  level drawn dashed) but `routes/export_figures.py:236-238` drops
+  `series_styles` on the `group_col` branch, so the exported curves are solid
+  and default-coloured.
+
+  **Review round 2026-09-14 (findings closed, tests/fixtures/plans only).** An
+  adversarial review of the matrix found three load-bearing comparisons that
+  were vacuous or false comfort, and eight nits; all are closed here.
+  (1) `FIXTURE_COLORS` — the only fixture with explicit `SeriesStyle.color`
+  overrides — was byte-identical to the first two `TEST_SERIES_PALETTE` slots,
+  so "the override wins" was indistinguishable from "the palette was used";
+  the colours are now disjoint (`#ffe066`/`#66ffd9`/`#ff8fa3`/`#b0ff7f`, all
+  clearing `resolveDrawColor`'s MIN_CONTRAST on the pinned dark theme by 8.7x
+  or more), `decor.json` is regenerated, and the `decor` test asserts both
+  `=== FIXTURE_COLORS[0]` and `!== TEST_SERIES_PALETTE[0]`.
+  (2) `projectExportPage` resolved its panel labels by calling
+  `pagePanelLabels(page.panels, page.output.labelFormat)` — the screen leg's
+  own call on the screen leg's own input — so `spec.label_format` was read by
+  no leg at all; it now rebuilds the slot list from `spec.panels` at
+  `row*cols+col` and resolves from `spec.label_format`, and the `page`
+  parameter is gone.
+  (3) GROUP mode compared `spec.series_styles`, a wire field the renderer
+  provably never reads on that branch, which both gave false comfort and hid
+  D5; `styleComparable("group")` is now `false` (facet's treatment, with the
+  `export_figures.py` citation) and the divergence is BUG-016 with its own
+  test. Nits closed: the five `it.fails` pins became explicit
+  `DIVERGENCE (BUG-01x): …` tests asserting both concrete values and their
+  difference (an `it.fails` passes on any throw); the two wrong fixture counts
+  in the fixtures header (eight figures + page = nine goldens); a committed
+  regeneration script, `frontend/scripts/freeze-regression-matrix.mjs`
+  (`--check` diffs without writing) replacing the "temporarily add a test that
+  writes the JSON" ritual, verified to reproduce the seven unchanged goldens
+  byte-identically; `reopenProject` widened to round-trip ALL four page
+  figures instead of panel 0 only; the module-scope `function document(...)`
+  in the fixtures testkit renamed to `makeFigure` (and the reopen leg split
+  into its own module, the legs testkit having been at 486/500); and two
+  KNOWN-LIMIT notes recorded in the testkit header — colour equality is
+  conditional on contrast-safe colours because of `resolveDrawColor`, and the
+  facet partition plus `mode` are shared-input rather than independent
+  evidence, as is the screen leg's hand-written mirror of `usePlotPayload`
+  (driving the real hook was measured as not cheap: it delivers its payload
+  through an async `fetchPlot` state transition, while `projectScreen` is a
+  synchronous function called ~20 times across the suite).
+  Sabotage-verified: dropping `style?.color` in `seriesStyleCycle.ts` and
+  forcing `label_format: "roman"` in `panelResolve.ts` — both of which the
+  matrix passed before this round — now fail named tests, as do the four
+  product-code mutations the original commit recorded.
+- [ ] Visual (rendered-output) equivalence for the same nine fixtures — the
+  half of the box above that 2026-09-14's structural matrix did not cover.
+  Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`
+  on ONE A8 fixture; the screen canvas has no rendered-output comparison at
+  all.
 - [ ] Migration fixtures for supported contract/workspace versions.
 - [ ] Document one ownership path per field before deleting adapters.
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED

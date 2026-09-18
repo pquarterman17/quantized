@@ -20,6 +20,7 @@ import {
   saveLibraryViewMode,
   type LibraryViewMode,
 } from "./lib/libraryViewPrefs";
+import { BACKEND_UNREACHABLE, recordBackendHealth } from "./store/backendHealth";
 import { useProjectLock } from "./store/projectLock";
 import { useApp } from "./store/useApp";
 import { useGlobalShortcuts } from "./useGlobalShortcuts";
@@ -61,9 +62,30 @@ export default function App() {
   };
 
   useEffect(() => {
+    // P3.4 review round (2026-09-14): also cache the identity for
+    // `store/backendHealth.ts` — the diagnostics bundle reads it back
+    // synchronously at click time instead of re-probing `/api/health` itself.
     health()
-      .then(() => setStatus("backend ready"))
-      .catch(() => setStatus("offline — demo mode"));
+      .then((info) => {
+        // Guard the recorded shape at the boundary rather than trusting
+        // `lib/api.ts`'s `as`-cast response type (P3.4 review round, finding
+        // 1): a hostile or buggy backend can answer with `app`/`version` of
+        // any JSON type, and `BackendIdentity` promises callers a real
+        // `string | null`. `sanitizeServerString` in `lib/diagnostics.ts`
+        // now also coerces defensively, but recording `null` for a
+        // non-string here keeps `BackendInfo` honest at its source instead
+        // of relying on that second layer alone.
+        recordBackendHealth({
+          reachable: true,
+          app: typeof info.app === "string" ? info.app : null,
+          version: typeof info.version === "string" ? info.version : null,
+        });
+        setStatus("backend ready");
+      })
+      .catch(() => {
+        recordBackendHealth(BACKEND_UNREACHABLE);
+        setStatus("offline — demo mode");
+      });
   }, [setStatus]);
 
   // P1.3 wave 3, Lane D: load the GLOBAL-scope Plot Recipe cache once at

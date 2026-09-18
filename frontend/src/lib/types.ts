@@ -6,6 +6,7 @@ import type { ErrorBinding } from "./errorRoles";
 
 import type { ColormapName } from "./colormap";
 import type { DatasetSource } from "./datasetSource";
+import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
@@ -480,6 +481,13 @@ export interface Dataset {
    *  and `exitFlag`. `xKey`/`yKey` are absent on legacy v1 (`{model}`) specs —
    *  recompute then falls back to the live plotted selection. */
   fitSpec?: FitSpec;
+  /** The durable fitted-peak table for this dataset (audit P2.1) — peak
+   *  identity, uncertainty slots, per-peak model, the user's `excluded` flags,
+   *  and a provenance record. Written by the Peaks workshop, read by
+   *  Williamson-Hall's "Use fitted peaks". Additive-optional: absent means "no
+   *  peak table", so a pre-P2.1 `.dwk` loads unchanged and no version bump was
+   *  needed. See lib/peakTable.ts for the contract and its sanitizer. */
+  peakTable?: PeakTable;
   /** Free-text user notes (sample, conditions, caveats); shown in the Inspector Notes card. */
   notes?: string;
   /** User tags for organizing + filtering the Library. */
@@ -640,63 +648,12 @@ export interface BaselineOverlay {
   y: (number | null)[];
 }
 
-/** One detected peak (from /api/peaks/find). `height` is measured ABOVE
- *  `bg` (`calc/peaks.py`'s `find_peaks_robust` returns both) — the apex's
- *  actual y is `height + bg`, never `height` alone (L1/L2 review finding,
- *  usePeaks.ts's "label peaks"/marker-overlay bug: every backgrounded
- *  dataset placed labels/markers a whole background below the real peak).
- *  Declared explicitly (not left to the index signature) so that formula is
- *  type-checked at every call site, not incidental. */
-export interface Peak {
-  center: number;
-  height: number;
-  fwhm: number;
-  prominence: number;
-  localSNR: number;
-  area: number | null;
-  bg: number;
-  [key: string]: unknown;
-}
-
-/** One fitted peak (from /api/peaks/fit-multi, or mapped from /api/peaks/fit).
- *  `eta` is null for non-pseudo-Voigt models (NaN serialized at the wire). */
-export interface FittedPeak {
-  center: number;
-  fwhm: number;
-  height: number;
-  bg: number;
-  eta: number | null;
-  area: number;
-  status: string;
-  model: string;
-  [key: string]: unknown;
-}
-
-/** Result of a simultaneous multi-peak fit (/api/peaks/fit-multi). `R2`/`rmse`
- *  are NaN-serialized to null when synthesized from independent per-peak fits. */
-export interface MultiFitResult {
-  peaks: FittedPeak[];
-  bgCoeffs: number[];
-  R2: number | null;
-  rmse: number | null;
-  nPeaks: number;
-  model: string;
-}
-
-/** Result of a single-peak window fit (/api/peaks/fit). */
-export interface SinglePeakFit {
-  success: boolean;
-  reason: string;
-  center: number;
-  fwhm: number;
-  height: number;
-  bg: number;
-  eta: number | null;
-  area: number;
-  params: number[];
-  model: string;
-  window: number[];
-}
+// The /api/peaks wire types (Peak / FittedPeak / MultiFitResult /
+// SinglePeakFit) MOVED to ./peakTable 2026-09-14 (audit P2.1) and are
+// re-exported here so every existing importer is untouched: that file is now
+// the single home for the peak contract, since P2.1's durable `PeakTable`
+// (below, on Dataset) is built from and rehydrated into exactly these shapes.
+export type { FittedPeak, MultiFitResult, Peak, SinglePeakFit } from "./peakTable";
 
 /** One material SLD preset (from GET /api/reflectivity/presets). `sldX` is the
  *  X-ray SLD (Å⁻²), `sldN` the neutron SLD, `sldImag` the X-ray imaginary part. */
@@ -739,6 +696,12 @@ export interface RegionShade {
 
 /** Per-channel line style (solid/dashed/dotted) — maps to a uPlot dash array. */
 export type LineStyle = "solid" | "dashed" | "dotted";
+
+/** The app-wide default-trace preference's four values (`store/prefs.ts`'s
+ *  `TRACES`, which sanitizes the persisted blob against exactly this list).
+ *  Beside `LineStyle`/`MarkerShape` rather than travelling as a bare `string`:
+ *  `markers.markerDecision` and `uplotOpts.buildOpts` branch on it BY VALUE. */
+export type DefaultTrace = "Line" | "Line + markers" | "Scatter" | "Step";
 
 /** Stepped-line alignment (GAP_PLOTTYPES — Graph Builder "step" mark), the
  *  same three-way vocabulary as matplotlib's `drawstyle` ("steps-pre"/

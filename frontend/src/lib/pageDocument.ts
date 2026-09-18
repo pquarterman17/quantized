@@ -111,6 +111,21 @@ export interface PageOutputSettings {
   dpi: number;
   labelFormat: PageLabelFormat;
   labelPos: PageLabelPosition;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: page-wide print-safe (greyscale)
+   *  output. The backend's `PagePanel.greyscale` is genuinely PER PANEL, but
+   *  neither PageDocument export path offers per-panel UI, so this one page
+   *  setting is applied to every panel when on (`lib/pageGreyscale.ts`).
+   *
+   *  ADDITIVE, absent === off — no schema version bump, same convention as
+   *  `createdAt`/`modifiedAt` below and unlike `layout` above: an older build
+   *  that ignores this field still renders the page exactly as it always did
+   *  (coloured), so there is nothing for a version gate to protect. The field
+   *  is therefore only ever PRESENT-AND-TRUE in a document this build writes
+   *  (`sanitizeOutput` keeps a literal `true` and drops everything else; the
+   *  composer's own setter deletes the key when unticked), so a page whose
+   *  greyscale was turned on and off again is byte-identical to one that
+   *  never had it — and does not read as dirty. */
+  greyscale?: boolean;
 }
 
 /** A versioned, persisted multi-panel page (F3.1). Row-major slot addressing
@@ -184,6 +199,12 @@ function sanitizeOutput(value: unknown): PageOutputSettings {
     dpi,
     labelFormat,
     labelPos,
+    // P3.3: only a literal `true` survives -- absent, `false` and any junk
+    // value all load as "off" WITHOUT the key, the single canonical shape
+    // (see PageOutputSettings.greyscale's own doc). DEFAULT_OUTPUT therefore
+    // has no `greyscale` entry: a document saved before this field existed
+    // round-trips byte-identically.
+    ...(o.greyscale === true ? { greyscale: true } : {}),
   };
 }
 

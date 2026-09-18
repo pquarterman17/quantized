@@ -78,7 +78,7 @@ export interface PackProjectPreview {
    *  verbatim (never re-derived) so `startPackProject` can resend this
    *  SAME string to `pack_start`, byte-for-byte, satisfying the backend's
    *  own `sha256(content)` staleness check trivially whenever the content
-   *  is otherwise unchanged. `packProjectRun.ts`'s `contentFingerprint`
+   *  is otherwise unchanged. `packProjectContent.ts`'s `contentFingerprint`
    *  is the "did the project meaningfully change since preview" check —
    *  never a raw string compare against this field directly, because
    *  `serializeWorkspace` stamps a fresh `savedAt` on every call and a
@@ -165,6 +165,48 @@ function reject(
   set({ lastRejected: { from, action } });
 }
 
+// BUG-011 review nit 3: `startPackProject`'s phase check alone cannot block
+// a second "Pack Project" click DURING `runStartPackProject`'s book-resolve
+// await -- `phase` stays `awaiting_confirmation` for that entire window (it
+// only becomes `packing` once the resolve step and the fingerprint check
+// both pass, see that action's own doc). This flag closes the window
+// without moving `phase` itself early: `phase` staying put is what keeps
+// Cancel routing through its existing `awaiting_confirmation` branch
+// (straight to `cancelled`, no backend call) instead of the `packing`
+// branch, which would ask the backend to cancel a copy that was never
+// actually started and has no poll loop yet running to resolve it.
+let startInFlight = false;
+
+// BUG-011 round 2 finding #1: the ONLY place that used to clear this flag was
+// `startPackProject`'s own `finally`, which never runs while the awaited
+// `runStartPackProject(...)` call is still pending -- and `serializeCurrent-
+// WorkspaceForPack`'s book-resolve await has no timeout, so a `fetchBookData`
+// that never settles pinned `startInFlight` true FOREVER: neither `Cancel`
+// nor `Reset` (a fresh preview included) could recover Start pack for the
+// rest of the session. Both `resetPackProject` and `cancelPackProject` below
+// now clear it directly and SYNCHRONOUSLY -- independent of whether the
+// stuck fetch ever settles -- rather than relying on that `finally`.
+//
+// BUG-011 round 3 finding #1: that fix's own `finally` was still
+// UNCONDITIONAL, so it traded "stuck forever" for "clears a flag it may no
+// longer own" -- a LATE-settling (not eternally hung) abandoned attempt's
+// `finally` fires after `resetPackProject`/`cancelPackProject` already ended
+// it, and a NEWER attempt can by then be holding the guard through its OWN
+// resolve window. `startEpoch` makes the flag attempt-scoped: every attempt
+// captures the epoch as it stands when it sets the flag, and every path that
+// INTENTIONALLY clears the flag (a new `startPackProject`, or a `reset`/
+// `cancel` ending the current attempt) bumps it first, so a stale `finally`
+// recognizes it is no longer the current attempt and leaves the flag alone.
+let startEpoch = 0;
+
+/** Exported for test use only: mirrors `packProjectRun.ts`'s own
+ *  `resetGeneration`/`resetThrottle`/`resetPollSequencing` test-reset role
+ *  for THIS module's one piece of state outside the Zustand store proper. */
+export function resetStartInFlightForTests(): void {
+  startInFlight = false;
+  startEpoch += 1;
+}
+
 export const usePackProject = create<PackProjectState>((set, get) => ({
   phase: "idle",
   progress: EMPTY_PACK_PROGRESS,
@@ -187,17 +229,40 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
 
   startPackProject: async (approvedManifest) => {
     const phase = get().phase;
-    if (phase !== "awaiting_confirmation") {
+    if (phase !== "awaiting_confirmation" || startInFlight) {
       reject(set, phase, "startPackProject");
       return;
     }
-    const { runStartPackProject } = await import("./packProjectRun");
-    await runStartPackProject(get, set, approvedManifest);
+    startInFlight = true;
+    const myEpoch = ++startEpoch; // this attempt's own token -- see the flag's doc above
+    try {
+      const { runStartPackProject } = await import("./packProjectRun");
+      await runStartPackProject(get, set, approvedManifest);
+    } finally {
+      // Round 3 finding #1: only clear the flag if THIS attempt still owns
+      // it -- a reset/cancel (or a newer start) that ran while this one was
+      // awaiting has already bumped `startEpoch` past `myEpoch`, and clearing
+      // the flag here would stomp whatever newer attempt now holds it.
+      if (startEpoch === myEpoch) startInFlight = false;
+    }
   },
 
   cancelPackProject: async () => {
     const phase = get().phase;
     if (!isActive(phase)) return; // idle/terminal: idempotent no-op, not a rejection
+    // Round 2 finding #1: a cancel during `startPackProject`'s own resolve
+    // window (phase still `awaiting_confirmation` -- see that action's doc)
+    // ends the attempt just as definitively as a reset does, and must not
+    // wait for the stuck fetch to eventually settle before releasing the
+    // guard either. Harmless once Start has actually reached `packing`: by
+    // then a real click cannot race the guard past the phase check anyway
+    // (`phase !== "awaiting_confirmation"` alone already rejects it), and
+    // `startPackProject`'s own `finally` clears the same flag again, moot,
+    // once its awaited call does eventually return -- and round 3's epoch
+    // bump here means that stale `finally` recognizes the moot-ness itself
+    // instead of relying on this line having already cleared it first.
+    startInFlight = false;
+    startEpoch += 1;
     const { runCancelPackProject } = await import("./packProjectRun");
     await runCancelPackProject(set, phase);
   },
@@ -214,6 +279,8 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
       reject(set, phase, "resetPackProject");
       return;
     }
+    startInFlight = false; // round 2 finding #1: a reset ends the attempt, settled or not
+    startEpoch += 1; // round 3 finding #1: and disowns it, so a late finally can't stomp a newer one
     const { runResetPackProject } = await import("./packProjectRun");
     await runResetPackProject(set);
   },

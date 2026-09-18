@@ -152,8 +152,17 @@ export function buildUiCommands(s: StoreGet): Action[] {
           // so neither the renderer nor the collector belongs in the eager
           // graph that `commands/` otherwise sits in. Eagerly importing it put
           // the build over the size ratchet, which is precisely the case
-          // check-bundle-size.mjs tells you to solve this way.
+          // check-bundle-size.mjs tells you to solve this way. `Shell/MenuBar`
+          // warms this same chunk when the Help menu opens, so from the
+          // second click in a session onward this `await` resolves from the
+          // module cache instantly; the first click of a session can still
+          // await a real fetch for it (P3.4 review round, finding 3).
           const { diagnosticsText } = await import("../store/diagnostics");
+          // Synchronous (P3.4 review round, 2026-09-14): reads the backend
+          // identity `store/backendHealth.ts` cached from App.tsx's startup
+          // probe rather than awaiting a fresh network round-trip here — see
+          // that module's header for why an awaited probe belongs nowhere
+          // between this click and the clipboard write below.
           const text = diagnosticsText();
           if (await copyText(text)) {
             s().setStatus("diagnostics copied — no dataset names, paths, or values included");

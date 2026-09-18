@@ -100,6 +100,26 @@ export interface FigureSpec {
   dpi?: number;
   /** MAIN #35: render on a transparent canvas (Copy figure preference). */
   transparent?: boolean;
+  /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
+   *  colour is overridden to a grey ramp and the dash/marker cycle is
+   *  forced server-side (`calc.figure_greyscale`). Omitted/`false` = today's
+   *  coloured export. An EXPORT-ONLY divergence from the canvas (the on-
+   *  screen plot stays coloured either way) -- a user-chosen export
+   *  transform, not a derived style, so it does not affect the P3.3 style-
+   *  parity invariant `series_styles` exists to satisfy. No-op once
+   *  `facets` is set (see this route's own doc). This SAME `FigureSpec` is
+   *  also embedded per-panel in a `/api/export/figure-page` request
+   *  (`PagePanelSpec.figure`, `lib/api/figurePage.ts`) -- review fix P3.3-F1
+   *  threads it into `calc.figure_page.PagePanel.greyscale` there too,
+   *  honored PER PANEL (a page can mix a greyscale panel next to a
+   *  coloured one); it used to reach that route and silently do nothing.
+   *  `/api/export/map-figure` (`MapFigureRequest` backend-side --
+   *  contour/heatmap/surface/waterfall; no frontend wrapper exists yet) has
+   *  NO equivalent field at all -- every kind there colours by a continuous
+   *  z-value (`cmap`), the same "colour IS the plotted quantity" case this
+   *  flag already leaves untouched for a `color_by` scatter, so there is no
+   *  categorical palette to grey. */
+  greyscale?: boolean;
   /** MAIN #36: per-plotted-series error spans, so an exported figure shows
    *  the same bars the screen does. `null` for a series with none. */
   error_spans?: ({ x?: ErrorPair; y?: ErrorPair } | null)[];
@@ -112,13 +132,26 @@ export interface FigureSpec {
   x_label?: string;
   y_label?: string;
   series_styles?: (ExportSeriesStyle | null)[];
+  /** BUG-013: the waterfall view's per-plotted-series vertical offset, in Y
+   *  data units, aligned to `y_keys`. RESOLVED client-side
+   *  (`lib/waterfallOffset.ts` — it is a fraction of a y-range the wire cannot
+   *  reconstruct) and simply added to each series by
+   *  `calc.plotting.apply_waterfall_offsets`, so the
+   *  exported curves stagger exactly as the canvas draws them while `dataset`
+   *  keeps the true, un-shifted values. Omitted for a view with no waterfall,
+   *  and for the `group_col`/`facets` shapes whose renderer cannot align a
+   *  `y_keys`-keyed list. */
+  waterfall_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
   filename?: string;
 }
 
-export function exportFigure(body: FigureSpec): Promise<void> {
-  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`);
+/** `signal` — P3.4 safe-cancel-for-export (lib/exportActive.ts): aborts the
+ *  in-flight render/download; postDownload's own race guard means a cancel
+ *  can never still trigger the browser download once the response lands. */
+export function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** Preview render + element hit-map (#13): PNG + per-artist pixel boxes. */
@@ -127,9 +160,19 @@ export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
 }
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG
- *  preview (the figure builder), as opposed to exportFigure which downloads. */
-export function renderFigureBlob(body: FigureSpec): Promise<Blob> {
-  return postBlob("/api/export/figure", body);
+ *  preview (the figure builder), as opposed to exportFigure which downloads.
+ *  `signal` — see exportFigure. For "Copy figure", postBlob's own race guard
+ *  only closes part of the cancel race: it keeps a cancelled render from ever
+ *  RESOLVING this promise with a post-cancel blob. `lib/clipboard.ts`'s
+ *  copyImageAsync/copySvgAsync re-check the SAME signal again, one microtask
+ *  later when they build the `ClipboardItem` — that narrows the remaining
+ *  gap but does not close it: a cancel landing after THAT check (the
+ *  browser's own read of the value promise, or the write itself) is not
+ *  observable from JS, and the clipboard write still completes (see that
+ *  module's own doc, and lib/exportActive.ts's post-`fn` abort check for how
+ *  that residual is reported). */
+export function renderFigureBlob(body: FigureSpec, signal?: AbortSignal): Promise<Blob> {
+  return postBlob("/api/export/figure", body, signal);
 }
 
 /** Posted joint-parameter samples for a corner (pairs) plot — e.g.

@@ -12,8 +12,10 @@ import type uPlot from "uplot";
 
 import { suggestLogScale } from "../../lib/autoscale";
 import { copyImage, copyText, payloadToTSV } from "../../lib/clipboard";
-import { clampPlottedRange, rowsInXRange, type PlotPayload } from "../../lib/plotdata";
+import { xExtent } from "../../lib/plotDecimate";
+import { clampPlottedRange, rowsInXRange, type PlotPayload, type PlotSeriesSpec } from "../../lib/plotdata";
 import { clipboardSvgSupported } from "../../lib/clipboard";
+import { withYRange } from "../../lib/regionSelect";
 // Bundle: `copyFigureCommand` (and the whole `figureSpec` transport builder
 // behind it) is click-only — loaded via dynamic import in `copyFigure`/
 // `copyFigureSvg` below, keeping it off the eager pre-paint path. The command
@@ -40,6 +42,31 @@ export interface PlotStageActions {
   snapshot: () => void;
 }
 
+/** [min, max] across every plotted y series on the region box's own axis —
+ *  `cols[0]` (x) is always skipped, and `cols[s]` aligns with `series[s-1]`,
+ *  one x column ahead. Mirrors `uplotOpts`'s `regionYScale` EXACTLY (same
+ *  rule, same series) so the read-back and the clamp never disagree: any
+ *  secondary-axis (`axis:1`) series — a dy/dx differentiate overlay, or a
+ *  dual-Y channel the user toggled to Y2 — is skipped whenever at least one
+ *  PRIMARY series is plotted (its differently-calibrated range must never
+ *  leak into the primary clamp); only when EVERY plotted series is on the
+ *  secondary axis does the clamp fall back to ITS extent instead of skipping
+ *  the clamp altogether (round-2 finding 1 — a lone Y2-toggled series is
+ *  still a real, deliberately-fit series, not one with no extent at all).
+ *  Via plotDecimate's already-eager `xExtent` reused per series (same
+ *  "finite [min,max] of one array" shape). */
+function plottedYExtent(cols: (number | null)[][], series: PlotSeriesSpec[]): [number, number] | null {
+  const hasPrimary = series.some((s) => (s.axis ?? 0) !== 1);
+  let lo = Infinity, hi = -Infinity;
+  for (let s = 1; s < cols.length; s++) {
+    const isSecondary = (series[s - 1]?.axis ?? 0) === 1;
+    if (hasPrimary ? isSecondary : !isSecondary) continue;
+    const e = xExtent(cols[s]);
+    if (e) { lo = Math.min(lo, e[0]); hi = Math.max(hi, e[1]); }
+  }
+  return lo <= hi ? [lo, hi] : null;
+}
+
 /** Build the toolbar/context-menu action callbacks for the active plot, plus
  *  the two PlotViewport drag-gesture callbacks (onRegionSelect/onRangeSelect)
  *  — a separate return shape, not folded into PlotStageActions, since
@@ -50,7 +77,7 @@ export function usePlotStageActions(
   displayPayload: PlotPayload | null,
   active: Dataset | null | undefined,
 ): PlotStageActions & {
-  onRegionSelect: (x0: number, x1: number) => void;
+  onRegionSelect: (x0: number, x1: number, y0?: number, y1?: number) => void;
   onRangeSelect: (x0: number, x1: number) => void;
 } {
   function resetView() {
@@ -130,12 +157,20 @@ export function usePlotStageActions(
     });
   }
 
-  // Baseline-workshop region pick (drag on the "region" tool): clamp to the
-  // plotted x-extent, stash it via setRegionPicked, then exit to "zoom".
-  function onRegionSelect(x0: number, x1: number) {
+  // Baseline-workshop region pick (drag on the "region" tool): clamp x to the
+  // plotted x-extent exactly as before. A genuine 2-D box drag (MATLAB
+  // `onBGMouseUp` parity, GAP #96/#20) also carries y0/y1 — buildOpts only
+  // supplies them once the drag's vertical span clears its own pixel
+  // threshold, so an ordinary x-only drag arrives here with y0/y1 undefined
+  // and `withYRange` leaves the pick x-only, byte-identical to before this
+  // existed. Stash via setRegionPicked, then exit to "zoom".
+  function onRegionSelect(x0: number, x1: number, y0?: number, y1?: number) {
     if (!displayPayload) return;
-    const range = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
-    if (range) useApp.getState().setRegionPicked(range);
+    const x = clampPlottedRange(displayPayload.data[0] as (number | null)[], x0, x1);
+    if (!x) return;
+    const yExtent = plottedYExtent(displayPayload.data as (number | null)[][], displayPayload.series);
+    const picked = withYRange(x, y0, y1, yExtent ? { min: yExtent[0], max: yExtent[1] } : undefined);
+    useApp.getState().setRegionPicked(picked);
     useApp.getState().setPlotTool("zoom");
   }
 

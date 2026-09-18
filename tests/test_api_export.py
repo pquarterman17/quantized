@@ -307,6 +307,20 @@ def test_figure_facets_pdf_and_png_render() -> None:
         assert resp.content[: len(magic)] == magic
 
 
+def test_figure_facets_greyscale_is_a_no_op() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: a facet panel never resolves
+    # per-series colour (FEATURE-001, plans/BUGS_AND_ISSUES.md), so the route
+    # never threads `greyscale` into the facet renderer at all -- a faceted
+    # export renders BYTE-IDENTICAL whether or not `greyscale` is requested,
+    # rather than silently doing nothing while looking wired. PNG (not
+    # PDF/SVG): deterministic, no embedded timestamp to strip.
+    base = {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()}
+    colour = client.post("/api/export/figure", json=base)
+    grey = client.post("/api/export/figure", json={**base, "greyscale": True})
+    assert colour.status_code == grey.status_code == 200
+    assert colour.content == grey.content
+
+
 def test_figure_facets_title_and_labels_apply_figure_wide() -> None:
     resp = client.post(
         "/api/export/figure",
@@ -486,6 +500,25 @@ def test_map_figure_log_contour_svg() -> None:
 def test_map_figure_bad_kind_is_422() -> None:
     resp = client.post("/api/export/map-figure", json={**_demo_map(), "kind": "nope"})
     assert resp.status_code == 422
+
+
+def test_map_figure_waterfall_has_no_greyscale_field_and_ignores_the_key() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 review (F1): `MapFigureRequest` has NO
+    # `greyscale` field at all, deliberately -- every `kind` here (including
+    # `waterfall`, the one that draws one line per row rather than a
+    # continuous surface) colours by a continuous z-value through `cmap`, the
+    # same "colour IS the plotted quantity" case `FigureRequest.greyscale`
+    # already leaves untouched for a `color_by` scatter. An unrecognized
+    # `greyscale` key in the JSON body is silently ignored by pydantic's
+    # default `extra="ignore"` -- byte-identical to never having sent it,
+    # the same no-op contract `test_figure_facets_greyscale_is_a_no_op` pins
+    # for the (very different) facets case. PNG: deterministic, no embedded
+    # timestamp to strip.
+    base = {**_demo_map(), "kind": "waterfall", "fmt": "png"}
+    plain = client.post("/api/export/map-figure", json=base)
+    with_key = client.post("/api/export/map-figure", json={**base, "greyscale": True})
+    assert plain.status_code == with_key.status_code == 200
+    assert plain.content == with_key.content
 
 
 def test_statplot_box_pdf() -> None:
@@ -714,6 +747,118 @@ def test_figure_series_styles_applied() -> None:
     )
     assert resp.status_code == 200
     assert "#abcdef" in resp.content.decode("utf-8", "ignore")
+
+
+def test_figure_greyscale_overrides_an_explicit_series_colour() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: `greyscale` wins over an explicit
+    # per-series `color` -- print-safe mode is not an accent, it replaces
+    # colour outright (calc.figure_greyscale.apply_greyscale).
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "greyscale": True,
+            "series_styles": [{"color": "#abcdef"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert "#abcdef" not in resp.content.decode("utf-8", "ignore")
+
+
+def test_figure_greyscale_defaults_to_off() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "svg",
+            "series_styles": [{"color": "#abcdef"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert "#abcdef" in resp.content.decode("utf-8", "ignore")
+
+
+# P3.3 review (F5): route-level greyscale coverage for the non-flat paths
+# `_render_impl` also serves -- group_col/y2/x_breaks -- mirroring
+# test_calc_figure.py's own `_achromatic_hexes`. The prior "group_col" unit
+# test (test_calc_figure.py) called `render_figure` directly and never
+# actually went through the route's grouped-resolve branch (`_figure_series`'s
+# `group_col` path, which resolves the styles and expands them onto the
+# per-level series itself -- `calc.figure_group_styles`, BUG-016; it used to
+# build `series_styles=None` there, which is the bug that entry records);
+# these do.
+# N1 (round-2 review): widened from stroke-only to stroke-OR-fill, same as
+# test_calc_figure.py's `_achromatic_hexes` -- a chromatic `fill:` (e.g. the
+# error-bar cap defect F6 fixed) was invisible to every route-level test
+# using this helper (group_col/y2/x_breaks/figure-page). `#ffffff` and text
+# are excluded for the same reason as there: not a series colour.
+_STROKE_HEX = re.compile(r"stroke:\s*#([0-9a-fA-F]{6})")
+_FILL_HEX = re.compile(r"fill:\s*#([0-9a-fA-F]{6})")
+
+
+def _assert_only_achromatic_strokes(svg: str) -> None:
+    hexes = _STROKE_HEX.findall(svg) + _FILL_HEX.findall(svg)
+    hexes = [h for h in hexes if h.lower() not in ("ffffff", "000000")]
+    assert hexes  # the probe actually found series strokes/fills, not nothing
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
+
+
+def test_figure_group_col_greyscale_renders_achromatic_strokes() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _group_fixture(),
+            "fmt": "svg",
+            "y_keys": ["Value"],
+            "group_col": 1,
+            "greyscale": True,
+        },
+    )
+    assert resp.status_code == 200
+    _assert_only_achromatic_strokes(resp.content.decode("utf-8", "ignore"))
+
+
+def test_figure_y2_greyscale_renders_achromatic_strokes() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _three_channel_dataset(),
+            "fmt": "svg",
+            "y2_keys": ["c"],
+            "greyscale": True,
+        },
+    )
+    assert resp.status_code == 200
+    _assert_only_achromatic_strokes(resp.content.decode("utf-8", "ignore"))
+
+
+def test_figure_x_breaks_greyscale_renders_achromatic_strokes() -> None:
+    ds = {
+        "time": [0.0, 1.0, 2.0, 3.0, 60.0, 61.0, 62.0],
+        "values": [
+            [1.0, 2.0], [2.0, 3.0], [1.5, 2.5], [3.0, 4.0],
+            [4.0, 5.0], [3.5, 4.5], [5.0, 6.0],
+        ],
+        "labels": ["a", "b"],
+        "units": ["", ""],
+        "metadata": {},
+    }
+    grey = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": ds, "fmt": "svg", "greyscale": True,
+            "overrides": {"x_breaks": [[3.0, 60.0]]},
+        },
+    )
+    colour = client.post(
+        "/api/export/figure",
+        json={"dataset": ds, "fmt": "svg", "overrides": {"x_breaks": [[3.0, 60.0]]}},
+    )
+    assert grey.status_code == colour.status_code == 200
+    assert grey.content != colour.content
+    _assert_only_achromatic_strokes(grey.content.decode("utf-8", "ignore"))
 
 
 def test_figure_x_fmt_and_y_fmt_render_and_appear_in_svg() -> None:
@@ -1688,6 +1833,99 @@ def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
     assert resp.content[:8] == b"\x89PNG\r\n\x1a\n"
 
 
+# P3.3 review (F1): `PagePanelSpec.figure` IS a `FigureRequest`, so
+# `greyscale` was already part of the figure-page OpenAPI schema and 200'd,
+# but `export_figure_page` never read `f.greyscale` and `PagePanel` had no
+# such field -- a silent no-op, unlike the DOCUMENTED facets no-op above.
+# Fixed: threaded PER PANEL (calc.figure_page.PagePanel.greyscale), applied
+# in `_draw_panel` before either the flat or the y2-twinx draw path.
+def test_figure_page_panel_greyscale_produces_different_bytes() -> None:
+    ds = _three_channel_dataset()
+    base_panel = {"figure": {"dataset": ds, "fmt": "png"}, "row": 0, "col": 0}
+    colour = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [base_panel], "fmt": "png"},
+    )
+    grey_panel = {**base_panel, "figure": {**base_panel["figure"], "greyscale": True}}
+    grey = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [grey_panel], "fmt": "png"},
+    )
+    assert colour.status_code == grey.status_code == 200
+    assert colour.content != grey.content
+
+
+def test_figure_page_panel_greyscale_svg_strokes_are_achromatic() -> None:
+    # Mirrors test_calc_figure.py's test_greyscale_svg_every_stroke_is_
+    # achromatic, at the figure-page route this time.
+    panel = {
+        "figure": {"dataset": _three_channel_dataset(), "fmt": "svg", "greyscale": True},
+        "row": 0,
+        "col": 0,
+    }
+    resp = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [panel], "fmt": "svg"},
+    )
+    assert resp.status_code == 200
+    _assert_only_achromatic_strokes(resp.content.decode("utf-8", "ignore"))
+
+
+def test_figure_page_can_mix_a_greyscale_panel_with_a_coloured_one() -> None:
+    # A page-wide switch would be wrong here: `greyscale` is per-panel, so a
+    # page can freely mix one greyscale panel next to a coloured one.
+    ds = _three_channel_dataset()
+    grey_panel = {
+        "figure": {"dataset": ds, "fmt": "svg", "y_keys": ["a"], "greyscale": True},
+        "row": 0,
+        "col": 0,
+    }
+    colour_panel = {
+        "figure": {
+            "dataset": ds, "fmt": "svg", "y_keys": ["b"],
+            "series_styles": [{"color": "#ff00ff"}],
+        },
+        "row": 0,
+        "col": 1,
+    }
+    resp = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 2, "panels": [grey_panel, colour_panel], "fmt": "svg"},
+    )
+    assert resp.status_code == 200
+    svg = resp.content.decode("utf-8", "ignore")
+    # The coloured panel's explicit magenta survives untouched next to the
+    # greyscale panel's own grey -- proof this is per-panel, not page-wide.
+    assert "#ff00ff" in svg
+
+
+def test_figure_page_facet_panel_greyscale_is_a_no_op() -> None:
+    # N4 (round-2 review): mirrors test_figure_facets_greyscale_is_a_no_op
+    # (the standalone `/figure` route), at the figure-page route -- a
+    # faceted panel here goes through calc.figure_page_facets.
+    # draw_facet_panel_cell, which never reads `PagePanel.greyscale`
+    # (export_page.py's facet branch above never even sets it), so the
+    # exported page must render BYTE-IDENTICAL whether or not the panel's
+    # `greyscale` key is set. PNG (not SVG): deterministic, no embedded
+    # timestamp to strip.
+    base_panel = {
+        "figure": {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()},
+        "row": 0,
+        "col": 0,
+    }
+    colour = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [base_panel], "fmt": "png"},
+    )
+    grey_panel = {**base_panel, "figure": {**base_panel["figure"], "greyscale": True}}
+    grey = client.post(
+        "/api/export/figure-page",
+        json={"rows": 1, "cols": 1, "panels": [grey_panel], "fmt": "png"},
+    )
+    assert colour.status_code == grey.status_code == 200
+    assert colour.content == grey.content
+
+
 # ── F4.4 follow-up (2026-08-24): routes/export_page.py used to render a
 # facet-bound panel by pre-rendering a whole PNG (render_facets_figure at a
 # fixed dpi) and embedding it via imshow -- one raster cell inside an
@@ -2057,3 +2295,101 @@ def test_export_opj_preserves_cat_levels_when_stamping_the_book_name(monkeypatch
     # survived it.
     assert seen[0].metadata["origin_book"] == "LoopA"
     assert seen[0].cat_levels == {1: ("alpha", "beta")}
+
+
+# ── BUG-016 round 4 (review F9): the document-only provenance key ───────────
+# `colorDerived` is the frontend's record of whether a pinned `color` was the
+# palette slot or a colour the user chose. It governs whether a GROUPED request
+# may send that colour at all, and the client deletes it at one wire boundary
+# (`lib/exportStyles.toWireSeriesStyles`). Until this guard the promise had
+# frontend-only enforcement -- `series_styles` is a loose dict, so a leak was
+# accepted and ignored. A leak means the boundary was skipped, so the colour
+# beside it was never filtered either; refusing names the bug at the request
+# instead of rendering a figure whose grouped levels are all one hue.
+def test_a_leaked_colorDerived_in_series_styles_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "pdf",
+            "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "colorDerived" in resp.text
+    assert "series_styles[0]" in resp.text
+
+
+def test_a_leaked_colorDerived_is_422_on_a_later_entry_and_on_a_page_panel() -> None:
+    # Indexing is per-entry (a null entry is skipped, not counted as a leak)...
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "series_styles": [None, {"width": 2}, {"color": "#ffe066", "colorDerived": False}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "series_styles[2]" in resp.text
+    # ...and the page route inherits the rule through `PagePanelSpec.figure`,
+    # which is the same model -- `spatialPageExport` builds panel styles too.
+    page = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(),
+                        "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+                    },
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+        },
+    )
+    assert page.status_code == 422
+    assert "colorDerived" in page.text
+
+
+def test_a_leaked_colorDerived_is_422_on_the_hitmap_route_too() -> None:
+    # The third route that reads `FigureRequest`, and the one the two tests
+    # above left resting on model identity alone (round-4 review F7). It
+    # matters on its own terms: the hitmap is what the Figure Builder preview
+    # clicks against, so a request that skipped the wire boundary would map
+    # elements for a figure whose grouped levels are all one hue and the user
+    # would be selecting on it.
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(),
+            "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "colorDerived" in resp.text
+    assert "series_styles[0]" in resp.text
+    # Non-vacuous: the same request without the document-only key is served.
+    ok = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "series_styles": [{"color": "#7fb3ff"}]},
+    )
+    assert ok.status_code == 200
+
+
+def test_an_ordinary_unrecognized_style_key_still_renders() -> None:
+    # The narrowness of the guard, pinned: `series_styles` is documented as a
+    # loose dict whose unknown keys degrade gracefully. Only the document-only
+    # list 422s -- a future or older client's harmless extra must still export.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "pdf",
+            "series_styles": [{"color": "#7fb3ff", "not_a_real_key": "whatever"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"

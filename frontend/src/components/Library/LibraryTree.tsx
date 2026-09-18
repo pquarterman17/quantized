@@ -28,6 +28,7 @@ import { focusRowWhenRendered, useListVirtualization } from "./useListVirtualiza
 import { subtreeCount, subtreeCountIndex } from "../../lib/foldertree";
 import { folderDeleteActions, isContextMenuKeyEvent, runContextAction } from "../../lib/contextActions";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
+import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
 import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
 import { workbookDeleteActions } from "../../lib/workbookContextActions";
@@ -163,6 +164,19 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- focusRow closes over virt, stable per render intent
   }, [rows]);
 
+  // ORGANIC-SCROLL focus fallback (lib/scrollOutFocus). A mouse-wheel scroll
+  // that unmounts the focused row orphans focus to <body> with no keystroke to
+  // recover it — this container takes it instead, and onKeyDown resumes from
+  // the roving row. Placed after the removal recovery above, whose case (the
+  // row is GONE from the model) the shared predicate excludes.
+  useEffect(() => {
+    const row = rows[indexOfKey(rows, focusedKeyRef.current)];
+    const selector = row ? rowSelector(row) : null;
+    if (needsScrollOutFocusFallback(virt.virtualized, selector, row != null, containerRef.current)) {
+      containerRef.current?.focus();
+    }
+  }, [virt.virtualized, virt.start, virt.end, rows]);
+
   // E-c3: "Show in Library" (and any ordinary selection change) keeps the
   // now-selected row inside the rendered window — selectLibraryNode runs
   // BEFORE the reveal effect's scrollIntoView retry (Library.tsx), so
@@ -196,10 +210,20 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
   }, [selectedKey, virt.virtualized]);
 
   const onFocusCapture = (e: React.FocusEvent) => {
+    // The scroll-out fallback holder is not a row: keep the roving key it was
+    // handed focus to stand in for, rather than clearing it to null.
+    if (e.target === containerRef.current) return;
     focusedKeyRef.current = keyOfRow(e.target as Element);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    // The CONTAINER itself holds focus — the scroll-out fallback above put it
+    // there. A nav key resumes from the roving row's model position (it is not
+    // a row, so `keyOfRow` would find nothing); every other key, Delete
+    // included, falls through to the guard below, which consumes it rather
+    // than let it reach the global dataset handlers.
+    const fromContainer = e.target === containerRef.current
+      && NAV_KEYS[e.key] != null && indexOfKey(rows, focusedKeyRef.current) >= 0;
     // P2 fix: a nested editor/control owns its own keystrokes — see
     // isEditorTarget's doc. Must run before Escape too: an editor's own
     // Escape (rename input's onKeyDown) stays its own, never ALSO blurring
@@ -208,7 +232,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
     // handle Delete or bare arrows itself, so those are consumed here —
     // never left to reach the global handlers and act on an unrelated
     // dataset. Enter/Space/Tab pass untouched (button activation).
-    if (isEditorTarget(e.target as Element)) {
+    if (!fromContainer && isEditorTarget(e.target as Element)) {
       const isDestructiveOrNav =
         e.key === "Delete" || e.key === "Backspace" || e.key === "ArrowUp" || e.key === "ArrowDown";
       if (isDestructiveOrNav && !isTextEditorTarget(e.target as Element)) e.preventDefault();
@@ -218,7 +242,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
       (document.activeElement as HTMLElement | null)?.blur();
       return;
     }
-    const key = keyOfRow(e.target as Element);
+    const key = fromContainer ? focusedKeyRef.current : keyOfRow(e.target as Element);
     const idx = indexOfKey(rows, key);
     if (idx < 0) return;
     if (isContextMenuKeyEvent(e) && isArtifactNode(rows[idx].node)) {
@@ -310,6 +334,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
   return (
     <div
       className="qzk-lib-tree"
+      {...scrollOutFocusProps}
       onKeyDown={onKeyDown}
       onFocusCapture={onFocusCapture}
       onContextMenu={(event) => {

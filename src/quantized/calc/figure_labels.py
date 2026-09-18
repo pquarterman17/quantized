@@ -39,7 +39,7 @@ import re
 from functools import lru_cache
 from typing import Any
 
-__all__ = ["safe_mathtext_label", "SUPPORTED_MATHTEXT_COMMANDS"]
+__all__ = ["safe_mathtext_label", "series_display_name", "SUPPORTED_MATHTEXT_COMMANDS"]
 
 # A "$" not preceded by a backslash -- matplotlib's own math-region rule
 # (matplotlib.cbook.is_math_text counts these; an odd count means the string
@@ -157,3 +157,31 @@ def safe_mathtext_label(label: str) -> str:
     except Exception:  # ANY parse failure means "render literal", never raise
         return _UNESCAPED_DOLLAR.sub(r"\\$", label)
     return label
+
+
+def series_display_name(label: str, unit: str, legend: str | None = None) -> str:
+    """The legend text for ONE exported series.
+
+    ``label``/``unit`` are the DATA's own channel label and unit, and the
+    default composition is the long-standing ``"label (unit)"`` (bare
+    ``label`` when the channel has no unit).
+
+    ``legend`` is the user's per-series legend override (BUG-014) and is
+    used VERBATIM when present -- unit included or not, exactly as typed.
+    That is the on-screen rule: ``frontend/src/lib/uplotOpts.ts`` resolves a
+    series' legend as ``args.seriesLabels?.[i] ?? (unit ? "label (unit)" :
+    label)``, so a rename REPLACES the whole label there. The backend used to
+    receive a rename as a rewritten ``dataset.labels[ch]`` and append the
+    channel's unit to it a second time, so "Loop 1" exported as
+    "Loop 1 (au)"; the override now rides its own presentation field
+    (``series_styles[i].legend``) and the wire's ``dataset`` keeps the DATA's
+    labels and units.
+
+    An EMPTY override is honoured verbatim too (a blank legend entry), for
+    the same reason: ``??`` on the screen side only falls back on
+    null/undefined, so ``""`` blanks the on-screen label rather than
+    restoring the derived one.
+    """
+    if legend is not None:
+        return legend
+    return f"{label} ({unit})" if unit else label

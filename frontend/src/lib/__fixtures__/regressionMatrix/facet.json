@@ -1,0 +1,91 @@
+{
+  "mode": "facet",
+  "xBinding": null,
+  "series": [
+    {
+      "channel": 0,
+      "label": "Signal (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": null,
+      "width": null,
+      "dash": null,
+      "marker": null,
+      "step": null,
+      "fill": null
+    },
+    {
+      "channel": 1,
+      "label": "Reference (au)",
+      "unit": "au",
+      "axis": 0,
+      "color": null,
+      "width": null,
+      "dash": null,
+      "marker": null,
+      "step": null,
+      "fill": null
+    }
+  ],
+  "errors": [
+    [],
+    []
+  ],
+  "grouping": {
+    "channel": null,
+    "levelOrder": null,
+    "levelLabels": null
+  },
+  "facet": {
+    "channel": 7,
+    "panels": [
+      {
+        "label": "north",
+        "series": [
+          "Signal (au)",
+          "Reference (au)"
+        ]
+      },
+      {
+        "label": "south",
+        "series": [
+          "Signal (au)",
+          "Reference (au)"
+        ]
+      }
+    ]
+  },
+  "y2Positions": [],
+  "xBreaks": [],
+  "waterfallOffset": 0,
+  "axes": {
+    "x": {
+      "label": "Index",
+      "scale": "linear",
+      "limits": [
+        0,
+        5
+      ]
+    },
+    "y": {
+      "label": "Signal (au)",
+      "scale": "linear",
+      "limits": [
+        -1,
+        4
+      ]
+    },
+    "y2": null
+  },
+  "decor": {
+    "legend": {
+      "show": true,
+      "position": "nw",
+      "title": null
+    },
+    "annotations": [],
+    "shapes": [],
+    "refLines": [],
+    "regionShades": []
+  }
+}

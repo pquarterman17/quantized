@@ -16,11 +16,10 @@ it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
@@ -31,42 +30,23 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes.export_figures_labels import (
+    derived_axis_label,
+    series_legends,
+    series_names,
+    solo_axis_label,
+)
+from quantized.routes.export_figures_schema import (
+    SERIES_STYLES_DOC,
+    WATERFALL_OFFSETS_DOC,
+    FigureFacet,
+    TickFormatSpec,
+    _ResolvedFigure,
+    _tick_fmt,
+    reject_document_only_style_keys,
+)
 
 router = APIRouter(prefix="/api/export", tags=["export"])
-
-
-class FigureFacetSeries(BaseModel):
-    label: str
-    y: list[float | None]
-
-
-class FigureFacet(BaseModel):
-    """One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 —
-    the export half of Stage's facet-by-column grid, `store.facetKey` /
-    `lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend
-    already computed each panel's row slice (level ordering + binning,
-    `lib/figureSpec.ts`'s `buildFacetSpecs`) and ships it here verbatim, so
-    this route never re-slices `dataset` itself and can never disagree with
-    what Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s
-    established "resolved facet panel" shape (`routes/export_statplots.py`).
-    `x`/each series' `y` may carry `null` for a non-finite cell (the
-    frontend's null-gap wire convention, same as every DataStruct value);
-    `calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,
-    matplotlib's own gap convention."""
-
-    label: str
-    x: list[float | None]
-    series: list[FigureFacetSeries]
-
-
-class TickFormatSpec(BaseModel):
-    """Wire model for the screen's `AxisFormat` (MAIN #24,
-    `frontend/src/lib/types.ts`): the tick-label number format for one axis.
-    `"auto"` (the default) leaves matplotlib's own formatter untouched --
-    see `calc.figure_ticks.axis_tick_formatter`."""
-
-    mode: Literal["auto", "fixed", "sci", "eng", "date", "time", "datetime"] = "auto"
-    digits: float = 2
 
 
 class FigureRequest(BaseModel):
@@ -111,14 +91,23 @@ class FigureRequest(BaseModel):
     # lands on the PRIMARY axis (`buildXY` never assigns `axis: 1` to a
     # grouped series), so combining `group_col` with `y2_keys` is rejected
     # (422) rather than inventing a secondary-axis semantic for it -- see
-    # `_figure_series`. `series_styles` is not applied in this path either
-    # (it's 1:1-with-`y_keys`, which doesn't align with the synthetic
-    # per-level series) -- matplotlib's default color cycle takes over,
-    # exactly like the screen, which never assigns per-level colors either.
+    # `_figure_series`. `series_styles` IS applied here (BUG-016 -- this doc
+    # used to claim the opposite, and that "the screen never assigns per-level
+    # colors either"): the screen gives EVERY level of a channel that
+    # channel's one style, explicit colour included, so the branch expands the
+    # `y_keys`-aligned list onto the synthetic series. What it does NOT give a
+    # level is a colour nobody chose -- an unstyled level takes the palette
+    # slot at its OWN display position, which one channel-aligned entry cannot
+    # express, so the client omits `color` for a grouped request and
+    # matplotlib's cycle colours the levels as before. The measured rule, and
+    # the two keys that cannot expand verbatim, are in
+    # `calc.figure_group_styles`. `legend` is a LABEL, not a stroke: it
+    # replaces the channel-label half of `"{label} ({group}={level})"`.
     group_col: int | None = None
     # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
     # multiples panel per facet-column level, RESOLVED client-side
-    # (`lib/facet.facetPayloads`) rather than a raw column index -- so this
+    # (`lib/facet.facetPayloads`, wrapped by `lib/figureSpecFacets.ts`)
+    # rather than a raw column index -- so this
     # route never re-derives level ordering/binning and can never disagree
     # with what Stage showed on screen. None/absent (default) = today's
     # single-panel behaviour, byte-identical; most other fields on this
@@ -146,6 +135,28 @@ class FigureRequest(BaseModel):
     # MAIN_PLAN #35: transparent canvas instead of the preset background —
     # what "Copy figure" needs to paste cleanly onto a coloured slide.
     transparent: bool = False
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
+    # colour is overridden to a position-based grey ramp and the dash/marker
+    # cycle is forced (see `calc.figure_greyscale`'s module doc). An
+    # EXPORT-ONLY transform: the on-screen canvas stays coloured regardless
+    # of this flag, so it is a user-chosen export option, not a derived
+    # style, and does not touch the P3.3 screen/export style-parity
+    # invariant that `series_styles` above exists to satisfy. No-op when
+    # `facets` is set (see this class's `facets` field doc) -- a faceted
+    # panel never resolves per-series colour at all today (FEATURE-001,
+    # `plans/BUGS_AND_ISSUES.md`), so there is nothing for this flag to grey.
+    # Also reachable embedded in a page panel (`routes.export_page.
+    # PagePanelSpec.figure` is this SAME `FigureRequest`): review fix P3.3-F1
+    # threaded this field into `calc.figure_page.PagePanel.greyscale`, honored
+    # PER PANEL there too -- it used to 200 and silently render as if it were
+    # `False` on that route (a real bug, not a documented no-op like facets).
+    # `/api/export/map-figure` (contour/heatmap/surface/waterfall) has NO
+    # `greyscale` field at all, deliberately: every one of its `kind`s colours
+    # by a continuous z-value through `cmap`, the same "colour IS the plotted
+    # quantity" case this flag already leaves untouched for a `color_by`
+    # scatter above -- there is no categorical per-series palette there for a
+    # print-safe ramp to replace.
+    greyscale: bool = False
     # MAIN_PLAN #36: per-series error spans, mirroring the frontend's
     # ErrorSpan — {x?: {plus, minus}, y?: {plus, minus}} with independent
     # magnitudes so an asymmetric pair survives to the exported figure.
@@ -157,39 +168,31 @@ class FigureRequest(BaseModel):
     title: str = ""  # optional figure title
     x_label: str | None = None  # override the auto-derived axis labels (None = derive)
     y_label: str | None = None
-    # Per-series style (aligned to the plotted y_keys order): color/width/line/
-    # marker, plus MAIN #13's `fill` ("under" or `{"vs": <channel>}`) and MAIN
-    # #14's `color_by`/`colormap` (channel indices — resolved against `dataset`
-    # by `calc.plotting.resolve_style_channels`, called from `_figure_series`),
-    # and GAP_PLOTTYPES's `step` ("pre"/"post"/"mid" — the Graph Builder "step"
-    # mark; mapped to matplotlib's `drawstyle` by `calc.figure._plot_kwargs`).
-    # `marker_shape` (a `MarkerShape` name -> `_plot_kwargs`'s `_MARKER` table,
-    # falling back to "o"); before it existed all eight on-screen marker shapes
-    # exported as filled circles while the canvas drew them correctly.
-    # An entry is a loose dict (never a strict pydantic sub-model): a bad/
-    # unrecognized value in ANY of these keys degrades gracefully (dropped,
-    # rendered with matplotlib's default) rather than 422ing the whole export.
-    series_styles: list[dict[str, Any] | None] | None = None
+    # Two FIELD DOCS, not `#` comments (BUG-013 review round, NIT 6): a `#`
+    # comment reaches no generated artefact, so an OpenAPI consumer saw a bare
+    # "Waterfall Offsets"/"Series Styles" title -- and `series_styles` is a
+    # loose dict whose keys (BUG-014's `legend` among them) can be documented
+    # nowhere else. The strings live in `export_figures_schema` for the same
+    # reason that module holds `FigureRequest`'s wire models: this file's
+    # 500-line ceiling. See there for the text.
+    series_styles: list[dict[str, Any] | None] | None = Field(
+        default=None, description=SERIES_STYLES_DOC
+    )
+    waterfall_offsets: list[float] | None = Field(
+        default=None, description=WATERFALL_OFFSETS_DOC
+    )
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
     filename: str = "figure"
 
-
-@dataclass(frozen=True)
-class _ResolvedFigure:
-    """``_figure_series``'s resolved output, in DISPLAY (``y_keys``) order.
-    ``y2_mask[i]`` is ``True`` when ``series[i]`` is one of ``req.y2_keys``
-    (see ``calc.plotting.PlotState.y2_keys``) -- all-``False`` (the default,
-    ``req.y2_keys`` absent) means "no secondary axis", the pre-y2 shape."""
-
-    x: Any
-    series: list[tuple[str, Any]]
-    x_label: str
-    y_label: str
-    styles: list[dict[str, Any] | None] | None
-    y2_mask: list[bool]
-    y2_label: str
+    # BUG-016 round 4 (review F9): refuse a leaked DOCUMENT-only style key.
+    # The rule and why this one key is a 422 rather than a graceful degrade
+    # live with the list itself, in `export_figures_schema`. Declared on this
+    # model, so the page route inherits it through `PagePanelSpec.figure`.
+    _no_document_keys = field_validator("series_styles")(
+        reject_document_only_style_keys
+    )
 
 
 def _figure_series(req: FigureRequest) -> _ResolvedFigure:
@@ -206,15 +209,22 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     ``req.y_keys`` (``calc.plotting.validate_y2_subset``, mapped to a 422 by
     every caller's existing ``except (ValueError, ...)`` handler).
 
+    ``req.waterfall_offsets`` (BUG-013) shifts each resolved series up by its
+    own offset (``calc.plotting.apply_waterfall_offsets``), so every caller of
+    this helper exports the waterfall stagger the canvas shows.
+
     ``req.group_col`` (GUI_INTERACTION #12 Slice 5) switches to the grouped
     resolve path (``calc.plotting.build_grouped_series``): every ``y_keys``
     channel becomes one series per group level instead of one series per
-    channel, matching the screen's ``buildXY`` colour split. Mutually
+    channel, matching the screen's ``buildXY`` colour split; ``styles`` is
+    ``series_styles`` expanded onto them (BUG-016, below). Mutually
     exclusive with ``req.y2_keys`` (raises ``ValueError`` -- ``buildXY``
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
+    from quantized.calc.figure_group_styles import expand_grouped_series_styles
     from quantized.calc.plotting import (
         PlotState,
+        apply_waterfall_offsets,
         build_grouped_series,
         build_series,
         resolve_style_channels,
@@ -232,20 +242,28 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
                 "series to the primary axis first"
             )
         y_keys = list(req.y_keys) if req.y_keys is not None else list(range(ds.n_channels))
-        grouped = build_grouped_series(ds, req.x_key, y_keys, req.group_col)
-        x_label = req.x_label
-        if x_label is None:
-            x_label = (
-                f"{grouped.x_label} ({grouped.x_unit})" if grouped.x_unit else grouped.x_label
-            )
-        y_label = req.y_label
-        if y_label is None:
-            y_label = ""
+        # BUG-014: a legend rename rides `series_styles[i].legend`, aligned to
+        # `y_keys`. This branch expands each y channel into one series PER
+        # LEVEL, so the override cannot name a finished series name the way it
+        # does on the flat path -- it replaces the CHANNEL-label half of
+        # `build_grouped_series`' own `"{y_label} ({group}={level})"` template,
+        # byte-for-byte what the pre-BUG-014 wire produced (the rename used to
+        # arrive as a rewritten `dataset.labels[ch]`).
+        grouped = build_grouped_series(
+            ds, req.x_key, y_keys, req.group_col, series_legends(req.series_styles, len(y_keys))
+        )
+        x_label = derived_axis_label(req.x_label, grouped.x_label, grouped.x_unit)
+        y_label = req.y_label if req.y_label is not None else ""
         g_series: list[tuple[str, Any]] = [
             (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in grouped.series
         ]
+        # BUG-016: every level draws with its channel's style, as the canvas
+        # does -- `calc.figure_group_styles` carries the measured rule.
+        g_styles = expand_grouped_series_styles(
+            resolve_style_channels(ds, y_keys, req.series_styles), len(y_keys), len(g_series)
+        )
         return _ResolvedFigure(
-            grouped.x, g_series, x_label, y_label, None, [False] * len(g_series), ""
+            grouped.x, g_series, x_label, y_label, g_styles, [False] * len(g_series), ""
         )
 
     validate_y2_subset(req.y_keys, req.y2_keys)
@@ -257,36 +275,22 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         y_log=req.y_log,
     )
     plot = build_series(ds, state)
-    x_label = req.x_label
-    if x_label is None:
-        x_label = f"{plot.x_label} ({plot.x_unit})" if plot.x_unit else plot.x_label
-    primary_only = [s for s in plot.series if s.axis == 0]
-    y2_only = [s for s in plot.series if s.axis == 1]
-    y_label = req.y_label
-    if y_label is None:
-        y_label = ""
-        if len(primary_only) == 1:
-            only = primary_only[0]
-            y_label = f"{only.label} ({only.unit})" if only.unit else only.label
-    y2_label = req.y2_label
-    if y2_label is None:
-        y2_label = ""
-        if len(y2_only) == 1:
-            only = y2_only[0]
-            y2_label = f"{only.label} ({only.unit})" if only.unit else only.label
-    series: list[tuple[str, Any]] = [
-        (f"{s.label} ({s.unit})" if s.unit else s.label, s.values) for s in plot.series
-    ]
+    # BUG-014: the per-series legend override (`series_styles[i].legend`) is
+    # used VERBATIM where present, so a renamed series exports with exactly
+    # the text the screen shows instead of the channel's unit being appended
+    # to it a second time. A solo axis title reads the SAME resolved name --
+    # `uplotOpts.buildOpts`' `soloLabel` reads the resolved legend too.
+    names = series_names(plot.series, series_legends(req.series_styles, len(plot.series)))
+    x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
+    y_label = solo_axis_label(req.y_label, names, plot.series, 0)
+    y2_label = solo_axis_label(req.y2_label, names, plot.series, 1)
+    series: list[tuple[str, Any]] = apply_waterfall_offsets(
+        [(name, s.values) for name, s in zip(names, plot.series, strict=True)],
+        req.waterfall_offsets,
+    )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
     y2_mask = [s.axis == 1 for s in plot.series]
     return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label)
-
-
-def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:
-    """``TickFormatSpec`` (route-layer pydantic) -> the plain mapping
-    ``calc.figure_ticks.axis_tick_formatter`` expects (calc/ never imports
-    pydantic — see the layering guard)."""
-    return spec.model_dump() if spec is not None else None
 
 
 def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
@@ -384,6 +388,7 @@ def export_figure(req: FigureRequest) -> Response:
                 height_in=req.height_in,
                 dpi=dpi,
                 transparent=req.transparent,
+                greyscale=req.greyscale,
                 overrides=req.overrides,
                 x_fmt=_tick_fmt(req.x_fmt),
                 y_fmt=_tick_fmt(req.y_fmt),
@@ -472,6 +477,7 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             style=req.style,
             series_styles=resolved.styles,
             dpi=dpi,
+            greyscale=req.greyscale,
             overrides=req.overrides,
             x_fmt=_tick_fmt(req.x_fmt),
             y_fmt=_tick_fmt(req.y_fmt),

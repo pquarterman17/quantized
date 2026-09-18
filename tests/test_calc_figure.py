@@ -211,6 +211,83 @@ def test_marker_shape_renders_in_svg() -> None:
     assert out[:5] == b"<?xml"
 
 
+# ── Per-series dash/marker CYCLE parity (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3) ──
+# The frontend resolves the auto dash/marker cycle itself and sends the result
+# as an ORDINARY explicit style (frontend/src/lib/seriesStyleCycle.ts ->
+# exportStyles.buildExportStyles), so this layer never learns a cycle exists.
+# What it owes in return: a spec that carries a different `line`/`marker_shape`
+# per series must actually render them differently, per series, not collapse
+# them. That is the backend half of the FEATURE-001 guard.
+
+
+def test_per_series_line_styles_map_independently() -> None:
+    # The exact three-series spec the ON cycle produces for an unstyled plot.
+    cycle = [{"line": "solid"}, {"line": "dashed"}, {"line": "dotted"}]
+    styles = [_plot_kwargs(1.5, 5.0, spec)["linestyle"] for spec in cycle]
+    assert styles == ["-", "--", ":"]
+    assert len(set(styles)) == 3, "three cycle positions must be three distinct linestyles"
+
+
+def test_per_series_marker_shapes_map_independently() -> None:
+    # The first three glyphs of AUTO_MARKER_CYCLE.
+    cycle = [
+        {"marker": True, "marker_shape": "circle"},
+        {"marker": True, "marker_shape": "square"},
+        {"marker": True, "marker_shape": "triangle"},
+    ]
+    codes = [_plot_kwargs(1.5, 5.0, spec)["marker"] for spec in cycle]
+    assert codes == ["o", "s", "^"]
+    assert len(set(codes)) == 3
+
+
+def test_cycled_dashes_reach_the_rendered_vector_output() -> None:
+    # Not just the kwargs: the dash has to survive into the drawn artists. An
+    # SVG carries stroke-dasharray per path, so a dashed/dotted pair shows up as
+    # two distinct dash patterns where an all-solid render has none.
+    x = np.linspace(0, 10, 20)
+    series = [("a", x), ("b", x + 1.0), ("c", x + 2.0)]
+    cycled = render_figure(
+        x,
+        series,
+        fmt="svg",
+        series_styles=[{"line": "solid"}, {"line": "dashed"}, {"line": "dotted"}],
+    )
+    plain = render_figure(x, series, fmt="svg")
+    patterns = set(re.findall(rb"stroke-dasharray:\s*([0-9.,\s]+)", cycled))
+    plain_patterns = set(re.findall(rb"stroke-dasharray:\s*([0-9.,\s]+)", plain))
+    # The dashed and the dotted series each contribute their own pattern; the
+    # solid one contributes none. (Axis spines/grid may add their own, so this
+    # asserts the DELTA the cycle is responsible for, not an absolute count.)
+    assert len(patterns - plain_patterns) >= 2, (patterns, plain_patterns)
+
+
+def test_cycled_marker_shapes_reach_the_rendered_output() -> None:
+    # PNG, deliberately NOT svg. matplotlib stamps `<dc:date>` into every SVG
+    # with microsecond precision, so two renders of the IDENTICAL spec already
+    # differ and a `varied != same` assertion on SVG bytes cannot fail — it
+    # passed on this exact code before the marker shapes were plumbed at all.
+    # The first assertion below proves the medium is deterministic, so the
+    # second one carries real weight.
+    x = np.linspace(0, 10, 20)
+    series = [("a", x), ("b", x + 1.0), ("c", x + 2.0)]
+    circles = [{"marker": True, "marker_shape": "circle"}] * 3
+    same = render_figure(x, series, fmt="png", series_styles=circles)
+    assert render_figure(x, series, fmt="png", series_styles=circles) == same, (
+        "png renders must be byte-deterministic for the comparison below to mean anything"
+    )
+    varied = render_figure(
+        x,
+        series,
+        fmt="png",
+        series_styles=[
+            {"marker": True, "marker_shape": "circle"},
+            {"marker": True, "marker_shape": "square"},
+            {"marker": True, "marker_shape": "triangle"},
+        ],
+    )
+    assert varied != same, "three different glyphs must not render identically to three circles"
+
+
 # ── Fill under/between curves (MAIN #13) ─────────────────────────────────────
 def test_fill_under_renders_and_changes_output() -> None:
     x = np.linspace(0, 10, 30)
@@ -751,3 +828,225 @@ def test_render_transparent_does_not_change_the_image_size() -> None:
 
     with Image.open(BytesIO(_png())) as a, Image.open(BytesIO(_png(transparent=True))) as b:
         assert a.size == b.size
+
+
+# --- PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: greyscale (print-safe) export -------
+
+_STROKE_HEX = re.compile(r"stroke:\s*#([0-9a-fA-F]{6})")
+# P3.3 review fix (F6): the achromatic guard used to check `stroke:` only, so
+# a chromatic `fill:` (found on an error-bar cap -- see
+# test_greyscale_error_spans_caps_are_achromatic below) went completely
+# unseen. `_ffffff`/`_000000` are excluded: matplotlib's own white background
+# and black axis/text/tick colour are not a SERIES colour at all (greyscale
+# mode never touches either), so including them would only add noise, not
+# signal, to "every colour a series drew is achromatic".
+_FILL_HEX = re.compile(r"fill:\s*#([0-9a-fA-F]{6})")
+_DASHARRAY = re.compile(r"stroke-dasharray:\s*[^;\"]+")
+
+
+def _achromatic_hexes(svg: str) -> list[str]:
+    """Every non-background/text stroke OR fill hex colour in ``svg`` --
+    what should be left, in greyscale mode, is only ever a rendered series
+    artist (line, fill, colour-mapped scatter excepted, or an error-bar
+    cap), which must all be achromatic."""
+    hexes = _STROKE_HEX.findall(svg) + _FILL_HEX.findall(svg)
+    return [h for h in hexes if h.lower() not in ("ffffff", "000000")]
+
+
+def _three_series_svg(**kw: object) -> str:
+    x = np.linspace(0.0, 10.0, 30)
+    out = render_figure(
+        x,
+        [("a", np.sin(x)), ("b", np.cos(x)), ("c", 0.1 * x)],
+        fmt="svg",
+        **kw,
+    )
+    return out.decode("utf-8", "ignore")
+
+
+def test_greyscale_png_differs_from_colour_png() -> None:
+    x = np.linspace(0.0, 10.0, 30)
+    series = [("a", np.sin(x)), ("b", np.cos(x)), ("c", 0.1 * x)]
+    colour = render_figure(x, series, fmt="png", dpi=72)
+    grey = render_figure(x, series, fmt="png", dpi=72, greyscale=True)
+    assert colour != grey
+
+
+def test_greyscale_svg_every_stroke_is_achromatic() -> None:
+    # N1 (round-2 review): widened from `_STROKE_HEX` alone to the
+    # stroke-OR-fill `_achromatic_hexes` -- a chromatic `fill:` on this
+    # default 3-series path would otherwise be invisible here too (exactly
+    # the F6 hole, now closed for every guard that uses this helper).
+    svg = _three_series_svg(
+        greyscale=True,
+        series_styles=[{"color": "#ff0000"}, {"color": "#00ff00"}, {"color": "#0000ff"}],
+    )
+    hexes = _achromatic_hexes(svg)
+    assert len(hexes) >= 3  # at least the three series lines were found
+    for h in hexes:
+        r, g, b = h[0:2], h[2:4], h[4:6]
+        assert r.lower() == g.lower() == b.lower(), f"non-achromatic #{h}"
+
+
+def test_colour_svg_has_a_non_achromatic_stroke_for_contrast() -> None:
+    # Sanity check for the test above: the SAME request WITHOUT greyscale
+    # really does draw a chromatic stroke, so "every stroke is achromatic"
+    # is a meaningful assertion above and not trivially true of every render.
+    svg = _three_series_svg(
+        series_styles=[{"color": "#ff0000"}, {"color": "#00ff00"}, {"color": "#0000ff"}],
+    )
+    strokes = _STROKE_HEX.findall(svg)
+    assert any(h[0:2].lower() != h[2:4].lower() for h in strokes)
+
+
+def test_greyscale_forces_at_least_two_dash_patterns_for_three_default_series() -> None:
+    # No explicit `line` on any series -- the grey ramp alone cannot separate
+    # more than a handful of series, so greyscale mode must also force the
+    # dash cycle (solid/dashed/dotted by display position).
+    svg = _three_series_svg(greyscale=True)
+    patterns = set(_DASHARRAY.findall(svg))
+    assert len(patterns) >= 2
+
+
+def test_colour_render_has_no_forced_dash_cycle_by_default() -> None:
+    # Sanity check for the assertion above: WITHOUT greyscale, three
+    # unstyled series draw solid lines only (today's unchanged behaviour) --
+    # so the dash cycle above is something greyscale mode adds, not
+    # something already there.
+    svg = _three_series_svg()
+    assert not _DASHARRAY.findall(svg)
+
+
+def test_greyscale_explicit_line_style_is_kept() -> None:
+    # An explicit per-series `line` still wins over the forced cycle -- and
+    # this must check MORE than "some dasharray exists in the SVG somewhere":
+    # with 3 series and no explicit line at all, positions 1/2 of LINE_CYCLE
+    # ("dashed"/"dotted") already guarantee a non-empty dasharray regardless
+    # of what happens at position 0, so a bare "found" assertion cannot tell
+    # the explicit-wins rule apart from deleting it (sabotage-confirmed).
+    # A SINGLE series isolates the claim instead: LINE_CYCLE[0] is "solid"
+    # (no dasharray at all), so if the explicit-wins check were deleted, an
+    # explicit "dashed" series at position 0 would silently revert to solid.
+    x = np.linspace(0.0, 10.0, 30)
+    explicit_dashed = render_figure(
+        x, [("a", np.sin(x))], fmt="svg", greyscale=True,
+        series_styles=[{"line": "dashed"}],
+    ).decode("utf-8", "ignore")
+    cycle_default = render_figure(
+        x, [("a", np.sin(x))], fmt="svg", greyscale=True,
+    ).decode("utf-8", "ignore")
+    assert _DASHARRAY.findall(explicit_dashed)  # explicit "dashed" wins
+    # Sanity check for the assertion above: LINE_CYCLE[0] really is "solid"
+    # (no dasharray), so the first assertion is meaningful, not trivially
+    # true of every single-series greyscale render.
+    assert not _DASHARRAY.findall(cycle_default)
+
+
+def test_facets_renderer_has_no_greyscale_hook() -> None:
+    # FEATURE-001 (plans/BUGS_AND_ISSUES.md): a facet panel never resolves
+    # per-series colour at all -- `calc.figure_facets.draw_facet_grid` always
+    # passes `spec=None` to `_plot_kwargs` -- so there is nothing for
+    # `greyscale` to act on there, and `render_facets_figure` doesn't even
+    # accept the keyword. The route-level no-op contract (a faceted
+    # `/api/export/figure` request renders byte-identically whether or not
+    # `greyscale` is set) is pinned in test_api_export.py, next to the rest
+    # of the facets route tests.
+    import inspect
+
+    from quantized.calc.figure_facets import render_facets_figure
+
+    assert "greyscale" not in inspect.signature(render_facets_figure).parameters
+
+
+def test_greyscale_applies_when_series_styles_is_none() -> None:
+    # P3.3 review (F5): renamed from "...group_col_resolved_series" -- this
+    # calls `render_figure` DIRECTLY with `series_styles=None`, which is the
+    # SAME code path as `test_greyscale_svg_every_stroke_is_achromatic`
+    # (also flat, also `draw_series_axes`); it proves nothing about the
+    # route's `group_col` BRANCH specifically (`_figure_series`'s grouped
+    # resolve, which never even calls this function with anything but
+    # `series_styles=None`). A REAL `group_col` route-level greyscale test
+    # lives in test_api_export.py, next to the rest of the group_col tests
+    # (`test_figure_group_col_greyscale_renders_achromatic_strokes`) -- this
+    # one still earns its keep as the plain "`None` styles greys out fine"
+    # unit case, which the route-level test doesn't need to re-prove.
+    # N1 (round-2 review): widened from `_STROKE_HEX` alone to the
+    # stroke-OR-fill `_achromatic_hexes` -- see the same note on
+    # test_greyscale_svg_every_stroke_is_achromatic above.
+    x = np.linspace(0.0, 5.0, 15)
+    series = [("l0", np.sin(x)), ("l1", np.cos(x)), ("l2", x / 5.0)]
+    out = render_figure(x, series, fmt="svg", greyscale=True, series_styles=None)
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower()
+
+
+def test_greyscale_error_spans_caps_are_achromatic() -> None:
+    # P3.3 review (F6): error-bar CAPS kept a chromatic `fill: #1f77b4` in
+    # vector output even in greyscale mode -- ecolor= colours the bar lines
+    # and each cap's EDGE, but not matplotlib's cap marker FACE, which stays
+    # rcParams' default C0 unless set explicitly (calc/figure_errorbars.py).
+    # Invisible in a raster PNG only because the cap glyph's fill path
+    # happens to be degenerate there -- a fully faithful check needs the
+    # widened stroke-OR-fill guard, `_achromatic_hexes`, not `_STROKE_HEX`
+    # alone (which would never have caught this).
+    x = np.linspace(0.0, 10.0, 5)
+    series = [("a", np.array([1.0, 2.0, 3.0, 4.0, 5.0]))]
+    spans = [{"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}}]
+    out = render_figure(x, series, fmt="svg", greyscale=True, error_spans=spans)
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes  # the probe actually found series/cap colour, not nothing
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
+
+
+def test_greyscale_fill_under_is_achromatic() -> None:
+    # P3.3 review (F6): the doc claims fills "inherit their series' drawn
+    # colour automatically ... so they follow the grey ramp with no extra
+    # code" -- true, but untested before this. `_achromatic_hexes` checks
+    # `fill:` (the fill polygon) as well as `stroke:` (the line).
+    x = np.linspace(0.0, 10.0, 30)
+    series = [("a", np.sin(x))]
+    out = render_figure(
+        x, series, fmt="svg", greyscale=True, series_styles=[{"fill": "under"}]
+    )
+    hexes = _achromatic_hexes(out.decode("utf-8", "ignore"))
+    assert hexes
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
+
+
+def test_greyscale_error_span_caps_use_their_own_series_colour_when_coloured() -> None:
+    # N2 (round-2 review): the F6 cap-colour fix (calc/figure_errorbars.py)
+    # also corrects a pre-existing NON-greyscale defect -- every series' cap
+    # FACE used to stay matplotlib's default C0 regardless of that series'
+    # own colour, so a coloured multi-series export with error bars silently
+    # drew every cap in series 1's colour. Pin the fix at the ordinary
+    # coloured (non-greyscale) path: each series' caps must carry ITS OWN
+    # colour, not a cross-filled single colour shared by both.
+    x = np.linspace(0.0, 10.0, 5)
+    series = [
+        ("a", np.array([1.0, 2.0, 3.0, 4.0, 5.0])),
+        ("b", np.array([2.0, 3.0, 4.0, 5.0, 6.0])),
+    ]
+    spans = [
+        {"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}},
+        {"y": {"plus": [0.2] * 5, "minus": [0.2] * 5}},
+    ]
+    out = render_figure(
+        x,
+        series,
+        fmt="svg",
+        error_spans=spans,
+        series_styles=[{"color": "#1f77b4"}, {"color": "#ff7f0e"}],
+    )
+    fills = {h.lower() for h in _FILL_HEX.findall(out.decode("utf-8", "ignore"))}
+    fills.discard("ffffff")
+    # Both series' own colours must appear as cap fills...
+    assert {"1f77b4", "ff7f0e"} <= fills
+    # ...and the pre-fix cross-filled combination (every cap sharing ONE
+    # colour, e.g. series 2's caps rendered in series 1's blue) must not be
+    # what is left: that bug collapses `fills` to a single hex.
+    assert fills != {"1f77b4"}
+    assert fills != {"ff7f0e"}

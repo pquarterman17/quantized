@@ -3,19 +3,32 @@
 // ratchet (architecture.test.ts's STORE_PINS): a couple of lines were
 // needed for the new "Append workspace (.dwk)…" command, and this was the
 // largest self-contained, no-JSX command body available to offset them.
-// Pure orchestration: prompts for format/style/dpi/labels, then calls the
-// export API against the active dataset — no React/store coupling beyond
-// the `StoreGet` handle every command closure already takes.
+// Pure orchestration: prompts for format/style/dpi/greyscale/labels, then
+// calls the export API against the active dataset — no React/store coupling
+// beyond the `StoreGet` handle every command closure already takes.
 //
-// The spec itself is built by `lib/figureSpec.buildStageFigureSpec` (MAIN_PLAN
+// The spec itself is built by `lib/figureSpecStage.buildStageFigureSpec` (MAIN_PLAN
 // #35; routed through the canonical-document adapter as of F2.5b), shared
 // verbatim with "Copy figure" so a pasted figure and an exported one cannot
 // drift. This file now owns only the DIALOG and the download verb.
 
-import { askParams } from "../components/overlays/ParamDialog";
+import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { exportActive, type StoreGet } from "./exportActive";
-import { buildStageFigureSpec } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpecStage";
+
+/** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
+ *  Export-figure dialog's own first boolean field. Exported so every OTHER
+ *  export dialog that embeds a `FigureSpec` (lib/exportPageCommand.ts's page
+ *  export) reuses this exact field instead of duplicating the label/hint text
+ *  and risking the two drifting apart. */
+export const GREYSCALE_FIELD: ParamField = {
+  key: "greyscale",
+  label: "Greyscale (print-safe)",
+  type: "boolean",
+  default: false,
+  hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
+};
 
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
@@ -42,6 +55,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       default: 300,
       hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
     },
+    GREYSCALE_FIELD,
     { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {
       key: "x_label",
@@ -68,7 +82,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const xl = asStr(params.x_label).trim();
   const yl = asStr(params.y_label).trim();
   const titleStr = asStr(params.title).trim();
-  await exportActive(s, (stem, ds) =>
+  await exportActive(s, (stem, ds, signal) =>
     exportFigure(
       buildStageFigureSpec(s, ds, stem, {
         fmt: params.fmt as string,
@@ -77,7 +91,9 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
         title: titleStr,
         xLabel: xl,
         yLabel: yl,
+        greyscale: params.greyscale as boolean,
       }),
+      signal,
     ),
   );
 }

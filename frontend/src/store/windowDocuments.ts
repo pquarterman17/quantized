@@ -38,6 +38,31 @@ export interface CreatePlotWindowDocumentOptions {
    *  exactly what a reimport shape change just invalidated (the row/column
    *  index-staleness class of 2026-07-19/21). */
   errors?: readonly NonNullable<Dataset["errorRoles"]>[number][] | null;
+  /** BUG-012 review F4: drop `previous`'s `plot.axisBreaks` instead of
+   *  inheriting it — the GENUINE-DATASET-SWITCH path, where `view.facetKey`
+   *  already arrives nulled by `store/windowDefaults.ts`'s
+   *  `datasetViewDefaults` for the very reason its own comment gives (a
+   *  binding built against the OLD dataset's columns is meaningless applied
+   *  to a new one). An x-break is that same class of stale binding: it is
+   *  expressed in the OLD dataset's x units, and since BUG-012 the SCREEN
+   *  reads it too (`lib/facet.ts`'s `durableComposition`), so without this a
+   *  plain Library click onto an unrelated dataset with an overlapping x
+   *  range panelled the NEW dataset at the OLD one's gap, with no gesture and
+   *  no toggle. The export path had always carried the stale value; the
+   *  visible symptom was new. Deliberately NOT applied to a re-activation of
+   *  the already-active dataset (`setActive`'s own `s.activeId !== id` test),
+   *  nor to a same-dataset reimport or error resync — neither is a dataset
+   *  switch. An explicit DROP onto a BACKGROUND window is the one deliberate
+   *  exception: that branch re-applies `datasetViewDefaults` wholesale, and
+   *  `facetKey` — the one channel-keyed binding `store/windows.ts`'s
+   *  per-technique view memory (`lib/techniqueViewMemory.ts`) deliberately
+   *  does NOT carry — resets even when the same dataset is dropped back on.
+   *  An x-break is that same class of channel-keyed binding, so it resets
+   *  with `facetKey` (round 3, finding 7; pinned by `store/useApp.test.ts`).
+   *  `xKey`/`yKeys` are a DIFFERENT case: a technique-tagged dataset's
+   *  memory does carry them, so they can come back restored on a
+   *  same-dataset re-drop rather than resetting (round-3 review NIT 1). */
+  resetAxisBreaks?: boolean;
 }
 
 export function createPlotWindowDocument(
@@ -76,7 +101,7 @@ export function createPlotWindowDocument(
     facetKey: view.facetKey,
     errors: options.errors === null ? undefined : (options.errors ?? previous?.bindings.errors),
     data: previous?.data,
-    axisBreaks: previous?.plot.axisBreaks,
+    axisBreaks: options.resetAxisBreaks ? undefined : previous?.plot.axisBreaks,
     output: previous?.output,
     publication: previous?.publication,
   });
@@ -87,6 +112,11 @@ interface SyncPlotWindowOptions {
   datasetId?: string | null;
   errors?: readonly NonNullable<Dataset["errorRoles"]>[number][];
   resetErrors?: boolean;
+  /** Forwarded to `createPlotWindowDocument` — see its own doc. Only the
+   *  three genuine-dataset-switch rebind sites pass it: `focusedRebindPatch`
+   *  and `rebindWindow`'s background branch (`store/windows.ts`), and
+   *  `rebindFocusedPlotWindow` below (the import leg). */
+  resetAxisBreaks?: boolean;
 }
 
 /** Keep compatibility projections aligned while the document is authoritative at rest. */
@@ -103,6 +133,7 @@ export function syncPlotWindow(
     : createPlotWindowDocument(window.id, title, datasetId, view, {
         previous: window.document,
         errors: options.resetErrors ? (options.errors ?? null) : (options.errors ?? window.document?.bindings.errors),
+        resetAxisBreaks: options.resetAxisBreaks,
       });
   return {
     ...window,
@@ -128,6 +159,63 @@ export function withPlotWindowDocument(window: PlotWindow, document: FigureDocum
     view: figureDocumentToPlotView(canonical),
     document: canonical,
   };
+}
+
+/** Drop the FOCUSED plot window's saved x-axis breaks, through the declared
+ *  document-write chokepoint (`withPlotWindowDocument`).
+ *
+ *  BUG-012 review F3. `setStackMode` clears the live `composition` AND the
+ *  durable `facetKey`, so switching stacking off returns a facet grid to a
+ *  plain XY plot. Since BUG-012 the screen ALSO rebuilds a paneled
+ *  arrangement from `document.plot.axisBreaks.x` whenever the live
+ *  composition is null (`lib/facet.ts`'s `durableComposition`), and that
+ *  fallback is deliberately independent of `stackMode` — an authored break
+ *  has no toggle to restore (`Stage/useEffectiveComposition.ts`'s
+ *  `multiPanelShowing`). The two together made the toggle INERT for a
+ *  broken-axis figure: the panels came straight back on the next render,
+ *  silently. Clearing the break here restores the toggle's meaning and keeps
+ *  it symmetric with the `facetKey` cleared on the same line.
+ *
+ *  BOTH directions of the toggle clear it, exactly as `facetKey` does, and
+ *  round 3 makes that explicit rather than incidental: a break arrangement
+ *  and the per-channel stack are mutually exclusive compositions of the same
+ *  canvas, and the break WINS (`multiPanelShowing` short-circuits on
+ *  `breakPanelsOf(composition) !== null`, ahead of every `stackMode` clause).
+ *  Leaving the break in place on `setStackMode(true)` would therefore make
+ *  the ON direction inert in precisely the way F3 fixed for OFF — the user
+ *  presses Stack and still gets the break panels. It is also what the
+ *  toggle's own comment in `useApp.setStackMode` already promised for every
+ *  other arrangement: "a manual toggle (on OR off) always drops any spatial
+ *  arrangement … the plain per-channel split (or leaving stack mode) is what
+ *  the user asked for". Undo restores it (`plotWindows` is in the history
+ *  snapshot and `setStackMode` records history first).
+ *
+ *  This is a user action deleting a field, not a persistence change: the
+ *  `.dwk` contract for `plot.axisBreaks` is untouched, and the Figure
+ *  Builder's breaks panel remains the affordance that authors one. A no-op
+ *  for a window that is not focused, carries no document, or holds no
+ *  breaks — the SAME ARRAY comes back, not just the same window object, so
+ *  no `plotWindows` subscriber re-renders and `useWorkspaceAutosave`'s
+ *  identity-compared `shouldAutosave` does not mark the project dirty
+ *  (round 3, finding 3: `Array.prototype.map` always allocates, so every
+ *  stack toggle in a workspace with no break anywhere flipped the ● marker
+ *  and restarted the 800 ms autosave debounce). */
+export function clearFocusedXBreaks(
+  windows: readonly PlotWindow[],
+  focusedId: string | null,
+): PlotWindow[] {
+  let changed = false;
+  const next = windows.map((window) => {
+    if (window.id !== focusedId || window.kind !== "plot" || !window.document) return window;
+    const breaks = window.document.plot.axisBreaks;
+    if (breaks.x.length === 0) return window;
+    changed = true;
+    return withPlotWindowDocument(window, {
+      ...window.document,
+      plot: { ...window.document.plot, axisBreaks: { ...breaks, x: [] } },
+    });
+  });
+  return changed ? next : (windows as PlotWindow[]);
 }
 
 /** Item 3: overwrite ONE window's document error bindings, leaving every
@@ -169,6 +257,16 @@ export function commitFocusedPlotWindow(
   return windows.map((window) => window.id === focusedId ? syncPlotWindow(window, view) : window);
 }
 
+/** The IMPORT leg of the same genuine-dataset-switch rebind `setActive` does
+ *  (`store/useApp.ts`'s `addDataset` is its only caller, and import, paste,
+ *  demo, merge and append all route through that). `resetAxisBreaks` is
+ *  UNCONDITIONAL here: the dataset being bound was constructed moments ago
+ *  and is not yet in the store, so it can never be the one the window is
+ *  already on — the single case `setActive` exempts. Without it, a window
+ *  holding an authored `[[2, 3]]` panelled the freshly imported dataset at
+ *  the PREVIOUS one's gap, with no gesture and no toggle (round 3, finding 1:
+ *  F4 covered `setActive` and `rebindWindow` but missed this, the most common
+ *  way a new dataset reaches the focused window). */
 export function rebindFocusedPlotWindow(
   windows: readonly PlotWindow[],
   focusedId: string | null,
@@ -181,6 +279,7 @@ export function rebindFocusedPlotWindow(
           datasetId: dataset.id,
           errors: dataset.errorRoles,
           resetErrors: true,
+          resetAxisBreaks: true,
         })
       : window,
   );

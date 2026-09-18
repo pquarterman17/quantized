@@ -9,6 +9,12 @@
 // `usePackProject` is mounted, and stops itself the moment the backend
 // reports a terminal phase — never on unmount, because there is no
 // mount to tie it to.
+//
+// The workspace-CONTENT half (what a pack sends, and the refusal when a
+// pending book can't be resolved for it) lives in the sibling
+// store/packProjectContent.ts — extracted under the .ts size ceiling when
+// BUG-011's resolve step landed. `useApp`/`serializeWorkspace` are reached
+// through it now, still only inside this lazy chunk.
 
 import {
   CANCELLED,
@@ -20,16 +26,22 @@ import {
   pickPackDestination,
   type PackStatus,
 } from "../lib/desktopPackBridge";
-import { serializeWorkspace } from "../lib/workspaceSerialize";
 import {
   packError,
   EMPTY_PACK_PROGRESS,
+  type PackProjectError,
   type PackProjectPhase,
   type PackProjectPreview,
   type PackProjectProgress,
   type PackProjectState,
 } from "./packProject";
-import { useApp } from "./useApp";
+import {
+  contentFingerprint,
+  deriveProjectName,
+  notePackOutcome,
+  refusePack,
+  serializeCurrentWorkspaceForPack,
+} from "./packProjectContent";
 
 import type { PortableManifest } from "../lib/desktopPackBridge";
 
@@ -39,41 +51,23 @@ type Set = (partial: Partial<PackProjectState>) => void;
 const POLL_INTERVAL_MS = 250;
 const THROTTLE_MS = 200;
 
-// -- workspace content (shared by preview + start, so they can only ever
-// disagree because the project actually changed in between) --------------
-
-function serializeCurrentWorkspaceForPack(): string {
-  const s = useApp.getState();
-  // No `projectDir` here on purpose: the content sent to the backend
-  // always names its ORIGINAL absolute source paths (`kind: "path"`) —
-  // `pack_project`'s own `rewrite_payload_for_bundle` is what turns the
-  // packed sources into `kind: "bundle"` entries; this is a different
-  // concern from a native Save's own bundle-relative round trip.
-  return serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+// BUG-011 round 3 finding #2: round 2's `notePackOutcome` closed the stale
+// "…packing…"/"…review the pack preview" transient only for the two
+// terminals it was actually caught on (`awaiting_confirmation`, `completed`)
+// -- every OTHER way this store reaches `failed` or `cancelled` left
+// whichever status line was already standing uncorrected. These two helpers
+// are the single choke point for every `failed`/`cancelled` transition in
+// this file (both the ones reached directly, and `pollOnce`'s own poll-
+// driven ones below), so the closure is now actually universal rather than
+// two named exceptions.
+function noteFailed(set: Set, errors: PackProjectError[]): void {
+  set({ phase: "failed", errors });
+  notePackOutcome(errors[0]?.message ?? "pack failed");
 }
 
-function deriveProjectName(): string {
-  const name = useApp.getState().currentProject?.name;
-  if (!name) return "workspace";
-  return name.replace(/\.(dwk|json)$/i, "") || "workspace";
-}
-
-/** A comparable fingerprint of serialized workspace content that ignores
- *  `serializeWorkspace`'s own `savedAt` stamp — `savedAt` is a FRESH
- *  timestamp on every single call, so a raw string compare between two
- *  serializations of the IDENTICAL workspace would always read as
- *  "changed" purely from the clock, never actually detecting a real edit.
- *  Never throws: malformed input (never produced by our own serializer,
- *  but defensive regardless) falls back to the raw string, which still
- *  degrades safely to "treat as different" rather than crashing. */
-function contentFingerprint(content: string): string {
-  try {
-    const parsed = JSON.parse(content) as Record<string, unknown>;
-    delete parsed.savedAt;
-    return JSON.stringify(parsed);
-  } catch {
-    return content;
-  }
+function noteCancelled(set: Set): void {
+  set({ phase: "cancelled" });
+  notePackOutcome("pack cancelled — nothing was modified");
 }
 
 // -- generation counter (review finding #3) --------------------------------
@@ -90,6 +84,14 @@ function contentFingerprint(content: string): string {
 // continuation that resumes after an `await` with a stale generation bails
 // out immediately, touching neither the store nor (for `packPreview`) ever
 // having called the bridge with data nobody asked for any more.
+//
+// BUG-011 REVIEW (2026-09-13): `runStartPackProject`'s own book-resolve
+// await needed the identical protection — added there as a bare READ of
+// this counter (captured before the await, compared after), never a bump:
+// Start doesn't start or end an attempt from this state machine's point of
+// view, it only needs to know whether one of the THREE functions above
+// (`runPreviewPackProject`/`runCancelPackProject`/`runResetPackProject`)
+// bumped the counter while it was waiting.
 let generation = 0;
 
 export function bumpGeneration(): number {
@@ -142,28 +144,38 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
       return;
     }
     if (picked === null) {
-      set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+      noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
       return;
     }
     if (typeof picked !== "string") {
-      set({ phase: "failed", errors: [packError("destination_pick_failed", picked.error)] });
+      noteFailed(set, [packError("destination_pick_failed", picked.error)]);
       return;
     }
     destinationParent = picked;
   }
 
   set({ phase: "scanning" });
-  const content = serializeCurrentWorkspaceForPack();
+  const serialized = await serializeCurrentWorkspaceForPack();
+  // A third await in this continuation (BUG-011's resolve step), so it needs
+  // the same generation check as the two above it — a cancel/reset while a
+  // slow book fetch was in flight must not be overwritten by this refusal
+  // or by the preview it would otherwise go on to request.
+  if (generation !== myGeneration) return;
+  if (!serialized.ok) {
+    refusePack(set, serialized.message);
+    return;
+  }
+  const content = serialized.content;
   const projectName = deriveProjectName();
   const result = await packPreview(content, projectName, destinationParent);
   if (generation !== myGeneration) return; // cancelled/reset while packPreview was in flight
 
   if (result === null) {
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (!result.ok) {
-    set({ phase: "failed", errors: [packError(result.error.code, result.error.message ?? result.error.code)] });
+    noteFailed(set, [packError(result.error.code, result.error.message ?? result.error.code)]);
     return;
   }
 
@@ -178,6 +190,12 @@ export async function runPreviewPackProject(set: Set, destination?: string): Pro
     projectName,
   };
   set({ phase: "awaiting_confirmation", preview, warnings: result.warnings, errors: [] });
+  // Round 2 finding N1/F3: replaces whatever `serializeCurrentWorkspace-
+  // ForPack` set above (up to and including its own "…packing…" transient)
+  // with a real outcome — the preview is ready to REVIEW, nothing has been
+  // copied yet, so "packing" must never be the word left standing here.
+  const n = result.manifest.summary.datasets;
+  notePackOutcome(`${n} dataset${n === 1 ? "" : "s"} ready — review the pack preview`);
 }
 
 // -- start + polling ------------------------------------------------------
@@ -311,7 +329,7 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
   if (status === null) {
     stopPolling();
     terminalReached = true;
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (seq < lastAppliedSeq) return; // an older in-flight response landed late
@@ -320,6 +338,27 @@ export async function pollOnce(get: Get, set: Set): Promise<void> {
   if (isTerminal(status.phase)) {
     terminalReached = true;
     stopPolling();
+    // Round 2 finding N1/F3 (widened round 3 finding #2 to cover every
+    // terminal, not only `completed`): the panel's own completed view
+    // already knows the dataset count (`preview.manifest.summary.datasets`)
+    // and destination (`status.result.bundle_dir`); this is that same
+    // information, just also on the app-wide status line rather than only
+    // inside the panel. `failed`/`cancelled` get the same treatment now --
+    // `scheduleStatusApply` just wrote `status.errors` into the store above,
+    // so a real reason is always available for `failed`.
+    if (status.phase === "completed") {
+      const n = get().preview?.manifest.summary.datasets;
+      const where = status.result?.bundle_dir;
+      notePackOutcome(
+        where
+          ? `packed ${n !== undefined ? `${n} dataset${n === 1 ? "" : "s"}` : "project"} to ${where}`
+          : "pack completed",
+      );
+    } else if (status.phase === "failed") {
+      notePackOutcome(status.errors[0]?.message ?? "pack failed");
+    } else {
+      notePackOutcome("pack cancelled — nothing was modified");
+    }
   }
 }
 
@@ -352,7 +391,8 @@ function startPolling(get: Get, set: Set): void {
  *  doc) catches the OTHER staleness case: the project itself changed
  *  since preview, even though the manifest reference is still current.
  *  Either mismatch rejects LOCALLY — the bridge is never called with data
- *  the store itself already knows is stale. When nothing changed, the
+ *  the store itself already knows is stale, and so does a book that can no
+ *  longer be fetched (BUG-011's refusal). When nothing changed, the
  *  EXACT `preview.content` string (not a fresh re-serialization) is what
  *  goes to `pack_start` — byte-identical to what `pack_preview` sent,
  *  which is what lets the backend's own `sha256(content)` check pass
@@ -360,30 +400,45 @@ function startPolling(get: Get, set: Set): void {
 export async function runStartPackProject(get: Get, set: Set, approvedManifest: PortableManifest): Promise<void> {
   const preview = get().preview;
   if (preview === null || approvedManifest !== preview.manifest) {
-    set({
-      phase: "failed",
-      errors: [packError("stale_preview", "the reviewed plan is no longer current — preview again")],
-    });
+    noteFailed(set, [packError("stale_preview", "the reviewed plan is no longer current — preview again")]);
     return;
   }
-  const fresh = serializeCurrentWorkspaceForPack();
+  // Review finding #1: `serializeCurrentWorkspaceForPack` below awaits a
+  // book fetch just like `runPreviewPackProject`'s own resolve step does,
+  // and this continuation needs the same protection against a cancel/reset
+  // that races it -- captured BEFORE the await, alongside `preview` above
+  // (also captured before it). Unlike `runCancelPackProject`/
+  // `runResetPackProject`/`runPreviewPackProject`, Start does NOT bump the
+  // counter itself: it isn't starting or ending an attempt from the state
+  // machine's point of view, it only needs to know whether ONE OF THOSE did
+  // while it was waiting.
+  const myGeneration = generation;
+  const serialized = await serializeCurrentWorkspaceForPack();
+  // A cancel/reset while the book fetch was in flight bumps `generation`
+  // (and a reset also clears `preview`) -- either means this continuation
+  // is answering a question nobody is asking any more: it must touch
+  // neither the store nor the bridge, exactly like the two checks in
+  // `runPreviewPackProject` above guard ITS awaits.
+  if (generation !== myGeneration || get().preview !== preview) return;
+  if (!serialized.ok) {
+    refusePack(set, serialized.message);
+    return;
+  }
+  const fresh = serialized.content;
   if (contentFingerprint(fresh) !== contentFingerprint(preview.content)) {
-    set({
-      phase: "failed",
-      errors: [packError("stale_preview", "the project changed since preview — preview again")],
-    });
+    noteFailed(set, [packError("stale_preview", "the project changed since preview — preview again")]);
     return;
   }
 
   set({ phase: "packing" });
   const result = await packStart(preview.token, preview.content);
   if (result === null) {
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   if (!result.ok) {
     const code = result.error?.code ?? "pack_failed";
-    set({ phase: "failed", errors: [packError(code, result.error?.message ?? code)] });
+    noteFailed(set, [packError(code, result.error?.message ?? code)]);
     return;
   }
   startPolling(get, set);
@@ -397,7 +452,10 @@ export async function runCancelPackProject(set: Set, phase: PackProjectPhase): P
   // counter's own doc above.
   bumpGeneration();
   if (phase === "selecting_destination" || phase === "scanning" || phase === "awaiting_confirmation") {
-    set({ phase: "cancelled" });
+    // Round 3 finding #2: this is `cancelled`'s OWN branch -- it never goes
+    // through `pollOnce`'s poll-driven terminal handling below, so it needs
+    // its own `notePackOutcome` call to close the same stale-status hole.
+    noteCancelled(set);
     return;
   }
   // "packing" or already "cancelling" -- `pack_cancel` is idempotent
@@ -406,7 +464,7 @@ export async function runCancelPackProject(set: Set, phase: PackProjectPhase): P
   const result = await packCancel();
   if (result === null) {
     stopPolling();
-    set({ phase: "failed", errors: [packError("bridge_unavailable", "the desktop bridge is unavailable")] });
+    noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;
   }
   // The final phase (cancelled, or a completion that raced the cancel)

@@ -5,8 +5,13 @@
 // it gets its own module instead of breaking that file's contract.
 
 import type { PlotWindow } from "../../../lib/plotview";
+// P3.3: the SAME call both canvas hooks make (`Stage/useStageSeriesCycle`),
+// imported rather than restated — restating it is exactly how the focus gate
+// below drifted from the canvas in the first place.
+import { windowCyclesSeriesStyles } from "../../../lib/seriesStyleCycle";
 import { liveWindowDocument, type FigurePublicationSession } from "../../../store/figureLifecycle";
 import { libraryWindowLiveDrifted } from "../../../store/figurePublicationLibrary";
+import { plotWindowView } from "../../../store/windowDocuments";
 import type { AppState } from "../../../store/useApp";
 
 /** True once a session's live document -- the SAME comparison
@@ -38,6 +43,70 @@ export function sessionLiveDrifted(
   if (!window) return false;
   const live = liveWindowDocument(state, window);
   return live !== null && JSON.stringify(live) !== JSON.stringify(session.baseline);
+}
+
+/** P3.3 (`lib/seriesStyleCycle.ts`): does the Publication Preview's TARGET plot
+ *  window cycle right now?
+ *
+ *  Only then may the preview image and its Export apply the auto dash/marker
+ *  cycle, and then they MUST: the preview is the "what will I get" widget for
+ *  that window's canvas, and that canvas's other export
+ *  (`figureSpecStage.buildStageFigureSpec` — Copy figure / Export figure…) cycles the
+ *  same positions. It drifted before this: one focused window with the
+ *  preference on gave a dashed Stage canvas, a dashed Stage export, and a SOLID
+ *  Figure Builder preview and Export — a third rendering of the same figure,
+ *  which is exactly what MAIN #35's one-path invariant exists to prevent.
+ *
+ *  FOCUS IS NOT AN INPUT, and that was the second hole. This selector used to
+ *  read `session.windowId === state.focusedWindowId`, while the canvas half
+ *  (`Stage/useStageSeriesCycle.useWindowSeriesCycle`) never gated on focus at
+ *  all: with Publication Preview open on w1 and w2 focused, w1's background
+ *  canvas dashed while w1's preview and its Export rendered solid — the same
+ *  divergence one layer over. The decision is now the very call the canvas hooks
+ *  make — `seriesStyleCycle.windowCyclesSeriesStyles` — over the TARGET window's
+ *  OWN document and view. The view is the LIVE singletons when that window holds
+ *  focus, because that is what its canvas draws from and a window record's
+ *  `view` copy lags them (the same focused/unfocused split
+ *  `store/liveWindowDocument.ts` makes), and otherwise `plotWindowView(target)`
+ *  (`store/windowDocuments.ts`) — the SAME projection `WindowCanvas.tsx` passes
+ *  to the unfocused canvas, which derives the view from the window's DOCUMENT
+ *  when it has one rather than trusting the record's `view` mirror. Reading
+ *  `target.view` directly here would agree with the canvas only as long as
+ *  every writer of a document-backed window keeps that mirror in sync — true
+ *  today, enforced nowhere, and not a bet this selector needs to make when the
+ *  canvas's own projection is one import away. (Measured both this shape and a
+ *  hand-inlined `figureDocumentToPlotView(target.document)` call: identical
+ *  eager bytes either way — see the bundle-size header's F4 note — so the
+ *  import is kept, rather than a duplicate, drift-prone reimplementation of
+ *  the same projection traded for no byte saving at all.)
+ *
+ *  Reading the LIVE view for a focused target also closes the drift the preview
+ *  had against the window behind it: toggling polar/stat/stack/facet on that
+ *  window stops its canvas cycling, and now stops the preview cycling in the
+ *  same notification. (`selectSessionLiveDrifted` below still flags the whole
+ *  draft as stale for that edit — the preview IMAGE renders the DRAFT document
+ *  and does not re-derive the live view. That is a separate, already-reported
+ *  condition, not a styling divergence.)
+ *
+ *  A `library` or `new-editable` session is a saved DOCUMENT with no live canvas
+ *  beside it, so it stays uncycled — the same rule that keeps a Figure Page
+ *  panel and a graph template uncycled, and what makes a saved document render
+ *  identically however the preference is set. */
+export function selectSessionCyclesSeriesStyles(state: AppState): boolean {
+  const session = state.figurePublicationSession;
+  // Cheap path first, for the same reason `selectSessionLiveDrifted` below has
+  // one: this runs on every store notification, and the overwhelmingly common
+  // case (preference off, or no open session) must not walk `plotWindows`. The
+  // preference is then passed on rather than assumed, so the shared decision
+  // still reads as the whole rule at its call site.
+  if (!state.autoSeriesStyles || session === null || session.target !== "window") return false;
+  const target = state.plotWindows.find((candidate) => candidate.id === session.windowId);
+  if (target === undefined || target.kind !== "plot") return false;
+  return windowCyclesSeriesStyles(
+    state.autoSeriesStyles,
+    target.id === state.focusedWindowId ? state : plotWindowView(target),
+    target.document,
+  );
 }
 
 /** Zustand SELECTOR form of the check above -- the form `useFigureBuilder`

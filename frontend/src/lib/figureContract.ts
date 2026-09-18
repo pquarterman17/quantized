@@ -185,8 +185,15 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   x_label: derived("axes.x.label"),
   y_label: derived("axes.y.label"),
   series_styles: derived("series.styles"),
+  waterfall_offsets: derived(
+    "plot.waterfall.verticalOffset",
+    "BUG-013: the per-series stagger RESOLVED at render time (lib/waterfallOffset.ts) from the canonical fraction above plus the display list -- Y data units, not a second source of the fraction itself. Nothing here is stored on the document.",
+  ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
+  greyscale: unsupported(
+    "P3.3 review (F9): unlike its closest analogue transparent (also export-only, but classified output/output.transparent above), greyscale is deliberately kept OUT of FigureDocument.output -- re-chosen every export rather than saved with the document, so a print-safe PDF and the coloured screen view it came from never disagree about which one 'the' figure is. This is a deliberate CHOICE not to add an output.greyscale field, not an inherent property of export-only fields in general -- reclassify as output('output.greyscale') if that choice is ever revisited.",
+  ),
 } satisfies FieldContractMap<FigureSpec>;
 
 export const FIGURE_FIELD_CONTRACTS = {

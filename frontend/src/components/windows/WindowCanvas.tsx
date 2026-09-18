@@ -40,8 +40,15 @@ import PlotStage from "../Stage/PlotStage";
 // (BackgroundAltModes -> useStatStage/StatStageCanvas/statRender) — loads on
 // demand, the same way DocumentWindow's Map/Worksheet content already does.
 const BackgroundPlotWindow = lazy(() => import("./BackgroundPlotWindow"));
+// plans/BUNDLE_HEADROOM.md slice 3, the same reasoning one line up: a `panel`
+// window exists only after the user composes one, so its renderer and the two
+// modules only it reaches (PanelCell, PanelOverlayWindow) have no business in
+// the entry chunk. Same `lazy()` + `Suspense fallback={null}` shape as
+// BackgroundPlotWindow and DocumentWindow's Map/Worksheet content, and it
+// inherits their caveat: a `lazy()` boundary has no error reporting of its own
+// (plans/BUGS_AND_ISSUES.md UX-003 owns that gap for all of them).
+const PanelPlotWindow = lazy(() => import("./PanelPlotWindow"));
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";
-import PanelPlotWindow from "./PanelPlotWindow";
 import PlotWindowFrame from "./PlotWindowFrame";
 import SnapshotPlotWindow from "./SnapshotPlotWindow";
 
@@ -194,7 +201,9 @@ export default function WindowCanvas() {
                 // Item 19 v1: a composite multi-dataset window — also never
                 // the focus target (like snapshot/worksheet/map above), so
                 // before the focused dispatch.
-                <PanelPlotWindow win={win} datasets={datasets} />
+                <Suspense fallback={null}>
+                  <PanelPlotWindow win={win} datasets={datasets} />
+                </Suspense>
               ) : focused ? (
                 <PlotStage />
               ) : (

@@ -102,6 +102,7 @@ afterEach(() =>
     statMode: false,
     stackMode: false,
     insetMode: false,
+    autoSeriesStyles: false,
   }),
 );
 
@@ -289,6 +290,115 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
     await waitFor(() => expect(created).toHaveLength(4));
   });
 
+  // BUG-014 round 3: a background window's facet grid is a SECOND caller of
+  // `useMultiPanelStage` (`BackgroundAltModes.tsx`'s `BackgroundStackWindow`),
+  // and it did not pass `seriesLabels` even though `durableComposition` above
+  // proves this window renders a real facet grid, not just the plain stack —
+  // so a rename reached every OTHER leg (focused stage, flat export, facet
+  // export) but a background window's facet panels still read the derived
+  // "Signal (au)". Mirrors `MultiPanelStage.test.tsx`'s focused-window twin.
+  it("a legend rename reaches every facet panel's legend, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [1, 100],
+        [1, 200],
+        [2, 300],
+        [2, 400],
+      ],
+      labels: ["batch", "Signal"],
+      units: ["", "au"],
+      metadata: {},
+    };
+    const view = {
+      ...defaultPlotView(),
+      stackMode: true,
+      facetKey: 0,
+      yKeys: [1],
+      seriesLabels: { 1: "Loop 1" },
+    };
+    render(<BackgroundPlotWindow dataset={{ id: "d1", name: "ds1", data: UNITS }} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const labels = (created as { opts: { series: { label?: string }[] } }[]).map(
+      (panel) => panel.opts.series[1].label,
+    );
+    expect(labels).toEqual(["Loop 1", "Loop 1"]);
+  });
+
+  // BUG-014 round 4, the background twins of `MultiPanelStage.test.tsx`'s
+  // stack/break pair. The rename has to reach the same slot here: a
+  // background window builds its panels through the SAME
+  // `useMultiPanelStage` legs, `buildOpts` shows no legend in them, so the
+  // panel's y-axis label is the only place the name appears — while this
+  // window's own export (`buildStageFigureSpec`, reached once it is focused)
+  // carries the rename either way.
+  it("a legend rename reaches the renamed channel's STACK panel, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 100],
+        [20, 200],
+        [30, 300],
+        [40, 400],
+      ],
+      labels: ["Field", "Signal"],
+      units: ["T", "au"],
+      metadata: {},
+    };
+    const view = { ...defaultPlotView(), stackMode: true, seriesLabels: { 1: "Loop 1" } };
+    render(<BackgroundPlotWindow dataset={{ id: "d1", name: "ds1", data: UNITS }} view={view} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    // Non-vacuous: panel 0 carries no rename and must still read its derived
+    // "label (unit)".
+    expect((created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label)).toEqual([
+      "Field (T)",
+      "Loop 1",
+    ]);
+  });
+
+  it("a legend rename reaches every X-BREAK panel, verbatim, in a BACKGROUND window too", async () => {
+    const UNITS: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 100],
+        [20, 200],
+        [30, 300],
+        [40, 400],
+      ],
+      labels: ["Field", "Signal"],
+      units: ["T", "au"],
+      metadata: {},
+    };
+    const view = {
+      ...defaultPlotView(),
+      stackMode: true,
+      yKeys: [1],
+      seriesLabels: { 1: "Loop 1" },
+    };
+    // The break arrangement a background window can render: derived from the
+    // window's OWN document (`durableComposition`'s `plot.axisBreaks.x`),
+    // never the transient singleton — BUG-012 review F5.
+    const document = createFigureDocument({
+      id: "fig-w1",
+      name: "w1",
+      datasetId: "d1",
+      view,
+      axisBreaks: { x: [[1, 2]] },
+    });
+    render(
+      <BackgroundPlotWindow
+        dataset={{ id: "d1", name: "ds1", data: UNITS }}
+        view={view}
+        document={document}
+      />,
+    );
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect((created as { opts: { axes: { label?: string }[] } }[]).map((p) => p.opts.axes[1]?.label)).toEqual([
+      "Loop 1",
+      "Loop 1",
+    ]);
+  });
+
   it("a facetKey pointing at a column with no finite levels still falls back to the plain XY path, never a crash", async () => {
     const view = { ...defaultPlotView(), stackMode: true, facetKey: 99 };
     render(<BackgroundPlotWindow dataset={DATASET} view={view} />);
@@ -379,5 +489,60 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
     await waitFor(() => expect(created).toHaveLength(1));
     const opts = created[0].opts as { plugins: unknown[] };
     expect(opts.plugins).toHaveLength(1); // errorBarsPlugin (legacy path, untouched)
+  });
+
+  // ── P3.3 auto dash/marker cycle: focus is not a styling input ─────────────
+  // A background window is a live preview tiled BESIDE the focused one so the
+  // two can be compared curve by curve. Before this it passed no cycle, so with
+  // the preference on series 2 and 3 were dashed in the focused window and solid
+  // in the neighbour, and clicking either window swapped which was which — the
+  // "window silently changing appearance on focus move" class this component's
+  // own header names. `useStageSeriesCycle.test.ts` pins that the focused and
+  // background DECISIONS are the same function of the same view; this pins that
+  // the decision actually reaches this window's uPlot options.
+  describe("auto dash/marker cycle (P3.3)", () => {
+    const dashes = (i = 0) =>
+      ((created[i].opts as { series: { dash?: number[] }[] }).series ?? [])
+        .slice(1)
+        .map((ser) => ser.dash);
+
+    it("OFF: no series carries a dash — unchanged from before the feature", async () => {
+      useApp.setState({ autoSeriesStyles: false });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined, undefined]);
+    });
+
+    it("ON: the background window cycles by display position, like the focused one", async () => {
+      useApp.setState({ autoSeriesStyles: true });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      // seriesStyleCycle's DASH table: solid = no dash, dashed = [8,4].
+      expect(dashes()).toEqual([undefined, [8, 4]]);
+    });
+
+    it("ON: refused for a view whose export cannot follow (stackMode), from the window's OWN view", async () => {
+      // The live singletons stay plain — a background window is judged by the
+      // view it draws from. stackMode with <2 plotted channels still renders the
+      // plain XY path here, so the gate (not the dispatcher) is what refuses.
+      useApp.setState({ autoSeriesStyles: true });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={{ ...noBoxView(), stackMode: true, yKeys: [0] }} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined]);
+    });
+
+    it("ON: refused when THIS window's document pins exact publication series styles", async () => {
+      useApp.setState({ autoSeriesStyles: true });
+      const pinned = createFigureDocument({
+        id: "pinned",
+        name: "Pinned",
+        datasetId: DATASET2.id,
+        view: noBoxView(),
+        publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null] },
+      });
+      render(<BackgroundPlotWindow dataset={DATASET2} view={noBoxView()} document={pinned} />);
+      await waitFor(() => expect(created).toHaveLength(1));
+      expect(dashes()).toEqual([undefined, undefined]);
+    });
   });
 });

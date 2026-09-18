@@ -16,7 +16,8 @@ import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
 import type { RegionStats } from "../../lib/regionStats";
-import type { Dataset, SeriesStyle } from "../../lib/types";
+import type { SeriesCycle } from "../../lib/seriesStyleCycle";
+import type { Dataset, DefaultTrace, SeriesStyle } from "../../lib/types";
 import type { PlotTool } from "../../lib/uplotOpts";
 import type { Readout } from "../../lib/uplotTools";
 import type { IntegralResult } from "../../store/useApp";
@@ -39,12 +40,16 @@ export interface PlotStageOverlaysProps {
   // Matches usePlotPayload's own return type exactly — PlotStage passes
   // these straight through from that hook.
   styleList: (SeriesStyle | undefined)[] | undefined;
+  /** P3.3 (`lib/seriesStyleCycle.ts`): the display positions PlotStage opted
+   *  this view's canvas into, so the legend swatch and the magnifier inset
+   *  resolve the same dash/glyph the plot behind them drew. */
+  seriesCycle: SeriesCycle;
   plotted: number[];
   hidden: boolean[] | undefined;
   colorByColumns: Map<number, ColorScatterSpec>;
   isDarkBg: boolean;
   inkColor: string;
-  defaultTrace: string;
+  defaultTrace: DefaultTrace;
   actions: PlotStageActions;
   readout: Readout | null;
   measurement: Measurement | null;
@@ -71,7 +76,9 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
       )}
       {p.displayPayload && <ToolHud tool={p.tool} />}
 
-      {p.insetMode && p.displayPayload && <InsetPlot payload={p.displayPayload} styleList={p.styleList} />}
+      {p.insetMode && p.displayPayload && (
+        <InsetPlot payload={p.displayPayload} styleList={p.styleList} seriesCycle={p.seriesCycle} />
+      )}
 
       {!p.active && (
         <div
@@ -94,6 +101,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         <PlotLegend
           series={p.displayPayload.series}
           styleList={p.styleList}
+          seriesCycle={p.seriesCycle}
           plotted={p.plotted}
           hidden={p.hidden}
           colorByColumns={p.colorByColumns}

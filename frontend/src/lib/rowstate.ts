@@ -124,6 +124,21 @@ export function analysisData(ds: Dataset | null | undefined): DataStruct | null 
   return drop.size === 0 ? ds.data : pruneExcluded(ds.data, drop);
 }
 
+/** `data` after `liveDataset`'s row-drop state (manual exclusion + the local
+ *  Data Filter) is applied, or `data` UNCHANGED when there is no live dataset
+ *  bound (a frozen/document-only export). The one substitution every export
+ *  path that builds a wire payload from a dataset's raw `data` must make so a
+ *  screen-hidden row can never reach an export — shared by
+ *  `lib/figureSpecFacets.ts`'s facet partition (FIGURE_AUTHORING_WORKFLOW_PLAN
+ *  fix-round C2) and `lib/figureSpec.ts`'s flat series build (the same plan's
+ *  long-open flat-path gap), so the two can never drift onto two different
+ *  pruning paths. `data` need not be `liveDataset.data` verbatim — a caller
+ *  may pass a request-local relabeled copy (`figureSpec.ts`'s `seriesLabels`
+ *  overlay); only `droppedRows` reads `liveDataset` itself. */
+export function pruneToLiveDataset(data: DataStruct, liveDataset: Dataset | null | undefined): DataStruct {
+  return liveDataset ? pruneExcluded(data, droppedRows(liveDataset)) : data;
+}
+
 /** Expand a pruned-length array back to full row count: each value at its kept
  *  original-row index, null elsewhere. Realigns a fit computed on the analysis
  *  subset with the full-length plot x (which keeps excluded rows as gaps), so
