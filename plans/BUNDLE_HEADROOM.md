@@ -1,7 +1,8 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slice 1 executed** (see its
-section below); slices 2 and 3 remain unmeasured proposals.
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1 and 3 executed** (see
+their sections below); slice 2 is partially done, and slice 4 (the former slice
+3) remains an unmeasured proposal.
 
 `main` sits at ~11 B of CI headroom against the 889.4 kB eager budget, so any
 eager addition is currently blocked. `check-bundle-size.mjs`'s history says
@@ -75,7 +76,7 @@ bound; the measured net delta is TBD until a spike runs.
 | 6,954 | `lib/plotspec.ts` | no — plot model |
 | 6,736 | `lib/figureDocument.ts` | no — workspace parse needs it |
 | 6,626 | `commands/plotCommands.ts` | partially — see slice 2 |
-| 5,926 | `lib/plotRecipeIO.ts` | partially — slice 3 |
+| 5,926 | `lib/plotRecipeIO.ts` | partially — slice 4 |
 | 5,835 | `lib/contextActions.ts` | no — right-click latency |
 | 5,231 | `lib/uplotGadgets.ts` | no — plot rendering |
 
@@ -271,13 +272,118 @@ thereafter.
 Worth a measured spike before committing — the handlers' transitive imports,
 not the command files themselves, are where the weight is.
 
-### Slice 3 — `lib/plotRecipeIO.ts`
+### Slice 3 — three more lazy seams — **DONE (2026-09-18)**
+
+**Measured net eager delta -6,890 B - budget UNMOVED at 920,400 B**
+
+Headroom was 3,682 B (916,718 B eager) after P2.8's durable map-view contract
+landed; it is 10,572 B now. The bundle pin is NOT edited in either direction,
+and the map contract stays fully eager - it was explicitly out of scope.
+
+Bundle pair, exact bytes (the eager `<script type=module>` + `modulepreload`
+count out of `dist/index.html`, not the rounded kB `check-bundle-size.mjs`
+prints), both built in this worktree after `npm ci` with `node_modules/.vite`
+wiped before every single build:
+
+| tree | SHA | eager bytes |
+|---|---|---:|
+| parent (`git rev-parse HEAD~1`) | `c1757fb1` | **916,718** |
+| this commit (its own SHA; the commit body repeats these numbers) | slice 3 | **909,828** |
+
+Cumulative, in the order the seams were measured - each row is a full
+`npm run build` on the same machine, same Node, `.vite` wiped:
+
+| seam | module deferred | loader | eager B | delta |
+|---|---|---|---:|---:|
+| parent | - | - | 916,718 | - |
+| 1 | `components/windows/PanelPlotWindow.tsx` | `components/windows/WindowCanvas.tsx` | 913,251 | **-3,467** |
+| 2 | `components/Stage/PolarStage.tsx` | `components/Stage/PlotStage.tsx` | 910,450 | **-2,801** |
+| 3 | `store/plotRecipeApply.ts` | `store/plotRecipeApplyLazy.ts` (new) | 909,828 | **-622** |
+
+Why each qualifies - every one runs strictly after a user action, never on
+first paint, autosave restore or crash recovery:
+
+1. **Panel windows.** `WindowCanvas`'s `win.kind === "panel"` branch. A panel
+   window exists only once the user composes one, and `PanelPlotWindow` was the
+   only eagerly-reachable importer of `PanelCell` and `PanelOverlayWindow`, so
+   all three left together. `lazy()` + `Suspense fallback={null}`, the shape
+   `BackgroundPlotWindow` two lines above it already uses.
+2. **Polar mode.** PlotStage's third runtime-conditional alternate render mode
+   and the only one still static (`MultiPanelStage` and `StatStage` were
+   already `lazy()`). Entered exactly one way, the Plot toolbar's polar toggle.
+   Takes `PolarStageCore` and `lib/polar.ts` with it.
+3. **The Plot Recipe apply core.** `store/plotRecipes.ts` is composed into
+   `useApp.ts`, so its static import of `store/plotRecipeApply.ts` - the
+   apply/matching half (`resolveApplyOrStage`, `applyResolvedRecipe`,
+   `resolvedCandidates`, `recipeLibs`) - was a permanent startup cost for a
+   module every entry point into which is a recipe gesture. All seven actions
+   that touch it were ALREADY `async`, because `recipeLibs()` lives inside that
+   same module and was already awaited first in every one of them, so no public
+   signature, return type or await count changed.
+
+`src/architecture.test.ts` gains all three in `SEAMS`, and
+`PanelCell`/`PanelOverlayWindow`/`PolarStageCore`/`lib/polar.ts` in
+`DRAGGED_OUT`. Measured with the guard's own `eagerlyReachable()` walk: 404
+eager modules before, 398 after (three seams + four dragged out, minus the one
+module added - `store/plotRecipeApplyLazy.ts`, the loader).
+
+**Gesture preservation: not applicable to any of the three.** None writes the
+clipboard or opens a file picker, so nothing here needs `copyTextAsync` or the
+"start the promise inside the click's own task" discipline seam 3 of the first
+diet did. The one candidate that WOULD have needed it is in the rejected list
+below, and it was rejected on bytes, not on that.
+
+**Failure reporting.** The `plotRecipeApply` seam rejects the action's own
+promise on a chunk that will not load, which is exactly what a failed
+`recipeLibs()` (an unguarded `Promise.all` of two dynamic imports, in that same
+module) already did from those call sites - the seam adds no new failure MODE,
+and nothing has mutated at that point. The two `lazy()` seams inherit the
+repo-wide gap: a `lazy()` boundary has no reporting of its own and unmounts the
+React root. That is UX-003 in `plans/BUGS_AND_ISSUES.md` for all such sites at
+once; it is not something these two introduced or can fix locally.
+
+#### Three seams measured and REJECTED, because they made the bundle BIGGER
+
+This is the slice's most transferable finding, and it contradicts the
+per-module table at the top of this file. Rollup's default chunking gives a
+dynamic-import boundary a real cost: every module the deferred subtree SHARES
+with the eager graph has to be carved into its own chunk, and each new chunk
+pays import/export glue. Three seams were fully implemented, measured, and
+reverted or kept on the measurement alone:
+
+| rejected seam | attributed upper bound | measured |
+|---|---:|---:|
+| `store/reimport.ts` -> `lib/reimport.ts` + `lib/dependencyImpact.ts` | 1,830 B | **+1,451 B** |
+| `commands/fileCommands.ts` -> `lib/originTemplate.ts` | 1,063 B | **+222 B** |
+| `store/plotRecipes.ts` -> `store/plotRecipeApply.ts` | 2,857 B | -617 B (KEPT, but 78% of the bound was eaten) |
+
+Deferring `lib/reimport.ts` split `lib/plotview.ts` (23.2 kB), `lib/formula.ts`
+(10.1 kB), `lib/recalc.ts`, `lib/api`/`lib/api/http.ts`, `lib/figuredoc.ts` and
+five smaller modules out into their own still-eager chunks; the module SET
+shrank and the byte total went UP. (The two rejected seams were measured on top
+of the `plotRecipeApply` one, so their deltas are marginal contributions in
+that order - which is the number that decides whether to keep them.)
+
+**The rule this slice adds:** rank candidates by how EXCLUSIVE the deferred
+subtree is, not by attributed bytes. The two component seams realised 85% of
+their bound (6,268 B of 7,422 B) because a React subtree is mostly its own; the
+three `lib`/`store`-level ones realised -22%, -21% and +22%. A seam whose
+target shares `plotview`/`formula`/`api`-class modules with the entry graph is
+presumed a loss until a real build says otherwise.
+
+### Slice 4 - `lib/plotRecipeIO.ts`
+
+*(Was numbered "Slice 3" until 2026-09-18, when the executed slice above took
+that number. Content unchanged apart from the closing note.)*
 
 **Upper bound 5,926 B · measured net eager delta: TBD, expected ~2 kB · LOW risk**
 
 Two exports: `sanitizeRecipes` (needed by `parseWorkspace` at load) and
 `parseRecipe` (only when importing a recipe file). Most of the 383 lines are
-helpers shared by both, so the win is small — verify before doing it.
+helpers shared by both, so the win is small — verify before doing it. Read the
+slice-3 finding above before spending a day on it: `lib/workspace.ts` needs
+`sanitizeRecipes` at load, so only `parseRecipe` could move, and it shares most
+of the module's helpers with the half that stays.
 
 ## What this does NOT change
 

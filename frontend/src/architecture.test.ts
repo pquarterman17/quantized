@@ -2381,6 +2381,45 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Library/FigureRow.tsx",
       call: 'import("./OriginSavedPreviewWindow")',
     },
+    // ── SLICE 3 (2026-09-18, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // Three more, same class, each with exactly one non-test importer whose
+    // only entry point into it is a user action — so the static-import arm
+    // below holds all three outright.
+    //
+    // `components/windows/PanelPlotWindow.tsx` renders `win.kind === "panel"`.
+    // A panel window exists only after the user composes one, so its renderer
+    // and the two modules only it reaches (PanelCell, PanelOverlayWindow, in
+    // DRAGGED_OUT below) had no business in the entry chunk. Measured the
+    // largest of the three by a wide margin.
+    //
+    // `components/Stage/PolarStage.tsx` is the third of PlotStage's runtime-
+    // conditional alternate render modes and the only one that was still
+    // static; MultiPanelStage and StatStage were already `lazy()`. It is
+    // reached exactly one way, the Plot menu's polar toggle, and takes
+    // PolarStageCore + lib/polar.ts with it.
+    //
+    // `store/plotRecipeApply.ts` is the apply/matching half of Plot Recipes
+    // (`resolveApplyOrStage`, `applyResolvedRecipe`, `resolvedCandidates`,
+    // `recipeLibs`). `store/plotRecipes.ts` is composed into `useApp.ts`, so
+    // its static import made that module a startup cost; every action that
+    // needs it was ALREADY `async` (for `recipeLibs()`, which lives inside it),
+    // so nothing changed shape. The loader is the new
+    // `store/plotRecipeApplyLazy.ts`, which also carries the failure contract.
+    {
+      module: "/components/windows/PanelPlotWindow.tsx",
+      loader: "/components/windows/WindowCanvas.tsx",
+      call: 'import("./PanelPlotWindow")',
+    },
+    {
+      module: "/components/Stage/PolarStage.tsx",
+      loader: "/components/Stage/PlotStage.tsx",
+      call: 'import("./PolarStage")',
+    },
+    {
+      module: "/store/plotRecipeApply.ts",
+      loader: "/store/plotRecipeApplyLazy.ts",
+      call: 'import("./plotRecipeApply")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2552,7 +2591,23 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  finding 7). Without it, one eager importer silently folds 4.7 kB back
    *  into the entry chunk and only the bundle budget would ever notice —
    *  the exact failure this describe block exists to prevent. */
-  const DRAGGED_OUT = ["/components/overlays/ToolWindow.tsx", "/lib/workshopHelp.ts"];
+  /** SLICE 3 (2026-09-18) adds the four modules its two component seams took
+   *  with them: `PanelCell`/`PanelOverlayWindow` (PanelPlotWindow was their
+   *  only eagerly-reachable importer, and PanelCell is reached BOTH directly
+   *  and through PanelOverlayWindow) and `PolarStageCore`/`lib/polar.ts`
+   *  (PolarStage's). Measured, not assumed: the eager walk went from 404
+   *  modules to 398 across the whole slice — the three seams, these four, and
+   *  the one module ADDED (`store/plotRecipeApplyLazy.ts`, the loader).
+   *  Together they are most of the slice's measured bytes, and none of them is
+   *  a seam itself, so only reachability can hold this line. */
+  const DRAGGED_OUT = [
+    "/components/overlays/ToolWindow.tsx",
+    "/lib/workshopHelp.ts",
+    "/components/windows/PanelCell.tsx",
+    "/components/windows/PanelOverlayWindow.tsx",
+    "/components/Stage/PolarStageCore.tsx",
+    "/lib/polar.ts",
+  ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
    *  STATIC value imports from the app entry, stop at every dynamic
@@ -2586,9 +2641,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
     const eager = eagerlyReachable();
     // Vacuity guard: a walk that stalls at the entry would pass everything.
-    // Measured 2026-09-15 on this tree: 400 of 901 source modules are eager
-    // (corrected 2026-09-17 — see the stripper doc above for why 399/900 was
-    // one commit stale).
+    // Measured 2026-09-15 on caa10f88's tree: 400 of 901 source modules are
+    // eager (corrected 2026-09-17 — see the stripper doc above for why 399/900
+    // was one commit stale). Re-measured in-test 2026-09-18 after slice 3:
+    // 398 of 912 — the corpus grew by the one module slice 3 added, and the
+    // eager set went 404 -> 398 (three seams + four dragged out, minus that
+    // one addition).
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(
