@@ -19,8 +19,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { EMPTY_MAP_VIEWS } from "../../lib/mapView";
 import type { MapAnnotation, MapSliceDef } from "../../lib/mapView";
 import type { MapPayload } from "../../lib/mapdataFetch";
+import { useApp } from "../../store/useApp";
 import MapSliceOverlay from "./MapSliceOverlay";
 // Not mocked (the factory spreads the original), so this IS the shipped rect.
 import { plotRect } from "./mapRender";
@@ -214,46 +216,104 @@ describe("the parked strip has a geometry budget (round 3, finding 11)", () => {
     expect(chip).toHaveTextContent(longLabel);
   });
 
-  it("the strip scrolls instead of growing up the plot", () => {
-    renderOverlay(
-      [],
-      Array.from({ length: 12 }, (_, i) => ({
-        id: `a${i}`,
-        x: 32,
-        y: 16,
-        text: longLabel,
-        space: "q" as const,
-      })),
-      payload(30, 34),
-      "angular",
-    );
-    const strip = screen.getByTestId("map-parked-strip");
-    expect(screen.getAllByTestId("map-parked-chip")).toHaveLength(12);
-    expect(strip.style.maxHeight).toBe("72px");
-    expect(strip.style.overflowY).toBe("auto");
-  });
+  // Round 4 gave the strip a `maxHeight`/`overflowY` clip plus its own
+  // `pointer-events: auto` so the resulting scrollbar could be grabbed.
+  // Round 5 review (F1) measured, with a real browser hit-test, that opting
+  // the WHOLE container into `auto` makes its full bounding box — not just
+  // its chips — intercept clicks/drags on the map underneath: wrapped rows
+  // rarely fill exactly to `max-width`, so the box routinely holds real dead
+  // space. That breaks round 2's click-through guarantee. The strip goes
+  // back to `pointer-events: none` (only chips opt in), and the clip/scroll
+  // budget is dropped with it — a scrollbar under `pointer-events: none` was
+  // never reachable, and a hard clip with no way to reach it would HIDE
+  // parked chips outright, breaking round 2's "every slice stays removable"
+  // guarantee. The strip wraps and grows instead.
+  describe("the strip never intercepts the plot; it wraps and grows (round 5, finding 1)", () => {
+    it("the strip container's own pointer-events is none; every chip's is auto", () => {
+      renderOverlay(
+        [],
+        Array.from({ length: 3 }, (_, i) => ({
+          id: `a${i}`,
+          x: 32,
+          y: 16,
+          text: longLabel,
+          space: "q" as const,
+        })),
+        payload(30, 34),
+        "angular",
+      );
+      const strip = screen.getByTestId("map-parked-strip");
+      expect(strip.style.pointerEvents).toBe("none");
+      // The overlay's outer container was already click-through; unchanged.
+      const outer = screen.getByTestId("map-slice-overlay");
+      expect(outer.style.pointerEvents).toBe("none");
+      for (const chip of screen.getAllByTestId("map-parked-chip")) {
+        expect(chip.style.pointerEvents).toBe("auto");
+      }
+    });
 
-  // Round 4, finding 7: the strip scrolls (above) but the scrollbar could not
-  // be grabbed — a `pointer-events: none` element cannot be a scroll-drag
-  // target. The strip itself now opts into `auto`, same as every chip in it.
-  it("the strip's OWN pointer-events is auto, so its scrollbar is grabbable, while the overlay stays click-through everywhere else", () => {
-    renderOverlay(
-      [],
-      Array.from({ length: 12 }, (_, i) => ({
-        id: `a${i}`,
-        x: 32,
-        y: 16,
-        text: longLabel,
-        space: "q" as const,
-      })),
-      payload(30, 34),
-      "angular",
-    );
-    const strip = screen.getByTestId("map-parked-strip");
-    expect(strip.style.pointerEvents).toBe("auto");
-    // The overlay's outer container is still the click-through layer over the
-    // rest of the map — unchanged by the strip's own opt-in.
-    const outer = screen.getByTestId("map-slice-overlay");
-    expect(outer.style.pointerEvents).toBe("none");
+    it("has no maxHeight/overflowY budget — it wraps and grows instead of clipping", () => {
+      renderOverlay(
+        [],
+        Array.from({ length: 12 }, (_, i) => ({
+          id: `a${i}`,
+          x: 32,
+          y: 16,
+          text: longLabel,
+          space: "q" as const,
+        })),
+        payload(30, 34),
+        "angular",
+      );
+      const strip = screen.getByTestId("map-parked-strip");
+      expect(strip.style.maxHeight).toBe("");
+      expect(strip.style.overflowY).toBe("");
+      expect(strip.style.flexWrap).toBe("wrap");
+    });
+
+    it("with 40 parked chips, all 40 remove buttons are in the DOM and clickable — removing the last one removes that store entry", () => {
+      useApp.setState({ mapViews: EMPTY_MAP_VIEWS, history: [], future: [] });
+      const datasetId = "ds-strip-40";
+      const ids: string[] = [];
+      for (let i = 0; i < 40; i++) {
+        // Parked because it is recorded in "q" while the map shows "angular"
+        // (same mechanism as the rest of this file's parked fixtures).
+        const id = useApp.getState().addMapSlice(datasetId, {
+          kind: "h",
+          a: { x: 32, y: 16 },
+          width: 0,
+          space: "q",
+        });
+        expect(id).not.toBeNull();
+        ids.push(id!);
+      }
+      const parked = useApp.getState().mapViews[datasetId]!.slices;
+      expect(parked).toHaveLength(40);
+
+      render(
+        <MapSliceOverlay
+          payload={payload(30, 34)}
+          w={W}
+          h={H}
+          slices={parked}
+          annotations={[]}
+          space="angular"
+          onRemoveSlice={(id) => useApp.getState().removeMapSlice(datasetId, id)}
+          onRemoveAnnotation={() => {}}
+        />,
+      );
+
+      const chips = screen.getAllByTestId("map-parked-chip");
+      expect(chips).toHaveLength(40);
+      const lastId = ids[ids.length - 1]!;
+      const lastChip = chips.find((c) => c.getAttribute("data-slice-id") === lastId);
+      expect(lastChip).toBeDefined();
+
+      fireEvent.click(lastChip!);
+
+      const after = useApp.getState().mapViews[datasetId]!.slices;
+      expect(after).toHaveLength(39);
+      expect(after.some((s) => s.id === lastId)).toBe(false);
+    });
   });
 });

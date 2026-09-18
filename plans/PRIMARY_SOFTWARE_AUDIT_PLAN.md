@@ -3364,6 +3364,75 @@ violin, bar, strip, or summary plots.
     `effectiveColorLimits` branch, the parked strip's `pointerEvents`
     constant, and the history-label disambiguator), all already eager by
     construction with the code they extend.
+- **Review round 5 2026-09-18** (adversarial review of `9c6abc5a`; both boxes
+  above stay `[x]`). One real, measured finding — round 4's own fix for its
+  finding 7 introduced a new click-blocking regression it had no way to
+  measure (jsdom lays nothing out); everything else that round re-checked
+  held.
+  - **The parked strip no longer intercepts the plot underneath it** (finding
+    1, user-visible regression). Round 4 opted the WHOLE strip container into
+    `pointer-events: auto` so its scrollbar could be grabbed. A real-browser
+    hit-test (Chromium via Playwright, not jsdom) on the shipped CSS shape
+    measured that this made the container's FULL bounding box — not just its
+    chips — swallow clicks and drags on the map underneath: `justify-content:
+    flex-end`-wrapped rows rarely fill exactly to `max-width`, so the box
+    routinely holds real, non-trivial dead space that was never a chip
+    (≈21% of the strip's own box in the reviewer's fixture). That directly
+    contradicted round 2's click-through guarantee, in exactly the corner a
+    long-running project with several parked slices is most likely to also
+    want to pan or box-select. `MapSliceOverlay.tsx`'s `PARKED_STRIP` is back
+    to `pointerEvents: "none"` — only each chip opts into `auto` (unchanged) —
+    and the round-4 `maxHeight: 72` + `overflowY: "auto"` clip/scroll budget
+    is REMOVED along with it: a scrollbar under `pointer-events: none` was
+    never reachable (the very defect round 4 was trying to fix), and a hard
+    clip with no way to reach it would HIDE parked chips outright, breaking
+    round 2's "every slice stays removable" guarantee. The strip wraps and
+    grows instead of clipping; the per-chip text budget (`max-width` +
+    ellipsis, round 3 finding 11) is untouched. A very large parked set can
+    now visually cover map area, but it can never BLOCK a pointer event on
+    the map underneath — only its own chips can, each over its own tight
+    content box, the same shape every DRAWN chip in this file already has.
+    Also fixed: the round-4 comment's "a shape that already exists on every
+    individual DRAWN chip and box-select bar elsewhere in this file" named a
+    "box-select bar" that does not exist anywhere in `MapSliceOverlay.tsx`
+    (`grep -n pointerEvents` finds exactly the chip style and the strip
+    constant) — the comment is corrected, with the DRAWN-chip comparison kept
+    (it is accurate) and the fabricated one dropped.
+  - **Measured with a real hit-test, not just DOM assertions.** jsdom cannot
+    lay anything out, so the DOM-level test suite could not have caught round
+    4's regression (or verify this round's fix) on its own; a standalone
+    Playwright/Chromium probe against the shipped CSS shape (absolute strip,
+    `right`/`bottom`, `flex-wrap`, `justify-content: flex-end`, five chips of
+    varied width) sampled 420 points across the strip's bounding box, found
+    153 empty (non-chip) points, and **zero** resolved to the strip `<div>` —
+    all fell through to the canvas underneath (`elementFromPoint` at an empty
+    corner point → `CANVAS`), and a real mouse click at that point fired the
+    plot's own `onclick`. Not run as part of the Playwright e2e suite (no
+    spec references this DOM, and the change is a style-value-only diff with
+    no role/tabindex/class change on Library, Details, Stage or Shell, so the
+    "run the full e2e suite" rule does not apply) — the DOM-level pointer-
+    events assertions in `MapSliceOverlay.test.tsx` are the lasting pin;
+    the hit-test was a one-time, out-of-band confirmation.
+  - **Sabotage.** 3 mutations, one at a time, each reverted: restoring
+    `pointerEvents: "auto"` on `PARKED_STRIP` (test "the strip container's own
+    pointer-events is none; every chip's is auto" → RED), adding back
+    `maxHeight: 72`/`overflowY: "auto"` (test "has no maxHeight/overflowY
+    budget…" → RED), and dropping the chip's `maxWidth`/ellipsis budget
+    (round-3 test "a chip is width-capped and truncates instead of growing" →
+    RED). **3 RED, 0 survivors.** A fourth test — 40 parked chips, all 40
+    remove buttons present and clickable, removing the last one removes that
+    exact entry from the live `mapViews` store (not just firing a mocked
+    callback) — has no dedicated sabotage of its own; it is a direct
+    behavioural pin on the "every slice stays removable" guarantee this round
+    protects, and passed unmodified throughout.
+  - **Bundle.** Eager total **911,785 B at the parent `9c6abc5a`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit, +0 B**;
+    both trees built after their own `npm ci` and `rm -rf node_modules/.vite`,
+    exact eager bytes on each side via `exactbytes.mjs`. 890.4 kB against the
+    898.8 kB budget, 8.4 kB under, unchanged from round 4; `EAGER_JS_BUDGET`
+    untouched. Zero delta because this round only changes a style-object
+    property VALUE and a comment — no import, export, or code-shape change
+    for the bundler to see.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

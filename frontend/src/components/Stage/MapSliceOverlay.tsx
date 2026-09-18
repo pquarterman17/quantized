@@ -114,31 +114,42 @@ const CHIP: CSSProperties = {
   color: "var(--text)",
 };
 
-/** Geometry budget for the parked strip (P2.8 review round 3, finding 11).
- *  A label is capped at 200 CHARACTERS by the sanitizer, which is not a
- *  budget in PIXELS: one such chip rendered as a single 202-character row,
- *  and several parked definitions wrapped the strip upward out of the bottom
- *  margin (`MARGIN.bottom = 42`), across the plot and under the colourbar.
- *  Each chip now truncates with an ellipsis (the full text stays in its
- *  `title`, which is where the reason already lives), and the strip itself
- *  scrolls past four rows instead of growing.
+/** Geometry budget for the parked strip (P2.8 review round 3, finding 11;
+ *  revised round 5, finding 1). A label is capped at 200 CHARACTERS by the
+ *  sanitizer, which is not a budget in PIXELS: one such chip rendered as a
+ *  single 202-character row. That half of the budget stays — each chip
+ *  truncates with an ellipsis (`PARKED_CHIP` below), the full text still
+ *  reachable in its `title`, which is where the reason already lives.
  *
- *  The strip's OWN `pointerEvents` (P2.8 review round 4, finding 7): the
- *  overlay's outer `<div>` is `pointer-events: none` end to end so the map
- *  underneath stays clickable, and each chip individually opts back into
- *  `auto` (below) so it alone stays clickable — the strip container itself
- *  was left at the inherited `none`. That is fine right up until it also
- *  scrolls: a `none` element cannot be the target of a scrollbar drag, so the
- *  scrollbar the round-3 budget introduced could not be grabbed at all (the
- *  content stayed reachable some other way — wheel-over-a-chip scroll-chains
- *  up to it, and Tab scrolls a focused chip into view — but the direct
- *  scrollbar affordance never worked). The strip is set to `auto` below,
- *  unconditionally: it is rendered only when it holds at least one chip, and
- *  those chips already covered essentially all of its visual footprint (each
- *  is `auto` too), so this costs only the few pixels of gap/padding between
- *  wrapped chips — a shape that already exists on every individual DRAWN
- *  chip and box-select bar elsewhere in this file. */
-const PARKED_STRIP: CSSProperties = { pointerEvents: "auto" };
+ *  The OTHER half — capping the strip's own height and scrolling it, plus
+ *  opting the strip container itself into `pointer-events: auto` so that
+ *  scrollbar could be grabbed (P2.8 review round 4, finding 7) — is REVERTED
+ *  here. Round 4's own review (round 5's `pointer-events: auto` sabotage,
+ *  see this file's test) measured that opting the whole container in makes
+ *  the strip's full bounding box — not just its chips — intercept clicks and
+ *  drags on the map underneath: `justify-content: flex-end`-wrapped rows
+ *  rarely fill exactly to `max-width`, so the container's box routinely
+ *  contains real, non-trivial dead space that was never a chip. That
+ *  contradicts round 2's own click-through guarantee, right in the corner a
+ *  long-running project (many parked slices) is most likely to also want to
+ *  pan or box-select.
+ *
+ *  So: the strip container is `pointer-events: none` again — it inherits
+ *  that from the overlay's outer `<div>` and does not need to say so itself,
+ *  but says so explicitly here so the contract is visible and testable at
+ *  this one site. Only each CHIP opts back into `auto` (already true; see
+ *  `CHIP` below) — exactly the shape of every DRAWN chip in this same file,
+ *  which has never intercepted anything beyond its own tight content box.
+ *  The `maxHeight`/`overflowY` budget is dropped along with it: a scrollbar
+ *  under `pointer-events: none` was never reachable anyway (the round-4
+ *  regression this round fixes was introduced trying to fix exactly that),
+ *  and a hard clip without a working scrollbar would hide parked chips
+ *  entirely — breaking round 2's "every slice stays removable" guarantee.
+ *  The strip wraps and grows downward/leftward instead; an unbounded parked
+ *  set can visually cover map area, but it can never BLOCK a pointer event
+ *  on the map underneath — only its own chips can, each over its own tight
+ *  box, same as every drawn chip already does. */
+const PARKED_STRIP: CSSProperties = { pointerEvents: "none" };
 
 const PARKED_CHIP: CSSProperties = {
   ...CHIP,
@@ -255,8 +266,6 @@ export default function MapSliceOverlay({
             justifyContent: "flex-end",
             gap: 4,
             maxWidth: "60%",
-            maxHeight: 72,
-            overflowY: "auto",
             ...PARKED_STRIP,
           }}
         >
