@@ -55,7 +55,7 @@ function selectFocusedWindowCycles(s: AppState): boolean {
  * The cycle positions for one plot window's plain single-panel overlay, or
  * `null` when it must not cycle.
  *
- * `lib/figureSpec.buildStageFigureSpec` — the export the FOCUSED window
+ * `lib/figureSpecStage.buildStageFigureSpec` — the export the FOCUSED window
  * produces (Copy figure, Copy figure (vector), Export figure…), and the one a
  * background window produces the moment it is focused — makes the SAME
  * `windowCyclesSeriesStyles` call, so a grouped, faceted, stacked, polar or stat

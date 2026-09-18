@@ -6,6 +6,7 @@ import { memoryBackend } from "./lib/autosaveBackend";
 import { createBrowserLockProvider } from "./lib/browserLockProvider";
 import { FIGURE_DOCUMENT_SCHEMA } from "./lib/figureDocument";
 import { STALE_AFTER_MS } from "./lib/lockState";
+import { EMPTY_MAP_VIEWS } from "./lib/mapView";
 import { serializeWorkspace } from "./lib/workspace";
 import { useAutosaveStatus } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
@@ -37,6 +38,7 @@ async function flush() {
 }
 
 const base: AutosaveState = {
+  mapViews: EMPTY_MAP_VIEWS, // P2.8 — the per-dataset durable map views (untouched)
   datasets: [],
   folders: [],
   activeId: null,

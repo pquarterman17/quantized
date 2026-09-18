@@ -45,7 +45,7 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
-import { buildExportStyles } from "./exportStyles";
+import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import { withSeriesLegends } from "./figureSpecSeries";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
 import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./multipanel";
@@ -207,9 +207,16 @@ function spatialPanelFigure(
     // `?? undefined` is a type bridge only: `withSeriesLegends` propagates a
     // NULL base (a document that omits `series_styles`), and this path's base
     // is always `buildExportStyles`' array, so the branch is unreachable here.
+    // `toWireSeriesStyles(..., false)` is this path's wire boundary: a spatial
+    // page cell is never grouped (no `group_col` on this request), so its only
+    // job here is removing the `colorDerived` provenance flag the builder
+    // records (BUG-016 round 3). The colours themselves are untouched.
     series_styles:
       withSeriesLegends(
-        buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+        toWireSeriesStyles(
+          buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+          false,
+        ),
         legends,
       ) ?? undefined,
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {

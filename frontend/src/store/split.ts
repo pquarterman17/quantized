@@ -83,7 +83,8 @@ import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertre
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId, nextFolderId, type AppState } from "./useApp";
+import { nextDatasetId, nextFolderId } from "./idSeq";
+import type { AppState } from "./useApp";
 import { datasetViewDefaults, focusTransientReset } from "./windows";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;

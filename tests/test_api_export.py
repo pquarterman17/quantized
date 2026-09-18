@@ -783,8 +783,10 @@ def test_figure_greyscale_defaults_to_off() -> None:
 # `_render_impl` also serves -- group_col/y2/x_breaks -- mirroring
 # test_calc_figure.py's own `_achromatic_hexes`. The prior "group_col" unit
 # test (test_calc_figure.py) called `render_figure` directly and never
-# actually went through the route's grouped-resolve branch (`_figure_
-# series`'s `group_col` path, which builds `series_styles=None` itself);
+# actually went through the route's grouped-resolve branch (`_figure_series`'s
+# `group_col` path, which resolves the styles and expands them onto the
+# per-level series itself -- `calc.figure_group_styles`, BUG-016; it used to
+# build `series_styles=None` there, which is the bug that entry records);
 # these do.
 # N1 (round-2 review): widened from stroke-only to stroke-OR-fill, same as
 # test_calc_figure.py's `_achromatic_hexes` -- a chromatic `fill:` (e.g. the
@@ -2293,3 +2295,101 @@ def test_export_opj_preserves_cat_levels_when_stamping_the_book_name(monkeypatch
     # survived it.
     assert seen[0].metadata["origin_book"] == "LoopA"
     assert seen[0].cat_levels == {1: ("alpha", "beta")}
+
+
+# ── BUG-016 round 4 (review F9): the document-only provenance key ───────────
+# `colorDerived` is the frontend's record of whether a pinned `color` was the
+# palette slot or a colour the user chose. It governs whether a GROUPED request
+# may send that colour at all, and the client deletes it at one wire boundary
+# (`lib/exportStyles.toWireSeriesStyles`). Until this guard the promise had
+# frontend-only enforcement -- `series_styles` is a loose dict, so a leak was
+# accepted and ignored. A leak means the boundary was skipped, so the colour
+# beside it was never filtered either; refusing names the bug at the request
+# instead of rendering a figure whose grouped levels are all one hue.
+def test_a_leaked_colorDerived_in_series_styles_is_422() -> None:
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "pdf",
+            "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "colorDerived" in resp.text
+    assert "series_styles[0]" in resp.text
+
+
+def test_a_leaked_colorDerived_is_422_on_a_later_entry_and_on_a_page_panel() -> None:
+    # Indexing is per-entry (a null entry is skipped, not counted as a leak)...
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "series_styles": [None, {"width": 2}, {"color": "#ffe066", "colorDerived": False}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "series_styles[2]" in resp.text
+    # ...and the page route inherits the rule through `PagePanelSpec.figure`,
+    # which is the same model -- `spatialPageExport` builds panel styles too.
+    page = client.post(
+        "/api/export/figure-page",
+        json={
+            "rows": 1,
+            "cols": 1,
+            "panels": [
+                {
+                    "figure": {
+                        "dataset": _xrd_dataset(),
+                        "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+                    },
+                    "row": 0,
+                    "col": 0,
+                }
+            ],
+        },
+    )
+    assert page.status_code == 422
+    assert "colorDerived" in page.text
+
+
+def test_a_leaked_colorDerived_is_422_on_the_hitmap_route_too() -> None:
+    # The third route that reads `FigureRequest`, and the one the two tests
+    # above left resting on model identity alone (round-4 review F7). It
+    # matters on its own terms: the hitmap is what the Figure Builder preview
+    # clicks against, so a request that skipped the wire boundary would map
+    # elements for a figure whose grouped levels are all one hue and the user
+    # would be selecting on it.
+    resp = client.post(
+        "/api/export/figure-hitmap",
+        json={
+            "dataset": _xrd_dataset(),
+            "series_styles": [{"color": "#7fb3ff", "colorDerived": True}],
+        },
+    )
+    assert resp.status_code == 422
+    assert "colorDerived" in resp.text
+    assert "series_styles[0]" in resp.text
+    # Non-vacuous: the same request without the document-only key is served.
+    ok = client.post(
+        "/api/export/figure-hitmap",
+        json={"dataset": _xrd_dataset(), "series_styles": [{"color": "#7fb3ff"}]},
+    )
+    assert ok.status_code == 200
+
+
+def test_an_ordinary_unrecognized_style_key_still_renders() -> None:
+    # The narrowness of the guard, pinned: `series_styles` is documented as a
+    # loose dict whose unknown keys degrade gracefully. Only the document-only
+    # list 422s -- a future or older client's harmless extra must still export.
+    resp = client.post(
+        "/api/export/figure",
+        json={
+            "dataset": _xrd_dataset(),
+            "fmt": "pdf",
+            "series_styles": [{"color": "#7fb3ff", "not_a_real_key": "whatever"}],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.content[:5] == b"%PDF-"

@@ -148,12 +148,14 @@ export function errorsFigure(): FigureDocument {
 /** One Y channel split by the categorical "Batch" column, whose explicit
  *  `level_order` is [C, A, B] rather than the ascending default.
  *
- *  The channel carries an explicit dash NOT because the grouped legs compare
- *  styling — they deliberately do not, `styleComparable("group")` is false —
- *  but because it is what BUG-016's divergence test measures: the canvas draws
- *  every level dashed while `routes/export_figures.py`'s `group_col` branch
- *  drops `series_styles` entirely. Removing the dash would make that test
- *  vacuous. */
+ *  The channel carries an explicit dash + width because that is what BUG-016
+ *  is measured on: the canvas draws every level dashed and 2px, and since the
+ *  fix `routes/export_figures.py`'s `group_col` branch expands the same
+ *  `series_styles` entry onto each level instead of dropping it. Removing them
+ *  would make both the equality test and the grouped legs' SHAPE comparison
+ *  (`styleComparable("group").shape`) vacuous. No explicit COLOUR, deliberately:
+ *  that is the half the wire cannot carry per level, so the fixture exercises
+ *  the palette-cycling case the rule documents. */
 export function groupFigure(): FigureDocument {
   return makeFigure(
     "group",

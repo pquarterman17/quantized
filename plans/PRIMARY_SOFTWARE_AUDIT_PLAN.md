@@ -3079,9 +3079,360 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependency:** P0.4
 (SATISFIED 2026-07-27 — the profile exists; see below).
 
-- [ ] Preserve existing H/V/segment slices and link positions.
+- [x] Preserve existing H/V/segment slices and link positions. **Done
+  2026-09-17.** Before this, nothing was preserved because nothing was kept:
+  an H/V click and a segment drag fired a backend cut and landed a 1-D
+  dataset, and the map retained no record of WHERE the cut was taken — there
+  was no slice object, no position, and nothing drawn. A committed cut now
+  also records a durable `MapSliceDef` (kind + linked position in map DATA
+  coordinates + width + cut space; `lib/mapView.ts`), drawn over the heatmap
+  by `components/Stage/MapSliceOverlay.tsx` through the SAME
+  `mapRender.dataToPx` projector the canvas paints with. Slices survive a
+  regrid (resolution AND grid method), a colour-limit change, a re-activation
+  of the same dataset, AND a switch to another dataset and back — the views
+  are keyed by dataset id (`mapViews`), so each map keeps its own and nothing
+  is ever dropped except with the dataset itself. Proven at the DOM layer in
+  `components/Stage/MapStage.mapView.test.tsx` (the drawn line, not just the
+  store field), with the drawn pixels compared against the projector's own
+  output in `components/Stage/MapSliceOverlay.test.tsx`. The RSM angular⇄Q
+  toggle is NOT a dataset change, so the overlay draws only definitions
+  recorded in the space now displayed; toggling back brings them back, and a
+  definition that cannot be drawn right now is listed in a muted "parked"
+  strip saying why, so it can always be removed.
 - [ ] Add ROI statistics/export only from real need.
-- [ ] Persist color limits/scale/map/slices/annotations.
+- [x] Persist color limits/scale/map/slices/annotations. **Done 2026-09-17.**
+  The five are one durable record PER DATASET (`mapViews`, `lib/mapView.ts` +
+  `store/mapView.ts`) instead of `MapStage`'s local `useState` (colormap,
+  log scale) and nothing at all (colour limits, slices, annotations — colour
+  limits did not exist; the canvas always painted the payload's own z
+  extent). It rides the existing persistence contract: `.dwk` save/reopen,
+  autosave (`shouldAutosave` trigger + `AutosaveState`) and Pack Project's
+  whole-state spread, plus undo via `HistorySnapshot`. Additive-optional and
+  written ONLY when some dataset's view is non-default, so a project that
+  never opened a map — and one that opened a map and decided nothing —
+  serializes byte-identically to before, pinned as BUG-017's fix was
+  (`lib/workspaceMapView.test.ts`). Explicit limits clip the heatmap AND its
+  colourbar, verified against a real raster in
+  `components/Stage/mapRenderLimits.test.ts`. NOT persisted, deliberately:
+  the regrid inputs `mapMethod`/`mapRes`/`contour*` (app-wide render
+  settings with their own HISTORY_EXCLUDED entries) and the working
+  `mapRoi`/`mapRuler`/`mapSector` geometry (see `store/rois.ts`). Workbook
+  transfer deliberately does not carry it: that package is one workbook's
+  data, and a map view belongs to the project, not to a workbook.
+- **Review round 2026-09-17** (adversarial review of the first cut,
+  `c1757fb1`; both boxes above stay `[x]` — the behaviour they claim is real,
+  but three user-visible defects and three false green lights were found and
+  are now closed).
+  - **One view per dataset.** `MapStage` mounts in the Stage Map tab AND in
+    every `kind:"map"` document window at once, and each instance ran
+    `bindMapView`, so opening a second map silently destroyed the first
+    one's slices, colour limits and annotations — outside undo, because the
+    rebind recorded no history. `mapView` became `mapViews`, a record keyed
+    by dataset id; reading a view is a pure lookup, `bindMapView` is gone,
+    and the drop-on-switch rule went with it (it was a consequence of
+    sharing one record, not a decision). A dataset REMOVAL still drops that
+    dataset's entry, in `store/removeDatasets.ts`'s one shared patch. The
+    `.dwk` field stays additive: `parseWorkspace` migrates a first-cut
+    single `mapView` object into the keyed record.
+  - **Opening a map is not an edit.** `isDefaultMapView` required
+    `datasetId === null`, so the mount-time bind wrote an all-default record,
+    made `shouldAutosave` true (hence `markProjectDirty`) and grew the saved
+    document by a field recording no decision. A view is now default by
+    VALUE; with the keyed record the bind writes nothing at all. Pinned at
+    the DOM layer.
+  - **Every slice keeps a handle.** Chips were built from the DRAWN list, so
+    a slice recorded in the other axis space or off the current extent had no
+    UI and could never be removed. Undrawable definitions are now listed in a
+    muted parked strip that says why, and remove on click.
+  - **An h/v slice is judged by its HELD coordinate only.** `endpoints`
+    projected the whole clicked point, so an `h` slice vanished when its
+    unheld x left a narrower regrid — contradicting the module's own doc. The
+    unheld component is clamped into its axis range; `seg` keeps the strict
+    both-ends test.
+  - **Log limits never blank a map that has something to paint.** The log
+    floor raise could push `lo` past an explicit `hi`
+    (`effectiveColorLimits([-1,2], 7, 9, log)` → null, i.e. no heatmap and no
+    colourbar). Any unusable explicit pair now falls back to the auto extent;
+    null is reserved for a grid with no paintable range (in log mode, no
+    positive cell).
+  - **Three false green lights, now pinned.** The "does not alias the live
+    store object" test asserted through a JSON round trip and could not fail;
+    nothing pinned that ADDING a slice is undoable; and the overlay's geometry
+    was never compared to a ground truth (a projector swap to raw data
+    coordinates left the DOM suite green). All three have failing-first pins.
+  - **Also closed:** an unknown slice `space` is dropped rather than coerced
+    to angular; the sanitizer bounds slices/annotations (200 each), label
+    length (200 chars) and rejects a negative width; `COLORMAP_NAMES` is
+    pinned equal to `Object.keys(COLORMAPS)`; `loadWorkspace` passes the live
+    dataset ids so a hand-built workspace cannot install a dangling entry;
+    `DEFAULT_MAP_VIEW` is deep-frozen; `lib/workspaceMerge.ts`'s never-merged
+    matrix names the field; the view writers early-return on an unchanged
+    value (no undo step, no dirty flag); and `MapColorLimits` has its own
+    test.
+  - **Bundle.** `effectiveColorLimits` moved from the eagerly-reachable
+    `lib/mapView.ts` (`lib/workspaceSerialize.ts` imports it) into
+    `components/Stage/mapRender.ts`, which only loads with the map itself —
+    it is a renderer decision, not part of the document contract. Eager total
+    **909,888 B at the parent `90ea30fa` → 910,287 B on `35b97380`, +399 B**
+    (both trees built after their own `npm ci` and a `node_modules/.vite`
+    wipe). Everything left is sanitizer/serializer/store logic that is eager
+    by construction. **Record corrected 2026-09-18** (review round 3, finding
+    3): this pair was first recorded as 916,782 → 917,181 B "against
+    `e93b193b`", which is NOT this commit's parent — `git rev-parse HEAD~1` is
+    `90ea30fa`, the lazy-seam bundle diet that landed in between, so both
+    absolutes (and the headroom they implied, by ≈7 kB) belonged to an older
+    tree. The +399 B delta was right; only the baseline was. Second occurrence
+    of exactly this on this branch — see the P4.1 review's F1 below.
+  - **Residuals, recorded not fixed.** (a) Contour levels still come from
+    `p.zMin`/`p.zMax`, not from the explicit colour limits — a contour level
+    is a feature of the data, and clipping the colour mapping is not a
+    statement about where the isolines are. The levels are derived in
+    `drawContours`, which `draw` calls after painting the heatmap, and the
+    decision is written into `drawContours`' own header (corrected in round 3,
+    finding 6: both this sentence and `draw`'s own comment placed the code
+    inside `draw`, where it is not).
+    (b) A blank field in `MapColorLimits` reads as 0 (`Number("")`), inherited
+    from the sibling `AxisLimits.tsx`, so "clip the top, leave the bottom
+    auto" is not expressible; pinned as it behaves in
+    `components/Inspector/MapColorLimits.test.tsx`. (c) The colormap and the
+    linear/log scale are now per-dataset rather than carried across a switch —
+    the carry was an artifact of the single shared record, and the per-dataset
+    memory is the stronger P2.8 promise.
+- **Review round 3 2026-09-18** (adversarial review of `35b97380`; both boxes
+  above stay `[x]`). Round 2's five user-visible fixes and three pins were
+  re-attacked and held — ten independent sabotage mutations, all killed — and
+  three things were found: one new way to lose work, one half-landed promise
+  from round 1, and a bundle record measured against the wrong parent.
+  - **Trash ▸ Restore keeps the map view** (finding 1, the only user-visible
+    one). Round 2 put `mapViews` in `RemovableState`, correctly — but
+    `removeDatasets` is ALSO the send-to-Trash path, and the trash entry
+    carried only the `Dataset`. Restore re-added it under the same id with its
+    colour limits, slices and annotations gone for good; **Undo** of the same
+    delete restored them (`HistorySnapshot.mapViews`), so the loss depended on
+    which recovery the user reached for. The view now travels ON the
+    `DatasetTrashEntry` (captured in `sendToTrash`, the one chokepoint every
+    delete path goes through) and `restoreDatasetInto` re-installs it in the
+    same transaction — dependency-aware exactly like the
+    `editableFigure`/`figureDoc` restores beside it. A view that came back some
+    other way (an undo, a re-import) WINS: restore never overwrites a live
+    entry. Pinned at the store layer, delete → Restore → entry-identical.
+  - **The Colour limits row says what is being painted** (finding 2, the
+    unlanded half of round 1's finding 5). `effectiveColorLimits` can replace
+    the stored pair — in log mode a non-positive `lo` is raised to the grid's
+    smallest positive cell, and a pair unusable after that raise falls back to
+    the auto extent — and the Inspector went on showing the pair the renderer
+    was ignoring (type `-1 … 2` in log mode on data starting at 7 and the map
+    paints 7 … 9). `draw` now RETURNS the pair it painted;
+    `components/Stage/useMapPaint.ts` reports it into a transient, per-dataset
+    `mapPaintedLimits` (not persisted, not undoable — its own
+    `HISTORY_EXCLUDED` entry), and `MapColorLimits` shows an "effective 7 – 9"
+    line beside the fields, ONLY when the two differ. The typed pair stays in
+    the fields, editable and recoverable. Proven end to end at the DOM layer:
+    a real `MapStage` paint on the RSM fixture drives the Inspector row to
+    `effective 100 – 403`.
+  - **Also closed.** (4) The first-cut migration is detected by a `datasetId`
+    STRING, so a keyed record holding a dataset id of literally `"datasetId"`
+    no longer discards every other dataset's entry with it. (5)
+    `effectiveColorLimits` returns null — not a non-positive auto pair — when
+    log mode has no positive floor, honouring its own header. (6) The contour
+    residual is attributed to `drawContours`, in the code and in residual (a)
+    above. (7) `sanitizeMapViews` caps the ENTRY count at 256 unconditionally;
+    the other three caps already were, and this one was a property of its
+    callers. (9) Every map history label names its dataset
+    (`change map colormap "rsm.xrdml"`) — with two maps open the label was the
+    only disambiguator and it had none. (10) `MapStage` subscribes to its OWN
+    dataset's entry, pinned with a React `Profiler` commit count: another
+    dataset's map edit now re-renders it zero times. (11) The parked strip has
+    a geometry budget (per-chip `max-width` + ellipsis, `max-height` +
+    scroll) — a 200-character label, the sanitizer's own cap, used to render
+    as one 202-character row and wrap the strip up across the plot. (12)
+    `removeDatasetsPatch` allocates a new `mapViews` only when it actually
+    prunes one.
+  - **New residual, named** (finding 8): a `kind:"map"` document window on a
+    NON-active dataset still has no colour-limit control. The Inspector
+    describes the active dataset by rule, and that rule is what makes the
+    per-dataset keying coherent; the window's own toolbar covers colormap and
+    scale, and a per-window limits control is a toolbar change this round did
+    not take. Deliberate, not an oversight — recorded beside residuals (a)–(c).
+  - **Sabotage.** 15 mutations, one at a time, each reverted: dropping the
+    restore, dropping the trash capture, letting the restore overwrite a live
+    entry, never reporting the painted pair, reporting the STORED pair instead,
+    hiding the effective row, the bare `"datasetId" in o`, removing the entry
+    cap, the non-positive log floor, the bare history label, the wide
+    `mapViews` selector, the chip's text budget, the strip's height budget, the
+    unconditional `mapViews` allocation, and the no-op guard on the painted
+    report. **15 RED, 0 survivors.**
+  - **Bundle** (finding 3, re-measured against the real parent). Eager total
+    **910,371 B at the parent `c29fc0e3` (`git rev-parse HEAD~1` of this
+    commit) → 910,824 B on this commit, +453 B**; both trees built after their
+    own `npm ci` and `rm -rf node_modules/.vite`, exact eager bytes on each
+    side. 889.5 kB against the 898.8 kB budget, 9.4 kB under; `EAGER_JS_BUDGET`
+    untouched. The growth is the transient painted-limits channel in the store
+    slice and the Inspector row that reads it, both eager by construction;
+    `useMapPaint.ts` rides the map chunk with the renderer it was extracted
+    from. (Round 4 correction: this entry originally named the parent
+    `b621c5fa`, which is `c29fc0e3`'s OWN parent, not this commit's — a
+    same-tree slip, since `c29fc0e3` touches only `plans/BUNDLE_HEADROOM.md`
+    and is therefore bundle-identical to `b621c5fa`, so the 910,371 B figure
+    itself needed no re-measurement, only the label.)
+- **Review round 4 2026-09-18** (adversarial review of `2074fba4`; both boxes
+  above stay `[x]`). Sixteen independent sabotage mutations, fourteen killed;
+  two survivors exposed a real user-visible bug and a real test gap, plus five
+  NITs, all now closed.
+  - **A loading map no longer reports "nothing to paint at these limits"**
+    (finding 1, user-visible). `draw` returns `null` both when there is
+    nothing to paint YET (no `payload` — a map mid-regrid, or a <3-channel
+    dataset that never gets one) and when the limits genuinely paint nothing;
+    `useMapPaint.ts` reported both alike, so opening a saved project with map
+    colour limits flashed the "nothing to paint" row for as long as the async
+    regrid took, blaming the typed limits for a load that just hadn't
+    finished. `useMapPaint.ts:~90` now reports only when `payload` is
+    non-null. DOM-pinned: a `MapStage` render before the offline regrid
+    resolves shows neither the "effective" row nor the "nothing to paint" one.
+  - **`loadWorkspace` also clears `mapPaintedLimits`** (finding 2,
+    user-visible). The transient painted-limits channel was reset nowhere on
+    project load, only `mapViews` was — so a `.dwk` whose dataset ids
+    collided with the PREVIOUS project's (an ordinary reopen) could show an
+    "effective" pair computed from the previous project's canvas, on the
+    eager `MapColorLimits` row, before the lazy `MapStage` chunk even loads.
+    `store/useApp.ts:1417` now resets `mapPaintedLimits: {}` in the same
+    packed line as `mapViews`, for the same cross-project-leak reason.
+  - **The figure-dependency restore's `mapViews` carry is now pinned**
+    (finding 3, test gap). `trashRestore.ts`'s `resolveDatasetDependency`
+    already carried the restored dataset's map view correctly; nothing
+    guarded it, so deleting that one line broke no test. Added to
+    `trash.test.ts`'s existing "branch A" case: after a figure-dependency
+    restore, `mapViews["d1"].colorLimits` is asserted back.
+  - **The trash entry's `bytes` now pins the carried view's own term**
+    (finding 4, test gap). `trash.ts:304`'s `bytes: datasetByteEstimate(dataset)
+    + (mapView ? byteSize(mapView) : 0)` was correct and unguarded; a new
+    `trash.test.ts` case measures the exact sum and asserts it is strictly
+    greater than the dataset-alone estimate.
+  - **`effectiveColorLimits` applies its own null rule to BOTH branches**
+    (finding 5, NIT). Round 3 fixed only the explicit-`colorLimits` branch: a
+    non-positive log floor there now returns `null`, honouring the header's
+    "null is reserved for … no positive cell at all". The no-`colorLimits`
+    branch still returned a non-positive `auto` pair as a log range.
+    `mapRender.ts:~41` now applies the same rule there; both branches agree,
+    and the header needed no change.
+  - **`sanitizeMapViews`'s 256 cap is documented as key-order, not file-order**
+    (finding 6, NIT/doc). `Object.entries` on a parsed JS object lists every
+    INTEGER-LIKE key ascending numerically ahead of every other key in
+    insertion order — a language invariant applied by the engine when
+    `JSON.parse` builds the object, before `sanitizeMapViews` ever sees it, so
+    the original `.dwk` text order of an integer-like key is unrecoverable
+    from a parsed value. The cap already iterates `Object.entries(o)`
+    directly (no re-sort), so no code changed; `lib/mapView.ts`'s `MAX_VIEWS`
+    doc now says so explicitly, and `lib/mapView.test.ts` pins the resulting,
+    documented behaviour (an integer-like key written last in the file is
+    kept FIRST).
+  - **The parked strip's own `pointer-events` is `auto`** (finding 7, NIT).
+    The strip scrolls (round 3, finding 11) but inherited `pointer-events:
+    none` from the overlay's outer click-through layer, so its scrollbar
+    could not be grabbed — the content stayed reachable some other way (wheel
+    scroll-chaining from a chip, Tab-into-view), but the direct affordance
+    never worked. `MapSliceOverlay.tsx`'s parked strip now opts into `auto`
+    unconditionally (it renders only when it holds at least one chip, and
+    each chip was already `auto`), while the overlay's outer container stays
+    `none` — pinned, with the existing click-through shape re-asserted in the
+    same test.
+  - **History labels disambiguate by dataset id when names collide** (finding
+    8, NIT). Round 3's per-dataset label names the dataset — but two live
+    datasets routinely share a NAME (the same file imported twice, or from
+    two workbooks), and the label was ambiguous again. `store/mapView.ts`'s
+    `edit()` now appends a short id disambiguator (`nextDatasetId`'s own
+    sequence suffix, e.g. `"#4"`) only when another LIVE dataset shares the
+    name; a unique name is untouched.
+  - **Sabotage.** 8 mutations, one at a time, each reverted: skipping the
+    `payload` guard before reporting (finding 1), dropping
+    `mapPaintedLimits: {}` from `loadWorkspace` (finding 2), dropping the
+    `mapViews` carry in `trashRestore.ts` (finding 3), dropping the
+    `byteSize(mapView)` term (finding 4), reverting the no-`colorLimits` log
+    branch (finding 5), reversing `sanitizeMapViews`'s entry iteration order
+    (finding 6), removing the parked strip's `pointer-events: auto` (finding
+    7), and removing the history-label disambiguator (finding 8). **8 RED, 0
+    survivors.**
+  - **Bundle** (finding 9, record only — the 910,371/910,824 B pair from
+    round 3 needed no re-measurement, only its parent's name). This round's
+    own commit: eager total **911,634 B at the parent `1b285a14`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit,
+    +151 B**; both trees built after `rm -rf node_modules/.vite` (the parent
+    from its own `npm ci`), exact eager bytes on each side via
+    `exactbytes.mjs`. 890.4 kB against the 898.8 kB budget, 8.4 kB under;
+    `EAGER_JS_BUDGET` untouched. The growth is the round-4 fixes themselves
+    (the loading-payload guard, the `loadWorkspace` reset, the
+    `effectiveColorLimits` branch, the parked strip's `pointerEvents`
+    constant, and the history-label disambiguator), all already eager by
+    construction with the code they extend.
+- **Review round 5 2026-09-18** (adversarial review of `9c6abc5a`; both boxes
+  above stay `[x]`). One real, measured finding — round 4's own fix for its
+  finding 7 introduced a new click-blocking regression it had no way to
+  measure (jsdom lays nothing out); everything else that round re-checked
+  held.
+  - **The parked strip no longer intercepts the plot underneath it** (finding
+    1, user-visible regression). Round 4 opted the WHOLE strip container into
+    `pointer-events: auto` so its scrollbar could be grabbed. A real-browser
+    hit-test (Chromium via Playwright, not jsdom) on the shipped CSS shape
+    measured that this made the container's FULL bounding box — not just its
+    chips — swallow clicks and drags on the map underneath: `justify-content:
+    flex-end`-wrapped rows rarely fill exactly to `max-width`, so the box
+    routinely holds real, non-trivial dead space that was never a chip
+    (≈21% of the strip's own box in the reviewer's fixture). That directly
+    contradicted round 2's click-through guarantee, in exactly the corner a
+    long-running project with several parked slices is most likely to also
+    want to pan or box-select. `MapSliceOverlay.tsx`'s `PARKED_STRIP` is back
+    to `pointerEvents: "none"` — only each chip opts into `auto` (unchanged) —
+    and the round-4 `maxHeight: 72` + `overflowY: "auto"` clip/scroll budget
+    is REMOVED along with it: a scrollbar under `pointer-events: none` was
+    never reachable (the very defect round 4 was trying to fix), and a hard
+    clip with no way to reach it would HIDE parked chips outright, breaking
+    round 2's "every slice stays removable" guarantee. The strip wraps and
+    grows instead of clipping; the per-chip text budget (`max-width` +
+    ellipsis, round 3 finding 11) is untouched. A very large parked set can
+    now visually cover map area, but it can never BLOCK a pointer event on
+    the map underneath — only its own chips can, each over its own tight
+    content box, the same shape every DRAWN chip in this file already has.
+    Also fixed: the round-4 comment's "a shape that already exists on every
+    individual DRAWN chip and box-select bar elsewhere in this file" named a
+    "box-select bar" that does not exist anywhere in `MapSliceOverlay.tsx`
+    (`grep -n pointerEvents` finds exactly the chip style and the strip
+    constant) — the comment is corrected, with the DRAWN-chip comparison kept
+    (it is accurate) and the fabricated one dropped.
+  - **Measured with a real hit-test, not just DOM assertions.** jsdom cannot
+    lay anything out, so the DOM-level test suite could not have caught round
+    4's regression (or verify this round's fix) on its own; a standalone
+    Playwright/Chromium probe against the shipped CSS shape (absolute strip,
+    `right`/`bottom`, `flex-wrap`, `justify-content: flex-end`, five chips of
+    varied width) sampled 420 points across the strip's bounding box, found
+    153 empty (non-chip) points, and **zero** resolved to the strip `<div>` —
+    all fell through to the canvas underneath (`elementFromPoint` at an empty
+    corner point → `CANVAS`), and a real mouse click at that point fired the
+    plot's own `onclick`. Not run as part of the Playwright e2e suite (no
+    spec references this DOM, and the change is a style-value-only diff with
+    no role/tabindex/class change on Library, Details, Stage or Shell, so the
+    "run the full e2e suite" rule does not apply) — the DOM-level pointer-
+    events assertions in `MapSliceOverlay.test.tsx` are the lasting pin;
+    the hit-test was a one-time, out-of-band confirmation.
+  - **Sabotage.** 3 mutations, one at a time, each reverted: restoring
+    `pointerEvents: "auto"` on `PARKED_STRIP` (test "the strip container's own
+    pointer-events is none; every chip's is auto" → RED), adding back
+    `maxHeight: 72`/`overflowY: "auto"` (test "has no maxHeight/overflowY
+    budget…" → RED), and dropping the chip's `maxWidth`/ellipsis budget
+    (round-3 test "a chip is width-capped and truncates instead of growing" →
+    RED). **3 RED, 0 survivors.** A fourth test — 40 parked chips, all 40
+    remove buttons present and clickable, removing the last one removes that
+    exact entry from the live `mapViews` store (not just firing a mocked
+    callback) — has no dedicated sabotage of its own; it is a direct
+    behavioural pin on the "every slice stays removable" guarantee this round
+    protects, and passed unmodified throughout.
+  - **Bundle.** Eager total **911,785 B at the parent `9c6abc5a`
+    (`git rev-parse HEAD~1` of this commit) → 911,785 B on this commit, +0 B**;
+    both trees built after their own `npm ci` and `rm -rf node_modules/.vite`,
+    exact eager bytes on each side via `exactbytes.mjs`. 890.4 kB against the
+    898.8 kB budget, 8.4 kB under, unchanged from round 4; `EAGER_JS_BUDGET`
+    untouched. Zero delta because this round only changes a style-object
+    property VALUE and a comment — no import, export, or code-shape change
+    for the bundler to see.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid
@@ -5147,8 +5498,135 @@ user-activation rule `openWorkspaceCommand` was rejected on), and the
 two-argument `.then(onRun, onLoadFailure)` form at every `runLazy` call site
 so a loaded handler's own throw is no longer swallowed with the load's.
 
-- [ ] Characterization tests before moves.
-- [ ] Split one owned domain per PR with unchanged behavior/contracts.
+- [~] Characterization tests before moves. **First domain done 2026-09-17**
+  (see the box below): `store/plotViewSettings.characterization.test.ts`, 119
+  specs, written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing byte-unchanged after the move. **Second domain done the same
+  day**: `store/reportsFigureDocs.characterization.test.ts`, 55 specs (57
+  after the 2026-09-17 review round added F3's `openFigureDocInWindow`
+  "writes ONLY" spec and F7's `renameReport` exact-string pin), same
+  discipline (green before, byte-identical `md5` after), and it starts with
+  the two guards the first net needed a review round to gain — every writer
+  diffs the WHOLE `getState()` snapshot (so an EXTRA field written is caught,
+  not only a missing one) against a POISONED baseline (so a write that
+  "clears" a field back to its own default still shows as a diff). Still
+  `[~]` because the practice is per-domain and `store/useApp.ts` has more
+  domains left.
+- [~] Split one owned domain per PR with unchanged behavior/contracts.
+  **ONE domain extracted 2026-09-17**, characterization tests first: the
+  singleton **PlotView writers** — axis scales/limits/steps/tick formats/
+  titles, legend/grid/axis-box flags, stack mode + panel fit + page setup,
+  the x/y/y2/group channel keys, reference lines, annotations, per-channel
+  series styles/labels/error pairings, draw order, hidden/solo channels and
+  the waterfall offset (43 actions) — moved verbatim from `store/useApp.ts`
+  to the new `store/plotViewSettings.ts` (277 lines by the repo's
+  `split("\n")` ceiling metric, `PlotViewSettingsSlice`, composed like
+  `datasetMeta.ts`/`gadget.ts`). `store/useApp.ts` **2,322 →
+  2,122 lines (−200)**; its `architecture.test.ts` STORE_PINS entry ratcheted
+  DOWN to 2,122 with a dated justification. Eager bundle for the landed pair:
+  913,336 B at parent `7a1ebd43` (the characterization commit — its body named
+  an orphaned pre-amend twin `7961f865`, same tree, unreachable SHA; corrected
+  here per review F3) → 913,376 B at `6686c23d` (+40 B). Chosen by measured
+  coupling, not size: nothing in the cluster writes `datasets`, so the
+  pending-edit ratchet has nothing to say about it. Deliberately left behind
+  as NOT this domain:
+  `setChannelRole`/`setChannelType` (per-dataset channel config that
+  round-trips the `.dwk`, not view state), the preference setters and the
+  shell-layout toggles.
+  **SECOND domain extracted 2026-09-17**, same discipline: the **report-sheet
+  (#36) and figure-document (#12) lifecycle** — `addReport`, `removeReport`,
+  `renameReport`, `setOpenReport`, `addFigureDoc`, `removeFigureDoc`,
+  `renameFigureDoc`, `duplicateFigureDoc`, `openFigureDraft`, `openFigureDoc`,
+  `openFigureDocInWindow`, `clearFigureDocSeed` (12 actions) — moved to the new
+  `store/reportsFigureDocs.ts` (183 lines, `ReportsFigureDocsSlice`, composed
+  with one import + one word on the `extends` clause + one spread, exactly like
+  `plotViewSettings.ts`). `store/useApp.ts` **2,122 → 2,012 lines (−110)**; its
+  `STORE_PINS` entry ratcheted DOWN to 2,012 with a dated justification.
+  11 of the 12 bodies are byte-identical after whitespace normalisation;
+  the twelfth (`duplicateFigureDoc`) differs by exactly one expression,
+  `` `figd-${Date.now().toString(36)}-${++_idSeq}` `` → `nextFigureDocId()`,
+  because a module-level `let` cannot be incremented across an ES-module
+  boundary. Rather than split the counter per domain (which would renumber
+  ids), the whole shared sequence moved to the new leaf module
+  `store/idSeq.ts` (45 lines, imports nothing); `store/useApp.ts` re-exports
+  `nextDatasetId`/`nextFolderId` from there, so none of its eight importers
+  changed, and `addSmartFolder` — which stays behind — now calls
+  `nextSmartFolderId()`. One characterization spec pins the property that
+  makes this safe: `addReport`, `duplicateFigureDoc`, `addSmartFolder` and
+  `nextDatasetId` still draw four CONSECUTIVE suffixes from one counter.
+  Chosen by measured coupling over the two larger candidates: `loadWorkspace`
+  (170 lines) writes 40 `AppState` fields and is where every newly persisted
+  field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
+  (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
+  this cluster writes 15, of which the 4 it owns means this module holds every
+  ACTION that edits them one at a time — bulk restores write them wholesale
+  and stay outside the cluster on purpose: `loadWorkspace`'s `.dwk` hydrate,
+  `store/trash.ts`'s delete delegates, `store/trashRestore.ts`'s
+  restore-from-trash, `store/workbookTransfer.ts`'s workbook import, and
+  `store/historySnapshot.ts`'s undo/redo restore. Verified beyond the suite:
+  the composed store is unchanged at **587 keys (380 functions)** with
+  byte-identical initial values, the `recordHistory`/`recordMacro`/`status:`
+  literal multisets are unchanged (15/10/6), and neither new module is in any
+  of the repo's 26 modules across 7 pre-existing runtime import cycles
+  (type-only imports erased; `reportsFigureDocs → useApp` has no runtime
+  edge). Eager bundle, the real parent-to-landed pair: **916,718 B at the
+  parent `23914f95`** (the characterization commit, i.e. `HEAD~1` of the
+  extraction) **→ 916,782 B at `e93b193b`, +64 B**; the budget
+  (`EAGER_JS_BUDGET = 920,400`) was not touched and keeps ≈3.6 kB headroom.
+  The box stays `[~]`: `store/useApp.ts` is still far
+  over the 500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
+  `lib/uplotOverlays.ts` are untouched by this pass.
+
+  **2026-09-17 review round — records corrected (findings closed, tests/docs
+  only; verdict CLEAN).** F1: the bundle pair above originally cited two SHAs
+  from an abandoned pre-cherry-pick worktree lineage that are unreachable from
+  this branch (the real work was cherry-picked onto a tip carrying P2.8 +
+  BUG-016 r2 first) — corrected to the real parent/landed pair above, with
+  both SHAs removed from this note. The **+64 B delta stands** (both
+  lineages differ only by the extraction), only the absolutes and headroom
+  (~6.8 kB → ≈3.6 kB) were stale. F2: "578 keys (372 actions)" was
+  the same abandoned-lineage measurement — the true parent `23914f95` (=
+  P2.8's tip) already carries the `mapView` slice (9 extra keys, 8 extra
+  functions), so the correct invariant pair is **587 keys (380 functions)**
+  before and after — the invariance claim itself was always true, only the
+  absolutes were stale. F4: "the four it owns are touched by nothing else
+  outside `loadWorkspace`'s bulk hydrate" was false — `store/trash.ts`,
+  `store/trashRestore.ts`, `store/workbookTransfer.ts` and
+  `store/historySnapshot.ts`'s undo/redo restore all touch them too; reworded
+  above (and in `store/reportsFigureDocs.ts`'s header and
+  `architecture.test.ts`'s pin justification) to what is actually true: this
+  cluster owns every INCREMENTAL action, not exclusive write access. F8: "26
+  pre-existing runtime import cycles" undercounted by conflating SCC count
+  with module count — corrected to "26 modules across 7 pre-existing
+  cycles" everywhere in this note. Also closed that round: F3, a missing
+  "writes ONLY" spec for `openFigureDocInWindow` (the one writer of the
+  twelve without one — sabotage-proven: a stray `showGrid: false` folded
+  into its `set()` passed all 55 existing specs and the whole
+  `src/store` + `architecture.test.ts` scope silently); F5, `store/gadget.ts`,
+  `store/split.ts`, `store/dataIntake.ts`, `store/derivedWorksheets.ts`,
+  `store/importDatasets.ts`, `store/workspaceIO.ts` and
+  `store/workbookTransfer.ts` repointed their `nextDatasetId`/`nextFolderId`
+  import from `./useApp` to the leaf `./idSeq` (import line only, same
+  module instance, no behavior change) — measured with Tarjan over runtime
+  imports (type-only erased): the store's main cyclic SCC shrank **15 → 9**
+  modules and the repo's cyclic-module total **26 → 20**; `gadget`, `split`,
+  `dataIntake`, `derivedWorksheets` and `workbookTransfer` left every cycle,
+  while `importDatasets`/`workspaceIO` stay in a (smaller) one via
+  `lib/plotSelectedTogether.ts`, which still needs the `useApp` VALUE import
+  and so keeps that edge alive. `useApp.ts`'s `nextDatasetId`/`nextFolderId`
+  re-export was KEPT (one real importer remains:
+  `lib/plotSelectedTogether.ts`, which reads the live `useApp` store too, not
+  just the minters). F6, three stale comments pointing the id sequence at
+  `useApp.ts` (`store/workbookIds.ts:~3,~8`, `store/figureLifecycle.ts:~19`)
+  now say `store/idSeq.ts`. F7, one spec added pinning `renameReport`'s
+  stored string EXACTLY (no `trim()`), sabotage-proven. Eager bundle for this
+  closing pass, both trees built after their own `npm ci` and a
+  `node_modules/.vite` wipe: **916,782 B at the parent `e93b193b`** →
+  **916,778 B on this commit, −4 B** (the F5 import repoint moved one chunk
+  boundary slightly; the net effect was a decrease, not a cost) — comfortably
+  inside the ≈3.6 kB headroom and `EAGER_JS_BUDGET` untouched. All findings
+  were test/doc/comment-only, plus the seven import-line repoints in F5; no
+  other runtime behavior changed.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy

@@ -51,9 +51,12 @@ describe("plotSpecToFigureDoc", () => {
 
   it("maps scatter to an honest point-only publication style", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "scatter" }), "", {});
+    // `colorDerived: true` is BUG-016 round 3's provenance: this colour is the
+    // palette slot `seriesColor` produced, not one the user picked. It rides
+    // the saved document and is removed at the wire boundary.
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), line: "none", marker: true },
-      { color: expect.any(String), line: "none", marker: true },
+      { color: expect.any(String), colorDerived: true, line: "none", marker: true },
+      { color: expect.any(String), colorDerived: true, line: "none", marker: true },
     ]);
   });
 
@@ -61,16 +64,16 @@ describe("plotSpecToFigureDoc", () => {
   it("maps step (default 'post') to a step-drawstyle publication style, no forced markers", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "step" }), "", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), step: "post" },
-      { color: expect.any(String), step: "post" },
+      { color: expect.any(String), colorDerived: true, step: "post" },
+      { color: expect.any(String), colorDerived: true, step: "post" },
     ]);
   });
 
   it("maps step + showMarkers to Origin's Line + Symbol equivalent", () => {
     const doc = plotSpecToFigureDoc(xy({ mark: "step", stepMode: "mid", showMarkers: true }), "", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: expect.any(String), step: "mid", marker: true },
-      { color: expect.any(String), step: "mid", marker: true },
+      { color: expect.any(String), colorDerived: true, step: "mid", marker: true },
+      { color: expect.any(String), colorDerived: true, step: "mid", marker: true },
     ]);
   });
 
@@ -100,16 +103,51 @@ describe("plotSpecToFigureDoc", () => {
   // group split now opens in Figure Builder -- FigureConfig.groupCol /
   // FigureSpec.group_col carry the split through to
   // calc.plotting.build_grouped_series, the backend's faithful port of
-  // buildXY. Per-channel styling is dropped (not misapplied) since it
-  // doesn't align 1:1 with the synthetic per-level series.
-  it("opens a grouped spec (no y2) in Figure Builder, carrying groupCol and dropping seriesStyles", () => {
+  // buildXY.
+  //
+  // BUG-016 round 2 INVERTS what this used to pin. The styling was dropped on
+  // the ground that the screen "doesn't assign per-level colors either" -- the
+  // same half-truth `routes/export_figures.py` was corrected for. The live
+  // Stage hands EVERY level of a channel that channel's one style object, so
+  // dropping it exported a dashed 4 px grouped plot as solid and default-width.
+  // It now rides along under the `grouped` rule: the whole style except a
+  // palette-DERIVED colour, which belongs to the level's display position and
+  // not to the channel.
+  it("opens a grouped spec (no y2) in Figure Builder, carrying groupCol AND the channel styles", () => {
     const grouped = xy({ zones: { ...xy().zones, group: { datasetId: "d1", channel: 3 } } });
     expect(plotSpecFigureReason(grouped)).toBeNull();
-    const doc = plotSpecToFigureDoc(grouped, "Grouped plot", { 2: { color: "#ffffff" } });
+    const doc = plotSpecToFigureDoc(grouped, "Grouped plot", {
+      2: { color: "#ffffff", width: 4, line: "dashed" },
+    });
     expect(doc).not.toBeNull();
     expect(doc?.config.groupCol).toBe(3);
     expect(doc?.config.yKeys).toEqual([2, 1]);
-    expect(doc?.config.seriesStyles).toBeNull();
+    // Channel 2 chose a colour, so every level draws it -- as the canvas does.
+    // `colorDerived: false` records that this one WAS picked, so no later
+    // palette change can make the wire drop it (BUG-016 round 3).
+    expect(doc?.config.seriesStyles?.[0])
+      .toEqual({ color: "#ffffff", colorDerived: false, width: 4, line: "dashed" });
+    // Channel 1 chose nothing: no palette colour on the wire, so both sides
+    // keep cycling per level. `null`, not `{}` -- an entry with nothing left.
+    expect(doc?.config.seriesStyles?.[1]).toBeNull();
+  });
+
+  it("a FLAT spec still bakes the palette colour in (the grouped omission is scoped)", () => {
+    const doc = plotSpecToFigureDoc(xy(), "Flat plot", { 2: { width: 4 } });
+    expect(doc?.config.groupCol).toBeNull();
+    expect(doc?.config.seriesStyles?.[0]?.color).toEqual(expect.any(String));
+    expect(doc?.config.seriesStyles?.[1]?.color).toEqual(expect.any(String));
+  });
+
+  it("carries a grouped spec's MARK vocabulary too (scatter's line:'none' + marker)", () => {
+    const grouped = xy({
+      mark: "scatter",
+      zones: { ...xy().zones, group: { datasetId: "d1", channel: 3 } },
+    });
+    expect(plotSpecToFigureDoc(grouped, "", {})?.config.seriesStyles).toEqual([
+      { line: "none", marker: true },
+      { line: "none", marker: true },
+    ]);
   });
 
   // A grouped spec that ALSO uses the secondary axis stays fail-closed --
@@ -163,7 +201,12 @@ describe("plotSpecToFigureDoc — error wells", () => {
     expect(doc?.config.errors).toEqual([]);
   });
 
-  it("omits errors for a grouped spec (same gate as seriesStyles -- no sound 1:1 mapping)", () => {
+  // The error gate SURVIVES BUG-016 round 2 while the styling gate beside it
+  // did not, and the asymmetry is the point: a style is the same for every
+  // level of a channel, so one `yKeys`-aligned entry says it completely and the
+  // backend expands it. An error SPAN is per-ROW, so a channel's one well
+  // cannot be split across the levels its rows were partitioned into.
+  it("omits errors for a grouped spec even though the STYLES now ride along", () => {
     const grouped = xy({
       zones: {
         ...xy().zones,
@@ -171,9 +214,9 @@ describe("plotSpecToFigureDoc — error wells", () => {
         yErr: [{ datasetId: "d1", channel: 5 }, { datasetId: "d1", channel: 6 }],
       },
     });
-    const doc = plotSpecToFigureDoc(grouped, "Grouped", {});
+    const doc = plotSpecToFigureDoc(grouped, "Grouped", { 2: { width: 4 } });
     expect(doc?.config.errors).toEqual([]);
-    expect(doc?.config.seriesStyles).toBeNull(); // the existing sibling gate, for contrast
+    expect(doc?.config.seriesStyles?.[0]).toEqual({ width: 4 }); // for contrast
   });
 });
 
@@ -192,8 +235,8 @@ describe("plotSpecToFigureDoc — v2 blocks win over the live arg", () => {
     // A DIFFERENT live arg proves it's ignored, not merely unused by luck.
     const doc = plotSpecToFigureDoc(spec, "Styled", { 2: { color: "#ffffff" }, 1: { width: 99 } });
     expect(doc?.config.seriesStyles).toEqual([
-      { color: "#123456", width: 4 },
-      { color: "#abcdef" },
+      { color: "#123456", colorDerived: false, width: 4 },
+      { color: "#abcdef", colorDerived: false },
     ]);
   });
 
@@ -205,8 +248,8 @@ describe("plotSpecToFigureDoc — v2 blocks win over the live arg", () => {
     });
     const doc = plotSpecToFigureDoc(spec, "Styled", {});
     expect(doc?.config.seriesStyles).toEqual([
-      { color: "#123456", line: "none", marker: true },
-      { color: "#abcdef", line: "none", marker: true },
+      { color: "#123456", colorDerived: false, line: "none", marker: true },
+      { color: "#abcdef", colorDerived: false, line: "none", marker: true },
     ]);
   });
 

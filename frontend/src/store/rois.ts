@@ -69,6 +69,7 @@
 // from the new dataset's own extents, unchanged from when that reset lived
 // in local state.
 
+import { createMapViewSlice, type MapViewSlice } from "./mapView";
 import type { CutSpace } from "../lib/mapcuts";
 import type { RsmPeak } from "../lib/types";
 import type { RoiDef, RoiRect, RoiRuler, RoiSector } from "../lib/roi";
@@ -128,7 +129,12 @@ const DEFAULT_MAP_SECTOR: MapSectorState = {
   primedFor: null,
 };
 
-export interface RoisSlice {
+// P2.8's durable map view (`store/mapView.ts`) is composed THROUGH this slice
+// rather than through a spread of its own in useApp.ts — that module is at its
+// store-size pin with zero headroom, which is this file's own reason to exist.
+// See store/mapView.ts's header; `loadedMapViews` is re-exported at the bottom
+// so `loadWorkspace` can reach it on the import line useApp.ts already has.
+export interface RoisSlice extends MapViewSlice {
   // Relocated verbatim from useApp.ts — see this file's header.
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
   setRsmPeaks: (rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null) => void;
@@ -180,6 +186,7 @@ export interface RoisSlice {
 
 export function createRoisSlice(set: SliceSet, get: SliceGet): RoisSlice {
   return {
+    ...createMapViewSlice(set, get),
     rsmPeaks: null,
     setRsmPeaks: (rsmPeaks) => set({ rsmPeaks }),
 
@@ -301,3 +308,7 @@ export function deserializeRois(v: unknown, warnings: string[]): RoiDef[] {
   }
   return out;
 }
+
+// Re-exported for store/useApp.ts's `loadWorkspace` — see store/mapView.ts's
+// header for why the restore rides this module's existing import line there.
+export { loadedMapViews } from "./mapView";

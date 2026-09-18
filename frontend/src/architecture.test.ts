@@ -265,7 +265,60 @@ const STORE_PINS: Record<string, number> = {
   // (17 of them) — every Prefs key is already an AppState field of the same name,
   // which is exactly what `prefsOf(s)` relies on to read them back out, so the
   // list could only ever drift. Same anti-drift move as `PrefKey = keyof Prefs`.
-  "/store/useApp.ts": 2322,
+  // 2322 -> 2122 (2026-09-17, PRIMARY_SOFTWARE_AUDIT_PLAN P4.1 "decompose
+  // high-risk frontend god-modules… characterization tests first", zero
+  // headroom): the singleton PlotView WRITERS — axis scales/limits/steps/tick
+  // formats/titles, the legend/grid/axis-box flags, stack mode + panel fit +
+  // page setup, the x/y/y2/group channel keys, reference lines, annotations,
+  // per-channel series styles/labels/error pairings, draw order, hidden/solo
+  // channels and the waterfall offset (43 actions, plus the `ref-`/`ann-` id
+  // counters they mint from) — moved verbatim to the new
+  // store/plotViewSettings.ts (PlotViewSettingsSlice), composed exactly like
+  // datasetMeta.ts/gadget.ts: one import line, one word on the extends
+  // clause, one creator-spread line. Chosen by COUPLING, not size: unlike
+  // `setChannelRole`/`setChannelType` (which sit in the middle of the same
+  // block and stay behind), nothing in the cluster writes `datasets` at all,
+  // so the pending-edit ratchet above has nothing to say about it and the
+  // module's promise stays exactly "PlotView state". The FIELDS stay declared
+  // and initialized on AppState here, because the actions that RESET them on
+  // a dataset switch (setActive/addDataset/duplicateDataset) and the ones
+  // that bulk-apply them (loadWorkspace/applyOriginFigure/facetByColumn) are
+  // NOT part of the cluster — the same shape corrections.ts already has for
+  // the shared `datasets` field. store/plotViewSettings.characterization.test.ts
+  // (119 specs) was written and run green against the PRE-extraction code and
+  // passes unchanged after the move; that, not a line count, is what made the
+  // extraction verifiable.
+  // 2122 -> 2012 (2026-09-17, the SECOND P4.1 domain, zero headroom): the
+  // report-sheet (#36) and figure-document (#12) lifecycle — addReport,
+  // removeReport, renameReport, setOpenReport, addFigureDoc, removeFigureDoc,
+  // renameFigureDoc, duplicateFigureDoc, openFigureDraft, openFigureDoc,
+  // openFigureDocInWindow, clearFigureDocSeed (12 actions) — moved verbatim to
+  // the new store/reportsFigureDocs.ts (ReportsFigureDocsSlice), composed
+  // exactly like plotViewSettings.ts: one import line, one word on the extends
+  // clause, one creator-spread line. Chosen by COUPLING over the two larger
+  // candidates: `loadWorkspace` (170 lines) writes 40 AppState fields and is
+  // where every new persisted field gets wired, and applyOriginFigure +
+  // facetByColumn + breakAtGaps (342 lines) write 24 PlotView fields that
+  // plotViewSettings.ts also writes; this cluster writes 15, of which the four
+  // it OWNS (reports/openReportId/figureDocs/figureDocSeed) means this module
+  // holds every ACTION that edits them one at a time; bulk restores write
+  // them wholesale and stay outside the cluster on purpose (2026-09-17 review
+  // finding F4: corrects the earlier, false "touched by nothing else outside
+  // loadWorkspace" wording) — `loadWorkspace`'s `.dwk` hydrate,
+  // store/trash.ts's delete delegates, store/trashRestore.ts's restore-from-
+  // trash, store/workbookTransfer.ts's workbook import, and
+  // store/historySnapshot.ts's undo/redo restore. The FIELDS stay declared
+  // and initialized on AppState here for exactly that reason — same shape as
+  // plotViewSettings.ts. The shared `<prefix>-<t36>-<n>` id counter
+  // moved with them, to the leaf module store/idSeq.ts (a module-level `let`
+  // cannot be incremented across a module boundary, and splitting it per
+  // domain would have renumbered ids); useApp.ts re-exports nextDatasetId/
+  // nextFolderId from there so no importer changed.
+  // store/reportsFigureDocs.characterization.test.ts (57 specs as of the
+  // 2026-09-17 review round's F3/F7 additions; 55 at the original move, each writer
+  // diffing the WHOLE poisoned getState() snapshot) was written and run green
+  // against the PRE-extraction code and passes byte-unchanged after the move.
+  "/store/useApp.ts": 2012,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -690,6 +743,20 @@ const LIB_UI_GRANDFATHERED = new Set([
   "./lib/worksheetTransformCommands.ts",
 ]);
 
+// store/ layering guard (P4.1 review F1, 2026-09-17). store/plotViewSettings.ts's
+// header claims "architecture.test.ts's import-direction guards keep lib/ and
+// store/ below the component layer" — that was true for lib/ (above) but not
+// for store/, which had no guard at all. Same shape as the lib/ ratchet: three
+// store modules already import askConfirm from components/overlays/ConfirmDialog
+// (discovered 2026-09-17, predates this guard); they are grandfathered, and a
+// NEW store file must not import components/. The grandfathered list only
+// shrinks — a file that drops the import must leave it.
+const STORE_UI_GRANDFATHERED = new Set([
+  "./store/originFigureApply.ts",
+  "./store/reimport.ts",
+  "./store/reimportAllRun.ts",
+]);
+
 // PENDING-EDIT GUARD RATCHET (BUG-006 site 9, added review round 5).
 //
 // Five review rounds on one feature produced two HIGH defects per round, and the
@@ -932,6 +999,31 @@ describe("lib/ layering guard (DIRACULATOR_AUDIT P3)", () => {
       return entry == null || !importsComponents(entry[1]);
     });
     expect(stale, "remove from LIB_UI_GRANDFATHERED (ratchet down)").toEqual([]);
+  });
+});
+
+describe("store/ layering guard (P4.1 review F1)", () => {
+  const importsComponents = (src: string): boolean =>
+    /from\s+["'][^"']*components\//.test(src);
+  const storeFiles = () => sources().filter(([p]) => p.startsWith("./store/"));
+
+  it("no NEW store/ module imports from components/ (grandfathered set only shrinks)", () => {
+    const bad = storeFiles()
+      .filter(([p]) => !STORE_UI_GRANDFATHERED.has(p))
+      .filter(([, src]) => importsComponents(src))
+      .map(([p]) => p);
+    expect(
+      bad,
+      "store is a lower layer — inject the UI dependency from the caller instead",
+    ).toEqual([]);
+  });
+
+  it("the grandfathered list stays honest — a file that dropped the import leaves the list", () => {
+    const stale = [...STORE_UI_GRANDFATHERED].filter((key) => {
+      const entry = storeFiles().find(([p]) => p === key);
+      return entry == null || !importsComponents(entry[1]);
+    });
+    expect(stale, "remove from STORE_UI_GRANDFATHERED (ratchet down)").toEqual([]);
   });
 });
 
@@ -1930,6 +2022,11 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   pipelineRunning: "pipeline execution flag; runtime state",
 
   // map render settings (technique-view class, like techniqueViewMemory)
+  mapPaintedLimits:
+    "what each open map is currently PAINTING (store/mapView.ts) — reported BY the " +
+    "renderer, never edited by the user, so there is nothing to undo TO; restoring an " +
+    "older pair would only make the Inspector describe a canvas that no longer exists, " +
+    "and the next repaint overwrites it anyway. Not persisted either (P2.8 review round 3)",
   mapMethod: "map interpolation method; view setting outside PlotView",
   mapRes: "map resolution; view setting outside PlotView",
   contourOn: "contour overlay toggle; view setting outside PlotView",
@@ -2289,6 +2386,52 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Library/FigureRow.tsx",
       call: 'import("./OriginSavedPreviewWindow")',
     },
+    // ── SLICE 3 (2026-09-18, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // Three more, same class, each with exactly one non-test importer whose
+    // only entry point into it is a user action — so the static-import arm
+    // below holds all three outright.
+    //
+    // `components/windows/PanelPlotWindow.tsx` renders `win.kind === "panel"`.
+    // A panel window is composed by the user in-session, OR already present
+    // on a restored `.dwk`/crash-recovery snapshot (`kind: "panel"` is a
+    // persisted window field) — never on the DEFAULT first paint of a fresh
+    // project either way (narrowed 2026-09-18, review round, finding 4: this
+    // comment previously said "only after the user composes one",
+    // unqualified, which is false for a restore). Its renderer and the two
+    // modules only it reaches (PanelCell, PanelOverlayWindow, in DRAGGED_OUT
+    // below) had no business in the entry chunk. Measured the largest of the
+    // three by a wide margin.
+    //
+    // `components/Stage/PolarStage.tsx` is the third of PlotStage's runtime-
+    // conditional alternate render modes and the only one that was still
+    // static; MultiPanelStage and StatStage were already `lazy()`. Entered by
+    // the Plot toolbar's polar toggle in-session, or already active on a
+    // restored project (`polarMode` is a persisted `PlotView` field — same
+    // finding 4 narrowing as above). Takes PolarStageCore + lib/polar.ts
+    // with it.
+    //
+    // `store/plotRecipeApply.ts` is the apply/matching half of Plot Recipes
+    // (`resolveApplyOrStage`, `applyResolvedRecipe`, `resolvedCandidates`,
+    // `recipeLibs`). `store/plotRecipes.ts` is composed into `useApp.ts`, so
+    // its static import made that module a startup cost; every action that
+    // needs it was ALREADY `async` (for `recipeLibs()`, which lives inside it),
+    // so nothing changed shape. The loader is the new
+    // `store/plotRecipeApplyLazy.ts`, which also carries the failure contract.
+    {
+      module: "/components/windows/PanelPlotWindow.tsx",
+      loader: "/components/windows/WindowCanvas.tsx",
+      call: 'import("./PanelPlotWindow")',
+    },
+    {
+      module: "/components/Stage/PolarStage.tsx",
+      loader: "/components/Stage/PlotStage.tsx",
+      call: 'import("./PolarStage")',
+    },
+    {
+      module: "/store/plotRecipeApply.ts",
+      loader: "/store/plotRecipeApplyLazy.ts",
+      call: 'import("./plotRecipeApply")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2460,7 +2603,22 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  finding 7). Without it, one eager importer silently folds 4.7 kB back
    *  into the entry chunk and only the bundle budget would ever notice —
    *  the exact failure this describe block exists to prevent. */
-  const DRAGGED_OUT = ["/components/overlays/ToolWindow.tsx", "/lib/workshopHelp.ts"];
+  /** SLICE 3 (2026-09-18) adds the four modules its two component seams took
+   *  with them: `PanelCell`/`PanelOverlayWindow` (PanelPlotWindow was their
+   *  only eagerly-reachable importer) and `PolarStageCore`/`lib/polar.ts`
+   *  (PolarStage's). Measured, not assumed: the eager walk went from 406
+   *  modules to 400 across the whole slice — the three seams, these four, and
+   *  the one module ADDED (`store/plotRecipeApplyLazy.ts`, the loader).
+   *  Together they are most of the slice's measured bytes, and none of them is
+   *  a seam itself, so only reachability can hold this line. */
+  const DRAGGED_OUT = [
+    "/components/overlays/ToolWindow.tsx",
+    "/lib/workshopHelp.ts",
+    "/components/windows/PanelCell.tsx",
+    "/components/windows/PanelOverlayWindow.tsx",
+    "/components/Stage/PolarStageCore.tsx",
+    "/lib/polar.ts",
+  ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
    *  STATIC value imports from the app entry, stop at every dynamic
@@ -2494,9 +2652,15 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   it("nothing eager reaches a seam, or the modules the seams dragged out with them", () => {
     const eager = eagerlyReachable();
     // Vacuity guard: a walk that stalls at the entry would pass everything.
-    // Measured 2026-09-15 on this tree: 400 of 901 source modules are eager
-    // (corrected 2026-09-17 — see the stripper doc above for why 399/900 was
-    // one commit stale).
+    // Measured 2026-09-15 on caa10f88's tree: 400 of 901 source modules are
+    // eager (corrected 2026-09-17 — see the stripper doc above for why 399/900
+    // was one commit stale). Re-measured in-test 2026-09-18 after slice 3,
+    // against the real parent e83c0cc8 (review round, finding 3 — the
+    // 404/912 pair recorded at landing time was one commit stale, off the
+    // cherry-pick source c1757fb1's chain, not this branch's actual base):
+    // 400 of 914 — the corpus grew by the one module slice 3 added, and the
+    // eager set went 406 -> 400 (three seams + four dragged out, minus that
+    // one addition).
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(
@@ -2573,11 +2737,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     expect(violations, "staticSpecifiers is blind to real static imports a naive regex still finds").toEqual([]);
   });
 
+  /** Review round, finding 7: `plotRecipeApplyLazy.ts:34` keeps a
+   *  `type ApplyCore = typeof import("./plotRecipeApply")` type alias next to
+   *  its real dynamic import — the exact same `call` text this test looks
+   *  for, in TYPE position. A plain `.toContain(call)` cannot tell the two
+   *  apart, so replacing the real `import("./plotRecipeApply")` with a
+   *  static one (leaving the type alias in place) left this arm green while
+   *  the other two SEAMS arms below correctly went red (measured: sabotage 3
+   *  in the review). Require the match not be immediately preceded by
+   *  `typeof `, which the type alias always is and a real dynamic import
+   *  never is. */
   it("each loader reaches its seam through a dynamic import()", () => {
     for (const { module, loader, call } of SEAMS) {
       const found = sources().find(([p]) => p.endsWith(loader));
       expect(found, `${loader} not found`).toBeDefined();
-      expect(found?.[1] ?? "", `${loader} must dynamically import ${module}`).toContain(call);
+      const src = found?.[1] ?? "";
+      const escapedCall = call.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const realDynamicImport = new RegExp(`(?<!typeof )${escapedCall}`);
+      expect(
+        realDynamicImport.test(src),
+        `${loader} must dynamically import ${module} (not merely name it in a \`typeof\` type position)`,
+      ).toBe(true);
     }
   });
 });

@@ -10,8 +10,13 @@
 
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureOverrides } from "./figureOverrides";
-import type { ExportSeriesStyle } from "./exportStyles";
 import { isAxisScale, scaleFromLog } from "./plotview";
+// The wire-style type AND its persistence sanitizer, both from the module that
+// owns them. It used to be a type-only import from `lib/exportStyles` (which
+// re-exports the type); taking it from the source lets the two `.dwk`
+// sanitizers below call `sanitizeExportSeriesStyles` without pulling the
+// export BUILDERS and the wire boundary into this module's runtime graph.
+import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import type { AxisScale, DataStruct } from "./types";
 
 /** The builder configuration a FigureDoc restores (and a run re-exports). */
@@ -92,7 +97,27 @@ function migrateConfig(v: unknown): FigureConfig | null {
   const xScale = isAxisScale(o.xScale) ? o.xScale : typeof o.xLog === "boolean" ? scaleFromLog(o.xLog) : null;
   const yScale = isAxisScale(o.yScale) ? o.yScale : typeof o.yLog === "boolean" ? scaleFromLog(o.yLog) : null;
   if (xScale === null || yScale === null) return null;
-  return { ...(o as unknown as FigureConfig), xScale, yScale };
+  // BUG-016 round 4: `config.seriesStyles` used to be spread VERBATIM out of
+  // the persisted JSON — this path never ran the app's own validator for that
+  // shape, so a `.dwk` was the one FigureDoc source whose publication styles
+  // reached the export wire unchecked. Review F3 measured the two ends of
+  // that: `colorDerived: "no"` (truthy) dropped a colour the user CHOSE from a
+  // grouped export, and `colorDerived: null` (falsy) shipped a derived one —
+  // round 1's regression. Running it through the same sanitizer
+  // `figureDocument`/`nameKeyedRecipes` use closes that, and that is ALL it
+  // does for provenance (round 5): a malformed flag is dropped, an absent one
+  // stays absent, and nothing is inferred from the live palette — so a `.dwk`
+  // loads the same under every theme, and re-saving it can neither gain nor
+  // freeze a guess. `undefined` (a config saved before the field existed)
+  // stays `undefined`.
+  const seriesStyles =
+    o.seriesStyles === undefined ? undefined : sanitizeExportSeriesStyles(o.seriesStyles);
+  return {
+    ...(o as unknown as FigureConfig),
+    xScale,
+    yScale,
+    ...(seriesStyles === undefined ? {} : { seriesStyles }),
+  };
 }
 
 /** Validate persisted figure docs (drop malformed; clamp dead dataset refs —
@@ -139,8 +164,9 @@ const KEY = "qz.graphTemplates";
  *  second hand-rolled shape check that could drift from this one. The
  *  IMPORT path layers stricter checks on top (name non-empty, `overrides`/
  *  `seriesStyles` typed when present) — deliberately NOT added here, so a
- *  pre-#15 stored record missing those fields keeps loading exactly as it
- *  always has. */
+ *  pre-#15 stored record missing those fields still PASSES this check. What
+ *  `loadGraphTemplates` does with it afterwards is not unchanged: see its own
+ *  comment on the `seriesStyles` normalization. */
 export function isGraphTemplate(v: unknown): v is GraphTemplate {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -152,7 +178,27 @@ export function loadGraphTemplates(): GraphTemplate[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isGraphTemplate) : [];
+    if (!Array.isArray(parsed)) return [];
+    // The SECOND persistence path for a pinned style array (BUG-016 round 4,
+    // kept in round 5). A template saved before `colorDerived` existed — or
+    // imported from an Origin file by a build that predates it — would
+    // otherwise reach `docSeriesStyles` (`useGraphTemplates.applyStyleTemplate`)
+    // and then the export wire carrying a MALFORMED flag that the wire would
+    // read as the document's word. The sanitizer drops such a flag; it infers
+    // nothing, so this call does not read the theme (round 5) and two loads of
+    // the same store under two palettes are identical.
+    //
+    // `seriesStyles` is the only field touched, and it is NORMALIZED, not left
+    // alone: a record that never had the field comes back with an explicit
+    // `seriesStyles: null` (the "this template carries none" sentinel
+    // `applyStyleTemplate` already coerced to with `?? null`), and
+    // `saveGraphTemplate`/`deleteGraphTemplate` then persist that shape for
+    // every template in the store. The tolerant `isGraphTemplate` check above
+    // is itself unchanged.
+    return parsed.filter(isGraphTemplate).map((t) => ({
+      ...t,
+      seriesStyles: sanitizeExportSeriesStyles(t.seriesStyles),
+    }));
   } catch {
     return [];
   }

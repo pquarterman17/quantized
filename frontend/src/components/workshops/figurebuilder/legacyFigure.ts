@@ -16,7 +16,7 @@
 // from). One input type makes that structural instead of a review question.
 
 import type { FigureSpec } from "../../../lib/api/figures";
-import { buildExportStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
+import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { axisFmtParam, type AxisFormat, type AxisScale, type DataStruct, type SeriesStyle } from "../../../lib/types";
@@ -52,22 +52,43 @@ function plottedChannels(state: LegacyFigureState, data: DataStruct): number[] {
   return state.yKeys ?? data.labels.map((_, index) => index);
 }
 
-/** Resolve the export styles for either builder: a saved doc's own styles win
- *  over the live per-channel ones, and an explicit null stays null. */
+/** The DOCUMENT form of this figure's per-series styles: a saved doc's own
+ *  array wins over the live per-channel ones, and an explicit null stays null.
+ *  Shared by both builders so a saved doc cannot reopen looking different from
+ *  the preview it was saved from — the reason they share this function at all.
+ *
+ *  BUG-016: a `docGroupCol` request has the backend expand every entry onto
+ *  one series per group LEVEL, so a palette-derived colour (which belongs to a
+ *  level's display position, not to the channel) must not reach the wire.
+ *  `buildExportStyles`' `grouped` doc carries that rule for the DERIVED array.
+ *
+ *  ROUND 3: the rule is applied at the WIRE, in `buildLegacyFigureSpec`, not
+ *  here. Round 2 stripped inside this helper, so "Save as figure" wrote the
+ *  stripped array back into `config.seriesStyles` and permanently destroyed a
+ *  colour field the document had (review F6) — for no gain, since stripping on
+ *  the wire alone satisfies the same "preview, export and saved doc cannot
+ *  disagree" argument: both builders start from THIS array, and the one that
+ *  builds a request is the only one that has a request to obey. What the doc
+ *  now persists is the array WITH its `colorDerived` provenance, which is what
+ *  lets the reopened doc reproduce the same wire under any palette. */
 function exportStyles(
   state: LegacyFigureState,
   data: DataStruct,
 ): (ExportSeriesStyle | null)[] | null {
-  return state.docSeriesStyles !== undefined
-    ? state.docSeriesStyles
-    : buildExportStyles(plottedChannels(state, data), state.seriesStyles);
+  if (state.docSeriesStyles !== undefined) return state.docSeriesStyles;
+  return buildExportStyles(
+    plottedChannels(state, data), state.seriesStyles, null, false, state.docGroupCol !== null,
+  );
 }
 
 /** The request shared by the debounced PNG preview and the export at the
  *  chosen format/DPI. Null with no data -- the caller renders nothing. */
 export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | null {
   if (!state.data) return null;
-  const styles = exportStyles(state, state.data);
+  // The document form -> the wire form: the grouped colour rule for a PINNED
+  // array, and the provenance flag off, on every request (BUG-016 round 3).
+  const docStyles = exportStyles(state, state.data);
+  const styles = docStyles === null ? null : toWireSeriesStyles(docStyles, state.docGroupCol !== null);
   return {
     dataset: state.data,
     x_key: state.xKey ?? undefined,

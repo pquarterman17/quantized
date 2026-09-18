@@ -11,6 +11,57 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import { niceTicks } from "../../lib/ticks";
 import type { RsmPeak } from "../../lib/types";
 
+// Homed here, NOT in lib/mapView.ts: this is a RENDERER decision, and
+// lib/mapView.ts is eagerly reachable (lib/workspaceSerialize.ts) while this
+// module is only pulled in with the map itself. Keeping it beside `draw`, its
+// one consumer, keeps the eager chunk free of it.
+/** The [lo, hi] the heatmap should actually paint with: the user's explicit
+ *  limits when they are usable, the payload's own extent otherwise.
+ *
+ *  In log mode `autoLo` is the grid's smallest POSITIVE cell (what
+ *  `mapRender.draw` passes): an explicit non-positive `lo` is raised to that
+ *  floor. The raise can push `lo` past the explicit `hi` (enter `-1 … 2` on
+ *  data that starts at 7), and the first cut returned null there — a blank
+ *  heatmap AND a blank colourbar with nothing to explain either. Any unusable
+ *  explicit pair now falls back to the AUTO extent instead, so switching to
+ *  log, or typing a range the data cannot honour, never blanks a map that has
+ *  something to paint.
+ *
+ *  Null is reserved for the genuinely empty case: no usable auto extent —
+ *  which in log mode means the grid has no positive cell at all, and there is
+ *  nothing a log scale could show. */
+export function effectiveColorLimits(
+  colorLimits: [number, number] | null,
+  autoLo: number | null,
+  autoHi: number | null,
+  logZ = false,
+): [number, number] | null {
+  const auto: [number, number] | null =
+    autoLo !== null && autoHi !== null && autoHi > autoLo ? [autoLo, autoHi] : null;
+  if (!colorLimits) {
+    // Round 4, finding 5: the same non-positive-log-floor rule the explicit
+    // branch below applies to `colorLimits` also applies to `auto` here —
+    // unreachable from `draw` (which only passes `minPositive`'s
+    // null-or-positive result), but this function answers for itself.
+    if (logZ && auto && auto[0] <= 0) return null;
+    return auto;
+  }
+  let lo = colorLimits[0];
+  const hi = colorLimits[1];
+  if (logZ && lo <= 0) {
+    // No positive floor to raise to: null, not the auto pair. `draw` passes
+    // `minPositive(p.zGrid)` here, which is null or strictly positive, so this
+    // is unreachable from the canvas — but this function is exported and
+    // tested standalone, and returning a NON-POSITIVE auto pair as a log range
+    // contradicted the header's own "null is reserved for … no positive cell
+    // at all" (P2.8 review round 3, finding 5).
+    if (autoLo === null || autoLo <= 0) return null;
+    lo = autoLo;
+  }
+  if (!(hi > lo)) return auto;
+  return [lo, hi];
+}
+
 const MARGIN = { left: 58, right: 78, top: 14, bottom: 42 };
 
 /** Interactive contour overlay controls (Inspector "2-D map" card; store
@@ -186,9 +237,18 @@ export function draw(
   peaks: RsmPeak[] | null = null,
   smooth = true,
   contour: ContourOptions | null = null,
-) {
+  // Audit P2.8: the user's explicit colour limits, or null for "auto" (the
+  // payload's own z extent — exactly what this function used before). Last and
+  // defaulted so every existing caller and test is untouched.
+  colorLimits: [number, number] | null = null,
+  // Returns the [lo, hi] actually PAINTED (null when there is nothing to
+  // paint) — P2.8 review round 3, finding 2. The Inspector's colour-limit
+  // fields would otherwise go on showing a pair the renderer silently
+  // replaced; `components/Stage/useMapPaint.ts` reports this back into the
+  // store so that row can say what the map is really doing.
+): [number, number] | null {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return; // jsdom / headless — nothing to paint
+  if (!ctx) return null; // jsdom / headless — nothing to paint
   const W = host.clientWidth || 600;
   const H = host.clientHeight || 400;
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
@@ -196,14 +256,27 @@ export function draw(
   canvas.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  if (!p) return;
+  if (!p) return null;
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
   const rect = plotRect(p, W, H);
   // Log mode floors at the smallest positive cell (0/negative -> transparent).
-  const lo = logZ ? minPositive(p.zGrid) : p.zMin;
-  const hi = p.zMax;
+  // P2.8: explicit colour limits win over that auto extent; `effectiveColorLimits`
+  // keeps the log floor as the lower bound when the explicit `lo` is non-positive
+  // and falls back to the auto extent when the pair is unusable, so switching a
+  // clipped map to log never blanks it. Both the heatmap and the colourbar below
+  // read the SAME pair, so the scale bar cannot disagree with the pixels it
+  // labels.
+  //
+  // RESIDUAL, recorded rather than papered over (P2.8 review round 2, finding
+  // 17): the isolines are NOT clipped to `limits`. That happens in
+  // `drawContours`, which `draw` calls below — see its header, where the
+  // decision is written out (P2.8 review round 3, finding 6: this note used to
+  // say "further down this function", which is not where the code is).
+  const limits = effectiveColorLimits(colorLimits, logZ ? minPositive(p.zGrid) : p.zMin, p.zMax, logZ);
+  const lo = limits ? limits[0] : null;
+  const hi = limits ? limits[1] : null;
 
   // Offscreen nx×ny image (built pure), then one scaled blit.
   if (lo != null && hi != null && hi > lo) {
@@ -232,6 +305,7 @@ export function draw(
   drawAxes(ctx, p, rect, ink, muted);
   drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
   if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
+  return limits;
 }
 
 /** Stroke the isolines from `lib/contour.ts` over the heatmap. Every level
@@ -243,7 +317,15 @@ export function draw(
  *  the same convention matplotlib's default contour uses over any colormap)
  *  reads reliably regardless of the colormap or theme. Clipped to the plot
  *  rect -- `lib/contour.ts` documents that a ring can overshoot the grid
- *  edge by half a cell (d3-contour's cell-centred sampling convention). */
+ *  edge by half a cell (d3-contour's cell-centred sampling convention).
+ *
+ *  RESIDUAL, DELIBERATE (P2.8 review round 2, finding 17): the levels come
+ *  from `p.zMin`/`p.zMax` — the DATA's own extent — not from the explicit
+ *  colour limits `draw` paints the heatmap and colourbar with. With clipped
+ *  limits the isolines and the colourbar therefore describe different ranges.
+ *  A contour level is a feature OF THE DATA, and clipping the colour mapping
+ *  is not a statement about where the isolines are; this is a decision, not an
+ *  oversight. */
 function drawContours(
   ctx: CanvasRenderingContext2D,
   p: MapPayload,

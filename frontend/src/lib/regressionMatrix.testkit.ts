@@ -62,11 +62,11 @@
 //   * GROUP mode: the backend expands `group_col` into one series per level
 //     itself, so the export wire carries the BASE channels while the canvas
 //     already carries the expanded ones. The screen leg therefore collapses its
-//     display series back to first-occurrence-per-channel, and `styleComparable`
-//     is FALSE for this mode — see its doc and BUG-016: the backend's
-//     `group_col` branch drops `series_styles` outright, so comparing them
-//     leg-to-leg compared a field the renderer never reads. Level identity
-//     moves into `grouping`; the styling divergence is pinned by its own test.
+//     display series back to first-occurrence-per-channel, which is sound
+//     because every level of a channel shares that channel's ONE style on both
+//     paths (BUG-016, fixed). `styleComparable` therefore compares the style's
+//     SHAPE half here and not its colour — see its doc for the measured reason.
+//     Level identity moves into `grouping`.
 //   * FACET mode: per-series styling is ignored by faceted plots on BOTH screen
 //     and export (FEATURE-001, `plans/BUGS_AND_ISSUES.md`), so every leg reports
 //     `null` styling for a faceted figure and the panel partition is compared
@@ -238,25 +238,48 @@ export function figureMode(document: FigureDocument): CanonicalFigure["mode"] {
   return "flat";
 }
 
-/** Per-series styling is a comparable property of a FLAT figure only.
+/** Which halves of the per-series styling every leg can be compared on for a
+ *  given mode. Two flags rather than one boolean because GROUP mode splits
+ *  exactly there (BUG-016). */
+export interface StyleComparison {
+  /** width / dash / marker / step / fill — the channel-level style. */
+  shape: boolean;
+  /** the resolved stroke colour. */
+  color: boolean;
+}
+
+/** FLAT: everything compares.
  *
  *  FACET (FEATURE-001): faceted plots ignore per-series styling on BOTH paths,
- *  so screen and export genuinely agree by both ignoring it.
+ *  so screen and export genuinely agree by both ignoring it — nothing to
+ *  compare, and reporting `null` on every leg records that.
  *
- *  GROUP (BUG-016, narrowed 2026-09-14): the two paths do NOT agree, and this
- *  returning `false` records that rather than hiding it. `routes/
- *  export_figures.py`'s `group_col` branch (`:81-85` documents the choice,
- *  `:236-238` implements it) returns `_ResolvedFigure(..., None, ...)` — every
- *  per-series style is dropped from a grouped export and matplotlib's default
- *  cycle takes over — while the canvas gives every level of a channel that
- *  channel's one style. The wire still CARRIES `series_styles`; it is simply
- *  never read on this branch, so comparing that field leg-to-leg was false
- *  comfort (a grouped red/dashed/3px figure draws as three red dashed curves
- *  on screen and three default-coloured solid ones in the PDF, and the
- *  comparison passed). The divergence itself is pinned by
- *  `regressionMatrix.test.ts`'s BUG-016 test, not swept under this flag. */
-export function styleComparable(mode: CanonicalFigure["mode"]): boolean {
-  return mode === "flat";
+ *  GROUP (BUG-016, FIXED 2026-09-17): SHAPE now compares and must. The canvas
+ *  hands every level of a channel that channel's one style object
+ *  (`Stage/usePlotPayload.ts`'s `styleList` over
+ *  `plotGroupSplit.groupSplitChannelMap`) and `routes/export_figures.py`'s
+ *  `group_col` branch expands the same `y_keys`-aligned `series_styles` entry
+ *  onto the synthetic per-level series (`calc.figure_group_styles`), so a
+ *  dashed 2px grouped channel is dashed and 2px on both. It used to be `false`
+ *  for the whole style, which hid the bug: the export dropped `series_styles`
+ *  outright and a grouped red/dashed figure came back solid.
+ *
+ *  COLOUR still does not compare, and that is a measured property of the two
+ *  paths rather than a fudge. `seriesColor` gives every level an EXPLICIT
+ *  `style.color` (so an explicitly coloured channel does agree, and the wire
+ *  carries that colour), but with none set the canvas falls back to the palette
+ *  slot at each LEVEL's display position — measured on the `group` fixture:
+ *  `--series-1`, `--series-2`, `--series-3` for its three levels. One
+ *  channel-aligned wire entry cannot carry three colours, so
+ *  `lib/exportStyles.ts` omits `color` for a grouped request and matplotlib's
+ *  own cycle colours the levels there. Both sides therefore CYCLE per level;
+ *  the two palettes differ, which is recorded as out of scope in BUG-016. The
+ *  canonical series list collapses a group to one entry per channel, so there
+ *  is no honest single colour to put in it either way. */
+export function styleComparable(mode: CanonicalFigure["mode"]): StyleComparison {
+  if (mode === "flat") return { shape: true, color: true };
+  if (mode === "group") return { shape: true, color: false };
+  return { shape: false, color: false };
 }
 
 export function displayLabel(labels: readonly string[], units: readonly string[], ch: number): string {

@@ -61,6 +61,12 @@ export interface HistorySnapshot {
   savedPlotSpecs: AppState["savedPlotSpecs"];
   activePlotSpecId: AppState["activePlotSpecId"];
   savedRois: AppState["savedRois"];
+  // Audit P2.8 — the durable 2-D map view (colour limits/scale/colormap, the
+  // committed H/V/segment slice definitions, the map annotations). Persistent
+  // user edits, the same class as `savedRois` right above, and wired here in
+  // the SAME commit as store/mapView.ts per this file's own savedRois-incident
+  // gate. NOT the working mapRoi/mapRuler/mapSector, which stay excluded.
+  mapViews: AppState["mapViews"];
   // LIBRARY_WORKBOOK_UX_PLAN PR H — named Quick Plot templates. Persistent
   // user edits (save/rename/delete), same class as `savedPlotSpecs`/
   // `savedRois` right above — wired here IN THE SAME COMMIT as the store
@@ -102,6 +108,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     savedPlotSpecs: s.savedPlotSpecs,
     activePlotSpecId: s.activePlotSpecId,
     savedRois: s.savedRois,
+    mapViews: s.mapViews,
     quickPlotTemplates: s.quickPlotTemplates,
     plotRecipes: s.plotRecipes,
     collections: s.collections,

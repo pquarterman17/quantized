@@ -16,7 +16,7 @@ import { withPlotWindowDocument } from "./windowDocuments";
 export { liveWindowDocument } from "./liveWindowDocument";
 
 let figureSequence = 0;
-// Exported (nextDatasetId/useApp.ts precedent) so a sibling slice minting a
+// Exported (nextDatasetId/store/idSeq.ts precedent) so a sibling slice minting a
 // FRESH editable-figure id -- store/quickPlotAction.ts's quickPlotDataset --
 // shares the exact same id scheme instead of inventing a second one.
 export const nextFigureId = (): string => `figure-${Date.now().toString(36)}-${++figureSequence}`;

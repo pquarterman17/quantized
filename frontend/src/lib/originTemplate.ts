@@ -47,9 +47,31 @@ export function sanitizeImportedTemplate(v: unknown, fallbackName: string): Grap
       ? (o.overrides as FigureOverrides)
       : null;
   const seriesStyles = Array.isArray(o.seriesStyles)
-    ? (o.seriesStyles as (ExportSeriesStyle | null)[])
+    ? (o.seriesStyles as (ExportSeriesStyle | null)[]).map(markOriginColorChosen)
     : null;
   return { name, style, overrides, seriesStyles, source: "origin" };
+}
+
+/** BUG-016 round 4 (review F2): an Origin template is a PRODUCER of pinned
+ *  style arrays, not a legacy population — every template imported tomorrow
+ *  arrives here — and its colours are CHOSEN by construction. They are RGB
+ *  hexes decoded out of the `.otp`/`.otpu` file's own curve records
+ *  (`io/origin_project/templates.py`'s `_HEX_RE`), which is a colour someone
+ *  set in Origin; this app's palette had no part in it.
+ *
+ *  Marking them explicitly matters because the alternative is silence: an
+ *  unflagged colour is UNVOUCHED at the wire boundary and a grouped export
+ *  omits it (`exportStyles.toWireSeriesStyles`), so an imported template's
+ *  curve colour would be dropped from exactly the export the template was
+ *  imported to style. Measured before this: `toWireSeriesStyles([{color:
+ *  "#7fb3ff", width: 3, marker: true}], true)` -> `[{width: 3, marker: true}]`.
+ *
+ *  Only `colorDerived` is added — "honestly partial upstream stays honestly
+ *  partial here" still holds for every other key. */
+function markOriginColorChosen(entry: ExportSeriesStyle | null): ExportSeriesStyle | null {
+  if (entry === null || typeof entry !== "object") return entry;
+  if (typeof entry.color !== "string") return entry;
+  return { ...entry, colorDerived: false };
 }
 
 /** First name in `name`, `name (2)`, `name (3)`, … not already taken —

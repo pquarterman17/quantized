@@ -23,13 +23,16 @@ import AxisDropZones from "./AxisDropZones";
 import PlotStageMenus from "./PlotStageMenus";
 import PlotStageOverlays from "./PlotStageOverlays";
 import PlotViewport from "./PlotViewport";
-import PolarStage from "./PolarStage";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
 // E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-
 // conditional alternate modes, never the default-plot first paint.
 const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
 const StatStage = lazy(() => import("./StatStage"));
+// plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode and
+// was the only one still static — reached one way, the Plot menu's polar
+// toggle. Same UX-003 caveat as every lazy() here (no error reporting).
+const PolarStage = lazy(() => import("./PolarStage"));
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
@@ -230,7 +233,7 @@ export default function PlotStage() {
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
   // useLiveSnapshotPublish's header).
   // P3.3 auto dash/marker cycle — the canvas half of its ONE opt-in pair (the
-  // export half is `figureSpec.buildStageFigureSpec`, same gate). See its doc.
+  // export half is `figureSpecStage.buildStageFigureSpec`, same gate). See its doc.
   const seriesCycle = useStageSeriesCycle(plotted.length);
 
   useLiveSnapshotPublish({
@@ -253,7 +256,7 @@ export default function PlotStage() {
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
-  if (polarMode && active) return <PolarStage />;
+  if (polarMode && active) return <Suspense fallback={null}><PolarStage /></Suspense>;
   if (statMode && active) return <Suspense fallback={null}><StatStage /></Suspense>;
   if (multiPanelShowing(composition, stackMode, plotted.length))
     return <Suspense fallback={null}><MultiPanelStage composition={composition} /></Suspense>; // L4: prop, not re-derived

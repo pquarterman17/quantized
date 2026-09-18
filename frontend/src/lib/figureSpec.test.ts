@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildFigureSpec,
   buildFigureSpecFromDocument,
-  buildStageFigureSpec,
   resolveFigureDocumentData,
 } from "./figureSpec";
+import { buildStageFigureSpec } from "./figureSpecStage";
 import { viewOverrides } from "./figureViewOverrides";
 import { facetPanelsOf } from "./composition";
 import { createFigureDocument, figureDocumentToPlotView, updateFigureDocumentFromPlotView } from "./figureDocument";
@@ -99,6 +99,33 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(spec.x_key).toBe(0);
     expect(spec.y_keys).toEqual([0, 1]);
     expect(spec.series_styles).toEqual([{ color: "#3366cc" }, { color: "#cc6633" }]);
+  });
+
+  it("re-cuts a PINNED publication array to `y_keys` when a channel is hidden (BUG-016)", () => {
+    // The CALL SITE, not the helper. `resolveSeriesPresentation` gets its
+    // alignment pair from this module, and a wiring mistake here — passing no
+    // alignment, or a display list that is not the one `plotted` was filtered
+    // from — is invisible to every test that calls the helper directly. Round 4
+    // shipped the re-cut with exactly that gap.
+    const document = createFigureDocument({
+      id: "pin-hidden",
+      name: "Pinned then hidden",
+      datasetId: dataset.id,
+      view: { ...defaultPlotView(), xKey: 0, yKeys: [1, 2, 3], hiddenChannels: [1] },
+      publication: {
+        overrides: null,
+        seriesStyles: [
+          { color: "#aa0000", colorDerived: false },
+          { color: "#00aa00", colorDerived: false },
+          { color: "#0000aa", colorDerived: false },
+        ],
+      },
+    });
+    const spec = buildFigureSpecFromDocument(document, dataset, "pin-hidden");
+    expect(spec.y_keys).toEqual([2, 3]);
+    // Entry 0 belongs to the HIDDEN channel 1 and is dropped, rather than
+    // sliding onto channel 2 the way an un-recut array did.
+    expect(spec.series_styles).toEqual([{ color: "#00aa00" }, { color: "#0000aa" }]);
   });
 
   it("keeps the established StoreGet FigureSpec wire shape byte/deep-equal", () => {

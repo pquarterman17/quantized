@@ -33,6 +33,13 @@ export type RemovableState = Pick<
   | "figureDocs"
   | "editableFigures"
   | "plotWindows"
+  // Audit P2.8 review round 2: the per-dataset map views. Keyed BY dataset id,
+  // so a removal must drop the removed datasets' entries — otherwise a colour
+  // limit and a set of slice positions in a deleted map's units outlive it in
+  // every save, and a later dataset that happens to reuse the id inherits
+  // them. Homed here (not in store/mapView.ts) so `deleteWorkbook` and
+  // `scrubDatasetsFromHistory` get the same pruning for free.
+  | "mapViews"
 >;
 
 export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): Partial<RemovableState> {
@@ -50,7 +57,15 @@ export function removeDatasetsPatch(s: RemovableState, ids: readonly string[]): 
   );
   const editableFigures = pruneEditableFigureRefs(s.editableFigures, drop);
   const plotWindows = pruneWindowDatasetRefs(s.plotWindows, drop);
-  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows };
+  // Allocate a NEW record only when an entry actually goes (P2.8 review round
+  // 3, finding 12). An unconditional `Object.fromEntries` handed `shouldAutosave`
+  // and every history snapshot `scrubDatasetsFromHistory` rewrites a fresh
+  // identity for an unchanged value — the same unconditional-new-identity the
+  // view writers in `store/mapView.ts` deliberately guard against.
+  const mapViews = Object.keys(s.mapViews).some((id) => drop.has(id))
+    ? Object.fromEntries(Object.entries(s.mapViews).filter(([id]) => !drop.has(id)))
+    : s.mapViews;
+  return { datasets, activeId, worksheetId, selectedIds, originFigures, originFidelity, reports, figureDocs, editableFigures, plotWindows, mapViews };
 }
 
 /** P3.7 review round: "Delete permanently" must be exactly that. Removing a

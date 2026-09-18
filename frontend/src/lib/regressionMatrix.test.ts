@@ -17,8 +17,8 @@
 // for the wrong reason, and a real fix would flip them to an unexplained
 // "unexpected pass". As written, fixing the bug turns the divergence assertion
 // red and the fix INVERTS it (`.not.toEqual` becomes `.toEqual`, the two
-// pinned values become one) — which is exactly what D1, D2, D3 and D4 below
-// now are. Keep this list and the "divergences found" describe title in step:
+// pinned values become one) — which is exactly what D1 through D5 below now
+// are. Keep this list and the "divergences found" describe title in step:
 // the two drifted apart once already (BUG-013's fix updated one, not the other).
 //   D1 / BUG-012 x-breaks  — FIXED 2026-09-14. A document's
 //                  `plot.axisBreaks.x` reached the export wire and survived
@@ -54,10 +54,18 @@
 //                  `hidden` fixture is a full member of the matrix above
 //                  (screen ≡ export ≡ reopen) and the pin below is the
 //                  inverted equality.
-//   D5 / BUG-016 grouped styling — the canvas gives every level of a grouped
-//                  channel that channel's style; `routes/export_figures.py`'s
-//                  `group_col` branch drops `series_styles` entirely, so the
-//                  exported curves are default-coloured and solid.
+//   D5 / BUG-016 grouped styling — FIXED 2026-09-17. The canvas gives every
+//                  level of a grouped channel that channel's one style;
+//                  `routes/export_figures.py`'s `group_col` branch dropped
+//                  `series_styles` entirely, so the exported curves came back
+//                  solid and default-width. It now expands that channel-aligned
+//                  entry onto the synthetic per-level series
+//                  (`calc.figure_group_styles`), `styleComparable("group")`
+//                  compares the style's SHAPE half again, and the pin below is
+//                  the inverted equality. COLOUR stays out of the comparison:
+//                  an uncoloured level takes the palette slot at its own
+//                  display position, which one channel-aligned entry cannot
+//                  carry — see `styleComparable`'s doc.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -81,8 +89,10 @@ import {
   figureDocumentToPlotView,
   type FigureDocument,
 } from "./figureDocument";
+import { buildExportStyles } from "./exportStyles";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { defaultPlotView } from "./plotview";
+import { SERIES_VARS } from "./seriesStyleCycle";
 import {
   FIXTURE_COLORS,
   MATRIX_FIXTURES,
@@ -94,6 +104,7 @@ import {
   type MatrixFixtureName,
 } from "./regressionMatrixFixtures.testkit";
 import {
+  dashOf,
   installSeriesPalette,
   TEST_SERIES_PALETTE,
   type CanonicalFigure,
@@ -349,7 +360,7 @@ describe("P4.2 regression matrix: multi-panel page", () => {
 //
 // Each test is named for the bug it reproduces, so `plans/BUGS_AND_ISSUES.md`
 // and the suite refer to each other by the same string.
-describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIXED, see below)", () => {
+describe("P4.2 regression matrix: divergences found (D1 through D5 since FIXED, see below)", () => {
   const dataset = matrixDataset();
 
   // BUG-012 (D1, FIXED 2026-09-14). `FigureDocument.plot.axisBreaks.x` is the
@@ -554,20 +565,20 @@ describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIX
     );
   });
 
-  // BUG-016 (D5). A grouped figure's per-series styling reaches the canvas but
-  // not the exported figure. `routes/export_figures.py:81-85` documents the
-  // choice and `:236-238` implements it: the `group_col` branch returns
-  // `_ResolvedFigure(..., None, ...)`, so `series_styles` is dropped and
-  // matplotlib's default colour cycle takes over. The wire still CARRIES the
-  // style — which is why `styleComparable("group")` is false and this
-  // divergence needs its own test rather than a leg-to-leg comparison of a
-  // field the renderer never reads.
+  // BUG-016 (D5), FIXED 2026-09-17 — this is the divergence assertion
+  // INVERTED. The canvas hands EVERY level of a grouped channel that channel's
+  // one style object (`Stage/usePlotPayload.ts`'s `styleList` over
+  // `plotGroupSplit.groupSplitChannelMap`); `routes/export_figures.py`'s
+  // `group_col` branch used to return `_ResolvedFigure(..., None, ...)` and
+  // drop the whole list, so the exported curves came back solid and
+  // default-width. It now expands the same `y_keys`-aligned entry onto the
+  // synthetic per-level series (`calc.figure_group_styles`), so the two agree
+  // level for level.
   //
   // Structural, as the rest of the matrix is: the screen half is read out of
-  // the real `buildOpts` options object, the wire half out of the real
-  // `FigureSpec`, and the backend's own contract is pinned as a named constant
-  // rather than guessed at.
-  it("DIVERGENCE (BUG-016): a grouped figure's per-series styling reaches the canvas but is dropped from the exported figure", () => {
+  // the real `buildOpts` options object and the wire half out of the real
+  // `FigureSpec`, with the level count taken from the wire's own dataset.
+  it("BUG-016: a grouped figure's levels carry the channel's style on screen AND in the export", () => {
     const figure = matrixFixture("group");
 
     // SCREEN — one drawn series per level, every one carrying the CHANNEL's
@@ -581,20 +592,87 @@ describe("P4.2 regression matrix: divergences found (D1, D2, D3 and D4 since FIX
     expect(drawn.map((s) => s.dash)).toEqual([[8, 4], [8, 4], [8, 4]]);
     expect(drawn.map((s) => s.width)).toEqual([2, 2, 2]);
 
-    // WIRE — the spec carries the style, and the grouping that makes the
-    // backend ignore it.
+    // WIRE — one entry, aligned to `y_keys`, carrying the style the backend
+    // expands. It deliberately carries NO colour: the canvas colours a level by
+    // its OWN display position (asserted below), which one channel-aligned
+    // entry cannot express, so `lib/exportStyles.ts` omits it and matplotlib's
+    // own cycle colours the levels — see `regressionMatrix.testkit.ts`'s
+    // `styleComparable` doc for the measured rule.
     const spec = buildFigureSpecFromDocument(figure, dataset, figure.name);
     expect(spec.group_col).toBe(6);
-    expect(spec.series_styles?.[0]).toMatchObject({ width: 2, line: "dashed" });
+    expect(spec.series_styles?.[0]).toEqual({ width: 2, line: "dashed" });
 
-    // EXPORT — `_figure_series`'s `group_col` branch builds one series per
-    // level and passes NO styles, so every exported curve is solid and
-    // default-coloured. The level count is taken from the wire, not assumed.
-    const STYLE_DROPPED_BY_THE_GROUP_BRANCH = null;
+    // EXPORT — that one entry, expanded onto every level the wire's own
+    // categorical metadata names (`calc.figure_group_styles`: synthetic series
+    // `i` belongs to channel `i / levels`). The level count comes from the
+    // wire, not from an assumption about the fixture.
     const exportedLevels = projectExport(figure, dataset).grouping.levelLabels;
     expect(exportedLevels).toEqual(["C", "A", "B"]);
-    const exportedDashes = exportedLevels!.map(() => STYLE_DROPPED_BY_THE_GROUP_BRANCH);
-    expect(drawn.map((s) => s.dash)).not.toEqual(exportedDashes);
+    const style = spec.series_styles?.[0];
+    const exportedPerLevel = exportedLevels!.map(() => ({
+      dash: dashOf(style?.line === "none" ? undefined : style?.line),
+      width: style?.width ?? null,
+    }));
+    expect(drawn.map((s) => ({ dash: s.dash, width: s.width }))).toEqual(exportedPerLevel);
+
+    // Non-vacuous: the compared quantity is REAL styling, not two absent fields
+    // agreeing. (The `group` fixture's own `screen ≡ export` case above now
+    // compares this same half field-for-field, which it could not while the
+    // backend dropped the list.)
+    expect(exportedPerLevel[0]).toEqual({ dash: [8, 4], width: 2 });
+    // And the canvas' per-LEVEL palette slots — three distinct strokes from one
+    // UNCOLOURED channel, which is exactly why COLOUR is the half a
+    // channel-aligned wire entry cannot carry.
+    expect(drawn.map((s) => s.color)).toEqual([
+      TEST_SERIES_PALETTE[0],
+      TEST_SERIES_PALETTE[1],
+      TEST_SERIES_PALETTE[2],
+    ]);
+    expect(style).not.toHaveProperty("color");
+  });
+
+  // BUG-016 round 3 — the same screen-vs-wire comparison for a PINNED
+  // document, with the palette CHANGED between the pin and the export. This
+  // is round-2 review F1 at the layer the user sees: round 2 classified a
+  // pinned colour by re-resolving the live palette, so after a theme flip the
+  // derived hex matched nothing, shipped, and the backend painted all three
+  // levels that one hue while the canvas cycled three new ones.
+  it("BUG-016: a PINNED grouped figure sends no derived colour after the palette changes under it", () => {
+    const base = matrixFixture("group");
+    // What the document stores: `buildExportStyles`' own output, taken under
+    // the palette that is live at pin time, provenance included.
+    const pinned = buildExportStyles([0], { 0: { width: 2, line: "dashed" } });
+    expect(pinned[0]).toEqual({
+      color: TEST_SERIES_PALETTE[0], colorDerived: true, width: 2, line: "dashed",
+    });
+    const figure: FigureDocument = {
+      ...base,
+      publication: { overrides: base.publication?.overrides ?? null, seriesStyles: pinned },
+    };
+
+    const root = document.documentElement;
+    const saved = SERIES_VARS.map((name) => root.style.getPropertyValue(name));
+    // Light and mutually distinct: the canvas runs every stroke through the
+      // same `resolveDrawColor` contrast check, and a near-black token would be
+      // substituted for the ink colour (measured: all three came back `#eee`).
+      const paletteB = ["#ffcccc", "#ccffcc", "#ccccff", "#ffffcc", "#ccffff", "#ffccff", "#ffddaa", "#ddaaff"];
+    SERIES_VARS.forEach((name, i) => root.style.setProperty(name, paletteB[i]));
+    try {
+      // SCREEN: three levels, three DIFFERENT slots of the new palette.
+      const drawn = screenDrawnStyles(figure, dataset);
+      expect(drawn.map((s) => s.color)).toEqual([paletteB[0], paletteB[1], paletteB[2]]);
+      expect(drawn.map((s) => s.dash)).toEqual([[8, 4], [8, 4], [8, 4]]);
+
+      // WIRE: the pinned entry, minus the colour the user never chose and
+      // minus the provenance flag that said so. The backend then cycles the
+      // levels, matching the screen in structure -- sending `#7fb3ff` (which
+      // is what round 2 did here) would paint all three one hue.
+      const spec = buildFigureSpecFromDocument(figure, dataset, figure.name);
+      expect(spec.group_col).toBe(6);
+      expect(spec.series_styles?.[0]).toEqual({ width: 2, line: "dashed" });
+    } finally {
+      SERIES_VARS.forEach((name, i) => root.style.setProperty(name, saved[i]));
+    }
   });
 });
 

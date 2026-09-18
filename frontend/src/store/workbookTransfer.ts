@@ -46,7 +46,7 @@ import { copyTextAsync } from "../lib/clipboard";
 import { plural } from "../lib/plural";
 import type { TransferExistingIds, TransferIdGenerators } from "../lib/workbookTransfer";
 import type { AppState } from "./useApp";
-import { nextDatasetId } from "./useApp";
+import { nextDatasetId } from "./idSeq";
 import { nextWorkbookId } from "./workbookIds";
 import { nextFigureId } from "./figureLifecycle";
 import { notifyMigrationWarnings, toast } from "./toasts";

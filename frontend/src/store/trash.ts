@@ -47,6 +47,7 @@
 
 import type { FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
+import type { MapViewState } from "../lib/mapView";
 import type { DataStruct, Dataset, FolderNode } from "../lib/types";
 import type { PageDocument } from "../lib/pageDocument";
 import type { ReportEntry } from "../lib/report";
@@ -113,6 +114,17 @@ interface TrashEntryBase {
 export interface DatasetTrashEntry extends TrashEntryBase {
   kind: "dataset";
   dataset: Dataset;
+  /** The dataset's 2-D map view (`mapViews[dataset.id]`) as it stood when the
+   *  dataset was trashed, when it had one — P2.8 review round 3, finding 1.
+   *  `removeDatasetsPatch` prunes the live record on the way out (right, and
+   *  shared with `deleteWorkbook`/the history scrub), and Trash restores the
+   *  dataset under the SAME id, so without this the colour limits, slices and
+   *  annotations were gone for good the moment the user chose Restore instead
+   *  of Undo. Carried on the entry rather than left in the live record for the
+   *  same reason the `Dataset` itself is: the entry is the whole capture.
+   *  Absent when the dataset had no view (the common case), so an ordinary
+   *  delete costs the entry nothing. */
+  mapView?: MapViewState;
 }
 export interface EditableFigureTrashEntry extends TrashEntryBase {
   kind: "editableFigure";
@@ -278,8 +290,22 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
 
     sendToTrash: (datasets, now = Date.now()) => {
       if (datasets.length === 0) return;
+      // The map view travels WITH the dataset (P2.8 review round 3, finding
+      // 1): this is the one chokepoint every send-to-Trash path goes through
+      // (`removeDatasets`, `deleteWorkbook`, the Delete key), and the removal
+      // patch that runs straight after it drops the live entry.
+      const views = get().mapViews;
       get().sendEntriesToTrash(
-        datasets.map((dataset): TrashEntry => ({ kind: "dataset", at: now, bytes: datasetByteEstimate(dataset), dataset })),
+        datasets.map((dataset): TrashEntry => {
+          const mapView = views[dataset.id];
+          return {
+            kind: "dataset",
+            at: now,
+            bytes: datasetByteEstimate(dataset) + (mapView ? byteSize(mapView) : 0),
+            dataset,
+            ...(mapView ? { mapView } : {}),
+          };
+        }),
         now,
       );
     },

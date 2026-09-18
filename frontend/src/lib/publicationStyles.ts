@@ -12,7 +12,19 @@
  * style, `plotspec2.ts` for the view style) must not drift about which glyphs
  * exist — and splitting that module in two to make the old wording true would
  * buy a comment with eager bytes. The separation that carries weight is the one
- * from `exportStyles`, and it holds. */
+ * from `exportStyles`, and it holds.
+ *
+ * ROUND 5 restored that separation where round 4 breached it. Round 4 ran a
+ * palette COMPARISON here, at load, to give a pre-provenance array a
+ * `colorDerived` flag — which put `lib/color.resolveToHex` and `seriesColor`
+ * on the persistence path. The comparison read the LIVE palette, because the
+ * palette a pin was taken under is recorded in no `.dwk`, FigureDoc,
+ * FigureDocument or graph template; a document opened under a theme other than
+ * the one it was saved under was therefore classified wrong, and round 4's
+ * next save froze that answer permanently. The ambiguity is genuine and
+ * unrecoverable from the stored data, so this file does not guess: an
+ * unflagged colour stays unflagged and the wire boundary fails closed on it.
+ * See `sanitizeExportSeriesStyles` below and BUG-016 round 5. */
 import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 
 export interface ExportSeriesStyle {
@@ -51,6 +63,42 @@ export interface ExportSeriesStyle {
    *  for that reason: a legend restored from a stale `publication.seriesStyles`
    *  could otherwise outvote the rename the user can still see and edit. */
   legend?: string;
+  /** PROVENANCE for `color`, and the ONE key here that is not a wire field
+   *  (BUG-016 round 3). `true` = `color` is the PALETTE slot `seriesColor`
+   *  produced for this series' display position, a colour the user never
+   *  chose; `false` = the user chose it (a swatch pick or a literal).
+   *
+   *  ABSENT = UNVOUCHED (round 5): an array pinned by a build that predates
+   *  this key, where nothing in the document says which of the two its colours
+   *  are. Nothing infers it — the palette the pin was taken under is persisted
+   *  nowhere, so any comparison is against the palette the READER happens to
+   *  have installed, which is a different question (round 4 made that
+   *  comparison at load and then froze its answer on the next save; see this
+   *  module's header). `toWireSeriesStyles` instead fails closed on a GROUPED
+   *  request and omits the colour: an unvouched colour sent to a grouped
+   *  export paints every level one hue (round 1's regression), while omitting
+   *  it falls back to matplotlib's own cycle, which is what the pre-BUG-016
+   *  export did. FLAT requests keep it. Re-pinning the figure — any action
+   *  that runs `exportStyles.buildExportStyles` again — records the real
+   *  answer and retires the residual for that document.
+   *
+   *  It exists because a pinned array outlives the state it was resolved
+   *  against. Round 2 recovered "derived vs chosen" by re-resolving the live
+   *  palette at export time, which is wrong the moment the theme, the palette
+   *  preset or the request's display positions move since the pin — and then
+   *  a grouped export ships the channel's one hue to every LEVEL, which is
+   *  the regression BUG-016 round 1 created. Recording the answer at the
+   *  producer (`exportStyles.buildExportStyles`) makes it independent of all
+   *  three.
+   *
+   *  CAMEL-CASED on purpose: every other key here is the snake_case wire
+   *  spelling, so this one reads as what it is — document-only. It is removed
+   *  at the single wire boundary, `exportStyles.toWireSeriesStyles`, which
+   *  every producer of a request's `series_styles` runs its array through --
+   *  `figureSpecSeries.ts`, `figurebuilder/legacyFigure.ts` and
+   *  `spatialPageExport.ts`. Each of the three has a test asserting no entry
+   *  of the request it builds carries this key. */
+  colorDerived?: boolean;
 }
 
 const object = (value: unknown): Record<string, unknown> | null =>
@@ -58,7 +106,27 @@ const object = (value: unknown): Record<string, unknown> | null =>
     ? value as Record<string, unknown>
     : null;
 
-/** Safely restore exact publication-series wire styles from persisted input. */
+/** Safely restore exact publication-series wire styles from persisted input.
+ *
+ *  It does NOT infer provenance (BUG-016 round 5). A boolean `colorDerived`
+ *  beside a colour is the document's own word and passes through; anything
+ *  else — a string, a number, `null`, or the key's absence altogether —
+ *  leaves the entry UNVOUCHED, which `exportStyles.toWireSeriesStyles` reads
+ *  as "this colour must not reach a grouped export". DROPPING a malformed flag
+ *  rather than coercing it is the round-4 fix that stands: `colorDerived: "no"`
+ *  is truthy and `null` is falsy, so coercion let a hand-edited or foreign blob
+ *  flip provenance in either direction (review F3, measured on the `.dwk` path,
+ *  which reached no sanitizer at all before round 4).
+ *
+ *  Every persistence path that can carry a pinned style array runs through
+ *  here: `figuredoc.migrateConfig` for a `.dwk` FigureDoc's `config`,
+ *  `figuredoc.loadGraphTemplates` for the saved graph-template store,
+ *  `figureDocument` for a canonical document's `publication`, and
+ *  `nameKeyedRecipes` for an imported template FILE. None of them reads the
+ *  theme, so the SAME stored bytes sanitize identically under every palette —
+ *  the property round 4's load-time comparison could not offer, and the reason
+ *  re-saving a pre-provenance document can no longer freeze a wrong guess
+ *  into it. */
 export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle | null)[] | null {
   if (value === null) return null;
   if (!Array.isArray(value)) return null;
@@ -68,6 +136,14 @@ export function sanitizeExportSeriesStyles(value: unknown): (ExportSeriesStyle |
     if (!raw) return null;
     const style: ExportSeriesStyle = {};
     if (typeof raw.color === "string") style.color = raw.color;
+    // Restored only ALONGSIDE a colour (BUG-016 round 3): the flag describes
+    // `color` and says nothing on its own, and letting a lone `colorDerived`
+    // through would turn an otherwise empty entry into a non-null one below.
+    // A non-boolean is DROPPED rather than coerced or inferred — see this
+    // function's doc and the flag's own on `ExportSeriesStyle`.
+    if (style.color !== undefined && typeof raw.colorDerived === "boolean") {
+      style.colorDerived = raw.colorDerived;
+    }
     if (typeof raw.width === "number" && Number.isFinite(raw.width) && raw.width >= 0) style.width = raw.width;
     if (raw.line === "solid" || raw.line === "dashed" || raw.line === "dotted" || raw.line === "none") style.line = raw.line;
     if (typeof raw.marker === "boolean") style.marker = raw.marker;

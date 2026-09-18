@@ -118,6 +118,23 @@ describe("buildSpatialPageRequest", () => {
     });
   });
 
+  // BUG-016 round 3: `buildExportStyles` records `colorDerived` on every
+  // colour it emits so a PINNED array can say later whether the user chose
+  // it. That flag is a document field and must never reach a request -- this
+  // path is one of the three wire boundaries that removes it.
+  it("sends no colorDerived provenance flag on a page panel's styles", () => {
+    const fig = buildSpatialPageRequest(
+      [panel({ seriesStyles: { 1: { width: 3 } } })],
+      new Map([["ds1", ds()]]),
+      defaultPageSetup(),
+    )!.panels[0].figure;
+    const styles = fig.series_styles ?? [];
+    expect(styles.length).toBeGreaterThan(0);
+    for (const st of styles) expect(Object.keys(st ?? {})).not.toContain("colorDerived");
+    // Non-vacuous: the panel's own styling still rides along.
+    expect(styles.map((st) => st?.width)).toContain(3);
+  });
+
   it("adds no legend field at all when the panel decoded no captions", () => {
     const fig = buildSpatialPageRequest(
       [panel()],

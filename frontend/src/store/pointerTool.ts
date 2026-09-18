@@ -15,7 +15,7 @@
 // qfitRoi-shaped fields windows.ts's focusTransientReset clears — that
 // helper is already at store/windows.ts's own size-ratchet pin, so adding a
 // line there was avoided): annotation ids are drawn from one module-global
-// sequence (`_annSeq` in useApp.ts), never reused across windows/datasets,
+// sequence (`_annSeq` in store/plotViewSettings.ts), never reused across windows/datasets,
 // so a stale id left over from a previous focus can never accidentally
 // match a DIFFERENT annotation — worst case it simply matches nothing (no
 // selection outline drawn) until the user picks again.

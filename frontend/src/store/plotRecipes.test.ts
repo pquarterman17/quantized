@@ -13,7 +13,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf } from "../lib/composition";
 import { durableComposition, facetCompositionFromBinding } from "../lib/facet";
-import { buildFigureSpecFromDocument, buildStageFigureSpec } from "../lib/figureSpec";
+import { buildFigureSpecFromDocument } from "../lib/figureSpec";
+import { buildStageFigureSpec } from "../lib/figureSpecStage";
 import { captureRecipe, type PlotRecipe } from "../lib/plotRecipe";
 import { defaultPlotView, type PlotView } from "../lib/plotview";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";

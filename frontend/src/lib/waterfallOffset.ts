@@ -37,7 +37,7 @@
 // payload. Measured: 20 000 rows with the excursion in rows [0,100) and
 // `xLim [5000,6000]` staggered by 0.25 on screen and by 499.75 on the wire.
 // The fix is `publishLiveWaterfallSpan` below — the focused canvas publishes the
-// span it actually measured, and `figureSpec.buildStageFigureSpec` reads it back
+// span it actually measured, and `figureSpecStage.buildStageFigureSpec` reads it back
 // at export time, so that export uses the canvas' own number rather than a
 // second derivation of it. The span is keyed by the dataset the PAYLOAD was
 // fetched for, not by whichever dataset the store is currently pointing at; see
@@ -151,7 +151,7 @@ export function publishLiveWaterfallSpan(v: { datasetId: string | null; span: nu
 
 /** The focused canvas' span for `datasetId`, or null when no XY canvas is
  *  showing that dataset. The id check is the guard for `exportActive`'s
- *  documented refocus race (`figureSpec.buildStageFigureSpec`): a span measured
+ *  documented refocus race (`figureSpecStage.buildStageFigureSpec`): a span measured
  *  from a DIFFERENT dataset's payload must never silently stagger this one. */
 export function readLiveWaterfallSpan(datasetId: string): number | null {
   return _liveSpan && _liveSpan.datasetId === datasetId ? _liveSpan.span : null;

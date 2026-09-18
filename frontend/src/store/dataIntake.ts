@@ -28,7 +28,8 @@ import { installBookData } from "../lib/bookData";
 import { lit } from "../lib/macro";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
-import { nextDatasetId, type AppState } from "./useApp";
+import { nextDatasetId } from "./idSeq";
+import type { AppState } from "./useApp";
 
 export interface DataIntakeSlice {
   // Lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38): fire-and-forget fetch
