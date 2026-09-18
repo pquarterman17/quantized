@@ -3254,6 +3254,8 @@ violin, bar, strip, or summary plots.
     per-dataset keying coherent; the window's own toolbar covers colormap and
     scale, and a per-window limits control is a toolbar change this round did
     not take. Deliberate, not an oversight — recorded beside residuals (a)–(c).
+    **CLOSED round 6, 2026-09-18 — see below, referred to there as residual
+    (a) per the tracking issue that scheduled the fix.**
   - **Sabotage.** 15 mutations, one at a time, each reverted: dropping the
     restore, dropping the trash capture, letting the restore overwrite a live
     entry, never reporting the painted pair, reporting the STORED pair instead,
@@ -3433,6 +3435,106 @@ violin, bar, strip, or summary plots.
     untouched. Zero delta because this round only changes a style-object
     property VALUE and a comment — no import, export, or code-shape change
     for the bundler to see.
+- **Review round 6 2026-09-18** (P2.8 residual (a) — round 3's finding 8: a
+  `kind:"map"` document window on a NON-active dataset had no colour-limit
+  control at all; the Inspector's row edits only the ACTIVE dataset by rule,
+  and `MapToolbar` already covered colormap/scale per window — every write it
+  makes already keys off THAT window's own dataset id, never the active one —
+  but limits were the one thing that per-window coverage had not taken).
+  **CLOSED.**
+  - **A compact two-field colour-limit control now lives in the map
+    toolbar** (`components/Stage/MapToolbarColorLimits.tsx`), so it appears in
+    every mounted `MapStage` — the Stage tab AND every `kind:"map"` document
+    window — bound to that instance's own `datasetId` prop, exactly like the
+    colormap picker and log-scale toggle beside it. It writes through
+    `setMapColorLimits(datasetId, …)`, so a window on a non-active dataset
+    edits THAT dataset's own `mapViews` entry, never `activeId`'s.
+  - **The commit/undo/effective-pair logic is SHARED, not duplicated.**
+    `lib/useMapColorLimitsField.ts` is the one implementation both the
+    Inspector's `MapColorLimits.tsx` (unchanged behaviour, still bound to
+    `activeId`) and the new toolbar control call: blank+blank commits auto
+    (`null`); a non-finite, inverted, or unchanged pair is a no-op (no store
+    write, no undo step); Enter/blur commits; and the "effective" note shows
+    what the renderer actually painted (`mapPaintedLimits[datasetId]`) when it
+    differs from what was typed — the same log-mode-floor-raise/fallback
+    story round 3's finding 2 gave the Inspector row. New in the shared hook:
+    **Escape reverts** the field to the last committed pair without touching
+    the store (neither control had this before; both get it for free).
+  - **History labelling is inherited for free.** `store/mapView.ts`'s
+    `setMapColorLimits`/`edit()` already names the dataset and disambiguates
+    by id when two live datasets share a name (round 4, finding 8) — the
+    toolbar control's commits get the identical label
+    (`change map colour limits "<name>"[ #<id>]`) with no new code.
+  - **A selector pitfall the shared hook had to avoid** (caught by the
+    existing round-3 finding-10 pin, not a new test): the Inspector's
+    original code read `useApp((s) => s.mapViews)` and computed
+    `mapViewFor(mapViews, dsId)` OUTSIDE the selector — harmless there, but
+    reused verbatim in the hook it would have made `MapToolbarColorLimits`
+    (now living INSIDE the profiled `MapStage` tree) re-render on every OTHER
+    open map's edit, exactly the regression round 3 closed for `MapStage`
+    itself. The hook selects `mapViewFor(s.mapViews, datasetId).colorLimits`
+    AS the selector, so zustand's default equality skips the re-render on an
+    unrelated dataset's write — `MapStage.mapView.test.tsx`'s existing
+    Profiler-commit-count pin (round 3, finding 10) catches a regression here
+    without a dedicated test of its own.
+  - **Not dirtied by opening a window.** The control reads via the same pure
+    `mapViewFor` lookup every other map reader uses; nothing in it writes on
+    mount. Pinned in `MapStage.windowColorLimits.test.tsx` the same way round
+    2's "opening a map is not an edit" is: no `mapViews` write, no history
+    entry, `shouldAutosave` false, byte-identical `.dwk`.
+  - **Tests.** `components/Stage/MapToolbarColorLimits.test.tsx` (8 cases,
+    the control rendered directly) and `components/Stage/
+    MapStage.windowColorLimits.test.tsx` (6 cases, through a REAL `MapStage
+    dataset={…}` — what `DocumentWindow.tsx`'s `MapWindow` actually mounts)
+    cover: the control renders for a map window on a non-active dataset;
+    typing + Enter/blur commits to THAT dataset and not the active one (and,
+    with two open windows, not each other's either); both fields blank
+    commits auto; a log-mode clamped pair shows the effective hint; Escape
+    reverts the field without committing; one history entry per commit,
+    labelled with the dataset; and opening the window is not an edit. The
+    existing `components/Inspector/MapColorLimits.test.tsx` (13 cases) was
+    re-run unmodified against the refactored Inspector row and stayed green,
+    proving the extraction changed no ACTIVE-dataset behaviour.
+  - **Sabotage.** 6 mutations, one at a time, each reverted: removing the
+    control's render call from `MapToolbar` (kills every DOM-level test that
+    looks for it), wiring `MapStage`'s toolbar `datasetId` to the ACTIVE
+    dataset instead of the window's own (kills the "not the active one"
+    tests), dropping the blank-both-fields auto branch (kills the auto tests
+    in BOTH the new toolbar suite and the untouched Inspector suite — proof
+    the logic really is shared, not copied), forcing `effective` to always be
+    `undefined` (kills the effective-hint tests in all three suites), routing
+    only `"Enter"` through `onKeyDown` and dropping `"Escape"` (kills the
+    revert tests), and having `commit()` write the pair TWICE with a
+    floating-point nudge on the second write (kills the exact-value AND the
+    one-entry-per-commit assertions, again across all three suites). **6 RED,
+    0 survivors** (some mutations reddened more than one describe block, all
+    tallied above).
+
+    | Sabotage | Failing tests |
+    |---|---|
+    | Remove `<MapToolbarColorLimits/>` from `MapToolbar` | 5/6 in `MapStage.windowColorLimits.test.tsx` |
+    | `MapStage` passes the toolbar the ACTIVE id, not the window's own | 4/6 in `MapStage.windowColorLimits.test.tsx` |
+    | Hook's blank+blank branch no longer commits `null` | 1/8 `MapToolbarColorLimits.test.tsx` + 1/13 `MapColorLimits.test.tsx` |
+    | Hook's `effective` forced to `undefined` | 1/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` + 4/13 `MapColorLimits.test.tsx` |
+    | Toolbar's `onKeyDown` drops the `"Escape"` branch | 2/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` |
+    | Hook's `commit()` writes the pair twice (2nd nudged by 1e-9) | 1/8 `MapToolbarColorLimits.test.tsx` + 2/6 `MapStage.windowColorLimits.test.tsx` + 2/13 `MapColorLimits.test.tsx` |
+
+  - **Bundle.** Eager total **911,295 B at the parent `3f43467b`
+    (`git rev-parse HEAD~1` of this commit) → 911,351 B on this commit, +56
+    B**; both trees built after their own `npm ci` and `rm -rf
+    node_modules/.vite`, exact eager bytes on each side via `exactbytes.mjs`.
+    890.0 kB against the 898.8 kB budget, 8.8 kB under. As expected — `
+    MapToolbar`/`MapToolbarColorLimits.tsx` are new code but sit entirely
+    inside the `MapStage-*.js` lazy chunk (absent from `index.html`'s eager
+    `<script type="module">`/`<link rel="modulepreload">` set, confirmed by
+    grep), so the whole toolbar control costs the eager bundle nothing. The
+    +56 B is the Inspector-side refactor: `lib/useMapColorLimitsField.ts` is
+    a new EAGER module (`MapColorLimits.tsx` is in the eager Inspector graph),
+    but it imports only what `MapColorLimits.tsx` already imported
+    (`mapViewFor`/`sameColorLimits` from the already-eager `lib/mapView.ts`,
+    `useApp`), so the delta is the small net difference between the
+    extracted hook and the component code it replaced, not a new dependency
+    edge.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

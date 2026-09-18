@@ -312,6 +312,7 @@ export default function MapStage({ dataset }: MapStageProps) {
 
       {active && enoughChannels && (
         <MapToolbar
+          datasetId={dsId}
           qAvailable={qAvailable}
           isAngular={keysAre(angularKeys)}
           isQ={keysAre(qKeys)}

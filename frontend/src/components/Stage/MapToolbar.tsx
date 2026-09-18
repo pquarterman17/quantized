@@ -9,6 +9,7 @@
 
 import type { ColormapName } from "../../lib/colormap";
 import type { CutMode, CutSpace } from "../../lib/mapcuts";
+import MapToolbarColorLimits from "./MapToolbarColorLimits";
 
 /** Box-ROI arm/disarm state (RSM_CUTS_PLAN item 6). Defined here (not in
  *  useMapRoi.ts) so this toolbar's extraction commit — step 1, "PAY
@@ -30,6 +31,14 @@ export type RulerMode = "off" | "ruler";
 export type WedgeMode = "off" | "sector";
 
 export interface MapToolbarProps {
+  /** The dataset THIS map instance is bound to — the Stage tab's active
+   *  dataset, or (document window) whatever it is bound to explicitly. Every
+   *  write this toolbar makes already keys off it (`onCmapChange`,
+   *  `onToggleLogZ`, …); the colour-limit control below is the same —
+   *  it writes through `setMapColorLimits(datasetId, …)`, never the
+   *  app-wide active dataset (P2.8 residual (a)). */
+  datasetId: string | null;
+
   /** Angular ⇄ Q axis toggle (only shown when the dataset carries both). */
   qAvailable: boolean;
   isAngular: boolean;
@@ -85,6 +94,7 @@ export interface MapToolbarProps {
 
 export default function MapToolbar(props: MapToolbarProps) {
   const {
+    datasetId,
     qAvailable,
     isAngular,
     isQ,
@@ -164,6 +174,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       >
         ∿
       </button>
+      <MapToolbarColorLimits datasetId={datasetId} />
       {cutSpace != null && (
         <>
           <span className="qzk-tool-sep" />
