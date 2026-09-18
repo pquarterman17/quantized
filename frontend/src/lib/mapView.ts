@@ -149,6 +149,14 @@ export const COLORMAP_NAMES: readonly string[] = ["viridis", "magma", "gray", "r
 const MAX_SLICES = 200;
 const MAX_ANNOTATIONS = 200;
 const MAX_LABEL_CHARS = 200;
+/** Cap on the number of DATASET ENTRIES a record may carry (P2.8 review round
+ *  3, finding 7). The other three caps above are unconditional, but the entry
+ *  count used to be bounded only by `liveDatasetIds` — a property of the
+ *  CALLERS (both pass it), not of this function. A crafted `.dwk` handed
+ *  straight to `sanitizeMapViews` could therefore install an unbounded record.
+ *  256 is far above any real project's dataset count and far below a size that
+ *  costs anything. */
+const MAX_VIEWS = 256;
 
 /** True when this dataset's view records no decision — every field is still at
  *  its default. Deliberately says NOTHING about which dataset it belongs to:
@@ -318,16 +326,27 @@ export function sanitizeMapView(raw: unknown): MapViewState {
 export function sanitizeMapViews(raw: unknown, liveDatasetIds?: ReadonlySet<string>): MapViewMap {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return EMPTY_MAP_VIEWS;
   const o = raw as Record<string, unknown>;
-  // A top-level `datasetId` is what tells the first cut's single object apart
-  // from the keyed record: it always wrote one, and a dataset id is generated
-  // (`ds-<t36>-<n>`), so it can never be that string.
-  const entries = "datasetId" in o ? [[o.datasetId, o] as const] : Object.entries(o);
+  // A top-level `datasetId` STRING is what tells the first cut's single object
+  // apart from the keyed record: the first cut always wrote one, and a dataset
+  // id is generated (`ds-<t36>-<n>`), so it can never be that string.
+  // The type test is load-bearing (P2.8 review round 3, finding 4): a bare
+  // `"datasetId" in o` also fired for a KEYED record that happens to hold a
+  // dataset whose id is literally "datasetId" — whose value is a view OBJECT,
+  // not a string — and then discarded every OTHER dataset's entry with it,
+  // contradicting this module's own "drop the malformed one, keep the rest"
+  // contract. With the string test that record takes the keyed branch, where
+  // its entries (that one included) are sanitized normally; a legacy object
+  // with a non-string `datasetId` described no dataset and falls through to
+  // the same branch, whose `typeof id !== "string"` guard drops it.
+  const entries =
+    typeof o.datasetId === "string" ? [[o.datasetId, o] as const] : Object.entries(o);
   const out: Record<string, MapViewState> = {};
   for (const [id, entry] of entries) {
     if (typeof id !== "string" || !id) continue;
     if (liveDatasetIds && !liveDatasetIds.has(id)) continue;
     const v = sanitizeMapView(entry);
     if (!isDefaultMapView(v)) out[id] = v;
+    if (Object.keys(out).length >= MAX_VIEWS) break;
   }
   return out;
 }

@@ -13,6 +13,7 @@
 
 import type { FigureDocument } from "../lib/figureDocument";
 import type { FigureDoc } from "../lib/figuredoc";
+import type { MapViewMap, MapViewState } from "../lib/mapView";
 import type { Dataset } from "../lib/types";
 import { deriveWorkbooks, type WorkbookNode } from "../lib/workbooks";
 import { trashEntryId, type DatasetTrashEntry, type FolderTrashMember, type RestoreResult, type TrashEntry } from "./trash";
@@ -28,7 +29,23 @@ import { nextWorkbookId } from "./workbookIds";
 export function restoreDatasetInto(
   s: AppState,
   dataset: Dataset,
-): { dataset: Dataset; datasets: Dataset[]; workbooks: WorkbookNode[]; expandedWorkbookIds: string[] } {
+  /** The 2-D map view captured with this dataset (`DatasetTrashEntry.mapView`),
+   *  when it had one — P2.8 review round 3, finding 1. `removeDatasetsPatch`
+   *  prunes `mapViews[id]` on the way out, and the dataset comes back under
+   *  the SAME id, so a restore that ignored this dropped the map's colour
+   *  limits, slices and annotations silently. Re-installed here, in the same
+   *  transaction, exactly as the figure-dependency restore below re-installs
+   *  what IT owns. An entry that came back some other way while the dataset
+   *  sat in the trash (a re-import, an undo) WINS — this never overwrites a
+   *  view the live store already has for that id. */
+  mapView?: MapViewState,
+): {
+  dataset: Dataset;
+  datasets: Dataset[];
+  workbooks: WorkbookNode[];
+  expandedWorkbookIds: string[];
+  mapViews: MapViewMap;
+} {
   let restored = dataset;
   let workbooks = s.workbooks;
   let expandedWorkbookIds = s.expandedWorkbookIds;
@@ -47,7 +64,9 @@ export function restoreDatasetInto(
     // failed restore.
     expandedWorkbookIds = [...new Set([...s.expandedWorkbookIds, ...derived.workbooks.map((w) => w.id)])];
   }
-  return { dataset: restored, datasets: [...s.datasets, restored], workbooks, expandedWorkbookIds };
+  const mapViews =
+    mapView && !(dataset.id in s.mapViews) ? { ...s.mapViews, [dataset.id]: mapView } : s.mapViews;
+  return { dataset: restored, datasets: [...s.datasets, restored], workbooks, expandedWorkbookIds, mapViews };
 }
 
 /** Restoring a live-mode `editableFigure`/`figureDoc` whose bound dataset is
@@ -72,10 +91,15 @@ function resolveDatasetDependency<T>(
     (e): e is DatasetTrashEntry => e.kind === "dataset" && e.dataset.id === boundDatasetId,
   );
   if (dsEntry) {
-    const r = restoreDatasetInto(s, dsEntry.dataset);
+    const r = restoreDatasetInto(s, dsEntry.dataset, dsEntry.mapView);
     return {
       restored: payload,
-      extraPatch: { datasets: r.datasets, workbooks: r.workbooks, expandedWorkbookIds: r.expandedWorkbookIds },
+      extraPatch: {
+        datasets: r.datasets,
+        workbooks: r.workbooks,
+        expandedWorkbookIds: r.expandedWorkbookIds,
+        mapViews: r.mapViews,
+      },
       consumedEntryIds: [trashEntryId(dsEntry)],
       note: `restored with its dataset "${r.dataset.name}"`,
     };
@@ -119,12 +143,13 @@ export function computeRestore(
       if (s.datasets.some((d) => d.id === entry.dataset.id)) {
         return { patch: { trash: withoutEntry() }, result: { ok: true } };
       }
-      const r = restoreDatasetInto(s, entry.dataset);
+      const r = restoreDatasetInto(s, entry.dataset, entry.mapView);
       return {
         patch: {
           datasets: r.datasets,
           workbooks: r.workbooks,
           expandedWorkbookIds: r.expandedWorkbookIds,
+          mapViews: r.mapViews,
           trash: withoutEntry(),
           activeId: s.activeId ?? entry.dataset.id,
           // L0.25 coherence: a restore that IS an activation (nothing was

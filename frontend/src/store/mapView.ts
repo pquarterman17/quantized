@@ -97,6 +97,27 @@ export interface MapViewSlice {
     space: CutSpace | null,
   ) => string | null;
   removeMapAnnotation: (datasetId: string | null, id: string) => void;
+
+  /** TRANSIENT, per dataset id: the [lo, hi] that dataset's map is ACTUALLY
+   *  painting right now (null = nothing paintable). Reported by the renderer
+   *  (`components/Stage/useMapPaint.ts`), read by the Inspector's colour-limit
+   *  row so it can say what the map is doing when `effectiveColorLimits`
+   *  replaces the stored pair — in log mode a non-positive `lo` is raised to
+   *  the grid's smallest positive cell, and an unusable pair falls back to the
+   *  auto extent, which the fields used to contradict silently (P2.8 review
+   *  round 3, finding 2).
+   *
+   *  NOT persisted (no `.dwk` field, no autosave trigger), NOT undoable (no
+   *  `HistorySnapshot` field — it has its own `HISTORY_EXCLUDED` entry), and
+   *  deliberately NOT pruned by `removeDatasetsPatch`: that patch also rewrites
+   *  history SNAPSHOTS, which carry no `mapPaintedLimits` at all, so reading
+   *  the field there would be reading `undefined`. A stale entry for a removed
+   *  dataset is unreachable — every reader looks up a LIVE dataset's id — and
+   *  is overwritten the next time a map for that id paints. */
+  mapPaintedLimits: Readonly<Record<string, readonly [number, number] | null>>;
+  /** Renderer → store. A no-op when the pair is unchanged, so a repaint that
+   *  changes nothing causes no store update and no re-render. */
+  reportMapPaintedLimits: (datasetId: string | null, painted: [number, number] | null) => void;
 }
 
 export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
@@ -110,7 +131,15 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
    *  place — `isDefaultMapViews`/`serializeMapViews` both judge it by value,
    *  so it still costs the saved document nothing. */
   const edit = (datasetId: string, label: string, fn: (v: MapViewState) => MapViewState) => {
-    get().recordHistory(label);
+    // The label NAMES the dataset (P2.8 review round 3, finding 9). Now that
+    // the writers are per-dataset, two open maps push steps that would
+    // otherwise read identically ("change map colormap") in the undo menu,
+    // with nothing to say which map they belong to. Same form as
+    // `store/workbookTransfer.ts`'s `paste workbook "<name>"`; a dataset the
+    // store no longer has (removed between the gesture and the write) keeps
+    // the bare label rather than inventing a name.
+    const name = get().datasets.find((d) => d.id === datasetId)?.name;
+    get().recordHistory(name ? `${label} "${name}"` : label);
     set((s) => ({
       mapViews: { ...s.mapViews, [datasetId]: fn(mapViewFor(s.mapViews, datasetId)) },
     }));
@@ -118,6 +147,14 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
 
   return {
     mapViews: EMPTY_MAP_VIEWS,
+    mapPaintedLimits: {},
+
+    reportMapPaintedLimits: (datasetId, painted) => {
+      if (!datasetId) return;
+      const prev = get().mapPaintedLimits[datasetId];
+      if (prev !== undefined && sameColorLimits(prev === null ? null : [prev[0], prev[1]], painted)) return;
+      set((s) => ({ mapPaintedLimits: { ...s.mapPaintedLimits, [datasetId]: painted } }));
+    },
 
     setMapColormap: (datasetId, colormap) => {
       if (!datasetId || at(datasetId).colormap === colormap) return;

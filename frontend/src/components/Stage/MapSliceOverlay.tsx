@@ -114,6 +114,24 @@ const CHIP: CSSProperties = {
   color: "var(--text)",
 };
 
+/** Geometry budget for the parked strip (P2.8 review round 3, finding 11).
+ *  A label is capped at 200 CHARACTERS by the sanitizer, which is not a
+ *  budget in PIXELS: one such chip rendered as a single 202-character row,
+ *  and several parked definitions wrapped the strip upward out of the bottom
+ *  margin (`MARGIN.bottom = 42`), across the plot and under the colourbar.
+ *  Each chip now truncates with an ellipsis (the full text stays in its
+ *  `title`, which is where the reason already lives), and the strip itself
+ *  scrolls past four rows instead of growing. */
+const PARKED_CHIP: CSSProperties = {
+  ...CHIP,
+  border: "1px dashed var(--border)",
+  color: "var(--text-dim)",
+  maxWidth: 180,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
 export default function MapSliceOverlay({
   payload,
   w,
@@ -219,6 +237,8 @@ export default function MapSliceOverlay({
             justifyContent: "flex-end",
             gap: 4,
             maxWidth: "60%",
+            maxHeight: 72,
+            overflowY: "auto",
           }}
         >
           {parkedSlices.map((def) => (
@@ -231,7 +251,7 @@ export default function MapSliceOverlay({
               data-slice-id={def.id}
               title={`${parkedReason(def.space, space)} — click to remove`}
               onClick={() => onRemoveSlice(def.id)}
-              style={{ ...CHIP, border: "1px dashed var(--border)", color: "var(--text-dim)" }}
+              style={PARKED_CHIP}
             >
               {sliceLabel(def)} ✕
             </button>
@@ -246,7 +266,7 @@ export default function MapSliceOverlay({
               data-annotation-id={ann.id}
               title={`${parkedReason(ann.space, space)} — click to remove`}
               onClick={() => onRemoveAnnotation(ann.id)}
-              style={{ ...CHIP, border: "1px dashed var(--border)", color: "var(--text-dim)" }}
+              style={PARKED_CHIP}
             >
               {ann.text} ✕
             </button>

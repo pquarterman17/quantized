@@ -3172,14 +3172,25 @@ violin, bar, strip, or summary plots.
   - **Bundle.** `effectiveColorLimits` moved from the eagerly-reachable
     `lib/mapView.ts` (`lib/workspaceSerialize.ts` imports it) into
     `components/Stage/mapRender.ts`, which only loads with the map itself —
-    it is a renderer decision, not part of the document contract. Measured
-    eager total 916,782 → 917,181 B (+399 B) against `e93b193b`; everything
-    left is sanitizer/serializer/store logic that is eager by construction.
+    it is a renderer decision, not part of the document contract. Eager total
+    **909,888 B at the parent `90ea30fa` → 910,287 B on `35b97380`, +399 B**
+    (both trees built after their own `npm ci` and a `node_modules/.vite`
+    wipe). Everything left is sanitizer/serializer/store logic that is eager
+    by construction. **Record corrected 2026-09-18** (review round 3, finding
+    3): this pair was first recorded as 916,782 → 917,181 B "against
+    `e93b193b`", which is NOT this commit's parent — `git rev-parse HEAD~1` is
+    `90ea30fa`, the lazy-seam bundle diet that landed in between, so both
+    absolutes (and the headroom they implied, by ≈7 kB) belonged to an older
+    tree. The +399 B delta was right; only the baseline was. Second occurrence
+    of exactly this on this branch — see the P4.1 review's F1 below.
   - **Residuals, recorded not fixed.** (a) Contour levels still come from
-    `p.zMin`/`p.zMax`, not from the explicit colour limits
-    (`components/Stage/mapRender.ts:314`) — a contour level is a feature of
-    the data, and clipping the colour mapping is not a statement about where
-    the isolines are; the decision is written into that function's header.
+    `p.zMin`/`p.zMax`, not from the explicit colour limits — a contour level
+    is a feature of the data, and clipping the colour mapping is not a
+    statement about where the isolines are. The levels are derived in
+    `drawContours`, which `draw` calls after painting the heatmap, and the
+    decision is written into `drawContours`' own header (corrected in round 3,
+    finding 6: both this sentence and `draw`'s own comment placed the code
+    inside `draw`, where it is not).
     (b) A blank field in `MapColorLimits` reads as 0 (`Number("")`), inherited
     from the sibling `AxisLimits.tsx`, so "clip the top, leave the bottom
     auto" is not expressible; pinned as it behaves in
@@ -3187,6 +3198,78 @@ violin, bar, strip, or summary plots.
     linear/log scale are now per-dataset rather than carried across a switch —
     the carry was an artifact of the single shared record, and the per-dataset
     memory is the stronger P2.8 promise.
+- **Review round 3 2026-09-18** (adversarial review of `35b97380`; both boxes
+  above stay `[x]`). Round 2's five user-visible fixes and three pins were
+  re-attacked and held — ten independent sabotage mutations, all killed — and
+  three things were found: one new way to lose work, one half-landed promise
+  from round 1, and a bundle record measured against the wrong parent.
+  - **Trash ▸ Restore keeps the map view** (finding 1, the only user-visible
+    one). Round 2 put `mapViews` in `RemovableState`, correctly — but
+    `removeDatasets` is ALSO the send-to-Trash path, and the trash entry
+    carried only the `Dataset`. Restore re-added it under the same id with its
+    colour limits, slices and annotations gone for good; **Undo** of the same
+    delete restored them (`HistorySnapshot.mapViews`), so the loss depended on
+    which recovery the user reached for. The view now travels ON the
+    `DatasetTrashEntry` (captured in `sendToTrash`, the one chokepoint every
+    delete path goes through) and `restoreDatasetInto` re-installs it in the
+    same transaction — dependency-aware exactly like the
+    `editableFigure`/`figureDoc` restores beside it. A view that came back some
+    other way (an undo, a re-import) WINS: restore never overwrites a live
+    entry. Pinned at the store layer, delete → Restore → entry-identical.
+  - **The Colour limits row says what is being painted** (finding 2, the
+    unlanded half of round 1's finding 5). `effectiveColorLimits` can replace
+    the stored pair — in log mode a non-positive `lo` is raised to the grid's
+    smallest positive cell, and a pair unusable after that raise falls back to
+    the auto extent — and the Inspector went on showing the pair the renderer
+    was ignoring (type `-1 … 2` in log mode on data starting at 7 and the map
+    paints 7 … 9). `draw` now RETURNS the pair it painted;
+    `components/Stage/useMapPaint.ts` reports it into a transient, per-dataset
+    `mapPaintedLimits` (not persisted, not undoable — its own
+    `HISTORY_EXCLUDED` entry), and `MapColorLimits` shows an "effective 7 – 9"
+    line beside the fields, ONLY when the two differ. The typed pair stays in
+    the fields, editable and recoverable. Proven end to end at the DOM layer:
+    a real `MapStage` paint on the RSM fixture drives the Inspector row to
+    `effective 100 – 403`.
+  - **Also closed.** (4) The first-cut migration is detected by a `datasetId`
+    STRING, so a keyed record holding a dataset id of literally `"datasetId"`
+    no longer discards every other dataset's entry with it. (5)
+    `effectiveColorLimits` returns null — not a non-positive auto pair — when
+    log mode has no positive floor, honouring its own header. (6) The contour
+    residual is attributed to `drawContours`, in the code and in residual (a)
+    above. (7) `sanitizeMapViews` caps the ENTRY count at 256 unconditionally;
+    the other three caps already were, and this one was a property of its
+    callers. (9) Every map history label names its dataset
+    (`change map colormap "rsm.xrdml"`) — with two maps open the label was the
+    only disambiguator and it had none. (10) `MapStage` subscribes to its OWN
+    dataset's entry, pinned with a React `Profiler` commit count: another
+    dataset's map edit now re-renders it zero times. (11) The parked strip has
+    a geometry budget (per-chip `max-width` + ellipsis, `max-height` +
+    scroll) — a 200-character label, the sanitizer's own cap, used to render
+    as one 202-character row and wrap the strip up across the plot. (12)
+    `removeDatasetsPatch` allocates a new `mapViews` only when it actually
+    prunes one.
+  - **New residual, named** (finding 8): a `kind:"map"` document window on a
+    NON-active dataset still has no colour-limit control. The Inspector
+    describes the active dataset by rule, and that rule is what makes the
+    per-dataset keying coherent; the window's own toolbar covers colormap and
+    scale, and a per-window limits control is a toolbar change this round did
+    not take. Deliberate, not an oversight — recorded beside residuals (a)–(c).
+  - **Sabotage.** 15 mutations, one at a time, each reverted: dropping the
+    restore, dropping the trash capture, letting the restore overwrite a live
+    entry, never reporting the painted pair, reporting the STORED pair instead,
+    hiding the effective row, the bare `"datasetId" in o`, removing the entry
+    cap, the non-positive log floor, the bare history label, the wide
+    `mapViews` selector, the chip's text budget, the strip's height budget, the
+    unconditional `mapViews` allocation, and the no-op guard on the painted
+    report. **15 RED, 0 survivors.**
+  - **Bundle** (finding 3, re-measured against the real parent). Eager total
+    **910,371 B at the parent `b621c5fa` (`git rev-parse HEAD~1`) → 910,824 B
+    on this commit, +453 B**; both trees built after their own `npm ci` and
+    `rm -rf node_modules/.vite`, exact eager bytes on each side. 889.5 kB
+    against the 898.8 kB budget, 9.4 kB under; `EAGER_JS_BUDGET` untouched. The
+    growth is the transient painted-limits channel in the store slice and the
+    Inspector row that reads it, both eager by construction; `useMapPaint.ts`
+    rides the map chunk with the renderer it was extracted from.
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid

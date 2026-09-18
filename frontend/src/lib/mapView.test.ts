@@ -160,4 +160,36 @@ describe("sanitizeMapViews", () => {
     expect(sanitizeMapViews([VIEW])).toEqual({});
     expect(sanitizeMapViews({ a: "not a view" })).toEqual({});
   });
+
+  // Review round 3, finding 4: the first-cut migration was detected with a
+  // bare `"datasetId" in o`, which also fired for a KEYED record holding a
+  // dataset whose id happens to be the string "datasetId" — and then threw
+  // away every OTHER dataset's entry with it, contradicting this module's
+  // "drop the malformed one, keep the rest" contract.
+  describe("legacy detection only fires for the single-object form (round 3, finding 4)", () => {
+    it("a keyed record with a `datasetId` KEY keeps that entry and all the others", () => {
+      expect(sanitizeMapViews({ datasetId: VIEW })).toEqual({ datasetId: VIEW });
+      expect(sanitizeMapViews({ a: VIEW, datasetId: VIEW })).toEqual({ a: VIEW, datasetId: VIEW });
+    });
+
+    it("the first cut's single object still migrates — it wrote a STRING there", () => {
+      expect(sanitizeMapViews({ datasetId: "a", ...VIEW })).toEqual({ a: VIEW });
+    });
+
+    it("a legacy object bound to no dataset is still dropped", () => {
+      expect(sanitizeMapViews({ datasetId: null, ...VIEW })).toEqual({});
+    });
+  });
+
+  // Review round 3, finding 7: the other three trust-boundary caps
+  // (slices/annotations/label chars) are unconditional, but the ENTRY count
+  // was bounded only by `liveDatasetIds` — a property of the callers, not of
+  // this function, which is the documented boundary for a hand-edited `.dwk`.
+  it("caps the number of dataset entries even with no live-id filter (round 3, finding 7)", () => {
+    const raw: Record<string, MapViewState> = {};
+    for (let i = 0; i < 400; i++) raw[`ds-${i}`] = VIEW;
+    expect(Object.keys(sanitizeMapViews(raw))).toHaveLength(256);
+    // The filtered path is unaffected: it was already bounded by the ids.
+    expect(Object.keys(sanitizeMapViews(raw, new Set(["ds-7"])))).toEqual(["ds-7"]);
+  });
 });

@@ -101,6 +101,32 @@ describe("effectiveColorLimits", () => {
       expect(effectiveColorLimits([0, 5], null, 9, true)).toBeNull();
       expect(effectiveColorLimits(null, null, 0, true)).toBeNull();
     });
+
+    // Review round 3, finding 5: the same "no positive floor" case reached
+    // with a NON-NULL but non-positive `autoLo` returned the auto pair, i.e. a
+    // log range with a floor of -2 — which the header's own "null is reserved
+    // for … no positive cell at all" rules out. Unreachable from `draw` (it
+    // passes `minPositive`, null or strictly positive), but this function is
+    // exported and unit-tested, so it answers for itself.
+    it("a non-positive auto floor in log mode is null too, exactly as documented", () => {
+      expect(effectiveColorLimits([0, 5], -2, 9, true)).toBeNull();
+      expect(effectiveColorLimits([0, 5], 0, 9, true)).toBeNull();
+      // Linear mode is untouched — there is no floor to honour there.
+      expect(effectiveColorLimits([0, 5], -2, 9, false)).toEqual([0, 5]);
+      expect(effectiveColorLimits([5, 0], -2, 9, false)).toEqual([-2, 9]);
+    });
+  });
+});
+
+describe.skipIf(!CANVAS_OK)("draw() reports the pair it painted (round 3, finding 2)", () => {
+  it("returns the explicit limits when it honours them, the auto extent when it does not", () => {
+    const c = document.createElement("canvas");
+    expect(draw(c, host(), gradient(), "viridis", false, null, true, null, [58, 62])).toEqual([58, 62]);
+    // Log mode on a grid whose smallest positive cell is 1: an explicit
+    // `[-1, 0.5]` cannot survive the raise, so the auto extent is painted —
+    // and that is what the Inspector must be told.
+    expect(draw(c, host(), gradient(), "viridis", true, null, true, null, [-1, 0.5])).toEqual([1, 119]);
+    expect(draw(c, host(), null, "viridis", false)).toBeNull();
   });
 });
 

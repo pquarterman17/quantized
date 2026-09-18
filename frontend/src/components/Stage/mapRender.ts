@@ -42,7 +42,13 @@ export function effectiveColorLimits(
   let lo = colorLimits[0];
   const hi = colorLimits[1];
   if (logZ && lo <= 0) {
-    if (autoLo === null || autoLo <= 0) return auto; // no positive floor to raise to
+    // No positive floor to raise to: null, not the auto pair. `draw` passes
+    // `minPositive(p.zGrid)` here, which is null or strictly positive, so this
+    // is unreachable from the canvas — but this function is exported and
+    // tested standalone, and returning a NON-POSITIVE auto pair as a log range
+    // contradicted the header's own "null is reserved for … no positive cell
+    // at all" (P2.8 review round 3, finding 5).
+    if (autoLo === null || autoLo <= 0) return null;
     lo = autoLo;
   }
   if (!(hi > lo)) return auto;
@@ -228,9 +234,14 @@ export function draw(
   // payload's own z extent — exactly what this function used before). Last and
   // defaulted so every existing caller and test is untouched.
   colorLimits: [number, number] | null = null,
-) {
+  // Returns the [lo, hi] actually PAINTED (null when there is nothing to
+  // paint) — P2.8 review round 3, finding 2. The Inspector's colour-limit
+  // fields would otherwise go on showing a pair the renderer silently
+  // replaced; `components/Stage/useMapPaint.ts` reports this back into the
+  // store so that row can say what the map is really doing.
+): [number, number] | null {
   const ctx = canvas.getContext("2d");
-  if (!ctx) return; // jsdom / headless — nothing to paint
+  if (!ctx) return null; // jsdom / headless — nothing to paint
   const W = host.clientWidth || 600;
   const H = host.clientHeight || 400;
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
@@ -238,7 +249,7 @@ export function draw(
   canvas.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  if (!p) return;
+  if (!p) return null;
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
@@ -252,12 +263,10 @@ export function draw(
   // labels.
   //
   // RESIDUAL, recorded rather than papered over (P2.8 review round 2, finding
-  // 17): `contourLevels(...)` further down this function still derives its
-  // isolines from `p.zMin`/`p.zMax`, NOT from `limits`. With clipped limits the
-  // contours and the colourbar therefore describe different ranges. Left as-is
-  // deliberately — a contour level is a feature OF THE DATA, and clipping the
-  // colour mapping is not a statement about where the isolines are — but it is a
-  // decision, not an oversight.
+  // 17): the isolines are NOT clipped to `limits`. That happens in
+  // `drawContours`, which `draw` calls below — see its header, where the
+  // decision is written out (P2.8 review round 3, finding 6: this note used to
+  // say "further down this function", which is not where the code is).
   const limits = effectiveColorLimits(colorLimits, logZ ? minPositive(p.zGrid) : p.zMin, p.zMax, logZ);
   const lo = limits ? limits[0] : null;
   const hi = limits ? limits[1] : null;
@@ -289,6 +298,7 @@ export function draw(
   drawAxes(ctx, p, rect, ink, muted);
   drawColorbar(ctx, p, rect, W, cmap, lo, hi, logZ, ink, muted);
   if (peaks && peaks.length) drawPeaks(ctx, p, rect, peaks, ink);
+  return limits;
 }
 
 /** Stroke the isolines from `lib/contour.ts` over the heatmap. Every level
@@ -300,7 +310,15 @@ export function draw(
  *  the same convention matplotlib's default contour uses over any colormap)
  *  reads reliably regardless of the colormap or theme. Clipped to the plot
  *  rect -- `lib/contour.ts` documents that a ring can overshoot the grid
- *  edge by half a cell (d3-contour's cell-centred sampling convention). */
+ *  edge by half a cell (d3-contour's cell-centred sampling convention).
+ *
+ *  RESIDUAL, DELIBERATE (P2.8 review round 2, finding 17): the levels come
+ *  from `p.zMin`/`p.zMax` — the DATA's own extent — not from the explicit
+ *  colour limits `draw` paints the heatmap and colourbar with. With clipped
+ *  limits the isolines and the colourbar therefore describe different ranges.
+ *  A contour level is a feature OF THE DATA, and clipping the colour mapping
+ *  is not a statement about where the isolines are; this is a decision, not an
+ *  oversight. */
 function drawContours(
   ctx: CanvasRenderingContext2D,
   p: MapPayload,

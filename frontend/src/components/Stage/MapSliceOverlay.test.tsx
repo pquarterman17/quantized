@@ -194,3 +194,42 @@ describe("every definition keeps a handle (finding 3)", () => {
     expect(view.container.innerHTML).toBe("");
   });
 });
+
+// Review round 3, finding 11. The sanitizer caps a label at 200 CHARACTERS,
+// which is not a budget in pixels: one such chip rendered as a single
+// 202-character row, and several parked definitions wrapped the strip upward
+// out of the bottom margin (MARGIN.bottom = 42), across the plot rect and
+// under the colourbar (MARGIN.right = 78). Nothing bounded either dimension.
+describe("the parked strip has a geometry budget (round 3, finding 11)", () => {
+  const longLabel = "x".repeat(200);
+
+  it("a chip is width-capped and truncates instead of growing", () => {
+    renderOverlay([], [{ id: "a1", x: 32, y: 16, text: longLabel, space: "q" }], payload(30, 34), "angular");
+    const chip = screen.getByTestId("map-parked-chip");
+    expect(chip.style.maxWidth).toBe("180px");
+    expect(chip.style.textOverflow).toBe("ellipsis");
+    expect(chip.style.overflow).toBe("hidden");
+    expect(chip.style.whiteSpace).toBe("nowrap");
+    // The full text is still reachable — the title already carries the reason.
+    expect(chip).toHaveTextContent(longLabel);
+  });
+
+  it("the strip scrolls instead of growing up the plot", () => {
+    renderOverlay(
+      [],
+      Array.from({ length: 12 }, (_, i) => ({
+        id: `a${i}`,
+        x: 32,
+        y: 16,
+        text: longLabel,
+        space: "q" as const,
+      })),
+      payload(30, 34),
+      "angular",
+    );
+    const strip = screen.getByTestId("map-parked-strip");
+    expect(screen.getAllByTestId("map-parked-chip")).toHaveLength(12);
+    expect(strip.style.maxHeight).toBe("72px");
+    expect(strip.style.overflowY).toBe("auto");
+  });
+});

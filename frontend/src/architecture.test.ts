@@ -2022,6 +2022,11 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   pipelineRunning: "pipeline execution flag; runtime state",
 
   // map render settings (technique-view class, like techniqueViewMemory)
+  mapPaintedLimits:
+    "what each open map is currently PAINTING (store/mapView.ts) — reported BY the " +
+    "renderer, never edited by the user, so there is nothing to undo TO; restoring an " +
+    "older pair would only make the Inspector describe a canvas that no longer exists, " +
+    "and the next repaint overwrites it anyway. Not persisted either (P2.8 review round 3)",
   mapMethod: "map interpolation method; view setting outside PlotView",
   mapRes: "map resolution; view setting outside PlotView",
   contourOn: "contour overlay toggle; view setting outside PlotView",

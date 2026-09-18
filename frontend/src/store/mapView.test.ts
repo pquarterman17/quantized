@@ -176,5 +176,113 @@ describe("map view slice (P2.8)", () => {
       expect(Object.keys(useApp.getState().mapViews)).toEqual(["ds-b"]);
       expect(view("ds-a")).toBe(DEFAULT_MAP_VIEW);
     });
+
+    it("a removal that drops NO entry keeps the record's identity (round 3, finding 12)", () => {
+      useApp.getState().loadWorkspace({ datasets: [ds("ds-a"), ds("ds-b")] });
+      useApp.getState().addMapSlice("ds-a", H);
+      const before = useApp.getState().mapViews;
+
+      useApp.getState().removeDataset("ds-b"); // ds-b has no view
+      expect(useApp.getState().mapViews).toBe(before);
+    });
+  });
+
+  // -- Trash restore (review round 3, finding 1) ---------------------------
+  //
+  // The pruning above is right, but `removeDatasets` is ALSO the send-to-Trash
+  // path, and Trash ▸ Restore puts the dataset back under the SAME id. Before
+  // this round the entry that would have matched it was simply gone: Undo of
+  // the delete restored the view (it rides `HistorySnapshot`), Restore did not
+  // — silently, and with no way back. The view now travels ON the trash entry.
+  describe("Trash restore keeps the map view (round 3, finding 1)", () => {
+    beforeEach(() => {
+      useApp.getState().loadWorkspace({ datasets: [ds("ds-a"), ds("ds-b")], activeId: "ds-a" });
+      useApp.setState({ mapViews: EMPTY_MAP_VIEWS, trash: [], history: [], future: [] });
+    });
+
+    it("limits + a slice survive delete → Restore, entry-identical", async () => {
+      useApp.getState().setMapColorLimits("ds-a", [3, 9]);
+      useApp.getState().setMapLogZ("ds-a", true);
+      useApp.getState().addMapSlice("ds-a", H);
+      const captured = view("ds-a");
+      expect(captured.slices).toHaveLength(1);
+
+      useApp.getState().removeDataset("ds-a");
+      expect(useApp.getState().mapViews["ds-a"]).toBeUndefined();
+      expect(useApp.getState().trash).toHaveLength(1);
+
+      const r = await useApp.getState().restoreFromTrash("dataset:ds-a");
+      expect(r).toEqual({ ok: true });
+      expect(useApp.getState().datasets.map((d) => d.id)).toContain("ds-a");
+      expect(view("ds-a")).toEqual(captured);
+      expect(view("ds-a").slices[0]).toEqual(captured.slices[0]);
+      // ds-b was never involved either way.
+      expect(view("ds-b")).toBe(DEFAULT_MAP_VIEW);
+    });
+
+    it("a dataset with no view costs the entry nothing and restores nothing", async () => {
+      useApp.getState().removeDataset("ds-a");
+      const entry = useApp.getState().trash[0];
+      expect(entry.kind === "dataset" && entry.mapView).toBeUndefined();
+
+      await useApp.getState().restoreFromTrash("dataset:ds-a");
+      expect(useApp.getState().mapViews["ds-a"]).toBeUndefined();
+    });
+
+    it("a view that came back some other way WINS — restore never overwrites it", async () => {
+      useApp.getState().setMapColorLimits("ds-a", [3, 9]);
+      useApp.getState().removeDataset("ds-a");
+      // The id is live in `mapViews` again (an undo, a re-import) while the
+      // dataset still sits in the trash.
+      useApp.setState({ mapViews: { "ds-a": { ...DEFAULT_MAP_VIEW, colorLimits: [100, 200] } } });
+
+      await useApp.getState().restoreFromTrash("dataset:ds-a");
+      expect(view("ds-a").colorLimits).toEqual([100, 200]);
+    });
+  });
+
+  // -- History labels (review round 3, finding 9) --------------------------
+  describe("history labels name the dataset (round 3, finding 9)", () => {
+    it("every writer's label carries the dataset name", () => {
+      useApp.getState().loadWorkspace({ datasets: [ds("ds-a"), ds("ds-b")] });
+      useApp.setState({ mapViews: EMPTY_MAP_VIEWS, history: [], future: [] });
+
+      useApp.getState().setMapColormap("ds-a", "magma");
+      useApp.getState().setMapLogZ("ds-b", true);
+      useApp.getState().addMapSlice("ds-b", H);
+      expect(useApp.getState().history.map((h) => h.label)).toEqual([
+        'change map colormap "ds-a.xrdml"',
+        'change map colour scale "ds-b.xrdml"',
+        'add map slice "ds-b.xrdml"',
+      ]);
+    });
+
+    it("a dataset the store does not have keeps the bare label", () => {
+      useApp.getState().setMapColormap("ds-gone", "magma");
+      expect(useApp.getState().history.map((h) => h.label)).toEqual(["change map colormap"]);
+    });
+  });
+
+  // -- The transient painted-limits channel (round 3, finding 2) -----------
+  describe("reportMapPaintedLimits (round 3, finding 2)", () => {
+    it("records per dataset and ignores a repeat of the same pair", () => {
+      useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]);
+      const first = useApp.getState().mapPaintedLimits;
+      expect(first["ds-a"]).toEqual([7, 9]);
+
+      useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]); // same pair, fresh array
+      expect(useApp.getState().mapPaintedLimits).toBe(first);
+
+      useApp.getState().reportMapPaintedLimits("ds-b", null);
+      expect(useApp.getState().mapPaintedLimits["ds-b"]).toBeNull();
+      expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([7, 9]);
+    });
+
+    it("records no history and never becomes a map VIEW edit", () => {
+      useApp.setState({ history: [] });
+      useApp.getState().reportMapPaintedLimits("ds-a", [7, 9]);
+      expect(useApp.getState().history).toEqual([]);
+      expect(useApp.getState().mapViews["ds-a"]).toBeUndefined();
+    });
   });
 });

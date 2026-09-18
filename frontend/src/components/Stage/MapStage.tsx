@@ -18,7 +18,8 @@ import MapRoiOverlay from "./MapRoiOverlay";
 import MapSliceOverlay from "./MapSliceOverlay";
 import MapToolbar from "./MapToolbar";
 import { armExclusively, routedTool } from "./mapToolArming";
-import { draw, fmt } from "./mapRender";
+import { fmt } from "./mapRender";
+import { useMapPaint } from "./useMapPaint";
 import { useMapCuts } from "./useMapCuts";
 import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
@@ -56,9 +57,13 @@ export default function MapStage({ dataset }: MapStageProps) {
   // per open map, so anything it WROTE on mount would be a second map
   // destroying the first one's slices, and merely opening a map would dirty
   // the project.
+  // The selector is narrowed to THIS map's own entry (P2.8 review round 3,
+  // finding 10): `mapViewFor` returns either the stored object or the frozen
+  // `DEFAULT_MAP_VIEW`, both reference-stable, so subscribing to the whole
+  // `mapViews` record only meant every open map re-rendered on any OTHER
+  // dataset's map edit.
   const dsId = active?.id ?? null;
-  const mapViews = useApp((s) => s.mapViews);
-  const mapView = mapViewFor(mapViews, dsId);
+  const mapView = useApp((s) => mapViewFor(s.mapViews, dsId));
   const setMapColormap = useApp((s) => s.setMapColormap);
   const setMapLogZ = useApp((s) => s.setMapLogZ);
   const addMapSlice = useApp((s) => s.addMapSlice);
@@ -117,11 +122,24 @@ export default function MapStage({ dataset }: MapStageProps) {
   // arms regardless, but `wedge.sector`/dragging both go inert off a Q
   // view — see useMapSectorWedge.ts's header).
   const wedge = useMapSectorWedge(active, cutSpace);
-  // Host box size in CSS px, kept in sync by the paint effect below (the
-  // SAME ResizeObserver that already exists for the canvas) — the ROI
-  // overlay needs it to convert data<->px through the SAME plotRect the
-  // canvas paints with, and refs aren't a reliable read during render.
-  const [hostSize, setHostSize] = useState({ w: 0, h: 0 });
+  // The paint effect and the host box size it keeps in sync live in
+  // useMapPaint.ts — see its header (it also reports what the paint actually
+  // used as its colour range, which is what lets the Inspector stop
+  // contradicting the canvas).
+  const hostSize = useMapPaint({
+    hostRef,
+    canvasRef,
+    payload,
+    dsId,
+    cmap,
+    logZ,
+    colorLimits: mapView.colorLimits,
+    rsmPeaks,
+    antialias,
+    contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
+    theme,
+    accent,
+  });
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -153,40 +171,6 @@ export default function MapStage({ dataset }: MapStageProps) {
       controller.abort();
     };
   }, [active, enoughChannels, keys, method, res, setStatus]);
-
-  // (Re)paint the canvas when the grid / colormap / theme / size change.
-  useEffect(() => {
-    const host = hostRef.current;
-    const canvas = canvasRef.current;
-    if (!host || !canvas) return;
-    // Show peak markers only when they belong to the active dataset.
-    const markers = rsmPeaks && rsmPeaks.datasetId === active?.id ? rsmPeaks.peaks : null;
-    const contour = { on: contourOn, levelCount: contourLevelCount, scale: contourScale };
-    const paint = () => {
-      draw(canvas, host, payload, cmap, logZ, markers, antialias, contour, mapView.colorLimits);
-      const w = host.clientWidth;
-      const h = host.clientHeight;
-      setHostSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
-    };
-    paint();
-    const ro = new ResizeObserver(paint);
-    ro.observe(host);
-    return () => ro.disconnect();
-    // theme/accent in deps so the frame/axis ink recolors from fresh tokens.
-  }, [
-    payload,
-    cmap,
-    logZ,
-    theme,
-    accent,
-    rsmPeaks,
-    active,
-    antialias,
-    contourOn,
-    contourLevelCount,
-    contourScale,
-    mapView.colorLimits,
-  ]);
 
   // Box, ruler, and the sector wedge take precedence over the cut tool while
   // armed — all four drive the same canvas pointer gestures, so only one may

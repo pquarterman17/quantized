@@ -13,6 +13,7 @@
 // waiting on a mock call is the ratcheted anti-pattern).
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { Profiler } from "react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EMPTY_MAP_VIEWS, mapViewFor } from "../../lib/mapView";
@@ -21,6 +22,7 @@ import { serializeWorkspace } from "../../lib/workspace";
 import { useAnnotationTextDialog } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
 import { shouldAutosave, type AutosaveState } from "../../useWorkspaceAutosave";
+import MapColorLimits from "../Inspector/MapColorLimits";
 import MapStage from "./MapStage";
 
 const W = 600;
@@ -324,5 +326,77 @@ describe("MapStage — slices survive (P2.8)", () => {
     expect(line).toHaveAttribute("data-slice-kind", "v");
     expect(line.getAttribute("x1")).toBe(line.getAttribute("x2")); // vertical
     expect(await screen.findByTestId("map-annotation")).toHaveTextContent("film peak");
+  });
+});
+
+// -- Review round 3 -------------------------------------------------------
+
+describe("the Inspector is told what the map actually painted (round 3, finding 2)", () => {
+  it("log limits the data cannot honour are shown as the effective pair", async () => {
+    // z runs 100…403 on this fixture, so the smallest POSITIVE cell is 100:
+    // an explicit -1 … 2 cannot survive the log-floor raise and the canvas
+    // paints the auto extent instead. Before this round the Inspector went on
+    // saying -1 … 2, which is the one thing the map was certainly not doing.
+    useApp.getState().setMapColorLimits("ds-a", [-1, 2]);
+    useApp.getState().setMapLogZ("ds-a", true);
+    render(
+      <>
+        <MapStage />
+        <MapColorLimits />
+      </>,
+    );
+    await mapReady();
+
+    const row = await screen.findByTestId("map-colour-limits-effective");
+    expect(row).toHaveTextContent(/^effective 100 – 403$/);
+    // The typed pair is untouched — the fields still offer it back.
+    expect(viewOf("ds-a").colorLimits).toEqual([-1, 2]);
+    expect((screen.getByLabelText("Map colour minimum") as HTMLInputElement).value).toBe("-1");
+  });
+
+  it("limits the map CAN honour produce no such row", async () => {
+    useApp.getState().setMapColorLimits("ds-a", [150, 300]);
+    render(
+      <>
+        <MapStage />
+        <MapColorLimits />
+      </>,
+    );
+    await mapReady();
+    await waitFor(() => expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([150, 300]));
+    expect(screen.queryByTestId("map-colour-limits-effective")).toBeNull();
+  });
+});
+
+describe("a map subscribes to its OWN dataset's entry (round 3, finding 10)", () => {
+  it("editing another dataset's map view does not re-render this one", async () => {
+    let commits = 0;
+    render(
+      <Profiler id="map" onRender={() => { commits += 1; }}>
+        <MapStage />
+      </Profiler>,
+    );
+    await mapReady();
+    // Let the payload/host-size effects settle, then count only what the
+    // ds-b edit causes.
+    await waitFor(() => expect(screen.getByTitle(/^H-cut:/)).toBeInTheDocument());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    commits = 0;
+
+    act(() => {
+      useApp.getState().setMapColorLimits("ds-b", [1, 2]);
+      useApp.getState().addMapSlice("ds-b", {
+        kind: "h",
+        a: { x: 31, y: 16 },
+        width: 0,
+        space: "angular",
+      });
+    });
+    expect(commits).toBe(0);
+    // …while an edit to THIS map's own dataset still gets through.
+    act(() => useApp.getState().setMapColorLimits("ds-a", [150, 300]));
+    expect(commits).toBeGreaterThan(0);
   });
 });
