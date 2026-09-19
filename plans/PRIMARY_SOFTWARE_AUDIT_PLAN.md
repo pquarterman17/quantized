@@ -6846,6 +6846,68 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Test-only change: `git diff` outside
   `workspaceHydration.characterization.test.ts` (plus the two comment
   fixes above) touches no `frontend/src` product code.
+
+  **FIFTH domain extracted 2026-09-19**, same discipline: the **macro
+  recorder + pipeline view** — `startMacro`/`stopMacro`/`clearMacro`/
+  `recordMacro` (the recorder; curated call sites throughout the store
+  invoke `recordMacro` unconditionally — the gate on whether it actually
+  appends a step, and the anti-self-recording-loop guard while the pipeline
+  runner replays steps, both live in this cluster) and
+  `updateStepParams`/`toggleStep`/`removeStep`/`moveStep`/`insertStep`/
+  `loadSteps`/`setPipelineRunning` (the editable pipeline view, #6, over the
+  SAME `macroSteps` list the recorder fills) — 11 actions over 3 fields
+  (`macroRecording`, `macroSteps`, `pipelineRunning`) — moved verbatim to
+  the new `store/macroPipeline.ts` (`MacroPipelineSlice`), composed exactly
+  like `plotViewSettings.ts`/`reportsFigureDocs.ts`/`viewAppliers.ts`/
+  `workspaceHydration.ts`: one import line, one word on the `extends`
+  clause, one creator-spread line. `store/useApp.ts` **1,451 → 1,386 lines
+  (−65, measured by `src.split("\n").length` as `architecture.test.ts`
+  measures it — one more than the `wc -l` count because the file ends with
+  a trailing newline)**; its `STORE_PINS` entry ratcheted DOWN to 1,386 with
+  a dated justification.
+  Unlike the fourth extraction (workspace hydration) immediately above,
+  the FIELDS moved WITH the actions — declared and initialized on
+  `MacroPipelineSlice` itself, not on `AppState` — because this is a genuine
+  own-state slice (`store/gadget.ts`'s shape), not a shared-field mutator
+  (`store/corrections.ts`'s/`plotViewSettings.ts`'s shape): grep across
+  `store/*.ts` before the move found nothing outside this cluster WRITING
+  `macroRecording`/`macroSteps`/`pipelineRunning` except
+  `store/workspaceHydration.ts`'s `loadWorkspace` (`ws.macroSteps ?? []`, a
+  plain-object-literal bulk `.dwk` restore — the same "bulk restores stay
+  outside the cluster" shape every earlier P4.1 domain already documents for
+  its own fields, not a functional dependency on this slice). Chosen for
+  its isolation: unlike every other candidate left in `useApp.ts`
+  (dataset CRUD/selection, the folder tree, the ~30 workshop open-flags),
+  this domain touches no `datasets`, no windows, no history, and — unlike
+  every earlier P4.1 domain — none of its 11 actions call
+  `get().recordHistory` or `toast(...)` at all; macro/pipeline edits are
+  simply not part of the undo stack (`history.ts`'s own exclusion list),
+  which is why this extraction's characterization file has no undo-label/
+  toast half the way the first four do. No new `store/` layering
+  grandfathered entry: `macroPipeline.ts` imports only `lib/pipeline`'s pure
+  step primitives and the `AppState` TYPE from `./useApp`.
+  Characterization net: `store/macroPipeline.characterization.test.ts` (26
+  specs), written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing unchanged after the move. It pins, per action AND per branch,
+  the exact set of top-level store keys each call changes — a poisoned
+  whole-`getState()` diff — including the one genuine short-circuit
+  (`moveStep`'s "id not found" branch returns a literal `{}` and writes
+  nothing at all, not even a new `macroSteps` array reference) told apart
+  from every OTHER unmatched-id branch (`updateStepParams`/`toggleStep`/
+  `removeStep`), which still produces a NEW `macroSteps` array reference via
+  `.map`/`.filter` even though its content is unchanged — and from the two
+  plain boolean flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`),
+  where a store-wide non-default poison would have hidden half of each
+  writer's behavior (the "already at the target value" case), so each of
+  those specs arranges its own starting value instead and a dedicated pair
+  of specs pins the "no observable diff when already at the target" case as
+  real, documented behavior. Sabotage-proven four ways: removing the
+  `!pipelineRunning` half of `recordMacro`'s gate, removing `moveStep`'s
+  `i < 0` short-circuit, dropping `clearMacro`'s `macroRecording: false`
+  half, and skipping `updateStepParams`'s `regenerateStep` call for a
+  runnable kind — each reddened exactly the spec written to catch it and
+  nothing else, confirmed by re-running the file after each single-line
+  break and restoring it before the next.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
