@@ -41,36 +41,50 @@
 //    already-successfully-loaded component's own render — and mislabel it
 //    "failed to load", which is worse than the blank screen this was meant
 //    to fix: it hides the real error behind a wrong, unactionable diagnosis.
-//    Only the loader's OWN rejection is tagged (`taggedLoader` below); the
-//    boundary re-throws anything else from `getDerivedStateFromError`,
-//    which hands it to the next boundary up (or lets it crash), exactly as
-//    if this boundary were not here.
+//    Only the loader's OWN failure is wrapped as a `LoadFailure` (below,
+//    never by mutating the caught value — a frozen/non-extensible rejection
+//    would throw on a property write and lose the tag); the boundary
+//    re-throws anything else from `getDerivedStateFromError`, which hands
+//    it to the next boundary up (or lets it crash), exactly as if this
+//    boundary were not here.
 import { Component, lazy, Suspense, useState } from "react";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
-const LOAD_FAILURE = Symbol("lazyRegion.loadFailure");
-interface Taggable {
-  [LOAD_FAILURE]?: true;
+/** Marks "the loader's own promise rejected" without touching the rejected
+ *  value itself — mutating a caught error (a `Symbol` property write) would
+ *  throw on a frozen/non-extensible one (e.g. `Object.freeze(new Error())`),
+ *  losing the tag and falling through to the blank-screen bug this file
+ *  exists to fix. Wrapping instead means tagging can never fail; the
+ *  original value survives on `.cause` for diagnostics. */
+class LoadFailure extends Error {
+  constructor(cause: unknown) {
+    super("lazyRegion: chunk failed to load", { cause });
+    this.name = "LoadFailure";
+  }
 }
 
-/** Wraps a loader so ONLY its own rejection carries the load-failure tag —
- *  the exact value `lazy()` throws into the boundary on a failed chunk
- *  fetch, since React re-throws whatever the loader's promise rejected
- *  with. A later error thrown by the loaded component's own render is a
- *  different object and is never tagged. */
+/** Wraps a loader so ONLY its own failure — sync throw or async rejection —
+ *  becomes a `LoadFailure`, the exact value `lazy()` re-throws into the
+ *  boundary. A later error thrown by the loaded component's own render is a
+ *  different, un-wrapped value. Every call site here is `() => import(...)`,
+ *  which can only reject, never throw synchronously — the try/catch is
+ *  defensive for a future loader shape that might. */
 function taggedLoader<P>(
   load: () => Promise<{ default: ComponentType<P> }>,
 ): () => Promise<{ default: ComponentType<P> }> {
-  return () =>
-    load().catch((err: unknown) => {
-      const tagged: Error & Taggable = err instanceof Error ? err : new Error(String(err));
-      tagged[LOAD_FAILURE] = true;
-      throw tagged;
-    });
+  return () => {
+    try {
+      return load().catch((err: unknown) => {
+        throw new LoadFailure(err);
+      });
+    } catch (err) {
+      return Promise.reject(new LoadFailure(err));
+    }
+  };
 }
 
-function isLoadFailure(error: unknown): boolean {
-  return typeof error === "object" && error !== null && (error as Taggable)[LOAD_FAILURE] === true;
+function isLoadFailure(error: unknown): error is LoadFailure {
+  return error instanceof LoadFailure;
 }
 
 interface CatchProps {
@@ -93,7 +107,11 @@ class Catch extends Component<CatchProps, CatchState> {
   }
   componentDidCatch(error: unknown): void {
     // The one diagnostic this boundary owes: which region failed, and why.
-    console.error(`[lazyRegion] "${this.props.label}" chunk failed to load`, error);
+    // `error` is always a LoadFailure here (getDerivedStateFromError
+    // re-throws anything else before this runs) — log its `.cause`, the
+    // original rejection, not the wrapper's own generic message.
+    const cause = error instanceof Error ? (error.cause ?? error) : error;
+    console.error(`[lazyRegion] "${this.props.label}" chunk failed to load`, cause);
   }
   render(): ReactNode {
     if (this.state.failed) {

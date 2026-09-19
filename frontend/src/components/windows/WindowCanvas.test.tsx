@@ -182,10 +182,7 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     });
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(1)); // only the focused (bound) window plots
-    // w2's BackgroundPlotWindow is its own lazy() seam (UX-003: lazyRegion),
-    // resolved independently of w1's uPlot mount above — wait on its own
-    // painted state rather than assuming it lands in the same tick.
-    await waitFor(() => expect(container.textContent).toContain("No dataset"));
+    expect(container.textContent).toContain("No dataset");
   });
 
   it("ORIGIN_FILE_DECODE_PLAN #38: fetches full data for a background window's pending dataset", async () => {

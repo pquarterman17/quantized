@@ -285,4 +285,32 @@ describe("lazyRegion", () => {
     expect(screen.getAllByText("ok")).toHaveLength(5);
     expect(loadCalls).toBe(5); // one call per instance, none blocked on another
   });
+
+  // Review round 2, finding #2 (LOW): tagging used to mutate the caught
+  // rejection (a Symbol property write), which throws on a frozen/
+  // non-extensible object — losing the tag and falling through to the
+  // blank-screen bug this file exists to fix.
+  it("still shows the retry UI for a load failure that cannot be mutated (frozen rejection)", async () => {
+    const load = (): Promise<{ default: ComponentType }> =>
+      Promise.reject(Object.freeze(new Error("chunk fetch failed")));
+    const Region = lazyRegion(load, "Widget");
+
+    render(<Region />);
+    expect(await screen.findByText("⚠ Widget failed to load.")).toBeInTheDocument();
+  });
+
+  // Review round 2, finding #3 (LOW): a loader that throws SYNCHRONOUSLY
+  // (rather than returning a rejected promise) must still be tagged as a
+  // load failure, not escape as an unhandled throw. Not reachable through
+  // any of today's 30+ call sites (every one is `() => import(...)`, which
+  // can only reject) — defensive for a future loader shape.
+  it("still shows the retry UI for a loader that throws synchronously", async () => {
+    const load = (): Promise<{ default: ComponentType }> => {
+      throw new Error("loader threw synchronously");
+    };
+    const Region = lazyRegion(load, "Widget");
+
+    render(<Region />);
+    expect(await screen.findByText("⚠ Widget failed to load.")).toBeInTheDocument();
+  });
 });
