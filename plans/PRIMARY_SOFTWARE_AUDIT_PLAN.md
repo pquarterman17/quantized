@@ -4031,6 +4031,14 @@ covers a much smaller subset and guards focus on Analyze.
       window (tool still `region`); Esc③ reverts the tool.
     · Tiles open + `plotTool: "zoom"` → Esc① closes Tiles, tool stays `zoom`;
       Esc② reverts it.
+    · **(added round 6)** a LIVE drag + the Peak Analyzer at step ② → Esc①
+      cancels the drag ONLY (marker edit still live, tool still armed); Esc②
+      pauses the marker edit (tool still armed, because the wizard's
+      `preventDefault()` stops the walk); Esc③ then falls to the surfaces
+      below — the hosting `ToolWindow` if focus is inside its frame, otherwise
+      the `app` tier's tool revert. The first two keystrokes are measured with
+      the real hooks in `usePeakWizard.test.ts`; on round 5's tree Esc① did
+      both of those actions at once (review finding 1).
     Round 2's order was the inverse for the workshop case (the tool reverted
     first and the panel stayed), which is the inconsistency this fixes; the
     workspace case already behaved this way and still does.
@@ -4074,9 +4082,9 @@ covers a much smaller subset and guards focus on Analyze.
 
   | Layer | Consumer | Why it sits there |
   |---|---|---|
-  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). |
-  | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. |
-  | `window` | `ToolWindow` (all 48 workshop hosts, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. |
+  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** |
+  | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. Resolved synchronously at keydown since round 5, and since round 6 a claim here also `preventDefault()`s, so a late window-bubble consumer cannot act on the same key. |
+  | `window` | `ToolWindow` (every workshop host, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. **("all 48 hosts" as written in round 4 was not reproducible — CORRECTED in round 6, review finding 5. Measured at round 6's tip: **40** production `.tsx` files render `<ToolWindow` across **41** render sites, and **44** import it; counting test files too gives 45 files / 78 sites / 50 importers. The substance — one registry entry per `ToolWindow` mount, so every host gets it — is unchanged; only the decorative count was wrong.)** |
   | `workspace` | `LibraryWorkspace` (Tiles), `QuickFigureBuilderWorkspace` | Full-Stage workspaces; mutually exclusive in `App.tsx`, so two can never co-exist. |
   | `selection` | the four Stage deselects (`useShapeEdit`, `useAnnotationEdit`, `useShapeDraw`, `worksheet/useWorksheetView`) + the idle-armed quick-fit gadget | A live selection or an idle-armed gadget is BELOW any open surface (finding 3: a committed ROI sitting behind a focused window is not innermost) and ABOVE the tool revert (clearing a selection is a smaller undo than disarming the tool that made it). Each registers only while it has something to clear, so the most recently armed one claims first. |
   | `app` | `useGlobalShortcuts` → revert the armed plot tool to Pointer | The whole-app fallback: it only ever sees an Escape every surface declined. |
@@ -4256,6 +4264,91 @@ covers a much smaller subset and guards focus on Analyze.
     defer only the action — and any surface whose claim is destroyed by
     waiting (a live drag) has to act synchronously too. Deciding later who
     should have acted is how one keystroke becomes two actions.
+
+  - **Round 6 2026-09-18 — a synchronous claim consumes the KEY, and only an
+    offered surface can swallow it.** Round 5's review found that the new
+    synchronous `gesture` claim reproduced the rounds 2–4 defect class one more
+    time, plus a swallow-direction regression and three false records. Two
+    one-rule code changes, both in `lib/escapeStack.ts`; no surface, layer or
+    order changed.
+
+    - **Finding 1 — the synchronous claim now `preventDefault()`s.** The
+      dispatcher returned from a synchronous claim without marking the event,
+      so the keystroke carried on down the propagation path un-claimed. The
+      dispatcher's own listener is attached FIRST and stays for the life of the
+      app (`useGlobalShortcuts` registers `gesture` and `app` unconditionally),
+      so every later window-bubble consumer runs after it; there is exactly one
+      in the tree, `usePeakWizard`'s marker-edit pause. **Measured with the
+      real hooks** (`useGlobalShortcuts` mounted first, then `usePeakWizard` at
+      step ②, a live gesture registered through `setActiveGestureCancel`), ONE
+      Escape:
+
+      | tree | drag cancelled | marker edit paused | actions on one key |
+      |---|---|---|---|
+      | round 5 `a67b3222` | yes | **yes** | **2** |
+      | round 6 (tip) | yes | no | **1** |
+
+      At registry level the same A/B is `["gesture","late-bubble-claimant"]` →
+      `["gesture"]`, and `event.defaultPrevented` after a synchronous claim goes
+      `false` → `true`.
+    - **The round-5 commit body's corner-case note is CORRECTED here.** It said
+      *"Escape now cancels the drag where it previously paused the wizard's
+      marker edit … the second Escape pauses the marker edit as before."* On the
+      round-5 tree that was false: the FIRST Escape already did both, so nothing
+      was left for the second. Round 6 makes the sentence true — Esc① cancels
+      the drag only, Esc② pauses the marker edit (and, because the wizard's
+      claim stops the walk, still does not revert the tool). Both keystrokes are
+      pinned in `usePeakWizard.test.ts`.
+    - **Finding 2 — only the keydown CLAIMANT can swallow the key by dying.**
+      Round 5 stopped the walk for ANY snapshot entry that was gone at walk
+      time. An entry below the first was never the claimant — the walk reaches
+      it only because everything above it declined, and it is not offered the
+      key either — so stopping there let a surface that was never in the running
+      swallow the keystroke. Measured on round 5: a `window` surface that
+      DECLINES (focus outside its frame) over a `workspace` that closes itself
+      in the gap gave `["window"]`, and the `app` tier below never ran; round 6
+      gives `["window","app"]`, which is what round 4 did. The rule is now
+      `ordered[0]` only.
+    - **What finding 2 deliberately does NOT change, and why.** The review's two
+      cited probes — Tiles under a declining `ToolWindow` that unregisters in
+      the gap, and close-and-identical-reopen in the gap — are both cases where
+      the dying surface IS `ordered[0]`, the claimant. Reproduced at round 5's
+      tip: both give `[]`, and they still give `[]` at round 6. They are
+      indistinguishable at walk time from the case round 5 exists to protect
+      (the pinned "STOPS when the surface that owned the key at keydown is gone
+      by the walk"): in all three the innermost entry at keydown is simply gone,
+      and what its handler WOULD have returned is unknowable. Restoring them
+      means deleting round 5's rule outright, which sabotage M-e shows reddens
+      that test. Recorded as the accepted cost of the round-5 protection rather
+      than silently "fixed"; reachability is a ~0 ms unregistration window and
+      the next Escape does the job.
+    - **The three staleness rules stay separately pinned**, one sabotage each
+      (S6-2 / S6-3 / S6-4 below) — they are not merged.
+    - **Finding 3 (record)** — the `menu` row of round 4's ladder table above is
+      corrected in place: with the wizard at step ② an open menu does not close,
+      and that is residual R11's class.
+    - **Finding 4 (record), both numbers restated from measurement.**
+      `useWorksheetView.ts`'s pin was **never ratcheted**: the file went 647 →
+      646 lines in round 4 and its `architecture.test.ts` pin stayed **648**
+      (comment still "Unchanged at 648 (BUG-009)"). That is legal — pins are
+      ceilings and the rule is "never raise" — and `architecture.test.ts` is
+      untouched by rounds 4, 5 and 6, so no pin was raised anywhere; the brief's
+      "ratcheted DOWN 648 → 646" simply did not happen. And "all 48 ToolWindow
+      hosts" is not reproducible: measured at round 6's tip, **40** production
+      `.tsx` files render `<ToolWindow` across **41** render sites and **44**
+      import it (45 files / 78 sites / 50 importers if test files are counted).
+      The table and `ToolWindow.tsx`'s header now say what was measured.
+
+    | Sabotage (round 6) | Result | Failing test(s) |
+    |---|---|---|
+    | S6-1 the synchronous claim stops calling `preventDefault()` | **RED** 4 | "stops a LATE window-bubble consumer from acting on the same key", "marks the event itself, which is how a later consumer can tell", "Esc① cancels the drag only; the marker edit stays live", "Esc② then pauses the marker edit, and still does not revert the tool" |
+    | S6-2 any dead snapshot entry stops the walk again (round 5's blanket rule) | **RED** 1 | "walks PAST a snapshot entry that was never the claimant and died in the gap" |
+    | S6-3 the keydown claimant no longer swallows the key by dying | **RED** 2 | "STILL stops when the CLAIMANT itself dies, with the same stack below it", "STOPS when the surface that owned the key at keydown is gone by the walk" (round 5) |
+    | S6-4 the mid-walk staleness skip becomes a stop (round 4's rule, M-d) | **RED** 1 | "still skips — and walks past — a surface killed DURING the walk (round 4)" |
+
+    Each applied alone against `escapeStack.test.ts` +
+    `useGlobalShortcuts.test.ts` + `components/workshops/peakwizard`
+    (**69 tests**, green at baseline), and restored after.
 
   **Named residuals (why this is `[~]`).**
   - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,

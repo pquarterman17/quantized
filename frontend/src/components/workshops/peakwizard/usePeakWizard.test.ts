@@ -10,8 +10,11 @@ import { fireEvent, renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { setActiveGestureCancel } from "../../../lib/gestureCancel";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { pressEscape } from "../../../test/pressEscape";
+import { useGlobalShortcuts } from "../../../useGlobalShortcuts";
 import { usePeakWizard } from "./usePeakWizard";
 
 vi.mock("../../../lib/api", async (importOriginal) => ({
@@ -210,6 +213,53 @@ describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
       window.dispatchEvent(spare);
     });
     expect(spare.defaultPrevented).toBe(false);
+  });
+});
+
+// P3.3 round 6, review finding 1 — the ladder's top two rungs, with the REAL
+// hooks in the order `App` mounts them. `useGlobalShortcuts` registers the
+// `gesture` and `app` surfaces unconditionally at App mount, so the shared
+// dispatcher's window listener is attached BEFORE this hook's marker-edit
+// listener and the wizard's listener runs after it on every Escape.
+//
+// Measured on the round-5 tree, one Escape with a live drag and the wizard at
+// step ②: the drag was cancelled AND the marker edit paused — two actions, one
+// key, the inversion the registry exists to prevent. The round-5 commit body
+// recorded the opposite ("the second Escape pauses the marker edit as before").
+describe("usePeakWizard — a live drag outranks the marker-edit pause, ONE action per key", () => {
+  it("Esc① cancels the drag only; the marker edit stays live", async () => {
+    const cancel = vi.fn();
+    setActiveGestureCancel(cancel);
+    useApp.setState({ plotTool: "fwhm", qfitRoi: null, gadgetCursors: null });
+    renderHook(() => useGlobalShortcuts()); // mounted first, as App does
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+    expect(result.current.markerEditActive).toBe(true);
+
+    await pressEscape();
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(result.current.markerEditActive).toBe(true); // NOT also paused
+    expect(useApp.getState().plotTool).toBe("fwhm"); // and the tool stays armed
+    setActiveGestureCancel(null);
+  });
+
+  it("Esc② then pauses the marker edit, and still does not revert the tool", async () => {
+    const cancel = vi.fn();
+    setActiveGestureCancel(cancel);
+    useApp.setState({ plotTool: "fwhm", qfitRoi: null, gadgetCursors: null });
+    renderHook(() => useGlobalShortcuts());
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+
+    await pressEscape(); // the drag
+    await pressEscape(); // the marker edit
+
+    expect(cancel).toHaveBeenCalledOnce(); // not cancelled twice
+    expect(result.current.markerEditActive).toBe(false);
+    expect(result.current.step).toBe(1); // the pause does not navigate
+    expect(useApp.getState().plotTool).toBe("fwhm"); // the wizard's claim stops the walk
+    setActiveGestureCancel(null);
   });
 });
 

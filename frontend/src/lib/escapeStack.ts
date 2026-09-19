@@ -81,12 +81,17 @@
 //
 // So the CLAIM is resolved when the key is pressed; only the ACTION waits:
 //  - `onKeyDown` snapshots the ordered stack, and the walk runs that snapshot
-//    rather than re-reading `stack`. A surface that goes away between the
-//    keydown and the walk was the innermost one at the moment of the
-//    keystroke, so the walk STOPS there instead of handing its key down the
-//    ladder (`liveAtWalk` below). Dying DURING the walk still only skips that
-//    entry — round 4's finding-4 rule, which exists for a handler that closes
-//    a surface beneath it, and is a different moment in time.
+//    rather than re-reading `stack`. If the surface that was the CLAIMANT at
+//    the moment of the keystroke — the snapshot's first entry, the one certain
+//    to be offered the key — is gone by the walk, the walk STOPS instead of
+//    handing its key down the ladder (`liveAtWalk` below). ROUND 6 narrowed
+//    that to the claimant alone: an entry further down the snapshot was never
+//    in the running for this keystroke (the walk only reaches it because
+//    everything above declined), so its death is skipped and the surface below
+//    it still acts, as it did before round 5. Dying DURING the walk likewise
+//    only skips that entry — round 4's finding-4 rule, which exists for a
+//    handler that closes a surface beneath it, and is a different moment in
+//    time. All three stay separately pinned.
 //  - the `gesture` layer cannot be deferred at all, because waiting is what
 //    destroys it: see `RESOLVES_AT_KEYDOWN`.
 
@@ -146,7 +151,14 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *  arrived BEFORE the dispatcher (window-capture, document-bubble — how
  *  `SymbolPalette` claims) is already visible in `defaultPrevented` and still
  *  wins. A `menu` open above a drag suspends the synchronous path entirely
- *  (see `onKeyDown`), so "an open menu owns Escape" is unchanged. */
+ *  (see `onKeyDown`), so "an open menu owns Escape" is unchanged.
+ *
+ *  A claim here CLAIMS THE EVENT too — `onKeyDown` calls `preventDefault()`
+ *  (round 6, finding 1). The deferred walk marks a claimed keystroke by
+ *  construction (every surface below is skipped and the two documented
+ *  exceptions gate on `defaultPrevented`), but this path returns while the
+ *  event is still propagating, so without the mark a window-bubble consumer
+ *  registered after the dispatcher acted on the SAME key. */
 const RESOLVES_AT_KEYDOWN: EscapeLayer = "gesture";
 
 type Entry = { layer: EscapeLayer; seq: number; handler: EscapeHandler };
@@ -194,11 +206,20 @@ function walk(event: KeyboardEvent): void {
   // the two ways an entry can go stale stay distinguishable below.
   const liveAtWalk = new Set(stack);
   for (const entry of ordered) {
-    // Gone between the keydown and this walk (round 5). This surface was the
-    // innermost one when the key was pressed — whatever removed it in the gap
-    // took the keystroke with it, and handing the key to a LOWER layer now
-    // would perform an action the user aimed at something else. Stop.
-    if (!liveAtWalk.has(entry)) return;
+    if (!liveAtWalk.has(entry)) {
+      // Gone between the keydown and this walk (round 5). Only the surface
+      // that was the CLAIMANT at keydown — `ordered[0]`, the one entry certain
+      // to be offered the key — may swallow it by dying: whatever removed it
+      // in the gap took the keystroke with it, and handing the key to a LOWER
+      // layer now would perform an action the user aimed at something else.
+      if (entry === ordered[0]) return;
+      // Any entry FURTHER DOWN was never the claimant (round 6, finding 2).
+      // The walk only reaches it because everything above it declined, and it
+      // is not offered the key either — so stopping here would let a surface
+      // that was never in the running swallow the keystroke, and the surface
+      // BELOW it (which round 4 gave the key to) would never act. Skip it.
+      continue;
+    }
     // Gone DURING this walk: a handler above closed a surface below it
     // (round 4, finding 4). Skip the dead entry and carry on — the walk that
     // is already running is what removed it.
@@ -242,8 +263,17 @@ function onKeyDown(event: KeyboardEvent): void {
       const entry = ordered[rest];
       rest++;
       if (!offer(entry, event)) continue; // nothing live: the layer declines
-      // Claimed and already acted on. Nothing below may run for this key, and
-      // a walk armed by an earlier keystroke in this same tick is void.
+      // Claimed and already acted on. Mark the KEYSTROKE as taken, exactly as
+      // the deferred walk's claim path does by re-reading `defaultPrevented`
+      // (round 6, finding 1). Returning without this left the key un-marked
+      // for the rest of the propagation path, so a window-bubble consumer
+      // registered after the dispatcher — `usePeakWizard`'s marker-edit pause
+      // is the one in the tree — still acted on it: measured, one Escape with
+      // a live drag and the Peak Analyzer at step ② cancelled the drag AND
+      // paused the marker edit. Two actions, one key.
+      event.preventDefault();
+      // Nothing below may run for this key, and a walk armed by an earlier
+      // keystroke in this same tick is void.
       if (pending !== null) {
         clearTimeout(pending);
         pending = null;

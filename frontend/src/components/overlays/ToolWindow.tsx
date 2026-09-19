@@ -119,7 +119,8 @@ export default function ToolWindow({
   };
 
   // P3.3 "cancel": until this landed, NO workshop could be dismissed from the
-  // keyboard — the only close affordance in the whole family of 48 panels was
+  // keyboard — the only close affordance in the whole family of panels (40
+  // production components render this host at round 6, 41 render sites) was
   // the title bar's ✕, reachable only by tabbing to it. The fix belongs here,
   // at the shared host, exactly once.
   //

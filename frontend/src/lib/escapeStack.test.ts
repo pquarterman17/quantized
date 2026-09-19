@@ -445,3 +445,107 @@ describe("escapeStack — a surface cannot lose its claim in the deferral gap", 
     }
   });
 });
+
+// P3.3 round 6 — a synchronous claim consumes the KEY, and only an offered
+// surface can swallow it.
+describe("escapeStack — a synchronous claim consumes the keystroke", () => {
+  it("stops a LATE window-bubble consumer from acting on the same key", async () => {
+    // The measured defect: the synchronous `gesture` claim returned without
+    // marking the event, so the keystroke carried on down the propagation path
+    // un-claimed. `useGlobalShortcuts` registers the `gesture` and `app`
+    // surfaces unconditionally at App mount, so the dispatcher's own listener
+    // is attached FIRST and every later window-bubble consumer runs after it —
+    // `usePeakWizard`'s marker-edit pause (this listener's shape) is the one in
+    // the tree. One Escape cancelled the drag AND paused the marker edit.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    register("gesture", true, log, "gesture");
+    const lateConsumer = (e: KeyboardEvent): void => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      log.push("late-bubble-claimant");
+    };
+    window.addEventListener("keydown", lateConsumer);
+    try {
+      await escape();
+      expect(log).toEqual(["gesture"]); // NOT ["gesture", "late-bubble-claimant"]
+    } finally {
+      window.removeEventListener("keydown", lateConsumer);
+    }
+  });
+
+  it("marks the event itself, which is how a later consumer can tell", () => {
+    // The mechanism behind the case above, asserted directly: after a
+    // synchronous claim `defaultPrevented` read false, so nothing downstream
+    // could know the keystroke was already spent.
+    cleanups.push(pushEscapeSurface("gesture", () => true));
+    const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("does NOT mark a key the gesture layer declined", async () => {
+    // The layer declines when nothing is mid-drag, and a decline has to leave
+    // the keystroke exactly as it found it — otherwise the deferred walk's own
+    // `defaultPrevented` re-read would abort the walk this keydown just armed.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    register("gesture", false, log, "gesture");
+    const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(log).toEqual(["gesture", "app"]);
+  });
+});
+
+describe("escapeStack — only the keydown CLAIMANT can swallow the key by dying", () => {
+  it("walks PAST a snapshot entry that was never the claimant and died in the gap", async () => {
+    // Round 5 stopped the walk for ANY snapshot entry that was gone by walk
+    // time. Measured on that tree: a `ToolWindow` that DECLINES (focus outside
+    // its frame) over a workspace that closes itself in the gap swallowed the
+    // keystroke and the `app` tier below it never ran — where round 4 gave it
+    // the key. The dead entry was never offered anything: the walk only
+    // reached it because the window above it declined.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    const unregisterWorkspace = pushEscapeSurface("workspace", () => {
+      log.push("workspace");
+      return true;
+    });
+    cleanups.push(unregisterWorkspace);
+    register("window", false, log, "window"); // focus is not inside the frame
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    unregisterWorkspace(); // closes itself between the keydown and the walk
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(log).toEqual(["window", "app"]); // NOT ["window"]
+  });
+
+  it("STILL stops when the CLAIMANT itself dies, with the same stack below it", async () => {
+    // The other side of the boundary, one entry along: here the surface that
+    // WAS innermost at keydown is the one that goes away, so round 5's rule
+    // still holds and nothing below it acts on that keystroke.
+    const log: string[] = [];
+    register("app", true, log, "app");
+    register("workspace", true, log, "workspace");
+    const unregisterWindow = pushEscapeSurface("window", () => {
+      log.push("window");
+      return true;
+    });
+    cleanups.push(unregisterWindow);
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    unregisterWindow(); // the claimant goes away before the walk
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(log).toEqual([]); // NOT ["workspace"]
+  });
+});
