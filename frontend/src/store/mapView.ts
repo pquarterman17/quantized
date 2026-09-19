@@ -250,10 +250,10 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
   };
 }
 
-/** `.dwk` READ hook — `store/useApp.ts`'s `loadWorkspace` restores the map
- *  views through this ONE call (re-exported by `store/rois.ts` so it rides the
- *  import line that module already has there; see this file's header for why
- *  useApp.ts cannot afford a new one).
+/** `.dwk` READ hook — `store/workspaceHydration.ts`'s `loadWorkspace` (P4.1's
+ *  fourth domain) restores the map views through this ONE call (re-exported
+ *  by `store/rois.ts`, which useApp.ts's store-size pin made the cheaper
+ *  import path when this was still inline there; see this file's header).
  *
  *  An absent field (every pre-P2.8 `.dwk`) and a malformed one both give the
  *  empty record, so an old project opens exactly as it did before — the

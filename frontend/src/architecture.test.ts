@@ -351,7 +351,39 @@ const STORE_PINS: Record<string, number> = {
   // diff — plus the applied values, undo label and macro step) was written
   // and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
-  "/store/useApp.ts": 1639,
+  // 1639 -> 1451 (2026-09-19, the FOURTH P4.1 domain, zero headroom): WORKSPACE
+  // HYDRATION — `loadWorkspace` (replace the whole library from a restored/
+  // parsed .dwk; the autosave restore on startup AND an explicit File ▸ Open
+  // .dwk both run it) and `appendWorkspace` (Origin's "Append Project",
+  // MAIN_PLAN #16 — the additive opposite: only the flat dataset list +
+  // referenced workbooks join the CURRENT library). This is exactly the
+  // candidate the 2012 -> 1639 note above named as still in useApp.ts:
+  // loadWorkspace, 170 lines (base useApp.ts 954-1123) plus appendWorkspace's
+  // one-line delegate (1124) and their 9 interface-declaration lines — 171
+  // implementation lines total, matching the plan's estimate — moved verbatim
+  // (modulo one indentation level) to the new store/workspaceHydration.ts
+  // (WorkspaceHydrationSlice), composed exactly like plotViewSettings.ts,
+  // reportsFigureDocs.ts and viewAppliers.ts: one import line, one word on
+  // the extends clause, one creator-spread line. `appendWorkspace`'s own
+  // body (`runAppendWorkspace`) stays in store/workspaceIO.ts — that module
+  // is not moving, it is already its own file below this pin — so only the
+  // action's one-line delegate travelled. The FIELDS stay declared and
+  // initialized on AppState here, same shape as all three earlier
+  // extractions: `loadWorkspace` writes nearly all of them (a full-library
+  // replace has to), but plenty of OTHER actions read and write them too, so
+  // the fields are not this cluster's alone to own. No new store/ layering
+  // grandfathered entry: workspaceHydration.ts imports only `lib/` helpers
+  // and sibling store modules, never `components/`.
+  // store/workspaceHydration.characterization.test.ts (20 specs pinning, for
+  // both actions and every branch, the exact set of top-level store keys
+  // each call changes — a poisoned whole-getState() diff covering every
+  // `lib/plotview.ts` VIEW_KEY, so both the restored-plot-window branch's
+  // write AND the legacy/fresh path's deliberate non-write are visible —
+  // plus the toolWindowLayout key's conditional presence, the mapPaintedLimits/
+  // mapViews P2.8 reset, and appendWorkspace's recordHistory-before-mutation
+  // ordering) was written and run green against the PRE-extraction code and
+  // passes byte-unchanged after the move.
+  "/store/useApp.ts": 1451,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

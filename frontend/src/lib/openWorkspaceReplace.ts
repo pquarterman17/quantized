@@ -188,8 +188,9 @@ export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?
  *  folders, workbooks, frozen editable/publication figures, pages,
  *  reports, smart folders, saved graphs, macro steps, saved ROIs — get
  *  silently replaced. Enumerated from EVERY persisted, user-owned
- *  collection `loadWorkspace` (store/useApp.ts) resets unconditionally on
- *  load (verified against its return object, not assumed). */
+ *  collection `loadWorkspace` (store/workspaceHydration.ts, P4.1's fourth
+ *  domain) resets unconditionally on load (verified against its return
+ *  object, not assumed). */
 export function hasWorkspaceContent(s: StoreGet): boolean {
   const st = s();
   return (

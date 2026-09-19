@@ -6534,6 +6534,72 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   plan and `architecture.test.ts`'s comments; no gate command, budget or
   pin changed, and the extraction's own byte-identical bodies (this note's
   earlier paragraph) are untouched.
+
+  **FOURTH domain extracted 2026-09-19**, same discipline: **workspace
+  hydration** — `loadWorkspace` (replace the whole library from a
+  restored/parsed `.dwk`; the autosave restore on startup AND an explicit
+  File ▸ Open `.dwk` both run it) and `appendWorkspace` (Origin's "Append
+  Project", MAIN_PLAN #16 — the additive opposite: only the flat dataset
+  list + referenced workbooks join the CURRENT library). This is exactly
+  the candidate the third domain's own note named as "the obvious next
+  domain" once the bulk view appliers landed. 170 implementation lines
+  (`loadWorkspace`, base `useApp.ts` 954-1123) plus `appendWorkspace`'s
+  one-line delegate (1124) and their 9 interface-declaration lines — 171
+  lines total, matching the plan's estimate — moved to the new
+  `store/workspaceHydration.ts` (266 lines by the repo's `split("\n")`
+  ceiling metric, `WorkspaceHydrationSlice`, composed with one import +
+  one word on the `extends` clause + one spread, exactly like
+  `plotViewSettings.ts`, `reportsFigureDocs.ts` and `viewAppliers.ts`).
+  `appendWorkspace`'s own body (`runAppendWorkspace`) stays in
+  `store/workspaceIO.ts` — that module is not moving, it is already its
+  own file below the store-size pin — so only the action's one-line
+  delegate travelled. `store/useApp.ts` **1,639 → 1,451 lines (−188)**;
+  its `STORE_PINS` entry ratcheted DOWN to 1,451 with a dated
+  justification. The bodies are byte-identical modulo one indentation
+  level (object literal at depth 1 → the creator's `return {` at depth
+  2); ten now-unused imports left `useApp.ts` with them
+  (`migrateGroupsToFolders`, `mainWindow`, `focusTransientReset`,
+  `sanitizeDocumentBackedPlotWindows`, `hydrateView`, `defaultErrKeys`,
+  `originHiddenChannels`, `sanitizeVisibleDetailsColumns`,
+  `sanitizeTechniqueViewMemory`, `loadedMapViews`, `runAppendWorkspace`,
+  `WorkspaceState`, `LoadedWorkspace`). The FIELDS stay declared and
+  initialized on AppState here, same shape as all three earlier
+  extractions — `loadWorkspace` writes nearly all of them (a
+  full-library replace has to), but plenty of other actions read and
+  write them too, so the fields are not this cluster's alone to own. No
+  new store/ layering grandfathered entry: `workspaceHydration.ts`
+  imports only `lib/` helpers and sibling store modules, never
+  `components/`. Four stale comments pointing at "`store/useApp.ts`'s
+  `loadWorkspace`" (`store/rois.ts` x2, `store/mapView.ts`,
+  `lib/openWorkspaceReplace.ts`) now say `store/workspaceHydration.ts`.
+  Characterization net:
+  `store/workspaceHydration.characterization.test.ts` (20 specs), written
+  and run GREEN against the pre-extraction `store/useApp.ts` and passing
+  byte-unchanged after the move. It pins, for both actions and every
+  branch, the exact set of top-level store keys each call changes — a
+  poisoned whole-`getState()` diff covering every `lib/plotview.ts`
+  `VIEW_KEY`, so both the restored-plot-window branch's write AND the
+  legacy/fresh path's deliberate NON-write are visible — plus the
+  `toolWindowLayout` key's conditional presence (omitted under
+  `skipLayout`, not reset to `{}`), the `mapPaintedLimits`/`mapViews`
+  P2.8 reset (always clears `mapPaintedLimits`; restores `mapViews` only
+  for datasets this load actually has), that `loadWorkspace` pushes no
+  undo entry and records no macro step, and `appendWorkspace`'s
+  `recordHistory`-before-mutation ordering. Sabotage-proven three ways:
+  dropping the `mapPaintedLimits` reset and adding an extra unconditional
+  key write (`xAxisLabel`) both turn the fresh-path key-set spec red; and
+  moving `appendWorkspace`'s `recordHistory` call to AFTER the mutation
+  is invisible to every OTHER spec (they only assert the post-append
+  state) — closed by adding a dedicated ordering spec asserting the
+  pushed undo snapshot is the PRE-append dataset list, which then failed
+  as expected. Eager bundle, both trees built after their own `npm ci`
+  and a `node_modules/.vite` wipe: **889,475 B at `fb0aa64b`** (`HEAD~1`
+  of the extraction, the characterization-only commit, which cannot move
+  the eager graph) → **889,496 B on the extraction commit, +21 B** (the
+  new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched, well clear
+  of budget). The box stays `[~]`: `store/useApp.ts` is still over the
+  500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
+  `lib/uplotOverlays.ts` are untouched by every pass so far.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
