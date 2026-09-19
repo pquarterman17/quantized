@@ -6,6 +6,17 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-18
+
+A **minor** release: the 43 merges since `v0.25.0` add new user-facing
+surfaces — a user-settable category order, nested two-factor box plots,
+greyscale and dash/marker-cycled export, persistent 2-D map views and a
+durable XRD peak table — alongside a large data-integrity batch (text columns
+that stay on their rows, non-finite cells that survive save, screen/export
+parity) and a keyboard-focus overhaul.
+
+### Plotting and export
+
 - Plots are now drawn with a full axis box by default — a border on all four
   sides (left y, bottom x, right y2 and top) rather than just the left-and-
   bottom "L". This matches Origin's own default and the convention most
@@ -14,6 +25,176 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   previously drew tick marks along the top and right edges with no border for
   those ticks to sit on. Turn it off per plot with **Axis box (frame)** in the
   Inspector; a saved project that had it off keeps it off.
+- Exported SVG figures now carry axis titles, tick labels and annotations as
+  real, editable `<text>` instead of outlined glyph paths, so they can be
+  retyped in Illustrator, Inkscape or Origin (mathtext stays outlined). The
+  correlation heatmap's cells are now vector rather than an embedded image.
+- Exported figures draw the same marker shapes as the screen; every marker
+  previously exported as a filled circle.
+- **Greyscale (print-safe)** export option: each series gets an evenly spaced
+  grey plus a forced dash/marker cycle. It covers single figures (including
+  y2, x-axis breaks and grouped figures) and every page export — Export
+  page…, the Figure Page composer (whose preview turns grey too), and
+  exporting a saved page from the Library. Only the export changes; the
+  screen stays in colour. Error-bar caps now take their series colour in
+  vector output, which also fixes caps drawn in the wrong colour in ordinary
+  coloured exports.
+- **Vary dash & marker** (Appearance menu, off by default) cycles line dashes
+  and marker shapes by series position, so series stay distinguishable
+  without relying on colour. A plot cycles on screen only when its export
+  will draw the same dash and marker at the same position; grouped, faceted,
+  stacked, polar and statistical views opt out on both sides.
+- The `tol-bright` series palette had two identical colours; its eighth slot
+  now has a distinct colour that stays distinguishable under simulated
+  colour-vision deficiency and legible on the dark canvas.
+- Exporting a (non-faceted) figure now leaves out excluded and Data-Filtered
+  rows, as the screen does, with error bars kept aligned to the remaining
+  points.
+- Long exports can be cancelled: each running export shows its own
+  **Cancel** control in the status bar, and nothing is written to disk once
+  it is cancelled. (A clipboard copy cannot be cancelled once the image is
+  produced, and some download paths are not cancellable yet.)
+- Screen, export and reopened project now agree in five cases that used to
+  diverge: a saved x-axis break is drawn on screen after reopening the
+  project; a waterfall's per-series stagger reaches the exported figure; a
+  legend rename is exported as a legend label only (the data's real label
+  and units are unchanged) and shows verbatim on facet, stacked and x-break
+  panels; hidden series no longer shift the other series' export colours;
+  and a grouped figure exports each level with its channel's dash, width,
+  marker and colour as the screen draws them.
+- The baseline **Fit from region** rubber band can also bound the y range (a
+  2-D box, as in the MATLAB toolbox).
+
+### Categorical data and statistics
+
+- **Reorder levels…** (worksheet column context menu on a categorical column)
+  sets a category's display order: move levels up or down, sort by label, or
+  reset to code order. The order applies wherever the categories are drawn:
+  bar, box, violin and strip axes, XY group split, Tabulate, facets,
+  variability charts, the Data Filter's level list and publication exports.
+  Level codes are never renumbered, so formulas, filters and macros that
+  refer to a code keep their meaning, and a level that appears later still
+  shows up, at the end. Each reorder is one undo step.
+- Box, violin and strip plots gain a **then by** picker beside **group by**,
+  which draws one box per combination of the two columns that has data
+  (labelled `lot = 1 / wafer = 3`). The boxes are nested in order, following
+  each factor's level order. Facets nest the same way, and exports carry the
+  combined labels.
+- Split Dataset now honours a column's categorical levels (an explicit level
+  table, or an Origin text column). A small categorical column used to be
+  treated as continuous and pooled into one group named after a level code;
+  children are now named after their level.
+- Corrections and Resample keep a categorical column's level table (and its
+  order) when the codes provably did not change: an identity correction, a
+  row trim, an x-only shift, or a resample onto the same grid. They used to
+  drop it every time, turning every label into a bare number.
+- Duplicate, Freeze copy, Extract rows and `.opj` export keep categorical
+  level labels. Duplicate and Freeze copy used to reduce them to raw codes.
+- The Stat Stage no longer keeps a group-by pick on a column you have since
+  marked non-categorical. Changing the type back restores the pick.
+
+### Data integrity
+
+- Text columns (sample ids, operators, run labels) stay attached to their
+  rows through Extract, Split, row exclusions and the Data Filter, facets,
+  inserting and deleting rows, Merge, x-trim corrections and lazily loaded
+  Origin previews. Each of these could previously pair a text cell with
+  another row's measurement, and inserting or deleting rows could delete
+  text cells beyond the last numeric row, which on a text-only Origin book
+  meant the whole worksheet. Resample, which creates new rows, now drops
+  them.
+- Worksheet cells holding NaN, ±Infinity or −0 now survive save and reopen
+  across `.dwk` save, autosave, Pack Project and workbook transfer. Ordinary
+  data serializes byte-identically, so this is not a file-format change.
+- Opening an NCNR reductus `.refl` file now plots only the measured
+  reflectivity. Its uncertainty becomes the Y error bars and its Q resolution
+  the X error bars; previously these were drawn as three separate curves.
+  This also works with `R`/`dR`/`dQ` naming, blank (dimensionless) units and
+  extra columns. The roles survive rebinding a window, reimport and a manual
+  override, and the uncertainty columns stay in the worksheet.
+- The Data Filter is part of undo. A slider drag or a typed value is a single
+  step, and Ctrl+Z works while a slider has focus. Previously one Ctrl+Z
+  could remove both a row exclusion and a filter, a redo could wipe out a
+  filter, and a cleared filter could come back.
+- Automatic recalculation handles datasets upstream-first, so a derived
+  dataset is never rebuilt from a stale parent. A recalculation that fails
+  now leaves that dataset, and anything derived from it, marked stale
+  instead of clean. If a background-subtraction reference has been deleted,
+  recalculation says it ran without it.
+- Lazily loaded Origin books: row exclusions and filter edits are refused
+  with a message while the book is still loading, instead of being silently
+  discarded when its full data arrives. If loading the full data failed, the
+  message now says why and suggests relinking or re-importing; it used to
+  say "try again in a moment" forever. Pack Project and Save/Save As load
+  pending books first and refuse, naming the book, if one cannot be loaded.
+  Pack Project could previously ship a book's preview rows as its data.
+- Warnings from migrating an older project now appear on every load path
+  (crash recovery, autosave restore, Append Project, workbook Paste), not
+  only File ▸ Open.
+- Paste and Duplicate now say when a lineage or background-subtraction
+  reference could not be carried across. A dropped background reference
+  changes the plotted data, so it is reported separately.
+
+### Analysis
+
+- XRD: fitted peaks are saved with the project as a peak table, from which a
+  Williamson-Hall analysis runs in one click. Editing a cell, changing an
+  exclusion or changing a unit invalidates the table instead of leaving it
+  describing data that no longer exists.
+- 2-D maps: each map's colormap, scale, colour limits and cut slices are
+  saved with the project. Slices survive a regrid or a colour-limit change;
+  a slice the new grid cannot place is parked in a strip on the stage with
+  the reason and stays removable. Opening a map no longer marks the project
+  modified. A map window for a dataset other than the active one has
+  colour-limit fields in its own toolbar.
+
+### Library, search and Help
+
+- In Tree view, a worksheet is now a compact one-line row like a graph,
+  where it used to be a tall card. Its sparkline preview is an opt-in toggle
+  per row and is remembered. Folders, workbooks, worksheets and graphs each
+  show a type glyph.
+- Large Libraries: Tree and Details (which also shows search results) render
+  only the visible rows once past 150, and folder counts and selection
+  lookups are indexed. Keyboard navigation continues past the visible
+  window, screen readers are told the full row count, and if the focused row
+  scrolls out of view, arrow keys and Delete keep working.
+- The Details and Tiles views gain the Tree's rename, move and drag-and-drop:
+  a drag grip, the same drop cues, and keyboard rename.
+- Find in project searches instrumental metadata that did not become a
+  channel: text-column and other column names, label rows (where sample ids
+  live) and the file's preamble comments.
+- Help search finds every described command, including ones such as Relink
+  Sources, Paste Workbook, Take Over Editing and Open as Copy that it could
+  not reach before.
+
+### Keyboard and accessibility
+
+- Dialogs and workshop panels take focus when they open, keep Tab inside,
+  close on Escape and return focus to where it was, and this now includes
+  Split, Separate, Combine, Reimport All, Shortcuts, Text Format Help,
+  Preferences and Help. Escape is handled by one ordered ladder (menu, live
+  gesture, window, workspace, selection, app), so a single press closes the
+  innermost thing and nothing behind it. Known issue: with Preferences open
+  over a confirmation, one Escape still closes both (BUG-018).
+- Screen readers announce import, export and fit progress from the status
+  bar, without interrupting.
+- The Library marks the dataset bound to the active window with
+  `aria-current`, separately from multi-selection.
+
+### Under the hood
+
+- About 42 kB of JavaScript moved off the startup path into lazily loaded
+  chunks, which absorbs everything above: the startup bundle (~889 kB) is
+  no larger than in 0.25.0.
+- The central store module (`store/useApp.ts`) shrank from 2,808 to 1,450
+  lines as seven domains (recalculation, ROI gadget, row state, plot-view
+  settings, reports and figure documents, bulk view appliers, workspace
+  hydration) moved into their own modules, most behind a characterization
+  test written before the move.
+- Dependency security updates: `anyio` 4.14.2 and `js-yaml` 4.3.2. The Rust
+  advisory register was re-verified; everything in it is still blocked on
+  upstream Tauri/gtk releases.
 
 ## [0.25.0] - 2026-09-08
 
