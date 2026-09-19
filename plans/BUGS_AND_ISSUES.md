@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (UX-003 FIXED across three rounds: `lib/lazyRegion.tsx`,
+**Updated:** 2026-09-19 (BUG-019 + BUG-020 FIXED: `captureTechniqueView` (`lib/techniqueViewMemory.ts`) spread its capture source whole, and three of its four callers hand it the ENTIRE `AppState` — so every per-technique view memory entry carried `datasets`, `plotWindows` AND the previous `techniqueViewMemory`, and alternating between two techniques compounded the map Fibonacci-wise (ratio -> phi ~ 1.62; measured on the owner's own sequence: 5.4 MB -> 16.3 -> 32.4 -> 70.0 -> 123.6 -> 214.8 -> 359.6 MB, then `JSON.stringify` throwing `Invalid string length`, then the page unresponsive for >45 s). The autosave that stringifies it runs on the thread that draws, which is why an ROI box integration's Apply produced an empty plot AND blanked previously plotted datasets; the StatusBar's persistent autosave-failing alert DOES fire, but its status line blamed storage for what was a serialization failure, and that wording is fixed too. Fixed by projecting the capture source down to its nine declared fields; same sequence now flat at 344 B. BUG-020, found alongside it and filed separately: `useCutLanding` minted cut ids from a private page-lifetime counter, so a reopened workspace holding `cut-1` plus one new cut held two datasets with that id — Apply plotted the OLD one and a single delete destroyed both; it now draws from `store/idSeq.ts`. UX-003 FIXED across three rounds: `lib/lazyRegion.tsx`,
 a drop-in `lazy()` replacement, gives every code-split seam its own error
 boundary and a retry that rebuilds `lazy()` — the only way to defeat React's
 permanent memoization of a rejected lazy() promise. Re-measured the seam
@@ -22,8 +22,7 @@ a real cost delta to a "stale cache". 13 tests total, 7 sabotage rounds
 each reddening the exactly-expected tests. Eager bytes, measured after
 `npm ci` + a cleared vite cache: 876,437 B against the unmoved 876,469 B
 budget — 32 B of headroom (see the entry's Completion record for the full,
-corrected accounting); earlier the same
-day, BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
+corrected accounting); 2026-09-19 earlier: BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
 — `plans/BUNDLE_HEADROOM.md` slice 3 added two more sites in modules the
 record already named, then slice 4's own 2026-09-18 review round re-measured
 after slice 4 added nine seams across three new modules, landing at 28;
@@ -69,6 +68,8 @@ This is a working document, not a claim that every observation is already reprod
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounted the React root — 30 `lazy()` sites measured 2026-09-19 (17 at filing, +2 slice 3, +9 slice 4, +2 more found unfiled at this fix's start), zero error boundaries, so the window went blank with no toast, no status, no console error, and React cached the rejection so the gesture could not retry | Claude (agent) | **FIXED** 2026-09-19, three rounds — `lib/lazyRegion.tsx`, a drop-in `lazy()` replacement: one error boundary per region distinguishing a load failure (a tagged `LoadFailure` wrapper, never a value mutation) from a genuine render bug (re-thrown, not mislabeled), plus a per-instance retry that rebuilds `lazy()` without ever remounting a sibling instance of the same seam. Wired to all 30 seams plus AppOverlays' 52-panel `lazyPanel()` family via one shared call site. 13 tests, 7 sabotage rounds each reddening the exactly-expected tests. Eager bytes (measured post `npm ci` with a cleared cache): 876,437 B vs 876,469 B budget (32 B headroom) — see the entry for the full accounting and a correction to an earlier mismeasurement |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 | BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal, nothing below a modal is offered the key even when the modal declines, and (round-9 review) the claim resolves SYNCHRONOUSLY at keydown and marks the event, so a window-bubble listener that honours `defaultPrevented` — `usePeakWizard`'s marker-edit pause — can no longer kill the dialog's close mid-dispatch. The bypass is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
+| BUG-019 | P1 | Per-technique view memory / dataset switch / autosave | `captureTechniqueView` stored the WHOLE object handed to it, and three callers hand it the entire `AppState` — so each entry held the library, the windows and the PREVIOUS memory map, compounding the serialized workspace on every dataset switch (Fibonacci-wise when alternating two techniques, ratio -> phi ~ 1.62) until autosave's `JSON.stringify` stalled the main thread and every plot, new and old, stopped drawing | Claude (agent) | Owner-reported 2026-09-19 (XRDML 3-D map + box integration); **FIXED 2026-09-19** — the capture projects down to its nine declared fields. Measured before/after on the owner's exact sequence in the running app: 5.4 MB -> 359.6 MB -> `RangeError` -> unresponsive, versus a flat 344 B |
+| BUG-020 | P2 | Cut landing (`Stage/useCutLanding.ts`) | A landed cut took its id from a private page-lifetime counter (`cut-1`, `cut-2`, …) instead of `store/idSeq.ts`, so a workspace reopened with a `cut-1` in it plus one new cut held TWO datasets with that id: Apply plotted the OLD cut's rows and one delete destroyed both | Claude (agent) | Found 2026-09-19 investigating BUG-019, confirmed by that fix's adversarial review; **FIXED 2026-09-19** — ids now come from the shared collision-free sequence. Probed on both trees: `['cut-1','cut-1']` / old rows / empty library before, unique ids and an independent delete after |
 
 ---
 
@@ -7394,6 +7395,348 @@ hoisting design decision R12 records.
 
 ---
 
+## BUG-019 — the per-technique view memory stored the whole app state, so every dataset switch compounded the workspace until the main thread stalled
+
+**Priority:** P1 — silent state corruption that grows without bound; the visible failure is "every plot is blank"  
+**State:** Verified complete (agent); owner verification on real data outstanding  
+**Reported:** 2026-09-19 by owner  
+**Investigated:** 2026-09-19, Claude (agent); adversarially reviewed the same day  
+**Suggested implementation owner/model:** —  
+**Related plan:** PLOT_WORKFLOW_PLAN item 5 (per-technique view memory); reported against RSM_CUTS_PLAN's box-integration flow, which is NOT where the defect lives
+
+### User-visible problem
+
+Verbatim: *"when I did a xrdml 3d data set and a box integration, the preview looked good, but then when I hit apply, it made a new plot that was empty, and when I toggled to previously plotted right data, they are also blank."*
+
+The ROI box preview is pure client-side math in a rAF (`lib/roiMath.ts`), so it
+is unaffected and looks correct. Apply lands a perfectly good dataset — and
+then the plot area is empty, and so is every previously plotted dataset the
+user switches back to.
+
+**What the user IS told, corrected after review.** An earlier version of this
+entry claimed "nothing is reported". That is false, and the claim is narrowed
+here: `lib/autosave.ts:88` stores the real failure message in `health.error`,
+`useWorkspaceAutosave.ts` calls `reportAutosaveHealth` **and** `setStatus`, and
+`components/Shell/StatusBar.tsx:139-145` renders a persistent `role="alert"`
+"⚠ autosave failing" carrying that message in its tooltip (pinned by
+`StatusBar.test.tsx:96,102`) — the owner's screenshot showed that indicator.
+What is NOT reported is the stall itself: while the main thread is inside the
+serialize there is no frame to paint, and nothing anywhere names "your
+workspace has grown too large to save". The one genuinely wrong surface was
+the status wording, fixed with this entry: `flushAutosaveNow` hardcoded
+"autosave failed (storage full or unavailable)" for every failure, but
+`saveAutosave`'s single catch also covers `serializeWorkspace`, so a
+`RangeError: Invalid string length` was blamed on the disk. It now names the
+real reason and keeps the generic wording only when there is none.
+
+### Reproduction
+
+- [x] Starting state and sample data identified
+- [x] Exact actions recorded
+- [x] Actual result recorded
+- [x] Expected result recorded
+- [x] Reproduced by an agent
+
+Driven against the RUNNING app (`qz --no-browser`, real backend, real built
+SPA, Chromium via Playwright, `?harness` for state reads), on the owner's
+sequence: import a 1-D XRDML scan and plot it, open a 220x220x5 RSM
+(`metadata.is2D`/`map_shape`/`axis1_name`, the shape `io/xrdml.py::_build_2d`
+emits — the owner's `m3learning_rsm.xrdml` is 465,885 x 5, roughly 10x this),
+arm the Integration box, set `store.mapRoi`, click the commit bar's `∫ 2Theta`,
+then toggle between the cut and the previously plotted scan.
+
+`JSON.stringify(techniqueViewMemory).length`, measured at each step:
+
+| step | with the defect | after the fix |
+|---|---|---|
+| prior scan plotted | 5,440,727 | 171 |
+| on the map | 16,322,222 | 344 |
+| after Apply (new cut plot) | 16,322,222 | 344 |
+| toggle 1 (back to the prior scan) | 16,322,222 | 344 |
+| toggle 2 | 32,387,084 | 344 |
+| toggle 3 | 69,957,577 | 344 |
+| toggle 4 | 123,592,932 | 344 |
+| toggle 5 | 214,798,775 | 344 |
+| toggle 6 | 359,639,968 | 344 |
+| toggle 7 | `RangeError: Invalid string length` | 344 |
+| toggle 10 | page unresponsive, >45 s, measurement abandoned | 344 |
+
+A second run on two ordinary imported XRDML files (no synthetic data, 6,474
+and 50 rows) reached 73.9 MB in ten switches and then stopped answering ANY
+page evaluation from switch nine onward — no further output in the remaining
+600 s. On the fixed build the identical probe runs all 26 switches, the map
+stays at 344 bytes, and both datasets keep the same canvas ink every time
+(537,953 / 51,795 — byte-identical measurements, so nothing about the drawing
+changed).
+
+**Expected:** the remembered view for a technique is a handful of channel
+indices and two axis scales. It must not grow with the library, and must not
+grow at all as the user moves between datasets.
+
+### Investigation
+
+- [x] Likely owning components/modules identified
+- [x] Root cause confirmed rather than inferred
+- [x] Related workflows and persistence paths checked
+- [x] Existing plan overlap reconciled
+
+**Root cause.** `lib/techniqueViewMemory.ts`'s `captureTechniqueView` ended
+with `return { ...memory, [tech]: { ...liveView, labels } };`. `liveView` is
+typed `LiveViewSource` — nine fields — but that interface is satisfied
+STRUCTURALLY, and three of its four callers pass something enormously wider:
+
+| call site | what it passes | probed size of one entry (`281ee552` vs fixed) |
+|---|---|---|
+| `store/windows.ts:151` (`focusedRebindPatch` — the shared body of `setActive` and `rebindWindow`'s focused branch, i.e. every Library click and every plot-intent activation) | the whole `AppState` | 177 B -> 347 B on a trivial library, unbounded on a real one |
+| `useWorkspaceAutosave.ts:283` (the 800 ms-debounced autosave, which then `JSON.stringify`s the result) | the whole `AppState` | 1,567,653 B -> 347 B |
+| `store/workspaceIO.ts:102` (File ▸ Save / Save As, into the `.dwk`) | the whole `AppState` | same path as autosave |
+| `store/windows.ts:492` (background-window rebind) | a full `PlotView` | 177 B -> 347 B — over-wide but bounded and non-recursive |
+
+**The growth relation, corrected after review.** It is NOT `2 x size(k-1)`.
+The copied state includes `techniqueViewMemory` itself, so each capture nests
+the map built by the one before it — but only the slot being written is
+replaced, and the OTHER slots are left holding their own older copies. With a
+single technique repeatedly captured the recursion is therefore LINEAR
+(`size(k) = size(k-1) + C`). Alternating between two techniques — exactly what
+"switch to the map, switch back" does — makes each slot absorb the other one
+generation late: `size(k) ≈ size(k-1) + size(k-2) + C`, i.e. Fibonacci-like,
+with the ratio tending to φ ≈ 1.62. Measured on `281ee552` alternating two
+techniques: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648
+-> 4,257,632 -> 6,988,939 (ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64).
+The field numbers in the reproduction table show the same 1.6x. More
+techniques in rotation compound faster still. `datasets` sets the constant `C`,
+which is why a 3-D RSM — the biggest single object the library ever holds —
+makes it fatal after a handful of switches instead of dozens.
+
+**Why Apply produces an empty plot, and why previously plotted data blanks
+too.** Neither plot's DATA is wrong; nothing is mutated and no view field is
+clobbered. Every measured payload was correct and complete at every step. The
+failure is that the thread that draws is the thread that serializes. Autosave
+subscribes to the store, and a changed `activeId`/`datasets` passes
+`shouldAutosave`, so **every dataset switch and every dataset add schedules a
+full workspace `JSON.stringify` 800 ms later** — of a structure that has just
+grown by a factor of ~1.6. Landing the cut adds a dataset (bigger `C`) and
+makes it active; the switch back to the previously plotted dataset compounds
+again. React has already torn down the old uPlot instance and the
+`/api/plot/series` promise has not resolved, so what the user is looking at
+while the main thread is inside that `JSON.stringify` is an EMPTY plot frame —
+for the new cut and, on the next toggle, for the old dataset as well.
+
+**What was ruled out, by measurement rather than by reading.** The backend box
+cut is correct (`POST /api/rsm/box` against a synthetic RSM returns a 21-row,
+2-column DataStruct with the right `time`/`values`/`labels`/metadata, grid path,
+`is2D` cleared). `cut_result` does not leak `is2D`/`map_shape` into the cut, so
+the Stage correctly routes to the plot tab. No DataStruct is mutated in place:
+`useCutLanding` → `addDataset` stores the parsed response as-is and
+`buildSelectionOverlay`/`assembleOverlay` allocate fresh arrays. The
+dataset-handle cache (`lib/api/datasetCache.ts` + `routes/_datasetcache.py`)
+resends the full dataset on a 409 and was never implicated. The full ROI flow —
+canvas commit bar, ROI panel Run, and batch "Apply to selected", in both
+angular and Q space, on 50-point and 90,000-point maps — lands correct data and
+keeps every plot drawing once the memory growth is removed.
+
+**Separately filed:** the cut-id collision first noted here as a footnote is
+now BUG-020, with its own reproduction. It reproduces the owner's symptom
+class ("Apply made a new plot that was empty/wrong") independently of this
+stall, which is why demoting it to a footnote was wrong.
+
+### Implementation
+
+- [x] Minimal safe behavior defined
+- [x] Failure and ambiguous-data behavior defined
+- [x] Data integrity and backward compatibility considered
+- [x] UI wording/tooltips/accessibility included where relevant
+
+One change, in the pure layer, at the single point every caller funnels
+through: `captureTechniqueView` now stores
+`{ ...projectLiveView(liveView), labels }`, where `projectLiveView` names the
+nine `LiveViewSource` fields explicitly and is annotated `: LiveViewSource`, so
+omitting a newly-added field is a compile error. Fixing it inside the capture
+(rather than adapting each call site) is what makes it hold for all four
+callers and for any future one — the interface stays structurally satisfiable,
+which is what the call sites rely on, but what gets STORED no longer depends on
+how wide the caller's object happens to be.
+
+Behaviour of the memory itself is unchanged: the same nine fields are captured,
+re-keyed by label and applied exactly as before (the existing round-trip,
+re-key, shape-mismatch and sanitizer tests all still pass untouched). No schema
+change: a `.dwk` written before this fix is read through
+`sanitizeTechniqueViewMemory`, which already projected to these same fields on
+load, so an oversized persisted map degrades to a correct small one rather than
+failing. `LiveViewSource`'s doc comment now says why the projection exists,
+since the sentence it replaces ("no adapter needed at either call site") is
+what invited the bug.
+
+Second, smaller change (see "What the user IS told" above): the autosave
+failure status now names the real reason instead of always blaming storage.
+
+### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
+- [ ] Owner verifies on the real `m3learning_rsm.xrdml` workflow
+
+`lib/techniqueViewMemory.test.ts`
+- "stores only the nine declared view fields, never the wider object handed
+  in" — captures from an `AppState`-shaped source and asserts the entry's key
+  set exactly. The expected list is PARSED out of the `LiveViewSource`
+  interface (the `PlotView` precedent at `architecture.test.ts:2238`), with a
+  degraded-parse guard, so it cannot rot as the interface changes.
+- "repeated captures that re-feed the previous map do not grow it" — feeds each
+  capture's own output back in, as the store does, and asserts the serialized
+  size stops moving.
+- "remembers a log X axis, not just a log Y" — added after review found
+  `xScale` was the one projected field with NO coverage anywhere: replacing it
+  with a literal `"linear"` passed all 684 files / 11,592 tests.
+
+`store/techniqueMemoryGrowth.test.ts` (new file) drives the owner's sequence
+through the REAL store actions — `setActive`, then `useCutLanding.land()` with
+the measured `/api/rsm/box` response, then `setActive` back:
+- asserts the cut lands, and that both the new cut and the previously plotted
+  dataset still produce drawable columns through the stage's own
+  `effectiveChannels` + column packing;
+- asserts no entry carries `datasets`/`plotWindows`/`techniqueViewMemory`, and
+  that the map stays under 4 kB across ten switches and stops changing.
+
+`useWorkspaceAutosave.test.ts` — two cases pinning that a serialization failure
+is reported as itself and that the generic wording survives a message-less
+throw.
+
+Both memory files guard against vacuity (the store test asserts a capture
+actually happened and that both technique slots are populated — without a real
+`metadata.technique` tag, `techniqueOf` returns `"generic"` and every
+assertion would hold on an empty map).
+
+**What these tests deliberately do NOT claim.** The blank canvas is a
+main-thread stall, not a data change; jsdom has no rendering and no autosave
+timer pressure, so it cannot show a canvas going blank. These tests pin the
+state size and shape that DECIDE whether the stall happens; the user-visible
+half is the before/after table above, measured against the running app.
+
+#### Completion record
+
+- PR/commit: the branch's `fix(store): the technique view memory must store a view, not the whole app state`
+- Automated tests: 7 new across three files, every one sabotage-verified
+- Agent verification: before/after measured against the running app on the owner's own sequence (table above)
+- Owner verification: outstanding
+- Notes: the adjacent cut-id defect is now BUG-020, filed and fixed in the same commit
+
+---
+
+## BUG-020 — a landed cut reused an id already in the library, so Apply plotted the old cut and one delete destroyed both
+
+**Priority:** P2 — silent data loss (one delete removes two datasets) and a wrong plot, reachable by a plain reopen-and-cut  
+**State:** Verified complete (agent); owner verification outstanding  
+**Reported:** 2026-09-19, found by Claude (agent) while investigating BUG-019; confirmed by the adversarial review of `f8d72f43`  
+**Investigated:** 2026-09-19, Claude (agent)  
+**Suggested implementation owner/model:** —  
+**Related plan:** RSM_CUTS_PLAN item 8 (the shared cut-landing hook)
+
+### User-visible problem
+
+`components/Stage/useCutLanding.ts` — the ONE landing path every cut commit
+shares (the map's inline ∫ bar, the ROI panel's Run, and the batch "Apply to
+selected") — minted dataset ids from a PRIVATE module counter:
+
+```ts
+let _seq = 0;
+…
+const id = `cut-${++_seq}`;
+```
+
+That counter resets on every page load; the library does not. Autosave restore
+runs at startup, so a session that reopens a workspace containing `cut-1` and
+then lands one new cut ends up with two datasets carrying that id. Nothing
+dedupes: `store/useApp.ts:817`'s `addDataset` appends, and
+`store/removeDatasets.ts:48` filters by id. Every id-keyed lookup in the app
+then resolves to whichever came first.
+
+This reproduces the owner's reported symptom class — "Apply made a new plot
+that was empty/wrong" — independently of BUG-019's stall, which is why it is
+its own entry rather than a note inside that one.
+
+`store/idSeq.ts`'s whole documented purpose is to prevent exactly this: "One
+counter per PROCESS … Ids are therefore unique across the whole workspace
+regardless of prefix." This hook was the one minting site that did not use it.
+
+### Reproduction
+
+- [x] Starting state and sample data identified
+- [x] Exact actions recorded
+- [x] Actual result recorded
+- [x] Expected result recorded
+- [x] Reproduced by an agent
+
+Reload the app (fresh module graph, so the private counter restarts) with a
+library restored from autosave that already holds `cut-1`, then land one cut.
+Measured with the defect present:
+
+- the library holds `['cut-1', 'cut-1']` — the landed dataset never becomes
+  separately addressable;
+- `activeId` is `cut-1`, and `datasets.find(...)` returns the FIRST match, so
+  the plot shows the OLD cut's rows (`values[0] === [10]`, not the new `[99]`);
+- `removeDatasets(['cut-1'])` leaves `[]` — one delete destroys both.
+
+**Expected:** a landed cut gets a library-unique id; Apply plots the cut just
+made; deleting it leaves everything else alone.
+
+### Investigation
+
+- [x] Likely owning components/modules identified
+- [x] Root cause confirmed rather than inferred
+- [x] Related workflows and persistence paths checked
+- [x] Existing plan overlap reconciled
+
+No code anywhere depends on the `cut-` prefix (grepped: the only occurrences
+were the minting line itself). The collision is confined to this one minting
+site; every other dataset-minting path in the store already draws from
+`store/idSeq.ts`.
+
+### Implementation
+
+- [x] Minimal safe behavior defined
+- [x] Failure and ambiguous-data behavior defined
+- [x] Data integrity and backward compatibility considered
+- [x] UI wording/tooltips/accessibility included where relevant (none — ids are not user-visible)
+
+`useCutLanding` now calls `nextDatasetId()` from `store/idSeq.ts`. Ids become
+`ds-<t36>-<n>` like every other minted dataset, which embeds a timestamp as
+well as the per-process counter, so a restored id from an earlier session
+cannot be reminted. Nothing else changes: the returned id still flows to the
+batch tool's `plotSelectedTogether`, and the name/status/error contract is
+untouched.
+
+Datasets already saved with a `cut-N` id keep it and keep working — the fix
+only changes what NEW cuts are named, which is what removes the collision.
+
+### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
+- [ ] Owner verifies
+
+`components/Stage/useCutLanding.test.ts` (new file), three cases against a
+`vi.resetModules()` reload with a restored `cut-1` in the library — the reload
+is what makes the page-load half real, and the store is taken from the SAME
+fresh module graph as the hook so the assertions read what the hook wrote:
+unique ids after landing; the ACTIVE dataset holds the new cut's rows; deleting
+the landed id leaves the restored dataset alive. All three fail with the
+private counter restored.
+
+#### Completion record
+
+- PR/commit: the branch's `fix(store): the technique view memory must store a view, not the whole app state`
+- Automated tests: 3 new, sabotage-verified (restoring the private counter reddens all three)
+- Agent verification: reproduction above measured on both trees
+- Owner verification: outstanding
+- Notes: found while investigating BUG-019; filed separately because it stands on its own
+
+---
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -7473,3 +7816,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
 | 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-19 | Claude (agent) | Filed BUG-018 (P2): all ten backdrop dialogs in `components/overlays/` claim Escape with `window.addEventListener("keydown", …, true)` + `stopPropagation()`, which does not stop a same-node same-phase sibling, so two stacked dialogs both act on ONE keystroke — measured 2 → 0 open `[role="dialog"]` for Preferences+Shortcuts, Preferences+Help and Preferences over a pending `ConfirmDialog`, the last also resolving the confirmation `false` on the keystroke that dismissed Preferences. Pre-existing (the Escape effects are byte-identical to before `cee0494f`); what was new was R1 being CLOSED and the audit row flipped to "window capture, kept" on the claim that a backdrop dialog can never be out-ranked — true over a non-dialog surface, false dialog-over-dialog. The preferred fix was BUILT and MEASURED (all ten onto `useEscapeSurface("window", …)`; it does fix the ladder, confirm stays pending on the first Escape) and then REVERTED: `escapeStack`'s `isEditingTarget` early return made Help, Separate, Combine and Split Escape-DEAD from their own documented landing spots (an `<input>`/`<select>` each), 9 failed / 264 passed. Narrowed R1 instead, corrected the audit row, recorded NITs 4 and 5 as residuals R12/R13, and fixed review NIT 3 (Preferences landed on the first Theme segment, which under `theme: "light"` is an `aria-selected="false"` "Dark" button; it now lands on the SELECTED one, pinned in both themes) | 3 new specs (`components/overlays/stackedDialogEscape.test.tsx`) + 1 new 2-case `it.each` (`PreferencesDialog.test.tsx`), all sabotage-verified across 5 sabotages, source restored byte-identical; round 7's per-dialog focus-hook sabotage property re-verified after the landing-spot change (Preferences alone → RED 2/10). Also corrected the FIFTH-recurrence wrong-parent bundle record on `cee0494f`: its parent is `4179b166`, not `b10bcad3` (three commits back, with two P4.1 commits that moved 218 eager lines between them) — re-measured in a throwaway worktree, `4179b166` **889,496 B** → `cee0494f` **889,498 B**, +2 B; the delta was right, both absolute numbers were wrong by 21 B |
+| 2026-09-19 | Claude (agent) | **BUG-019 fixed** (P1, silent state corruption) and **BUG-020 filed + fixed** (P2, silent data loss). BUG-019: `lib/techniqueViewMemory.ts`'s `captureTechniqueView` spread its capture source whole (`{ ...liveView, labels }`), and `LiveViewSource` is satisfied STRUCTURALLY — so the three callers that hand it the entire `AppState` (`store/windows.ts:151`'s `focusedRebindPatch`, `useWorkspaceAutosave.ts:283`'s debounced autosave, `store/workspaceIO.ts:102`'s Save/Save As) stored `datasets`, `plotWindows` AND the PREVIOUS `techniqueViewMemory` in every entry. Only the slot being written is replaced, so a single technique recurses linearly but ALTERNATING two — switch to the map, switch back — makes each slot absorb the other one generation late: `size(k) ~ size(k-1) + size(k-2) + C`, Fibonacci-like, ratio -> phi ~ 1.62 (an earlier revision of this row said `2 x size(k-1) + C`; measured on `281ee552`: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648 -> 4,257,632 -> 6,988,939, ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64). Autosave `JSON.stringify`s that map on the thread that draws, 800 ms after every dataset switch and every dataset add, which is why the owner's ROI box integration produced an empty new plot AND blanked previously plotted datasets — the data was never wrong, the main thread simply stopped. Fixed by projecting the capture source down to its nine declared fields inside `captureTechniqueView`, so it holds for all four callers and any future one; no schema change and no behaviour change to the memory itself. Two review corrections carried in the same commit: the earlier claim that "nothing is reported" was FALSE — `lib/autosave.ts:88` + `StatusBar.tsx:139-145` do render a persistent `role="alert"` autosave-failing indicator — so the claim is narrowed to the stall itself, and the one genuinely wrong surface (a status line hardcoded to "storage full or unavailable" for what was a `serializeWorkspace` failure) now names the real reason. BUG-020: `Stage/useCutLanding.ts` minted `cut-N` ids from a private page-lifetime counter instead of `store/idSeq.ts`'s collision-free sequence — filed with its own reproduction rather than left as a footnote, since it reproduces the owner's "Apply made a new plot that was empty/wrong" symptom class independently of the stall | Measured before/after against the RUNNING app (Playwright + real backend) on the owner's exact sequence: `JSON.stringify(techniqueViewMemory).length` 5,440,727 -> 16,322,222 -> 32,387,084 -> 69,957,577 -> 123,592,932 -> 214,798,775 -> 359,639,968 -> `RangeError: Invalid string length` -> page unresponsive >45 s; after the fix a flat 344 B across all 26 switches with identical canvas ink (537,953 / 51,795) every time. A second run on two ordinary imported XRDML files hit 73.9 MB in ten switches and stopped answering any page evaluation from switch nine for the remaining 600 s. BUG-020 probed on both trees: `['cut-1','cut-1']`, `activeId` resolving to the OLD rows, and `removeDatasets` emptying the library, versus unique ids and an independent delete after. 10 new tests across four files, all sabotage-verified — the whole-object spread and the recursion-only variant each redden 4 (2 in `lib/techniqueViewMemory.test.ts`, 2 in `store/techniqueMemoryGrowth.test.ts`); restoring the private cut counter reddens all 3 in `Stage/useCutLanding.test.ts`; hardcoding the autosave wording reddens both new `useWorkspaceAutosave.test.ts` cases; and a per-field sweep of `projectLiveView` (scope: the two memory files + `store/windows.test.ts`) now reddens on EVERY one of the nine — xKey 4, yKeys 8, yScale 5, xScale 2, seriesStyles 9, seriesLabels 8, seriesOrder 2, errKeys 8, hiddenChannels 8 (the previous row claimed 1 for a dropped field, which was the weaker `hiddenChannels: []` variant, and `xScale` had NO coverage at all before this round). `npx tsc -b --force` 0; `npx eslint src --max-warnings=0` 0; SCOPED `npx vitest run` over the six affected/adjacent files (`lib/techniqueViewMemory.test.ts`, `store/techniqueMemoryGrowth.test.ts`, `Stage/useCutLanding.test.ts`, `useWorkspaceAutosave.test.ts`, `store/windows.test.ts`, `architecture.test.ts`) 6 files / 138 passed, 0 `FAIL` — the FULL suite is NOT verified on this tree: two attempts were killed by host contention (a second agent's gate running concurrently), not by a test failure, so CI is the remaining gate; `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q tests/test_repo_integrity.py` 13 passed (12 + the new heading guard). Eager bundle 875,755 B at the parent `281ee552` -> 876,018 B here, +263 B, 451 B under the unmoved 876,469 B budget |

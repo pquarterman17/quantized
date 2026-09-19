@@ -286,7 +286,16 @@ export async function flushAutosaveNow(): Promise<void> {
   // SUCCESS, instead of a status line that scrolls away.
   reportAutosaveHealth(autosaveHealth());
   if (!ok) {
-    useApp.getState().setStatus("autosave failed (storage full or unavailable)");
+    // BUG-019 review: the failure was reported as "storage full or
+    // unavailable" unconditionally, but `saveAutosave`'s one catch covers
+    // SERIALIZATION too (`serializeWorkspace` runs inside it) — a
+    // `RangeError: Invalid string length` from a workspace grown too big to
+    // stringify was being blamed on the disk. `autosaveHealth().error`
+    // already carries the real message (it is what the StatusBar's
+    // persistent "⚠ autosave failing" alert shows in its tooltip); say it
+    // here too, and keep the old wording only when there is nothing to say.
+    const reason = autosaveHealth().error;
+    useApp.getState().setStatus(reason ? `autosave failed: ${reason}` : "autosave failed (storage full or unavailable)");
   }
 }
 
