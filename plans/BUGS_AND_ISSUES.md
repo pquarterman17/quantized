@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-18 (UX-003's `lazy()` site count corrected 17 -> 19 -> 28
+**Updated:** 2026-09-19 (BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
 — `plans/BUNDLE_HEADROOM.md` slice 3 added two more sites in modules the
 record already named, then slice 4's own 2026-09-18 review round re-measured
 after slice 4 added nine seams across three new modules, landing at 28;
@@ -47,6 +47,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — round 2 recovered "derived vs chosen" from the palette slot itself in `lib/exportStyles.stripDerivedColors`, a function round 3 DELETED); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). **Review round 3 (2026-09-18)** replaced round 2's recovery-by-comparison with PROVENANCE: `buildExportStyles` records `ExportSeriesStyle.colorDerived` on every colour it emits, the document persists it, and the single wire boundary `exportStyles.toWireSeriesStyles` applies the grouped rule and strips the flag — so a theme flip, a palette preset or a display-position shift between the pin and the export can no longer resurrect the one-hue regression, and a grouped request never sends a derived colour while an explicit one is always sent. The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets; plus one scoped migration residual for documents saved before provenance existed. **Review round 4 (2026-09-18)** moved that migration to LOAD time — `publicationStyles.sanitizeExportSeriesStyles` decides a flagless colour once, when the document arrives, and the `.dwk` FigureDoc path now runs that sanitizer at all — so a re-save really does persist provenance, a malformed persisted flag cannot flip it, an imported Origin template records its decoded colours as CHOSEN, a pinned array is re-cut to `y_keys` when a channel was hidden after the pin, and the export route refuses a leaked `colorDerived` with a 422. **Review round 5 (2026-09-18)** removed the palette inference from BOTH places it had lived: the palette a pin was taken under is persisted in no document, so round 4's load-time comparison read the READER's theme and then FROZE a possibly-wrong answer on the next save (measured: a figure saved under one palette and opened under another shipped both derived colours to a grouped export — round 1's regression — permanently). Provenance is now recorded ONLY by the five producers; an unflagged colour is UNVOUCHED and fails closed, omitted from a grouped export and kept on a flat one, until the figure is RE-PINNED (loading and re-saving retire nothing). The pin re-cut is reduced to a hidden-channel filter over the pin, closing the three guard clauses round 4's review sabotaged green, and `/figure-hitmap`'s 422 gains the test the claim rested on |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 28 `lazy()` sites (17 at filing, +2 from `BUNDLE_HEADROOM.md` slice 3, +9 from slice 4, 2026-09-18), zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites at filing, 19 after slice 3, 28 after slice 4) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
+| BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Unassigned | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9` across three stacked pairs + a lone-dialog control. **Pinned by `stackedDialogEscape.test.tsx` in the house `DIVERGENCE` style, not fixed** — the preferred fix (migrating all ten onto `useEscapeSurface`) was built, measured to work on the stacked pairs, and REVERTED because `escapeStack`'s `isEditingTarget` bail made four dialogs Escape-dead from their own documented landing spot. P3.3 residual R1 narrowed to match |
 
 ---
 
@@ -6915,6 +6916,161 @@ one-line patch to slip into a bundle-diet follow-up.
 ---
 
 
+## BUG-018 — one Escape closes TWO stacked backdrop dialogs (and silently answers a pending confirmation)
+
+**Priority:** P2 — a destructive-action confirmation can be answered by a keystroke the user aimed at the dialog above it  
+**State:** Open — reproduced, pinned by test, not fixed (a fix was built, measured and reverted; see Investigation)  
+**Reported:** 2026-09-19 by Claude (agent), from the adversarial review of `cee0494f`  
+**Investigated:** 2026-09-19 — root cause confirmed in code and measured in jsdom on `490243f9`; the reviewer reproduced it independently in real Chromium  
+**Suggested implementation owner/model:** —  
+**Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3, residual R1 (narrowed round 8), R12, R13
+
+#### User-visible problem
+
+Two backdrop dialogs can be open at once, and one Escape closes both.
+
+The reachable path uses no mouse. `useGlobalShortcuts`' `?` branch has no
+"a dialog is already open" guard, and these dialogs `stopPropagation()` only
+on `Escape`, so every other key still reaches the window-bubble global
+shortcuts while a dialog is open. So `Ctrl+,` (Preferences), then `?`
+(Shortcuts sheet, which opens ON TOP), then ONE `Escape` takes
+`[role="dialog"]` from 2 to 0. `Ctrl+K` and the Help command are the same
+shape.
+
+The sharpest case is Preferences over a `ConfirmDialog`. `askConfirm` is the
+app's styled replacement for `window.confirm` on destructive actions ("Remove
+all", …). With a confirmation pending and Preferences opened above it, one
+Escape dismisses Preferences **and resolves the confirmation `false`** — the
+user answers a question they were not looking at, with a keystroke aimed at
+something else. It resolves to the safe answer, which is why this is P2 and
+not P1; but the gate on an irreversible action is being operated by accident,
+and the user is given no indication it happened.
+
+#### Reproduction
+
+- [x] Starting state and sample data identified — no data needed; any build
+- [x] Exact actions recorded — `Ctrl+,`, then `?`, then one `Escape`
+- [x] Actual result recorded — see the table below
+- [x] Expected result recorded — one Escape closes the INNERMOST dialog only;
+      the next Escape reaches the one below it
+- [x] Reproduced by an agent — in real Chromium (keyboard only, by the
+      reviewer) and in jsdom against the real components (four stacked pairs)
+
+Measured on `490243f9`, real components, `user.keyboard("{Escape}")` at
+`document.activeElement`, after letting a macrotask elapse:
+
+| stacked pair | after ONE Escape | intended |
+|---|---|---|
+| Preferences + Shortcuts | 2 → **0** dialogs | 2 → 1 |
+| Preferences + Help | 2 → **0** dialogs | 2 → 1 |
+| Preferences over a pending `ConfirmDialog` | 2 → **0**, and the confirm **resolved `false`** | 2 → 1, confirm still **pending** |
+| a LONE backdrop dialog (control) | 1 → 0 | 1 → 0 — correct, unchanged |
+
+#### Investigation
+
+- [x] Likely owning components/modules identified
+- [x] Root cause confirmed rather than inferred
+- [x] Related workflows and persistence paths checked
+- [x] Existing plan overlap reconciled
+
+**Root cause.** All ten backdrop dialogs register their Escape handler as
+`window.addEventListener("keydown", onKey, true)` and call
+`e.stopPropagation()`. `stopPropagation()` does not stop other listeners on
+the **same node in the same phase** — that needs `stopImmediatePropagation()`
+— so when two of these are mounted, both handlers run on one keystroke. The
+ten: `CombineWorkbooksDialog`, `ConfirmDialog`, `HelpDialog`,
+`PreferencesDialog`, `RecoveryChoiceDialog`, `ReimportAllDialog`,
+`SeparateWorksheetsDialog`, `ShortcutsDialog`, `SplitDatasetDialog`,
+`TextFormatHelp` (all under `frontend/src/components/overlays/`).
+`WhatIsThis.tsx` uses the same listener shape but is a MODE, not a backdrop
+dialog, and is mutually exclusive with them.
+
+**Not a regression.** The Escape effects are byte-identical to their state
+before `cee0494f`; that commit added focus-in/trap/restore and did not touch
+Escape. What `cee0494f` did do is close P3.3's residual R1 and flip the audit
+row to "window capture, kept" on the claim that a backdrop dialog "can never
+be out-ranked" and that "joining the registry buys nothing". That is true for
+a dialog over a NON-dialog surface — verified, and the
+`menu ▸ gesture ▸ window ▸ workspace ▸ selection ▸ app` ladder in
+`frontend/src/lib/escapeStack.ts` is not disturbed by these dialogs — and
+false for dialog-over-dialog, which is the one case that ladder exists to
+settle. R1 is narrowed accordingly in the audit plan.
+
+**A fix was built and reverted (2026-09-19); start from this, not from
+scratch.** All ten dialogs were migrated onto
+`useEscapeSurface("window", …)`, keeping each dialog's close semantics.
+Measured: it **works** — Preferences over Shortcuts went 2 → 1 → 0 on two
+Escapes, and Preferences over a pending confirm closed Preferences first with
+the confirm still pending, resolving `false` only on the second Escape.
+
+It was reverted because it broke a different guarantee. `escapeStack`'s
+dispatcher returns early on `isEditingTarget(event.target)`
+(`INPUT`/`TEXTAREA`/`SELECT`/`contenteditable`), and **four of the ten
+dialogs land focus on exactly such a control by design**: Help's search box,
+`SeparateWorksheets`' and `CombineWorkbooks`' Name field, `SplitDataset`'s
+Column select. Measured: with Help open and focus on its search box, Escape
+did nothing at all, twice; `SeparateWorksheets` would not close from its own
+documented landing spot. The scoped `components/overlays` suite went from 268
+green to 9 failed / 264 passed across 7 files — four of those nine are this
+genuine regression, the rest are synchronous `fireEvent` tests meeting the
+registry's one-macrotask deferral.
+
+So the migration needs one of:
+1. a new top tier in `escapeStack` for true modals that bypasses the
+   `isEditingTarget`, `cmdkOpen` and `.qzk-ctx` early returns (a change to a
+   dispatcher that has produced an inversion in each of rounds 2–5 — it needs
+   its own review round, not a drive-by); or
+2. `stopImmediatePropagation()` plus a shared "topmost modal" sequence number.
+   `useDialogFocus.ts`'s `trapStack` already computes exactly this ordering
+   for Tab, allocates its `seq` once per component instance, and could be
+   reused rather than reinvented.
+
+Option 2 is the smaller change and does not touch the ladder; option 1 is the
+one that makes "one ordered walk" true for every surface in the app. Either
+way, the four editing-target landing spots are the acceptance criterion.
+
+#### Implementation
+
+- [ ] Minimal safe behavior defined — one Escape closes the innermost open
+      backdrop dialog and nothing else
+- [ ] Failure and ambiguous-data behavior defined — a dialog whose landing
+      spot is a text field or `<select>` must still close on Escape from that
+      control (the four named above)
+- [ ] Data integrity and backward compatibility considered — `ReimportAll`
+      must keep calling `cancelReimportAll()` (coordinator-review G1), and
+      `ConfirmDialog` must keep Enter's `e.repeat` safeguard
+- [ ] UI wording/tooltips/accessibility included where relevant — see R12
+      (two concurrent `aria-modal` dialogs, and `aria-modal` hiding the
+      toaster and status-bar live regions)
+
+#### Tests and acceptance
+
+- [x] Regression test written and failing in the correct direction —
+      `frontend/src/components/overlays/stackedDialogEscape.test.tsx` PINS
+      the defect in the house `DIVERGENCE (BUG-0xx)` style: it asserts the
+      concrete values both sides produce and asserts they differ from the
+      intended ladder, with the intended value recorded inline next to each.
+      Fixing the bug inverts each `ACTUAL` expectation to its `INTENDED` one.
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [ ] Agent verifies acceptance criteria — after the fix
+- [ ] Owner verifies when required
+
+#### Completion record
+
+- PR/commit: filed 2026-09-19; not fixed
+- Automated tests: `stackedDialogEscape.test.tsx` (3 cases: Preferences over
+  Help, Preferences over a pending `ConfirmDialog`, and a lone-dialog control
+  proving this is about stacking and not about Escape generally). Each
+  sabotage-verified — see the filing commit's body.
+- Agent verification: —
+- Owner verification: —
+- Notes: the reviewer's Chromium reproduction and this entry's jsdom
+  measurements agree exactly. See P3.3's round-8 record for the reverted
+  migration's full measurement.
+
+---
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -6993,3 +7149,4 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |
 | 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
 | 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
+| 2026-09-19 | Claude (agent) | Filed BUG-018 (P2): all ten backdrop dialogs in `components/overlays/` claim Escape with `window.addEventListener("keydown", …, true)` + `stopPropagation()`, which does not stop a same-node same-phase sibling, so two stacked dialogs both act on ONE keystroke — measured 2 → 0 open `[role="dialog"]` for Preferences+Shortcuts, Preferences+Help and Preferences over a pending `ConfirmDialog`, the last also resolving the confirmation `false` on the keystroke that dismissed Preferences. Pre-existing (the Escape effects are byte-identical to before `cee0494f`); what was new was R1 being CLOSED and the audit row flipped to "window capture, kept" on the claim that a backdrop dialog can never be out-ranked — true over a non-dialog surface, false dialog-over-dialog. The preferred fix was BUILT and MEASURED (all ten onto `useEscapeSurface("window", …)`; it does fix the ladder, confirm stays pending on the first Escape) and then REVERTED: `escapeStack`'s `isEditingTarget` early return made Help, Separate, Combine and Split Escape-DEAD from their own documented landing spots (an `<input>`/`<select>` each), 9 failed / 264 passed. Narrowed R1 instead, corrected the audit row, recorded NITs 4 and 5 as residuals R12/R13, and fixed review NIT 3 (Preferences landed on the first Theme segment, which under `theme: "light"` is an `aria-selected="false"` "Dark" button; it now lands on the SELECTED one, pinned in both themes) | 3 new specs (`components/overlays/stackedDialogEscape.test.tsx`) + 1 new 2-case `it.each` (`PreferencesDialog.test.tsx`), all sabotage-verified across 5 sabotages, source restored byte-identical; round 7's per-dialog focus-hook sabotage property re-verified after the landing-spot change (Preferences alone → RED 2/10). Also corrected the FIFTH-recurrence wrong-parent bundle record on `cee0494f`: its parent is `4179b166`, not `b10bcad3` (three commits back, with two P4.1 commits that moved 218 eager lines between them) — re-measured in a throwaway worktree, `4179b166` **889,496 B** → `cee0494f` **889,498 B**, +2 B; the delta was right, both absolute numbers were wrong by 21 B |

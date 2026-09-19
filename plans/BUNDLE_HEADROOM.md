@@ -1,8 +1,10 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3 and 4 executed**
-(see their sections below); slice 2 is partially done, and slice 5 (the former
-slice 3, then slice 4) remains an unmeasured proposal.
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4 and 5
+executed** (slice 5 deliberately small — see its ruling on `PlotLegend`) (see their sections below); slice 2 is partially done. Slice 5 is
+no longer the `lib/plotRecipeIO.ts` proposal it was reserved for — that
+candidate was re-ranked out on the measured evidence below and the number was
+spent on two render seams instead.
 
 **Stale as of this document's own first draft** (kept for the record; see the
 "What these numbers are NOT" note below and each slice's own measured
@@ -14,7 +16,27 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
+**Current state (2026-09-19, after slice 5):** landed tip **888,562 B**
+eager against parent `cee0494f`'s **889,498 B** (**−936 B**), leaving
+**31,838 B of headroom** against the unmoved 920,400 B budget. Slice 5 is the
+first slice in this campaign whose limit is **not** candidate scarcity but the
+ratchet's own LOWER bound — see "The ceiling this campaign has now hit" below
+before planning slice 6 — and the first in which the biggest measured win was
+**rejected on user-visible cost rather than on bytes**. Both of those findings
+outlast the 936 B.
+
+**Read before starting slice 6, so it is not re-derived from the narrative
+below:** `scripts/check-bundle-size.mjs`'s ratchet is two-sided — it also
+fails the build BELOW `EAGER_JS_BUDGET - SLACK` (880,400 B) to force a
+pin-down, and slice 5 left only 9,098 B of headroom above that floor before
+hitting it. **Slice 6's first decision is therefore not which seam to cut but
+whether it is authorized to ratchet `EAGER_JS_BUDGET` DOWN** (protocol: lower
+it to `measured + 1,024` right after landing a reduction) — until that is
+decided, banked seams below the floor (`PlotToolbar`, `CommandPalette`) stay
+unlandable regardless of how clean their gate is. See "The ceiling this
+campaign has now hit" for the full arithmetic.
+
+**Earlier state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
 4's real parent is `b50f6602` (`git rev-parse 8a6f49ca^`), not `3f43467b`
 (that's `HEAD~2` — the implementer's worktree was rooted there and the commit
 was merged forward; `3f43467b`'s numbers below are that pre-merge worktree's,
@@ -542,6 +564,16 @@ exclusivity of its deferred subtree; rank a COMPONENT seam by its exclusive
 bytes alone and ignore the shared set.** Slice 3's own component seams
 (85% realised) were the first data point for this and were read too narrowly.
 
+**Addendum (slice 5, 2026-09-19): a re-export shell is not a real seam.**
+A component seam is only a win if its target's own bytes actually leave the
+eager graph. When the "target" is a re-export shell wrapping content that is
+*already* deferred behind some other loader, the shell adds a chunk-boundary
+and its own module weight without removing anything — a pure loss. This is
+why `DocumentWindow` (wrapping the already-lazy `MapWindow`/`WorksheetWindow`)
+measured **+221 B** in slice 5's per-seam table below rather than a reduction:
+check what a candidate's target actually re-exports before ranking it, not
+just whether a gate exists to hang it on.
+
 #### Per-seam measurements
 
 Cumulative, in the order the seams were measured — each row is a full
@@ -721,27 +753,213 @@ bytes ARE the palette metadata (label/description/keywords), which must stay
 eager, and its `run` bodies are one-liners — slice 2's shape would recover
 almost nothing there.
 
-### Slice 5 - `lib/plotRecipeIO.ts`
+### Slice 5 — one content-gated render seam — **DONE (2026-09-19)**
 
-*(Was numbered "Slice 3" until 2026-09-18, when the first executed slice took
-that number, and "Slice 4" until later the same day, when the executed
-content-gated render slice took THAT number. Content unchanged apart from the
-closing note and this one.)*
+**Measured net eager delta −936 B — budget UNMOVED at 920,400 B**
 
-**Upper bound 5,926 B · measured net eager delta: TBD, expected ~2 kB · LOW risk**
+This slice landed one seam out of five it built and measured. That is the
+point of it, not a shortfall: the byte cap below is structural, and the single
+largest win on the tree was **measured and then rejected on user-visible
+cost**. Both findings are stated up front, in the "Current state" note near
+the top of this file and in "The ceiling this campaign has now hit" just
+below — that is what this slice is actually for.
 
-Two exports: `sanitizeRecipes` (needed by `parseWorkspace` at load) and
-`parseRecipe` (only when importing a recipe file). Most of the 383 lines are
-helpers shared by both, so the win is small — verify before doing it. Read the
-slice-3 finding above before spending a day on it: `lib/workspace.ts` needs
-`sanitizeRecipes` at load, so only `parseRecipe` could move, and it shares most
-of the module's helpers with the half that stays.
+Bundle pair, exact bytes (the eager `<script type=module>` + `modulepreload`
+count out of `dist/index.html`, not the rounded kB `check-bundle-size.mjs`
+prints). Both built in this worktree after `npm ci`, with `node_modules/.vite`
+wiped before EVERY build:
+
+| tree | SHA | eager bytes |
+|---|---|---:|
+| parent (`git rev-parse HEAD~1`) | `cee0494f` | **889,498** |
+| this commit (slice 5) | see commit | **888,562** |
+| — net delta — | — | **−936** |
+
+Eager-walk module counts, measured with `architecture.test.ts`'s own
+`eagerlyReachable()`/`sources()` replayed over `src/`: **394 of 927 before,
+393 of 927 after** — the one seam. It drags no module out with it and this
+slice adds no new module, so there is no offsetting `+1` of the kind slices 3
+and 4 had to account for.
+
+#### The ceiling this campaign has now hit — read this before slice 6
+
+`scripts/check-bundle-size.mjs` is a two-sided ratchet. It fails the build
+ABOVE `EAGER_JS_BUDGET` (920,400 B) and it also fails BELOW
+`EAGER_JS_BUDGET - SLACK` (920,400 − 40,000 = **880,400 B**), demanding the pin
+be ratcheted down so an unlocked gain cannot be silently spent. With the parent
+at 889,498 B that leaves exactly **9,098 B** recoverable in a slice that does
+not move the pin — and this slice was told not to move it.
+
+That cap, not a shortage of candidates, is what sized slice 5 — together with
+the cost ruling below, which disqualified the largest win independently of it.
+Ranked candidates worth **~26 kB** were identified and five were fully built
+and measured; two of them are banked below, unlanded, because landing them
+would have left under 300 B of margin over the 880,400 B floor. **Slice 6's
+first decision is not which seam to cut but whether it is authorized to ratchet
+the pin DOWN** (the file's own protocol: lower to `measured + 1,024` right
+after landing the reduction). Until then every further seam is unbankable.
+
+#### How the candidates were ranked
+
+Slice 4's corrected rule was applied as written: rank a `lib`/`store` seam by
+the exclusivity of its deferred subtree, and rank a COMPONENT seam by its
+exclusive bytes alone, ignoring the shared set. The guard's own
+`eagerlyReachable()` walk was replayed over `src/` in a scratch script; for
+every eager module with exactly one eager importer that edge was cut, and the
+modules that fall out of the eager set were summed using
+`scripts/profile-eager-bundle.mjs`'s per-module attribution (`npx vite build
+--sourcemap`, `TOP=400`). The script is session scratch, not committed — it
+replays the guard plus the committed profiler, so it regenerates from those
+two.
+
+Three of the four highest-ranked component candidates were rejected on
+ANALYSIS, before any build, and are recorded here so slice 6 does not re-rank
+them:
+
+- `components/windows/PlotWindowFrame.tsx` (9,486 B exclusive) is **first
+  paint**: `store/windows.ts` initializes `plotWindows: [_mainWindow]`, so a
+  frame is on screen before any user action. No gate exists to hang it on.
+- `components/Library/DatasetRow.tsx` (10,297 B exclusive, the single largest
+  candidate on the tree) is reachable eagerly only through `Library.tsx`'s flat
+  fallback row list, and `LibraryTree.tsx` + `SmartFoldersSection.tsx` both
+  import it statically from inside ALREADY-lazy chunks. It therefore cannot be
+  a `SEAMS` entry as-is — the guard's "no module value-imports a seam module
+  statically" arm is corpus-wide and would go red for two importers that are
+  doing nothing wrong. Landing it needs a thin `LibraryFlatRows.tsx` wrapper to
+  be the seam instead (the `LibrarySections.tsx` shape, +~200 B of glue), which
+  is real work this slice had no byte budget left to spend. Worth doing first
+  in slice 6.
+- `components/Stage/InsetPlot.tsx` (1,549 B) has the same two-importer shape
+  (`BackgroundPlotWindow.tsx`), and is too small to be worth a wrapper.
+
+#### Per-seam measurements — kept, banked and rejected
+
+Each row is a full `npm run build` on the same machine, same Node,
+`node_modules/.vite` wiped first, exact bytes out of `dist/index.html`. Five
+seams were fully implemented and measured; one landed.
+
+| # | seam (module deferred) | loader | gate | bound | delta | outcome |
+|---|---|---|---|---:|---:|---|
+| 1 | `components/windows/SnapshotPlotWindow.tsx` | `WindowCanvas.tsx` | `kind === "snapshot" && snapshot` | 1,169 | **−936** | **KEPT** |
+| 2 | `components/Stage/PlotLegend.tsx` | `PlotStageOverlays.tsx` | `displayPayload && showLegend` | 6,259 | **−5,881** | **REJECTED on user-visible cost** — see the ruling below |
+| 3 | `components/Stage/PlotToolbar.tsx` | `PlotStageOverlays.tsx` | `displayPayload` | 4,004 | **−3,644** | banked — breaches the 880,400 B floor outright |
+| 4 | `components/overlays/CommandPalette.tsx` | `App.tsx` | `cmdkOpen` | 3,607 | **−2,935** | banked — would leave 259 B over the floor |
+| 5 | `components/windows/DocumentWindow.tsx` (`MapWindow`+`WorksheetWindow`) | `WindowCanvas.tsx` | `kind === "worksheet"` / `"map"` | 866 | **+221** | **REJECTED on measurement** |
+
+**Measured-alone vs marginal — do not confuse them.** Seam 1's −936 B is its
+delta measured ALONE against the parent (889,498 → 888,562). The same seam
+measured as a marginal addition on top of the PlotLegend tree read −585 B
+(883,594 → 883,009): two seams landing in one build share chunk-boundary glue,
+so a marginal figure is not the seam's own delta and the two are not
+interchangeable. Seams 2–5 were measured on the PlotLegend tree and their
+deltas are marginal in that order — which is the number that decides whether to
+keep them, but not a number to quote as a standalone seam value. Seam 3's total
+(879,950 B) FAILS the build outright: `bundle-size: FAIL — eager JS is 859.3 kB,
+well under the 898.8 kB budget. Lower EAGER_JS_BUDGET … to 919950 to lock the
+gain in.` Seam 4's total (880,659 B) passes by 259 B — a margin that thin is a
+trap for the next lane, since any 260 B eager reduction anywhere then reddens
+CI with a demand to move the pin.
+
+#### The ruling on `PlotLegend`, and the trade it sets
+
+`PlotLegend` was the largest clean win on the tree — −5,881 B, 94% of its
+bound, one seam, a gate that already existed. It was built, measured, fully
+tested (DOM + import-recorder, all sabotage cases green) and then **rejected,
+on cost rather than on bytes**:
+
+> The legend is part of the plot's MEANING, not chrome around it. Deferring it
+> makes the first plot of a session paint for one chunk fetch before the legend
+> appears, and every project restored with `showLegend` on pays the same on its
+> first paint. That buys a visible first-paint artifact on a core surface with
+> 5,881 B that the 880,400 B floor means the campaign **cannot bank for
+> anything anyway**. With 31.9 kB of headroom already and ~8 kB of recoverable
+> room, byte-hunting at the cost of perceived quality is the wrong trade.
+
+The general rule this sets, and the one slice 6 should rank by first: **a seam
+is disqualified by a perceptible artifact on a surface the user is looking at,
+before bytes are considered at all.** Under it, seam 3 (`PlotToolbar`,
+`displayPayload`-gated plot chrome) is now suspect on the same grounds and
+should not be landed merely because it fits; seam 4 (`CommandPalette`) spends
+its fetch on the first ⌘K of a session, which is the latency-sensitive class
+slice 4 already flagged when it spent one on the right-click menu. Neither is
+a free 3 kB waiting to be collected.
+
+#### Why the kept seam qualifies, and what it costs
+
+It runs strictly after a user action **or a persisted-state restore**, and the
+restore path is stated here up front rather than as a later narrowing:
+
+- **The snapshot window** is the `win.kind === "snapshot"` dispatch branch, one
+  line from `PanelPlotWindow`'s slice-3 seam and the same in kind. **Pays a
+  chunk fetch on open:** yes — `kind` is a persisted window field, so a project
+  restored with a snapshot window fetches it on that restore's first paint;
+  otherwise it waits for the user to take a snapshot, which creates the window
+  in the same gesture that fetches the chunk. **Nothing perceptible on either
+  path**, which after the `PlotLegend` ruling above is the property that
+  qualified it, not its size.
+
+It inherits the repo-wide `lazy()` gap: a chunk that will not load has no
+reporting of its own and unmounts the React root at the nearest boundary. That
+is UX-003 in `plans/BUGS_AND_ISSUES.md` for every such site at once, not
+something this seam introduces or can fix locally.
+
+#### Guards, and the slice-4 test lesson applied
+
+`src/architecture.test.ts` gains the seam in `SEAMS`. `DRAGGED_OUT` is
+unchanged: `SnapshotPlotWindow` is a prop-forwarding shell whose every import
+is kept eager by something else, so it took no module with it.
+
+DOM + import coverage is in `components/windows/lazyRenderSeams.test.tsx`.
+**Slice 4's lesson — a DOM-only test cannot see a render gate — applies here
+too, and was proved rather than asserted.** This gate is a ternary branch, so
+the cheap break is to WIDEN it, not delete it; a widened branch still renders
+*something* on every window, so the DOM assertions alone cannot separate it
+from the real gate. Measured: widening it reddens the import recorder with
+`expected [ 'SnapshotPlotWindow' ] to not include 'SnapshotPlotWindow'`.
+
+All three `SEAMS` guard arms were verified against the seam by making it
+static — the corpus-wide static-import arm, the `eagerlyReachable()` arm, and
+the `(?<!typeof )` dynamic-import arm all went red. The last was additionally
+verified in isolation (on the rejected `PlotLegend` seam, before it was
+reverted) by leaving only a `typeof import("…")` type alias behind, which
+reddens that arm alone; and the `DRAGGED_OUT` reachability arm was verified in
+isolation by adding a static `LegendSample` import to an eager module, which
+reddens that arm alone. Both isolation checks are recorded here because they
+prove the ARMS work, which outlives the seams they were run against.
+
+**Blast-radius sweep for tick-counting**, per slice 3's lesson: every
+`.test.ts(x)` naming a `kind: "snapshot"` window or `SnapshotPlotWindow` — and,
+while the legend seam existed, everything naming `PlotLegend`/`LegendSample`/
+`qzk-legend` — was grepped for `await Promise.resolve()` after an action that
+now crosses a seam. **Zero hits** in either radius. No test needed converting.
+
+#### The `lib/plotRecipeIO.ts` candidate this slice was reserved for
+
+Re-ranked and **not built**. The eager walk puts it at 5,789 B exclusive over
+**43 shared modules / 66,434 B** behind its single eager importer
+(`lib/workspace.ts`) — a `lib` seam with poor subtree exclusivity, which is
+exactly the shape slice 3's rule presumes a loss until a build says otherwise,
+and slice 4's restatement does NOT rescue it (that rescue is for COMPONENT
+seams only). Its own note already conceded the structural problem:
+`parseWorkspace` needs `sanitizeRecipes` at load, so only `parseRecipe` could
+move and it shares most of the module's helpers with the half that stays. With
+9,098 B of ratchet room available, spending a build on a candidate whose own
+premise is "the win is small — verify before doing it" was the wrong trade
+against two component seams with clean gates. It stays on the table for a slice
+willing to split the module.
 
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and
-only P4.1-style slice decomposition touches it. Even executing all three
-slices above recovers well under 30 kB, against a budget the file's own
-history calls healthy at 25-40 kB of headroom. A raise may still be the
+only P4.1-style slice decomposition touches it. A raise may still be the
 honest answer for a lane that needs room *now*; these slices are how the
 budget stops being a recurring blocker.
+
+What has changed since that was written is which end of the ratchet binds.
+Headroom is now 31,838 B of a 40,000 B `SLACK` band, so the campaign's next
+constraint is the FLOOR, not the ceiling: roughly **8.1 kB** can still be
+recovered without touching the pin, against ~26 kB of ranked, partly measured
+candidates (slice 5's banked `PlotToolbar` and `CommandPalette` seams, plus
+`DatasetRow` behind a wrapper). Slice 6 is a pin-DOWN slice or it is nothing —
+and it should rank by the `PlotLegend` ruling above before it ranks by bytes,
+because two of the three candidates it inherits are suspect under that rule.

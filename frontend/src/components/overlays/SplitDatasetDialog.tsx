@@ -9,7 +9,7 @@
 // anything commits). All grouping math is lib/datasetsplit.ts (unit-tested
 // there); this file only renders it and calls the store action on confirm.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   autoTolerance,
@@ -23,6 +23,7 @@ import { pickDefaultSplitColumn } from "../../lib/datasetsplitDefault";
 import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";
+import { useDialogFocus } from "./useDialogFocus";
 
 export default function SplitDatasetDialog() {
   const targetId = useApp((s) => s.splitDialogTargetId);
@@ -30,6 +31,8 @@ export default function SplitDatasetDialog() {
   const close = useApp((s) => s.closeSplitDialog);
   const splitDatasetByColumn = useApp((s) => s.splitDatasetByColumn);
   const dataset = datasets.find((d) => d.id === targetId);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
   const [col, setCol] = useState(0);
   const [toleranceText, setToleranceText] = useState("0");
@@ -74,6 +77,14 @@ export default function SplitDatasetDialog() {
   // dataset as well would fix that but re-seed on EVERY edit, wiping a
   // tolerance the user typed while a recalc lands — the worse of the two, so
   // this is a deliberate trade, not an oversight.
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!dataset) return;
     setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));
@@ -81,6 +92,11 @@ export default function SplitDatasetDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, col]);
 
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
+  // its own window-capture listener rather than joining `lib/escapeStack.ts`
+  // — a true backdrop modal always wins over anything mounted behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener.
   useEffect(() => {
     if (!targetId) return;
     const onKey = (e: KeyboardEvent) => {
@@ -92,6 +108,12 @@ export default function SplitDatasetDialog() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [targetId, close]);
+
+  // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Column
+  // select — it's the FIRST decision (it also decides whether Tolerance even
+  // renders below it), so the hook's default first-focusable is already the
+  // meaningful one.
+  useDialogFocus(dialogRef, targetId !== null && dataset !== undefined);
 
   // Derived values + the live-preview memo run UNCONDITIONALLY (same hook
   // count every render) — the "no dataset" case is handled by returning an
@@ -136,13 +158,18 @@ export default function SplitDatasetDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSplit) runSplit();
           e.stopPropagation();
         }}
       >
-        <h2>Split by column value</h2>
+        <h2 id={titleId}>Split by column value</h2>
         <div className="qz-ws-row">
           <span className="k">Column</span>
           <Select

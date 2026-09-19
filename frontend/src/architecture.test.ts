@@ -351,7 +351,39 @@ const STORE_PINS: Record<string, number> = {
   // diff — plus the applied values, undo label and macro step) was written
   // and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
-  "/store/useApp.ts": 1639,
+  // 1639 -> 1451 (2026-09-19, the FOURTH P4.1 domain, zero headroom): WORKSPACE
+  // HYDRATION — `loadWorkspace` (replace the whole library from a restored/
+  // parsed .dwk; the autosave restore on startup AND an explicit File ▸ Open
+  // .dwk both run it) and `appendWorkspace` (Origin's "Append Project",
+  // MAIN_PLAN #16 — the additive opposite: only the flat dataset list +
+  // referenced workbooks join the CURRENT library). This is exactly the
+  // candidate the 2012 -> 1639 note above named as still in useApp.ts:
+  // loadWorkspace, 170 lines (base useApp.ts 954-1123) plus appendWorkspace's
+  // one-line delegate (1124) and their 9 interface-declaration lines — 171
+  // implementation lines total, matching the plan's estimate — moved verbatim
+  // (modulo one indentation level) to the new store/workspaceHydration.ts
+  // (WorkspaceHydrationSlice), composed exactly like plotViewSettings.ts,
+  // reportsFigureDocs.ts and viewAppliers.ts: one import line, one word on
+  // the extends clause, one creator-spread line. `appendWorkspace`'s own
+  // body (`runAppendWorkspace`) stays in store/workspaceIO.ts — that module
+  // is not moving, it is already its own file below this pin — so only the
+  // action's one-line delegate travelled. The FIELDS stay declared and
+  // initialized on AppState here, same shape as all three earlier
+  // extractions: `loadWorkspace` writes nearly all of them (a full-library
+  // replace has to), but plenty of OTHER actions read and write them too, so
+  // the fields are not this cluster's alone to own. No new store/ layering
+  // grandfathered entry: workspaceHydration.ts imports only `lib/` helpers
+  // and sibling store modules, never `components/`.
+  // store/workspaceHydration.characterization.test.ts (20 specs pinning, for
+  // both actions and every branch, the exact set of top-level store keys
+  // each call changes — a poisoned whole-getState() diff covering every
+  // `lib/plotview.ts` VIEW_KEY, so both the restored-plot-window branch's
+  // write AND the legacy/fresh path's deliberate non-write are visible —
+  // plus the toolWindowLayout key's conditional presence, the mapPaintedLimits/
+  // mapViews P2.8 reset, and appendWorkspace's recordHistory-before-mutation
+  // ordering) was written and run green against the PRE-extraction code and
+  // passes byte-unchanged after the move.
+  "/store/useApp.ts": 1451,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -2553,6 +2585,45 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Stage/PlotStageMenus.tsx",
       call: 'import("./PlotContextMenu")',
     },
+    // ── SLICE 5 (2026-09-19, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // One content-gated render seam, measured net −936 B.
+    //
+    // This slice's limit is NOT candidate scarcity. The ratchet in
+    // `scripts/check-bundle-size.mjs` is two-sided: it FAILS the build below
+    // `EAGER_JS_BUDGET - SLACK` (920,400 − 40,000 = 880,400 B) to force a
+    // pin-down, so with the real parent (`cee0494f`, not `b10bcad3` — see the
+    // plan) at 889,498 B only 9,098 B was recoverable
+    // here without moving the pin. Three further seams were built and
+    // measured and are recorded in the plan (`PlotToolbar` −3,644 B and
+    // `CommandPalette` −2,935 B, both banked for a slice allowed to ratchet
+    // the pin DOWN; `DocumentWindow` +221 B, rejected outright). A fourth,
+    // `PlotLegend`, measured −5,881 B — the largest win on the tree — and was
+    // rejected anyway on USER-VISIBLE COST: the legend is part of the plot's
+    // meaning, and deferring it makes the first plot of a session (and every
+    // restore with `showLegend` on) paint for one chunk fetch before the
+    // legend appears. Bytes that the 880,400 B floor means the campaign
+    // cannot bank for anything are not worth a visible first-paint artifact
+    // on a core surface. Do not re-add it without that trade being re-argued.
+    //
+    // `components/windows/SnapshotPlotWindow.tsx` is the `win.kind ===
+    // "snapshot"` branch, the same shape as `PanelPlotWindow` above: a frozen
+    // snapshot window exists only after the user takes one in-session, or on
+    // opening a project that already held one (`kind` is a persisted window
+    // field, so that restore pays the fetch on its first paint) — never on the
+    // default first paint, and nothing perceptible on either path. It drags
+    // nothing out with it: −936 B against a 1,169 B bound, 80% realised,
+    // which is the component-seam figure slice 4's rule predicts.
+    //
+    // NOTE for anyone re-deriving these numbers: −936 B is this seam's delta
+    // measured ALONE against the parent. Measured instead as a marginal
+    // addition on top of the (rejected) `PlotLegend` tree it reads −585 B —
+    // two seams landing in the same build share chunk-boundary glue, so a
+    // marginal figure is not the seam's own delta. The plan records both.
+    {
+      module: "/components/windows/SnapshotPlotWindow.tsx",
+      loader: "/components/windows/WindowCanvas.tsx",
+      call: 'import("./SnapshotPlotWindow")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2748,6 +2819,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  `components/Stage/resultChipsVisible.ts`, the shared gate predicate).
    *  None of the six is a seam itself, so only reachability can hold this
    *  line. */
+  /** SLICE 5 (2026-09-19) adds nothing here: its one seam
+   *  (`SnapshotPlotWindow`) is a prop-forwarding shell whose every import is
+   *  kept eager by something else, so it dragged no module out with it.
+   *  Measured by the same eager walk this block runs, against the real
+   *  parent `cee0494f` (not `b10bcad3`, which is four commits back and
+   *  misses the eagerly-reachable `store/workspaceHydration.ts` module that
+   *  `4179b166` added in between): 394 -> 393 modules of a 927-module
+   *  corpus, which is that seam alone. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",

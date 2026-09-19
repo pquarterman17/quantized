@@ -15,15 +15,18 @@
 // leaving the user to notice a distant status bar, and never pretends the
 // commit half-succeeded.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
+import { useDialogFocus } from "./useDialogFocus";
 
 export default function SeparateWorksheetsDialog() {
   const plan = useApp((s) => s.separatePreview);
   const close = useApp((s) => s.closeSeparatePreview);
   const commit = useApp((s) => s.commitSeparateWorksheets);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
   const [name, setName] = useState("");
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -35,11 +38,24 @@ export default function SeparateWorksheetsDialog() {
   // `null` on both success and a fresh open still carries a NEW plan object
   // the same requested set could legitimately re-trigger).
   const requestedKey = plan?.requestedWorksheetIds.join(",");
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     setName("");
     setCommitError(null);
   }, [requestedKey]);
 
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
+  // its own window-capture listener rather than joining `lib/escapeStack.ts`
+  // — a true backdrop modal always wins over anything mounted behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener.
   useEffect(() => {
     if (!plan) return;
     const onKey = (e: KeyboardEvent) => {
@@ -51,6 +67,12 @@ export default function SeparateWorksheetsDialog() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [plan, close]);
+
+  // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Name field —
+  // the one control every commit needs a look at (it seeds from
+  // `plan.suggestedName` but the user may want to change it), ahead of the
+  // affected-items list below it.
+  useDialogFocus(dialogRef, plan !== null);
 
   if (!plan) return null;
 
@@ -70,13 +92,18 @@ export default function SeparateWorksheetsDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSeparate) runSeparate();
           e.stopPropagation();
         }}
       >
-        <h2>Separate into new workbook</h2>
+        <h2 id={titleId}>Separate into new workbook</h2>
         <div className="qz-ws-row">
           <span className="k">Name</span>
           <input

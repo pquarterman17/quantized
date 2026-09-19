@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../lib/types";
@@ -198,6 +199,68 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(confirm).toBeDisabled();
     fireEvent.click(confirm);
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+});
+
+// R1 (P3.3): focus-in/Tab-trap/Escape/restore driven via userEvent at
+// document.activeElement (not fireEvent.keyDown on the box) — the bug class
+// here is "the handler exists but the key never reaches it".
+describe("SplitDatasetDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the dialog on open, onto the Column select — the first decision", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByLabelText("Split column")).toHaveFocus();
+  });
+
+  it("Tab wraps between Column, Tolerance, Cancel, and Split instead of walking out to the page behind it", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">outside</button>
+        <SplitDatasetDialog />
+      </>,
+    );
+    act(() => useApp.setState({ splitDialogTargetId: "d1" }));
+
+    const column = screen.getByLabelText("Split column");
+    const tolerance = screen.getByLabelText("Tolerance");
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const confirm = screen.getByRole("button", { name: /Split into/ });
+    expect(column).toHaveFocus();
+
+    await user.tab();
+    expect(tolerance).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab();
+    expect(confirm).toHaveFocus();
+
+    await user.tab(); // would leave the modal — must wrap
+    expect(column).toHaveFocus();
+    expect(screen.getByRole("button", { name: "outside" })).not.toHaveFocus();
+
+    await user.tab({ shift: true }); // backwards off the first control
+    expect(confirm).toHaveFocus();
+  });
+
+  it("Escape (via the keyboard) closes without splitting and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <SplitDatasetDialog />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => useApp.setState({ splitDialogTargetId: "d1" }));
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useApp.getState().splitDialogTargetId).toBeNull();
+    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(opener).toHaveFocus();
   });
 });
 

@@ -3,7 +3,6 @@
 import { create } from "zustand";
 import { uploadFile } from "../lib/api";
 import { cloneDataStruct } from "../lib/dataset";
-import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
 import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
@@ -17,29 +16,22 @@ import {
 } from "../lib/pipeline";
 import {
   createFolder as treeCreateFolder,
-  migrateGroupsToFolders,
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
   renameFolder as treeRenameFolder,
 } from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
 import type { SmartFolder } from "../lib/smartfolders";
-import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
-import { sanitizeVisibleDetailsColumns } from "../lib/libraryDetailsColumns";
 import type { WorkbookNode } from "../lib/workbooks";
-import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
-import { hydrateView, snapshotView } from "../lib/plotview";
-import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
+import { snapshotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
-// rebind helpers are imported back for setActive/addDataset/loadWorkspace.
+// rebind helpers are imported back for setActive/addDataset.
 import {
   createWindowsSlice,
   datasetViewDefaults,
   focusedRebindPatch,
-  focusTransientReset,
-  mainWindow,
   retargetPassiveRebind,
   type WindowsSlice,
 } from "./windows";
@@ -47,7 +39,7 @@ import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-import { runAppendWorkspace, runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
+import { runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
 import { createReimportSlice, type ReimportSlice } from "./reimport";
 import { createReimportAllSlice, type ReimportAllSlice } from "./reimportAll";
@@ -90,7 +82,7 @@ import { createQuickFigureBuilderSlice, type QuickFigureBuilderSlice } from "./q
 import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocuments";
 // RSM_CUTS_PLAN item 4: rsmPeaks/setRsmPeaks relocated here (see rois.ts's
 // header) to pay for this slice's own composition cost under the pin.
-import { createRoisSlice, loadedMapViews, type RoisSlice } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
+import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import type { Composition } from "../lib/composition";
@@ -103,6 +95,7 @@ import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
+import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
 import { toast } from "./toasts";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
@@ -155,9 +148,11 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // resolve*/ensureBookData actions that call it, plus pasteDataFromClipboard,
 // now live in store/dataIntake.ts — DataIntakeSlice, composed below.)
 
-// (mainWindow / focusTransientReset / datasetViewDefaults / focusedRebindPatch /
-// retargetPassiveRebind moved to store/windows.ts with the window slice —
-// imported above for the setActive/addDataset/loadWorkspace paths.)
+// (mainWindow / focusTransientReset moved to store/windows.ts with the window
+// slice, then on to store/workspaceHydration.ts's loadWorkspace (P4.1's
+// fourth domain) — that module imports them directly now.
+// datasetViewDefaults / focusedRebindPatch / retargetPassiveRebind stay
+// imported above for the setActive/addDataset paths.)
 
 // Recalc scheduler internals (#1): a module-level debounce timer plus an
 // in-progress guard so the recalc's own applyCorrections calls never re-mark
@@ -262,7 +257,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -508,15 +503,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   touchDataset: (id: string) => void;
   recalcNow: () => Promise<void>;
   setFitSpec: (id: string, spec: FitSpec | null) => void;
-  // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
-  // focusedWindowId/toolWindowLayout, falling through to the same default.
-  loadWorkspace: (ws: WorkspaceState, options?: { skipLayout?: boolean }) => void;
-  // Append a second .dwk's datasets into the CURRENT library (Origin's
-  // "Append Project", MAIN_PLAN #16) — the additive opposite of
-  // loadWorkspace: only the flat dataset list joins (collision-free ids +
-  // names, see lib/workspace.mergeWorkspace); activeId, plotWindows, every
-  // view-state field, and the existing datasets are left completely alone.
-  appendWorkspace: (ws: LoadedWorkspace) => void;
+  // loadWorkspace / appendWorkspace: see store/workspaceHydration.ts
+  // (WorkspaceHydrationSlice) — composed exactly like plotViewSettings.ts,
+  // reportsFigureDocs.ts and viewAppliers.ts.
   setActive: (id: string) => void;
   // WORKSHEET_PLAN item 15: the routed Library-click entry point — EVERY
   // "click/select a row" site (DatasetRow's plain click + pre-menu select,
@@ -720,6 +709,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createPlotViewSettingsSlice(set, get),
   ...createReportsFigureDocsSlice(set, get),
   ...createViewAppliersSlice(set, get),
+  ...createWorkspaceHydrationSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -944,184 +934,6 @@ export const useApp = create<AppState>((set, get) => ({
   // #16's appendWorkspace — see that file's doc).
   saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
   saveWorkspace: () => runSaveWorkspace(get),
-
-  // Replace the whole library with a restored workspace (from a .dwk file).
-  // Resets every per-dataset view (channels, styles, axis limits) and drops the
-  // overlays/markers tied to the old datasets — same hygiene as setActive.
-  // Runs on BOTH triggers that call this action: the autosave restore on
-  // startup, and an explicit File ▸ Open .dwk — so a legacy v1 doc's `group`
-  // strings get promoted to folders (item 6) either way, exactly once.
-  loadWorkspace: (ws, options) =>
-    set((s) => {
-      const skipLayout = options?.skipLayout ?? false; // PR E2, see AppState doc
-      // v1/legacy compat: promote any un-foldered `Dataset.group` into a
-      // root-level folder before anything else reads `datasets`/`folders` —
-      // idempotent, so reloading an already-migrated workspace is a no-op.
-      const migrated = migrateGroupsToFolders(ws.folders ?? [], ws.datasets, nextFolderId);
-      const datasets = migrated.datasets;
-      // Restore the persisted active/selection (v2); v1 or a stale id falls back
-      // to the first dataset. Folders + expansion come straight from the doc
-      // (plus any folder the group migration just created, auto-revealed).
-      const active =
-        ws.activeId && datasets.some((d) => d.id === ws.activeId)
-          ? ws.activeId
-          : (datasets[0]?.id ?? null);
-      const activeDs = active ? (datasets.find((d) => d.id === active) ?? null) : null;
-      const selected = (ws.selectedIds ?? []).filter((id) => datasets.some((d) => d.id === id));
-      // L0.25: the [active] fallback below is a store-level synthesis with
-      // no basis in the doc — a non-null librarySelection wins outright.
-      const restoredLibrarySelection = ws.librarySelection ?? null;
-      // Plot windows (item 7): restore a persisted layout when the doc has one;
-      // the document-aware boundary validates it and clamps dead refs. Otherwise (a v1-v6
-      // doc with no `plotWindows`, or a genuinely fresh workspace) collapse
-      // back to the ≥1-window invariant's single maximized window, bound to
-      // the newly-restored active dataset, with a fresh view — unchanged
-      // from before item 7.
-      const win = mainWindow(active);
-      const dsIds = new Set(datasets.map((d) => d.id));
-      const migrationWarnings = [...(ws.migrationWarnings ?? [])];
-      // skipLayout: an empty `restored` falls through to the fresh-window path.
-      const restored = skipLayout
-        ? []
-        : sanitizeDocumentBackedPlotWindows(ws.plotWindows, dsIds, migrationWarnings);
-      const migrationNotice = migrationWarnings[0] ? ` — ${migrationWarnings[0]}${migrationWarnings.length > 1 ? ` (+${migrationWarnings.length - 1} more)` : ""}` : "";
-      // Items 11/17: the ≥1-window invariant is specifically ≥1 PLOT window —
-      // non-plot kinds (snapshot / worksheet / map) can't hold focus, so a
-      // doc whose surviving windows are all non-plot still gets the fresh
-      // maximized main window appended; focus then falls back to the first plot window.
-      const restoredHasPlot = restored.some((w) => w.kind === "plot");
-      const plotWindows = restoredHasPlot ? restored : [...restored, win];
-      const focusedWindowId =
-        restoredHasPlot &&
-        ws.focusedWindowId &&
-        plotWindows.some((w) => w.id === ws.focusedWindowId && w.kind === "plot")
-          ? ws.focusedWindowId
-          : (plotWindows.find((w) => w.kind === "plot") ?? plotWindows[0]).id;
-      // A restored layout carries its own PlotView per window — hydrate the
-      // FOCUSED one into the live singleton fields immediately so it renders
-      // right away, the same "focused window's live view ≡ singletons"
-      // invariant `focusWindow`/`closeWindow` already uphold. Null in the
-      // legacy/fresh case, so every singleton field below falls through to
-      // EXACTLY today's reset (including the errKeys/hiddenChannels smart
-      // defaults derived from the active dataset) — zero behavior change
-      // when there's no persisted layout to restore.
-      const restoredView = restoredHasPlot
-        ? hydrateView(plotWindows.find((w) => w.id === focusedWindowId)!.view)
-        : null;
-      return {
-        datasets,
-        folders: migrated.folders,
-        // MUST be explicit — `set()` merges a PARTIAL state, so omitting this
-        // silently leaves the PREVIOUS project's workbooks in place on the
-        // newly opened one (a v1-v3 doc has no `workbooks` field at all, and
-        // TypeScript won't catch a missing key in an object literal here).
-        workbooks: ws.workbooks ?? [],
-        expandedFolders: [...new Set([...(ws.expandedFolders ?? []), ...migrated.createdFolderIds])],
-        // L0.25/PR E2: restore what THIS doc carries (parseWorkspace already
-        // sanitized it), never the PREVIOUS project's stale value.
-        librarySelection: restoredLibrarySelection,
-        expandedWorkbookIds: ws.expandedWorkbookIds ?? [],
-        workbookLastChild: ws.workbookLastChild ?? {},
-        activeId: active,
-        // item 15: transient UI (like `stageTab`) — a fresh load falls back to activeId.
-        worksheetId: null,
-        worksheetSelections: {}, // #14: also transient — never round-trips
-        // A restored tree selection wins outright, no [active] synthesis.
-        selectedIds: restoredLibrarySelection ? [] : selected.length ? selected : active ? [active] : [],
-        originFigures: ws.originFigures ?? [], // restored from the .dwk (v2 persists them)
-        originFidelity: ws.originFidelity ?? [],
-        smartFolders: ws.smartFolders ?? [], // saved queries (item 9) — .dwk persists them
-        reports: ws.reports ?? [], // report sheets (#36) — .dwk v2 persists them
-        openReportId: null,
-        macroSteps: ws.macroSteps ?? [], // typed pipeline (#6) — .dwk v3
-        recalcMode: ws.recalcMode ?? "auto", // recalc engine (#1) — .dwk v3
-        figureDocs: ws.figureDocs ?? [], // figure documents (#12) — .dwk v3
-        editableFigures: ws.editableFigures ?? [],
-        pages: ws.pages ?? [],
-        figureDocSeed: null, figurePublicationSession: null, pageDocSeed: null,
-        savedPlotSpecs: ws.savedPlotSpecs ?? [], // named graphs (#11) — .dwk v3
-        quickPlotTemplates: ws.quickPlotTemplates ?? [], // Quick Plot templates (PR H) — .dwk v4 additive
-        savedRois: ws.savedRois ?? [], mapViews: loadedMapViews(ws.mapViews, dsIds), mapPaintedLimits: {}, // named ROIs (RSM_CUTS_PLAN #13) — .dwk v3; and P2.8's per-dataset durable map views — .dwk v4 additive, MUST be explicit for the same cross-project-leak reason `workbooks` above is (their colour limits and slice positions are in the PREVIOUS project's units), and `dsIds` so a hand-built WorkspaceState cannot install an entry for a dataset this load does not have. `mapPaintedLimits` is reset the same way and for the same reason (P2.8 review round 3, finding 2): it is transient per-dataset paint state, and a reopened project's dataset ids can collide with the previous project's, leaving a stale "effective" pair on screen. Packed onto one line, not its own: this module is AT its store-size pin (architecture.test.ts) with zero headroom, which is also why the slice composes through store/rois.ts — see store/mapView.ts's header.
-        collections: ws.collections ?? [], // saved-search Collections (PR L, L0.48/L0.49) — .dwk v4 additive
-        // P1.3 wave 2 (Lane B/C integration fix): `plotRecipes` was already
-        // serialized by the whole-state-spread save path (workspaceIO.ts /
-        // useWorkspaceAutosave.ts) but never restored here — a load silently
-        // dropped every saved recipe AND, worse, left the PREVIOUS project's
-        // live list in place (the same cross-project-leak class `workbooks`
-        // above calls out). MUST be explicit, same reasoning.
-        plotRecipes: ws.plotRecipes ?? [],
-        recipeSourcesComplete: ws.recipeSourcesComplete ?? true, // stale `true` would re-certify what THIS load lost
-        visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
-        activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
-        quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
-        separatePreview: null, // PR J transient dialog state — never resumes on a fresh load
-        // L0.33: transient staging/report state — never resumes on a fresh
-        // load, same class as separatePreview above (a stale row would name
-        // a dataset id from the PREVIOUS project).
-        reimportAllRows: null,
-        reimportAllBusy: false,
-        reimportAllCommitted: null,
-        // P1.3 wave 2: transient preview/confirm state for a staged recipe
-        // apply — never resumes on a fresh load, same as separatePreview/
-        // quickFigureBuilderDatasetId above (a stale pending would confirm
-        // against whatever dataset happens to share its id in the NEW project).
-        pendingRecipeApplication: null,
-        staleDatasets: [],
-        staleFits: [],
-        stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) : s.stageTab,
-        xKey: restoredView ? restoredView.xKey : null,
-        yKeys: restoredView ? restoredView.yKeys : null,
-        groupKey: restoredView ? restoredView.groupKey : null,
-        facetKey: restoredView ? restoredView.facetKey : null,
-        y2Keys: restoredView ? restoredView.y2Keys : null,
-        y2Lim: restoredView ? restoredView.y2Lim : null,
-        y2Scale: restoredView ? restoredView.y2Scale : null,
-        y2Step: restoredView ? restoredView.y2Step : null,
-        y2AxisLabel: restoredView ? restoredView.y2AxisLabel : "",
-        seriesStyles: restoredView ? restoredView.seriesStyles : {},
-        seriesLabels: restoredView ? restoredView.seriesLabels : {},
-        errKeys: restoredView ? restoredView.errKeys : activeDs ? defaultErrKeys(activeDs.data) : {},
-        seriesOrder: restoredView ? restoredView.seriesOrder : null,
-        hiddenChannels: restoredView
-          ? restoredView.hiddenChannels
-          : activeDs
-            ? originHiddenChannels(activeDs.data)
-            : [],
-        xLim: restoredView ? restoredView.xLim : null,
-        yLim: restoredView ? restoredView.yLim : null,
-        xStep: restoredView ? restoredView.xStep : null,
-        yStep: restoredView ? restoredView.yStep : null,
-        fitOverlay: null,
-        peakOverlay: null,
-        baselineOverlay: null,
-        peakWizardEdit: null,
-        // NOT baselineAnchorEdit: the useBaseline hook owns it and re-pushes
-        // (with a cleared anchor list) on dataset change — nulling it here
-        // would fight that effect's cleanup ordering.
-        // `composition` (#54, ephemeral) + rsmPeaks..gadgetCursorResult — the
-        // SAME transient-tool clear a dataset/focus switch applies elsewhere
-        // (windows.ts's `focusTransientReset`); one field list to maintain.
-        ...focusTransientReset(),
-        // PLOT_WORKFLOW_PLAN item 5: additive — absent on a pre-item-5 .dwk
-        // sanitizes to {} (lib/workspace.ts's own undefined-input path).
-        techniqueViewMemory: sanitizeTechniqueViewMemory(ws.techniqueViewMemory),
-        plotWindows,
-        focusedWindowId,
-        // #10 item 3: viewport-clamped by parseWorkspace. skipLayout: OMIT
-        // the key so `set()`'s merge leaves the layout untouched.
-        ...(skipLayout ? {} : { toolWindowLayout: ws.toolWindowLayout ?? {} }),
-        // The rest of the PlotView cluster (item 7) — only touched when
-        // restoring an actual persisted layout; the legacy/fresh path never
-        // wrote these here before item 7, so they're left alone (whatever the
-        // pre-load session had) exactly as before. `restoredView` is exactly
-        // the VIEW_KEYS set (hydrateView) and the store is a superset, so this
-        // spread writes the identical field set the group above re-lists on the
-        // restore path — one place to maintain as PlotView grows, not two.
-        ...(restoredView ?? {}),
-        status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}${migrationNotice}`,
-      };
-    }),
-  appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
   setActive: (id) => {
     // Item 14 pin opt-out: a pinned focused window never follows a passive
     // plot intent — retarget it first (focus swap, or a fresh window), then

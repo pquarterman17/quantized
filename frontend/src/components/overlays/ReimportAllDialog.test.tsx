@@ -2,7 +2,8 @@
 // Available Sources problem report dialog. Mirrors
 // SeparateWorksheetsDialog.test.tsx's rendering conventions.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
@@ -141,5 +142,36 @@ describe("ReimportAllDialog — G2: partial success vs outright refusal banners"
     expect(screen.getByText(/re-imported 3 sources; 1 skipped:/)).toBeInTheDocument();
     expect(screen.queryByText(/could not be re-imported/)).not.toBeInTheDocument();
     expect(screen.queryByText(/left unchanged/)).not.toBeInTheDocument();
+  });
+});
+
+// R1 (P3.3): focus-in/Escape/restore driven via userEvent at
+// document.activeElement (not fireEvent.keyDown on the box).
+describe("ReimportAllDialog focus-in / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the dialog on open, onto Close, while staging", () => {
+    useApp.setState({ reimportAllBusy: true, reimportAllRows: null });
+    render(<ReimportAllDialog />);
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+  });
+
+  it("Escape (via the keyboard) cancels the report — even mid-stage — and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <ReimportAllDialog />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => useApp.setState({ reimportAllBusy: true, reimportAllRows: null }));
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    // cancelReimportAll(), not a raw close — bumps the generation too (G1).
+    expect(useApp.getState().reimportAllRows).toBeNull();
+    expect(useApp.getState().reimportAllBusy).toBe(false);
+    expect(opener).toHaveFocus();
   });
 });

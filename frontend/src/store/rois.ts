@@ -133,7 +133,8 @@ const DEFAULT_MAP_SECTOR: MapSectorState = {
 // rather than through a spread of its own in useApp.ts — that module is at its
 // store-size pin with zero headroom, which is this file's own reason to exist.
 // See store/mapView.ts's header; `loadedMapViews` is re-exported at the bottom
-// so `loadWorkspace` can reach it on the import line useApp.ts already has.
+// so `loadWorkspace` (store/workspaceHydration.ts, P4.1's fourth domain) can
+// import it directly.
 export interface RoisSlice extends MapViewSlice {
   // Relocated verbatim from useApp.ts — see this file's header.
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null; // markers on the 2D map
@@ -309,6 +310,7 @@ export function deserializeRois(v: unknown, warnings: string[]): RoiDef[] {
   return out;
 }
 
-// Re-exported for store/useApp.ts's `loadWorkspace` — see store/mapView.ts's
-// header for why the restore rides this module's existing import line there.
+// Re-exported for store/workspaceHydration.ts's `loadWorkspace` (P4.1's
+// fourth domain) — see store/mapView.ts's header for why the restore rides
+// this module's existing export rather than a new one straight off mapView.ts.
 export { loadedMapViews } from "./mapView";

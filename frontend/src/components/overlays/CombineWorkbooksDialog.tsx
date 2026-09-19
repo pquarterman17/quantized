@@ -31,13 +31,14 @@
 // items, so a "Name" / "Name (2)" collision is something the user sees
 // before confirming, not something that happens invisibly on commit.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { dedupeWorksheetNames, resolveCombineTargets, suggestCombinedWorkbookName } from "../../lib/workbookCombine";
 import { Button } from "../primitives";
 import { toast } from "../../store/toasts";
 import { useCombineDialog } from "../../store/combineDialog";
 import { useApp } from "../../store/useApp";
+import { useDialogFocus } from "./useDialogFocus";
 
 export default function CombineWorkbooksDialog() {
   const seed = useCombineDialog((s) => s.seed);
@@ -45,6 +46,8 @@ export default function CombineWorkbooksDialog() {
   const datasets = useApp((s) => s.datasets);
   const workbooks = useApp((s) => s.workbooks);
   const combineWorkbooks = useApp((s) => s.combineWorkbooks);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
   // Adversarial-review P1 fix (2026-08-19): FROZEN at open, not re-derived
   // from live `datasets` on every render — the bug this closes is a
@@ -75,6 +78,19 @@ export default function CombineWorkbooksDialog() {
     setCommitError(null);
   }, [seed]);
 
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
+  // its own window-capture listener rather than joining `lib/escapeStack.ts`
+  // — a true backdrop modal always wins over anything mounted behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener.
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!seed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -86,6 +102,12 @@ export default function CombineWorkbooksDialog() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [seed, close]);
+
+  // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Name field —
+  // it drives whether Combine is even enabled (`canCombine` requires a
+  // non-empty name) and sits above the checklist, so it is the first control
+  // worth a look.
+  useDialogFocus(dialogRef, seed !== null);
 
   // Hooks run unconditionally (same discipline as SplitDatasetDialog) — the
   // "closed" case is handled by an empty resolved list, not by skipping a hook.
@@ -141,13 +163,18 @@ export default function CombineWorkbooksDialog() {
     <div className="qz-overlay-backdrop" onMouseDown={close}>
       <div
         className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canCombine) runCombine();
           e.stopPropagation();
         }}
       >
-        <h2>Combine into new workbook</h2>
+        <h2 id={titleId}>Combine into new workbook</h2>
         <div className="qz-ws-row">
           <span className="k">Name</span>
           <input

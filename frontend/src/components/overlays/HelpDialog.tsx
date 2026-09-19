@@ -8,7 +8,7 @@
 // existing shortcut data rather than duplicating it. The importing/origin tabs
 // are added by later slices; the store's HelpSection type already lists them.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   actionToHelpItem,
@@ -28,6 +28,7 @@ import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
 import { useApp } from "../../store/useApp";
 import { mergeCommands, useCommands, type Action } from "../../store/commands";
+import { useDialogFocus } from "./useDialogFocus";
 
 const IS_MAC = isMacPlatform();
 
@@ -79,9 +80,23 @@ export default function HelpDialog() {
   const query = useHelp((s) => s.query);
   const setQuery = useHelp((s) => s.setQuery);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
 
   // Esc closes even when focus isn't inside the dialog (ShortcutsDialog rule).
+  // R1 (P3.3): kept as its own window-capture listener rather than joining
+  // `lib/escapeStack.ts` — a true backdrop modal always wins over anything
+  // mounted behind it, and window-capture already guarantees that ahead of
+  // the registry's window-bubble listener.
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -94,10 +109,22 @@ export default function HelpDialog() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, close]);
 
-  // Focus the box when the Topics tab is showing.
+  // Focus the box when the Topics tab is showing. This runs BEFORE
+  // `useDialogFocus` below, so on the Topics tab the shared hook's own
+  // focus-in sees focus already inside the dialog and skips (the same
+  // "already inside `ref`" rule ParamDialog's `autoFocus` relies on).
   useEffect(() => {
     if (open && section === "search") inputRef.current?.focus();
   }, [open, section]);
+
+  // R1: focus-in, Tab trap, restore-to-opener, PLUS a deliberate landing spot
+  // for the other four tabs — this dialog renders its own tab chrome
+  // (`.qzk-help-tabs`), but unlike Preferences' the tab buttons here ARE real
+  // `role="tab"` `<button>`s, so the hook's plain default (first focusable
+  // element in DOM order) already lands on the "Topics" tab button — a
+  // meaningful, always-present, keyboard-operable control — whenever the
+  // search box isn't the one taking focus above.
+  useDialogFocus(dialogRef, open);
 
   // Snapshot the runtime command registry on open — the same non-reactive
   // discipline CommandPalette uses for `useCommands.getState().menuCommands`
@@ -139,9 +166,12 @@ export default function HelpDialog() {
         className="qzk-glass qz-dialog qzk-help"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="Help"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
       >
-        <h2>Help</h2>
+        <h2 id={titleId}>Help</h2>
         <div className="qzk-help-tabs" role="tablist">
           {TABS.map((t) => (
             <button

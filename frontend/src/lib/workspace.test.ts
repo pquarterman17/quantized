@@ -1421,8 +1421,9 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
 
     expect(loaded.plotWindows[0].document).toEqual(document);
     expect(loaded.plotWindows[0].document?.bindings.facetKey).toBe(2);
-    // The live-facade projection (what `useApp.ts`'s `loadWorkspace` hydrates
-    // the focused window's singleton `facetKey` field from) also survives.
+    // The live-facade projection (what `store/workspaceHydration.ts`'s
+    // `loadWorkspace` hydrates the focused window's singleton `facetKey`
+    // field from) also survives.
     expect(loaded.plotWindows[0].view.facetKey).toBe(2);
     expect(loaded.plotWindows[0].view.stackMode).toBe(true);
   });

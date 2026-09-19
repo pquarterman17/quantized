@@ -3797,9 +3797,12 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [~] Keyboard reachability, focus, order, cancel. **Audited in full and
-  partly fixed 2026-09-18.** Stays `[~]` rather than `[x]`: the audit covered
-  everything the box names, but the fixes deliberately stopped short of eight
-  dialogs that already have a working Escape (residuals listed below).
+  fixed across eight rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
+  **round 8 NARROWED R1** after measuring that its Escape half was closed on
+  a false claim, and filed the measured defect as **BUG-018**. Stays `[~]`
+  rather than `[x]`: twelve residuals remain (R2–R13 below), each a distinct,
+  smaller gap — none of them a dialog with no keyboard dismissal at all,
+  which is what the audit originally found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -3814,7 +3817,7 @@ covers a much smaller subset and guards focus on Analyze.
   | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
-  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | **Y alone, WRONG stacked (BUG-018)** | Y | R1 narrowed (round 8) — focus-in + trap + restore closed; Escape OWNERSHIP is not |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
@@ -4192,6 +4195,38 @@ covers a much smaller subset and guards focus on Analyze.
     it is one of the two documented exceptions above, and closing it needs the
     hook to reach its host frame's ref.
 
+  - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
+    mounted at once, and each one hides the app's live regions.** Follows
+    directly from BUG-018: with Preferences and Shortcuts both open, both
+    carry `aria-modal="true"`, and AT behaviour with two concurrent modals is
+    undefined. Separately and more reachably, `aria-modal` on any one of these
+    ten hides everything outside that dialog from assistive tech for as long
+    as it is open — including the two `aria-live` regions the app raises
+    announcements through, `components/overlays/Toaster.tsx` and the status
+    bar (`StatusBar.tsx`). A toast raised while a dialog is open is therefore
+    silently not announced. Pre-existing for `ConfirmDialog`; extended to six
+    more dialogs by round 7 (Preferences and Help had `role` but not
+    `aria-modal`). Closing it properly means `inert` on the background plus
+    hoisting the live regions out of the inert subtree, which is a design
+    decision of its own, not a markup tweak. Not fixed here; recorded.
+
+  - **R13** (round 8, review NIT 5) — **three of round 7's eight new Escape
+    cases discriminate only on focus-in/restore, not on Escape
+    reachability.** Each "Escape … gives focus back to the opener" case
+    drives `user.keyboard("{Escape}")`, which is right, but because the
+    handler is a window-CAPTURE listener the dialog closes whether or not
+    focus ever moved in. What actually distinguishes the fixed tree in those
+    cases is `expect(opener).not.toHaveFocus()` right after open and
+    `expect(opener).toHaveFocus()` after close — both genuinely pinned, so
+    the cases are sound; the case NAMES just promise more than they check.
+    Escape reachability itself is pinned only by the pre-existing
+    `fireEvent.keyDown(window, …)` tests, which exist in five of the eight
+    files (`ShortcutsDialog`, `TextFormatHelp`, `PreferencesDialog`,
+    `HelpDialog`, `SplitDatasetDialog`) and **not** in `SeparateWorksheets`,
+    `CombineWorkbooks` or `ReimportAll`. Recorded rather than renamed: the
+    three missing reachability pins are worth adding with BUG-018's fix,
+    when the mechanism they would pin is the one that will actually ship.
+
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because
     `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
@@ -4350,14 +4385,173 @@ covers a much smaller subset and guards focus on Analyze.
     `useGlobalShortcuts.test.ts` + `components/workshops/peakwizard`
     (**69 tests**, green at baseline), and restored after.
 
+  **Round 7 (2026-09-19) — R1 closed: the eight backdrop dialogs now take
+  focus, trap Tab, and restore it.** Split, Separate, Combine, ReimportAll,
+  Shortcuts, TextFormatHelp, Preferences, Help all adopt
+  `useDialogFocus`/`useFocusTrap` (`components/overlays/useDialogFocus.ts`,
+  unchanged — this is applying existing infrastructure, not building new).
+  `role="dialog"`, `aria-modal="true"` and an `aria-labelledby` from
+  `useId()` were added wherever missing (Preferences and Help already had
+  `role="dialog"` + `aria-label`; both are now `aria-labelledby` pointing at
+  their own heading, matching every other dialog in the app).
+  - **Escape: all eight KEEP their own window-capture listener** rather than
+    joining `lib/escapeStack.ts`. Reason, same for all eight and consistent
+    with `ConfirmDialog`/`RecoveryChoiceDialog` (never rewritten onto the
+    registry either): a backdrop dialog is a true MODAL that blocks the
+    pointer entirely, so it must always win over anything mounted behind
+    it. Window-capture already guarantees that — it runs ahead of the
+    registry's one window-BUBBLE listener on every keystroke — so joining
+    the registry would add ordering machinery (a `menu`/`window`/`workspace`
+    layer decision) that a dialog which can never be out-ranked does not
+    need. `ReimportAllDialog` additionally keeps calling `cancelReimportAll()`
+    specifically (never a raw close), per its existing coordinator-review G1
+    contract — untouched by this pass.
+  - **Landing spot, one line per dialog:**
+    - Split — the Column select (DOM-order default): it is the first
+      decision and gates whether Tolerance even renders below it.
+    - Separate — the Name field (default): the one control every commit
+      needs a look at.
+    - Combine — the Name field (default): drives whether Combine is even
+      enabled.
+    - ReimportAll — default (Close, or Close + "Reimport Available
+      Sources"): no field outranks either.
+    - Shortcuts / TextFormatHelp — default (Close): read-only sheets with
+      one real control.
+    - **Preferences** — deliberately NOT the default. This dialog's own tab
+      nav (`.qzk-prefs-nav`) is a row of plain, non-focusable `<div>`s (a
+      pre-existing, separate gap this pass does not touch — they were
+      mouse-only before and after), so the raw DOM-order default would land
+      on the "✕" close button, telling a keyboard user nothing about what
+      the dialog is for. A second effect (declared before `useDialogFocus`,
+      so the shared hook's own "already inside" skip applies — the same
+      composition `ParamDialog`'s `autoFocus` and `HelpDialog`'s own
+      search-box focus already rely on) instead focuses the first focusable
+      control INSIDE THE ACTIVE PANE — the setting a user opening
+      Preferences almost certainly came for. The Keyboard tab has no
+      focusable content at all, so there this is a no-op and the shared
+      hook's Close-button fallback is what actually fires — verified by
+      sabotage (below).
+    - **Help** — the pre-existing "focus the search box on the Topics tab"
+      effect is kept (same composition as Preferences), and for the other
+      four tabs the shared hook's plain default already lands on the
+      "Topics" tab button — unlike Preferences, Help's tabs ARE real
+      `role="tab"` `<button>`s, so no override was needed there.
+  - **Sabotage — one dialog's `useDialogFocus` call removed at a time (never
+    all eight at once, the exact failure mode a prior round shipped):**
+
+    | Dialog sabotaged | Result | Failing test(s) |
+    |---|---|---|
+    | Shortcuts | **RED** 2/2 | "moves focus into the dialog on open…", "Escape … closes it and gives focus back to the opener" |
+    | TextFormatHelp | **RED** 2/2 | same two case names |
+    | SeparateWorksheets | **RED** 2/2 | same two case names |
+    | ReimportAll | **RED** 2/2 | same two case names |
+    | CombineWorkbooks | **RED** 3/3 | + "Tab wraps through the checklist and buttons…" |
+    | SplitDataset | **RED** 3/3 | + "Tab wraps between Column, Tolerance, Cancel, and Split…" |
+    | Preferences | **RED** 2/3 | "Tab traps at the dialog's real boundary…", "Escape … gives focus back to the opener" — **NOT** "moves focus into the ACTIVE PANE…", which stays green because that assertion is satisfied by the dialog's OWN separate landing-spot effect, independent of `useDialogFocus`. Sabotaging that effect's own line instead (a second, additive check) turns the focus-in case red too — landing on the "✕" close button — confirming the deliberate-landing-spot claim is itself tested, just not by the same case that pins the trap/restore. |
+    | Help | **RED** 2/3 | "falls back to the shared hook's default…", "Escape … gives focus back to the opener" — **NOT** "moves focus into the Search box…", which is HelpDialog's own pre-existing effect, same reasoning as Preferences. |
+
+    Each sabotage applied alone against that one dialog's own test file
+    (`components/overlays/*.test.tsx`), green at baseline, and restored
+    after. The full `components/overlays` suite (23 files, 268 tests, 20 new)
+    is green with every sabotage reverted.
+  - Eager bundle — **CORRECTED in round 8; the pair below was measured
+    against the wrong parent.** `cee0494f~1` is **`4179b166`**, not
+    `b10bcad3`, which is three commits back (`b10bcad3` → `c841c38d` →
+    `4179b166` → `cee0494f`); the two intervening P4.1 commits moved 218
+    lines out of eager `store/useApp.ts` into a new 265-line
+    `store/workspaceHydration.ts`, both eager sources, so the old pair folded
+    that extraction into this commit's number. Re-measured 2026-09-19 in a
+    throwaway worktree, `npm ci` once (no lock or `package.json` drift
+    between the two commits) and `rm -rf node_modules/.vite` before each
+    build: parent **`4179b166` 889,496 B** → tip **`cee0494f` 889,498 B**,
+    **+2 B**. The delta was right; **both absolute numbers were wrong by
+    21 B**, and the parent SHA was wrong outright. Budget 920,400 B, so
+    30,902 B of headroom at that tip. (Superseded arithmetic, kept so the
+    correction is auditable: `b10bcad3` **889,475 B** → **889,477 B**.)
+    No new library code — only existing-hook adoption plus
+    `role`/`aria-modal`/`aria-labelledby` markup, so the delta is negligible.
+
+  **Round 8 (2026-09-19) — R1 narrowed, BUG-018 filed, landing spot fixed.**
+  This round changed almost no product code, on purpose. It started from an
+  adversarial review of `cee0494f` that reproduced a stacked-dialog Escape
+  double-close in real Chromium with three keystrokes and no mouse.
+  - **The preferred fix was built and MEASURED, then reverted.** All ten
+    backdrop dialogs were migrated onto `useEscapeSurface("window", …)`,
+    keeping each dialog's close semantics (`ReimportAll` still `cancel()`,
+    `RecoveryChoice` still `applyCancelRecovery()`, `ConfirmDialog` keeping
+    Enter on its own window-capture listener and moving only Escape). It
+    **does** fix the ladder, measured: Preferences over Shortcuts went 2 → 1
+    → 0 on two Escapes, and Preferences over a pending `ConfirmDialog` closed
+    Preferences on the first Escape with the confirm **still pending**,
+    resolving `false` only on the second — exactly the target behaviour.
+  - **It was reverted because it inverted the ladder elsewhere.**
+    `escapeStack`'s dispatcher returns early on
+    `isEditingTarget(event.target)` (INPUT/TEXTAREA/SELECT), and FOUR of the
+    ten dialogs land focus on such a control **by design**, per round 7's own
+    landing-spot table: Help's search box, Separate's and Combine's Name
+    field, Split's Column select. Measured: with Help open and focus on its
+    search box, Escape did nothing at all — twice — and `SeparateWorksheets`
+    alone would not close from its own documented landing spot. The scoped
+    suite went from 268 green to **9 failed / 264 passed across 7 files**; of
+    those 9, four are this genuine regression (Help, Separate, Combine,
+    Split's `user.keyboard("{Escape}")` cases) and the rest are the
+    synchronous-`fireEvent` tests meeting the registry's one-macrotask
+    deferral. Making it work would mean giving `escapeStack` a new modal tier
+    that bypasses `isEditingTarget`, `cmdkOpen` and the `.qzk-ctx` guard —
+    a redesign of the dispatcher that has already produced an inversion in
+    each of rounds 2, 3, 4 and 5, not an adoption of existing infrastructure.
+    Out of scope for a bounded round; recorded as BUG-018's design note so
+    the next attempt starts from the measurement rather than repeating it.
+  - **What shipped instead:** this narrowing, BUG-018, the corrected bundle
+    record above, two new residuals (R12, R13), and one real fix — the
+    Preferences landing spot (below).
+  - **Preferences lands on the SELECTED segment, not the first one** (review
+    NIT 3). `SegmentedControl` gives every option a plain focusable
+    `<button role="tab">` with no roving `tabindex`, so round 7's
+    `focusablesIn(paneRef.current)[0]` was always the FIRST option. Measured
+    with `theme: "light"`: focus landed on **"Dark"**, carrying
+    `aria-selected="false"` — a screen-reader user's entry point was "Dark,
+    tab, not selected", and Enter/Space there flipped the theme. The new
+    `landingSpotIn` helper prefers the selected option of the `role="tablist"`
+    group the default belongs to, falling back to the plain DOM-order default
+    for every non-tablist pane. Round 7's test covered only the default dark
+    theme, where first-in-DOM and selected coincide; **both themes are pinned
+    now** (`it.each`), and the assertion is stated as the property —
+    `aria-selected="true"` on whatever it landed on — not just the label.
+  - **Round 7's per-dialog sabotage property is preserved.** Re-verified
+    after the landing-spot change: commenting out `useDialogFocus` in
+    Preferences alone still reddens exactly its trap and restore cases
+    (**RED 2/10**), and the two landing-spot cases correctly stay green
+    because the dialog's own effect satisfies them — the same disclosure
+    round 7 made.
+
   **Named residuals (why this is `[~]`).**
-  - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
-    Shortcuts, TextFormatHelp, Preferences, Help) still take no focus, trap no
-    Tab, and restore nothing. Their Escape is a window-capture listener and
-    DOES work, which is why they were left for a later, lower-risk slice
-    rather than swept in here: each renders enough of its own chrome that
-    focus-in needs a per-dialog decision about which control is the safe
-    landing spot.
+  - **R1** — **NARROWED (round 8), not closed.** The FOCUS half is closed and
+    stays closed: the eight backdrop dialogs (Split, Separate, Combine,
+    ReimportAll, Shortcuts, TextFormatHelp, Preferences, Help) take focus on
+    open, trap Tab, and restore it to the opener on close, via the same
+    `useDialogFocus`/`useFocusTrap` infrastructure every other dialog in this
+    box uses — round 7's per-dialog sabotage table reproduces exactly, and an
+    independent review re-ran all eight.
+
+    The ESCAPE half is **not** closed, and round 7's reason for keeping the
+    window-capture listener was false where it mattered. It claimed a backdrop
+    dialog "can never be out-ranked" and that "joining the registry buys
+    nothing". Both hold for a dialog over a NON-dialog surface — measured, and
+    still true. Neither holds for a dialog over ANOTHER dialog, which is the
+    one case the registry's ordering exists to settle: all ten backdrop
+    dialogs (these eight plus `ConfirmDialog` and `RecoveryChoiceDialog`)
+    listen with `window.addEventListener("keydown", …, true)` and call
+    `stopPropagation()`, which does not stop a same-node, same-phase sibling,
+    so both handlers run on one keystroke. Measured on this tree
+    (`490243f9`), jsdom, real components, `user.keyboard("{Escape}")`:
+    Preferences + Shortcuts, Preferences + Help and Preferences + a pending
+    `ConfirmDialog` each go from 2 open `[role="dialog"]` to **0** on ONE
+    Escape, and the confirm resolves `false` on the same keystroke that
+    dismissed Preferences. **Filed as BUG-018** (`plans/BUGS_AND_ISSUES.md`)
+    with that reproduction and pinned by
+    `components/overlays/stackedDialogEscape.test.tsx`. Pre-existing, not
+    introduced by round 7 — the Escape effects are byte-identical to base.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
@@ -6534,6 +6728,124 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   plan and `architecture.test.ts`'s comments; no gate command, budget or
   pin changed, and the extraction's own byte-identical bodies (this note's
   earlier paragraph) are untouched.
+
+  **FOURTH domain extracted 2026-09-19**, same discipline: **workspace
+  hydration** — `loadWorkspace` (replace the whole library from a
+  restored/parsed `.dwk`; the autosave restore on startup AND an explicit
+  File ▸ Open `.dwk` both run it) and `appendWorkspace` (Origin's "Append
+  Project", MAIN_PLAN #16 — the additive opposite: only the flat dataset
+  list + referenced workbooks join the CURRENT library). This is exactly
+  the candidate the third domain's own note named as "the obvious next
+  domain" once the bulk view appliers landed. 170 implementation lines
+  (`loadWorkspace`, base `useApp.ts` 954-1123) plus `appendWorkspace`'s
+  one-line delegate (1124) and their 9 interface-declaration lines — 171
+  lines total, matching the plan's estimate — moved to the new
+  `store/workspaceHydration.ts` (266 lines by the repo's `split("\n")`
+  ceiling metric, `WorkspaceHydrationSlice`, composed with one import +
+  one word on the `extends` clause + one spread, exactly like
+  `plotViewSettings.ts`, `reportsFigureDocs.ts` and `viewAppliers.ts`).
+  `appendWorkspace`'s own body (`runAppendWorkspace`) stays in
+  `store/workspaceIO.ts` — that module is not moving, it is already its
+  own file below the store-size pin — so only the action's one-line
+  delegate travelled. `store/useApp.ts` **1,639 → 1,451 lines (−188)**;
+  its `STORE_PINS` entry ratcheted DOWN to 1,451 with a dated
+  justification. The bodies are byte-identical modulo one indentation
+  level (object literal at depth 1 → the creator's `return {` at depth
+  2); ten import STATEMENTS were narrowed or removed, covering 13
+  bindings, leaving `useApp.ts` without them
+  (`migrateGroupsToFolders`, `mainWindow`, `focusTransientReset`,
+  `sanitizeDocumentBackedPlotWindows`, `hydrateView`, `defaultErrKeys`,
+  `originHiddenChannels`, `sanitizeVisibleDetailsColumns`,
+  `sanitizeTechniqueViewMemory`, `loadedMapViews`, `runAppendWorkspace`,
+  `WorkspaceState`, `LoadedWorkspace`) — 5 statements removed outright
+  (`lib/errorbars`, `lib/workspace` types, `lib/libraryDetailsColumns`,
+  `lib/techniqueViewMemory`, `lib/windowDocumentPersistence`) and 5
+  narrowed (`lib/foldertree`, `lib/plotview`, `store/windows`,
+  `store/workspaceIO`, `store/rois`). The FIELDS stay declared and
+  initialized on AppState here, same shape as all three earlier
+  extractions — `loadWorkspace` writes nearly all of them (a
+  full-library replace has to), but plenty of other actions read and
+  write them too, so the fields are not this cluster's alone to own. No
+  new store/ layering grandfathered entry: `workspaceHydration.ts`
+  imports only `lib/` helpers and sibling store modules, never
+  `components/`. Four stale comments pointing at "`store/useApp.ts`'s
+  `loadWorkspace`" (`store/rois.ts` x2, `store/mapView.ts`,
+  `lib/openWorkspaceReplace.ts`) now say `store/workspaceHydration.ts`.
+  Characterization net:
+  `store/workspaceHydration.characterization.test.ts` (20 specs), written
+  and run GREEN against the pre-extraction `store/useApp.ts` and passing
+  byte-unchanged after the move. It pins, for both actions and every
+  branch, the exact set of top-level store keys each call changes — a
+  poisoned whole-`getState()` diff covering every `lib/plotview.ts`
+  `VIEW_KEY`, so both the restored-plot-window branch's write AND the
+  legacy/fresh path's deliberate NON-write are visible — plus the
+  `toolWindowLayout` key's conditional presence (omitted under
+  `skipLayout`, not reset to `{}`), the `mapPaintedLimits`/`mapViews`
+  P2.8 reset (always clears `mapPaintedLimits`; restores `mapViews` only
+  for datasets this load actually has), that `loadWorkspace` pushes no
+  undo entry and records no macro step, and `appendWorkspace`'s
+  `recordHistory`-before-mutation ordering. Sabotage-proven three ways:
+  dropping the `mapPaintedLimits` reset and adding an extra unconditional
+  key write (`xAxisLabel`) both turn the fresh-path key-set spec red; and
+  moving `appendWorkspace`'s `recordHistory` call to AFTER the mutation
+  is invisible to every OTHER spec (they only assert the post-append
+  state) — closed by adding a dedicated ordering spec asserting the
+  pushed undo snapshot is the PRE-append dataset list, which then failed
+  as expected. Eager bundle, both trees built after their own `npm ci`
+  and a `node_modules/.vite` wipe: **889,475 B at `c841c38d`** (`HEAD~1`
+  of the extraction, the characterization-only commit, which cannot move
+  the eager graph) → **889,496 B on the extraction commit, +21 B** (the
+  new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched, well clear
+  of budget). The box stays `[~]`: `store/useApp.ts` is still over the
+  500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
+  `lib/uplotOverlays.ts` are untouched by every pass so far.
+
+  **Adversarial review of the fourth extraction (2026-09-19), net gaps
+  closed same day.** Verdict CLEAN — the moved body and the composed
+  store are byte-/reference-identical (C1/C5); seven findings, none a
+  live behaviour regression. F1: the "before" SHA above was recorded as
+  `fb0aa64b`, an orphaned amend that is neither this commit's parent nor
+  on any branch — corrected above to `c841c38d` (the real `HEAD~1`); the
+  two commits' trees are byte-identical, so the **889,475 B number
+  itself was always right**, only the SHA was unreproducible (same class
+  as review-1 F3, review-2 F1, review-3 F7 — a recurring mistake this
+  plan and `agent_rules.md` now both call out). F7: "ten now-unused
+  imports … (13 names)" conflated import STATEMENTS with BINDINGS;
+  corrected above to say both numbers explicitly (10 statements / 13
+  bindings), and a stale `lib/workspace.test.ts:1424` comment naming
+  `useApp.ts`'s `loadWorkspace` (missed by the otherwise-thorough
+  four-site cross-reference sweep) now names `store/workspaceHydration.ts`.
+  F2-F6 were holes in the characterization net itself, closed in
+  `store/workspaceHydration.characterization.test.ts` (20 → 23 specs):
+  F2, a "surviving windows are all non-plot" spec used a `kind:
+  "snapshot"` fixture with no `snapshot:` payload, which
+  `sanitizeDocumentBackedPlotWindows` discards outright — `restored` was
+  `[]` either way, so the spec never reached the branch it named;
+  changed to `kind: "worksheet"` (a document-backed kind that round-trips
+  on a live dataset binding with no extra payload) and asserts BOTH the
+  restored window and the appended fresh one survive. F3: the
+  restored-plot-window-layout branch had only a `toContain` loop over the
+  VIEW_KEYS, which cannot see an extra key written only on that branch
+  (proven with a `history: []` write gated on `restoredHasPlot` — 23/23
+  and the full 7,559-test wide suite both stayed green); given the same
+  exact `toEqual` key-set treatment the legacy/fresh branch already had.
+  F4: `stageTab`'s write and the persisted `focusedWindowId` restore were
+  each unpinned here (`stageTab` survived the ENTIRE wide suite; the
+  `focusedWindowId` restore was caught only by `store/plotRecipes.test.ts`,
+  never by this file or `useApp.test.ts`) — pinned with a poison seed
+  `nextStageTab` actually recomputes past, and a second restored window
+  so the persisted focus can be told apart from the fallback's "first
+  plot window". F5: `appendWorkspace`'s header claims the delegate call
+  is "provably still wired to the same function with the same
+  arguments", but no spec pinned the ARGUMENTS — a silently truncated
+  `ws.datasets` passed 20/20; closed with one assertion on the joined
+  dataset ids. F6: BUG-010's `migrationNotice` status-line fold had no
+  spec here (only in `useApp.test.ts`/`lib/openWorkspaceReplace.test.ts`);
+  added. Each of the five closures was verified red under its own
+  reviewer-identified mutation and green on honest code before landing.
+  Test-only change: `git diff` outside
+  `workspaceHydration.characterization.test.ts` (plus the two comment
+  fixes above) touches no `frontend/src` product code.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
