@@ -94,6 +94,56 @@ describe("postJSON dataset-cache dispatch", () => {
     expect(retryBody.dataset).toEqual(dataset); // the transparent resend carried the full payload
   });
 
+  // BUG-021 defect 1, at the layer the user experiences: `ensureOk` is the
+  // SINGLE error-extraction path for every backend fetch, and it used to cast
+  // the body to `{ detail?: string }` — so FastAPI's array-shaped 422 detail
+  // landed in the message verbatim and rendered as
+  // `[object Object],[object Object],[object Object],[object Object]`.
+  it("renders an array-shaped 422 detail readably, not as [object Object]", async () => {
+    const detail = [7, 8, 22, 31].map((i) => ({
+      type: "float_type",
+      loc: ["body", "moment", i],
+      msg: "Input should be a valid number",
+      input: null,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(fakeResponse({ detail }, { ok: false, status: 422 })),
+    );
+    let message = "";
+    try {
+      await postJSON("/api/magnetometry/subtract-background", { temperature: [], moment: [] });
+    } catch (e) {
+      message = e instanceof Error ? e.message : String(e);
+    }
+    expect(message).not.toContain("[object Object]");
+    expect(message).toContain("body.moment.7: Input should be a valid number");
+    expect(message).toContain("(4 problems in total)");
+  });
+
+  it("keeps a string detail verbatim and a missing/non-JSON body on the status line", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(fakeResponse({ detail: "need at least 3 data points" }, { ok: false, status: 422 })),
+    );
+    await expect(postJSON("/api/x", {})).rejects.toThrow("need at least 3 data points");
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(fakeResponse({}, { ok: false, status: 500 })));
+    await expect(postJSON("/api/x", {})).rejects.toThrow("500 Error");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: () => Promise.reject(new SyntaxError("Unexpected token <")),
+        headers: { get: () => null },
+      } as unknown as Response),
+    );
+    await expect(postJSON("/api/x", {})).rejects.toThrow("502 Bad Gateway");
+  });
+
   it("still throws for a genuine (non-cache) error on a cache-eligible path", async () => {
     const dataset = { time: [1], values: [[1]], labels: ["a"], units: [""], metadata: {} };
     vi.stubGlobal(

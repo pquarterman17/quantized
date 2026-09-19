@@ -11,7 +11,7 @@ import { useHysteresis } from "./useHysteresis";
 
 export default function HysteresisPanel() {
   const setOpen = useApp((s) => s.setHysteresisOpen);
-  const { active, result, busy, error, bgBusy, subtractBackground } = useHysteresis();
+  const { active, result, busy, warning, error, bgBusy, subtractBackground } = useHysteresis();
 
   const sfd = (result?.SFD as Record<string, unknown> | undefined) ?? {};
   const warnings = (result?.warnings as string[] | undefined) ?? [];
@@ -38,6 +38,11 @@ export default function HysteresisPanel() {
       {active && error && (
         <div className="qzk-ds-meta" style={{ color: "var(--danger)" }}>
           {error}
+        </div>
+      )}
+      {active && warning && (
+        <div className="qzk-ds-meta" style={{ color: "var(--warn, #c90)" }}>
+          {warning}
         </div>
       )}
       {rows.length > 0 && (

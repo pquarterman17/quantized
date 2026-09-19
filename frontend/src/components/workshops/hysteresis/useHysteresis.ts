@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 
+import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/api/magnetometry";
 import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
@@ -33,6 +34,10 @@ export interface HysteresisState {
   active: Dataset | null;
   result: CalcResult | null;
   busy: boolean;
+  /** Set when gap rows were excluded from the analysis — silently dropping
+   *  measured rows is exactly the kind of quiet change the user must be told
+   *  about, the same notice the magnetometry Background tab gives. */
+  warning: string | null;
   error: string | null;
   bgBusy: boolean;
   subtractBackground: () => Promise<void>;
@@ -50,12 +55,14 @@ export function useHysteresis(): HysteresisState {
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [bgBusy, setBgBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setResult(null);
     setError(null);
+    setWarning(null);
     if (!active) return;
     setBusy(true);
     const activeId = active.id;
@@ -66,8 +73,21 @@ export function useHysteresis(): HysteresisState {
         const ds = await useApp.getState().resolveDataset(activeId);
         if (cancelled || !ds) return;
         const { h, m } = hm(ds, xKey, yKeys, seriesOrder);
-        const r = await hysteresisAnalysis({ h, m });
-        if (!cancelled) setResult(r);
+        // A measured loop's gaps are NaN, `JSON.stringify` writes them as
+        // `null`, and `list[float]` rejects each one — so this effect, which
+        // fires automatically on dataset activation, 422'd on any gapped loop
+        // before it could show anything (BUG-021 finding 2). `selectedFitData`
+        // is a shared primitive used by every fit path and is deliberately
+        // left alone; the filtering belongs at the request boundary.
+        const pairs = dropGapRows(h, m);
+        const r = await hysteresisAnalysis({ h: pairs.x, m: pairs.y });
+        if (cancelled) return;
+        if (!pairs.complete) {
+          setWarning(
+            `${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from this analysis.`,
+          );
+        }
+        setResult(r);
       } catch (e: unknown) {
         if (!cancelled) setError(e instanceof Error ? e.message : "analysis failed");
       } finally {
@@ -86,17 +106,32 @@ export function useHysteresis(): HysteresisState {
     if (!active) return;
     setBgBusy(true);
     setError(null);
+    setWarning(null);
     try {
       // #38 deferred edge: resolve the active dataset's full data first.
       const ds = await useApp.getState().resolveDataset(active.id);
       if (!ds) return;
       const st = useApp.getState();
       const { h, m, yKey } = hm(ds, st.xKey, st.yKeys, st.seriesOrder);
-      const res = await subtractHysteresisBackground({ h, m });
+      // Gaps out of the request, gaps back in on the SAME rows — so `time: h`
+      // (the full original x) still lines up with `corrected`.
+      const pairs = dropGapRows(h, m);
+      if (pairs.keep.length < 2) {
+        setError(
+          `Only ${pairs.keep.length} of ${pairs.n} rows have both a finite field and a finite moment — not enough to fit a background.`,
+        );
+        return;
+      }
+      if (!pairs.complete) {
+        setWarning(
+          `${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit and stay gaps in the result.`,
+        );
+      }
+      const res = await subtractHysteresisBackground({ h: pairs.x, m: pairs.y });
       const data: DataStruct = {
         ...ds.data,
         time: h,
-        values: res.corrected.map((v) => [v ?? Number.NaN]),
+        values: restoreGapRows(res.corrected, pairs).map((v) => [v]),
         labels: [ds.data.labels[yKey] ?? "Moment"],
         units: [ds.data.units[yKey] ?? ""],
         metadata: { ...ds.data.metadata, hysteresis_bg_subtracted: true },
@@ -116,5 +151,5 @@ export function useHysteresis(): HysteresisState {
     }
   }
 
-  return { active, result, busy, error, bgBusy, subtractBackground };
+  return { active, result, busy, warning, error, bgBusy, subtractBackground };
 }

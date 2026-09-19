@@ -1,6 +1,15 @@
 """Thin magnetometry routes. Wraps ``calc.magnetometry`` (golden vs MATLAB):
-hysteresis-loop analysis, high-T background subtraction, sample-aware unit
-conversion. Validate -> call the pure fn -> serialize; no analysis here.
+hysteresis-loop analysis, background subtraction (TWO distinct routines --
+``subtract-background`` is the one-sided high-T fit for M-vs-T,
+``subtract-hysteresis-background`` is the two-tail susceptibility removal plus
+re-centring for an M-vs-H loop; they are not interchangeable, see the calc
+docstrings), sample-aware unit conversion. Validate -> call the pure fn ->
+serialize; no analysis here.
+
+Every series field here is ``list[float]``: a JSON ``null`` (what a JavaScript
+NaN stringifies to) is REJECTED with one validation error per element. Callers
+must drop their gaps first -- the frontend does so in
+``lib/api/finitePairs.ts`` and restores them, row-aligned, afterwards.
 """
 
 from __future__ import annotations
