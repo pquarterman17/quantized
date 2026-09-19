@@ -1,9 +1,10 @@
-import { lazy, StrictMode, Suspense } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { spatialPanelsOf } from "./lib/composition";
 import { connectLifecycle } from "./lib/lifecycle";
+import { lazyRegion } from "./lib/lazyRegion";
 import { defaultPlotView } from "./lib/plotview";
 import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotview";
 import type { Dataset } from "./lib/types";
@@ -116,19 +117,14 @@ if (new URLSearchParams(window.location.search).has("harness")) {
 // ratchet): its only caller is this rare deep-link path, but it pulls in
 // CalculatorsContent's entire tab tree (SuperconductorTab, SldTab, VacuumTab,
 // …) — ~136 kB of module source that every default-view user was previously
-// downloading for a shell they never mount. Same lazy()+Suspense seam as
-// AppOverlays.tsx's lazyPanel(); fallback={null} because the chunk is served
-// from localhost and arrives in a frame or two.
-const CalcOnlyApp = lazy(() => import("./CalcOnlyApp"));
+// downloading for a shell they never mount. Same `lazyRegion()` seam as
+// AppOverlays.tsx's lazyPanel() (UX-003: error boundary + a retry that
+// recreates the lazy() promise); no Suspense fallback because the chunk is
+// served from localhost and arrives in a frame or two.
+const CalcOnlyApp = lazyRegion(() => import("./CalcOnlyApp"), "Calc-only view");
 
 function Root() {
-  return isCalcOnlyView() ? (
-    <Suspense fallback={null}>
-      <CalcOnlyApp />
-    </Suspense>
-  ) : (
-    <App />
-  );
+  return isCalcOnlyView() ? <CalcOnlyApp /> : <App />;
 }
 
 createRoot(document.getElementById("root")!).render(

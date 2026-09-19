@@ -23,9 +23,10 @@
 // window after already visiting the matching tab (or vice versa) is a cache
 // hit, not a second fetch.
 
-import { lazy, Suspense, useEffect } from "react";
+import { useEffect } from "react";
 
 import { canRenderMap } from "../../lib/mapdata";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
 import { useRelinkCommands } from "../../commands/relinkCommands";
@@ -35,8 +36,8 @@ import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
 
-const MapStage = lazy(() => import("./MapStage"));
-const Worksheet = lazy(() => import("./Worksheet"));
+const MapStage = lazyRegion(() => import("./MapStage"), "Map");
+const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
 
 const TABS = [
   { id: "plot", label: "Plot" },
@@ -85,13 +86,9 @@ export default function Stage() {
       {stageTab === "plot" ? (
         <WindowCanvas />
       ) : stageTab === "map" && mappable ? (
-        <Suspense fallback={null}>
-          <MapStage />
-        </Suspense>
+        <MapStage />
       ) : stageTab === "worksheet" ? (
-        <Suspense fallback={null}>
-          <Worksheet />
-        </Suspense>
+        <Worksheet />
       ) : (
         <WindowCanvas />
       )}

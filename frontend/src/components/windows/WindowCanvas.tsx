@@ -27,12 +27,13 @@
 // interact with a placeholder), and prune any id no longer in `plotWindows`
 // (a window closed mid-stage stops wasting a drain frame).
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/windowHydration";
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { DATASET_DND } from "../Library/dnd";
 import PlotStage from "../Stage/PlotStage";
 import { MapWindow, WorksheetWindow } from "./DocumentWindow";
@@ -41,22 +42,21 @@ import PlotWindowFrame from "./PlotWindowFrame";
 // unfocused-window renderer — which drags in the whole alt-modes cluster
 // (BackgroundAltModes -> useStatStage/StatStageCanvas/statRender) — loads on
 // demand, the same way DocumentWindow's Map/Worksheet content already does.
-const BackgroundPlotWindow = lazy(() => import("./BackgroundPlotWindow"));
+const BackgroundPlotWindow = lazyRegion(() => import("./BackgroundPlotWindow"), "Window");
 // plans/BUNDLE_HEADROOM.md slice 3, the same reasoning one line up: a `panel`
 // window exists only after the user composes one, so its renderer and the two
 // modules only it reaches (PanelCell, PanelOverlayWindow) have no business in
-// the entry chunk. Same `lazy()` + `Suspense fallback={null}` shape as
-// BackgroundPlotWindow and DocumentWindow's Map/Worksheet content, and it
-// inherits their caveat: a `lazy()` boundary has no error reporting of its own
-// (plans/BUGS_AND_ISSUES.md UX-003 owns that gap for all of them).
-const PanelPlotWindow = lazy(() => import("./PanelPlotWindow"));
+// the entry chunk. Same `lazyRegion()` shape as BackgroundPlotWindow and
+// DocumentWindow's Map/Worksheet content — UX-003 FIXED: each now has its own
+// error boundary and a retry that recreates the lazy() promise.
+const PanelPlotWindow = lazyRegion(() => import("./PanelPlotWindow"), "Window");
 
 // Bundle diet slice 5 (plans/BUNDLE_HEADROOM.md): the frozen-snapshot window
 // renderer, same class as the two seams above. `kind: "snapshot"` is reached
 // only after the user takes a snapshot in-session, or on opening a project
 // that already held one (a persisted window field, so that restore pays the
 // chunk fetch on its first paint) — never on the default first paint.
-const SnapshotPlotWindow = lazy(() => import("./SnapshotPlotWindow"));
+const SnapshotPlotWindow = lazyRegion(() => import("./SnapshotPlotWindow"), "Window");
 
 export default function WindowCanvas() {
   const plotWindows = useWindowsStore((s) => s.plotWindows);
@@ -194,9 +194,7 @@ export default function WindowCanvas() {
                 // Item 11: a snapshot window renders its FROZEN bundle
                 // statically — never focused (the store guarantees it), so
                 // this branch is checked before the focused dispatch.
-                <Suspense fallback={null}>
-                  <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
-                </Suspense>
+                <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
               ) : win.kind === "worksheet" ? (
                 // Item 17: a document window mounts the SAME component the
                 // stage tab does, live-bound to ITS dataset — also never the
@@ -209,21 +207,17 @@ export default function WindowCanvas() {
                 // Item 19 v1: a composite multi-dataset window — also never
                 // the focus target (like snapshot/worksheet/map above), so
                 // before the focused dispatch.
-                <Suspense fallback={null}>
-                  <PanelPlotWindow win={win} datasets={datasets} />
-                </Suspense>
+                <PanelPlotWindow win={win} datasets={datasets} />
               ) : focused ? (
                 <PlotStage />
               ) : (
-                <Suspense fallback={null}>
-                  <BackgroundPlotWindow
-                    dataset={dataset}
-                    view={plotWindowView(win)}
-                    bg={win.bg}
-                    linkGroup={win.linkGroup}
-                    document={win.document}
-                  />
-                </Suspense>
+                <BackgroundPlotWindow
+                  dataset={dataset}
+                  view={plotWindowView(win)}
+                  bg={win.bg}
+                  linkGroup={win.linkGroup}
+                  document={win.document}
+                />
               )}
             </PlotWindowFrame>
           );

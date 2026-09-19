@@ -7,7 +7,7 @@
 // and the fetch+compose pipeline now live in PlotViewport.tsx / usePlotPayload.ts
 // — this file is the thin store-reading wrapper around them.)
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 import type { Measurement } from "../../lib/measure";
@@ -19,6 +19,7 @@ import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_P
 import { windowSyncKey } from "../../lib/windowsync";
 import type { Readout } from "../../lib/uplotTools";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { lazyRegion } from "../../lib/lazyRegion";
 import AxisDropZones from "./AxisDropZones";
 import PlotStageMenus from "./PlotStageMenus";
 import PlotStageOverlays from "./PlotStageOverlays";
@@ -27,12 +28,12 @@ import { useAnnotationEdit } from "./useAnnotationEdit";
 
 // E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-
 // conditional alternate modes, never the default-plot first paint.
-const MultiPanelStage = lazy(() => import("./MultiPanelStage"));
-const StatStage = lazy(() => import("./StatStage"));
+const MultiPanelStage = lazyRegion(() => import("./MultiPanelStage"), "Plot");
+const StatStage = lazyRegion(() => import("./StatStage"), "Plot");
 // plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode and
 // was the only one still static — reached one way, the Plot menu's polar
-// toggle. Same UX-003 caveat as every lazy() here (no error reporting).
-const PolarStage = lazy(() => import("./PolarStage"));
+// toggle. UX-003 fixed: lazyRegion gives it an error boundary + real retry.
+const PolarStage = lazyRegion(() => import("./PolarStage"), "Plot");
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
 import { multiPanelShowing, useEffectiveComposition } from "./useEffectiveComposition";
@@ -256,10 +257,10 @@ export default function PlotStage() {
   });
 
   // Alternate render modes (each self-contained; polar wins, then stats, then stack).
-  if (polarMode && active) return <Suspense fallback={null}><PolarStage /></Suspense>;
-  if (statMode && active) return <Suspense fallback={null}><StatStage /></Suspense>;
+  if (polarMode && active) return <PolarStage />;
+  if (statMode && active) return <StatStage />;
   if (multiPanelShowing(composition, stackMode, plotted.length))
-    return <Suspense fallback={null}><MultiPanelStage composition={composition} /></Suspense>; // L4: prop, not re-derived
+    return <MultiPanelStage composition={composition} />; // L4: prop, not re-derived
 
   return (
     <AxisDropZones

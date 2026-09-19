@@ -8,7 +8,7 @@
 // instead of overwriting the focused one — the payoff for an `.opj` import
 // with many graph windows.
 
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { plural } from "../../lib/plural";
 
 import { recordWorkbookOpen } from "./libraryOpen";
@@ -18,18 +18,19 @@ import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { lazyRegion } from "../../lib/lazyRegion";
 
 /** The saved-preview ToolWindow renders only after the "▣" button is clicked,
  *  and nothing else in the entry graph imported it — so a static import here
  *  put the window, `components/overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`
- *  in the eager bundle for a control most sessions never press. `lazy` + a
- *  `<Suspense fallback={null}>` is the same shape `Library.tsx` already uses
- *  for `EditableFiguresSection` and `AppOverlays.tsx`'s `lazyPanel()` uses for
- *  every on-demand panel: the row itself, its glyph button and the toggle are
- *  untouched and still eager, so the ONLY difference is that the window paints
- *  one chunk-fetch later the first time it is opened in a session.
- *  Measured: 917,136 -> 912,461 B eager. */
-const OriginSavedPreviewWindow = lazy(() => import("./OriginSavedPreviewWindow"));
+ *  in the eager bundle for a control most sessions never press. `lazyRegion`
+ *  (UX-003's error boundary + retry) is the same shape `Library.tsx` already
+ *  uses for `EditableFiguresSection` and `AppOverlays.tsx`'s `lazyPanel()`
+ *  uses for every on-demand panel: the row itself, its glyph button and the
+ *  toggle are untouched and still eager, so the ONLY difference is that the
+ *  window paints one chunk-fetch later the first time it is opened in a
+ *  session. Measured: 917,136 -> 912,461 B eager. */
+const OriginSavedPreviewWindow = lazyRegion(() => import("./OriginSavedPreviewWindow"), "Preview");
 
 export default function FigureRow({ entry, depth = 0, treeMode = false }: {
   entry: OriginFigureEntry;
@@ -150,13 +151,11 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
       )}
       </div>
       {showSavedPreview && savedPreviewSrc && (
-        <Suspense fallback={null}>
-          <OriginSavedPreviewWindow
-            entry={entry}
-            src={savedPreviewSrc}
-            onClose={() => setShowSavedPreview(false)}
-          />
-        </Suspense>
+        <OriginSavedPreviewWindow
+          entry={entry}
+          src={savedPreviewSrc}
+          onClose={() => setShowSavedPreview(false)}
+        />
       )}
     </div>
   );

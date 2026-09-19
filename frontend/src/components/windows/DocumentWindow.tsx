@@ -21,12 +21,11 @@
 // the identical specifiers, so Vite serves both call sites from the same
 // chunk.
 
-import { lazy, Suspense } from "react";
-
 import type { Dataset } from "../../lib/types";
+import { lazyRegion } from "../../lib/lazyRegion";
 
-const MapStage = lazy(() => import("../Stage/MapStage"));
-const WorksheetPane = lazy(() => import("../Stage/worksheet/WorksheetPane"));
+const MapStage = lazyRegion(() => import("../Stage/MapStage"), "Window");
+const WorksheetPane = lazyRegion(() => import("../Stage/worksheet/WorksheetPane"), "Window");
 
 /** Decision #4's "dataset removed" state. Library clicks never retarget a
  *  document window (they're not passive-rebind candidates), so the only way
@@ -44,18 +43,10 @@ function DocumentEmptyState() {
 
 export function WorksheetWindow({ dataset, windowId }: { dataset: Dataset | null; windowId: string }) {
   if (!dataset) return <DocumentEmptyState />;
-  return (
-    <Suspense fallback={null}>
-      <WorksheetPane datasetId={dataset.id} windowId={windowId} />
-    </Suspense>
-  );
+  return <WorksheetPane datasetId={dataset.id} windowId={windowId} />;
 }
 
 export function MapWindow({ dataset }: { dataset: Dataset | null }) {
   if (!dataset) return <DocumentEmptyState />;
-  return (
-    <Suspense fallback={null}>
-      <MapStage dataset={dataset} />
-    </Suspense>
-  );
+  return <MapStage dataset={dataset} />;
 }

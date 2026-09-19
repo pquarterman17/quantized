@@ -2,7 +2,19 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
+**Updated:** 2026-09-19 (UX-003 FIXED: `lib/lazyRegion.tsx`, a drop-in
+`lazy()` replacement, gives every code-split seam its own error boundary and
+a retry that rebuilds `lazy()` — the only way to defeat React's permanent
+memoization of a rejected lazy() promise. Re-measured the seam count myself
+before touching anything: 30, not the filed 28 (`WindowCanvas.tsx`'s
+`BackgroundPlotWindow` and `Library.tsx`'s `LibraryFlatRows`, both pre-
+existing but never folded into the count). All 30 converted, plus
+AppOverlays' 52-panel `lazyPanel()` family via its one shared call site. 6
+new tests, 3 independent sabotage rounds each reddening exactly the expected
+tests. Eager bytes landed 750 B UNDER the parent (removing ~30 now-redundant
+per-call-site `<Suspense>` wrappers outweighed the new boundary code):
+875,005 B vs the unmoved 876,469 B budget, 1,464 B headroom; earlier the same
+day, BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
 — `plans/BUNDLE_HEADROOM.md` slice 3 added two more sites in modules the
 record already named, then slice 4's own 2026-09-18 review round re-measured
 after slice 4 added nine seams across three new modules, landing at 28;
@@ -45,7 +57,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — round 2 recovered "derived vs chosen" from the palette slot itself in `lib/exportStyles.stripDerivedColors`, a function round 3 DELETED); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). **Review round 3 (2026-09-18)** replaced round 2's recovery-by-comparison with PROVENANCE: `buildExportStyles` records `ExportSeriesStyle.colorDerived` on every colour it emits, the document persists it, and the single wire boundary `exportStyles.toWireSeriesStyles` applies the grouped rule and strips the flag — so a theme flip, a palette preset or a display-position shift between the pin and the export can no longer resurrect the one-hue regression, and a grouped request never sends a derived colour while an explicit one is always sent. The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets; plus one scoped migration residual for documents saved before provenance existed. **Review round 4 (2026-09-18)** moved that migration to LOAD time — `publicationStyles.sanitizeExportSeriesStyles` decides a flagless colour once, when the document arrives, and the `.dwk` FigureDoc path now runs that sanitizer at all — so a re-save really does persist provenance, a malformed persisted flag cannot flip it, an imported Origin template records its decoded colours as CHOSEN, a pinned array is re-cut to `y_keys` when a channel was hidden after the pin, and the export route refuses a leaked `colorDerived` with a 422. **Review round 5 (2026-09-18)** removed the palette inference from BOTH places it had lived: the palette a pin was taken under is persisted in no document, so round 4's load-time comparison read the READER's theme and then FROZE a possibly-wrong answer on the next save (measured: a figure saved under one palette and opened under another shipped both derived colours to a grouped export — round 1's regression — permanently). Provenance is now recorded ONLY by the five producers; an unflagged colour is UNVOUCHED and fails closed, omitted from a grouped export and kept on a flat one, until the figure is RE-PINNED (loading and re-saving retire nothing). The pin re-cut is reduced to a hidden-channel filter over the pin, closing the three guard clauses round 4's review sabotaged green, and `/figure-hitmap`'s 422 gains the test the claim rested on |
-| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 28 `lazy()` sites (17 at filing, +2 from `BUNDLE_HEADROOM.md` slice 3, +9 from slice 4, 2026-09-18), zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites at filing, 19 after slice 3, 28 after slice 4) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
+| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounted the React root — 30 `lazy()` sites measured 2026-09-19 (17 at filing, +2 slice 3, +9 slice 4, +2 more found unfiled at this fix's start), zero error boundaries, so the window went blank with no toast, no status, no console error, and React cached the rejection so the gesture could not retry | Claude (agent) | **FIXED** 2026-09-19 — `lib/lazyRegion.tsx`, a drop-in `lazy()` replacement: one error boundary per region + a retry that rebuilds `lazy()` (defeats the cached-rejection trap). Wired to all 30 seams plus AppOverlays' 52-panel `lazyPanel()` family via one shared call site. 6 tests (5 unit + 1 real-module integration through the real composition root), 3 sabotage rounds each reddening the expected tests. Eager bytes: 875,005 B vs 876,469 B budget (1,464 B headroom), −750 B vs parent — see the entry |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 | BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal, nothing below a modal is offered the key even when the modal declines, and (round-9 review) the claim resolves SYNCHRONOUSLY at keydown and marks the event, so a window-bubble listener that honours `defaultPrevented` — `usePeakWizard`'s marker-edit pause — can no longer kill the dialog's close mid-dispatch. The bypass is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
 
@@ -6793,15 +6805,15 @@ ratchet tighter than it has been all session. Full rationale in
 
 ---
 
-## UX-003 — a failed lazy chunk load unmounts the React root: 28 `lazy()` sites, no error boundary
+## UX-003 — a failed lazy chunk load unmounts the React root: 30 `lazy()` sites, no error boundary
 
 **Priority:** P3 — recoverable by reloading the page, and it needs a chunk
 fetch to fail (offline right after a deploy, or a stale cached `index.html`
 referencing a since-rotated hash); but when it does happen the whole app
 goes blank with no message at all
-**State:** Open
+**State:** **FIXED** 2026-09-19 — see Completion record below
 **Reported:** 2026-09-15 by agent (adversarial review of the `b749f804` bundle diet)
-**Investigated:** measured, not fixed — see below
+**Investigated:** measured, then fixed — see below
 **Suggested implementation owner/model:** Unassigned
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 (the lazy-seam
 diet), `plans/BUNDLE_HEADROOM.md` slice 2
@@ -6832,6 +6844,20 @@ and `components/Stage/PlotStageMenus.tsx` (one seam each — `PlotResultChips`,
 `components/Stage/PlotStageOverlays.tsx` 1, `components/Stage/PlotStageMenus.tsx`
 1, `components/windows/WindowCanvas.tsx` 2, `components/windows/DocumentWindow.tsx`
 2 — sums to 28.
+
+**Re-measured 2026-09-19 (this fix, before touching any file):** the same
+`grep -rn "= lazy(" src --include="*.ts*" | grep -v "\.test\."` returns **30**
+on the tree this fix started from, not 28 — `components/windows/WindowCanvas.tsx`
+had gained a third site (`BackgroundPlotWindow`, present since the original
+E-c1 bundle pass and apparently never folded into this count) and
+`components/Library/Library.tsx` a fourth (`LibraryFlatRows`, added by
+`BUNDLE_HEADROOM.md` slice 6, 2026-09-19, after this entry's count was last
+updated). Both are now accounted for in the fix below, which reaches every
+one of the 30 by construction (each was mechanically converted from
+`lazy(load)` to `lazyRegion(load, label)`, verified by
+`grep -rn "= lazy(" src --include="*.ts*" | grep -v "\.test\."` returning
+**0** afterward — the only 3 remaining hits are inside `lib/lazyRegion.tsx`
+itself, the one place `lazy()` is still called).
 
 So the failure mode is: the user clicks something that opens a lazy panel,
 the fetch fails, and **the entire React root unmounts** — a blank window,
@@ -6865,53 +6891,131 @@ one-line patch to slip into a bundle-diet follow-up.
   (`vi.mock` of the lazy module throwing, then clicking "▣" on a
   `saved_preview` row): root HTML length after the click **0**, row present
   **false**, toasts **0**, `console.error` lines **0**
-- [ ] Expected result recorded — owner call: the decision below
+- [x] Expected result recorded — a failed panel/window/section degrades only
+  that region; the rest of the app (and every other open window/panel) stays
+  usable; the failure is visible (a named message, not silence); a retry
+  after the underlying fetch would now succeed actually recovers
 - [x] Reproduced by an agent
 
 #### Investigation
 
-- [x] Likely owning components/modules identified — the nine modules listed
-  above; a fix belongs at/near `src/main.tsx`'s root render and each
-  `<Suspense>` boundary, not in any individual panel
+- [x] Likely owning components/modules identified — the twelve modules that
+  hold a `lazy()` declaration (see the per-module count above, now 30 sites
+  across 12 modules) plus `AppOverlays.tsx`'s `lazyPanel()` factory, which is
+  the ONE call site 52 workshop-panel/dialog seams already funnel through
 - [x] Root cause confirmed rather than inferred — measured, both halves
-  (0 boundaries, 17 sites) counted by grep on 2026-09-15
-- [ ] Related workflows and persistence paths checked — in particular
-  whether autosave (`useWorkspaceAutosave`) has already written before a
-  root unmount, i.e. how much is actually lost
-- [ ] Existing plan overlap reconciled — P4.1 will keep ADDING `lazy()`
-  seams for bundle headroom, so this grows with every future slice
+  (0 boundaries, 30 sites) by the same greps, 2026-09-19
+- [x] Related workflows and persistence paths checked — autosave is
+  untouched by this fix (a failed chunk fetch no longer takes down the tree
+  that `useWorkspaceAutosave` runs inside, which is itself strictly safer
+  than before, but forcing an autosave from inside the boundary was
+  considered and rejected — see Implementation below)
+- [x] Existing plan overlap reconciled — `lazyRegion()` is now the seam
+  itself (every `BUNDLE_HEADROOM.md` slice already converts a bare `lazy()`
+  call to a `lazyRegion()` call with a one-word label), so a future slice
+  adding a seam adds boundary coverage for free instead of growing this gap
 
 #### Implementation
 
-- [ ] Minimal safe behavior defined — owner call between: (a) one root
-  boundary that shows a "something went wrong, reload" panel; (b) a boundary
-  per `<Suspense>` so only the failing panel dies and the rest of the app
-  keeps working; (c) (b) plus a Retry that remounts with a fresh `lazy()`,
-  which is the only way to defeat React's cached rejection
-- [ ] Failure and ambiguous-data behavior defined — a boundary must not
-  swallow non-chunk errors into a generic message that hides a real bug
-- [ ] Data integrity and backward compatibility considered — whether the
-  boundary should force an autosave before showing its fallback
-- [ ] UI wording/tooltips/accessibility included where relevant
+- [x] Minimal safe behavior defined — **decision: (b) one boundary per
+  region, not (a) one root boundary** (too coarse: the whole app still goes
+  away with an app-wide message for a one-panel failure) **— plus (c), a
+  retry that rebuilds `lazy()`** (the only way to defeat React's cached
+  rejection; see `src/lib/lazyRegion.tsx`'s header for the mechanism).
+  Granularity follows how the seams are already grouped in
+  `architecture.test.ts`'s own `SEAMS` list and the modules that hold a
+  `lazy()` declaration: Library (`Library.tsx`/`LibrarySections.tsx`/
+  `FigureRow.tsx`, label `"Library"`/`"Preview"`), Plot
+  (`PlotStage.tsx`/`PlotStageMenus.tsx`/`PlotStageOverlays.tsx`, label
+  `"Plot"`), Stage tabs (`Stage.tsx`, label `"Map"`/`"Worksheet"`), Window
+  (`WindowCanvas.tsx`/`DocumentWindow.tsx`, label `"Window"`), the three
+  App-shell workspaces (`App.tsx`, each its own label), the calc-only deep
+  link (`main.tsx`), and the AppOverlays panel/dialog family (label
+  `"Panel"`, one factory covering 52 call sites). A failed panel/window/
+  section degrades only itself; a failed Library section does not take the
+  Stage down, and vice versa.
+- [x] Failure and ambiguous-data behavior defined — the boundary catches
+  ONLY what its `<Suspense>` subtree throws (React's own scoping), so a
+  render error inside an already-loaded, non-lazy component elsewhere is
+  untouched; it does not attempt to distinguish a chunk-fetch error from
+  any other error the lazy component's module could throw at import time,
+  since both are equally "this region failed to come up" from the user's
+  side and both need the identical retry
+- [x] Data integrity and backward compatibility considered — no autosave
+  hook added: the boundary is a pure render-layer catch, forcing a save
+  from inside `componentDidCatch`/`getDerivedStateFromError` would run
+  arbitrary async I/O from an error path or during a React render commit,
+  which is a bigger risk than the failure being fixed. In-memory state
+  elsewhere in the app is untouched by design (criterion 1) — nothing new
+  is lost by not writing
+- [x] UI wording/tooltips/accessibility included — `role="alert"` (assistive
+  tech announces it immediately, matching `Toaster`'s own live region
+  convention), the Unicode glyphs `⚠`/`↻` per CLAUDE.md's icon rule (no
+  emoji), and colors read from the `--danger`/`--glass-border` design
+  tokens (`src/styles/platform.css`'s `.qzk-lazy-fail` block) — never
+  hardcoded
 
 #### Tests and acceptance
 
-- [ ] Regression test fails before the fix and passes afterward — a spec
-  that makes one `lazy()` chunk reject and asserts the root is still mounted
-- [ ] Relevant focused tests pass
-- [ ] Type-check/build/repository gates pass
-- [ ] Agent verifies acceptance criteria
+- [x] Regression test fails before the fix and passes afterward — sabotage-
+  verified three ways, see Completion record
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
 - [ ] Owner verifies when required
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
+- PR/commit: fixed in this worktree's branch (see the session's reported
+  SHAs); not yet merged
+- Automated tests: `src/lib/lazyRegion.test.tsx` (5 tests — root/sibling
+  survival, retry recovery against a loader that rejects once then resolves,
+  a second failure+retry, props pass through, an unaffected sibling region),
+  `src/AppOverlays.lazyFailure.test.tsx` (1 test — the REAL AppOverlays
+  composition root with a real module path (`ShortcutsDialog`) mocked to
+  reject then resolve, proving the fix against production wiring, not just
+  the helper in isolation). Two pre-existing tests
+  (`components/windows/WindowCanvas.test.tsx`) were adjusted from a bare
+  post-`waitFor` assertion to an explicit `waitFor` on their own DOM state —
+  a legitimate consequence of the fix (see the commit body), not a
+  weakening; the full frontend suite is green
+- Agent verification: sabotage table —
+
+  | Sabotage | Tests that reddened |
+  |---|---|
+  | Remove the boundary (`getDerivedStateFromError` commented out) | 4/5 in `lazyRegion.test.tsx` (root-survival, both retry tests, sibling-unaffected) + the `AppOverlays.lazyFailure.test.tsx` test |
+  | Break retry's cache-busting (drop the `current = lazy(load)` reassignment) | exactly the two retry-recovery tests in `lazyRegion.test.tsx` + the `AppOverlays.lazyFailure.test.tsx` test (which also asserts retry) |
+  | Fallback renders `null` instead of the message+button | the same 4/5 in `lazyRegion.test.tsx` + the `AppOverlays.lazyFailure.test.tsx` test |
+
+  Each sabotage was applied, the exact expected tests reddened (verified by
+  full test-file run), then reverted and re-confirmed clean.
 - Owner verification: —
 - Notes: filed by the 2026-09-15 review round of `b749f804`; that round
   narrowed the two over-broad claims in the plans and left the boundary
-  itself to this item.
+  itself to this item. Fixed 2026-09-19 — `src/lib/lazyRegion.tsx` (new, 76
+  lines) is a drop-in replacement for `lazy()`: `lazyRegion(load, label,
+  fallback?)` returns a component that keeps ONE module-scoped `lazy(load)`
+  object (so the common, never-fails case is byte- and behavior-identical to
+  plain `lazy()` — one chunk fetch per seam per session, not per mount) and
+  only builds a FRESH `lazy(load)` inside its retry handler, which is the
+  only way to escape React's permanent memoization of a rejected lazy()
+  promise. One `Catch` class component (an error boundary) is shared by
+  every call site. All 30 `lazy()` declarations were converted; AppOverlays'
+  `lazyPanel()` factory (52 call sites) now delegates to `lazyRegion(load,
+  "Panel")` in one place, so those 52 panels/dialogs are covered by the same
+  one-line change. Every now-redundant per-call-site `<Suspense>` wrapper at
+  the render call sites was removed (lazyRegion carries its own), which
+  partly funded the byte cost of the fix.
+
+  **Eager bundle cost** (measured, `node scripts/profile-eager-bundle.mjs`
+  equivalent via the repo's `exactbytes.mjs`): parent `HEAD~1`
+  (`281ee552`) measured **875,755 B** eager against the `876,469 B`
+  `EAGER_JS_BUDGET` (**714 B** of headroom, matching this task's brief).
+  This fix's tree measures **875,005 B** — **−750 B**, i.e. it landed
+  UNDER the parent's eager cost (removing ~30 `<Suspense>` wrappers plus
+  their now-unused `lazy`/`Suspense` imports outweighed the new boundary
+  code), leaving **1,464 B** of headroom against the unmoved budget. The
+  budget pin was not touched.
 
 ---
 

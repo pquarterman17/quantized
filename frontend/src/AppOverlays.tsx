@@ -54,7 +54,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -76,22 +76,18 @@ import { useRecode } from "./store/recode";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useRecipeManager } from "./store/recipeManager";
+import { lazyRegion } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
- *  Suspense boundary. The per-panel boundary is the point: with one shared
- *  boundary, opening a second panel would suspend the whole subtree and blank
- *  an already-open panel while the new chunk loaded. `fallback={null}` because
- *  these are overlays served from localhost — the chunk arrives in a frame or
- *  two, and a spinner would flash more than it informs. */
+ *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
+ *  is the point: with one shared boundary, opening a second panel would
+ *  suspend the whole subtree and blank an already-open panel while the new
+ *  chunk loaded, and a failed one would take every other panel down with
+ *  it. `fallback={null}` because these are overlays served from
+ *  localhost — the chunk arrives in a frame or two, and a spinner would
+ *  flash more than it informs. */
 function lazyPanel(load: () => Promise<{ default: ComponentType }>): ComponentType {
-  const Panel = lazy(load);
-  return function LazyPanel() {
-    return (
-      <Suspense fallback={null}>
-        <Panel />
-      </Suspense>
-    );
-  };
+  return lazyRegion(load, "Panel");
 }
 
 /** Load an on-demand dialog only after its first opening, then leave it mounted

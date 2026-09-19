@@ -182,7 +182,10 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     });
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(1)); // only the focused (bound) window plots
-    expect(container.textContent).toContain("No dataset");
+    // w2's BackgroundPlotWindow is its own lazy() seam (UX-003: lazyRegion),
+    // resolved independently of w1's uPlot mount above — wait on its own
+    // painted state rather than assuming it lands in the same tick.
+    await waitFor(() => expect(container.textContent).toContain("No dataset"));
   });
 
   it("ORIGIN_FILE_DECODE_PLAN #38: fetches full data for a background window's pending dataset", async () => {
@@ -213,13 +216,14 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     const { container } = render(<WindowCanvas />);
     // Only the focused XY window builds a uPlot instance; w2's polar mode is
     // Canvas2D. (The live singleton polarMode stays false throughout — w2
-    // renders from its OWN view.)
+    // renders from its OWN view.) w2's BackgroundPlotWindow is its own
+    // lazy() seam (UX-003: lazyRegion) — wait on its painted canvas rather
+    // than a fixed sleep.
     await waitFor(() => expect(created.length).toBe(1));
-    await new Promise((r) => setTimeout(r, 10));
+    const frames = container.querySelectorAll(".qzk-plotwin");
+    await waitFor(() => expect(frames[1]!.querySelector("canvas")).not.toBeNull()); // w2's polar canvas
     expect(created).toHaveLength(1);
     expect(useApp.getState().polarMode).toBe(false);
-    const frames = container.querySelectorAll(".qzk-plotwin");
-    expect(frames[1]!.querySelector("canvas")).not.toBeNull(); // w2's polar canvas
     expect(frames[0]!.querySelector("canvas")).toBeNull(); // w1 is XY (mocked uPlot adds no DOM)
   });
 
