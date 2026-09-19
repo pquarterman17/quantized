@@ -8,7 +8,7 @@
 // Modeled on ConfirmDialog's backdrop + qzk-glass shell, but not built on
 // askConfirm's boolean promise — three distinct outcomes, not confirm/cancel.
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
 import {
   applyCancelRecovery,
@@ -18,6 +18,7 @@ import {
 import { useRecoveryChoice } from "../../store/recoveryChoice";
 import { Button } from "../primitives";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 function formatWhen(ms: number): string {
   const d = new Date(ms);
@@ -38,25 +39,23 @@ export default function RecoveryChoiceDialog() {
   //
   // Escape maps to Cancel — the choice that touches nothing (the autosave
   // stays in storage, the project file stays on disk), matching the backdrop.
-  // Window capture, like ConfirmDialog, so it works wherever focus is.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation();
+  // A `modal` surface in `lib/escapeStack.ts`, like ConfirmDialog, so it works
+  // wherever focus is — including inside a field, which the `modal` layer's
+  // bypass of `isEditingTarget` is what makes true.
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
+  // app's one ordered registry on its `modal` layer, so the innermost open
+  // dialog closes and nothing below it acts on the same keystroke. The
+  // per-dialog `window`-capture listener this replaces used
+  // `stopPropagation()`, which does not stop a same-node, same-phase sibling,
+  // so two open dialogs both closed on ONE Escape.
+  useEscapeSurface(
+    "modal",
+    () => {
       applyCancelRecovery();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open]);
+      return true;
+    },
+    open,
+  );
 
   useDialogFocus(dialogRef, open);
 

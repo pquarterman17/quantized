@@ -2,7 +2,7 @@
 // Available Sources problem report dialog. Mirrors
 // SeparateWorksheetsDialog.test.tsx's rendering conventions.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -173,5 +173,18 @@ describe("ReimportAllDialog focus-in / Escape / restore (P3.3 R1)", () => {
     expect(useApp.getState().reimportAllRows).toBeNull();
     expect(useApp.getState().reimportAllBusy).toBe(false);
     expect(opener).toHaveFocus();
+  });
+
+  // R13 (P3.3 round 8): this file had no Escape REACHABILITY pin — the case
+  // above discriminates on focus-in/restore and would stay green if the key
+  // never reached the dialog. Added with BUG-018's fix, against the mechanism
+  // that ships (`lib/escapeStack.ts`'s `modal` layer, on `window` BUBBLE), and
+  // it still has to be `cancelReimportAll()` rather than a raw close (G1).
+  it("Escape dispatched at the window cancels the report (reachability)", async () => {
+    useApp.setState({ reimportAllBusy: true, reimportAllRows: null });
+    render(<ReimportAllDialog />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(useApp.getState().reimportAllBusy).toBe(false));
+    expect(useApp.getState().reimportAllRows).toBeNull();
   });
 });

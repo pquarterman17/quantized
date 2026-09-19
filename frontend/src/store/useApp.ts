@@ -8,13 +8,6 @@ import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import {
-  makeStep,
-  moveStep as movePipelineStep,
-  regenerateStep,
-  type PipelineStep,
-  type StepKind,
-} from "../lib/pipeline";
-import {
   createFolder as treeCreateFolder,
   moveDatasetToFolder as treeMoveDatasetToFolder,
   moveFolder as treeMoveFolder,
@@ -96,6 +89,7 @@ import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
+import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeline";
 import { toast } from "./toasts";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
@@ -257,7 +251,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -462,15 +456,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   contourOn: boolean;
   contourLevelCount: number;
   contourScale: "linear" | "log";
-  // Macro recorder: when `macroRecording` is on, curated actions append a step;
-  // the Inspector card exports `macroSteps` as a reproducible script. Steps are
-  // TYPED (lib/pipeline): runnable kinds carry {kind, params} so the pipeline
-  // view (#6) edits and re-runs the same list the script exports — one source
-  // of truth. `pipelineRunning` suppresses recording while the runner replays
-  // steps through these same store actions (no self-recording loops).
-  macroRecording: boolean;
-  macroSteps: PipelineStep[];
-  pipelineRunning: boolean;
+  // macroRecording / macroSteps / pipelineRunning — the macro recorder +
+  // pipeline view's (#6) OWN state — declared on MacroPipelineSlice
+  // (store/macroPipeline.ts); see AppState's extends list.
   status: string;
 
   /** `historyToken`: forward the token an enclosing `withHistoryBatch` gave
@@ -632,25 +620,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setContourOn: (on: boolean) => void;
   setContourLevelCount: (n: number) => void;
   setContourScale: (scale: "linear" | "log") => void;
-  startMacro: () => void;
-  stopMacro: () => void;
-  clearMacro: () => void;
-  // Append a step IFF recording is on (callers invoke unconditionally — the
-  // gate lives here so the "are we recording?" check isn't scattered).
-  recordMacro: (
-    label: string,
-    code: string,
-    typed?: { kind: StepKind; params: Record<string, unknown> },
-  ) => void;
-  // Pipeline view (#6): edit the recorded step list in place.
-  updateStepParams: (id: string, params: Record<string, unknown>) => void;
-  toggleStep: (id: string) => void;
-  removeStep: (id: string) => void;
-  moveStep: (id: string, delta: number) => void;
-  insertStep: (step: PipelineStep) => void;
-  // Replace the whole step list (loading a template, #2).
-  loadSteps: (steps: PipelineStep[]) => void;
-  setPipelineRunning: (running: boolean) => void;
+  // (startMacro … setPipelineRunning — the macro recorder + pipeline view's
+  // actions — are declared on MacroPipelineSlice; see store/macroPipeline.ts.)
   setStatus: (status: string) => void;
 }
 
@@ -710,6 +681,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createReportsFigureDocsSlice(set, get),
   ...createViewAppliersSlice(set, get),
   ...createWorkspaceHydrationSlice(set, get),
+  ...createMacroPipelineSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -826,9 +798,8 @@ export const useApp = create<AppState>((set, get) => ({
   contourOn: false,
   contourLevelCount: 8,
   contourScale: "linear",
-  macroRecording: false,
-  macroSteps: [],
-  pipelineRunning: false,
+  // (macroRecording / macroSteps / pipelineRunning initialized by
+  // createMacroPipelineSlice above, spread into this literal.)
   status: "starting…",
 
   addDataset: (ds, historyToken) => {
@@ -1398,44 +1369,8 @@ export const useApp = create<AppState>((set, get) => ({
   setContourOn: (contourOn) => set({ contourOn }),
   setContourLevelCount: (n) => set({ contourLevelCount: Math.max(2, Math.round(n)) }),
   setContourScale: (contourScale) => set({ contourScale }),
-  // ── Macro recorder ──────────────────────────────────────────────────────
-  startMacro: () => set({ macroRecording: true }),
-  stopMacro: () => set({ macroRecording: false }),
-  clearMacro: () => set({ macroSteps: [], macroRecording: false }),
-  recordMacro: (label, code, typed) =>
-    set((s) =>
-      s.macroRecording && !s.pipelineRunning
-        ? {
-            macroSteps: [
-              ...s.macroSteps,
-              makeStep(typed?.kind ?? "ui", label, code, typed?.params ?? {}),
-            ],
-          }
-        : {},
-    ),
-  // ── Pipeline view (#6): edit + replay the recorded step list ────────────
-  updateStepParams: (id, params) =>
-    set((s) => ({
-      macroSteps: s.macroSteps.map((st) =>
-        st.id === id ? regenerateStep({ ...st, params }) : st,
-      ),
-    })),
-  toggleStep: (id) =>
-    set((s) => ({
-      macroSteps: s.macroSteps.map((st) =>
-        st.id === id ? { ...st, enabled: !st.enabled } : st,
-      ),
-    })),
-  removeStep: (id) =>
-    set((s) => ({ macroSteps: s.macroSteps.filter((st) => st.id !== id) })),
-  moveStep: (id, delta) =>
-    set((s) => {
-      const i = s.macroSteps.findIndex((st) => st.id === id);
-      return i < 0 ? {} : { macroSteps: movePipelineStep(s.macroSteps, i, delta) };
-    }),
-  insertStep: (step) => set((s) => ({ macroSteps: [...s.macroSteps, step] })),
-  loadSteps: (macroSteps) => set({ macroSteps }),
-  setPipelineRunning: (pipelineRunning) => set({ pipelineRunning }),
+  // (startMacro … setPipelineRunning bodies moved to
+  // createMacroPipelineSlice, spread into this literal above.)
   setStatus: (status) => set({ status }),
 }));
 

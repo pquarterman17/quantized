@@ -20,14 +20,13 @@
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
-import DatasetRow from "./DatasetRow";
 import LibrarySections from "./LibrarySections";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
-import { folderPath, folderPathLabel } from "../../lib/foldertree";
+import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
 import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
@@ -48,6 +47,10 @@ const MultiSelectBar = lazy(() => import("./MultiSelectBar"));
 // useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
 const LibraryTree = lazy(() => import("./LibraryTree"));
 const LibraryDetails = lazy(() => import("./LibraryDetails"));
+// Bundle diet slice 6 (plans/BUNDLE_HEADROOM.md): the flat-list fallback body
+// (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for
+// why this is the only static edge that kept DatasetRow.tsx eager.
+const LibraryFlatRows = lazy(() => import("./LibraryFlatRows"));
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
@@ -192,25 +195,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     }
   }
 
-  // `showPath` (plan #13 sub-item 2): only the flat FILTERED list hides a
-  // row's location (the tree view already shows it via nesting) — so only
-  // that call site passes true.
-  const row = (d: Dataset, depth = 0, showPath = false) => (
-    <DatasetRow
-      key={d.id}
-      dataset={d}
-      active={d.id === activeId}
-      selected={selectedIds.includes(d.id)}
-      showReorder={canReorder}
-      canMoveUp={datasets.indexOf(d) > 0}
-      canMoveDown={datasets.indexOf(d) < datasets.length - 1}
-      onFilterTag={setQuery}
-      sheetNumber={sheetOf.get(d.id)}
-      depth={depth}
-      folderCaption={showPath ? folderPathLabel(folders, d.folderId) : undefined}
-    />
-  );
-
   const searchActive = query.trim() !== "";
   // Body: the tree whenever there's anything to show and no active search
   // (PR C); a search query renders the PROJECT-WIDE flat Details-style
@@ -244,8 +228,33 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         <LibraryTree rows={rows} onFilterTag={setQuery} panelRef={panelRef} />
       </Suspense>
     );
+  } else if (shown.length > 0) {
+    // This branch is unreachable in today's app (PR C: `rows.length === 0`
+    // implies `datasets.length === 0`, which implies `shown.length === 0`
+    // too — see LibraryFlatRows.tsx's own header), but the gate is kept
+    // explicit and cheap rather than assumed. `shown` is already computed
+    // above, for the same reason `HomeScreen`'s own `rows.length === 0`
+    // check, one line below, is already free — no new derived state. Without
+    // this gate, mounting the branch on `rows.length === 0` alone would
+    // fetch LibraryFlatRows' chunk (and DatasetRow/datasetRowMenu/Sparkline
+    // with it) on every cold start to render zero rows — a real, avoidable
+    // round trip on exactly the surface this seam's cost argument rests on
+    // being free.
+    body = (
+      <Suspense fallback={null}>
+        <LibraryFlatRows
+          shown={shown}
+          datasets={datasets}
+          activeId={activeId}
+          selectedIds={selectedIds}
+          canReorder={canReorder}
+          sheetOf={sheetOf}
+          onFilterTag={setQuery}
+        />
+      </Suspense>
+    );
   } else {
-    body = shown.map((d) => row(d));
+    body = null;
   }
 
   return (
