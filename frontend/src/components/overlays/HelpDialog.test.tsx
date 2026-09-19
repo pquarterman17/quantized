@@ -302,8 +302,11 @@ describe("HelpDialog startup boundary", () => {
   )[0] as string;
 
   it("loads the catalog only after the standalone Help store opens", () => {
+    // UX-003: lazyPanel() now also takes a distinguishable label (review
+    // finding #6 — every panel used to share "Panel"), so the exact call
+    // text gained a second argument; the seam itself is unchanged.
     expect(overlaysSrc).toContain(
-      'const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"))',
+      'const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"), "HelpDialog")',
     );
     expect(overlaysSrc).toContain("{helpOpen && <HelpDialog />}");
   });
