@@ -13,7 +13,8 @@ import { useRef, useState } from "react";
 
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { collectionMembers } from "../../lib/collections";
-import type { LibraryHierarchy, LibraryNode, LibraryNodeKind } from "../../lib/libraryHierarchy";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
 
@@ -25,10 +26,10 @@ interface Props {
 }
 
 const QUERY_HINT = "terms AND'ed; bare = name/tag, or tag:… name:… format:…";
-const KIND_GLYPH: Record<LibraryNodeKind, string> = {
-  folder: "▦", workbook: "▤", worksheet: "·", "origin-figure": "▥",
-  "editable-figure": "▥", "publication-figure": "▥", page: "▥", report: "▥",
-};
+// UX-004: this local map is gone. It was the worst of the three — ▥ for FIVE
+// different kinds at once, a bare "·" for a worksheet, and ▦/▤ meaning
+// something different again in the tree beside it. `nodeIcons.ts` is now the
+// only place a Library view may name a node-type mark.
 
 export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props) {
   const collections = useApp((s) => s.collections);
@@ -129,7 +130,13 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
                   title={`Show in Library — ${node.name}`}
                   onClick={() => onShowInLibrary(node)}
                 >
-                  <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+                  <span
+                    className="qzk-ds-icon"
+                    aria-hidden="true"
+                    title={LIBRARY_NODE_LABEL[node.kind]}
+                  >
+                    {LIBRARY_NODE_GLYPH[node.kind]}
+                  </span>
                   <span>{node.name}</span>
                 </button>
               ))}

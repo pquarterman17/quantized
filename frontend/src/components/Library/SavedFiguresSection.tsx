@@ -17,6 +17,7 @@ import {
   figureTransitionWarning,
 } from "../../lib/figureCompatibility";
 import { docRenderable } from "../../lib/figuredoc";
+import { FROZEN_MARK, FROZEN_TITLE, LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 
@@ -63,7 +64,20 @@ export default function SavedFiguresSection() {
                 onClick={() => openFigureDoc(d.id)}
               >
                 <span className="qzk-fig-name">
-                  {d.live ? "◉" : "❄"} {d.name}
+                  {/* UX-004: the TYPE mark is now stable (it used to be
+                   *  swapped out for ❄, so a frozen figure showed no type at
+                   *  all); ❄ is a separate status mark. */}
+                  <span
+                    className="qzk-ds-icon"
+                    aria-hidden="true"
+                    title={LIBRARY_NODE_LABEL["publication-figure"]}
+                  >
+                    {LIBRARY_NODE_GLYPH["publication-figure"]}
+                  </span>
+                  {d.name}
+                  {!d.live && (
+                    <span className="qzk-frozen-mark" title={FROZEN_TITLE}>{FROZEN_MARK}</span>
+                  )}
                 </span>
                 <span className="qzk-fig-meta">{d.config.style}</span>
               </button>

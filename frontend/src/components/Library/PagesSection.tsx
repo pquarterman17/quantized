@@ -18,6 +18,7 @@
 import { useState } from "react";
 
 import { exportFigurePage } from "../../lib/api";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
 import { buildPageSpecFromDocument } from "../workshops/figurepage/panelResolve";
@@ -69,7 +70,13 @@ export default function PagesSection() {
             title={`open saved page "${page.name}"`}
             onClick={() => open(page.id)}
           >
-            <span className="qzk-fig-name">▦ {page.name}</span>
+            <span className="qzk-fig-name">
+              {/* UX-004: one vocabulary — this said ▦, the Folder mark. */}
+              <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL.page}>
+                {LIBRARY_NODE_GLYPH.page}
+              </span>
+              {page.name}
+            </span>
             <span className="qzk-fig-meta">
               {page.rows}×{page.cols}
             </span>

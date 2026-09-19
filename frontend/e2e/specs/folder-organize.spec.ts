@@ -87,8 +87,9 @@ test.describe("Library folder organization @core", () => {
 
     // ── Create two root folders (the "create" half of the journey) ────────
     // The icon-only toolbar buttons here (Library.tsx) carry a `title` but no
-    // `aria-label` and DO have visible glyph text ("▦") — the glyph, not the
-    // title, is the computed accessible name, so `getByTitle` (a direct DOM
+    // `aria-label` and DO have visible glyph text (the Folder mark from
+    // components/Library/nodeIcons.ts) — the glyph, not the title, is the
+    // computed accessible name, so `getByTitle` (a direct DOM
     // `title`-attribute lookup, not accessible-name computation) is the
     // right locator rather than `getByRole('button', {name})`.
     const newFolderBtn = page.getByTitle("New folder", { exact: true });

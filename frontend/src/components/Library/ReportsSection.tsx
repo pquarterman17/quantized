@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 
 export default function ReportsSection() {
@@ -33,7 +34,13 @@ export default function ReportsSection() {
             title={`open report "${r.name}"`}
             onClick={() => setOpenReport(r.id)}
           >
-            <span className="qzk-fig-name">▤ {r.name}</span>
+            <span className="qzk-fig-name">
+              {/* UX-004: one vocabulary — this said ▤, the Workbook mark. */}
+              <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL.report}>
+                {LIBRARY_NODE_GLYPH.report}
+              </span>
+              {r.name}
+            </span>
             <span className="qzk-fig-meta">{dsName(r.datasetId)}</span>
           </button>
         ))}

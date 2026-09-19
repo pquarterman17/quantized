@@ -47,6 +47,7 @@ import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
 import { DatasetRowControls, DatasetRowName } from "./DatasetRowParts";
 import { recordWorkbookOpen } from "./libraryOpen";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { Dataset } from "../../lib/types";
@@ -310,11 +311,10 @@ export default function DatasetRow({
         <>
           <div className="qzk-ds-compact-row">
             {controls}
-            {/* Node-type glyph (UX-001 interaction checklist: "make the node
-             *  type explicit") — the Tree already has one for Folder (▦) and
-             *  Workbook (▤); this is Worksheet's, same aria-hidden+title
-             *  convention as those two. */}
-            <span className="qzk-ds-icon" aria-hidden="true" title="Worksheet">▥</span>
+            {/* Node-type glyph, from the one shared vocabulary (UX-004). */}
+            <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL.worksheet}>
+              {LIBRARY_NODE_GLYPH.worksheet}
+            </span>
             {nameEl}
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
               {pts} pts · {ch}ch{d.pending && " · …"}

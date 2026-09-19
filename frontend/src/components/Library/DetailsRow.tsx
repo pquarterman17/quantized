@@ -54,6 +54,7 @@ import { useState, type CSSProperties } from "react";
 import { deleteArtifactConfirmed, isArtifactNode } from "./artifactContextActions";
 import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { renameLibraryNode } from "../../lib/libraryRename";
 import { useDetailsDragDrop, type DetailsDragDropContext } from "./useDetailsDragDrop";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
@@ -263,7 +264,14 @@ export default function DetailsRow({
           // row's name starts at the same x (shell.css sizes both).
           <span className="qzk-details-grip-space" aria-hidden="true" />
         )}
-        <span aria-hidden="true">{node.kind === "folder" ? "▦" : node.kind === "workbook" ? "▤" : "·"}</span>
+        {/* UX-004: Details used to be a third, reduced vocabulary — ▦/▤ for
+         *  the two containers (▦ being the tree's Folder mark but Tiles'
+         *  WORKSHEET mark) and an undifferentiated "·" for the other six
+         *  kinds. It now reads the one shared map, so a row looks the same
+         *  here as in Tree and Tiles, and every kind is nameable. */}
+        <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL[node.kind]}>
+          {LIBRARY_NODE_GLYPH[node.kind]}
+        </span>
         {renameDraft != null ? (
           <input
             className="qz-input qzk-folder-rename"

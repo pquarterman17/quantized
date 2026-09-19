@@ -310,6 +310,24 @@ body {
    100%` can wrap it onto its own full-width line below the name/meta/
    toggle line, instead of squeezing a 180px SVG in among them. */
 .qzk-ds-spark-wrap { flex-basis: 100%; }
+/* UX-004 density: the preview toggle joins the drag handle and the "⋯" menu
+   button as a resting cue — invisible until the row is hovered or the button
+   itself is focused, so a tree of hundreds of worksheets paints ONE mark per
+   row (its type glyph) instead of two. `opacity`, never `display`/
+   `visibility`: the button keeps its box, its place in the tab order, and its
+   aria-label/aria-pressed for a screen reader. A row whose preview is open
+   keeps the toggle painted — the control that closes the sparkline must not
+   be the invisible one. Colour is untouched (it inherits the row's tokens),
+   so this behaves identically in every theme, density and the print path. */
+.qzk-ds-preview-btn { opacity: 0; }
+.qzk-ds:hover .qzk-ds-preview-btn,
+.qzk-ds-preview-btn:hover,
+.qzk-ds-preview-btn:focus-visible,
+.qzk-ds-preview-btn[aria-pressed="true"] { opacity: 1; }
+/* A publication figure's frozen-data STATUS mark, beside the name and after
+   the type glyph — never instead of it (UX-004: swapping the type mark out
+   for ❄ left a frozen figure with no type at all). */
+.qzk-frozen-mark { flex-shrink: 0; margin-left: 4px; color: var(--text-faint); }
 /* Tags are shared by both layouts (UX-001 review round: the compact row must
    not silently drop tagging). Full-width flex child so chips and the add/edit
    input wrap onto their own line below name/meta — taking NO height at all

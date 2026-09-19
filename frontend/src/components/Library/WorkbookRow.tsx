@@ -26,6 +26,7 @@ import { plural } from "../../lib/plural";
 
 import { WORKBOOK_DND } from "./dnd";
 import { openLibraryNode } from "./libraryOpen";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { buildWorkbookRowMenu } from "./workbookRowMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
@@ -134,7 +135,9 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
       >
         {hasChildren ? (expanded ? "▾" : "▸") : "·"}
       </span>
-      <span className="qzk-workbook-icon" aria-hidden="true" title="Workbook">▤</span>
+      <span className="qzk-workbook-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL.workbook}>
+        {LIBRARY_NODE_GLYPH.workbook}
+      </span>
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"

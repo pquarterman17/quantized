@@ -50,6 +50,7 @@ import { useState } from "react";
 import { plural } from "../../lib/plural";
 import { FOLDER_DND, WORKBOOK_DND } from "./dnd";
 import { buildFolderRowMenu } from "./folderRowMenu";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import ContextMenu from "../overlays/ContextMenu";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import {
@@ -288,17 +289,21 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
       {/* UX-R3: a distinct per-kind glyph, matching WorkbookRow's own
        *  `qzk-workbook-icon` — the tree's items were otherwise "similarly
        *  weighted" with nothing but the caret and indent telling a folder
-       *  apart from a workbook at a glance. Tinted with the same
-       *  `folderColorCss` swatch as the caret above (F5 review fix) — a
+       *  apart from a workbook at a glance. The mark itself now comes from
+       *  `nodeIcons.ts` (UX-004), the one place any Library view may declare
+       *  a node-type glyph; it was ▦ here, which also meant Figure page,
+       *  Worksheet and two different commands elsewhere. Tinted with the
+       *  same `folderColorCss` swatch as the caret above (F5 review fix) — a
        *  folder's Properties color should read consistently across both
-       *  glyphs, not just the caret. */}
+       *  glyphs, not just the caret. The tint is decoration ON TOP of an
+       *  already-distinct shape: colour is never the only channel. */}
       <span
         className="qzk-folder-icon"
         aria-hidden="true"
-        title="Folder"
+        title={LIBRARY_NODE_LABEL.folder}
         style={folderColorCss ? { color: folderColorCss } : undefined}
       >
-        ▦
+        {LIBRARY_NODE_GLYPH.folder}
       </span>
       {rename != null ? (
         <input

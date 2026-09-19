@@ -12,35 +12,23 @@ import { plural } from "../../lib/plural";
 
 import { fmtNum } from "../../lib/format";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useThumbnail } from "./useThumbnail";
 
-export const KIND_LABEL: Record<LibraryNode["kind"], string> = {
-  folder: "Folder",
-  workbook: "Workbook",
-  worksheet: "Worksheet",
-  "origin-figure": "Origin figure",
-  "editable-figure": "Editable figure",
-  "publication-figure": "Publication figure",
-  page: "Figure page",
-  report: "Report",
-};
-
-const KIND_GLYPH: Record<LibraryNode["kind"], string> = {
-  folder: "▰",
-  workbook: "▤",
-  worksheet: "▦",
-  "origin-figure": "⌁",
-  "editable-figure": "⌁",
-  "publication-figure": "⌁",
-  page: "▧",
-  report: "≡",
-};
+// UX-004: both of these local maps are gone. Tiles used to draw a WORKSHEET
+// as ▦ — the mark the tree gave a FOLDER — one figure mark (⌁) for all three
+// figure kinds, and its own ▰/▧/≡ for folder/page/report, so the same entity
+// changed appearance between Tiles and Tree. `nodeIcons.ts` is now the only
+// place a Library view may name a node-type mark or label; the label strings
+// there are these ones verbatim, so `LibraryTile`'s accessible names are
+// byte-identical.
+export { LIBRARY_NODE_LABEL as KIND_LABEL } from "./nodeIcons";
 
 function WorksheetPreview({ node }: { node: Extract<LibraryNode, { kind: "worksheet" }> }) {
   if (node.entity.pending) {
     return (
       <div className="qzk-tile-placeholder">
-        <span aria-hidden="true">{KIND_GLYPH.worksheet}</span>
+        <span aria-hidden="true">{LIBRARY_NODE_GLYPH.worksheet}</span>
         <small>Data loads when opened</small>
       </div>
     );
@@ -96,12 +84,12 @@ function ArtifactPreview({ node }: { node: LibraryNode }) {
         />
       ) : (
         <>
-          <span className="qzk-preview-kind" aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+          <span className="qzk-preview-kind" aria-hidden="true">{LIBRARY_NODE_GLYPH[node.kind]}</span>
           {thumb.status === "loading" && <span className="qzk-preview-skeleton" aria-hidden="true" />}
         </>
       )}
       {caption && <small role={thumb.status === "error" ? "status" : undefined}>{caption}</small>}
-      <span className="qzk-preview-badge" aria-hidden="true">{KIND_LABEL[node.kind]}</span>
+      <span className="qzk-preview-badge" aria-hidden="true">{LIBRARY_NODE_LABEL[node.kind]}</span>
     </div>
   );
 }
@@ -112,7 +100,7 @@ export default function TilePreview({ node }: { node: LibraryNode }) {
     const children = node.children.length;
     return (
       <div className="qzk-tile-placeholder">
-        <span aria-hidden="true">{KIND_GLYPH[node.kind]}</span>
+        <span aria-hidden="true">{LIBRARY_NODE_GLYPH[node.kind]}</span>
         <small>{children} item{plural(children)}</small>
       </div>
     );

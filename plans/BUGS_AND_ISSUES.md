@@ -2,7 +2,15 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (BUG-019 + BUG-020 FIXED: `captureTechniqueView` (`lib/techniqueViewMemory.ts`) spread its capture source whole, and three of its four callers hand it the ENTIRE `AppState` — so every per-technique view memory entry carried `datasets`, `plotWindows` AND the previous `techniqueViewMemory`, and alternating between two techniques compounded the map Fibonacci-wise (ratio -> phi ~ 1.62; measured on the owner's own sequence: 5.4 MB -> 16.3 -> 32.4 -> 70.0 -> 123.6 -> 214.8 -> 359.6 MB, then `JSON.stringify` throwing `Invalid string length`, then the page unresponsive for >45 s). The autosave that stringifies it runs on the thread that draws, which is why an ROI box integration's Apply produced an empty plot AND blanked previously plotted datasets; the StatusBar's persistent autosave-failing alert DOES fire, but its status line blamed storage for what was a serialization failure, and that wording is fixed too. Fixed by projecting the capture source down to its nine declared fields; same sequence now flat at 344 B. BUG-020, found alongside it and filed separately: `useCutLanding` minted cut ids from a private page-lifetime counter, so a reopened workspace holding `cut-1` plus one new cut held two datasets with that id — Apply plotted the OLD one and a single delete destroyed both; it now draws from `store/idSeq.ts`. UX-003 FIXED across three rounds: `lib/lazyRegion.tsx`,
+**Updated:** 2026-09-19 (UX-004 filed and its collision half FIXED: the
+Library's node-type marks collided across three contradicting per-view maps —
+`▦` alone meant Folder, Figure page, Worksheet and two different commands —
+and nothing checked, because UX-001's icon audit asserted each mark was
+LABELLED, never that two marks were DISTINGUISHABLE. One source of truth
+(`components/Library/nodeIcons.ts`) separated by silhouette rather than hatch,
+an injectivity test over the complete kind set, `▦`/`▥` retired outright, and
+the preview toggle `∿` joins `⠿`/`⋯` as a resting cue; the mark choice and
+that density change are design judgement and still need the owner's eye; BUG-019 + BUG-020 FIXED: `captureTechniqueView` (`lib/techniqueViewMemory.ts`) spread its capture source whole, and three of its four callers hand it the ENTIRE `AppState` — so every per-technique view memory entry carried `datasets`, `plotWindows` AND the previous `techniqueViewMemory`, and alternating between two techniques compounded the map Fibonacci-wise (ratio -> phi ~ 1.62; measured on the owner's own sequence: 5.4 MB -> 16.3 -> 32.4 -> 70.0 -> 123.6 -> 214.8 -> 359.6 MB, then `JSON.stringify` throwing `Invalid string length`, then the page unresponsive for >45 s). The autosave that stringifies it runs on the thread that draws, which is why an ROI box integration's Apply produced an empty plot AND blanked previously plotted datasets; the StatusBar's persistent autosave-failing alert DOES fire, but its status line blamed storage for what was a serialization failure, and that wording is fixed too. Fixed by projecting the capture source down to its nine declared fields; same sequence now flat at 344 B. BUG-020, found alongside it and filed separately: `useCutLanding` minted cut ids from a private page-lifetime counter, so a reopened workspace holding `cut-1` plus one new cut held two datasets with that id — Apply plotted the OLD one and a single delete destroyed both; it now draws from `store/idSeq.ts`. UX-003 FIXED across three rounds: `lib/lazyRegion.tsx`,
 a drop-in `lazy()` replacement, gives every code-split seam its own error
 boundary and a retry that rebuilds `lazy()` — the only way to defeat React's
 permanent memoization of a rejected lazy() promise. Re-measured the seam
@@ -47,8 +55,9 @@ This is a working document, not a claim that every observation is already reprod
 | ID | Priority | Area | Issue | Owner | Status/evidence |
 |---|---:|---|---|---|---|
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
-| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains |
+| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains. **Its icon-audit residual proved to be only half an audit — see UX-004**, which finishes it without reverting anything here |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
+| UX-004 | P1 | Origin project Library | Node-type marks COLLIDE — `▦` meant Folder, Figure page, Worksheet and two commands; `▤` meant Workbook and Report; `▥` meant Worksheet and five artifact kinds — across three contradicting per-view maps, and `▦ ▥ ▤` differ only by hatch at row size | Claude (agent) | **Collision half FIXED 2026-09-19** and locked by an injectivity test over the complete kind set (`nodeIcons.test.ts`); one shared vocabulary separated by silhouette. Density change (`∿` becomes a resting cue) and the choice of the eight marks are design judgement — owner eyeball on the reported project still required |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
@@ -7794,6 +7803,195 @@ Describe what the user did, what happened, and why it matters. Include filenames
 
 ---
 
+## UX-004 — the Library's node-type marks collide: one glyph meant up to five different things
+
+**Priority:** P1 — the same surface and the same workflow as UX-001, and the
+reason UX-001's own "make the node type explicit" fix did not land for the
+owner.
+**State:** Fixed and test-locked on the collision half (objective, measured).
+The density half is a design judgement awaiting the owner's eye — see
+"What is measured and what is judgement" below.
+**Reported:** 2026-09-19 by owner — *"loading this origin project, it's pretty
+impossible to parse that many icons"*.
+**Related:** UX-001 (same surface; this is its icon-audit residual finished
+properly, not a contradiction of it — see "Reconciliation with UX-001").
+
+### User-visible problem
+
+Importing an Origin project brings in folders, workbooks, worksheets, graphs,
+pages and notes at once — hundreds of Library rows. Their type marks are not
+telling them apart, because several kinds wear the *same* mark and the marks
+that do differ differ only by hatch direction at 12px.
+
+### Measured collision inventory (2026-09-19, before the fix)
+
+Three mutually contradicting kind→glyph maps existed, none aware of the
+others. Every site was read, not sampled:
+
+| glyph | code point | everything it meant | sites |
+|---|---|---|---|
+| `▦` | U+25A6 | **Folder**, **Figure page**, **Worksheet**, *"open the source workbook"* (command), *"New folder"* (command) | `FolderRow.tsx:301`, `ArtifactRows.tsx:51`, `PagesSection.tsx:72`, `TilePreview.tsx:31`, `CollectionsSection.tsx:29`, `DetailsRow.tsx:266`, `FigureRow.tsx:112`, `Library.tsx:285` |
+| `▤` | U+25A4 | **Workbook**, **Report** | `WorkbookRow.tsx:137`, `ArtifactRows.tsx:53`, `ReportsSection.tsx:36`, `TilePreview.tsx:30`, `CollectionsSection.tsx:29`, `DetailsRow.tsx:266` |
+| `▥` | U+25A5 | **Worksheet**, and **Origin figure + Editable figure + Publication figure + Figure page + Report** (all five at once) | `DatasetRow.tsx:317`, `CollectionsSection.tsx:29-30` |
+| `⌁` | U+2301 | **Origin figure**, and in Tiles *all three* figure kinds | `FigureRow.tsx:91`, `TilePreview.tsx:33-35` |
+| `◇` | U+25C7 | **Editable figure** | `ArtifactRows.tsx:47`, `EditableFiguresSection.tsx:49` |
+| `◉`/`❄` | U+25C9 / U+2744 | **Publication figure**, live vs frozen — the *type* mark was swapped out to carry a *status*, so a frozen publication figure had no type mark at all | `ArtifactRows.tsx:49`, `SavedFiguresSection.tsx:66` |
+| `▰` `▧` `≡` | | **Folder**, **Figure page**, **Report** — but only in Tiles | `TilePreview.tsx:29,36,37` |
+| `·` | | **Worksheet** (Collections) and **everything that is not a folder or a workbook** (Details) | `CollectionsSection.tsx:29`, `DetailsRow.tsx:266` |
+
+Two corrections to the report that prompted this entry: there is **no Matrix
+node kind** — `ArtifactRows.tsx:51`'s `rows×cols` row is a figure **page**, and
+`LibraryNodeKind` has exactly eight members; and the drag handle `⠿` and menu
+cue `⋯` were **already** resting cues (`shell.css:390,468`: `opacity: 0`,
+revealed on row hover and on focus), so they were never part of the resting
+noise.
+
+Non-type glyphs a Library row can also paint, for completeness: `⠿` drag
+(resting cue), `⋯` more actions (resting cue), `▸`/`▾` caret, `●` stale,
+`↻` recomputed-from-fit, `⇢` derived worksheet, `∿` preview toggle,
+`⊞` open in a new window, `▣` saved Origin preview, `G` remake in Graph
+Builder, `▲`/`▼` move (flat card only), `└ sheet N` chip.
+
+### What changed
+
+- **One source of truth:** `frontend/src/components/Library/nodeIcons.ts`
+  (`LIBRARY_NODE_GLYPH`, `LIBRARY_NODE_LABEL`, `FROZEN_MARK`). The three rival
+  maps are deleted; every Library view (Tree, Tiles, Details, Collections and
+  the five flat sections) reads this one.
+- **A vocabulary separated by SILHOUETTE, not hatch:** folder `▰` (solid
+  slanted bar), workbook `▤` (the one ruled box), worksheet `≡` (free rules,
+  no box), origin-figure `⌁` (zigzag trace), editable-figure `◇` (outline
+  diamond), publication-figure `◆` (solid diamond), page `▭` (wide empty
+  rectangle), report `¶` (pilcrow). `▦` and `▥` — the two marks that meant
+  several things at once — are **removed from the vocabulary entirely**.
+- **Type and status are two channels:** a publication figure keeps a stable
+  `◆` and, when frozen, a separate `❄` mark beside the name. Previously the
+  type mark itself was replaced.
+- **The two commands that NAME a kind wear that kind's mark** rather than
+  inventing one: "New folder" (`Library.tsx`) and "open the source workbook"
+  (`FigureRow.tsx`, which wore the *folder* mark `▦`).
+- **Density (judgement, not measurement):** the preview toggle `∿` was the
+  last control still painted at rest on every worksheet row. It now follows
+  the drag handle's and menu button's existing resting-cue recipe —
+  `opacity: 0`, revealed on row hover, on `:focus-visible`, and whenever the
+  preview is open. Opacity only: it keeps its box, its tab order and its
+  `aria-label`/`aria-pressed`. A worksheet row at rest now paints exactly one
+  mark (its type glyph) plus text.
+- **Colour is not a channel.** Every glyph inherits `currentColor` from its
+  row's design tokens, so the vocabulary is identical in every theme, accent,
+  density and the greyscale/print paths, and no information is carried by hue
+  (the CVD concern from `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3 does not arise).
+  `FolderRow`'s existing folder-colour tint stays, as decoration on top of an
+  already-distinct shape.
+
+### What the design system specified
+
+`plans/design/DESIGN_GUIDE.md` §Iconography specifies the **medium**, not a
+node vocabulary: inline Unicode glyphs inheriting `currentColor` and the
+surrounding font-size, thin/geometric, no icon font, no SVG sprite, **never
+emoji**, and a substitution rule (a thin ~1.5px-stroke line set, flagged) if
+the Unicode set runs out. It names tool glyphs only — `✥` pan, `⛶` box-zoom,
+`✛` cursor, `▾`/`▸` chevrons — and, notably, assigns **`▤`/`▥` to panel
+toggles**, so using them as node types was already double duty. No Library
+node-type vocabulary was specified, so this defines one in that idiom; the
+guide's constraints are all met (single BMP codepoints, no emoji presentation,
+asserted by test).
+
+### Enforcement (the most valuable artifact here)
+
+`frontend/src/components/Library/nodeIcons.test.ts` — 11 cases:
+
+- **injectivity** over the complete kind set (no two kinds share a glyph; the
+  label map too), and completeness (the hand-written kind list must match
+  `LibraryNodeKind`, so a ninth kind cannot slip in unmarked);
+- each glyph is one non-blank BMP character below U+1F300 with no U+FE0F —
+  the repo's "Unicode glyphs, never emoji" rule, made checkable;
+- **disjointness**: no command/status glyph reuses a type mark, *unless* the
+  table declares that the command names that kind — and then it must really
+  wear that kind's mark;
+- **non-rot**: every command/status glyph in that table still appears in the
+  file the table names, no Library component declares a kind-keyed
+  `KIND_GLYPH` of its own any more, and the two retired marks `▦`/`▥` appear
+  nowhere in this directory's rendered code (comments excepted — they are the
+  record of what each site used to draw).
+
+`rowIconAccessibility.test.tsx` gains two describe blocks: the rendered mark
+of each row kind **is** the one the shared map declares (four kinds rendered
+together produce four different characters — the owner's complaint, at the DOM
+layer), and the preview toggle stays in the DOM, focusable, named, hidden by
+`opacity` only with the hover/focus/`aria-pressed` rules parsed out of
+`shell.css` rather than assumed. That file's header now records *why* the
+earlier audit missed this: it asserted each mark was **labelled**, never that
+two marks were **distinguishable** — the gap this entry closes.
+
+### Reconciliation with UX-001
+
+UX-001's interaction checklist item "make the node type explicit" stays ticked
+and is **not** reverted: every kind still carries a type mark, and no mark was
+deleted for the sake of deleting one. What that pass could not know is that
+the marks it chose (`▥` for worksheet, keeping `▦`/`▤`) already meant other
+things in five files it did not touch. UX-001's own open research box —
+"a full icon/badge audit across every row kind is still open", closed
+2026-09-12 as an *accessibility* audit — is what left the distinguishability
+half unchecked. `LibraryTree.compactRows.test.tsx`'s "≥6 worksheet rows"
+acceptance evidence is untouched and still passes.
+
+### What is measured and what is judgement
+
+- **Measured, objective:** every collision in the table above was read out of
+  the source at the cited line, and the injectivity test would have failed on
+  the pre-fix map. The fix to that half is not a matter of taste.
+- **Judgement, needs the owner's eye:** the *choice* of the eight marks, and
+  the density change (hiding `∿` at rest). No screenshot of the owner's actual
+  Origin project exists here, so the aggregate-density claim — "a worksheet
+  row at rest now paints one mark plus text" — is derived from the code and
+  the stylesheet, not from a rendered tree at the owner's row count, font and
+  density setting. It is exactly the sort of claim `jsdom` cannot settle.
+
+### Deliberately NOT done
+
+- **No mark was deleted.** Dropping the worksheet glyph outright was
+  considered (it is the most numerous row, has no caret, and carries unique
+  `N pts · Mch` meta, so hierarchy alone nearly identifies it) and rejected:
+  it would silently un-tick UX-001's "make the node type explicit" box across
+  Tree, Tiles, Details and Collections. It is the obvious next density lever
+  if the owner still finds the tree noisy — raise it with a screenshot.
+- `⠿` and `⋯` were left alone: already resting cues, already correct.
+- `Library.tsx` took the single minimal edit its in-flight state allows (the
+  "New folder" button's glyph, now the shared constant + an import);
+  `LibraryFlatRows.tsx` was not touched at all.
+- Command glyphs outside a Library row (`Shell/TitleBar.tsx`'s `▤`/`▥` panel
+  toggles, `Stage/*`, the workshops) are out of scope — they are a different
+  surface and the design guide assigns `▤`/`▥` to panel toggles there.
+
+### Acceptance criteria
+
+- [x] No two Library node kinds render the same mark, over the complete kind
+  set — `nodeIcons.test.ts`, sabotage-verified.
+- [x] One source of truth; no component declares its own kind→glyph map —
+  `nodeIcons.test.ts`, sabotage-verified.
+- [x] The same entity looks the same in Tree, Tiles, Details and Collections
+  — all four now read `LIBRARY_NODE_GLYPH`.
+- [x] Accessibility does not regress: every icon-only control keeps an
+  accessible name, every badge a title, and the newly hidden resting cue
+  stays focusable and announced — `rowIconAccessibility.test.tsx`.
+- [x] Marks work in every theme/accent/density and in greyscale — they carry
+  no colour information; enforced by construction (`currentColor`), stated
+  here rather than test-claimed.
+- [ ] Owner confirms, on the reported Origin project, that the eight marks
+  read apart at a glance and that the tree is quieter.
+
+### Completion record
+
+- PR/commit: committed on the worktree branch (not pushed, per task
+  instructions).
+- Automated tests: `nodeIcons.test.ts` (new, 11 cases),
+  `rowIconAccessibility.test.tsx` (+7 cases), `PagesSection.test.tsx`
+  (expectation updated to the shared constant).
+- Owner verification: pending — the density and mark-choice halves above.
+
+---
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |
@@ -7812,6 +8010,7 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
 | 2026-09-14 | Claude (agent) | Filed BUG-016 (P2): a grouped figure's per-series styling reaches the canvas — `plotGroupSplit.ts`'s channel map gives every level its source channel's style and `buildOpts` applies it — but `routes/export_figures.py`'s `group_col` branch (`:81-85` documents the choice, `:236-238` returns `_ResolvedFigure(..., None, ...)`) drops `series_styles` outright, so the exported curves are solid, default-width and default-coloured. Found by the 2026-09-14 adversarial review round of the P4.2 regression matrix, which showed the matrix's own GROUP style comparison was reading a wire field the renderer never consults. Same round: renamed BUG-012..BUG-015's reproducing tests (the five bare `it.fails` pins became explicit `DIVERGENCE (BUG-01x)` tests asserting BOTH concrete values and their difference) and updated each entry's fix checklist to say the fix INVERTS the assertion rather than flipping an `it.fails`. Not fixed here — tests/fixtures/plans only, no product code touched | Design-time finding, code-read and file:line-cited, and measured on both paths (canvas: three levels at `dash: [8, 4]`, `width: 2`; resolver: `styles=None` under `group_col`). Reproducing test: `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` (new this round). `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; `npx vitest run src/lib/regressionMatrix.test.ts src/lib/figureSpec.a8.test.ts src/architecture.test.ts` |
+| 2026-09-19 | Claude (agent) | Filed UX-004 (P1) from an owner report on the same surface as UX-001, and fixed its objective half. Measured, by reading every site: three mutually contradicting kind→glyph maps, in which `▦` meant Folder AND Figure page AND Worksheet AND two different commands, `▤` meant Workbook AND Report, `▥` meant Worksheet AND all five artifact kinds at once, and a frozen publication figure had NO type mark because `❄` replaced it. Corrected two details of the report while confirming it: there is no Matrix node kind (the `rows×cols` row is a figure page; `LibraryNodeKind` has eight members), and `⠿`/`⋯` were already resting cues. Fixed with one source of truth, `frontend/src/components/Library/nodeIcons.ts`, a vocabulary separated by SILHOUETTE rather than hatch (`▰ ▤ ≡ ⌁ ◇ ◆ ▭ ¶`), `▦`/`▥` retired from the vocabulary outright, type and status split into two channels, and the two kind-naming commands wearing their kind's mark. Density: the preview toggle `∿` joins the drag handle and menu button as an opacity-only resting cue (still focusable, still announced). Recorded in the entry which half is measured and which is design judgement the owner must eyeball, since no screenshot of the reported project exists here | `nodeIcons.test.ts` (new, 11 cases — injectivity over the complete kind set, completeness, no-emoji, command/status disjointness, and three non-rot checks) + 7 new cases in `rowIconAccessibility.test.tsx`, whose header now records that the earlier UX-001 audit checked marks were LABELLED, never DISTINGUISHABLE — the gap that let this ship. Every new assertion sabotage-verified (see the commit body's table); `npx tsc -b --force`, `npx eslint src --max-warnings=0`, full `npx vitest run`, `npm run build` + bundle ratchet, and `uv run pytest -q tests/test_repo_integrity.py` all clean — numbers in the commit body |
 | 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |
 | 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
 | 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |

@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { lazyRegion } from "../../lib/lazyRegion";
 import LibrarySections from "./LibrarySections";
+import { LIBRARY_NODE_GLYPH } from "./nodeIcons";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
@@ -271,7 +272,10 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
             title="New folder"
             onClick={() => createFolder(null, "New Folder")}
           >
-            ▦
+            {/* UX-004 (the ONLY change this file takes: this command names a
+             *  node kind, so it wears that kind's mark from `nodeIcons.ts`
+             *  instead of a literal ▦ that no longer means "folder"). */}
+            {LIBRARY_NODE_GLYPH.folder}
           </button>
           <button className="qz-icon-btn" title="Add demo dataset" onClick={onDemo}>
             ✚
