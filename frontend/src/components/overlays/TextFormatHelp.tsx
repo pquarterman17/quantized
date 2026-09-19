@@ -6,10 +6,11 @@
 // ShortcutsDialog conventions: a read-only modal on the store
 // `textFormatHelpOpen` flag; backdrop click / Esc / Close dismiss it.
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { Button, RichText } from "../primitives";
 import { useApp } from "../../store/useApp";
+import { useDialogFocus } from "./useDialogFocus";
 
 /** Worked examples: [what you type, note]. Rendered live via RichText. */
 const EXAMPLES: [string, string][] = [
@@ -66,8 +67,14 @@ const SYNTAX: [string, string][] = [
 export default function TextFormatHelp() {
   const open = useApp((s) => s.textFormatHelpOpen);
   const setOpen = useApp((s) => s.setTextFormatHelpOpen);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
-  // Esc closes even when focus isn't inside the dialog (ShortcutsDialog).
+  // Esc closes even when focus isn't inside the dialog (ShortcutsDialog). R1
+  // (P3.3): kept as its own window-capture listener, not the escape registry
+  // — a true backdrop modal must always win over anything behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -80,6 +87,10 @@ export default function TextFormatHelp() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, setOpen]);
 
+  // R1: focus-in, Tab trap, restore-to-opener. Read-only sheet, one real
+  // control (Close) — the hook's default first-focusable landing is it.
+  useDialogFocus(dialogRef, open);
+
   if (!open) return null;
 
   return (
@@ -87,9 +98,14 @@ export default function TextFormatHelp() {
       <div
         className="qzk-glass qz-dialog"
         style={{ maxWidth: 620, maxHeight: "80vh", overflowY: "auto" }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2>Text formatting</h2>
+        <h2 id={titleId}>Text formatting</h2>
         <p style={{ color: "var(--text-dim)", marginTop: 6 }}>
           Labels, titles, and legend names are plain text with optional{" "}
           <code>$...$</code> math regions in a strict subset of matplotlib

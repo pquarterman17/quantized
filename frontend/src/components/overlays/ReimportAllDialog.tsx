@@ -18,11 +18,12 @@
 // reopen, and report `survived: true` to a caller that then chains a commit
 // the user already dismissed.
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
 import type { ReimportAllOutcome, ReimportAllRow } from "../../store/reimportAll";
+import { useDialogFocus } from "./useDialogFocus";
 
 // Short status words only — the row's own `message` (store/reimportAll.ts)
 // carries the full sentence, so this must never restate it verbatim (that
@@ -56,9 +57,19 @@ export default function ReimportAllDialog() {
   // that tells a genuinely in-flight `stageReimportAll` call it was
   // cancelled (store/reimportAll.ts's own doc has the full race).
   const cancel = useApp((s) => s.cancelReimportAll);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const open = rows !== null || busy;
 
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
+  // its own window-capture listener rather than joining `lib/escapeStack.ts`
+  // — a true backdrop modal always wins over anything mounted behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener. Also the coordinator-review G1 discipline above: this
+  // must stay `cancel()`, never a raw close, so an in-flight stage is
+  // actually cancelled.
   useEffect(() => {
-    if (!rows && !busy) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -67,7 +78,14 @@ export default function ReimportAllDialog() {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [rows, busy, cancel]);
+  }, [open, cancel]);
+
+  // R1: focus-in, Tab trap, restore-to-opener. No per-dialog landing-spot
+  // decision needed: while staging (`busy`) the only control is Close, and
+  // once rows land the hook's default (first focusable) is still Close or
+  // "Reimport Available Sources" in DOM order — both meaningful, no field to
+  // prefer over them.
+  useDialogFocus(dialogRef, open);
 
   if (!rows && !busy) return null;
 
@@ -76,8 +94,16 @@ export default function ReimportAllDialog() {
 
   return (
     <div className="qz-overlay-backdrop" onMouseDown={cancel}>
-      <div className="qzk-glass qz-dialog" onMouseDown={(e) => e.stopPropagation()}>
-        <h2>Reimport All</h2>
+      <div
+        className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2 id={titleId}>Reimport All</h2>
         {busy || !rows ? (
           <div className="qzk-ds-meta">staging sources…</div>
         ) : (

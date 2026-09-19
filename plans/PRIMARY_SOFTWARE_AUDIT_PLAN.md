@@ -3797,9 +3797,11 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [~] Keyboard reachability, focus, order, cancel. **Audited in full and
-  partly fixed 2026-09-18.** Stays `[~]` rather than `[x]`: the audit covered
-  everything the box names, but the fixes deliberately stopped short of eight
-  dialogs that already have a working Escape (residuals listed below).
+  fixed across seven rounds, 2026-09-18–19 (round 7 closed R1, the last of
+  the deliberately-deferred items).** Stays `[~]` rather than `[x]`: ten
+  residuals remain (R2–R11 below), each a distinct, smaller gap — none of
+  them a dialog with no keyboard dismissal at all, which is what the audit
+  originally found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -3814,7 +3816,7 @@ covers a much smaller subset and guards focus on Analyze.
   | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
-  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (window capture, kept) | Y | R1 closed (round 7) — focus-in + trap + restore, per-dialog landing spot |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
@@ -4350,14 +4352,90 @@ covers a much smaller subset and guards focus on Analyze.
     `useGlobalShortcuts.test.ts` + `components/workshops/peakwizard`
     (**69 tests**, green at baseline), and restored after.
 
+  **Round 7 (2026-09-19) — R1 closed: the eight backdrop dialogs now take
+  focus, trap Tab, and restore it.** Split, Separate, Combine, ReimportAll,
+  Shortcuts, TextFormatHelp, Preferences, Help all adopt
+  `useDialogFocus`/`useFocusTrap` (`components/overlays/useDialogFocus.ts`,
+  unchanged — this is applying existing infrastructure, not building new).
+  `role="dialog"`, `aria-modal="true"` and an `aria-labelledby` from
+  `useId()` were added wherever missing (Preferences and Help already had
+  `role="dialog"` + `aria-label`; both are now `aria-labelledby` pointing at
+  their own heading, matching every other dialog in the app).
+  - **Escape: all eight KEEP their own window-capture listener** rather than
+    joining `lib/escapeStack.ts`. Reason, same for all eight and consistent
+    with `ConfirmDialog`/`RecoveryChoiceDialog` (never rewritten onto the
+    registry either): a backdrop dialog is a true MODAL that blocks the
+    pointer entirely, so it must always win over anything mounted behind
+    it. Window-capture already guarantees that — it runs ahead of the
+    registry's one window-BUBBLE listener on every keystroke — so joining
+    the registry would add ordering machinery (a `menu`/`window`/`workspace`
+    layer decision) that a dialog which can never be out-ranked does not
+    need. `ReimportAllDialog` additionally keeps calling `cancelReimportAll()`
+    specifically (never a raw close), per its existing coordinator-review G1
+    contract — untouched by this pass.
+  - **Landing spot, one line per dialog:**
+    - Split — the Column select (DOM-order default): it is the first
+      decision and gates whether Tolerance even renders below it.
+    - Separate — the Name field (default): the one control every commit
+      needs a look at.
+    - Combine — the Name field (default): drives whether Combine is even
+      enabled.
+    - ReimportAll — default (Close, or Close + "Reimport Available
+      Sources"): no field outranks either.
+    - Shortcuts / TextFormatHelp — default (Close): read-only sheets with
+      one real control.
+    - **Preferences** — deliberately NOT the default. This dialog's own tab
+      nav (`.qzk-prefs-nav`) is a row of plain, non-focusable `<div>`s (a
+      pre-existing, separate gap this pass does not touch — they were
+      mouse-only before and after), so the raw DOM-order default would land
+      on the "✕" close button, telling a keyboard user nothing about what
+      the dialog is for. A second effect (declared before `useDialogFocus`,
+      so the shared hook's own "already inside" skip applies — the same
+      composition `ParamDialog`'s `autoFocus` and `HelpDialog`'s own
+      search-box focus already rely on) instead focuses the first focusable
+      control INSIDE THE ACTIVE PANE — the setting a user opening
+      Preferences almost certainly came for. The Keyboard tab has no
+      focusable content at all, so there this is a no-op and the shared
+      hook's Close-button fallback is what actually fires — verified by
+      sabotage (below).
+    - **Help** — the pre-existing "focus the search box on the Topics tab"
+      effect is kept (same composition as Preferences), and for the other
+      four tabs the shared hook's plain default already lands on the
+      "Topics" tab button — unlike Preferences, Help's tabs ARE real
+      `role="tab"` `<button>`s, so no override was needed there.
+  - **Sabotage — one dialog's `useDialogFocus` call removed at a time (never
+    all eight at once, the exact failure mode a prior round shipped):**
+
+    | Dialog sabotaged | Result | Failing test(s) |
+    |---|---|---|
+    | Shortcuts | **RED** 2/2 | "moves focus into the dialog on open…", "Escape … closes it and gives focus back to the opener" |
+    | TextFormatHelp | **RED** 2/2 | same two case names |
+    | SeparateWorksheets | **RED** 2/2 | same two case names |
+    | ReimportAll | **RED** 2/2 | same two case names |
+    | CombineWorkbooks | **RED** 3/3 | + "Tab wraps through the checklist and buttons…" |
+    | SplitDataset | **RED** 3/3 | + "Tab wraps between Column, Tolerance, Cancel, and Split…" |
+    | Preferences | **RED** 2/3 | "Tab traps at the dialog's real boundary…", "Escape … gives focus back to the opener" — **NOT** "moves focus into the ACTIVE PANE…", which stays green because that assertion is satisfied by the dialog's OWN separate landing-spot effect, independent of `useDialogFocus`. Sabotaging that effect's own line instead (a second, additive check) turns the focus-in case red too — landing on the "✕" close button — confirming the deliberate-landing-spot claim is itself tested, just not by the same case that pins the trap/restore. |
+    | Help | **RED** 2/3 | "falls back to the shared hook's default…", "Escape … gives focus back to the opener" — **NOT** "moves focus into the Search box…", which is HelpDialog's own pre-existing effect, same reasoning as Preferences. |
+
+    Each sabotage applied alone against that one dialog's own test file
+    (`components/overlays/*.test.tsx`), green at baseline, and restored
+    after. The full `components/overlays` suite (23 files, 268 tests, 20 new)
+    is green with every sabotage reverted.
+  - Eager bundle: parent `b10bcad3` **889,475 B** → tip **889,477 B**, **+2 B**
+    (budget 920,400 B, so **30,923 B** of headroom left). Both built after
+    `rm -rf node_modules/.vite`, the parent in its own worktree after
+    `npm ci`. No new library code — only existing-hook adoption plus
+    `role`/`aria-modal`/`aria-labelledby` markup, so the delta is negligible.
+
   **Named residuals (why this is `[~]`).**
-  - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
-    Shortcuts, TextFormatHelp, Preferences, Help) still take no focus, trap no
-    Tab, and restore nothing. Their Escape is a window-capture listener and
-    DOES work, which is why they were left for a later, lower-risk slice
-    rather than swept in here: each renders enough of its own chrome that
-    focus-in needs a per-dialog decision about which control is the safe
-    landing spot.
+  - ~~**R1**~~ **CLOSED (round 7).** The eight backdrop dialogs (Split,
+    Separate, Combine, ReimportAll, Shortcuts, TextFormatHelp, Preferences,
+    Help) now take focus on open, trap Tab, and restore it to the opener on
+    close, via the same `useDialogFocus`/`useFocusTrap` infrastructure every
+    other dialog in this box uses. Their Escape stays a window-capture
+    listener, by deliberate choice (see round 7) — it already worked and
+    already always wins over anything mounted behind a true modal backdrop,
+    so nothing there needed to change.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No

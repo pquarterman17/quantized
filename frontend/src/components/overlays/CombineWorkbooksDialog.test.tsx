@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { openCombineDialog, useCombineDialog } from "../../store/combineDialog";
@@ -168,5 +169,68 @@ describe("CombineWorkbooksDialog — freezes the selection at open (adversarial 
     expect(screen.getByText(/no longer exist/)).toBeInTheDocument();
     // The dialog stays open so the user isn't left confused by a silent close.
     expect(useCombineDialog.getState().seed).not.toBeNull();
+  });
+});
+
+// R1 (P3.3): focus-in/Tab-trap/Escape/restore driven via userEvent at
+// document.activeElement (not fireEvent.keyDown on the box).
+describe("CombineWorkbooksDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the dialog on open, onto the Name field", () => {
+    openCombineDialog({ workbookIds: [], worksheetIds: ["d1", "d2"] });
+    render(<CombineWorkbooksDialog />);
+    expect(screen.getByLabelText("Workbook name")).toHaveFocus();
+  });
+
+  it("Tab wraps through the checklist and buttons instead of walking out to the page behind it", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">outside</button>
+        <CombineWorkbooksDialog />
+      </>,
+    );
+    act(() => openCombineDialog({ workbookIds: [], worksheetIds: ["d1", "d2"] }));
+
+    const name = screen.getByLabelText("Workbook name");
+    const item1 = screen.getByLabelText("run1_field.dat");
+    const item2 = screen.getByLabelText("run1_temp.dat");
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const combine = screen.getByRole("button", { name: "Combine" });
+    expect(name).toHaveFocus();
+
+    await user.tab();
+    expect(item1).toHaveFocus();
+    await user.tab();
+    expect(item2).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab();
+    expect(combine).toHaveFocus();
+
+    await user.tab(); // would leave the modal — must wrap
+    expect(name).toHaveFocus();
+    expect(screen.getByRole("button", { name: "outside" })).not.toHaveFocus();
+
+    await user.tab({ shift: true }); // backwards off the first control
+    expect(combine).toHaveFocus();
+  });
+
+  it("Escape (via the keyboard) discards the dialog and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <CombineWorkbooksDialog />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => openCombineDialog({ workbookIds: [], worksheetIds: ["d1", "d2"] }));
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useCombineDialog.getState().seed).toBeNull();
+    expect(opener).toHaveFocus();
   });
 });

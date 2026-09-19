@@ -5,7 +5,8 @@
 // command registry entry exists in commands/uiCommands.ts (source-scan,
 // architecture.test style — the App tree is too heavy to render in jsdom).
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { useApp } from "../../store/useApp";
@@ -117,6 +118,35 @@ describe("TextFormatHelp", () => {
     rerender(<TextFormatHelp />);
     fireEvent.click(screen.getByText("Close"));
     expect(useApp.getState().textFormatHelpOpen).toBe(false);
+  });
+});
+
+// R1 (P3.3): focus-in/Escape driven via userEvent at document.activeElement
+// (not fireEvent.keyDown on the box) — the only way to see whether Escape is
+// actually reachable, not merely wired to a handler.
+describe("TextFormatHelp focus-in / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the dialog on open, onto the Close button", () => {
+    open();
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+  });
+
+  it("Escape closes it and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <TextFormatHelp />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => useApp.getState().setTextFormatHelpOpen(true));
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useApp.getState().textFormatHelpOpen).toBe(false);
+    expect(opener).toHaveFocus();
   });
 });
 

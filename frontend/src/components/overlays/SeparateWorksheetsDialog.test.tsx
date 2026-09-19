@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
@@ -84,5 +85,35 @@ describe("SeparateWorksheetsDialog — affected-item preview", () => {
     expect(screen.getByText(/previewed worksheet changed/)).toBeInTheDocument();
     // The dialog stays open so the user can re-preview, per the store contract.
     expect(useApp.getState().separatePreview).not.toBeNull();
+  });
+});
+
+// R1 (P3.3): focus-in/Escape/restore driven via userEvent at
+// document.activeElement (not fireEvent.keyDown on the box) — the class of
+// bug this closes is "the handler exists but the key never reaches it".
+describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the dialog on open, onto the Name field", () => {
+    useApp.getState().previewSeparateWorksheets(["d1"]);
+    render(<SeparateWorksheetsDialog />);
+    expect(screen.getByLabelText("Workbook name")).toHaveFocus();
+  });
+
+  it("Escape (via the keyboard) cancels the preview and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <SeparateWorksheetsDialog />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => useApp.getState().previewSeparateWorksheets(["d1"]));
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useApp.getState().separatePreview).toBeNull();
+    expect(opener).toHaveFocus();
   });
 });

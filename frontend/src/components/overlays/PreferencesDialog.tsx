@@ -5,7 +5,7 @@
 // menu — both write the same store. The Keyboard tab reuses lib/shortcuts so the
 // reference can't drift from the ? sheet.
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -20,6 +20,7 @@ import {
   savePlotPerfPrefs,
 } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
+import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 
 const IS_MAC = isMacPlatform();
 
@@ -66,7 +67,15 @@ export default function PreferencesDialog() {
   const [decimateDensePlots, setDecimateDensePlots] = useState(
     () => loadPlotPerfPrefs().decimateDensePlots,
   );
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const paneRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
+  // its own window-capture listener rather than joining `lib/escapeStack.ts`
+  // — a true backdrop modal always wins over anything mounted behind it, and
+  // window-capture already guarantees that ahead of the registry's window-
+  // bubble listener.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -79,6 +88,29 @@ export default function PreferencesDialog() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, setOpen]);
 
+  // R1: focus-in, Tab trap, restore-to-opener, PLUS a deliberate landing spot
+  // — this dialog renders its own tab chrome (`.qzk-prefs-nav`), and that nav
+  // is a row of plain `<div>`s with no `tabindex` (a pre-existing, separate
+  // gap this slice does not touch: they were mouse-only before this pass and
+  // are mouse-only after it — the trap changes nothing about their
+  // reachability either way). Landing on the shared hook's raw default (the
+  // FIRST focusable element in DOM order) would put focus on the "✕" close
+  // button, which works but tells a keyboard/screen-reader user nothing about
+  // what this dialog is actually for. Instead, this effect focuses the first
+  // focusable control INSIDE THE ACTIVE PANE (`.qzk-prefs-pane`) — the
+  // setting a user opening Preferences almost certainly came for — and runs
+  // BEFORE `useDialogFocus` below so its own default is already satisfied and
+  // skips (same "already inside `ref`" rule ParamDialog's `autoFocus` and
+  // HelpDialog's search-box focus rely on). The Keyboard tab has no focusable
+  // content at all (a static shortcut table), so there `focusablesIn` finds
+  // nothing and this is a no-op — `useDialogFocus` then falls back to the
+  // close button, which is the correct behaviour for that one pane.
+  useEffect(() => {
+    if (!open) return;
+    focusablesIn(paneRef.current)[0]?.focus();
+  }, [open]);
+  useDialogFocus(dialogRef, open);
+
   if (!open) return null;
   const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
@@ -87,11 +119,14 @@ export default function PreferencesDialog() {
       <div
         className="qzk-prefs"
         role="dialog"
-        aria-label="Preferences"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="qzk-prefs-head">
-          <span className="ttl">Preferences</span>
+          <span className="ttl" id={titleId}>Preferences</span>
           <button className="qzk-prefs-x" title="Close (Esc)" onClick={() => setOpen(false)}>
             ✕
           </button>
@@ -108,7 +143,7 @@ export default function PreferencesDialog() {
               </div>
             ))}
           </nav>
-          <div className="qzk-prefs-pane">
+          <div className="qzk-prefs-pane" ref={paneRef}>
             {tab === "Appearance" && (
               <>
                 <PrefRow label="Theme">

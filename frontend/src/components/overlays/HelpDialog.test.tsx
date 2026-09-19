@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import HelpDialog from "./HelpDialog";
@@ -352,5 +353,42 @@ describe("Help search excludes per-entity commands (review round)", () => {
     );
     searchFor("guarded");
     expect(titleShown("Do a guarded thing")).toBe(true);
+  });
+});
+
+// R1 (P3.3): focus-in/Escape/restore driven via userEvent at
+// document.activeElement (not fireEvent.keyDown on the box) — the bug class
+// here is "the handler exists but the key never reaches it".
+describe("HelpDialog focus-in / Escape / restore (P3.3 R1)", () => {
+  it("moves focus into the Search box when the Topics tab is showing (pre-existing behaviour, now composed with the shared trap/restore)", () => {
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    expect(screen.getByLabelText("Search help")).toHaveFocus();
+  });
+
+  it("falls back to the shared hook's default — the first tab button — on any OTHER tab, since nothing else claims focus there", () => {
+    useHelp.setState({ open: false, section: "shortcuts", query: "" });
+    render(<HelpDialog />);
+    act(() => useHelp.setState({ open: true }));
+    expect(screen.getByRole("tab", { name: "Topics" })).toHaveFocus();
+  });
+
+  it("Escape (via the keyboard) closes it and gives focus back to the opener", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button type="button">opener</button>
+        <HelpDialog />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "opener" });
+    opener.focus();
+
+    act(() => useHelp.getState().openHelp());
+    expect(opener).not.toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(useHelp.getState().open).toBe(false);
+    expect(opener).toHaveFocus();
   });
 });
