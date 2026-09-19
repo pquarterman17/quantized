@@ -35,6 +35,8 @@ import { forceHydrate, pruneHydration, useWindowHydration } from "../../store/wi
 import { plotWindowDatasetId, plotWindowView } from "../../store/windowDocuments";
 import { DATASET_DND } from "../Library/dnd";
 import PlotStage from "../Stage/PlotStage";
+import { MapWindow, WorksheetWindow } from "./DocumentWindow";
+import PlotWindowFrame from "./PlotWindowFrame";
 // E-c1 bundle pass: a fresh session has exactly one (focused) window, so the
 // unfocused-window renderer — which drags in the whole alt-modes cluster
 // (BackgroundAltModes -> useStatStage/StatStageCanvas/statRender) — loads on
@@ -48,9 +50,13 @@ const BackgroundPlotWindow = lazy(() => import("./BackgroundPlotWindow"));
 // inherits their caveat: a `lazy()` boundary has no error reporting of its own
 // (plans/BUGS_AND_ISSUES.md UX-003 owns that gap for all of them).
 const PanelPlotWindow = lazy(() => import("./PanelPlotWindow"));
-import { MapWindow, WorksheetWindow } from "./DocumentWindow";
-import PlotWindowFrame from "./PlotWindowFrame";
-import SnapshotPlotWindow from "./SnapshotPlotWindow";
+
+// Bundle diet slice 5 (plans/BUNDLE_HEADROOM.md): the frozen-snapshot window
+// renderer, same class as the two seams above. `kind: "snapshot"` is reached
+// only after the user takes a snapshot in-session, or on opening a project
+// that already held one (a persisted window field, so that restore pays the
+// chunk fetch on its first paint) — never on the default first paint.
+const SnapshotPlotWindow = lazy(() => import("./SnapshotPlotWindow"));
 
 export default function WindowCanvas() {
   const plotWindows = useWindowsStore((s) => s.plotWindows);
@@ -188,7 +194,9 @@ export default function WindowCanvas() {
                 // Item 11: a snapshot window renders its FROZEN bundle
                 // statically — never focused (the store guarantees it), so
                 // this branch is checked before the focused dispatch.
-                <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
+                <Suspense fallback={null}>
+                  <SnapshotPlotWindow frozen={win.snapshot} view={win.view} bg={win.bg} />
+                </Suspense>
               ) : win.kind === "worksheet" ? (
                 // Item 17: a document window mounts the SAME component the
                 // stage tab does, live-bound to ITS dataset — also never the

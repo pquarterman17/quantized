@@ -1,10 +1,13 @@
-// COLD-path DOM coverage for the two RENDER seams taken out of the eager
-// bundle on 2026-09-18 (`plans/BUNDLE_HEADROOM.md` slice 3):
+// COLD-path DOM coverage for the RENDER seams taken out of the eager bundle on
+// 2026-09-18 (`plans/BUNDLE_HEADROOM.md` slice 3) and 2026-09-19 (slice 5):
 //
 //   * `components/windows/PanelPlotWindow.tsx` — the `win.kind === "panel"`
-//     renderer, now `lazy()` in WindowCanvas beside BackgroundPlotWindow; and
+//     renderer, now `lazy()` in WindowCanvas beside BackgroundPlotWindow;
 //   * `components/Stage/PolarStage.tsx` — PlotStage's third runtime-conditional
-//     alternate mode, now `lazy()` beside MultiPanelStage/StatStage.
+//     alternate mode, now `lazy()` beside MultiPanelStage/StatStage; and
+//   * `components/windows/SnapshotPlotWindow.tsx` (slice 5) — the
+//     `win.kind === "snapshot"` renderer, the same dispatch branch one line
+//     from the panel one.
 //
 // `src/architecture.test.ts`'s SEAMS list holds the STATIC half (nothing may
 // value-import either, and the loader must reach it with a dynamic `import()`);
@@ -47,6 +50,26 @@ const { created, MockUPlot } = vi.hoisted(() => {
   return { created, MockUPlot };
 });
 vi.mock("uplot", () => ({ default: MockUPlot }));
+
+// Records whether `SnapshotPlotWindow` has actually been IMPORTED. The DOM
+// assertions below prove the seam SUSPENDS, but not that the gate is real:
+// `win.kind === "snapshot" && win.snapshot ?` sits in a ternary chain, and the
+// cheapest way to break the seam is to widen the branch rather than delete it.
+// The recorder says precisely which chunks a render asked for. Same
+// `vi.hoisted` pattern as `Library/lazySectionSeams.test.tsx`; the factory runs
+// once, on first import, and hands back the real module so the window still
+// renders for real.
+const { loaded, track } = vi.hoisted(() => {
+  const loaded = new Set<string>();
+  const track =
+    (name: string) =>
+    async (importOriginal: () => Promise<Record<string, unknown>>): Promise<Record<string, unknown>> => {
+      loaded.add(name);
+      return await importOriginal();
+    };
+  return { loaded, track };
+});
+vi.mock("./SnapshotPlotWindow", track("SnapshotPlotWindow"));
 
 class MockResizeObserver {
   observe(): void {}
@@ -144,5 +167,54 @@ describe("polar mode — chunk-deferred renderer", () => {
     await waitFor(() => expect(container.querySelector('[title="Back to a cartesian plot"]')).not.toBeNull());
     // …and it really is the polar tree, not the cartesian one falling through.
     expect(created).toHaveLength(0);
+  });
+});
+
+describe("snapshot window — chunk-deferred renderer (slice 5)", () => {
+  // A frozen bundle with a distinctive y column, the same fixture shape
+  // `SnapshotPlotWindow.test.tsx` uses, so the uPlot the recorder captures is
+  // unambiguously the snapshot's.
+  const FROZEN = {
+    payload: {
+      data: [
+        [0, 1, 2],
+        [99, 98, 97],
+      ],
+      series: [{ label: "a", unit: "" }],
+      xLabel: "x",
+      xUnit: "",
+    },
+    styleList: null,
+    labelList: null,
+    errorBars: [],
+    plotted: [0],
+    colorByColumns: [],
+    hidden: null,
+  } as unknown as NonNullable<PlotWindow["snapshot"]>;
+
+  it("renders its frozen bundle only after the chunk resolves", async () => {
+    // The gate half first, and it is a claim about every test above too: none
+    // of them put a `kind: "snapshot"` window on the canvas, so nothing should
+    // have requested this chunk yet. A widened branch would have.
+    expect([...loaded]).not.toContain("SnapshotPlotWindow");
+
+    useApp.setState({
+      plotWindows: [
+        win({ id: "w1", kind: "snapshot", title: "Frozen", datasetId: null, winState: "normal", snapshot: FROZEN }),
+      ],
+      // A snapshot window is never the focus target (the store guarantees it).
+      focusedWindowId: null,
+    });
+
+    const { container } = render(<WindowCanvas />);
+    // The seam itself: the frame is up, its CONTENT is not — `fallback={null}`
+    // while the chunk is in flight, so no uPlot has been constructed.
+    expect(container.querySelectorAll(".qzk-plotwin").length).toBeGreaterThan(0);
+    expect(created).toHaveLength(0);
+
+    await waitFor(() => expect(created.length).toBeGreaterThan(0));
+    expect([...loaded]).toContain("SnapshotPlotWindow");
+    // …and it drew the FROZEN bundle, not a live dataset.
+    expect(JSON.stringify(created[0]?.data)).toContain("99");
   });
 });

@@ -2585,6 +2585,44 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Stage/PlotStageMenus.tsx",
       call: 'import("./PlotContextMenu")',
     },
+    // ── SLICE 5 (2026-09-19, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // One content-gated render seam, measured net −936 B.
+    //
+    // This slice's limit is NOT candidate scarcity. The ratchet in
+    // `scripts/check-bundle-size.mjs` is two-sided: it FAILS the build below
+    // `EAGER_JS_BUDGET - SLACK` (920,400 − 40,000 = 880,400 B) to force a
+    // pin-down, so with the parent at 889,475 B only 9,075 B was recoverable
+    // here without moving the pin. Three further seams were built and
+    // measured and are recorded in the plan (`PlotToolbar` −3,644 B and
+    // `CommandPalette` −2,935 B, both banked for a slice allowed to ratchet
+    // the pin DOWN; `DocumentWindow` +221 B, rejected outright). A fourth,
+    // `PlotLegend`, measured −5,881 B — the largest win on the tree — and was
+    // rejected anyway on USER-VISIBLE COST: the legend is part of the plot's
+    // meaning, and deferring it makes the first plot of a session (and every
+    // restore with `showLegend` on) paint for one chunk fetch before the
+    // legend appears. Bytes that the 880,400 B floor means the campaign
+    // cannot bank for anything are not worth a visible first-paint artifact
+    // on a core surface. Do not re-add it without that trade being re-argued.
+    //
+    // `components/windows/SnapshotPlotWindow.tsx` is the `win.kind ===
+    // "snapshot"` branch, the same shape as `PanelPlotWindow` above: a frozen
+    // snapshot window exists only after the user takes one in-session, or on
+    // opening a project that already held one (`kind` is a persisted window
+    // field, so that restore pays the fetch on its first paint) — never on the
+    // default first paint, and nothing perceptible on either path. It drags
+    // nothing out with it: −936 B against a 1,169 B bound, 80% realised,
+    // which is the component-seam figure slice 4's rule predicts.
+    //
+    // NOTE for anyone re-deriving these numbers: −936 B is this seam's delta
+    // measured ALONE against the parent. Measured instead as a marginal
+    // addition on top of the (rejected) `PlotLegend` tree it reads −585 B —
+    // two seams landing in the same build share chunk-boundary glue, so a
+    // marginal figure is not the seam's own delta. The plan records both.
+    {
+      module: "/components/windows/SnapshotPlotWindow.tsx",
+      loader: "/components/windows/WindowCanvas.tsx",
+      call: 'import("./SnapshotPlotWindow")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2780,6 +2818,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  `components/Stage/resultChipsVisible.ts`, the shared gate predicate).
    *  None of the six is a seam itself, so only reachability can hold this
    *  line. */
+  /** SLICE 5 (2026-09-19) adds nothing here: its one seam
+   *  (`SnapshotPlotWindow`) is a prop-forwarding shell whose every import is
+   *  kept eager by something else, so it dragged no module out with it.
+   *  Measured by the same eager walk this block runs: 393 -> 392 modules of a
+   *  926-module corpus, which is that seam alone. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
