@@ -7073,6 +7073,22 @@ window-bubble consumer from killing a MODAL's claim"
 (`lib/escapeStack.test.ts`) and "a window-bubble claimant behind the dialog
 cannot swallow the dialog's Escape" (`stackedDialogEscape.test.tsx`).
 
+**A deliberate DECLINE traps; a THROW does not** (re-review). No dialog
+declines today — all ten `return true` unconditionally — but `offer()` catches
+a thrown handler, and folding that into "declined" would have made one broken
+dialog disable Escape for the whole app while it stayed mounted. `offer()` now
+distinguishes the two: the deferred walk still treats a throw as a decline (it
+has no trap to lift), while under a modal a throw lifts the trap and the layers
+below get the key. Pinned both ways in `lib/escapeStack.test.ts`.
+
+**Known residual this fix makes worse, recorded not guessed at:** an Escape
+pressed mid-IME-composition. `isComposing` is checked nowhere in the tree, so
+this is pre-existing, but the synchronous `preventDefault()` now suppresses the
+composition's own cancel as well as closing the dialog. Booked as P3.3
+residual **R14**, explicitly UNVERIFIED — neither jsdom nor headless Chromium
+can drive a real IME, and an unmeasured keyboard-dispatch change is what
+rounds 2–5 each regressed on.
+
 **The four editing-target landing spots, measured individually** (jsdom, real
 components, `user.keyboard("{Escape}")` at the dialog's own landing spot, one
 test each, each in its own dialog's test file):

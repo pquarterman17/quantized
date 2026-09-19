@@ -3800,10 +3800,11 @@ covers a much smaller subset and guards focus on Analyze.
   fixed across nine rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
   **round 8 NARROWED R1** after measuring that its Escape half was closed on
   a false claim, and filed the measured defect as **BUG-018**; **round 9 fixed
-  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: eleven
-  residuals remain (R2–R12 below), each a distinct, smaller gap — none of them
-  a dialog with no keyboard dismissal at all, which is what the audit
-  originally found.
+  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: twelve
+  residuals remain (R2–R12 and R14 below — R13 is closed, and R14 was opened by
+  the round-9 re-review), each a distinct, smaller gap — none of them a dialog
+  with no keyboard dismissal at all, which is what the audit originally
+  found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -4255,6 +4256,30 @@ covers a much smaller subset and guards focus on Analyze.
     state waits, not mock-call waits, so `architecture.test.ts`'s weak-wait
     ratchet is unmoved.
 
+  - **R14** (round 9 re-review) — **an Escape pressed while an IME composition
+    is in flight now closes the dialog AND suppresses the composition's own
+    cancel.** `isComposing` is checked NOWHERE in this tree (measured: zero
+    hits across `frontend/src`), so this is pre-existing — but the round-9
+    delta makes it strictly worse, and that is recorded here rather than left
+    in a review thread. Before it, `modal` acted on the deferred walk and
+    never called `preventDefault()`, so Escape's default composition-cancel
+    survived and the IME behaved normally; the synchronous claim now marks the
+    event, so the candidate window is denied its own cancel and the dialog
+    closes underneath it. The correct shape is the standard one — bail out of
+    the dispatcher on `event.isComposing` (or `keyCode === 229`) so the key
+    belongs to the IME, exactly as `isEditingTarget` gives it to a text field
+    — and it would have to be applied to the `modal` bypass too, since a
+    composition is happening IN an editing target.
+
+    **UNVERIFIED, deliberately.** Neither jsdom nor headless Chromium here can
+    drive a real IME, and `KeyboardEvent.isComposing` cannot be forged through
+    Playwright's input pipeline, so a fix could be written but not measured —
+    and an unmeasured keyboard-dispatch change is what rounds 2–5 each
+    regressed on. Booked for someone with a real IME (Japanese/Chinese/Korean
+    input on Windows or macOS) rather than guessed at. Scope: any Escape
+    pressed mid-composition anywhere in the app; the ten backdrop dialogs are
+    where the new `preventDefault()` makes it visible.
+
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because
     `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
@@ -4617,9 +4642,38 @@ covers a much smaller subset and guards focus on Analyze.
     ARIA surface. Two `aria-modal="true"` dialogs can still be mounted at once
     and `aria-modal` still hides the toaster and status-bar live regions;
     R12's wording below stands unaltered.
-  - `escapeStack.ts` 324 → 377 lines (ceiling 500). Bundle: 888,754 B eager
-    against the parent `8f79207d`'s 888,562 B (+192 B), 221 chunks either
-    side — no seam moved and the pin is untouched.
+  - `escapeStack.ts` 324 → **465** lines (ceiling 500 — 35 lines of headroom,
+    worth watching: the next substantial change to this dispatcher should
+    extract a sibling rather than grow it). Bundle: **888,757 B** eager
+    against the parent `8f79207d`'s 888,562 B (+195 B), 221 chunks either
+    side — no seam moved and the pin is untouched. (Both figures were stale in
+    an earlier draft of this record — 377 lines and 888,754 B, measured before
+    the two review rounds below; corrected here from a fresh `npm ci` build.)
+  - **Re-review (2026-09-19), before landing.** No inversion in the sync-claim
+    delta — confirmed in real Chromium for the mid-drag case (Preferences
+    opened mid-drag: Escape ① closes the dialog only and the tool stays armed,
+    Escape ② reverts the tool), held-Escape, the native `<select>` popup and
+    `SymbolPalette` (which claims on document-bubble, before the dispatcher,
+    so it cannot race the synchronous claim). Four findings, all closed here:
+    - **A modal that DECLINES traps the key; a modal that THROWS does not.**
+      `offer()` folded an exception into "declined", and once a decline
+      started trapping that meant one throwing dialog made Escape dead
+      app-wide for as long as it was mounted — reintroducing, through the
+      back door, the very defect review NIT 5 added that catch to prevent.
+      `offer()` now returns `claimed`/`declined`/`threw`; the walk still
+      treats a throw as a decline (it has no trap to lift), and under a modal
+      a throw lifts the trap so the layers below get the key. Both halves
+      pinned, and the `offer()` header's "the surface below still gets its
+      turn" is narrowed to where it is actually true.
+    - **The trapped return no longer leaked a stale walk.** It skipped the
+      `clearTimeout` the fall-through path runs, so a walk armed by keydown ①
+      survived keydown ② and fired a macrotask later, handing the key to a
+      surface BENEATH the modal — precisely what the trap exists to prevent.
+      Needs two keydowns in one macrotask, so it is ~unreachable from real
+      input; fixed and pinned regardless.
+    - **The IME residual is booked as R14** rather than guessed at.
+    - **Stale numbers in this record corrected** (see the bullet above).
+
   - **Review round (2026-09-19), before landing.** One behavioural finding —
     the deferred-modal regression above — plus four doc/gating defects, all
     fixed on top: two orphaned comments that still said this fix was

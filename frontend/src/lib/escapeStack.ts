@@ -157,7 +157,10 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *  header said "by definition, TRAPS Escape", which is more than the code can
  *  deliver):
  *   - it outranks every other surface in this registry, and nothing below a
- *     modal is offered the key — whether the modal claims it or declines it;
+ *     modal is offered the key — whether the modal claims it or DELIBERATELY
+ *     declines it. A modal whose handler THROWS is the one exception: that is
+ *     a bug, not a decline, and it lets the key fall through to the layers
+ *     below rather than making Escape dead app-wide (round 9 review);
  *   - its claim is resolved SYNCHRONOUSLY at keydown and marks the event with
  *     `preventDefault()`, so any listener that honours `defaultPrevented` and
  *     runs after this dispatcher stands down. `usePeakWizard`'s marker-edit
@@ -194,9 +197,10 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *  offered, and it stays correct if a layer is ever added above this one.
  *
  *  The bypass is paired with the rule above — nothing below a modal is
- *  offered the key — so a modal that DECLINES cannot hand a text field's
- *  Escape down to a workspace or the app fallbacks, which are the surfaces
- *  the bypassed guards existed to protect.
+ *  offered the key — so a modal that DELIBERATELY DECLINES cannot hand a text
+ *  field's Escape down to a workspace or the app fallbacks, which are the
+ *  surfaces the bypassed guards existed to protect. A modal whose handler
+ *  THROWS is not a decline and does not trap: see `Offered`.
  *
  *  ROUND 9 REVIEW. This layer was first built on the DEFERRED walk, and that
  *  was a measured behavioural regression against the per-dialog
@@ -261,19 +265,31 @@ function orderInnermostFirst(): Entry[] {
   );
 }
 
-/** Run one surface's handler. Returns true if it CLAIMED the keystroke.
+/** What one surface did with the keystroke.
+ *
+ *  `threw` is deliberately NOT folded into `declined` (round 9 review,
+ *  finding 1). The two are the same thing everywhere except under a modal,
+ *  where they have to differ: a modal's decline TRAPS the key, and a throw is
+ *  a bug — folding them together meant one broken dialog made Escape dead for
+ *  the whole app for as long as it stayed mounted, which is the exact defect
+ *  review NIT 5 introduced this catch to prevent. */
+type Offered = "claimed" | "declined" | "threw";
+
+/** Run one surface's handler.
  *
  *  A handler that throws must not eat the key for everything beneath it
- *  (review NIT 5): without this, one broken surface made Escape dead for the
- *  whole app for as long as it stayed mounted, and the exception escaped the
- *  `setTimeout` outside any React error boundary. Treated as a decline, so the
- *  surface below still gets its turn. */
-function offer(entry: Entry, event: KeyboardEvent): boolean {
+ *  (review NIT 5): without this catch, the exception escaped the `setTimeout`
+ *  outside any React error boundary and the walk stopped dead. In the walk a
+ *  throw is treated exactly like a decline and the surface below still gets
+ *  its turn. Under a modal it is NOT (round 9 review, finding 1): a deliberate
+ *  decline traps the key — that is what a modal is for — but a throw lifts the
+ *  trap and lets the layers below have it. See `onKeyDown`. */
+function offer(entry: Entry, event: KeyboardEvent): Offered {
   try {
-    return entry.handler(event);
+    return entry.handler(event) ? "claimed" : "declined";
   } catch (error) {
     console.error("escapeStack: a surface handler threw; continuing the walk", error);
-    return false;
+    return "threw";
   }
 }
 
@@ -304,7 +320,9 @@ function walk(event: KeyboardEvent): void {
     // (round 4, finding 4). Skip the dead entry and carry on — the walk that
     // is already running is what removed it.
     if (!stack.includes(entry)) continue;
-    if (offer(entry, event)) return;
+    // A throw is a decline here, as it has been since review NIT 5 — the walk
+    // has no trap to lift, so the surface below simply gets its turn.
+    if (offer(entry, event) === "claimed") return;
   }
 }
 
@@ -353,11 +371,19 @@ function onKeyDown(event: KeyboardEvent): void {
   const resolvesNow = (layer: EscapeLayer): boolean =>
     trapped ? layer === TRAPS_ESCAPE : layer === RESOLVES_AT_KEYDOWN;
   let rest = 0;
+  // Set only under a modal, and only by an EXCEPTION — never by a deliberate
+  // decline. It lifts the trap below (round 9 review, finding 1).
+  let modalThrew = false;
   if (!event.defaultPrevented) {
     while (rest < ordered.length && resolvesNow(ordered[rest].layer)) {
       const entry = ordered[rest];
       rest++;
-      if (!offer(entry, event)) continue; // nothing live: the layer declines
+      const outcome = offer(entry, event);
+      if (outcome === "threw") {
+        modalThrew = trapped;
+        continue;
+      }
+      if (outcome === "declined") continue; // nothing live: the layer declines
       // Claimed and already acted on. Mark the KEYSTROKE as taken, exactly as
       // the deferred walk's claim path does by re-reading `defaultPrevented`
       // (round 6, finding 1). Returning without this left the key un-marked
@@ -377,9 +403,25 @@ function onKeyDown(event: KeyboardEvent): void {
       return;
     }
   }
-  // Every modal declined (or something upstream had already claimed the key).
-  // Nothing BELOW a modal may act on this keystroke, so no walk is armed.
-  if (trapped) return;
+  // Every modal DELIBERATELY declined (or something upstream had already
+  // claimed the key). Nothing BELOW a modal may act on this keystroke, so no
+  // walk is armed. A modal that THREW does not get here — a bug in one dialog
+  // must not make Escape dead app-wide, so `modalThrew` lets the key fall
+  // through to `ordered.slice(rest)`, which is everything below the modals
+  // (round 9 review, finding 1).
+  if (trapped && !modalThrew) {
+    // …and a walk armed by an EARLIER keystroke in this same macrotask is void
+    // (round 9 review, finding 2 — a regression this return introduced against
+    // the version that fell through to the `clearTimeout` below). Left armed,
+    // it fired one macrotask later and handed THIS key to a surface beneath
+    // the modal: exactly the leak the rule above exists to prevent.
+    if (pending !== null) {
+      clearTimeout(pending);
+      pending = null;
+      pendingOrder = [];
+    }
+    return;
+  }
 
   const snapshot = ordered.slice(rest);
   if (snapshot.length === 0) return;

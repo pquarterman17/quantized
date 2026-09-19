@@ -529,6 +529,68 @@ describe("escapeStack — a synchronous claim consumes the keystroke", () => {
   });
 });
 
+describe("escapeStack — a modal DECLINES vs a modal THROWS (round 9 review)", () => {
+  it("a deliberate decline traps the key: nothing below the modal acts", async () => {
+    // The point of a modal. A decline is a decision — "not mine, and not
+    // anyone's behind me either" — so a live gesture and a workspace beneath
+    // it are never offered the key, and the keystroke goes unmarked.
+    const log: string[] = [];
+    register("workspace", true, log, "workspace");
+    register("gesture", true, log, "gesture");
+    register("modal", false, log, "modal");
+    const event = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
+    window.dispatchEvent(event);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(log).toEqual(["modal"]);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("a THROWN exception is NOT a decline: the surface below still gets its turn", async () => {
+    // A handler that throws is a bug, and a bug in one dialog must not make
+    // Escape dead for the whole app for as long as that dialog is mounted —
+    // which is exactly what folding a throw into "declined" did once the
+    // decline started trapping. The trap is lifted, the key falls through to
+    // the layers below the modals, and the console carries the exception.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const log: string[] = [];
+    register("workspace", true, log, "workspace");
+    cleanups.push(
+      pushEscapeSurface("modal", () => {
+        log.push("modal-throws");
+        throw new Error("boom");
+      }),
+    );
+    try {
+      await escape();
+      expect(log).toEqual(["modal-throws", "workspace"]);
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a trapped keystroke voids a walk armed earlier in the SAME macrotask", async () => {
+    // Round 9 review, finding 2. The trapped return skipped the `clearTimeout`
+    // the fall-through path runs, so a walk armed by keydown #1 survived
+    // keydown #2 and fired one macrotask later — handing the key to a surface
+    // BENEATH the modal, which is the leak the trap exists to prevent.
+    const log: string[] = [];
+    register("workspace", true, log, "workspace");
+    // Keydown #1 with no modal: arms a walk for the workspace.
+    fireEvent.keyDown(window, { key: "Escape" });
+    // Keydown #2 in the SAME macrotask, now with a declining modal on top.
+    const declining = pushEscapeSurface("modal", () => false);
+    cleanups.push(declining);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(log).toEqual([]); // NOT ["workspace"]
+  });
+});
+
 describe("escapeStack — only the keydown CLAIMANT can swallow the key by dying", () => {
   it("walks PAST a snapshot entry that was never the claimant and died in the gap", async () => {
     // Round 5 stopped the walk for ANY snapshot entry that was gone by walk
