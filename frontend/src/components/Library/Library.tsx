@@ -228,7 +228,18 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         <LibraryTree rows={rows} onFilterTag={setQuery} panelRef={panelRef} />
       </Suspense>
     );
-  } else {
+  } else if (shown.length > 0) {
+    // This branch is unreachable in today's app (PR C: `rows.length === 0`
+    // implies `datasets.length === 0`, which implies `shown.length === 0`
+    // too — see LibraryFlatRows.tsx's own header), but the gate is kept
+    // explicit and cheap rather than assumed. `shown` is already computed
+    // above, for the same reason `HomeScreen`'s own `rows.length === 0`
+    // check, one line below, is already free — no new derived state. Without
+    // this gate, mounting the branch on `rows.length === 0` alone would
+    // fetch LibraryFlatRows' chunk (and DatasetRow/datasetRowMenu/Sparkline
+    // with it) on every cold start to render zero rows — a real, avoidable
+    // round trip on exactly the surface this seam's cost argument rests on
+    // being free.
     body = (
       <Suspense fallback={null}>
         <LibraryFlatRows
@@ -242,6 +253,8 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         />
       </Suspense>
     );
+  } else {
+    body = null;
   }
 
   return (

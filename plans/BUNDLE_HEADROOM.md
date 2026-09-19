@@ -18,14 +18,17 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-19, after slice 6):** landed tip **875,428 B**
-eager against parent `8f79207d`'s **888,562 B** (**−13,134 B**, the largest
-single-seam win of the campaign), pin LOWERED to **876,452 B**
-(`measured + 1,024`), leaving **1,024 B of headroom** against the new pin —
-by design: slice 6 is a deliberate diet-and-lock-in pass, so the gain is not
-left sitting as spendable slack (rule 3's "deliberate diet pass" path, not
-the forced `total < budget - SLACK` path — see slice 6's own section). The
-next slice starts from a LOWER pin, not from banked headroom.
+**Current state (2026-09-19, after slice 6, round 2 following adversarial
+review):** landed tip **875,445 B** eager against parent `8f79207d`'s
+**888,562 B** measured bytes (**−13,117 B**, the largest single-seam win of
+the campaign), pin LOWERED from the PRIOR PIN of **920,400 B** to
+**876,469 B** (`measured + 1,024`), leaving **1,024 B of headroom** against
+the new pin — by design: this slice's own forced-floor check (re-run
+unmodified against the unmoved 920,400 pin) already FAILED before the pin
+was touched, so the lower was compelled, not merely a deliberate discretionary
+diet-and-lock-in choice (round 1 said the opposite; see slice 6's own
+section for the correction). The next slice starts from a LOWER pin, not
+from banked headroom.
 
 **Earlier current state (2026-09-19, after slice 5):** landed tip **888,562 B**
 eager against parent `cee0494f`'s **889,498 B** (**−936 B**), leaving
@@ -949,19 +952,34 @@ premise is "the win is small — verify before doing it" was the wrong trade
 against two component seams with clean gates. It stays on the table for a slice
 willing to split the module.
 
-### Slice 6 — one seam (`DatasetRow` behind a wrapper), pin ratcheted DOWN — **DONE (2026-09-19)**
+### Slice 6 — one seam (`DatasetRow` behind a wrapper), pin ratcheted DOWN — **DONE (2026-09-19, round 2 after adversarial review)**
 
-**Measured net eager delta −13,134 B — pin LOWERED 888,562 -> 876,452 B**
+**Measured net eager delta −13,117 B — pin LOWERED 920,400 -> 876,469 B**
+
+**Corrected after adversarial review (round 2) — read this before the rest of
+the section, which is otherwise the round-1 record with in-place fixes:**
+the PRIOR PIN was **920,400**, not 888,562 as round 1 wrote — 888,562 is the
+PARENT COMMIT's measured eager bytes, a different quantity, and conflating
+them was the section's own error. Separately, round 1's claim that the
+forced `total < EAGER_JS_BUDGET - SLACK` floor check "would not itself have
+fired" was FALSE: re-run unmodified against this commit's `dist/`, that
+check DOES fail against the unmoved 920,400 pin (`FAIL — eager JS is
+854.9 kB, well under the 898.8 kB budget. Lower EAGER_JS_BUDGET … to
+915428`) — this slice was COMPELLED to lower the pin, not merely authorized
+to. The chosen 876,469 is still correct and stricter than the script's own
+915,428 floor; only the narrative was wrong. A third defect (below, "the
+seam is not free") changed the actual bytes by +17 (875,428 -> 875,445),
+which is folded into the delta and pin above. See `check-bundle-size.mjs`'s
+own history entry for the corrected numbers in full.
 
 The first decision, per the tail this slice inherited, was whether it is
 authorized to ratchet `EAGER_JS_BUDGET` DOWN at all (a pin-down slice or
-nothing). It is: `check-bundle-size.mjs`'s own rule 3 gives a deliberate diet
-pass the `measured + 1,024` path independent of whether the forced
-`total < budget - SLACK` check would itself have fired. It landed
-13,134 B under the parent, well inside the 40,000 B `SLACK` band (so the
-forced floor never tripped), and the pin was lowered anyway so the gain is
-locked in rather than left as spendable slack for the next unrelated feature
-— exactly the trade the tail below asked slice 6 to make explicit.
+nothing) — moot after the correction above: the forced floor check already
+demanded a lower pin regardless of authorization. The pin was set to
+`measured + 1,024` (876,469) rather than the script's own suggested floor
+(915,428) so the gain is locked in tightly rather than left as spendable
+slack for the next unrelated feature — exactly the trade the tail below
+asked slice 6 to make explicit, now for the right reason.
 
 #### Ranking: the `PlotLegend` ruling first, bytes second
 
@@ -984,21 +1002,24 @@ writing, before building anything:
   (and accepted the cost there only because it was, at the time, the single
   largest win on the tree). Rejected without a rebuild.
 - **`DatasetRow` behind a wrapper** is NOT disqualified. Its target is
-  Library.tsx's own flat-list fallback body — the `else` branch taken only
-  when `query.trim() === "" && rows.length === 0`. Investigating that gate
-  (not merely trusting the "component seam" label) found it is stronger than
-  a persisted-restore-only claim: PR C's own invariant
+  Library.tsx's own flat-list fallback body — the branch taken only when
+  `query.trim() === "" && rows.length === 0`. Investigating that gate (not
+  merely trusting the "component seam" label) found it is stronger than a
+  persisted-restore-only claim: PR C's own invariant
   (`lib/libraryHierarchy.ts`'s `buildLibraryHierarchy` unconditionally adds a
   hierarchy worksheet node for every dataset, and `flattenLibraryHierarchy`
   always includes every root-level node regardless of expansion state) means
   `rows.length === 0` IMPLIES `datasets.length === 0`, which means `shown`
   (filtered from `datasets`) is empty too — so this branch renders zero
   `DatasetRow`s on every path in today's app, first paint AND restore
-  included (confirmed: no test in the suite exercises `rows.length === 0`
-  with `datasets.length > 0`, and none could — the hierarchy build makes it
-  impossible). Deferring it is not merely low-cost, it is free: nothing a
-  user can see depends on the chunk loading synchronously, because nothing
-  was ever painted there.
+  included. Round-1 confirmed this only by trace and by the absence of a
+  test exercising the impossible combination; round 2's adversarial review
+  went further and PROBED it (dangling `workbookId`, dangling `folderId`,
+  duplicate ids, cyclic/self-parent folders, an empty id, collapsed
+  containers) via `vite-node`, and `rows.length` was ≥ 1 in every case.
+  **Round 1 then overstated the cost claim: "deferring it is free" was true
+  of the RENDERED content, but not of the ORIGINAL, un-gated code** — see
+  "The seam is not free" fix below, applied in this round.
 
 Also checked against the `lib`-vs-component rule (slice 3/4): `DatasetRow`'s
 seam is a COMPONENT seam (a thin new `LibraryFlatRows.tsx` wrapper, the
@@ -1019,27 +1040,78 @@ flat-list-fallback body (moved out verbatim — the `row()` helper and its
 JSX, previously inline in Library.tsx), and `Library.tsx` is its only
 importer, reached only via `lazy(() => import("./LibraryFlatRows"))`.
 
+#### The seam is not free — round 2 fix (MED, adversarial review)
+
+Round 1's gate on the `<Suspense>` boundary was `rows.length === 0` alone —
+the SAME condition the branch's own analysis above traces, but not the same
+as `shown.length > 0`. In the ONE state that actually reaches this branch
+(an empty library — cold start, or a first run with nothing imported yet),
+`rows.length === 0` is true and the round-1 code fetched
+`LibraryFlatRows`'s chunk (and `DatasetRow`/`datasetRowMenu`/the
+preview/Sparkline chunks with it) to render zero rows. Before this seam
+existed those bytes were already sitting in the entry chunk, paid once, at
+parse time, with no network round trip; after the seam, cold start pays a
+NEW chunk fetch for content that was never going to render — a real cost,
+and on exactly the surface ("first paint is free") the ranking above argued
+was costless.
+
+**Fix:** gate the `<Suspense>` boundary on `shown.length > 0` too (the same
+condition `HomeScreen`, immediately below in the JSX, already computes for
+free — no new derived state). `Library.tsx`'s branch chain is now `} else
+if (shown.length > 0) { … } else { body = null; }`. Cold start (empty
+library) now renders `body = null` and never touches the chunk;
+`HomeScreen` renders the same as before either way.
+
+Sabotage: reverted the gate to plain `else` (round 1's shape) and re-ran the
+seam test — `libraryFlatRowsSeam.test.tsx`'s "never fetches on any REAL
+state" test went RED at `expected [ 'LibraryFlatRows' ] to not include
+'LibraryFlatRows'`, at the exact assertion that pins the true-empty state.
+Reverted the sabotage; green again.
+
+Re-measured (not assumed unchanged) after the fix: the gate is real,
+non-comment code, so it moved the eager byte count by +17 B (875,428 ->
+875,445) — folded into the Measurement table and the pin above.
+
 #### Measurement
 
 Both built in this worktree after `npm ci`, with `node_modules/.vite` wiped
 before EVERY build; exact bytes out of `dist/index.html` (not the rounded kB
-`check-bundle-size.mjs` prints):
+`check-bundle-size.mjs` prints). The PRIOR PIN was **920,400 B** — 888,562
+below is the parent's MEASURED bytes, a different quantity (round 1's own
+history entry conflated them; corrected here and in `check-bundle-size.mjs`):
 
 | tree | SHA | eager bytes |
 |---|---|---:|
 | parent (`git rev-parse HEAD~1`) | `8f79207d` | **888,562** |
-| this commit (slice 6) | see commit | **875,428** |
-| — net delta — | — | **−13,134** |
+| this commit, before the `shown.length > 0` gate fix | — | 875,428 |
+| this commit, as landed (with the gate fix) | see commit | **875,445** |
+| — net delta (parent -> landed) — | — | **−13,117** |
 
-Eager-walk module counts, measured with a standalone replica of
-`architecture.test.ts`'s own `eagerlyReachable()` walk run against both trees
-(script kept in the session scratch, not committed — it replays the guard,
-not a new mechanism): **393 of 927 before, 382 of 928 after** — the one seam
-(which itself stays lazy, so it does not appear in either count) plus the
-eleven modules it dragged out, minus the one module ADDED
-(`LibraryFlatRows.tsx`, the loader, also lazy).
+Re-running `check-bundle-size.mjs` UNMODIFIED except for restoring the old
+920,400 pin, against this commit's `dist/`, confirms the forced floor check
+(`total < EAGER_JS_BUDGET - SLACK`) already failed before this slice touched
+the pin: `FAIL — eager JS is 854.9 kB, well under the 898.8 kB budget. Lower
+EAGER_JS_BUDGET … to 915428 to lock the gain in.` — round 1's claim that this
+check "would not have fired" was wrong; this slice was compelled to lower
+the pin, and chose 876,469 (`875,445 + 1,024`), stricter than the script's
+own 915,428 suggestion.
 
-The realised delta (13,134 B) is LARGER than `DatasetRow.tsx`'s own
+Eager-walk module counts: first measured with a standalone replica of
+`architecture.test.ts`'s own `eagerlyReachable()` walk (script kept in the
+session scratch, not committed), then VERIFIED against the REAL guard
+itself (round 2, adversarial review) — a temporary `console.log` dump of
+`eagerlyReachable()`'s own output, run unmodified in both trees via
+`npx vitest run src/architecture.test.ts -t "nothing eager reaches a seam"`,
+gives **393 of 927 before, 382 of 928 after** (`sources().length` for the
+corpus counts, also this file's own function) — the one seam (which itself
+stays lazy, so it does not appear in either count) plus the eleven modules
+it dragged out, minus the one module ADDED (`LibraryFlatRows.tsx`, the
+loader, also lazy). The SET difference between the two real-guard dumps is
+exactly the eleven `DRAGGED_OUT` entries below — nothing missed, nothing
+extra. (The debug dump lines were removed from both trees' `architecture.test.ts`
+after verification; they are not part of the committed diff.)
+
+The realised delta (13,117 B) is LARGER than `DatasetRow.tsx`'s own
 attributed bytes from the per-module table at the top of this file
 (10,297 B) — expected, and not a discrepancy: that figure was one module's
 own bytes, not its exclusive subtree, and the seam took DatasetRow's own
@@ -1078,10 +1150,10 @@ import("./LibraryFlatRows"))` with a plain `import LibraryFlatRows from
 
 DOM + import-recorder coverage: `components/Library/libraryFlatRowsSeam.test.tsx`
 (the gate half — a `vi.hoisted` + `track()` import recorder, since this
-seam's gate is strictly stronger than a DOM-visible ternary: with
-`rows.length === 0` implying `shown.length === 0`, a DOM assertion CANNOT
-distinguish "gate open, chunk fetched, nothing to render" from "gate closed,
-chunk never fetched" — only the import record can) and
+seam's gate is strictly stronger than a DOM-visible ternary: even the round-2
+`shown.length > 0` gate cannot be told apart from "deleted" by a DOM
+assertion in the ONLY state real code can reach it in, because that state
+renders nothing either way — only the import record can) and
 `components/Library/LibraryFlatRows.test.tsx` (the wrapper's own render
 output, unit-tested directly, decoupled from the mocked seam test so the
 tracked import isn't fired early by a static top-level import in the same
@@ -1089,20 +1161,36 @@ file — a real trap: an earlier draft that imported `LibraryFlatRows`
 statically in the seam test file for a second, direct-render assertion
 fired the mock factory at file-load time instead of at Library.tsx's real
 runtime `import()` call, permanently defeating the recorder for that file).
-Proved the recorder reddens by widening the gate (`const inHierarchy =
-false`, i.e. "the gate deleted"): the "never fetches while the hierarchy has
-rows" half of the combined test went red with `expected [ 'LibraryFlatRows'
-] to not include 'LibraryFlatRows'`, confirming a DOM-only version of this
-test (there isn't one, deliberately) could not have caught it.
 
-One React/testing-environment quirk surfaced and is recorded so a future
-seam test isn't re-surprised by it: two SEPARATE `render()` calls of
+**Rewritten in round 2** to match the corrected gate and the adversarial
+review's finding that the "gate open" state is unreachable through real
+store state: `libraryFlatRowsSeam.test.tsx` now holds two tests —
+(1) "never fetches the chunk on any REAL state, including the closest
+approach to true-empty" drives `<Library />` through both real states
+(dataset present -> tree; true-empty -> nothing) via `rerender()` and
+asserts the chunk is never fetched in either, proving the round-2 fix; and
+(2) "still fetches the chunk if the otherwise-unreachable gate is forced
+open" mocks `useLibraryHierarchyModel` (wrapped in `vi.fn()`, defaulting to
+the real implementation via `importOriginal`) to return `rows: []` while
+`datasets` — and therefore `shown` — is non-empty, the one combination no
+real app path can produce, and asserts the chunk STILL fetches and
+`DatasetRow` still renders correctly if that ever becomes reachable. Proved
+both halves reddened by sabotage (see the sabotage table): widening
+`inHierarchy` to `false`, and separately reverting the `shown.length > 0`
+gate, both redden test (1) at
+`expected [ 'LibraryFlatRows' ] to not include 'LibraryFlatRows'` —
+confirming a DOM-only version of either test (there isn't one, deliberately)
+could not have caught it.
+
+One React/testing-environment quirk surfaced in round 1 and is recorded so a
+future seam test isn't re-surprised by it: two SEPARATE `render()` calls of
 `<Library />` across two different `it()` blocks, both referencing the SAME
 module-level `lazy(() => import(...))` object, do not reliably re-trigger
-the tracked factory a second time — the closed-then-open transition has to
-happen within ONE test via `rerender()` (the same shape
-`lazySectionSeams.test.tsx`'s `MultiSelectBar` test already uses) for the
-import recorder to fire predictably in that ordering.
+the tracked factory a second time. Round 1 worked around it with a single
+`rerender()`-based test; round 2's rewrite keeps that shape for test (1) and
+places test (2) — the file's only OTHER trigger of the factory — after it,
+so it remains the first and only render to open the real gate in that
+ordering.
 
 #### Blast-radius sweep for tick-counting
 
@@ -1117,18 +1205,36 @@ frontend suite (682 files / 11,547 tests) both pass unchanged.
 
 #### The cost, stated plainly
 
-None. This is the first seam in the campaign whose deferred branch renders
-zero content on every reachable path today, so there is no first-paint or
-restore-time artifact to weigh against the bytes — the `PlotLegend`/
-`PlotToolbar`/`CommandPalette` trade this slice's ranking turned away from
-simply does not apply here.
+None on the RENDERED content — this is still the first seam in the campaign
+whose deferred branch renders zero content on every reachable path today, so
+there is no first-paint or restore-time artifact to weigh against the bytes,
+unlike `PlotLegend`/`PlotToolbar`/`CommandPalette`. Round 1 stopped there and
+was wrong to: the ORIGINAL gate (`rows.length === 0` alone) DID cost a real
+chunk fetch on cold start to render that zero content, which is fixed above
+("The seam is not free"). With the `shown.length > 0` gate in place, the
+cost really is none — not merely on what renders, but on whether the chunk
+is ever fetched at all on the one path that could reach this branch.
+
+**What `LibraryFlatRows.tsx` is, stated precisely (narrowing round 1's "real
+fallback" language):** it is not a live fallback and nothing today exercises
+it as one — no real store state can reach `rows.length === 0` with
+`datasets.length > 0` (confirmed by trace AND by adversarial probing, see
+above), so `shown.length > 0` can never hold at the same time as
+`rows.length === 0`. It is a deliberately-retained UNREACHABLE guard: kept
+in source, and now gated so it costs nothing even to check, because the
+invariant that makes it unreachable lives in a different module
+(`lib/libraryHierarchy.ts`) and this file should not assume that invariant
+without proof. Calling it "the flat list" or "a real fallback" without that
+qualifier is not backed by anything in the test suite, because nothing can
+back it.
 
 #### Sabotage table
 
 | sabotage | test(s) | result |
 |---|---|---|
 | static import (seam made eager) | the 3 `SEAMS` guard arms | **RED** (all 3, see table above) |
-| widen the render gate (`inHierarchy = false`) | `libraryFlatRowsSeam.test.tsx`'s "never fetches while the hierarchy has rows" half | **RED** |
+| widen `inHierarchy` to always `false` | `libraryFlatRowsSeam.test.tsx`'s "never fetches the chunk on any REAL state" | **RED** — `expected [ 'LibraryFlatRows' ] to not include 'LibraryFlatRows'` |
+| remove the `shown.length > 0` gate (round 2 fix reverted) | `libraryFlatRowsSeam.test.tsx`'s "never fetches the chunk on any REAL state" | **RED** — same assertion, at the true-empty (cold-start) state specifically |
 
 ## What this does NOT change
 
@@ -1144,12 +1250,14 @@ and `CommandPalette` were both disqualified on user-visible cost (plot
 chrome on first paint; the first ⌘K of a session) and stay banked, unlanded;
 `DatasetRow` behind a `LibraryFlatRows.tsx` wrapper was not disqualified —
 its target branch renders zero content on any reachable path today — and
-landed at −13,134 B, the largest single-seam win of the campaign. The pin
-was then lowered 888,562 -> 876,452 B (`measured + 1,024`) per rule 3's
-deliberate-diet-pass path, so that gain is locked in rather than left as
-spendable slack.
+landed at −13,117 B, the largest single-seam win of the campaign. The pin
+was then lowered from the prior 920,400 B to 876,469 B (`measured + 1,024`)
+— compelled by the script's own forced-floor check having already failed
+against the unmoved pin, not a purely discretionary diet-pass choice (see
+slice 6's round-2 correction), so that gain is locked in rather than left
+as spendable slack.
 
-**Current headroom is 1,024 B against the 876,452 B pin** — by design, not
+**Current headroom is 1,024 B against the 876,469 B pin** — by design, not
 by exhaustion. The two banked seams (`PlotToolbar` −3,644 B,
 `CommandPalette` −2,935 B) remain on the table, unlanded, under the
 `PlotLegend` ruling; landing either needs that ruling to be re-argued, not

@@ -1,31 +1,49 @@
 // COLD-path coverage for the Library render seam taken out of the eager
 // bundle on 2026-09-19 (`plans/BUNDLE_HEADROOM.md` slice 6): Library.tsx's
-// own flat-list fallback body (`query.trim() === "" && rows.length === 0`)
-// now reaches `DatasetRow.tsx` only through the lazy `LibraryFlatRows.tsx`
-// wrapper. `src/architecture.test.ts`'s SEAMS list holds the STATIC half
-// (nothing may value-import it, and the loader must reach it with a dynamic
-// `import()`) — that grep cannot see whether the gate still behaves at
-// runtime, which is what this file asserts. See `LibraryFlatRows.test.tsx`
-// for coverage of the wrapper's own render output — this file deliberately
-// never imports `LibraryFlatRows` itself (statically OR indirectly through a
-// shared module import at the top level), because that would fire the
-// tracked mock factory below at file-load time instead of at Library.tsx's
-// real runtime `import()` call, defeating the whole point of the recorder.
+// own flat-list fallback body (`query.trim() === "" && rows.length === 0 &&
+// shown.length > 0`) now reaches `DatasetRow.tsx` only through the lazy
+// `LibraryFlatRows.tsx` wrapper. `src/architecture.test.ts`'s SEAMS list
+// holds the STATIC half (nothing may value-import it, and the loader must
+// reach it with a dynamic `import()`) — that grep cannot see whether the
+// gate still behaves at runtime, which is what this file asserts. See
+// `LibraryFlatRows.test.tsx` for coverage of the wrapper's own render
+// output — this file deliberately never imports `LibraryFlatRows` itself
+// (statically OR indirectly through a shared module import at the top
+// level), because that would fire the tracked mock factory below at
+// file-load time instead of at Library.tsx's real runtime `import()` call,
+// defeating the whole point of the recorder.
 //
-// The gate here is UNUSUALLY strong (see LibraryFlatRows.tsx's own header):
-// `rows.length === 0` implies `datasets.length === 0` (every dataset
-// unconditionally yields a hierarchy worksheet node), which means `shown` is
-// empty too — so a DOM assertion can NEVER distinguish "gate open, chunk
-// fetched, nothing to render" from "gate closed, chunk never fetched" on this
-// particular seam; only the import record can. That is a stronger version of
-// slice 4/5's "a DOM-only test cannot see a render gate" lesson.
+// The `shown.length > 0` half of the gate exists ONLY as a belt-and-braces
+// guard: adversarial review (2026-09-19) proved from source
+// (`lib/libraryHierarchy.ts`'s `buildLibraryHierarchy`/
+// `flattenLibraryHierarchy`) — and probed with dangling `workbookId`,
+// dangling `folderId`, duplicate ids, cyclic/self-parent folders, an empty
+// id, and collapsed containers — that `rows.length === 0 && datasets.length
+// > 0` is UNREACHABLE from real app state: every dataset unconditionally
+// yields at least one hierarchy row. So in today's app this branch is only
+// ever reached with `shown.length === 0` too, and the gate below is
+// impossible to open through normal state. The first test proves that: even
+// pushed as close to the true-empty edge as real state allows, the chunk is
+// never fetched. The second test proves the gate still opens CORRECTLY if
+// that invariant ever breaks (a future `libraryHierarchy.ts` change that
+// lets `rows` go empty while datasets exist) — reached only by mocking the
+// hierarchy hook directly, since no real store state can produce it.
+//
+// A DOM assertion cannot stand in for either test: even when the gate is
+// artificially forced open, `LibraryFlatRows` renders real content only
+// because `shown` (computed independently of the mocked hook, straight from
+// `datasets`) is non-empty — but whether the SUSPENSE BOUNDARY was ever
+// mounted, i.e. whether the chunk was fetched, is exactly the thing only the
+// import record can see.
 
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Library from "./Library";
+import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 
 vi.mock("../overlays/ParamDialog", () => ({ askParams: vi.fn(), default: () => null }));
 
@@ -43,14 +61,26 @@ const { loaded, track } = vi.hoisted(() => {
 });
 vi.mock("./LibraryFlatRows", track("LibraryFlatRows"));
 
+// `useLibraryHierarchyModel` is wrapped in a `vi.fn()` that defaults to the
+// REAL implementation, so every test gets genuine hierarchy behavior unless
+// it explicitly overrides — only the "forced" test below does, to reach the
+// otherwise-unreachable `rows.length === 0, datasets.length > 0` state.
+vi.mock("./useLibraryHierarchyRows", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./useLibraryHierarchyRows")>();
+  return { ...actual, useLibraryHierarchyModel: vi.fn(actual.useLibraryHierarchyModel) };
+});
+
 const ds = (id: string): Dataset => ({
   id,
   name: id,
   data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} },
 });
 
+const emptyHierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [] });
+
 beforeEach(() => {
   loaded.clear();
+  vi.mocked(useLibraryHierarchyModel).mockReset();
   useApp.setState({
     datasets: [],
     folders: [],
@@ -72,27 +102,38 @@ afterEach(() => {
   useApp.setState({ datasets: [], originFigures: [], originFidelity: [], figureDocs: [], reports: [], smartFolders: [], collections: [], selectedIds: [] });
 });
 
-describe("Library flat-row fallback — chunk-deferred, and gated on the true-empty state", () => {
-  it("fetches the chunk only once the hierarchy goes from non-empty to truly empty", async () => {
-    // Gate CLOSED: a dataset means at least one hierarchy row, so the tree
-    // renders instead (LibraryTree is its own, already-lazy seam) — give it a
-    // chance to resolve too, then flush the microtask queue with nothing left
-    // pending. A real gate never starts LibraryFlatRows's dynamic import at
-    // all on this path; only React's own import-cache TIMING makes this
-    // ordering (closed first, in the SAME render tree, via `rerender`) the
-    // one that actually exercises it — two separate `render()` calls across
-    // two tests do not reliably re-trigger `lazy()`'s factory a second time
-    // once React has resolved it once for that component reference.
+describe("Library flat-row fallback — chunk-deferred, and unreachable through real state", () => {
+  it("never fetches the chunk on any REAL state, including the closest approach to true-empty", async () => {
+    // Real state 1: a dataset means at least one hierarchy row, so the tree
+    // renders instead (LibraryTree is its own, already-lazy seam) — give it
+    // a chance to resolve too, then flush the microtask queue with nothing
+    // left pending.
     useApp.setState({ datasets: [ds("a")] });
     const { rerender } = render(<Library />);
     await screen.findByText("a");
     await act(async () => {});
     expect([...loaded]).not.toContain("LibraryFlatRows");
 
-    // Gate OPEN: drop to the true-empty state (no dataset, no folder,
-    // nothing) — `rows.length === 0`, so the flat-fallback branch is taken.
+    // Real state 2: the true-empty state (no dataset, no folder, nothing) —
+    // `rows.length === 0` AND `shown.length === 0`, the only combination
+    // real app state can reach. `HomeScreen` renders instead; the gate never
+    // opens because there is nothing in `shown` to draw either way.
     useApp.setState({ datasets: [] });
     rerender(<Library />);
+    await act(async () => {});
+    expect([...loaded]).not.toContain("LibraryFlatRows");
+  });
+
+  it("still fetches the chunk if the otherwise-unreachable gate is forced open", async () => {
+    // Force `rows.length === 0` while `datasets` (and therefore `shown`) is
+    // non-empty — the state adversarial review confirmed no real app path
+    // can reach, reproduced here only via a mocked hierarchy hook so the
+    // gate's OPEN side stays covered even though nothing can open it today.
+    vi.mocked(useLibraryHierarchyModel).mockReturnValue({ hierarchy: emptyHierarchy, rows: [] });
+    useApp.setState({ datasets: [ds("a")] });
+    render(<Library />);
+    expect([...loaded]).not.toContain("LibraryFlatRows");
     await waitFor(() => expect([...loaded]).toContain("LibraryFlatRows"), { timeout: 5000 });
+    expect(await screen.findByText("a")).toBeInTheDocument();
   });
 });

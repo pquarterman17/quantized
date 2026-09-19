@@ -46,11 +46,19 @@ import { fileURLToPath } from "node:url";
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
  *  2026-09-19 (bundle diet slice 6, `plans/BUNDLE_HEADROOM.md`) — pin LOWERED
- *  888,562 -> 876,452 after one real reduction, per rule 3's "deliberate diet
- *  pass" path (`measured + 1,024`, not the `total < budget - SLACK` forced
- *  path — this landed 13,134 B under the pin, inside the 40 kB `SLACK` band,
- *  so the forced check would not itself have fired; the pin is lowered here
- *  anyway so the gain is locked in rather than left as spendable slack).
+ *  920,400 -> 876,469. The PRIOR PIN was 920,400; 888,562 below is the
+ *  PARENT COMMIT's measured eager bytes, a different quantity (an earlier
+ *  draft of this entry wrongly wrote 888,562 as "the pin" — corrected after
+ *  adversarial review). This was not a discretionary "diet pass" lower under
+ *  rule 3's minimal-margin path: rule 2's own forced check
+ *  (`total < EAGER_JS_BUDGET - SLACK`) ALREADY FAILED against the unmoved
+ *  920,400 pin before this entry touched it — re-run unmodified against
+ *  this commit's `dist/`: `FAIL — eager JS is 854.9 kB, well under the
+ *  898.8 kB budget. Lower EAGER_JS_BUDGET … to 915428 to lock the gain in.`
+ *  This slice's own chosen 876,469 is lower than that forced-check floor
+ *  of 915,428 — stricter than the script's own minimum demand, per the
+ *  `measured + 1,024` convention applied on top of THIS slice's own
+ *  reduction rather than the floor the unmoved pin alone would have forced.
  *
  *  Ranked ahead of bytes, per the `PlotLegend` ruling slice 5 left behind (a
  *  seam is disqualified by a perceptible artifact on a surface the user is
@@ -62,21 +70,38 @@ import { fileURLToPath } from "node:url";
  *  — are both suspect under that ruling and were NOT landed. The third,
  *  `DatasetRow.tsx` behind a `LibraryFlatRows.tsx` wrapper, was not suspect:
  *  its one static edge (Library.tsx's OWN flat-list fallback body) is
- *  reached only when `query.trim() === "" && rows.length === 0`, and PR C's
- *  own invariant (every dataset unconditionally yields a hierarchy worksheet
- *  node — `lib/libraryHierarchy.ts`) means that condition implies
- *  `datasets.length === 0`, so the branch never renders an actual row on ANY
- *  path today — deferring it costs nothing perceptible, first paint or
- *  restore, because nothing was ever painted there to begin with.
+ *  reached only when `query.trim() === "" && rows.length === 0` AND
+ *  `shown.length > 0`, and PR C's own invariant (every dataset
+ *  unconditionally yields a hierarchy worksheet node —
+ *  `lib/libraryHierarchy.ts`) means `rows.length === 0` implies
+ *  `datasets.length === 0`, so `shown.length > 0` can never hold at the same
+ *  time — this branch is unreachable through real state today (adversarially
+ *  probed, not merely traced — see the plan), so deferring it costs nothing
+ *  perceptible on any path a user can actually reach.
  *
  *  Measured, `npm ci`-fresh node_modules, `.vite` wiped before each build,
  *  exact bytes out of `dist/index.html` (not this script's own rounded kB):
- *    8f79207d (real parent, `git rev-parse HEAD~1`)   888,562
- *    this commit                                       875,428   (−13,134 B)
- *  875,428 + 1,024 = 876,452, the same minimal-raise-margin convention
+ *    8f79207d (real parent, `git rev-parse HEAD~1`)             888,562
+ *    this commit, before the `shown.length > 0` gate (below)    875,428   (−13,134 B)
+ *    this commit, as landed (with the gate)                     875,445   (+17 B over
+ *                                                                          the pre-gate figure)
+ *  875,445 + 1,024 = 876,469, the same minimal-raise-margin convention
  *  applied to a lower. Full vitest (682 files / 11,547 tests), `tsc -b
  *  --force`, and eslint all green post-move. See the plan for the full
  *  ranking, the per-seam rejections, and the guard verification.
+ *
+ *  2026-09-19 (same slice, adversarial-review round 2) — the render gate
+ *  (`Library.tsx`) was `rows.length === 0` alone, so the ONE state that
+ *  actually reaches it — a fresh/empty library, i.e. cold start — fetched
+ *  `LibraryFlatRows`'s chunk (plus `DatasetRow`/`datasetRowMenu`/
+ *  `Sparkline`) to render zero rows: a real, avoidable round trip on
+ *  exactly the surface this pin's cost argument called free. Fixed by
+ *  gating on `shown.length > 0` too (the same condition `HomeScreen`,
+ *  one line below, already computes for free). Re-measured after the fix
+ *  rather than assumed unchanged, `npm ci`-fresh, `.vite` wiped: 875,445 B
+ *  (+17 B over the pre-fix 875,428 — the new check and branch are real,
+ *  tiny, eager code, not a wash). Folded into the table and pin above
+ *  rather than left as a separate, disagreeing entry.
  *
  *  2026-09-10 — pin RAISED 914,015 -> 915,421 for Group O-2b (the categorical
  *  level REORDER UI, JMP_GAP J1). The raise is the documented last resort and
@@ -1592,7 +1617,7 @@ import { fileURLToPath } from "node:url";
  *    bc8f14fa   916,182   parent (greyscale export commit)
  *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
-const EAGER_JS_BUDGET = 876_452;
+const EAGER_JS_BUDGET = 876_469;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

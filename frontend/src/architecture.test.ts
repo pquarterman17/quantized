@@ -2903,19 +2903,23 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  corpus, which is that seam alone. */
   /** SLICE 6 (2026-09-19) adds the eleven modules its one seam took with it —
    *  `DatasetRow.tsx` itself plus everything it (and its own row-only
-   *  siblings) exclusively pulled in, measured with a standalone replica of
-   *  this block's own `eagerlyReachable()` walk run against both trees
-   *  (`plans/BUNDLE_HEADROOM.md` slice 6): `DatasetRowParts.tsx`,
+   *  siblings) exclusively pulled in: `DatasetRowParts.tsx`,
    *  `DatasetRowPreview.tsx`, `Sparkline.tsx`, `datasetRowMenu.ts` (DatasetRow's
    *  own imports), `DerivedWorksheetMark.tsx` + `RecomputedMark.tsx` (rendered
    *  by DatasetRowParts), and `lib/combineSeparateActions.ts` +
    *  `lib/derivedWorksheetActions.ts` + `lib/downsample.ts` +
-   *  `lib/libraryPreviewPrefs.ts` (pulled in by those, transitively). Measured
-   *  against the real parent `8f79207d`: 393 -> 382 eager modules of a
-   *  927 -> 928-module corpus (the one module ADDED is `LibraryFlatRows.tsx`,
-   *  the loader — which itself stays lazy, so it does not appear in either
-   *  eager count). None of the eleven is a seam itself, so only reachability
-   *  can hold this line. */
+   *  `lib/libraryPreviewPrefs.ts` (pulled in by those, transitively). First
+   *  measured with a standalone replica of this block's own
+   *  `eagerlyReachable()`, then VERIFIED against the REAL guard itself
+   *  (`plans/BUNDLE_HEADROOM.md` slice 6, adversarial-review round 2): a
+   *  temporary dump of `eagerlyReachable()`'s own output, run unmodified in
+   *  both the real parent `8f79207d`'s tree and this one, gives 393 -> 382
+   *  eager modules of a 927 -> 928-module corpus (`sources().length`, this
+   *  file's own function), and the SET difference between the two real-guard
+   *  dumps is exactly these eleven modules — nothing missed, nothing extra.
+   *  The one corpus module ADDED is `LibraryFlatRows.tsx`, the loader — which
+   *  itself stays lazy, so it does not appear in either eager count. None of
+   *  the eleven is a seam itself, so only reachability can hold this line. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
