@@ -2659,6 +2659,45 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/windows/WindowCanvas.tsx",
       call: 'import("./SnapshotPlotWindow")',
     },
+    // ── SLICE 6 (2026-09-19, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // One seam, measured net −13,134 B — the largest single-seam win of the
+    // campaign. Ranked ahead of the two candidates this slice inherited
+    // (`PlotToolbar`, `CommandPalette`) under the `PlotLegend` ruling slice 5
+    // left behind: both are gated on a surface the user is actively looking
+    // at (plot chrome / the first ⌘K of a session) and are suspect on that
+    // ground alone, independent of bytes. This one is not — see below.
+    //
+    // `components/Library/DatasetRow.tsx` itself cannot be the SEAMS
+    // `module`: `LibraryTree.tsx` and `SmartFoldersSection.tsx` both import
+    // it directly (it is the real worksheet row for the Tree and Smart
+    // Folders renders), and both are themselves ALREADY-lazy chunks, so the
+    // corpus-wide "no module value-imports a seam module statically" arm
+    // would go red for two importers doing nothing wrong. The seam is
+    // instead `components/Library/LibraryFlatRows.tsx`, a thin new wrapper
+    // (the `LibrarySections.tsx` shape) around Library.tsx's OWN flat-list
+    // fallback body — the `else` branch reached only when the search box is
+    // empty AND the hierarchy has produced zero rows. That branch was the
+    // ONLY static edge keeping DatasetRow.tsx (and everything it exclusively
+    // pulls in) eager: nothing else in the entry graph reaches it.
+    //
+    // The gate is stronger than "runs after a user action or a persisted
+    // restore" (the class every other seam in this file argues): PR C means
+    // `rows.length === 0` implies `datasets.length === 0` (every dataset
+    // unconditionally yields a hierarchy worksheet node —
+    // `lib/libraryHierarchy.ts`'s `buildLibraryHierarchy`), which means
+    // `shown` (filtered from `datasets`) is empty too — so in today's app
+    // this branch never renders an actual row, on ANY path, first paint or
+    // restore included. Deferring it is therefore not merely low-cost, it is
+    // free: nothing a user can see or a restore can hit depends on this
+    // chunk loading synchronously. See `LibraryFlatRows.tsx`'s own header for
+    // the full argument; it is not deleted outright because that invariant
+    // lives in a different module and this file should not assume it without
+    // proof.
+    {
+      module: "/components/Library/LibraryFlatRows.tsx",
+      loader: "/components/Library/Library.tsx",
+      call: 'import("./LibraryFlatRows")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2862,6 +2901,21 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  misses the eagerly-reachable `store/workspaceHydration.ts` module that
    *  `4179b166` added in between): 394 -> 393 modules of a 927-module
    *  corpus, which is that seam alone. */
+  /** SLICE 6 (2026-09-19) adds the eleven modules its one seam took with it —
+   *  `DatasetRow.tsx` itself plus everything it (and its own row-only
+   *  siblings) exclusively pulled in, measured with a standalone replica of
+   *  this block's own `eagerlyReachable()` walk run against both trees
+   *  (`plans/BUNDLE_HEADROOM.md` slice 6): `DatasetRowParts.tsx`,
+   *  `DatasetRowPreview.tsx`, `Sparkline.tsx`, `datasetRowMenu.ts` (DatasetRow's
+   *  own imports), `DerivedWorksheetMark.tsx` + `RecomputedMark.tsx` (rendered
+   *  by DatasetRowParts), and `lib/combineSeparateActions.ts` +
+   *  `lib/derivedWorksheetActions.ts` + `lib/downsample.ts` +
+   *  `lib/libraryPreviewPrefs.ts` (pulled in by those, transitively). Measured
+   *  against the real parent `8f79207d`: 393 -> 382 eager modules of a
+   *  927 -> 928-module corpus (the one module ADDED is `LibraryFlatRows.tsx`,
+   *  the loader — which itself stays lazy, so it does not appear in either
+   *  eager count). None of the eleven is a seam itself, so only reachability
+   *  can hold this line. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
@@ -2875,6 +2929,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/originFidelity.ts",
     "/lib/plotMenu.ts",
     "/lib/plotHitTest.ts",
+    "/components/Library/DatasetRow.tsx",
+    "/components/Library/DatasetRowParts.tsx",
+    "/components/Library/DatasetRowPreview.tsx",
+    "/components/Library/Sparkline.tsx",
+    "/components/Library/datasetRowMenu.ts",
+    "/components/Library/DerivedWorksheetMark.tsx",
+    "/components/Library/RecomputedMark.tsx",
+    "/lib/combineSeparateActions.ts",
+    "/lib/derivedWorksheetActions.ts",
+    "/lib/downsample.ts",
+    "/lib/libraryPreviewPrefs.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

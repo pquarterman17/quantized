@@ -45,6 +45,39 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-19 (bundle diet slice 6, `plans/BUNDLE_HEADROOM.md`) — pin LOWERED
+ *  888,562 -> 876,452 after one real reduction, per rule 3's "deliberate diet
+ *  pass" path (`measured + 1,024`, not the `total < budget - SLACK` forced
+ *  path — this landed 13,134 B under the pin, inside the 40 kB `SLACK` band,
+ *  so the forced check would not itself have fired; the pin is lowered here
+ *  anyway so the gain is locked in rather than left as spendable slack).
+ *
+ *  Ranked ahead of bytes, per the `PlotLegend` ruling slice 5 left behind (a
+ *  seam is disqualified by a perceptible artifact on a surface the user is
+ *  looking at, BEFORE bytes are considered): the two seams this slice
+ *  inherited banked — `PlotToolbar` (−3,644 B, `displayPayload`-gated plot
+ *  chrome — a first-paint artifact on the plot itself) and `CommandPalette`
+ *  (−2,935 B, spends its fetch on the first ⌘K of a session, the same
+ *  latency-sensitive class slice 4 already flagged for the right-click menu)
+ *  — are both suspect under that ruling and were NOT landed. The third,
+ *  `DatasetRow.tsx` behind a `LibraryFlatRows.tsx` wrapper, was not suspect:
+ *  its one static edge (Library.tsx's OWN flat-list fallback body) is
+ *  reached only when `query.trim() === "" && rows.length === 0`, and PR C's
+ *  own invariant (every dataset unconditionally yields a hierarchy worksheet
+ *  node — `lib/libraryHierarchy.ts`) means that condition implies
+ *  `datasets.length === 0`, so the branch never renders an actual row on ANY
+ *  path today — deferring it costs nothing perceptible, first paint or
+ *  restore, because nothing was ever painted there to begin with.
+ *
+ *  Measured, `npm ci`-fresh node_modules, `.vite` wiped before each build,
+ *  exact bytes out of `dist/index.html` (not this script's own rounded kB):
+ *    8f79207d (real parent, `git rev-parse HEAD~1`)   888,562
+ *    this commit                                       875,428   (−13,134 B)
+ *  875,428 + 1,024 = 876,452, the same minimal-raise-margin convention
+ *  applied to a lower. Full vitest (682 files / 11,547 tests), `tsc -b
+ *  --force`, and eslint all green post-move. See the plan for the full
+ *  ranking, the per-seam rejections, and the guard verification.
+ *
  *  2026-09-10 — pin RAISED 914,015 -> 915,421 for Group O-2b (the categorical
  *  level REORDER UI, JMP_GAP J1). The raise is the documented last resort and
  *  a lazy split was tried FIRST, as required; all four numbers below were
@@ -1559,7 +1592,7 @@ import { fileURLToPath } from "node:url";
  *    bc8f14fa   916,182   parent (greyscale export commit)
  *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
-const EAGER_JS_BUDGET = 920_400;
+const EAGER_JS_BUDGET = 876_452;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

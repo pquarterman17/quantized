@@ -1,10 +1,12 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4 and 5
-executed** (slice 5 deliberately small — see its ruling on `PlotLegend`) (see their sections below); slice 2 is partially done. Slice 5 is
-no longer the `lib/plotRecipeIO.ts` proposal it was reserved for — that
-candidate was re-ranked out on the measured evidence below and the number was
-spent on two render seams instead.
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5 and 6
+executed** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
+6 ratchets the pin DOWN, the first slice authorized to) (see their sections
+below); slice 2 is partially done. Slice 5 is no longer the
+`lib/plotRecipeIO.ts` proposal it was reserved for — that candidate was
+re-ranked out on the measured evidence below and the number was spent on two
+render seams instead.
 
 **Stale as of this document's own first draft** (kept for the record; see the
 "What these numbers are NOT" note below and each slice's own measured
@@ -16,25 +18,24 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-19, after slice 5):** landed tip **888,562 B**
+**Current state (2026-09-19, after slice 6):** landed tip **875,428 B**
+eager against parent `8f79207d`'s **888,562 B** (**−13,134 B**, the largest
+single-seam win of the campaign), pin LOWERED to **876,452 B**
+(`measured + 1,024`), leaving **1,024 B of headroom** against the new pin —
+by design: slice 6 is a deliberate diet-and-lock-in pass, so the gain is not
+left sitting as spendable slack (rule 3's "deliberate diet pass" path, not
+the forced `total < budget - SLACK` path — see slice 6's own section). The
+next slice starts from a LOWER pin, not from banked headroom.
+
+**Earlier current state (2026-09-19, after slice 5):** landed tip **888,562 B**
 eager against parent `cee0494f`'s **889,498 B** (**−936 B**), leaving
 **31,838 B of headroom** against the unmoved 920,400 B budget. Slice 5 is the
 first slice in this campaign whose limit is **not** candidate scarcity but the
 ratchet's own LOWER bound — see "The ceiling this campaign has now hit" below
-before planning slice 6 — and the first in which the biggest measured win was
-**rejected on user-visible cost rather than on bytes**. Both of those findings
-outlast the 936 B.
-
-**Read before starting slice 6, so it is not re-derived from the narrative
-below:** `scripts/check-bundle-size.mjs`'s ratchet is two-sided — it also
-fails the build BELOW `EAGER_JS_BUDGET - SLACK` (880,400 B) to force a
-pin-down, and slice 5 left only 9,098 B of headroom above that floor before
-hitting it. **Slice 6's first decision is therefore not which seam to cut but
-whether it is authorized to ratchet `EAGER_JS_BUDGET` DOWN** (protocol: lower
-it to `measured + 1,024` right after landing a reduction) — until that is
-decided, banked seams below the floor (`PlotToolbar`, `CommandPalette`) stay
-unlandable regardless of how clean their gate is. See "The ceiling this
-campaign has now hit" for the full arithmetic.
+— and the first in which the biggest measured win was **rejected on
+user-visible cost rather than on bytes**. Both of those findings outlast the
+936 B, and both were the reason slice 6 ranked by the `PlotLegend` ruling
+before it ranked by bytes.
 
 **Earlier state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
 4's real parent is `b50f6602` (`git rev-parse 8a6f49ca^`), not `3f43467b`
@@ -948,6 +949,187 @@ premise is "the win is small — verify before doing it" was the wrong trade
 against two component seams with clean gates. It stays on the table for a slice
 willing to split the module.
 
+### Slice 6 — one seam (`DatasetRow` behind a wrapper), pin ratcheted DOWN — **DONE (2026-09-19)**
+
+**Measured net eager delta −13,134 B — pin LOWERED 888,562 -> 876,452 B**
+
+The first decision, per the tail this slice inherited, was whether it is
+authorized to ratchet `EAGER_JS_BUDGET` DOWN at all (a pin-down slice or
+nothing). It is: `check-bundle-size.mjs`'s own rule 3 gives a deliberate diet
+pass the `measured + 1,024` path independent of whether the forced
+`total < budget - SLACK` check would itself have fired. It landed
+13,134 B under the parent, well inside the 40,000 B `SLACK` band (so the
+forced floor never tripped), and the pin was lowered anyway so the gain is
+locked in rather than left as spendable slack for the next unrelated feature
+— exactly the trade the tail below asked slice 6 to make explicit.
+
+#### Ranking: the `PlotLegend` ruling first, bytes second
+
+Slice 5 left three inherited candidates (~26 kB, partly measured):
+`DatasetRow` behind a wrapper, and slice 5's own banked `PlotToolbar`
+(−3,644 B) and `CommandPalette` (−2,935 B) seams. Applying the `PlotLegend`
+ruling — *a seam is disqualified by a perceptible artifact on a surface the
+user is looking at, before bytes are considered at all* — to each, in
+writing, before building anything:
+
+- **`PlotToolbar`** (`displayPayload`-gated plot chrome) is disqualified on
+  the same grounds as `PlotLegend` itself: it is part of what the user is
+  looking AT on the plot's first paint (and on any restore with a plot
+  already showing), not chrome around it. Rejected without a rebuild — the
+  ruling covers it exactly as slice 5's own tail said it would.
+- **`CommandPalette`** (opens on the first ⌘K of a session) is disqualified
+  on the adjacent ground the ruling names: it spends its one chunk fetch on
+  the FIRST invocation of a frequent, latency-sensitive gesture — the same
+  class slice 4 already flagged when it spent one on the right-click menu
+  (and accepted the cost there only because it was, at the time, the single
+  largest win on the tree). Rejected without a rebuild.
+- **`DatasetRow` behind a wrapper** is NOT disqualified. Its target is
+  Library.tsx's own flat-list fallback body — the `else` branch taken only
+  when `query.trim() === "" && rows.length === 0`. Investigating that gate
+  (not merely trusting the "component seam" label) found it is stronger than
+  a persisted-restore-only claim: PR C's own invariant
+  (`lib/libraryHierarchy.ts`'s `buildLibraryHierarchy` unconditionally adds a
+  hierarchy worksheet node for every dataset, and `flattenLibraryHierarchy`
+  always includes every root-level node regardless of expansion state) means
+  `rows.length === 0` IMPLIES `datasets.length === 0`, which means `shown`
+  (filtered from `datasets`) is empty too — so this branch renders zero
+  `DatasetRow`s on every path in today's app, first paint AND restore
+  included (confirmed: no test in the suite exercises `rows.length === 0`
+  with `datasets.length > 0`, and none could — the hierarchy build makes it
+  impossible). Deferring it is not merely low-cost, it is free: nothing a
+  user can see depends on the chunk loading synchronously, because nothing
+  was ever painted there.
+
+Also checked against the `lib`-vs-component rule (slice 3/4): `DatasetRow`'s
+seam is a COMPONENT seam (a thin new `LibraryFlatRows.tsx` wrapper, the
+`LibrarySections.tsx` shape), which slice 4's restatement rescues from the
+"poor subtree exclusivity is presumed a loss" rule — and it was still
+measured, not assumed.
+
+#### Why `DatasetRow.tsx` itself can't be the `SEAMS` entry
+
+`LibraryTree.tsx` and `SmartFoldersSection.tsx` both import `DatasetRow.tsx`
+directly (they are its real render paths — the Tree view and Smart Folders),
+and both are themselves already-lazy chunks. Making `DatasetRow.tsx` the
+`SEAMS` `module` would make the guard's corpus-wide "no module value-imports
+a seam module statically" arm red for those two importers, which are doing
+nothing wrong. The seam is instead the new `components/Library/LibraryFlatRows.tsx`
+wrapper (the `LibrarySections.tsx` precedent): it wraps Library.tsx's OWN
+flat-list-fallback body (moved out verbatim — the `row()` helper and its
+JSX, previously inline in Library.tsx), and `Library.tsx` is its only
+importer, reached only via `lazy(() => import("./LibraryFlatRows"))`.
+
+#### Measurement
+
+Both built in this worktree after `npm ci`, with `node_modules/.vite` wiped
+before EVERY build; exact bytes out of `dist/index.html` (not the rounded kB
+`check-bundle-size.mjs` prints):
+
+| tree | SHA | eager bytes |
+|---|---|---:|
+| parent (`git rev-parse HEAD~1`) | `8f79207d` | **888,562** |
+| this commit (slice 6) | see commit | **875,428** |
+| — net delta — | — | **−13,134** |
+
+Eager-walk module counts, measured with a standalone replica of
+`architecture.test.ts`'s own `eagerlyReachable()` walk run against both trees
+(script kept in the session scratch, not committed — it replays the guard,
+not a new mechanism): **393 of 927 before, 382 of 928 after** — the one seam
+(which itself stays lazy, so it does not appear in either count) plus the
+eleven modules it dragged out, minus the one module ADDED
+(`LibraryFlatRows.tsx`, the loader, also lazy).
+
+The realised delta (13,134 B) is LARGER than `DatasetRow.tsx`'s own
+attributed bytes from the per-module table at the top of this file
+(10,297 B) — expected, and not a discrepancy: that figure was one module's
+own bytes, not its exclusive subtree, and the seam took DatasetRow's own
+row-only siblings with it too (below).
+
+#### What got dragged out
+
+`DRAGGED_OUT` gains eleven modules, all measured (not assumed) with the same
+before/after walk: `DatasetRow.tsx` itself, `DatasetRowParts.tsx`,
+`DatasetRowPreview.tsx`, `Sparkline.tsx`, `datasetRowMenu.ts` (DatasetRow's
+own imports — `libraryTileMenu.ts`, `datasetRowMenu.ts`'s other importer, is
+itself reachable only from the already-lazy `LibraryWorkspace.tsx`/
+`DetailsRow.tsx`, so it never made `datasetRowMenu.ts` eager), plus
+`DerivedWorksheetMark.tsx` + `RecomputedMark.tsx` (rendered by
+`DatasetRowParts.tsx`) and `lib/combineSeparateActions.ts` +
+`lib/derivedWorksheetActions.ts` + `lib/downsample.ts` +
+`lib/libraryPreviewPrefs.ts` (pulled in transitively by those). `ContextMenu.tsx`
+and `Badge` (from `primitives`), also imported by `DatasetRow.tsx`, do NOT
+drop — both stay eager via `PlotToolbar.tsx`/other primitives consumers, so
+they correctly do not appear in `DRAGGED_OUT`.
+
+#### Guard verification
+
+`src/architecture.test.ts`'s `SEAMS` gains the one entry
+(`LibraryFlatRows.tsx`, loader `Library.tsx`) and `DRAGGED_OUT` gains the
+eleven modules above. All three `SEAMS` guard arms were verified by making
+the seam static (replacing `const LibraryFlatRows = lazy(() =>
+import("./LibraryFlatRows"))` with a plain `import LibraryFlatRows from
+"./LibraryFlatRows"`), confirmed red, then reverted:
+
+| sabotage | test | result |
+|---|---|---|
+| static import in the loader | "no module value-imports a seam module statically" | **RED** — `Library.tsx -> /components/Library/LibraryFlatRows` |
+| static import in the loader | "nothing eager reaches a seam, or the modules the seams dragged out with them" | **RED** — all 12 (seam + 11 dragged-out) reappear eager |
+| static import in the loader | "each loader reaches its seam through a dynamic import()" | **RED** |
+
+DOM + import-recorder coverage: `components/Library/libraryFlatRowsSeam.test.tsx`
+(the gate half — a `vi.hoisted` + `track()` import recorder, since this
+seam's gate is strictly stronger than a DOM-visible ternary: with
+`rows.length === 0` implying `shown.length === 0`, a DOM assertion CANNOT
+distinguish "gate open, chunk fetched, nothing to render" from "gate closed,
+chunk never fetched" — only the import record can) and
+`components/Library/LibraryFlatRows.test.tsx` (the wrapper's own render
+output, unit-tested directly, decoupled from the mocked seam test so the
+tracked import isn't fired early by a static top-level import in the same
+file — a real trap: an earlier draft that imported `LibraryFlatRows`
+statically in the seam test file for a second, direct-render assertion
+fired the mock factory at file-load time instead of at Library.tsx's real
+runtime `import()` call, permanently defeating the recorder for that file).
+Proved the recorder reddens by widening the gate (`const inHierarchy =
+false`, i.e. "the gate deleted"): the "never fetches while the hierarchy has
+rows" half of the combined test went red with `expected [ 'LibraryFlatRows'
+] to not include 'LibraryFlatRows'`, confirming a DOM-only version of this
+test (there isn't one, deliberately) could not have caught it.
+
+One React/testing-environment quirk surfaced and is recorded so a future
+seam test isn't re-surprised by it: two SEPARATE `render()` calls of
+`<Library />` across two different `it()` blocks, both referencing the SAME
+module-level `lazy(() => import(...))` object, do not reliably re-trigger
+the tracked factory a second time — the closed-then-open transition has to
+happen within ONE test via `rerender()` (the same shape
+`lazySectionSeams.test.tsx`'s `MultiSelectBar` test already uses) for the
+import recorder to fire predictably in that ordering.
+
+#### Blast-radius sweep for tick-counting
+
+Per slice 3's lesson: grepped every `.test.ts(x)` naming `DatasetRow` for
+`await Promise.resolve()` after an action that now crosses this seam. One
+file matched (`DatasetRow.test.tsx`), and its four `await Promise.resolve()`
+sites are all inside the destructive-Remove confirm flow (waiting on
+`askConfirm`'s own promise) on a `<DatasetRow>` rendered DIRECTLY — never
+through `Library.tsx`/`LibraryFlatRows.tsx` — so none crosses the new seam.
+**Zero hits.** The full Library suite (39 files / 531 tests) and the full
+frontend suite (682 files / 11,547 tests) both pass unchanged.
+
+#### The cost, stated plainly
+
+None. This is the first seam in the campaign whose deferred branch renders
+zero content on every reachable path today, so there is no first-paint or
+restore-time artifact to weigh against the bytes — the `PlotLegend`/
+`PlotToolbar`/`CommandPalette` trade this slice's ranking turned away from
+simply does not apply here.
+
+#### Sabotage table
+
+| sabotage | test(s) | result |
+|---|---|---|
+| static import (seam made eager) | the 3 `SEAMS` guard arms | **RED** (all 3, see table above) |
+| widen the render gate (`inHierarchy = false`) | `libraryFlatRowsSeam.test.tsx`'s "never fetches while the hierarchy has rows" half | **RED** |
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and
@@ -955,11 +1137,23 @@ only P4.1-style slice decomposition touches it. A raise may still be the
 honest answer for a lane that needs room *now*; these slices are how the
 budget stops being a recurring blocker.
 
-What has changed since that was written is which end of the ratchet binds.
-Headroom is now 31,838 B of a 40,000 B `SLACK` band, so the campaign's next
-constraint is the FLOOR, not the ceiling: roughly **8.1 kB** can still be
-recovered without touching the pin, against ~26 kB of ranked, partly measured
-candidates (slice 5's banked `PlotToolbar` and `CommandPalette` seams, plus
-`DatasetRow` behind a wrapper). Slice 6 is a pin-DOWN slice or it is nothing —
-and it should rank by the `PlotLegend` ruling above before it ranks by bytes,
-because two of the three candidates it inherits are suspect under that rule.
+What has changed since that was written is which end of the ratchet binds,
+and then, after slice 6, that the ratchet moved. Slice 6 ranked its three
+inherited candidates by the `PlotLegend` ruling before bytes: `PlotToolbar`
+and `CommandPalette` were both disqualified on user-visible cost (plot
+chrome on first paint; the first ⌘K of a session) and stay banked, unlanded;
+`DatasetRow` behind a `LibraryFlatRows.tsx` wrapper was not disqualified —
+its target branch renders zero content on any reachable path today — and
+landed at −13,134 B, the largest single-seam win of the campaign. The pin
+was then lowered 888,562 -> 876,452 B (`measured + 1,024`) per rule 3's
+deliberate-diet-pass path, so that gain is locked in rather than left as
+spendable slack.
+
+**Current headroom is 1,024 B against the 876,452 B pin** — by design, not
+by exhaustion. The two banked seams (`PlotToolbar` −3,644 B,
+`CommandPalette` −2,935 B) remain on the table, unlanded, under the
+`PlotLegend` ruling; landing either needs that ruling to be re-argued, not
+merely a slice with spare bytes. A future slice with real headroom to spend
+starts by re-measuring against the NEW pin, not by assuming the 8.1 kB or
+31.8 kB figures this section's earlier drafts cited — both are stale as of
+slice 6.
