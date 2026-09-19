@@ -465,9 +465,32 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
     useApp.getState().loadWorkspace({ datasets: [ds("w2")] });
     expect(useApp.getState().workbooks).toEqual([]);
   });
+
+  // F6 (review): BUG-010's migrationNotice fold -- `${migrationWarnings[0]}
+  // ${length > 1 ? " (+N more)" : ""}` appended to the status line -- was
+  // absent from this net (caught only by useApp.test.ts / the wider suite).
+  it("folds multiple migrationWarnings into the status line (BUG-010)", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [ds("w1")],
+      migrationWarnings: ["first warning", "second warning"],
+    });
+    expect(useApp.getState().status).toBe("loaded workspace — 1 dataset — first warning (+1 more)");
+  });
 });
 
 describe("loadWorkspace — restored plot-window layout path (restoredHasPlot true)", () => {
+  // F3 (review, workspace-hydration net): the legacy/fresh spec above gets an
+  // exact `toEqual` key-set; this branch had only a `toContain` loop over the
+  // VIEW_KEYS, which cannot see an EXTRA key written only here — that hole
+  // survived the entire 7,559-test wide suite (review's S3: an
+  // `openReportId` write gated on `restoredHasPlot` alone). This is the same
+  // 115-key list as the legacy/fresh spec's 88, PLUS `activeId` (a dataset is
+  // present here, unlike that spec's empty-library case) and the ~30
+  // restoredView-only VIEW_KEYS the legacy path never reaches. `stageTab` is
+  // NOT in this set: `activeDs` is present, but `nextStageTab` special-cases
+  // "already on Worksheet" and poison() seeds `stageTab: "worksheet"`, so the
+  // write recomputes the SAME value here — see the dedicated stageTab spec
+  // below for a poison seed that actually exercises it.
   it("ADDITIONALLY writes every PlotView field the legacy path leaves alone", () => {
     const before = snapshot();
     useApp.getState().loadWorkspace({
@@ -481,23 +504,161 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       ],
       focusedWindowId: "pw1",
     });
-    const changed = changedSince(before);
-    for (const viewKey of [
-      "yScale", "xScale", "showGrid", "showLegend", "legendPos", "legendXY",
-      "legendFrameXY", "legendStatic", "legendTitle", "axisLabelOffsets",
-      "axisLabelStyles", "plotTemplate", "showAxisBox", "stackMode",
-      "insetMode", "polarMode", "statMode", "xFmt", "yFmt", "y2Fmt",
-      "plotTitle", "xAxisLabel", "yAxisLabel", "refLines", "annotations",
-      "regionShades", "shapes", "waterfall", "panelFit", "pageSetup",
-    ]) {
-      expect(changed, `expected ${viewKey} to be written by the restored-layout branch`).toContain(viewKey);
-    }
+    expect(changedSince(before)).toEqual([
+      "activeId",
+      "activePlotSpecId",
+      "annotations",
+      "axisLabelOffsets",
+      "axisLabelStyles",
+      "baselineOverlay",
+      "collections",
+      "composition",
+      "datasets",
+      "editableFigures",
+      "errKeys",
+      "expandedFolders",
+      "expandedWorkbookIds",
+      "facetKey",
+      "figureDocSeed",
+      "figureDocs",
+      "figurePublicationSession",
+      "fitOverlay",
+      "focusedWindowId",
+      "folders",
+      "fwhmResult",
+      "gadgetBusy",
+      "gadgetCursorResult",
+      "gadgetCursors",
+      "gadgetDerivResult",
+      "gadgetError",
+      "gadgetFftPreview",
+      "gadgetIntegrateResult",
+      "gadgetStatsResult",
+      "groupKey",
+      "hiddenChannels",
+      "insetMode",
+      "integral",
+      "legendFrameXY",
+      "legendPos",
+      "legendStatic",
+      "legendTitle",
+      "legendXY",
+      "librarySelection",
+      "macroSteps",
+      "mapPaintedLimits",
+      "mapViews",
+      "openReportId",
+      "originFidelity",
+      "originFigures",
+      "pageDocSeed",
+      "pageSetup",
+      "pages",
+      "panelFit",
+      "peakOverlay",
+      "peakWizardEdit",
+      "pendingRecipeApplication",
+      "plotRecipes",
+      "plotTemplate",
+      "plotTitle",
+      "plotWindows",
+      "polarMode",
+      "qfitBusy",
+      "qfitError",
+      "qfitResult",
+      "qfitRoi",
+      "quickFigureBuilderDatasetId",
+      "quickPlotTemplates",
+      "recalcMode",
+      "recipeSourcesComplete",
+      "refLines",
+      "regionShades",
+      "reimportAllBusy",
+      "reimportAllCommitted",
+      "reimportAllRows",
+      "reports",
+      "rsmPeaks",
+      "savedPlotSpecs",
+      "savedRois",
+      "selectedIds",
+      "separatePreview",
+      "seriesLabels",
+      "seriesOrder",
+      "seriesStyles",
+      "shapes",
+      "showAxisBox",
+      "showGrid",
+      "showLegend",
+      "smartFolders",
+      "stackMode",
+      "staleDatasets",
+      "staleFits",
+      "statMode",
+      "status",
+      "techniqueViewMemory",
+      "toolWindowLayout",
+      "visibleDetailsColumns",
+      "waterfall",
+      "workbookLastChild",
+      "workbooks",
+      "worksheetId",
+      "worksheetSelections",
+      "xAxisLabel",
+      "xFmt",
+      "xKey",
+      "xLim",
+      "xScale",
+      "xStep",
+      "y2AxisLabel",
+      "y2Fmt",
+      "y2Keys",
+      "y2Lim",
+      "y2Scale",
+      "y2Step",
+      "yAxisLabel",
+      "yFmt",
+      "yKeys",
+      "yLim",
+      "yScale",
+      "yStep",
+    ]);
     const s = useApp.getState();
     expect(s.showGrid).toBe(true); // defaultPlotView()'s value -- differs from poison's `false`
     expect(s.plotTitle).toBe("Restored Title");
     expect(s.stackMode).toBe(false); // defaultPlotView()'s value -- differs from poison's `true`
     expect(s.plotWindows.map((w) => w.id)).toEqual(["pw1"]);
     expect(s.focusedWindowId).toBe("pw1");
+  });
+
+  // F4a (review): `stageTab: activeDs ? nextStageTab(activeDs, s.stageTab) :
+  // s.stageTab` survived the whole wide suite (S17: drop the write entirely)
+  // because poison() seeds `stageTab: "worksheet"` and `nextStageTab`
+  // special-cases "already on Worksheet, stay put" — so the write recomputes
+  // the identical value whether or not the line exists. Seeding a value
+  // `nextStageTab` will actually recompute (not "worksheet") makes the write
+  // observable: `raw`'s dataset is not a 2-D map, so the fixture's
+  // non-map data selects "plot".
+  it("sets stageTab via nextStageTab once a dataset becomes active", () => {
+    useApp.setState({ stageTab: "map" }); // NOT "worksheet" -- nextStageTab must actually run
+    useApp.getState().loadWorkspace({ datasets: [ds("w1")] });
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  // F4b (review): the persisted `focusedWindowId` restore is unguarded HERE
+  // (it is caught only by store/plotRecipes.test.ts) because the spec above
+  // has exactly one restored window, so `plotWindows.find(kind==="plot") ??
+  // plotWindows[0]` — the FALLBACK path — lands on the same id the persisted
+  // value names either way. A second window, focused, tells the two paths
+  // apart: the fallback always picks the FIRST plot window.
+  it("restores the persisted focusedWindowId, not just the first restored plot window", () => {
+    useApp.getState().loadWorkspace({
+      datasets: [ds("w1")],
+      plotWindows: [
+        win({ id: "pw1", datasetId: "w1" }),
+        win({ id: "pw2", datasetId: "w1" }),
+      ],
+      focusedWindowId: "pw2",
+    });
+    expect(useApp.getState().focusedWindowId).toBe("pw2");
   });
 
   it("skipLayout: true ignores a persisted layout even when present — falls back to the fresh single window", () => {
@@ -514,14 +675,26 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
     expect(s.plotTitle).toBe("STALE TITLE"); // the restoredView spread never fires
   });
 
+  // F2 (review, workspace-hydration net): a `kind: "snapshot"` window with no
+  // `snapshot:` payload is DISCARDED by `sanitizeDocumentBackedPlotWindows`
+  // (its sanitizer requires the bundle), so `restored` was `[]` either way
+  // and this spec never actually reached the items-11/17 branch it names —
+  // `restoredHasPlot` was trivially false because nothing survived at all.
+  // `kind: "worksheet"` (a document-backed kind that round-trips on a LIVE
+  // dataset binding with no extra payload, lib/plotview.test.ts's "item 17")
+  // makes `restored` genuinely non-empty and non-plot, so this is really
+  // exercising "some window restored, none of them a plot window".
   it("a doc whose surviving windows are all non-plot still gets a fresh maximized plot window", () => {
     useApp.getState().loadWorkspace({
       datasets: [ds("w1")],
-      plotWindows: [{ ...win({ id: "snap1" }), kind: "snapshot" } as unknown as PlotWindow],
+      plotWindows: [{ ...win({ id: "ws1", datasetId: "w1" }), kind: "worksheet" } as unknown as PlotWindow],
     });
     const s = useApp.getState();
+    // The restored worksheet window survives AND a fresh plot window gets
+    // appended alongside it — dropping either half would pass a looser check.
+    expect(s.plotWindows.map((w) => w.kind).sort()).toEqual(["plot", "worksheet"]);
     expect(s.plotWindows.some((w) => w.kind === "plot")).toBe(true);
-    expect(s.plotTitle).toBe("STALE TITLE"); // no plot window restored -> legacy/fresh path
+    expect(s.plotTitle).toBe("STALE TITLE"); // no PLOT window restored -> legacy/fresh path
   });
 });
 
@@ -575,6 +748,13 @@ describe("appendWorkspace — the additive .dwk join", () => {
     // changes regardless of content.
     expect(changedSince(before)).toEqual(["datasets", "future", "history", "status", "workbooks"]);
     expect(labels()).toEqual(["append workspace"]);
+    // F5 (review): the header claims the extraction's delegate call is
+    // "provably still wired to the same function with the SAME ARGUMENTS" --
+    // but nothing above pins the ARGUMENTS `appendWorkspace` forwards, only
+    // the key names it touches. A silently truncated `ws.datasets` before the
+    // delegate call would pass every assertion above unchanged, so pin the
+    // actual joined ids: BOTH incoming datasets must land, in order.
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["d1", "n1", "n2"]);
   });
 
   // Ordering pin (workspaceIO.ts's own doc: "`recordHistory` runs BEFORE the

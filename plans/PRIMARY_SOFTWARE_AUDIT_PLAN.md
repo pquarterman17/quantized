@@ -6635,12 +6635,17 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   its `STORE_PINS` entry ratcheted DOWN to 1,451 with a dated
   justification. The bodies are byte-identical modulo one indentation
   level (object literal at depth 1 → the creator's `return {` at depth
-  2); ten now-unused imports left `useApp.ts` with them
+  2); ten import STATEMENTS were narrowed or removed, covering 13
+  bindings, leaving `useApp.ts` without them
   (`migrateGroupsToFolders`, `mainWindow`, `focusTransientReset`,
   `sanitizeDocumentBackedPlotWindows`, `hydrateView`, `defaultErrKeys`,
   `originHiddenChannels`, `sanitizeVisibleDetailsColumns`,
   `sanitizeTechniqueViewMemory`, `loadedMapViews`, `runAppendWorkspace`,
-  `WorkspaceState`, `LoadedWorkspace`). The FIELDS stay declared and
+  `WorkspaceState`, `LoadedWorkspace`) — 5 statements removed outright
+  (`lib/errorbars`, `lib/workspace` types, `lib/libraryDetailsColumns`,
+  `lib/techniqueViewMemory`, `lib/windowDocumentPersistence`) and 5
+  narrowed (`lib/foldertree`, `lib/plotview`, `store/windows`,
+  `store/workspaceIO`, `store/rois`). The FIELDS stay declared and
   initialized on AppState here, same shape as all three earlier
   extractions — `loadWorkspace` writes nearly all of them (a
   full-library replace has to), but plenty of other actions read and
@@ -6671,13 +6676,60 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   state) — closed by adding a dedicated ordering spec asserting the
   pushed undo snapshot is the PRE-append dataset list, which then failed
   as expected. Eager bundle, both trees built after their own `npm ci`
-  and a `node_modules/.vite` wipe: **889,475 B at `fb0aa64b`** (`HEAD~1`
+  and a `node_modules/.vite` wipe: **889,475 B at `c841c38d`** (`HEAD~1`
   of the extraction, the characterization-only commit, which cannot move
   the eager graph) → **889,496 B on the extraction commit, +21 B** (the
   new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched, well clear
   of budget). The box stays `[~]`: `store/useApp.ts` is still over the
   500-line module ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` /
   `lib/uplotOverlays.ts` are untouched by every pass so far.
+
+  **Adversarial review of the fourth extraction (2026-09-19), net gaps
+  closed same day.** Verdict CLEAN — the moved body and the composed
+  store are byte-/reference-identical (C1/C5); seven findings, none a
+  live behaviour regression. F1: the "before" SHA above was recorded as
+  `fb0aa64b`, an orphaned amend that is neither this commit's parent nor
+  on any branch — corrected above to `c841c38d` (the real `HEAD~1`); the
+  two commits' trees are byte-identical, so the **889,475 B number
+  itself was always right**, only the SHA was unreproducible (same class
+  as review-1 F3, review-2 F1, review-3 F7 — a recurring mistake this
+  plan and `agent_rules.md` now both call out). F7: "ten now-unused
+  imports … (13 names)" conflated import STATEMENTS with BINDINGS;
+  corrected above to say both numbers explicitly (10 statements / 13
+  bindings), and a stale `lib/workspace.test.ts:1424` comment naming
+  `useApp.ts`'s `loadWorkspace` (missed by the otherwise-thorough
+  four-site cross-reference sweep) now names `store/workspaceHydration.ts`.
+  F2-F6 were holes in the characterization net itself, closed in
+  `store/workspaceHydration.characterization.test.ts` (20 → 23 specs):
+  F2, a "surviving windows are all non-plot" spec used a `kind:
+  "snapshot"` fixture with no `snapshot:` payload, which
+  `sanitizeDocumentBackedPlotWindows` discards outright — `restored` was
+  `[]` either way, so the spec never reached the branch it named;
+  changed to `kind: "worksheet"` (a document-backed kind that round-trips
+  on a live dataset binding with no extra payload) and asserts BOTH the
+  restored window and the appended fresh one survive. F3: the
+  restored-plot-window-layout branch had only a `toContain` loop over the
+  VIEW_KEYS, which cannot see an extra key written only on that branch
+  (proven with a `history: []` write gated on `restoredHasPlot` — 23/23
+  and the full 7,559-test wide suite both stayed green); given the same
+  exact `toEqual` key-set treatment the legacy/fresh branch already had.
+  F4: `stageTab`'s write and the persisted `focusedWindowId` restore were
+  each unpinned here (`stageTab` survived the ENTIRE wide suite; the
+  `focusedWindowId` restore was caught only by `store/plotRecipes.test.ts`,
+  never by this file or `useApp.test.ts`) — pinned with a poison seed
+  `nextStageTab` actually recomputes past, and a second restored window
+  so the persisted focus can be told apart from the fallback's "first
+  plot window". F5: `appendWorkspace`'s header claims the delegate call
+  is "provably still wired to the same function with the same
+  arguments", but no spec pinned the ARGUMENTS — a silently truncated
+  `ws.datasets` passed 20/20; closed with one assertion on the joined
+  dataset ids. F6: BUG-010's `migrationNotice` status-line fold had no
+  spec here (only in `useApp.test.ts`/`lib/openWorkspaceReplace.test.ts`);
+  added. Each of the five closures was verified red under its own
+  reviewer-identified mutation and green on honest code before landing.
+  Test-only change: `git diff` outside
+  `workspaceHydration.characterization.test.ts` (plus the two comment
+  fixes above) touches no `frontend/src` product code.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
