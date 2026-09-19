@@ -3,12 +3,13 @@
 // or the `?` key. Content lives in lib/shortcuts (pure, testable); this is just
 // the renderer. Backdrop click / Esc / the Close button dismiss it.
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 const IS_MAC = isMacPlatform();
 
@@ -25,25 +26,20 @@ export default function ShortcutsDialog() {
   // and RecoveryChoiceDialog. Window-capture already guarantees that (it runs
   // ahead of the registry's window-BUBBLE listener), so joining the registry
   // would add ordering machinery this dialog never needs.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, setOpen]);
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
+  // app's one ordered registry on its `modal` layer, so the innermost open
+  // dialog closes and nothing below it acts on the same keystroke. The
+  // per-dialog `window`-capture listener this replaces used
+  // `stopPropagation()`, which does not stop a same-node, same-phase sibling,
+  // so two open dialogs both closed on ONE Escape.
+  useEscapeSurface(
+    "modal",
+    () => {
+      setOpen(false);
+      return true;
+    },
+    open,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. A read-only sheet with one
   // real control (Close), so the shared hook's default landing spot — the

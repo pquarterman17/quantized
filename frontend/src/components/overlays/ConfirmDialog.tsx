@@ -8,6 +8,7 @@ import { useEffect, useId, useRef } from "react";
 import { create } from "zustand";
 
 import { Button } from "../primitives";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { useFocusTrap } from "./useDialogFocus";
 
 interface ConfirmState {
@@ -76,19 +77,20 @@ export default function ConfirmDialog() {
   // leans on Enter because nothing appeared to happen — has the very next
   // auto-repeat land here as a CONFIRM, before they have read the question.
   // On a delete that cannot be undone, that is the whole safeguard bypassed.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
+  // NARROWED 2026-09-19 (BUG-018, P3.3 round 9). The paragraph above is true
+  // only over a NON-dialog surface, and it now describes ENTER alone.
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so
+  // while a second backdrop dialog was open above this one, ONE Escape both
+  // dismissed that dialog AND silently resolved this confirmation `false`.
+  // ESCAPE therefore moved to the ordered registry's `modal` layer below;
+  // ENTER stays here, because the `e.repeat` safeguard and the
+  // "a focused button activates itself" rule are about this dialog's own
+  // destructive-action gate and have nothing to do with the Escape ladder.
   useEffect(() => {
     if (title === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Enter" && e.key !== "Escape") return;
-      e.stopPropagation(); // this dialog owns both keys while it is open
+      if (e.key !== "Enter") return;
+      e.stopPropagation(); // this dialog owns Enter while it is open
       if (e.repeat) {
         e.preventDefault();
         return;
@@ -98,15 +100,30 @@ export default function ConfirmDialog() {
       // Cancel, so treating Enter as confirm here would turn the safest
       // keyboard gesture in the dialog into the destructive one — the exact
       // opposite of what moving focus there was for. Let the browser activate
-      // whatever is focused instead. Escape always cancels.
-      if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button")) return;
+      // whatever is focused instead.
+      if ((e.target as HTMLElement | null)?.closest?.("button")) return;
       e.preventDefault();
-      resolve?.(e.key === "Enter");
+      resolve?.(true);
       close();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [title, resolve, close]);
+
+  // Escape always cancels — now as a `modal` surface in `lib/escapeStack.ts`,
+  // so a dialog opened ON TOP of a pending confirmation takes the first
+  // Escape and this one stays pending for the second (BUG-018). The
+  // registry's own `event.repeat` guard replaces the one removed above for
+  // this key.
+  useEscapeSurface(
+    "modal",
+    () => {
+      resolve?.(false);
+      close();
+      return true;
+    },
+    title !== null,
+  );
 
   // Move focus INTO the dialog, onto Cancel — the safe choice, so a stray
   // Space/Enter on the newly focused control dismisses rather than destroys.

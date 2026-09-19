@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -115,5 +115,31 @@ describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () =>
     await user.keyboard("{Escape}");
     expect(useApp.getState().separatePreview).toBeNull();
     expect(opener).toHaveFocus();
+  });
+
+  // R13 (P3.3 round 8): this file had no Escape REACHABILITY pin at all — the
+  // case above discriminates on focus-in/restore, and would stay green if the
+  // key never reached the dialog. Added with BUG-018's fix, against the
+  // mechanism that actually ships (`lib/escapeStack.ts`'s `modal` layer, which
+  // listens on `window` in the BUBBLE phase).
+  it("Escape dispatched at the window closes the dialog (reachability)", async () => {
+    useApp.getState().previewSeparateWorksheets(["d1"]);
+    render(<SeparateWorksheetsDialog />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(useApp.getState().separatePreview).toBeNull());
+  });
+
+  // BUG-018 acceptance criterion: this dialog's landing spot is an `<input>`,
+  // and `escapeStack`'s `isEditingTarget` bail would make Escape from there
+  // dead. The `modal` layer suspends that bail — measured here from the real
+  // landing spot, not from the dialog box.
+  it("Escape from the Name field — the landing spot — still closes it", async () => {
+    const user = userEvent.setup();
+    render(<SeparateWorksheetsDialog />);
+    act(() => useApp.getState().previewSeparateWorksheets(["d1"]));
+    expect(screen.getByLabelText("Workbook name")).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(useApp.getState().separatePreview).toBeNull());
   });
 });

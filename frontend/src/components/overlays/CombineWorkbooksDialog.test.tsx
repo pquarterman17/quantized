@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -232,5 +232,32 @@ describe("CombineWorkbooksDialog focus-in / Tab trap / Escape / restore (P3.3 R1
     await user.keyboard("{Escape}");
     expect(useCombineDialog.getState().seed).toBeNull();
     expect(opener).toHaveFocus();
+  });
+
+  // R13 (P3.3 round 8): this file had no Escape REACHABILITY pin — the case
+  // above discriminates on focus-in/restore and would stay green if the key
+  // never reached the dialog. Added with BUG-018's fix, against the mechanism
+  // that ships (`lib/escapeStack.ts`'s `modal` layer, on `window` BUBBLE).
+  it("Escape dispatched at the window closes the dialog (reachability)", async () => {
+    openCombineDialog({ workbookIds: [], worksheetIds: ["d1", "d2"] });
+    render(<CombineWorkbooksDialog />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(useCombineDialog.getState().seed).toBeNull());
+  });
+
+  // BUG-018 acceptance criterion: the landing spot is an `<input>`, which
+  // `escapeStack`'s `isEditingTarget` bail would make Escape-dead. The `modal`
+  // layer suspends that bail — measured from the real landing spot. The
+  // dialog box's own `onKeyDown` also had to stop stopping Escape: a React
+  // synthetic `stopPropagation()` stops the NATIVE event at the React root,
+  // which is below `window`.
+  it("Escape from the Name field — the landing spot — still closes it", async () => {
+    const user = userEvent.setup();
+    render(<CombineWorkbooksDialog />);
+    act(() => openCombineDialog({ workbookIds: [], worksheetIds: ["d1", "d2"] }));
+    expect(screen.getByLabelText("Workbook name")).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(useCombineDialog.getState().seed).toBeNull());
   });
 });

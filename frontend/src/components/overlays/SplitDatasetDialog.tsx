@@ -24,6 +24,7 @@ import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 export default function SplitDatasetDialog() {
   const targetId = useApp((s) => s.splitDialogTargetId);
@@ -97,17 +98,18 @@ export default function SplitDatasetDialog() {
   // — a true backdrop modal always wins over anything mounted behind it, and
   // window-capture already guarantees that ahead of the registry's window-
   // bubble listener.
-  useEffect(() => {
-    if (!targetId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        close();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [targetId, close]);
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9) — see `lib/escapeStack.ts`'s
+  // `modal` layer. That layer also suspends the registry's `isEditingTarget`
+  // bail, which matters here: this dialog's landing spot is the Column
+  // `<select>`, and on the `window` layer Escape from there did nothing.
+  useEscapeSurface(
+    "modal",
+    () => {
+      close();
+      return true;
+    },
+    targetId !== null,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Column
   // select — it's the FIRST decision (it also decides whether Tolerance even
@@ -166,7 +168,13 @@ export default function SplitDatasetDialog() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSplit) runSplit();
-          e.stopPropagation();
+          // Escape is deliberately let through (BUG-018): it belongs to the
+          // `modal` surface registered above, and that dispatcher listens on
+          // `window` in the BUBBLE phase. Measured — a React synthetic
+          // `stopPropagation()` calls `stopPropagation()` on the native event
+          // at the React root container, so stopping Escape here made the
+          // registry's listener unreachable from inside this dialog.
+          if (e.key !== "Escape") e.stopPropagation();
         }}
       >
         <h2 id={titleId}>Split by column value</h2>

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -173,11 +173,31 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 
-  it("Escape closes without splitting", () => {
+  it("Escape closes without splitting", async () => {
     useApp.setState({ splitDialogTargetId: "d1" });
     render(<SplitDatasetDialog />);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(useApp.getState().splitDialogTargetId).toBeNull();
+    // Escape now goes through the ordered registry (`lib/escapeStack.ts`,
+    // BUG-018), whose walk is deferred one macrotask, so wait on the STATE the
+    // close produces rather than reading it in the same tick.
+    await waitFor(() => expect(useApp.getState().splitDialogTargetId).toBeNull());
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  // BUG-018 acceptance criterion: this dialog's landing spot is a `<select>`,
+  // which `escapeStack`'s `isEditingTarget` bail would make Escape-dead. The
+  // `modal` layer suspends that bail — measured from the real landing spot,
+  // driven through the keyboard rather than at `window`.
+  it("Escape from the Column select — the landing spot — still closes it", async () => {
+    const user = userEvent.setup();
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const column = screen.getByLabelText("Split column");
+    expect(column).toHaveFocus();
+    expect(column.tagName).toBe("SELECT"); // the exact shape `isEditingTarget` bails on
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(useApp.getState().splitDialogTargetId).toBeNull());
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 

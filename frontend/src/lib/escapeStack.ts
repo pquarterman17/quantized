@@ -43,10 +43,11 @@
 // HOW IT DISPATCHES. One listener, on `window` in the BUBBLE phase, i.e. the
 // very last stop on the propagation path. Everything that already owns Escape
 // by stopping propagation keeps owning it, with no special case here: an open
-// `ContextMenu` (document bubble), the `CommandPalette` (React synthetic),
-// `ConfirmDialog` and the eight backdrop dialogs (window capture), a recipe
-// row mid-rename. If the event reaches this listener at all, nothing upstream
-// claimed it.
+// `ContextMenu` (document bubble), the `CommandPalette` (React synthetic), the
+// `WhatIsThis` mode (window capture), a recipe row mid-rename. If the event
+// reaches this listener at all, nothing upstream claimed it. (The ten backdrop
+// dialogs used to be in that list; round 9 moved them INTO the walk — see
+// below.)
 //
 // The walk is then deferred ONE MACROTASK and re-reads `defaultPrevented`,
 // which is a live property of the event. That is round 2's finding-2 fix, kept
@@ -94,6 +95,15 @@
 //    time. All three stay separately pinned.
 //  - the `gesture` layer cannot be deferred at all, because waiting is what
 //    destroys it: see `RESOLVES_AT_KEYDOWN`.
+//
+// ROUND 9 (BUG-018). The ten backdrop dialogs used to sit OUTSIDE this walk,
+// each on its own `window` capture listener with `stopPropagation()`. That
+// does not stop a same-node, same-phase sibling, so two open dialogs both ran
+// on one keystroke: `Ctrl+,` then `?` then ONE Escape took `[role="dialog"]`
+// from 2 to 0, and over a pending `ConfirmDialog` the same key silently
+// resolved the confirmation `false`. Dialog-over-dialog is the ONE case this
+// ordering apparatus exists to settle, so they join it — see the `modal`
+// layer below for why they could not simply be `window`-layer surfaces.
 
 import { useEffect, useRef } from "react";
 
@@ -117,8 +127,13 @@ import { useApp } from "../store/useApp";
  *  every surface, including the window focus happens to be in. It is also the
  *  one layer whose claim cannot survive the deferral, so it is resolved
  *  synchronously — see `RESOLVES_AT_KEYDOWN`.
- *  `menu` — an open menu owns Escape (GUI_INTERACTION #9). */
-export type EscapeLayer = "app" | "selection" | "workspace" | "window" | "gesture" | "menu";
+ *  `menu` — an open menu owns Escape (GUI_INTERACTION #9).
+ *  `modal` — a true backdrop modal: a surface that blocks the pointer over
+ *  the whole app and, by definition, TRAPS Escape. Top of the ladder, and the
+ *  only layer that suspends this dispatcher's three "this key is not ours"
+ *  early returns — see `onKeyDown`. The ten backdrop dialogs under
+ *  `components/overlays` are the members. */
+export type EscapeLayer = "app" | "selection" | "workspace" | "window" | "gesture" | "menu" | "modal";
 
 /** Return `true` to CLAIM the keystroke and stop the walk; `false` to decline
  *  and let the surface below have it. A `ToolWindow` declines when focus is
@@ -132,7 +147,31 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
   window: 3,
   gesture: 4,
   menu: 5,
+  modal: 6,
 };
+
+/** The layer that TRAPS Escape (round 9, BUG-018).
+ *
+ *  A modal blocks every surface behind it, so the three early returns in
+ *  `onKeyDown` — "the key belongs to the text field", "the command palette
+ *  owns it", "an open menu owns it" — are exactly wrong while one is the
+ *  claimant, and four of the ten backdrop dialogs land focus on an `<input>`
+ *  or `<select>` BY DESIGN (Help's search box, Separate's and Combine's Name
+ *  field, Split's Column select). Measured on the reverted first attempt,
+ *  which put them on the `window` layer: Escape from those landing spots did
+ *  nothing at all.
+ *
+ *  The bypass is keyed on THE CLAIMANT resolving to a modal, not on "a modal
+ *  is registered anywhere". The two coincide while `modal` is the top rank,
+ *  but the claimant form is the narrower statement of the same rule: it can
+ *  only ever suspend a guard for a keystroke a modal is actually going to be
+ *  offered, and it stays correct if a layer is ever added above this one.
+ *
+ *  It is a TRAP, not merely a priority: when the claimant is a modal, the
+ *  walk is restricted to modal entries, so a modal that DECLINES cannot hand
+ *  a text field's Escape down to a workspace or the app fallbacks — the
+ *  surfaces the bypassed guards existed to protect. */
+const TRAPS_ESCAPE: EscapeLayer = "modal";
 
 /** The one layer whose handler runs SYNCHRONOUSLY, in the keydown listener,
  *  instead of in the deferred walk (round 5).
@@ -146,12 +185,15 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *  later" for this layer.
  *
  *  Acting here means this layer does not see a `preventDefault()` that lands
- *  after the dispatcher — which costs nothing, because it is the top of the
- *  ladder bar `menu`: nothing below it may outrank it anyway, and a claim that
+ *  after the dispatcher — which costs nothing, because only `menu` and
+ *  `modal` outrank it (and an open modal suspends this path entirely, exactly
+ *  as an open menu does): nothing below it may outrank it, and a claim that
  *  arrived BEFORE the dispatcher (window-capture, document-bubble — how
  *  `SymbolPalette` claims) is already visible in `defaultPrevented` and still
- *  wins. A `menu` open above a drag suspends the synchronous path entirely
- *  (see `onKeyDown`), so "an open menu owns Escape" is unchanged.
+ *  wins. A `menu` or `modal` open above a drag suspends the synchronous path
+ *  entirely (see `onKeyDown` — the scan stops at the first entry that is not
+ *  this layer, and both of those sort above it), so "an open menu owns
+ *  Escape" is unchanged and a modal traps it.
  *
  *  A claim here CLAIMS THE EVENT too — `onKeyDown` calls `preventDefault()`
  *  (round 6, finding 1). The deferred walk marks a claimed keystroke by
@@ -235,22 +277,29 @@ function onKeyDown(event: KeyboardEvent): void {
   // `onClose` twelve times, eleven of them after the panel had unmounted.
   // `ConfirmDialog` has had this guard from the start and documents why.
   if (event.repeat) return;
-  // Escape inside a text field is the FIELD's, not a surface's — closing a
-  // panel out from under someone mid-type discards what they were entering.
-  if (isEditingTarget(event.target)) return;
-  // The command palette owns its own Escape even if focus has drifted off its
-  // input. Evaluated HERE, synchronously, not in the deferred walk: the
-  // palette closes itself on the same keystroke, so by walk time the flag
-  // would already read false.
-  if (useApp.getState().cmdkOpen) return;
-  // Belt and braces for GUI_INTERACTION #9 ("an open menu OWNS Escape").
-  // `ContextMenu` stops propagation on document-bubble, so this listener is
-  // normally not even reached; the check keeps the promise true for any menu
-  // that forgets to. The Shell's own menus are `menu`-layer surfaces instead.
-  if (document.querySelector(".qzk-ctx")) return;
   if (stack.length === 0) return;
 
   const ordered = orderInnermostFirst();
+  // A modal TRAPS Escape (round 9, BUG-018). Resolved from the CLAIMANT — the
+  // one entry certain to be offered this key — rather than from "is a modal
+  // registered": see `TRAPS_ESCAPE` for why, and for why the walk below is
+  // then restricted to modal entries rather than merely starting at one.
+  const trapped = ordered[0].layer === TRAPS_ESCAPE;
+  if (!trapped) {
+    // Escape inside a text field is the FIELD's, not a surface's — closing a
+    // panel out from under someone mid-type discards what they were entering.
+    if (isEditingTarget(event.target)) return;
+    // The command palette owns its own Escape even if focus has drifted off
+    // its input. Evaluated HERE, synchronously, not in the deferred walk: the
+    // palette closes itself on the same keystroke, so by walk time the flag
+    // would already read false.
+    if (useApp.getState().cmdkOpen) return;
+    // Belt and braces for GUI_INTERACTION #9 ("an open menu OWNS Escape").
+    // `ContextMenu` stops propagation on document-bubble, so this listener is
+    // normally not even reached; the check keeps the promise true for any menu
+    // that forgets to. The Shell's own menus are `menu`-layer surfaces instead.
+    if (document.querySelector(".qzk-ctx")) return;
+  }
   // Resolve the layer that cannot wait, NOW, inside the keydown listener.
   // Only surfaces ABOVE the first non-synchronous one can be offered the key
   // here: a `menu` outranks a drag, and asking a menu synchronously would
@@ -282,7 +331,11 @@ function onKeyDown(event: KeyboardEvent): void {
       return;
     }
   }
-  const snapshot = ordered.slice(rest);
+  // The trap: nothing BELOW a modal may act on this keystroke, whether the
+  // modal claims it or declines it. (`modal` is the top rank, so this is the
+  // same prefix `slice(rest)` would produce — stated as a filter because the
+  // property being enforced is "modals only", not "from here down".)
+  const snapshot = trapped ? ordered.filter((e) => e.layer === TRAPS_ESCAPE) : ordered.slice(rest);
   if (snapshot.length === 0) return;
 
   if (pending !== null) clearTimeout(pending);

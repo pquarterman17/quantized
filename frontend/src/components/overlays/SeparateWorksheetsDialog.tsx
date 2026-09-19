@@ -20,6 +20,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 export default function SeparateWorksheetsDialog() {
   const plan = useApp((s) => s.separatePreview);
@@ -56,17 +57,18 @@ export default function SeparateWorksheetsDialog() {
   // — a true backdrop modal always wins over anything mounted behind it, and
   // window-capture already guarantees that ahead of the registry's window-
   // bubble listener.
-  useEffect(() => {
-    if (!plan) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        close();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [plan, close]);
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9) — see `lib/escapeStack.ts`'s
+  // `modal` layer. That layer also suspends the registry's `isEditingTarget`
+  // bail, which matters here: this dialog's landing spot is the Name
+  // `<input>`, and on the `window` layer Escape from there did nothing.
+  useEscapeSurface(
+    "modal",
+    () => {
+      close();
+      return true;
+    },
+    plan !== null,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Name field —
   // the one control every commit needs a look at (it seeds from
@@ -100,7 +102,13 @@ export default function SeparateWorksheetsDialog() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSeparate) runSeparate();
-          e.stopPropagation();
+          // Escape is deliberately let through (BUG-018): it belongs to the
+          // `modal` surface registered above, and that dispatcher listens on
+          // `window` in the BUBBLE phase. Measured — a React synthetic
+          // `stopPropagation()` calls `stopPropagation()` on the native event
+          // at the React root container, so stopping Escape here made the
+          // registry's listener unreachable from inside this dialog.
+          if (e.key !== "Escape") e.stopPropagation();
         }}
       >
         <h2 id={titleId}>Separate into new workbook</h2>

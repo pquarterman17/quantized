@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -47,7 +47,7 @@ describe("PreferencesDialog", () => {
     expect(useApp.getState().originBookClickOpens).toBe("worksheet");
   });
 
-  it("closes via Done and Escape", () => {
+  it("closes via Done and Escape", async () => {
     useApp.getState().setPrefsOpen(true);
     const { rerender } = render(<PreferencesDialog />);
     fireEvent.click(screen.getByText("Done"));
@@ -56,7 +56,10 @@ describe("PreferencesDialog", () => {
     useApp.getState().setPrefsOpen(true);
     rerender(<PreferencesDialog />);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(useApp.getState().prefsOpen).toBe(false);
+    // Escape now goes through the ordered registry (`lib/escapeStack.ts`,
+    // BUG-018), whose walk is deferred one macrotask, so wait on the STATE the
+    // close produces rather than reading it in the same tick.
+    await waitFor(() => expect(useApp.getState().prefsOpen).toBe(false));
   });
 });
 
