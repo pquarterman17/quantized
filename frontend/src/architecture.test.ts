@@ -2591,7 +2591,8 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // This slice's limit is NOT candidate scarcity. The ratchet in
     // `scripts/check-bundle-size.mjs` is two-sided: it FAILS the build below
     // `EAGER_JS_BUDGET - SLACK` (920,400 − 40,000 = 880,400 B) to force a
-    // pin-down, so with the parent at 889,475 B only 9,075 B was recoverable
+    // pin-down, so with the real parent (`cee0494f`, not `b10bcad3` — see the
+    // plan) at 889,498 B only 9,098 B was recoverable
     // here without moving the pin. Three further seams were built and
     // measured and are recorded in the plan (`PlotToolbar` −3,644 B and
     // `CommandPalette` −2,935 B, both banked for a slice allowed to ratchet
@@ -2821,8 +2822,11 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
   /** SLICE 5 (2026-09-19) adds nothing here: its one seam
    *  (`SnapshotPlotWindow`) is a prop-forwarding shell whose every import is
    *  kept eager by something else, so it dragged no module out with it.
-   *  Measured by the same eager walk this block runs: 393 -> 392 modules of a
-   *  926-module corpus, which is that seam alone. */
+   *  Measured by the same eager walk this block runs, against the real
+   *  parent `cee0494f` (not `b10bcad3`, which is four commits back and
+   *  misses the eagerly-reachable `store/workspaceHydration.ts` module that
+   *  `4179b166` added in between): 394 -> 393 modules of a 927-module
+   *  corpus, which is that seam alone. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",

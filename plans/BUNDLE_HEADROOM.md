@@ -16,14 +16,25 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-19, after slice 5):** landed tip **888,539 B**
-eager against parent `b10bcad3`'s **889,475 B** (**−936 B**), leaving
-**31,861 B of headroom** against the unmoved 920,400 B budget. Slice 5 is the
+**Current state (2026-09-19, after slice 5):** landed tip **888,562 B**
+eager against parent `cee0494f`'s **889,498 B** (**−936 B**), leaving
+**31,838 B of headroom** against the unmoved 920,400 B budget. Slice 5 is the
 first slice in this campaign whose limit is **not** candidate scarcity but the
 ratchet's own LOWER bound — see "The ceiling this campaign has now hit" below
 before planning slice 6 — and the first in which the biggest measured win was
 **rejected on user-visible cost rather than on bytes**. Both of those findings
 outlast the 936 B.
+
+**Read before starting slice 6, so it is not re-derived from the narrative
+below:** `scripts/check-bundle-size.mjs`'s ratchet is two-sided — it also
+fails the build BELOW `EAGER_JS_BUDGET - SLACK` (880,400 B) to force a
+pin-down, and slice 5 left only 9,098 B of headroom above that floor before
+hitting it. **Slice 6's first decision is therefore not which seam to cut but
+whether it is authorized to ratchet `EAGER_JS_BUDGET` DOWN** (protocol: lower
+it to `measured + 1,024` right after landing a reduction) — until that is
+decided, banked seams below the floor (`PlotToolbar`, `CommandPalette`) stay
+unlandable regardless of how clean their gate is. See "The ceiling this
+campaign has now hit" for the full arithmetic.
 
 **Earlier state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
 4's real parent is `b50f6602` (`git rev-parse 8a6f49ca^`), not `3f43467b`
@@ -553,6 +564,16 @@ exclusivity of its deferred subtree; rank a COMPONENT seam by its exclusive
 bytes alone and ignore the shared set.** Slice 3's own component seams
 (85% realised) were the first data point for this and were read too narrowly.
 
+**Addendum (slice 5, 2026-09-19): a re-export shell is not a real seam.**
+A component seam is only a win if its target's own bytes actually leave the
+eager graph. When the "target" is a re-export shell wrapping content that is
+*already* deferred behind some other loader, the shell adds a chunk-boundary
+and its own module weight without removing anything — a pure loss. This is
+why `DocumentWindow` (wrapping the already-lazy `MapWindow`/`WorksheetWindow`)
+measured **+221 B** in slice 5's per-seam table below rather than a reduction:
+check what a candidate's target actually re-exports before ranking it, not
+just whether a gate exists to hang it on.
+
 #### Per-seam measurements
 
 Cumulative, in the order the seams were measured — each row is a full
@@ -739,8 +760,9 @@ almost nothing there.
 This slice landed one seam out of five it built and measured. That is the
 point of it, not a shortfall: the byte cap below is structural, and the single
 largest win on the tree was **measured and then rejected on user-visible
-cost**. The two findings under "The ceiling this campaign has now hit" and
-"What slice 6 should do" are what this slice is actually for.
+cost**. Both findings are stated up front, in the "Current state" note near
+the top of this file and in "The ceiling this campaign has now hit" just
+below — that is what this slice is actually for.
 
 Bundle pair, exact bytes (the eager `<script type=module>` + `modulepreload`
 count out of `dist/index.html`, not the rounded kB `check-bundle-size.mjs`
@@ -749,13 +771,13 @@ wiped before EVERY build:
 
 | tree | SHA | eager bytes |
 |---|---|---:|
-| parent (`git rev-parse HEAD~1`) | `b10bcad3` | **889,475** |
-| this commit (slice 5) | see commit | **888,539** |
+| parent (`git rev-parse HEAD~1`) | `cee0494f` | **889,498** |
+| this commit (slice 5) | see commit | **888,562** |
 | — net delta — | — | **−936** |
 
 Eager-walk module counts, measured with `architecture.test.ts`'s own
-`eagerlyReachable()`/`sources()` replayed over `src/`: **393 of 926 before,
-392 of 926 after** — the one seam. It drags no module out with it and this
+`eagerlyReachable()`/`sources()` replayed over `src/`: **394 of 927 before,
+393 of 927 after** — the one seam. It drags no module out with it and this
 slice adds no new module, so there is no offsetting `+1` of the kind slices 3
 and 4 had to account for.
 
@@ -765,7 +787,7 @@ and 4 had to account for.
 ABOVE `EAGER_JS_BUDGET` (920,400 B) and it also fails BELOW
 `EAGER_JS_BUDGET - SLACK` (920,400 − 40,000 = **880,400 B**), demanding the pin
 be ratcheted down so an unlocked gain cannot be silently spent. With the parent
-at 889,475 B that leaves exactly **9,075 B** recoverable in a slice that does
+at 889,498 B that leaves exactly **9,098 B** recoverable in a slice that does
 not move the pin — and this slice was told not to move it.
 
 That cap, not a shortage of candidates, is what sized slice 5 — together with
@@ -825,7 +847,7 @@ seams were fully implemented and measured; one landed.
 | 5 | `components/windows/DocumentWindow.tsx` (`MapWindow`+`WorksheetWindow`) | `WindowCanvas.tsx` | `kind === "worksheet"` / `"map"` | 866 | **+221** | **REJECTED on measurement** |
 
 **Measured-alone vs marginal — do not confuse them.** Seam 1's −936 B is its
-delta measured ALONE against the parent (889,475 → 888,539). The same seam
+delta measured ALONE against the parent (889,498 → 888,562). The same seam
 measured as a marginal addition on top of the PlotLegend tree read −585 B
 (883,594 → 883,009): two seams landing in one build share chunk-boundary glue,
 so a marginal figure is not the seam's own delta and the two are not
@@ -921,7 +943,7 @@ and slice 4's restatement does NOT rescue it (that rescue is for COMPONENT
 seams only). Its own note already conceded the structural problem:
 `parseWorkspace` needs `sanitizeRecipes` at load, so only `parseRecipe` could
 move and it shares most of the module's helpers with the half that stays. With
-9,075 B of ratchet room available, spending a build on a candidate whose own
+9,098 B of ratchet room available, spending a build on a candidate whose own
 premise is "the win is small — verify before doing it" was the wrong trade
 against two component seams with clean gates. It stays on the table for a slice
 willing to split the module.
@@ -934,7 +956,7 @@ honest answer for a lane that needs room *now*; these slices are how the
 budget stops being a recurring blocker.
 
 What has changed since that was written is which end of the ratchet binds.
-Headroom is now 31,861 B of a 40,000 B `SLACK` band, so the campaign's next
+Headroom is now 31,838 B of a 40,000 B `SLACK` band, so the campaign's next
 constraint is the FLOOR, not the ceiling: roughly **8.1 kB** can still be
 recovered without touching the pin, against ~26 kB of ranked, partly measured
 candidates (slice 5's banked `PlotToolbar` and `CommandPalette` seams, plus
