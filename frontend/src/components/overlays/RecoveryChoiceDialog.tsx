@@ -8,6 +8,8 @@
 // Modeled on ConfirmDialog's backdrop + qzk-glass shell, but not built on
 // askConfirm's boolean promise — three distinct outcomes, not confirm/cancel.
 
+import { useEffect, useId, useRef } from "react";
+
 import {
   applyCancelRecovery,
   applyKeepLastProject,
@@ -15,6 +17,7 @@ import {
 } from "../../lib/applyRecoveryChoice";
 import { useRecoveryChoice } from "../../store/recoveryChoice";
 import { Button } from "../primitives";
+import { useDialogFocus } from "./useDialogFocus";
 
 function formatWhen(ms: number): string {
   const d = new Date(ms);
@@ -23,14 +26,48 @@ function formatWhen(ms: number): string {
 
 export default function RecoveryChoiceDialog() {
   const prompt = useRecoveryChoice((s) => s.pending);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
+  const open = prompt !== null;
+
+  // P3.3: this dialog had NO keyboard dismissal at all — the only way out was
+  // clicking Cancel or the backdrop. It is a STARTUP modal (it appears before
+  // the user has touched anything), so it was also the one place where "focus
+  // is already somewhere sensible" is guaranteed false: focus sat on <body>,
+  // which meant the backdrop-click escape hatch had no keyboard twin.
+  //
+  // Escape maps to Cancel — the choice that touches nothing (the autosave
+  // stays in storage, the project file stays on disk), matching the backdrop.
+  // Window capture, like ConfirmDialog, so it works wherever focus is.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      applyCancelRecovery();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+
+  useDialogFocus(dialogRef, open);
+
   if (prompt === null) return null;
 
   const { autosaveAt, datasetCount, lastProject } = prompt;
 
   return (
     <div className="qz-overlay-backdrop" onMouseDown={applyCancelRecovery}>
-      <div className="qzk-glass qz-dialog" onMouseDown={(e) => e.stopPropagation()}>
-        <h2>Recover unsaved work?</h2>
+      <div
+        className="qzk-glass qz-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={dialogRef}
+        tabIndex={-1}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2 id={titleId}>Recover unsaved work?</h2>
         <p>
           An autosaved snapshot is newer than the last time <strong>{lastProject.name}</strong> was
           saved. Choose which one to keep working from — the other is left untouched either way.

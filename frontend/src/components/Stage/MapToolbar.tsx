@@ -9,6 +9,7 @@
 
 import type { ColormapName } from "../../lib/colormap";
 import type { CutMode, CutSpace } from "../../lib/mapcuts";
+import MapToolbarColorLimits from "./MapToolbarColorLimits";
 
 /** Box-ROI arm/disarm state (RSM_CUTS_PLAN item 6). Defined here (not in
  *  useMapRoi.ts) so this toolbar's extraction commit — step 1, "PAY
@@ -30,6 +31,20 @@ export type RulerMode = "off" | "ruler";
 export type WedgeMode = "off" | "sector";
 
 export interface MapToolbarProps {
+  /** The dataset THIS map instance is bound to — the Stage tab's active
+   *  dataset, or (document window) whatever it is bound to explicitly. Every
+   *  write this toolbar makes already keys off it (`onCmapChange`,
+   *  `onToggleLogZ`, …); the colour-limit control below is the same —
+   *  it writes through `setMapColorLimits(datasetId, …)`, never the
+   *  app-wide active dataset (P2.8 residual (a)). */
+  datasetId: string | null;
+  /** What THIS map instance's own last paint used as its colour range —
+   *  `undefined` before its first paint, `null` when nothing was paintable
+   *  (review round 7, finding 1). Forwarded to `MapToolbarColorLimits` so its
+   *  "effective" hint describes what THIS toolbar's own canvas is doing,
+   *  never another open map's, even when they share a dataset. */
+  painted: readonly [number, number] | null | undefined;
+
   /** Angular ⇄ Q axis toggle (only shown when the dataset carries both). */
   qAvailable: boolean;
   isAngular: boolean;
@@ -85,6 +100,8 @@ export interface MapToolbarProps {
 
 export default function MapToolbar(props: MapToolbarProps) {
   const {
+    datasetId,
+    painted,
     qAvailable,
     isAngular,
     isQ,
@@ -164,6 +181,7 @@ export default function MapToolbar(props: MapToolbarProps) {
       >
         ∿
       </button>
+      <MapToolbarColorLimits datasetId={datasetId} painted={painted} />
       {cutSpace != null && (
         <>
           <span className="qzk-tool-sep" />

@@ -22,6 +22,7 @@ import MapToolbar, { type MapToolbarProps } from "./MapToolbar";
 
 function renderToolbar(overrides: Partial<MapToolbarProps> = {}) {
   const props: MapToolbarProps = {
+    datasetId: "ds-a",
     qAvailable: true, isAngular: true, isQ: false, onAngular: vi.fn(), onQ: vi.fn(),
     labels: ["2Theta", "Omega", "Intensity", "Qx", "Qz"], keys: [0, 1, 2], onKeyChange: vi.fn(),
     cmap: "viridis", cmapOptions: ["viridis"], onCmapChange: vi.fn(),

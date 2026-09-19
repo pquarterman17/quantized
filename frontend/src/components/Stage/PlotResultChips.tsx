@@ -14,6 +14,7 @@ import { formatQfitParams, GADGET_MODE_LABELS } from "../../lib/quickfit";
 import type { IntegralResult } from "../../store/useApp";
 import { Button, Select } from "../primitives";
 import type { GadgetChipState } from "./useGadgetChip";
+import { resultChipsVisible } from "./resultChipsVisible";
 
 interface Props {
   integral: IntegralResult | null;
@@ -27,7 +28,7 @@ interface Props {
 
 export default function PlotResultChips({ integral, fwhm, onClearIntegral, onClearFwhm, gadget }: Props) {
   const showGadget = !!gadget && (gadget.roi != null || gadget.cursors != null || gadget.busy || gadget.error != null);
-  if (!integral && !fwhm && !showGadget) return null;
+  if (!resultChipsVisible({ integral, fwhm, gadget })) return null;
   return (
     <div className="qzk-result-chips">
       {integral && (

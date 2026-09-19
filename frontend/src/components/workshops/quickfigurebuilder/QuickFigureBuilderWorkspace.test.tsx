@@ -1,8 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
 import { askParams } from "../../overlays/ParamDialog";
+import ToolWindow from "../../overlays/ToolWindow";
+import { pressEscape } from "../../../test/pressEscape";
 import { useApp } from "../../../store/useApp";
 import QuickFigureBuilderWorkspace from "./QuickFigureBuilderWorkspace";
 
@@ -284,28 +287,28 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(useApp.getState().quickPlotTemplates).toEqual([]); // no template
   });
 
-  it("Escape cancels, but the command palette owns Escape while open", () => {
+  it("Escape cancels, but the command palette owns Escape while open", async () => {
     render(<QuickFigureBuilderWorkspace />);
     useApp.setState({ cmdkOpen: true });
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
     useApp.setState({ cmdkOpen: false });
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
   });
 
-  it("Escape cancels, but a context menu owns Escape while open", () => {
+  it("Escape cancels, but a context menu owns Escape while open", async () => {
     render(<QuickFigureBuilderWorkspace />);
     const ctx = document.createElement("div");
     ctx.className = "qzk-ctx";
     document.body.appendChild(ctx);
     try {
-      fireEvent.keyDown(window, { key: "Escape" });
+      await pressEscape();
       expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1");
     } finally {
       document.body.removeChild(ctx);
     }
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
   });
 
@@ -377,5 +380,50 @@ describe("QuickFigureBuilderWorkspace — Save Quick Plot Template… (PR H, L0.
     await act(async () => {});
     expect(useApp.getState().editableFigures).toEqual([]);
     expect(useApp.getState().plotWindows).toEqual([]);
+  });
+});
+
+// ── The Escape ladder: a workshop on top of the Quick Figure Builder ─────
+// Review finding 2 (P3.3 round 3), the same inversion as Tiles: this
+// workspace's `window` listener `preventDefault()`ed every Escape, so with a
+// workshop focused over the builder, Escape closed the BUILDER and left the
+// panel open. Round 1 got this right by accident (`stopPropagation()`); round
+// 2 removed the shield and nothing pinned the behaviour.
+describe("QuickFigureBuilderWorkspace + workshop Escape ladder (P3.3 round 3)", () => {
+  function BuilderWithWorkshop() {
+    const [panelOpen, setPanelOpen] = useState(true);
+    return (
+      <>
+        <QuickFigureBuilderWorkspace />
+        {panelOpen && (
+          <ToolWindow id="qfb-ladder" title="Find peaks" onClose={() => setPanelOpen(false)}>
+            <button type="button">Run</button>
+          </ToolWindow>
+        )}
+      </>
+    );
+  }
+
+  it("Escape closes the WORKSHOP and leaves the builder open; the next Escape closes the builder", async () => {
+    const { container } = render(<BuilderWithWorkshop />);
+    const frame = container.querySelector(".qzk-win");
+    expect(frame).not.toBeNull();
+    expect(frame).toHaveFocus();
+
+    await pressEscape(frame!);
+    expect(container.querySelector(".qzk-win")).toBeNull();
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBe("d1"); // builder stayed
+
+    await pressEscape(document.activeElement ?? document);
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+  });
+
+  it("Escape from outside the panel closes the builder and leaves the panel alone", async () => {
+    const { container } = render(<BuilderWithWorkshop />);
+
+    await pressEscape(document.body);
+
+    expect(useApp.getState().quickFigureBuilderDatasetId).toBeNull();
+    expect(container.querySelector(".qzk-win")).not.toBeNull();
   });
 });

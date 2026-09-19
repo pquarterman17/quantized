@@ -38,6 +38,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
+import { useEscapeSurface } from "../../../lib/escapeStack";
 import { channelLetter, compileFormula } from "../../../lib/formula";
 import type { TextColumn } from "../../../lib/columnmeta";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
@@ -258,16 +259,14 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     useApp.getState().clearOriginWorksheetSeed();
   }, [ds.id, originWorksheetSeed]);
 
-  // Esc clears the column selection while one exists (mirrors useGadgetChip's
-  // "listen only while there's something to dismiss" pattern).
-  useEffect(() => {
-    if (selectedCols.size === 0) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedCols(new Set());
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [selectedCols.size]);
+  // Esc clears the column selection (round 4: a `selection`-layer surface on
+  // the shared registry, not a bare window listener — that one fired ALONGSIDE
+  // every other Escape consumer and ran even mid cell-edit). Registered only
+  // while there IS something to dismiss.
+  useEscapeSurface("selection", () => {
+    setSelectedCols(new Set());
+    return true;
+  }, selectedCols.size > 0);
 
   const toggleColSelected = (col: number) =>
     setSelectedCols((s) => {

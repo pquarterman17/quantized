@@ -270,14 +270,25 @@ export function usePeakWizard(): PeakWizardState {
 
   // Escape pauses the mode (mirrors useGadgetChip's Escape-to-dismiss) without
   // navigating away from step ②; re-entering the step below un-pauses it.
+  //
+  // `preventDefault()` is the repo's "this keystroke was mine" convention
+  // (useGlobalShortcuts' header documents it), and here it is load-bearing:
+  // this panel is hosted by `ToolWindow`, whose Escape-to-close reads
+  // `defaultPrevented` once the dispatch is over. Without the claim, one
+  // Escape would pause the marker-edit mode AND close the whole Peak Analyzer.
+  // The listener is mounted only while there is something to pause, so a
+  // SECOND Escape (mode already paused) claims nothing and closes the panel as
+  // usual.
   useEffect(() => {
-    if (step !== 1 || !active) return;
+    if (step !== 1 || !active || editSuppressed) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setEditSuppressed(true);
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      setEditSuppressed(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [step, active]);
+  }, [step, active, editSuppressed]);
 
   // Any step change resets the pause — so it never outlives the visit to ②
   // that raised it, and returning to ② always starts un-paused.

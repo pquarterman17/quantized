@@ -17,18 +17,12 @@
 
 import { useEffect } from "react";
 
+import { isEditingTarget } from "../../lib/editingTarget";
 import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
-
-function isEditing(t: EventTarget | null): boolean {
-  const el = t as HTMLElement | null;
-  if (!el) return false;
-  const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-}
 
 /** New Graph Window: clones the focused view onto the focused dataset by
  *  default (the plan's "fast compare workflow"), then focuses it — Origin's
@@ -264,7 +258,7 @@ export function useWindowCommands(): void {
         cycleFocus(e.shiftKey ? -1 : 1);
         return;
       }
-      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || isEditing(e.target)) return;
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || isEditingTarget(e.target)) return;
       switch (e.key.toLowerCase()) {
         case "n":
           e.preventDefault();

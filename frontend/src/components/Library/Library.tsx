@@ -20,15 +20,8 @@
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
-import BookFamiliesSection from "./BookFamiliesSection";
-import CollectionsSection from "./CollectionsSection";
 import DatasetRow from "./DatasetRow";
-import FiguresSection from "./FiguresSection";
-import MultiSelectBar from "./MultiSelectBar";
-import OriginFidelitySection from "./OriginFidelitySection";
-import ReportsSection from "./ReportsSection";
-import SavedFiguresSection from "./SavedFiguresSection";
-import SmartFoldersSection from "./SmartFoldersSection";
+import LibrarySections from "./LibrarySections";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
@@ -44,10 +37,13 @@ import type { LibraryViewMode } from "../../lib/libraryViewPrefs";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { selectLibraryNode } from "./libraryOpen";
 
-const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
-const PagesSection = lazy(() => import("./PagesSection"));
+// Bundle diet slice 4 (plans/BUNDLE_HEADROOM.md): the multi-select action bar
+// renders null below two selected rows, so its chunk waits for the second row
+// the user picks. The flat sections are deferred the same way, one gate each,
+// inside LibrarySections.tsx.
+const MultiSelectBar = lazy(() => import("./MultiSelectBar"));
 // PR C: LibraryTree pulls in WorkbookRow/ArtifactRows/the workbook menu
-// registry/FolderRow — lazy like the two sections above (MAIN_PLAN #29's
+// registry/FolderRow — lazy like the sections (MAIN_PLAN #29's
 // eager-bundle budget; the pure hierarchy build itself stays eager via
 // useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
 const LibraryTree = lazy(() => import("./LibraryTree"));
@@ -334,22 +330,19 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         )}
       </div>
 
-      <MultiSelectBar />
+      {selectedIds.length > 1 && (
+        <Suspense fallback={null}>
+          <MultiSelectBar />
+        </Suspense>
+      )}
 
-      {/* Sections whose items are now tree children (workbook worksheets,
-       *  figures, pages, reports) hide while the tree renders — and hide
-       *  during search too (PR D2: the results surface covers every kind
-       *  WITH the query applied; the sections were unfiltered). The
-       *  true-empty state is the only remaining flat-section surface. */}
-      {!inHierarchy && !searchActive && <FiguresSection />}
-      {!searchActive && <OriginFidelitySection />}
-      {!inHierarchy && !searchActive && <Suspense fallback={null}><EditableFiguresSection /></Suspense>}
-      {!inHierarchy && !searchActive && <SavedFiguresSection />}
-      {!inHierarchy && !searchActive && <Suspense fallback={null}><PagesSection /></Suspense>}
-      {!inHierarchy && !searchActive && <ReportsSection />}
-      {!searchActive && <BookFamiliesSection />}
-      <SmartFoldersSection onFilterTag={setQuery} />
-      <CollectionsSection hierarchy={hierarchy} onShowInLibrary={showInLibrary} />
+      <LibrarySections
+        inHierarchy={inHierarchy}
+        searchActive={searchActive}
+        hierarchy={hierarchy}
+        onFilterTag={setQuery}
+        onShowInLibrary={showInLibrary}
+      />
 
       {body}
       {/* MAIN #38: an empty Library is the most common launch state, so it

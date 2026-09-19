@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { statsDescriptive } from "../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
 import Worksheet from "./Worksheet";
 
 vi.mock("../../lib/api", () => ({
@@ -467,11 +468,11 @@ describe("Worksheet column selection (item 6)", () => {
     expect(screen.getByText("1 column selected")).toBeInTheDocument();
   });
 
-  it("Escape clears the column selection", () => {
+  it("Escape clears the column selection", async () => {
     render(<Worksheet />);
     fireEvent.click(header(2));
     expect(screen.getByText("1 column selected")).toBeInTheDocument();
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(screen.queryByText(/columns? selected/)).not.toBeInTheDocument();
   });
 

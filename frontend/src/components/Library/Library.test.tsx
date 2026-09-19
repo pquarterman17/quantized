@@ -317,19 +317,22 @@ describe("Library — project-wide search + Show in Library reveal (PR D2)", () 
 });
 
 describe("Library — multi-select bar (GUI_INTERACTION_PLAN #13 sub-item 3)", () => {
-  it("is absent below 2 selected, appears at >=2 with the N-selected count", () => {
+  // The bar is chunk-deferred (bundle diet slice 4), so its appearance is
+  // awaited on the DOM STATE it produces — never on a fixed number of
+  // microtask ticks, which is what the weak-wait ratchet exists to forbid.
+  it("is absent below 2 selected, appears at >=2 with the N-selected count", async () => {
     useApp.setState({ datasets: [dsWith("a"), dsWith("b")], selectedIds: ["a"] });
     const { rerender } = render(<Library />);
     expect(screen.queryByText(/selected$/)).not.toBeInTheDocument();
     useApp.setState({ selectedIds: ["a", "b"] });
     rerender(<Library />);
-    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    expect(await screen.findByText("2 selected")).toBeInTheDocument();
   });
 
-  it("Clear empties the multi-selection", () => {
+  it("Clear empties the multi-selection", async () => {
     useApp.setState({ datasets: [dsWith("a"), dsWith("b")], selectedIds: ["a", "b"] });
     render(<Library />);
-    fireEvent.click(screen.getByText("Clear"));
+    fireEvent.click(await screen.findByText("Clear"));
     expect(useApp.getState().selectedIds).toEqual([]);
   });
 });
@@ -366,13 +369,13 @@ describe("Library — smart-folder query grammar in the filter box (item 9)", ()
     expect(screen.getByTitle(/Save this filter as a Collection/)).toBeInTheDocument();
   });
 
-  it("renders the smart-folders section when saved queries exist", () => {
+  it("renders the smart-folders section when saved queries exist", async () => {
     useApp.setState({
       datasets: [tagged("loop.dat", ["MvsH"])],
       smartFolders: [{ id: "s1", name: "Loops", query: "tag:mvsh" }],
     });
     render(<Library />);
-    expect(screen.getByText("Smart folders")).toBeInTheDocument();
+    expect(await screen.findByText("Smart folders")).toBeInTheDocument();
     expect(screen.getByText("☆ Loops")).toBeInTheDocument();
   });
 });
@@ -567,7 +570,7 @@ describe("Library — OriginFidelitySection disclosure survives search (FU-2)", 
     render(<Library />);
 
     // Expand it — the per-project fidelity summary becomes visible.
-    fireEvent.click(screen.getByText("Origin fidelity"));
+    fireEvent.click(await screen.findByText("Origin fidelity"));
     expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
 
     // Activate search: Library.tsx unmounts OriginFidelitySection entirely
@@ -580,7 +583,7 @@ describe("Library — OriginFidelitySection disclosure survives search (FU-2)", 
     // Clear search: the section remounts. It must come back EXPANDED, not
     // reset to its collapsed default.
     fireEvent.change(filter, { target: { value: "" } });
-    expect(screen.getByText("Origin fidelity")).toBeInTheDocument();
+    expect(await screen.findByText("Origin fidelity")).toBeInTheDocument();
     expect(screen.getByText(/XRD · Best effort/)).toBeInTheDocument();
   });
 });

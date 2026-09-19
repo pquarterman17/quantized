@@ -7,14 +7,15 @@
 // reads its own store slice, so PlotStage (at its own line pin) stays
 // untouched while still getting the feature.
 
-import type { RefObject } from "react";
+import { lazy, Suspense, type RefObject } from "react";
 import type uPlot from "uplot";
 
 import type { PlotPayload } from "../../lib/plotdata";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
-import PlotContextMenu from "./PlotContextMenu";
 import SelectionMiniToolbar from "./SelectionMiniToolbar";
 import type { PlotStageActions } from "./usePlotStageActions";
+
+const PlotContextMenu = lazy(() => import("./PlotContextMenu"));
 
 interface ObjectMenu {
   x: number;
@@ -42,6 +43,7 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
   return (
     <>
       {p.menu && p.displayPayload && (
+        <Suspense fallback={null}>
         <PlotContextMenu
           x={p.menu.x}
           y={p.menu.y}
@@ -52,6 +54,7 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
           actions={p.actions}
           onClose={p.onCloseMenu}
         />
+        </Suspense>
       )}
       {p.annotationMenu && (
         <ContextMenu

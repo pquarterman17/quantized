@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, runAction, useCommands, type Action } from "../../store/commands";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { reopenRecent } from "../../lib/reopenRecent";
 import type { RecentFile } from "../../lib/recentFiles";
 import { relativeTime } from "../../lib/recentFiles";
@@ -61,16 +62,26 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     const onDown = (e: MouseEvent) => {
       if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(null);
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(null);
-    };
     document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Escape closes the open menu (GUI_INTERACTION #9, "an open menu OWNS
+  // Escape"). Round 4: this was a plain document-keydown listener with no
+  // `preventDefault`/`stopPropagation`, so the shared registry ALSO walked and
+  // a surface below closed on the same keystroke — measured, the menu closed
+  // and the armed plot tool reverted to pointer together. As a `menu`-layer
+  // surface it is the top of the ladder, and one Escape does one thing.
+  useEscapeSurface(
+    "menu",
+    () => {
+      setOpen(null);
+      return true;
+    },
+    open !== null,
+  );
 
   // MAIN #31: an entry imported through a native dialog carries a path and
   // reopens its TARGET; a browser-uploaded one still re-opens the picker,

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { plural } from "../../lib/plural";
 
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
+import { useEscapeSurface } from "../../lib/escapeStack";
 import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
@@ -153,25 +154,21 @@ export default function LibraryWorkspace({ onClose }: Props) {
   // the Stage. Escape therefore belongs to the whole workspace session, not
   // only descendants of the tile section: focus may still be on the sidebar
   // Tiles button or a tree row when the user presses it.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      // Same editing predicate as useGlobalShortcuts' isEditing (review round:
-      // SELECT was missing, and isContentEditable covers every contenteditable
-      // form, not only the ="true" spelling).
-      const el = event.target instanceof HTMLElement ? event.target : null;
-      const editing = !!el
-        && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
-      if (useApp.getState().cmdkOpen || document.querySelector(".qzk-ctx") || editing) return;
-      event.preventDefault();
-      // This workspace owns the keystroke. Do not also let the window-level
-      // plot-tool Escape handler clear an unchanged plot gesture/tool.
-      event.stopPropagation();
-      close();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [close]);
+  //
+  // ROUND 3 (review findings 1+2): this used to be its own `document` listener
+  // that `preventDefault()`ed EVERY Escape it saw, which outranked the only
+  // keyboard dismissal a focused workshop has — with Tiles open, Escape closed
+  // this workspace and left the panel on top of it stuck. It now takes its
+  // place in the shared ordered registry (`lib/escapeStack.ts`) at the
+  // `workspace` layer: a floating window in front of it claims the key first,
+  // and the whole-app fallbacks behind it (the armed-plot-tool revert) only
+  // ever see an Escape this workspace declined. The editing / command-palette
+  // / open-menu guards are the dispatcher's now — one copy, one place — which
+  // also retires the fifth hand-rolled `isEditing` predicate (review NIT 8).
+  useEscapeSurface("workspace", () => {
+    close();
+    return true;
+  });
 
   const selectOrBrowse = (node: LibraryNode): void => {
     selectLibraryNode(node);

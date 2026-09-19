@@ -123,10 +123,14 @@ export default function MapStage({ dataset }: MapStageProps) {
   // view — see useMapSectorWedge.ts's header).
   const wedge = useMapSectorWedge(active, cutSpace);
   // The paint effect and the host box size it keeps in sync live in
-  // useMapPaint.ts — see its header (it also reports what the paint actually
-  // used as its colour range, which is what lets the Inspector stop
-  // contradicting the canvas).
-  const hostSize = useMapPaint({
+  // useMapPaint.ts — see its header (it also returns what THIS instance
+  // actually painted, which is what lets its own toolbar stop contradicting
+  // its own canvas — review round 7, finding 1). Only the Stage-tab instance
+  // (the `dataset` prop omitted; it follows the Library-active dataset, see
+  // this component's own header) mirrors that pair into the store's per-
+  // dataset `mapPaintedLimits` slot, which is what the Inspector's colour-
+  // limit row (bound to the active dataset by rule) reads.
+  const { w, h, painted } = useMapPaint({
     hostRef,
     canvasRef,
     payload,
@@ -139,7 +143,9 @@ export default function MapStage({ dataset }: MapStageProps) {
     contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale },
     theme,
     accent,
+    reportToStore: dataset === undefined,
   });
+  const hostSize = { w, h };
 
   // Reset the channel picks to 0/1/2 when the active dataset changes.
   useEffect(() => {
@@ -312,6 +318,8 @@ export default function MapStage({ dataset }: MapStageProps) {
 
       {active && enoughChannels && (
         <MapToolbar
+          datasetId={dsId}
+          painted={painted}
           qAvailable={qAvailable}
           isAngular={keysAre(angularKeys)}
           isQ={keysAre(qKeys)}

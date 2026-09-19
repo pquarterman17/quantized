@@ -7,6 +7,8 @@
 import { useEffect } from "react";
 
 import { cancelActiveGesture } from "./lib/gestureCancel";
+import { useEscapeSurface } from "./lib/escapeStack";
+import { isEditingTarget } from "./lib/editingTarget";
 import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { openFilePicker } from "./lib/openFilePicker";
 import { toolForKey } from "./lib/plotToolKeys";
@@ -15,12 +17,6 @@ import { useApp } from "./store/useApp";
 
 export function useGlobalShortcuts(): void {
   useEffect(() => {
-    const isEditing = (t: EventTarget | null): boolean => {
-      const el = t as HTMLElement | null;
-      if (!el) return false;
-      const tag = el.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
-    };
     const onKey = (e: KeyboardEvent) => {
       // Delete / Backspace removes the selected dataset(s) — but never while the
       // user is typing in a field (rename, tag, filter, formula, dialog input),
@@ -40,7 +36,7 @@ export function useGlobalShortcuts(): void {
       // either. Any future component that handles Delete for its own selection
       // gets this protection by calling preventDefault(), which it must do
       // anyway to stop the browser's Back navigation on Backspace.
-      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditing(e.target)) {
+      if ((e.key === "Delete" || e.key === "Backspace") && !e.defaultPrevented && !isEditingTarget(e.target)) {
         const s = useApp.getState();
         if (s.datasets.length === 0) return;
         e.preventDefault();
@@ -50,44 +46,24 @@ export function useGlobalShortcuts(): void {
         requestDatasetRemoval(s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : []);
         return;
       }
-      // Esc: universal plot-tool cancel (GUI_INTERACTION #9). A capture-phase
-      // dialog (ConfirmDialog/PreferencesDialog/…) or a bubble-phase menu
-      // (ContextMenu) that stopPropagation()s on Escape already wins over
-      // this — it's a plain window-level bubble listener, the same
-      // composition priority as every other Esc consumer in components/Stage.
-      // A live drag (integrate/FWHM/measure/stats/pan/quick-fit ROI/gadget
-      // cursors) wins next — cancelActiveGesture() tears down its listeners
-      // and discards the gesture WITHOUT committing, and the tool stays
-      // armed so the user can immediately retry. With nothing mid-drag: an
-      // idle-but-armed qfit gadget (a committed roi/cursors sitting with no
-      // drag in progress) clears the same way its own chip dismiss does.
-      // Only then — tool not already Pointer, not typing in a field, and
-      // Preferences ▸ Interaction ▸ "Persistent plot tool" not set — does
-      // Esc revert the active tool to Pointer.
-      if (e.key === "Escape") {
-        if (cancelActiveGesture()) {
-          e.preventDefault();
-          return;
-        }
-        const s = useApp.getState();
-        if (s.qfitRoi || s.gadgetCursors) {
-          e.preventDefault();
-          s.clearQfit();
-          return;
-        }
-        if (!isEditing(e.target) && s.plotTool !== "pointer" && !loadInteractionPrefs().persistentTool) {
-          e.preventDefault();
-          s.setPlotTool("pointer");
-        }
-        return;
-      }
+      // Esc is not handled in this listener at all any more (P3.3 round 4).
+      // All three of its tiers — cancel the live drag, clear the idle-armed
+      // quick-fit gadget, revert the armed tool to Pointer — are surfaces on
+      // the shared ordered registry at the bottom of this file, so that
+      // "the innermost open surface claims Escape" is one walk rather than a
+      // race between listener phases. Round 3 moved only the third tier and
+      // left the other two claiming inline with `preventDefault()`, ahead of
+      // every registered surface; measured consequence, with Tiles open over a
+      // committed ROI: Escape destroyed the ROI and left Tiles open.
+      // Returning here keeps Escape out of the single-key tool branch below.
+      if (e.key === "Escape") return;
       // "?" (Shift+/ on US layouts) opens the keyboard-shortcuts sheet.
-      if (e.key === "?" && !isEditing(e.target)) {
+      if (e.key === "?" && !isEditingTarget(e.target)) {
         e.preventDefault();
         useApp.getState().setShortcutsOpen(true);
         return;
       }
-      if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditing(e.target)) {
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !isEditingTarget(e.target)) {
         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
           e.preventDefault();
           const s = useApp.getState();
@@ -103,7 +79,7 @@ export function useGlobalShortcuts(): void {
       // the arrows it handles, and without this gate the SAME keystroke also
       // stepped the global prev/next-dataset navigation — two handlers, one
       // key press.
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditing(e.target)) {
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.defaultPrevented && !isEditingTarget(e.target)) {
         const s = useApp.getState();
         switch (e.key) {
           case "a":
@@ -169,7 +145,7 @@ export function useGlobalShortcuts(): void {
           // Only claim ⌘/Ctrl+V as "paste a dataset" when the user isn't typing
           // into a field (rename, tag, formula, dialog input) — those keep the
           // browser's native paste. Command palette / Edit menu always work.
-          if (!isEditing(e.target)) {
+          if (!isEditingTarget(e.target)) {
             e.preventDefault();
             void s.pasteDataFromClipboard();
           }
@@ -208,4 +184,55 @@ export function useGlobalShortcuts(): void {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──
+  // All three are registry surfaces as of round 4. Each DECLINES when it has
+  // nothing to do, so an Escape nothing wanted still falls all the way
+  // through. The editing-target / command-palette / open-menu guards live in
+  // the dispatcher, one copy for the whole app.
+
+  // TOP of the whole ladder: a drag that is happening right now. The user's
+  // hand is on it, so it outranks every surface — including the window focus
+  // happens to be sitting in. `cancelActiveGesture()` tears the drag's
+  // listeners down and discards it WITHOUT committing, and the tool stays
+  // armed for an immediate retry; it returns false when nothing is mid-drag,
+  // which is exactly the decline this layer needs.
+  //
+  // Round 5: the registry runs THIS layer synchronously, inside the keydown
+  // listener, because a drag does not survive the walk's macrotask — the
+  // browser delivers the queued `mouseup` first, the plugin commits, and the
+  // cancel arrives to find nothing left (see `RESOLVES_AT_KEYDOWN`). Nothing
+  // changes at this call site; the handler must simply stay cheap and safe to
+  // run mid-dispatch, which tearing down a drag's listeners is.
+  useEscapeSurface("gesture", () => cancelActiveGesture());
+
+  // An idle-but-armed quick-fit gadget (a committed roi/cursors sitting with
+  // NO drag in progress) clears the same way its own chip dismiss does. Round
+  // 3 left this inline, claiming ahead of everything; measured, that cleared a
+  // committed ROI out from under a focused workshop while the window stayed
+  // open (review finding 3). It is a Stage SELECTION, so it belongs below any
+  // open surface. Registered only while there IS something to dismiss — the
+  // same "listen while it matters" shape the four Stage deselect hooks use,
+  // which also makes the most recently armed selection the one Escape clears.
+  // The boolean selector is deliberate: `qfitRoi` changes on every mousemove
+  // of a live drag, but this value only flips at its edges.
+  const hasIdleGadget = useApp((s) => s.qfitRoi !== null || s.gadgetCursors !== null);
+  useEscapeSurface(
+    "selection",
+    () => {
+      useApp.getState().clearQfit();
+      return true;
+    },
+    hasIdleGadget,
+  );
+
+  // The LAST tier: revert the armed plot tool to Pointer. With Tiles or a
+  // workshop open, Escape dismisses that surface and leaves the tool armed,
+  // and the NEXT Escape (nothing left to dismiss) reverts the tool.
+  useEscapeSurface("app", () => {
+    const s = useApp.getState();
+    if (s.plotTool === "pointer" || loadInteractionPrefs().persistentTool) return false;
+    s.setPlotTool("pointer");
+    return true;
+  });
 }

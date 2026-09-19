@@ -10,10 +10,16 @@
 // behave exactly like the plot's X/Y limits rather than inventing a second
 // idiom for the same gesture. The difference that matters is undo: this one
 // DOES record an entry (see `setMapColorLimits` in store/mapView.ts for why).
+//
+// The commit/undo/effective-pair logic itself lives in the shared
+// `useMapColorLimitsField` hook (P2.8 residual (a), review round 3 finding 8)
+// so this row and the per-window toolbar control
+// (`components/Stage/MapToolbarColorLimits.tsx`) implement the gesture once —
+// this component ALWAYS binds it to the ACTIVE dataset, which is what makes
+// the per-dataset keying coherent for the Inspector's "describes the active
+// selection" rule; only the layout below is specific to this card.
 
-import { useEffect, useState } from "react";
-
-import { mapViewFor, sameColorLimits } from "../../lib/mapView";
+import { useMapColorLimitsField } from "../../lib/useMapColorLimitsField";
 import { useApp } from "../../store/useApp";
 import { NumberField } from "../primitives/NumberField";
 
@@ -31,49 +37,12 @@ function num(v: number): string {
 export default function MapColorLimits() {
   // The Inspector describes the ACTIVE dataset, so it edits that dataset's own
   // map view (P2.8 review round 2 — the views are keyed by dataset id, and a
-  // map document window showing some other dataset has its own entry).
+  // map document window showing some other dataset has its own entry; that
+  // window's own colour-limit control is `components/Stage/
+  // MapToolbarColorLimits.tsx`, sharing this same hook against THAT window's
+  // dataset instead of `activeId`).
   const dsId = useApp((s) => s.activeId);
-  const mapViews = useApp((s) => s.mapViews);
-  const colorLimits = mapViewFor(mapViews, dsId).colorLimits;
-  const setMapColorLimits = useApp((s) => s.setMapColorLimits);
-  // What the canvas is ACTUALLY painting with (P2.8 review round 3, finding
-  // 2). `mapRender.effectiveColorLimits` can replace the stored pair — in log
-  // mode a non-positive lower limit is raised to the grid's smallest positive
-  // cell, and a pair that is unusable after that raise falls back to the
-  // payload's own extent — and until this round the fields went on showing a
-  // range the renderer was ignoring (enter -1 … 2 in log mode on data starting
-  // at 7 and the map paints 7 … 9). The stored pair stays in the fields, so it
-  // is still editable and still recoverable; the effective pair is shown
-  // beside them, and only when the two actually differ.
-  const painted = useApp((s) => (dsId ? s.mapPaintedLimits[dsId] : undefined));
-  const effective =
-    colorLimits !== null &&
-    painted !== undefined &&
-    !sameColorLimits(painted === null ? null : [painted[0], painted[1]], colorLimits)
-      ? painted
-      : undefined;
-
-  const [lo, setLo] = useState("");
-  const [hi, setHi] = useState("");
-
-  // Mirror store → fields when the limits change elsewhere (a dataset switch
-  // resets them to auto; undo restores an earlier pair).
-  useEffect(() => {
-    setLo(colorLimits ? String(colorLimits[0]) : "");
-    setHi(colorLimits ? String(colorLimits[1]) : "");
-  }, [colorLimits]);
-
-  const commit = (): void => {
-    if (lo === "" && hi === "") {
-      if (colorLimits !== null) setMapColorLimits(dsId, null); // both blank → auto
-      return;
-    }
-    const min = Number(lo);
-    const max = Number(hi);
-    if (!Number.isFinite(min) || !Number.isFinite(max) || !(min < max)) return;
-    if (colorLimits && colorLimits[0] === min && colorLimits[1] === max) return; // no change, no undo entry
-    setMapColorLimits(dsId, [min, max]);
-  };
+  const { lo, hi, setLo, setHi, commit, revert, effective } = useMapColorLimitsField(dsId);
 
   return (
     <div style={{ marginTop: 12 }}>
@@ -86,7 +55,7 @@ export default function MapColorLimits() {
           aria-label="Map colour minimum"
           onChange={setLo}
           onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && commit()}
+          onKeyDown={(e) => (e.key === "Enter" ? commit() : e.key === "Escape" ? revert() : undefined)}
         />
         <span style={{ color: "var(--text-faint)" }}>–</span>
         <NumberField
@@ -96,7 +65,7 @@ export default function MapColorLimits() {
           aria-label="Map colour maximum"
           onChange={setHi}
           onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && commit()}
+          onKeyDown={(e) => (e.key === "Enter" ? commit() : e.key === "Escape" ? revert() : undefined)}
         />
       </div>
       {effective !== undefined && (

@@ -1,12 +1,13 @@
 // useShapeDraw — the MAIN #27 drag-to-draw-a-shape / place-a-text-box mode
 // bridge. Same renderHook/act/fireEvent convention as useAnnotationEdit.test.ts.
 
-import { fireEvent, renderHook, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
 import { useShapeDraw } from "./useShapeDraw";
 
 vi.mock("../../store/annotationTextDialog", async (importOriginal) => ({
@@ -170,16 +171,16 @@ describe("useShapeDraw — committing a text box (MAIN #27's 'one text system')"
 });
 
 describe("useShapeDraw — Escape cancels the mode", () => {
-  it("clears drawShapeKind on Escape while a mode is active", () => {
+  it("clears drawShapeKind on Escape while a mode is active", async () => {
     useApp.setState({ drawShapeKind: "rect" });
     renderHook(() => useShapeDraw());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().drawShapeKind).toBeNull();
   });
 
-  it("is a no-op when no mode is active", () => {
+  it("is a no-op when no mode is active", async () => {
     renderHook(() => useShapeDraw());
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape();
     expect(useApp.getState().drawShapeKind).toBeNull();
   });
 });

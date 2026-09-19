@@ -1,8 +1,8 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1 and 3 executed** (see
-their sections below); slice 2 is partially done, and slice 4 (the former slice
-3) remains an unmeasured proposal.
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3 and 4 executed**
+(see their sections below); slice 2 is partially done, and slice 5 (the former
+slice 3, then slice 4) remains an unmeasured proposal.
 
 **Stale as of this document's own first draft** (kept for the record; see the
 "What these numbers are NOT" note below and each slice's own measured
@@ -14,7 +14,18 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-18, review round, finding 10):** slice 3 is done.
+**Current state (2026-09-18, after slice 4):** slices 3 and 4 are done. Slice
+4's real parent is `b50f6602` (`git rev-parse 8a6f49ca^`), not `3f43467b`
+(that's `HEAD~2` — the implementer's worktree was rooted there and the commit
+was merged forward; `3f43467b`'s numbers below are that pre-merge worktree's,
+kept as a labelled per-seam breakdown, not the landed measurement). Measured
+against the real pair: landed tip 887,615 B eager against parent `b50f6602`'s
+912,824 B (**−25,209 B**), which is **32,785 B of headroom** against the
+unmoved 920,400 B budget — the first time this campaign has cleared the
+25–40 kB its own history calls healthy. A tree's number is only valid for that
+tree; re-measure before quoting it.
+
+**Earlier note (2026-09-18, review round, finding 10):** slice 3 is done.
 Budget is 920,400 B, unmoved throughout. Slice 3's own tree (`90ea30fa`)
 measures 909,888 B eager against its real parent `e83c0cc8` (see slice 3's
 section); the branch tip at the time of this note (`b621c5fa`, after P2.8
@@ -88,7 +99,7 @@ bound; the measured net delta is TBD until a spike runs.
 | 6,954 | `lib/plotspec.ts` | no — plot model |
 | 6,736 | `lib/figureDocument.ts` | no — workspace parse needs it |
 | 6,626 | `commands/plotCommands.ts` | partially — see slice 2 |
-| 5,926 | `lib/plotRecipeIO.ts` | partially — slice 4 |
+| 5,926 | `lib/plotRecipeIO.ts` | partially — slice 5 |
 | 5,835 | `lib/contextActions.ts` | no — right-click latency |
 | 5,231 | `lib/uplotGadgets.ts` | no — plot rendering |
 
@@ -450,10 +461,272 @@ bound, which is -79%, not -22%. A seam whose target shares
 `plotview`/`formula`/`api`-class modules with the entry graph is presumed a
 loss until a real build says otherwise.
 
-### Slice 4 - `lib/plotRecipeIO.ts`
+### Slice 4 — nine content-gated render seams — **DONE (2026-09-18)**
 
-*(Was numbered "Slice 3" until 2026-09-18, when the executed slice above took
-that number. Content unchanged apart from the closing note.)*
+**Measured net eager delta −25,209 B — budget UNMOVED at 920,400 B**
+
+Headroom is **32,785 B** against the unmoved 920,400 B budget, measured on
+the landed pair below. The bundle pin is NOT edited in either direction. This
+is the first slice whose result clears the 25–40 kB this file's own history
+calls healthy.
+
+**Real parent vs the implementer's build chain (2026-09-18 review round,
+finding 1):** the commit's real parent is `b50f6602`
+(`git rev-parse 8a6f49ca^`), not `3f43467b`. The implementer's worktree was
+rooted two commits back at `3f43467b` and the commit was merged forward, so
+every number originally recorded in this section — including the per-seam
+table below — describes that pre-merge worktree, a tree that was never
+committed. The per-seam table is kept because it is still the real,
+individually-measured delta of each seam over `3f43467b`'s starting point and
+its shape (which seam won how much, in what order) is unaffected by the
+mislabel; it is now labelled explicitly as the `3f43467b` chain. The
+authoritative before/after pair for this slice's own landed effect is the
+`b50f6602` → `8a6f49ca` row below.
+
+Bundle pair, exact bytes (the eager `<script type=module>` + `modulepreload`
+count out of `dist/index.html`, not the rounded kB `check-bundle-size.mjs`
+prints):
+
+| tree | SHA | eager bytes | built by |
+|---|---|---:|---|
+| real parent (`git rev-parse 8a6f49ca^`) | `b50f6602` | **912,824** | orchestrator, `npm ci` + `.vite` wiped |
+| this commit, as landed | `8a6f49ca` | **887,615** | orchestrator, `npm ci` + `.vite` wiped |
+| — net delta — | — | **−25,209** | — |
+
+The `3f43467b` chain below (the implementer's pre-merge worktree, ~1,529 B
+lighter at the start than the real parent — the map colour-limits work in
+`b50f6602` that chain never contained):
+
+| tree | SHA | eager bytes | built by |
+|---|---|---:|---|
+| `3f43467b`-chain start (mislabelled "parent"/"`HEAD~1`" originally) | `3f43467b` | 911,295 | implementer, same-worktree `npm ci` + `.vite` wiped |
+| `3f43467b`-chain end (pre-merge worktree tip) | slice 4 (pre-merge) | 885,632 | implementer, same-worktree `npm ci` + `.vite` wiped |
+
+#### How the candidates were ranked
+
+The per-module table at the top of this file gives an upper bound but says
+nothing about whether a bound is reachable, which is what slice 3's rejected
+seams were about. So this slice ranked candidates mechanically first: replay
+`architecture.test.ts`'s own `eagerlyReachable()` walk over `src/`, then, for
+every eager module with exactly one eager importer, CUT that edge and sum the
+attributed bytes of everything that drops out (the **exclusive** bytes) plus
+the bytes of everything reachable from the target that stays eager (the
+**shared** set slice 3 warns gets carved into its own chunks). Scripts are in
+the session scratch, not committed; the walk they replay is the guard's, so it
+regenerates from `architecture.test.ts` plus
+`scripts/profile-eager-bundle.mjs`.
+
+That produced nine clean zero-shared leaves, four of which were unusable —
+`store/graphBuilder.ts` and `store/datasetMeta.ts` are `useApp` slice
+CREATORS (their state must exist at store construction), and
+`lib/pageDocument.ts`/`lib/workspaceOrigin.ts` hang off `parseWorkspace`,
+which is synchronous and would have to become async through every caller.
+`lib/figureOverrides.ts` (4,526 B, the single largest zero-shared leaf) is the
+same shape: its only eager use is `sanitizeFigureOverrides` inside
+`sanitizeFigureDocument`, also a synchronous parse function. None of the five
+was built or measured; they are analysis rejections, not measured ones, and
+they stay on the table for a slice that is willing to move `parseWorkspace`.
+
+**The ranking's own biggest miss is worth more than its hits, and it
+qualifies slice 3's rule.** `components/Stage/PlotContextMenu.tsx` scored
+*terribly* on that metric — 228 shared modules, 379 kB of them — so slice 3's
+"a seam whose target shares `plotview`/`formula`/`api`-class modules with the
+entry graph is presumed a loss" predicted a loss. Built and measured, it is
+this slice's **largest single win at −6,328 B, 91% of its 6,985 B bound**.
+The reconciliation: that rule was derived from `lib`/`store` seams, where the
+shared modules are mid-graph and really do get carved out. A React component
+seam's shared set is dominated by `useApp` and the entry-wide libraries, which
+are *already* shared with dozens of other eager modules and therefore stay
+exactly where they were. **Restated rule: rank a `lib`/`store` seam by the
+exclusivity of its deferred subtree; rank a COMPONENT seam by its exclusive
+bytes alone and ignore the shared set.** Slice 3's own component seams
+(85% realised) were the first data point for this and were read too narrowly.
+
+#### Per-seam measurements
+
+Cumulative, in the order the seams were measured — each row is a full
+`npm run build` on the same machine, same Node, `.vite` wiped first. Every
+seam measured a REDUCTION, so none was rejected on measurement. **This table
+is the `3f43467b` chain** (the implementer's pre-merge worktree, per the note
+above) — the per-seam shape and ordering are real, but `3f43467b` is
+`HEAD~2` of the landed commit, not its parent; do not quote this table's start
+or end row as "the commit's" totals. Use the landed pair above for that.
+
+| # | seam (module deferred) | loader | gate | bound | eager B | delta |
+|---|---|---|---|---:|---:|---:|
+| — | `3f43467b` chain start (not this commit's parent — see above) | — | — | — | 911,295 | — |
+| 1 | `components/Library/SavedFiguresSection.tsx` | Library.tsx† | `figureDocs.length > 0` | 5,652 | 905,950 | **−5,345** |
+| 2 | `components/Library/FiguresSection.tsx` | Library.tsx† | `originFigures.length > 0` | 3,912 | 902,454 | **−3,496** |
+| 3 | `components/Library/CollectionsSection.tsx` | Library.tsx† | `collections.length > 0` | 2,717 | 900,019 | **−2,435** |
+| 4 | `components/Library/SmartFoldersSection.tsx` | Library.tsx† | `smartFolders.length > 0` | 2,305 | 897,849 | **−2,170** |
+| 5 | `components/Library/OriginFidelitySection.tsx` | Library.tsx† | `originFidelity.length > 0` | 1,523 | 895,914 | **−1,935** |
+| 6 | `components/Library/ReportsSection.tsx` | Library.tsx† | `reports.length > 0` | 792 | 895,396 | **−518** |
+| 7 | `components/Library/MultiSelectBar.tsx` | `Library.tsx` | `selectedIds.length > 1` | 1,660 | 893,958 | **−1,438** |
+| 8 | `components/Stage/PlotResultChips.tsx` | `PlotStageOverlays.tsx` | `resultChipsVisible(...)` | 4,222 | 891,761 | **−2,197** |
+| 9 | `components/Stage/PlotContextMenu.tsx` | `PlotStageMenus.tsx` | `menu && displayPayload` | 6,985 | 885,433 | **−6,328** |
+| — | `LibrarySections.tsx` extraction (see below) | — | — | — | 885,632 | **+199** |
+
+† Measured with `Library.tsx` as the loader. The nine seams took `Library.tsx`
+to 417 lines, over the 400-line component ceiling, so the six flat sections
+were then lifted into a new `components/Library/LibrarySections.tsx`, which
+is now their loader — and an extra eager module plus its chunk glue, the
++199 B in the last row.
+
+**Pre- vs post-extraction totals (2026-09-18 review round, finding 3):** the
+nine seam deltas alone (rows 1–9 above, summed) are **−25,862 B** — this is
+the number `architecture.test.ts`'s SEAMS comment carries. Adding the
+`LibrarySections.tsx` extraction's +199 B honest cost gives **−25,663 B** —
+the number this file (and the commit body) carry elsewhere. The two are not
+in tension: one is the sum before paying the ceiling-compliance cost, the
+other after. Both are the `3f43467b`-chain figures per the note above; the
+landed net delta over the real parent `b50f6602` is the different, separately
+measured **−25,209 B** at the top of this section.
+
+Seam 6 (`ReportsSection`, −518 B against a 792 B bound) is the scale check
+this slice owes the file: a section that is mostly JSX over a small helper set
+gives back most of its own bytes and nothing else. Seams 1 and 9 are the
+opposite and are where the slice actually lives — they drag `lib/*` modules
+out with them (below).
+
+#### Why each seam qualifies
+
+Every flat Library section ALREADY returned `null` until its own store
+collection was non-empty, and a fresh project's collections are all empty. So
+on the default first paint the section bodies were pure dead weight: mounted,
+rendering nothing, and in the entry chunk. Each is now `lazy()` +
+`Suspense fallback={null}` behind the SAME emptiness test the section applies
+internally, which is the whole trick — the gate is not a new judgement call,
+it is the component's existing one hoisted one level so the chunk request
+follows it.
+
+- **The six flat sections** load strictly after the user authors that content
+  or opens a project that already had it. That second path is a **persisted-
+  state restore**, and it is stated here up front rather than as a later
+  narrowing, which is what slice 3's finding 4 had to do for its polar/panel
+  seams. A restore into a project with publication figures pays one chunk
+  fetch on that restore's first paint. No correctness consequence — nothing
+  reads the suspended frame — and `lazySectionSeams.test.tsx` pins both halves.
+- **The multi-select bar** waits for the second selected row. Pure gesture;
+  `selectedIds` is not a persisted field.
+- **The plot result chips** (∫ Integrate · ∩ FWHM · the ROI gadget family) are
+  the one seam with no restore path at all: those results are committed by an
+  on-canvas tool and the workspace format never serializes them. Its gate is
+  the component's own visibility predicate, moved into
+  `components/Stage/resultChipsVisible.ts` and imported by BOTH the gate and
+  the component, so a future chip kind cannot show up in one and not the other.
+- **The plot context menu** was already rendered only on `menu &&
+  displayPayload`, i.e. after a right-click on the canvas.
+
+**BookFamiliesSection is deliberately NOT a seam** although it is the same
+shape: its emptiness test is a DERIVED value (`originBookFamilies(datasets)`),
+so gating on it would mean recomputing that grouping on every dataset change
+to decide whether to fetch a ~1 kB chunk. Left static.
+
+#### The cost, stated plainly
+
+Eight of the nine seams cost nothing a user can perceive: the content they
+render did not exist a moment earlier, so the chunk fetch overlaps the action
+that creates it. **Seam 9 is different in kind** — the FIRST right-click on a
+plot canvas in a session now waits one chunk fetch before the menu appears
+(every later one is instant, and the app is served from localhost). This is
+adjacent to the "no — right-click latency" annotation `lib/contextActions.ts`
+carries in the table at the top of this file, so: that module is the shared
+action registry behind the Library row menus and the palette, it is untouched,
+and it stays eager. Only the plot-canvas menu RENDERER and its two helpers
+moved. If the latency is ever judged unacceptable the seam is a one-line
+revert worth +6,328 B.
+
+#### Guards
+
+`src/architecture.test.ts` gains all nine in `SEAMS`, and the six modules they
+dragged out with them in `DRAGGED_OUT`: `FigureRow.tsx` + `lib/originPreview.ts`
+(FiguresSection's), `lib/figureCompatibility.ts` (SavedFiguresSection's),
+`lib/originFidelity.ts` (OriginFidelitySection's), and `lib/plotMenu.ts` +
+`lib/plotHitTest.ts` (PlotContextMenu's — most of that seam's −6,328 B).
+`FigureRow.tsx` is itself the LOADER of the pre-existing
+`OriginSavedPreviewWindow` seam; that guard greps FigureRow's source and does
+not require FigureRow to be eager, so it is unaffected.
+
+Recorded originally as "400 eager modules of 914 before, 387 of 916 after,
+against `3f43467b`" — wrong on two counts (2026-09-18 review round, finding
+4): `3f43467b` is not this commit's parent (see above), and the walk was
+mis-measured against it regardless. Re-measured with the guard's own
+`eagerlyReachable()`/`sources()` against the REAL parent `b50f6602`: **402
+eager modules of 920 before, 389 of 922 after** — the shape of the original
+claim holds exactly (−13 eager modules, +2 corpus modules: the nine seams,
+the six dragged out, minus the two modules ADDED —
+`components/Library/LibrarySections.tsx`, `components/Stage/resultChipsVisible.ts`).
+Nothing in `architecture.test.ts` asserts on these absolute counts (only
+`> 200` plus an empty-intersection check), so no test was ever at risk — this
+was a documentation defect only.
+
+DOM coverage is `components/Library/lazySectionSeams.test.tsx` and
+`components/Stage/lazyStageSeams.test.tsx`, in the shape slice 3's
+`lazyRenderSeams.test.tsx` established: nothing on the first synchronous flush,
+the real content once the chunk resolves. Both files pin the render-gate half
+of seams 7 (`MultiSelectBar`) and 8 (`PlotResultChips`) too — their own
+`resultChipsVisible(...)`/`selectedIds.length > 1` checks return `null`
+internally regardless of the outer gate, so a DOM-only assertion cannot tell
+a real gate from one deleted; an import-recording seam (`vi.hoisted` +
+`vi.mock` factory) added in the 2026-09-18 review round closes that hole by
+asserting the module was never imported while the gate stayed closed.
+
+**Residual (2026-09-18 review round, finding 7, NOT fixed by this slice):**
+seam 9 (`PlotContextMenu`) also defers `ContextMenu.tsx`'s own
+`mousedown`/`keydown`(Escape)/`scroll`/`resize` dismissal listeners, since
+`ContextMenu` is rendered by `PlotContextMenu` inside the deferred chunk.
+During the one-chunk window after a session's first right-click, nothing owns
+Escape or an outside click, so a user who dismisses that way in that window
+still sees the menu once the chunk lands (menu `x`/`y` are captured at
+right-click time, so position is unaffected). The window is one localhost
+fetch, once per session, so this is minor and left as a named residual rather
+than fixed here; a future slice that touches this seam should either move the
+dismissal listeners to the eager loader or accept and re-state this cost.
+
+**Test lesson this slice adds: a DOM-only test cannot see a render gate.**
+Every one of these sections ALSO returns null internally when its collection is
+empty, so deleting the outer `figureDocCount > 0` gate — which would put a
+suspended boundary on the first paint and hand back the entire measured saving
+— changes nothing a `queryByText` can observe. Measured: a DOM-only version of
+the gate tests stayed GREEN through exactly that sabotage. What the deletion
+does change is whether the module is ever IMPORTED, so the test now records
+that directly, with a `vi.mock` factory per section that notes its own first
+import and returns the real module via `importOriginal()`. The seams then run
+in a fixed order and each asserts nothing had fetched its module before its own
+gate opened — a claim about every earlier test in the file, all of which
+rendered the same tree with that collection empty. The sabotage reddens two
+tests.
+
+**Blast-radius sweep for tick-counting**, per slice 3's own lesson: every test
+touching a seam or its loader was grepped for `await Promise.resolve()` after
+an action that now crosses a seam. The section tests render the sections
+DIRECTLY and are unaffected. Five assertions across four tests in
+`Library.test.tsx` did read state on the synchronous flush and are now DOM
+state waits (`await screen.findByText(...)`), not counted ticks: `"2
+selected"`, `"Clear"`, `"Smart folders"`, and `"Origin fidelity"` twice (one
+test asserts it on two separate lines) — corrected 2026-09-18, review round,
+finding 9 (originally undercounted as four).
+
+#### What was left on the table
+
+Beyond the five parse-path leaves above: `store/gadget.ts` (6,655 B exclusive,
+28 shared modules / 23.7 kB) and `lib/statstage.ts` (6,444 B, 4 shared /
+6,032 kB) are both real candidates, and both need a synchronous builder
+(`useApp`'s gadget actions, `plotspec.ts`'s `buildSpecRender`) to become
+async first. `components/overlays/ContextMenu.tsx` is a zero-shared 5,293 B
+leaf with six `lazy()` sites, held back for the same right-click-latency
+reason seam 9 already spends once. `commands/analysisCommands.ts` looks
+superb on the metric (7,680 B exclusive, 4 shared / 180 B) and is a trap: its
+bytes ARE the palette metadata (label/description/keywords), which must stay
+eager, and its `run` bodies are one-liners — slice 2's shape would recover
+almost nothing there.
+
+### Slice 5 - `lib/plotRecipeIO.ts`
+
+*(Was numbered "Slice 3" until 2026-09-18, when the first executed slice took
+that number, and "Slice 4" until later the same day, when the executed
+content-gated render slice took THAT number. Content unchanged apart from the
+closing note and this one.)*
 
 **Upper bound 5,926 B · measured net eager delta: TBD, expected ~2 kB · LOW risk**
 

@@ -392,6 +392,48 @@ describe("the Inspector is told what the map actually painted (round 3, finding 
   });
 });
 
+// Round 7, finding 4: `mapPaintedLimits` was never pruned at all, so a
+// closed-then-reopened Stage tab went on showing a PREVIOUS mount's painted
+// pair — a canvas that no longer exists — until its own first repaint landed.
+describe("a closed map's painted hint does not survive into a reopened one (round 7, finding 4)", () => {
+  it("unmounting the Stage-tab instance clears its dataset's store entry", async () => {
+    const view1 = render(<MapStage />);
+    await waitFor(() => expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([100, 403]));
+
+    view1.unmount();
+    expect("ds-a" in useApp.getState().mapPaintedLimits).toBe(false);
+  });
+
+  it("a reopened map shows no stale hint until it repaints", async () => {
+    useApp.getState().setMapColorLimits("ds-a", [-1, 2]);
+    useApp.getState().setMapLogZ("ds-a", true);
+    const view1 = render(
+      <>
+        <MapStage />
+        <MapColorLimits />
+      </>,
+    );
+    await waitFor(() => expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([100, 403]));
+    expect(await screen.findByTestId("map-colour-limits-effective")).toHaveTextContent(/^effective 100 – 403$/);
+
+    view1.unmount();
+    expect(useApp.getState().mapPaintedLimits["ds-a"]).toBeUndefined();
+
+    render(
+      <>
+        <MapStage />
+        <MapColorLimits />
+      </>,
+    );
+    // Synchronously, before the fresh mount's own regrid/repaint lands: no
+    // stale "effective" row carried over from the closed instance's last life.
+    expect(screen.queryByTestId("map-colour-limits-effective")).toBeNull();
+
+    await waitFor(() => expect(useApp.getState().mapPaintedLimits["ds-a"]).toEqual([100, 403]));
+    expect(await screen.findByTestId("map-colour-limits-effective")).toHaveTextContent(/^effective 100 – 403$/);
+  });
+});
+
 describe("a map subscribes to its OWN dataset's entry (round 3, finding 10)", () => {
   it("editing another dataset's map view does not re-render this one", async () => {
     let commits = 0;

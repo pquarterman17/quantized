@@ -298,7 +298,7 @@ const STORE_PINS: Record<string, number> = {
   // clause, one creator-spread line. Chosen by COUPLING over the two larger
   // candidates: `loadWorkspace` (170 lines) writes 40 AppState fields and is
   // where every new persisted field gets wired, and applyOriginFigure +
-  // facetByColumn + breakAtGaps (342 lines) write 24 PlotView fields that
+  // facetByColumn + breakAtGaps (336 lines) write 24 PlotView fields that
   // plotViewSettings.ts also writes; this cluster writes 15, of which the four
   // it OWNS (reports/openReportId/figureDocs/figureDocSeed) means this module
   // holds every ACTION that edits them one at a time; bulk restores write
@@ -318,7 +318,40 @@ const STORE_PINS: Record<string, number> = {
   // 2026-09-17 review round's F3/F7 additions; 55 at the original move, each writer
   // diffing the WHOLE poisoned getState() snapshot) was written and run green
   // against the PRE-extraction code and passes byte-unchanged after the move.
-  "/store/useApp.ts": 2012,
+  // 2012 -> 1639 (2026-09-18, the THIRD P4.1 domain, zero headroom): the BULK
+  // VIEW APPLIERS — the three actions that install a WHOLE plot view in one
+  // gesture from a source description rather than editing one setting at a
+  // time: applyOriginFigure (an imported Origin graph window, in its four
+  // branches — cross-book overlay, double-Y layer pair, spatial multi-panel
+  // family, single-layer fallback), facetByColumn (a small-multiples
+  // partition by a category column) and breakAtGaps (a paneled x-break
+  // arrangement), 336 implementation lines (base useApp.ts 985-1320:
+  // applyOriginFigure 985-1215, facetByColumn 1226-1281, breakAtGaps
+  // 1288-1320) plus their 24 interface lines and the ORIGIN_FIGURE_AXIS
+  // constant all three spread — moved verbatim (modulo
+  // one indentation level) to the new store/viewAppliers.ts
+  // (ViewAppliersSlice), composed exactly like plotViewSettings.ts and
+  // reportsFigureDocs.ts: one import line, one word on the extends clause,
+  // one creator-spread line. This is the larger of the two candidates the
+  // 2122 -> 2012 note above deferred; the other (loadWorkspace, 170 lines) is
+  // still in useApp.ts. Chosen now BECAUSE of that note's coupling objection
+  // rather than despite it: these three write PlotView fields that
+  // plotViewSettings.ts also writes, but they write them as one whole-view
+  // install, which is a different job from a per-setting writer — the split
+  // is by GESTURE, and plotViewSettings.ts's header already listed all three
+  // by name as the bulk-appliers it does not own. The FIELDS stay declared
+  // and initialized on AppState here, same shape as both earlier extractions.
+  // The Origin-apply PREFLIGHTS stay in store/originFigureApply.ts (one of
+  // the three modules grandfathered to import components/), which is what
+  // lets viewAppliers.ts sit below the component layer with no new
+  // grandfathered entry. store/viewAppliers.characterization.test.ts (35
+  // specs pinning, per action AND per branch — including the cross-book
+  // overlay branch, added 2026-09-18 review round 3 F1 — the exact set of
+  // top-level store keys each call changes — a poisoned whole-getState()
+  // diff — plus the applied values, undo label and macro step) was written
+  // and run green
+  // against the PRE-extraction code and passes byte-unchanged after the move.
+  "/store/useApp.ts": 1639,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -2290,8 +2323,9 @@ describe("storage-key registry ratchet (P3.4)", () => {
 // Lazy Origin-apply chunk guard (BUNDLE_HEADROOM slice 1, 2026-08-30).
 //
 // `lib/originFigureSelection.ts` + `lib/originSpatialPanels.ts` hold the half
-// of the Origin figure library that only an APPLY needs. `store/useApp.ts`
-// reaches them through `store/originApplyLibs.ts`'s dynamic `import()`, which
+// of the Origin figure library that only an APPLY needs. `store/viewAppliers.ts`
+// (P4.1, formerly `store/useApp.ts`) reaches them through
+// `store/originApplyLibs.ts`'s dynamic `import()`, which
 // is what keeps them — and `lib/originPanels.ts`, whose only value import is
 // there — out of the entry chunk (measured 890.2 -> 885.3 kB eager).
 //
@@ -2431,6 +2465,93 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       module: "/store/plotRecipeApply.ts",
       loader: "/store/plotRecipeApplyLazy.ts",
       call: 'import("./plotRecipeApply")',
+    },
+    // ── SLICE 4 (2026-09-18, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // Nine content-gated render seams. The nine per-seam deltas sum to
+    // −25,862 B; adding the +199 B honest cost of the `LibrarySections.tsx`
+    // extraction below (required to stay under the ceiling) gives −25,663 B
+    // — see `plans/BUNDLE_HEADROOM.md` slice 4 for both figures and for the
+    // separately measured, landed-tree net delta against the real parent
+    // (−25,209 B; the −25,862/−25,663 pair above is the pre-merge worktree's).
+    //
+    // Six of them are the flat Library sections. Every one of those already
+    // returned `null` until its own store collection was non-empty, and a
+    // FRESH project's collections are all empty — so on the default first
+    // paint the section bodies were pure dead weight in the entry chunk.
+    // `LibrarySections.tsx` (new, extracted from `Library.tsx`, which sits
+    // against the 400-line component ceiling) renders those six behind
+    // `lazy()` + `Suspense fallback={null}` under the SAME emptiness test the
+    // section applies internally (`originFigures`/`originFidelity`/
+    // `figureDocs`/`reports`/`smartFolders`/`collections` length). A seventh,
+    // the multi-select bar — not a flat section, just gated the same way —
+    // keeps `Library.tsx` as its loader and is gated on
+    // `selectedIds.length > 1`. The chunk is therefore requested strictly
+    // after the user authors that content, selects a second row, or opens a
+    // project that already had it — a persisted-state restore, exactly the
+    // narrowing slice 3's finding 4 had to make for the polar/panel seams,
+    // stated up front here rather than after the fact.
+    //
+    // The eighth is the on-plot result chips (∫ Integrate · ∩ FWHM · the ROI
+    // gadget family). Those results are committed by an on-canvas tool and
+    // the workspace format never serializes them, so this one really is
+    // user-action-only — no restore path reaches it. Its gate is the
+    // component's own visibility predicate, shared through
+    // `components/Stage/resultChipsVisible.ts` (the single module this slice
+    // ADDS to the eager graph) so gate and component cannot drift.
+    //
+    // The ninth is the plot canvas's own context menu, already rendered only
+    // when `menu && displayPayload` — i.e. after a right-click on the plot.
+    // It takes `lib/plotMenu.ts` and `lib/plotHitTest.ts` with it and was the
+    // single largest seam of the slice (−6,328 B). NOTE the cost, which is
+    // real and different in kind from the others: the FIRST right-click of a
+    // session waits one chunk fetch before the menu appears (later ones are
+    // instant). `lib/contextActions.ts` — the shared action registry CLAUDE.md
+    // pins as eager for right-click latency — is untouched and stays eager;
+    // only the plot-canvas menu renderer moved.
+    {
+      module: "/components/Library/SavedFiguresSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./SavedFiguresSection")',
+    },
+    {
+      module: "/components/Library/FiguresSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./FiguresSection")',
+    },
+    {
+      module: "/components/Library/CollectionsSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./CollectionsSection")',
+    },
+    {
+      module: "/components/Library/SmartFoldersSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./SmartFoldersSection")',
+    },
+    {
+      module: "/components/Library/OriginFidelitySection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./OriginFidelitySection")',
+    },
+    {
+      module: "/components/Library/ReportsSection.tsx",
+      loader: "/components/Library/LibrarySections.tsx",
+      call: 'import("./ReportsSection")',
+    },
+    {
+      module: "/components/Library/MultiSelectBar.tsx",
+      loader: "/components/Library/Library.tsx",
+      call: 'import("./MultiSelectBar")',
+    },
+    {
+      module: "/components/Stage/PlotResultChips.tsx",
+      loader: "/components/Stage/PlotStageOverlays.tsx",
+      call: 'import("./PlotResultChips")',
+    },
+    {
+      module: "/components/Stage/PlotContextMenu.tsx",
+      loader: "/components/Stage/PlotStageMenus.tsx",
+      call: 'import("./PlotContextMenu")',
     },
   ];
 
@@ -2611,6 +2732,22 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  the one module ADDED (`store/plotRecipeApplyLazy.ts`, the loader).
    *  Together they are most of the slice's measured bytes, and none of them is
    *  a seam itself, so only reachability can hold this line. */
+  /** SLICE 4 (2026-09-18) adds the six modules its nine seams took with
+   *  them, each one measured by the same eager walk this block runs rather
+   *  than assumed: `FigureRow` + `lib/originPreview.ts` (FiguresSection was
+   *  their only eagerly-reachable importer — note FigureRow is itself the
+   *  LOADER of the `OriginSavedPreviewWindow` seam above, which is unaffected:
+   *  that guard greps FigureRow's source, it does not require FigureRow to be
+   *  eager), `lib/figureCompatibility.ts` (SavedFiguresSection's),
+   *  `lib/originFidelity.ts` (OriginFidelitySection's), and
+   *  `lib/plotMenu.ts` + `lib/plotHitTest.ts` (PlotContextMenu's — most of
+   *  that seam's −6,328 B). Measured across the whole slice: the eager walk
+   *  went 400 -> 387 modules, which is the nine seams, these six, minus the
+   *  two modules ADDED (`components/Library/LibrarySections.tsx`, the loader
+   *  the six Library-section seams share, and
+   *  `components/Stage/resultChipsVisible.ts`, the shared gate predicate).
+   *  None of the six is a seam itself, so only reachability can hold this
+   *  line. */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
@@ -2618,6 +2755,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/windows/PanelOverlayWindow.tsx",
     "/components/Stage/PolarStageCore.tsx",
     "/lib/polar.ts",
+    "/components/Library/FigureRow.tsx",
+    "/lib/originPreview.ts",
+    "/lib/figureCompatibility.ts",
+    "/lib/originFidelity.ts",
+    "/lib/plotMenu.ts",
+    "/lib/plotHitTest.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
@@ -2660,7 +2803,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // cherry-pick source c1757fb1's chain, not this branch's actual base):
     // 400 of 914 — the corpus grew by the one module slice 3 added, and the
     // eager set went 406 -> 400 (three seams + four dragged out, minus that
-    // one addition).
+    // one addition). Slice 4's real parent is b50f6602, not 3f43467b — the
+    // implementer's worktree was rooted two commits back at 3f43467b and the
+    // commit was merged forward (review round, finding 1); the "387 of 916"
+    // first recorded here was measured against that wrong tree and was also
+    // arithmetically off (review round, finding 4). Re-measured against the
+    // real parent b50f6602: 402 of 920 -> 389 of 922 — the corpus grew by the
+    // two modules slice 4 added (`components/Library/LibrarySections.tsx` and
+    // `components/Stage/resultChipsVisible.ts`) and the eager set went
+    // 402 -> 389 (nine seams + six dragged out, minus those two additions) —
+    // the same shape as originally claimed, corrected absolutes. Nothing here
+    // is asserted against these counts; see the `expect`s below.
     expect(eager.has("/main.tsx"), "the entry itself must be in the walk").toBe(true);
     expect(eager.size, "the eager walk collapsed — it is no longer proving anything").toBeGreaterThan(200);
     expect(

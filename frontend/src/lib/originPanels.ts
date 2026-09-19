@@ -2,7 +2,7 @@
 // graph window's decoded per-layer frame quads (`figure_geometry.py`, page
 // units, top-left origin, y increasing downward — same convention as the
 // annotation/legend position model). Store-agnostic and dataset-agnostic —
-// `store/useApp.ts`'s `applyOriginFigure` zips the result against each
+// `store/viewAppliers.ts`'s `applyOriginFigure` zips the result against each
 // layer's resolved dataset/channel selection (see `originFigures.ts`'s
 // `resolveFigurePanels`) to build the drawn multi-panel view.
 

@@ -3254,6 +3254,8 @@ violin, bar, strip, or summary plots.
     per-dataset keying coherent; the window's own toolbar covers colormap and
     scale, and a per-window limits control is a toolbar change this round did
     not take. Deliberate, not an oversight — recorded beside residuals (a)–(c).
+    **CLOSED round 6, 2026-09-18 — see below, referred to there as residual
+    (a) per the tracking issue that scheduled the fix.**
   - **Sabotage.** 15 mutations, one at a time, each reverted: dropping the
     restore, dropping the trash capture, letting the restore overwrite a live
     entry, never reporting the painted pair, reporting the STORED pair instead,
@@ -3433,6 +3435,220 @@ violin, bar, strip, or summary plots.
     untouched. Zero delta because this round only changes a style-object
     property VALUE and a comment — no import, export, or code-shape change
     for the bundler to see.
+- **Review round 6 2026-09-18** (P2.8 residual (a) — round 3's finding 8: a
+  `kind:"map"` document window on a NON-active dataset had no colour-limit
+  control at all; the Inspector's row edits only the ACTIVE dataset by rule,
+  and `MapToolbar` already covered colormap/scale per window — every write it
+  makes already keys off THAT window's own dataset id, never the active one —
+  but limits were the one thing that per-window coverage had not taken).
+  **CLOSED.**
+  - **A compact two-field colour-limit control now lives in the map
+    toolbar** (`components/Stage/MapToolbarColorLimits.tsx`), so it appears in
+    every mounted `MapStage` — the Stage tab AND every `kind:"map"` document
+    window — bound to that instance's own `datasetId` prop, exactly like the
+    colormap picker and log-scale toggle beside it. It writes through
+    `setMapColorLimits(datasetId, …)`, so a window on a non-active dataset
+    edits THAT dataset's own `mapViews` entry, never `activeId`'s.
+  - **The commit/undo/effective-pair logic is SHARED, not duplicated.**
+    `lib/useMapColorLimitsField.ts` is the one implementation both the
+    Inspector's `MapColorLimits.tsx` (unchanged behaviour, still bound to
+    `activeId`) and the new toolbar control call: blank+blank commits auto
+    (`null`); a non-finite, inverted, or unchanged pair is a no-op (no store
+    write, no undo step); Enter/blur commits; and the "effective" note shows
+    what the renderer actually painted (`mapPaintedLimits[datasetId]`) when it
+    differs from what was typed — the same log-mode-floor-raise/fallback
+    story round 3's finding 2 gave the Inspector row. New in the shared hook:
+    **Escape reverts** the field to the last committed pair without touching
+    the store (neither control had this before; both get it for free).
+  - **History labelling is inherited for free.** `store/mapView.ts`'s
+    `setMapColorLimits`/`edit()` already names the dataset and disambiguates
+    by id when two live datasets share a name (round 4, finding 8) — the
+    toolbar control's commits get the identical label
+    (`change map colour limits "<name>"[ #<id>]`) with no new code.
+  - **A selector pitfall the shared hook had to avoid** (caught by the
+    existing round-3 finding-10 pin, not a new test): the Inspector's
+    original code read `useApp((s) => s.mapViews)` and computed
+    `mapViewFor(mapViews, dsId)` OUTSIDE the selector — harmless there, but
+    reused verbatim in the hook it would have made `MapToolbarColorLimits`
+    (now living INSIDE the profiled `MapStage` tree) re-render on every OTHER
+    open map's edit, exactly the regression round 3 closed for `MapStage`
+    itself. The hook selects `mapViewFor(s.mapViews, datasetId).colorLimits`
+    AS the selector, so zustand's default equality skips the re-render on an
+    unrelated dataset's write — `MapStage.mapView.test.tsx`'s existing
+    Profiler-commit-count pin (round 3, finding 10) catches a regression here
+    without a dedicated test of its own.
+  - **Not dirtied by opening a window.** The control reads via the same pure
+    `mapViewFor` lookup every other map reader uses; nothing in it writes on
+    mount. Pinned in `MapStage.windowColorLimits.test.tsx` the same way round
+    2's "opening a map is not an edit" is: no `mapViews` write, no history
+    entry, `shouldAutosave` false, byte-identical `.dwk`.
+  - **Tests.** `components/Stage/MapToolbarColorLimits.test.tsx` (8 cases,
+    the control rendered directly) and `components/Stage/
+    MapStage.windowColorLimits.test.tsx` (6 cases, through a REAL `MapStage
+    dataset={…}` — what `DocumentWindow.tsx`'s `MapWindow` actually mounts)
+    cover: the control renders for a map window on a non-active dataset;
+    typing + Enter/blur commits to THAT dataset and not the active one (and,
+    with two open windows, not each other's either); both fields blank
+    commits auto; a log-mode clamped pair shows the effective hint; Escape
+    reverts the field without committing; one history entry per commit,
+    labelled with the dataset; and opening the window is not an edit. The
+    existing `components/Inspector/MapColorLimits.test.tsx` (13 cases) was
+    re-run unmodified against the refactored Inspector row and stayed green,
+    proving the extraction changed no ACTIVE-dataset behaviour.
+  - **Sabotage.** 6 mutations, one at a time, each reverted: removing the
+    control's render call from `MapToolbar` (kills every DOM-level test that
+    looks for it), wiring `MapStage`'s toolbar `datasetId` to the ACTIVE
+    dataset instead of the window's own (kills the "not the active one"
+    tests), dropping the blank-both-fields auto branch (kills the auto tests
+    in BOTH the new toolbar suite and the untouched Inspector suite — proof
+    the logic really is shared, not copied), forcing `effective` to always be
+    `undefined` (kills the effective-hint tests in all three suites), routing
+    only `"Enter"` through `onKeyDown` and dropping `"Escape"` (kills the
+    revert tests), and having `commit()` write the pair TWICE with a
+    floating-point nudge on the second write (kills the exact-value AND the
+    one-entry-per-commit assertions, again across all three suites). **6 RED,
+    0 survivors** (some mutations reddened more than one describe block, all
+    tallied above).
+
+    | Sabotage | Failing tests |
+    |---|---|
+    | Remove `<MapToolbarColorLimits/>` from `MapToolbar` | 5/6 in `MapStage.windowColorLimits.test.tsx` |
+    | `MapStage` passes the toolbar the ACTIVE id, not the window's own | 4/6 in `MapStage.windowColorLimits.test.tsx` |
+    | Hook's blank+blank branch no longer commits `null` | 1/8 `MapToolbarColorLimits.test.tsx` + 1/13 `MapColorLimits.test.tsx` |
+    | Hook's `effective` forced to `undefined` | **Correction (review round 7):** 7 tests across FOUR suites, not 6 across three — 1/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` + 4/13 `MapColorLimits.test.tsx` + 1 in `MapStage.mapView.test.tsx` ("log limits the data cannot honour are shown as the effective pair", which mounts the real `MapColorLimits` row and reads the same hook) |
+    | Toolbar's `onKeyDown` drops the `"Escape"` branch | 2/8 `MapToolbarColorLimits.test.tsx` + 1/6 `MapStage.windowColorLimits.test.tsx` |
+    | Hook's `commit()` writes the pair twice (2nd nudged by 1e-9) | 1/8 `MapToolbarColorLimits.test.tsx` + 2/6 `MapStage.windowColorLimits.test.tsx` + 2/13 `MapColorLimits.test.tsx` |
+
+  - **Bundle.** Eager total **911,295 B at the parent `3f43467b`
+    (`git rev-parse HEAD~1` of this commit) → 911,351 B on this commit, +56
+    B**; both trees built after their own `npm ci` and `rm -rf
+    node_modules/.vite`, exact eager bytes on each side via `exactbytes.mjs`.
+    890.0 kB against the 898.8 kB budget, 8.8 kB under. As expected — `
+    MapToolbar`/`MapToolbarColorLimits.tsx` are new code but sit entirely
+    inside the `MapStage-*.js` lazy chunk (absent from `index.html`'s eager
+    `<script type="module">`/`<link rel="modulepreload">` set, confirmed by
+    grep), so the whole toolbar control costs the eager bundle nothing.
+    **Correction (review round 7, finding 2): the +56 B's CAUSE was
+    mis-stated here** — `Inspector-*.js` is NOT eager (it is absent from
+    `index.html` too; `grep -c "Inspector-" index.html` is 0, and it is
+    dynamically imported from `index.js`), so "`lib/useMapColorLimitsField.ts`
+    is a new eager module because `MapColorLimits.tsx` is in the eager
+    Inspector graph" does not hold — both the hook and the component it lives
+    in are LAZY. The real mechanism is chunk hoisting: the new shared hook is
+    imported by TWO lazy chunks (`Inspector-*.js` and `MapStage-*.js`), so the
+    bundler lifts it into THEIR common ancestor, the eager entry `index.js` —
+    the only eager chunk that moved (+56 B). Per-chunk deltas confirm it:
+    `index.js` 407,635→407,691 (+56, eager), `Inspector-*.js`
+    55,952→55,647 (**-305**, lazy — the Inspector chunk shrank), `MapStage-*.js`
+    51,110→52,537 (+1,427, lazy, costs the eager budget nothing). The byte
+    figure itself needed no re-measurement, only this paragraph.
+- **Review round 7 2026-09-18** (adversarial review of `b50f6602`; P2.8
+  residual (a) stays `[x]` — the feature itself was correctly built; this
+  round closes one real cross-window defect, one stale hint, two doc-vs-code
+  gaps, one dead-code guard, and one accessibility NIT). **CLOSED.**
+  - **F1 (real defect) — the painted pair is now per WINDOW, not per
+    dataset.** The "effective" hint's store slot (`mapPaintedLimits`) is keyed
+    by dataset id, but the pair `draw()` returns is a property of ONE mounted
+    `MapStage` instance's own z-channel pick — two windows on the SAME
+    dataset with different channels fought over that one slot, and every
+    toolbar but the last writer's showed a wrong pair. `useMapPaint.ts` now
+    always keeps its OWN paint in local state and returns it; `MapStage.tsx`
+    hands it to its own `MapToolbar` → `MapToolbarColorLimits`, which passes
+    it to `useMapColorLimitsField` as an explicit override that wins over the
+    store lookup. Only the Stage-tab instance (`dataset` prop omitted) still
+    mirrors into the store slot the Inspector's active-dataset row reads.
+    Test: `MapStage.windowColorLimits.test.tsx` — two real `MapStage
+    dataset={…}` mounts on ONE dataset, different z channels, each toolbar
+    asserts its OWN "eff …" text; sabotage (ignore the override prop) → RED
+    on that test and the existing clamped-log-mode test (2 failures).
+  - **F4 — a reopened window no longer shows a stale painted pair.**
+    `mapPaintedLimits` was never pruned; nothing cleared a dataset's entry on
+    unmount, so a closed-then-reopened Stage tab went on showing a PREVIOUS
+    mount's pair — a canvas that no longer exists — until its first fresh
+    repaint landed. New `clearMapPaintedLimits(datasetId)` store action, called
+    from `useMapPaint.ts`'s cleanup on unmount of the reporting instance only.
+    Tests: `store/mapView.test.ts` (drops the entry / leaves other datasets
+    alone / no history / no-op with nothing to drop) and
+    `MapStage.mapView.test.tsx` (unmount clears the store entry; a fresh mount
+    shows no "effective" row until ITS OWN repaint lands). The pre-existing
+    "records per dataset and ignores a repeat of the same pair" no-op guard on
+    `reportMapPaintedLimits` is untouched and still passes. Sabotage (drop the
+    cleanup) → RED on both new `MapStage.mapView.test.tsx` cases; sabotage
+    (no-op the store action) → RED on those two plus the store-level "drops
+    the entry" case (3 failures).
+  - **F3 — the Inspector row's Escape-to-revert is now guarded by its own
+    test.** The shared hook's Escape branch was documented as applying to
+    "both controls" since round 6, but only the toolbar's suite ever
+    exercised it. Added to `components/Inspector/MapColorLimits.test.tsx`.
+    Sabotage (drop the Escape branch from both of the row's `onKeyDown`s) →
+    RED, exactly that one test.
+  - **F5 — the hook's dead "no change, no undo entry" guard is deleted, not
+    kept.** `store/mapView.ts`'s `setMapColorLimits` already short-circuits on
+    an unchanged pair; the hook's own copy of that guard was provably dead
+    (deleting it earlier changed nothing observable — round 6's own sabotage
+    table proved as much). Deleted, with the reasoning now in `commit()`'s
+    comment instead of a redundant `if`.
+  - **F6 — the half-blank-pair asymmetry is now named in the hook's header,
+    not only in the Inspector test that pins it.** `Number("")` is `0`, so a
+    blank min with a typed max commits `[0, max]`; a typed min with a blank
+    max stays a no-op (`min < max` fails). Pre-existing, deliberately pinned
+    behaviour (`MapColorLimits.test.tsx`'s "a half-filled pair commits with
+    the blank side read as 0"), carried verbatim from the sibling
+    `AxisLimits.tsx`; the header now says so, so a reader of the hook alone
+    does not have to find the Inspector's test to learn the contract exists.
+  - **F7 — `MapCard.tsx`'s comment no longer contradicts the code.** It said
+    the colour-limit control lived "beside the grid controls rather than in
+    the float toolbar" — as of round 6 the float toolbar carries it too.
+    Comment corrected to say both exist and why neither is redundant with the
+    other (one binds to the active dataset, the other to its own window's).
+  - **F8 — each toolbar colour-limit field now sits in its OWN `<label>`.**
+    A single `<label>` wrapping both inputs only formally associates with the
+    FIRST (an HTML implicit-label rule), so "clim" named the min field alone;
+    both inputs' `aria-label`s were already correct and are untouched — only
+    which field(s) "clim" is associated with changes. Test: each field is
+    inside its own `<label>`, plus the existing `aria-label`-based queries
+    keep working unmodified. Sabotage (one wrapping label again) → RED,
+    exactly that one test.
+  - **Sabotage.** 5 mutations, one at a time, each reverted (S1–S3 target the
+    component/hook layer per finding above; S4 targets the store action
+    directly; S5 covered under F8 above):
+
+    | # | Mutation | Result |
+    |---|---|---|
+    | S1 (F1) | `MapToolbarColorLimits` ignores the `painted` prop override entirely | RED — 2 (`MapStage.windowColorLimits.test.tsx`: the new two-window test + the existing clamped-log-mode test) |
+    | S2 (F4) | `useMapPaint.ts`'s unmount cleanup does nothing | RED — 2 (`MapStage.mapView.test.tsx`'s two new cases) |
+    | S3 (F4, store) | `clearMapPaintedLimits` is a no-op | RED — 3 (the store-level "drops the entry" case + both `MapStage.mapView.test.tsx` cases) |
+    | S4 (F3) | Inspector row's `onKeyDown` drops the `"Escape"` branch | RED — 1 (`MapColorLimits.test.tsx`'s new Escape case only) |
+    | S5 (F8) | Both toolbar fields back under one wrapping `<label>` | RED — 1 (`MapToolbarColorLimits.test.tsx`'s new label-structure case only) |
+    | S6 (review round 7, finding 2 — coverage gap, closed by a follow-up tests-only commit) | `MapStage.tsx` forces `reportToStore: true` unconditionally (a window would win the Stage tab's store slot) | Was a SURVIVOR against the committed suite at round 7; now RED — 1 (`MapStage.windowColorLimits.test.tsx`'s new "the Inspector shows the STAGE TAB's painted pair, never a window's" case) |
+    | S7 (review round 7, finding 3 — coverage gap, closed by a follow-up tests-only commit) | `useMapPaint.ts`'s render-time reset (`paintedForRef`/`setPainted(undefined)` on a `dsId` change) deleted | Was a SURVIVOR against the committed suite at round 7; now RED — 1 (`useMapPaint.dsSwitch.test.ts`'s new "clears THIS instance's painted pair synchronously the moment dsId changes" case; the hook layer, not DOM, per the round-7 review's warning that a naive DOM reproduction races MapStage's own unrelated payload-fetch race) |
+
+    **5 for 5 at round 7 itself, 0 survivors; the review's own two follow-up sabotages (S6, S7) also now RED, 0 survivors.**
+  - **Bundle.** Eager total **887,615 B at the parent `8a6f49ca`
+    (`git rev-parse HEAD~1` of this commit) → 887,746 B on this commit, +131
+    B**; both trees built after their own `npm ci` and `rm -rf
+    node_modules/.vite`, exact eager bytes on each side via `exactbytes.mjs`.
+    866.9 kB against the 898.8 kB (920,400 B) budget, 31.9 kB under;
+    `EAGER_JS_BUDGET` untouched. Per-chunk diff (matched by stripping each
+    build's content hash from the filename): every other eager chunk is
+    BYTE-IDENTICAL between the two trees except `plural-*.js`, 51,862→51,993
+    (+131) — `index-*.js` itself is unchanged (382,829 both sides), unlike
+    round 6, because the chunk graph has been reshaped by intervening
+    bundle-diet commits since then, and the shared ancestor that absorbs code
+    reachable from both the Inspector and MapStage lazy chunks is now this
+    "plural" chunk rather than the entry. It carries the new
+    `clearMapPaintedLimits` store action (confirmed: its name is a literal
+    object-property string in the built chunk, `grep -c clearMapPaintedLimits
+    plural-*.js` = 1) plus the small amount of added branching in the shared
+    `useMapColorLimitsField.ts` hook — both already-eager modules this round
+    only extends, not a new dependency edge.
+  - **F2 (record, not code) — the round-6 bundle entry's stated CAUSE for its
+    +56 B was corrected above** (`Inspector-*.js` is lazy, not eager; the
+    growth is chunk hoisting of the new shared hook into the eager entry
+    because two LAZY chunks import it, not "a new eager module"), and the
+    round-6 sabotage table's "Hook's `effective` forced to `undefined`" row
+    is corrected from 6 tests/three suites to 7 tests/four suites (a fourth
+    failure in `MapStage.mapView.test.tsx` was omitted).
 - [~] Fix profiled rendering/memory bottlenecks — **profile delivered
   2026-07-27** (`docs/envelope/2027…-final-residuals.json` M1 +
   `tools/baselines/measure_map_regrid.py`): the default linear regrid
@@ -3580,7 +3796,585 @@ covers a much smaller subset and guards focus on Analyze.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Keyboard reachability, focus, order, cancel.
+- [~] Keyboard reachability, focus, order, cancel. **Audited in full and
+  partly fixed 2026-09-18.** Stays `[~]` rather than `[x]`: the audit covered
+  everything the box names, but the fixes deliberately stopped short of eight
+  dialogs that already have a working Escape (residuals listed below).
+
+  **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
+  workshop host, and the three Library views. Columns: focus moves INTO the
+  surface on open / Tab is trapped inside it / Escape cancels / focus returns
+  to the opener on close.
+
+  | Surface | in | trap | Esc | restore | after this pass |
+  |---|---|---|---|---|---|
+  | ConfirmDialog | Y | **N** | Y | Y | trap added |
+  | ParamDialog | partial | **N** | **dead** | **N** | all four |
+  | RecoveryChoiceDialog | **N** | **N** | **none** | **N** | all four |
+  | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
+  | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
+  | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | **N** | **N** | Y (window capture) | **N** | unchanged — residual |
+  | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
+  | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
+  | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
+
+  "dead" means the dialog HAD an Escape handler — on the dialog box's React
+  `onKeyDown` — but nothing ever moved focus into the box, so the key never
+  reached it. That distinction is the main thing the audit bought: four of
+  these looked done by grep and were not.
+
+  **What shipped.**
+  - `components/overlays/useDialogFocus.ts` (new, no new dependency).
+    `useFocusTrap(ref, open)` wraps Tab/Shift+Tab; `useDialogFocus(ref, open)`
+    adds focus-in on open and restore-to-opener on close. The opener is read
+    during the RENDER that opens the dialog, not in the effect — by effect
+    time an `autoFocus` field has already taken focus, so an effect-time read
+    remembers a node inside the dialog and restores to nothing. Focus-in is
+    skipped when focus is already inside, so a dialog's own `autoFocus` wins.
+  - `RecoveryChoiceDialog` — the worst of the set, and a STARTUP modal: no
+    keyboard dismissal at all and focus left on `<body>`. Escape now cancels
+    (matching the backdrop, the choice that touches nothing), plus focus-in,
+    restore, `role="dialog"`/`aria-modal`/`aria-labelledby`.
+  - `ParamDialog`, `PlotRecipeApplyDialog`, `QuickPlotWithDialog`,
+    `AnnotationTextDialog` — focus-in, so their existing Escape is reachable,
+    plus trap and restore. `QuickPlotWithDialog`'s "source worksheet was
+    removed" branch had no Escape handler at all; both branches now share one.
+  - `ConfirmDialog` — trap only. Its focus-in/restore were already argued out
+    and test-pinned, and are untouched.
+  - `ToolWindow` — Escape closes a workshop, once at the shared host instead
+    of in 48 panels, guarded by the repo's editing-target convention (a text
+    field keeps Escape). The frame also takes focus on mount (`tabIndex={-1}`),
+    because a workshop opened from the command palette otherwise leaves focus
+    on the unmounted trigger, where a root-level React handler never fires.
+    **Round-2 correction:** as first written this ALSO claimed a
+    `defaultPrevented` guard that let another Escape consumer keep the key.
+    That claim was false — the handler called `stopPropagation()` on a React
+    synthetic event, which kills the native event at React's root container,
+    so the window-BUBBLE consumers it named never ran at all. See the round-2
+    entry below for the measurement and the fix.
+  - Tests: `overlays/dialogFocus.a11y.test.tsx` (7 cases) and six cases
+    appended to `overlays/ToolWindow.test.tsx`, all driven at the DOM layer
+    with `userEvent.tab()`/`userEvent.keyboard()`, because the bug class here
+    is "the handler exists but the key never reaches it". Every one is
+    sabotage-verified. Eager bundle +1,437 B (911,295 → 912,732).
+
+  **Round 2 (2026-09-18) — the adversarial review's three findings, closed.**
+  The pass above shipped three defects of its own. Each is fixed here with the
+  test that was missing, and every claim it made that measurement contradicted
+  is corrected in place rather than left standing.
+  - **It created the very focus-loss its own hook header condemns.** The frame
+    took focus on mount and nothing gave it back, so Escape-closing a workshop
+    left the user on `<body>` — where `useGlobalShortcuts`' Delete/Backspace
+    removes the active dataset. `ToolWindow` now shares the dialogs'
+    render-time opener latch (`useOpenerRestore`, extracted from
+    `useDialogFocus`) and restores BEFORE the panel unmounts, the pattern
+    `lib/focusGuard.ts`'s `removeRowSafely` already documents: React runs a
+    deleted tree's passive destroy in a LATER flush, and measured in jsdom
+    focus was still on `<body>` when the assertions ran. The unmount cleanup
+    stays as the backstop for closes that do not come through the component.
+    When the opener is gone (a menu item that unmounted with the click), focus
+    lands on the Library's own focus-loss container (`lib/scrollOutFocus.ts`)
+    — CORRECTED in round 3: that container exists only where a virtualized
+    Library view is rendered, so the fallback now continues to the shell root
+    (`lib/appRoot.ts`) and the "never `<body>`" promise is finally true. The audit table's `n/a` restore cell for ToolWindow now
+    reads the truth: it was **N**, and it was this pass that made it matter.
+  - **The `defaultPrevented` guard protected nobody.** `onWindowKey` called
+    `stopPropagation()` on a React SYNTHETIC event, which also stops the
+    native event at React's root container — and every Escape consumer the
+    comment named is a window-BUBBLE listener downstream of that root.
+    Measured: with a bubble consumer, `onClose` 1 call / consumer 0; with a
+    capture consumer, `onClose` 0 / consumer 1. The `stopPropagation()` is
+    gone (the event reaches every consumer as it always should have) and the
+    close waits one macrotask, then re-reads `defaultPrevented` — a LIVE
+    property of the event — so a consumer that claimed the key wins whatever
+    phase or registration order it ran in. Registration order could not have
+    fixed this: `usePeakWizard` registers its Escape listener when the wizard
+    reaches step ②, long after the hosting window mounted. That panel now also
+    CLAIMS the key with `preventDefault()`, so one Escape pauses marker-edit
+    instead of closing the whole Peak Analyzer; a second Escape, with nothing
+    left to pause, closes the panel as usual.
+  - **Three of the six fixed dialogs had no test at all.** Sabotage S10 —
+    delete the `useDialogFocus` call from `PlotRecipeApplyDialog`,
+    `QuickPlotWithDialog` and `AnnotationTextDialog` at once — left all 226
+    `components/overlays` tests green, because each dialog's own suite fires
+    Escape AT the box (`fireEvent.keyDown(box, …)`), which passes whether or
+    not anything ever moved focus into it. Six cases (focus-in + Escape each,
+    covering BOTH QuickPlotWith branches) now press the key the way a user
+    does, via `userEvent.keyboard` at `document.activeElement`.
+
+  Also closed, from the same review: stacked traps (a module-level stack of
+  open trap roots — only the top acts, so two open dialogs no longer deadlock
+  Tab on the first control of each); the frame no longer overrides a child's
+  `autoFocus`; the restore no longer yanks focus the user has since moved to a
+  live control elsewhere; `FOCUSABLE` gained `[contenteditable]`, `iframe`,
+  `summary` and `audio`/`video[controls]`; the hidden/`aria-hidden` check
+  walks ancestors up to the trap root instead of asking only the element; and
+  the fourth hand-rolled copy of the `isEditing` predicate became one shared
+  `lib/editingTarget.ts` (`useHistoryCommands` keeps its documented WIDER
+  variant, which answers a different question).
+
+  | Sabotage (round 2) | Result | Failing tests |
+  |---|---|---|
+  | S10 `useDialogFocus` removed from all three untested dialogs | **RED** 6 | the six new focus-in/Escape cases |
+  | S11 ToolWindow's restore-to-opener removed | **RED** 2 | "gives focus back to the opener…", "lands on the shared safe spot…" |
+  | S12 safe-landing fallback removed (opener gone) | **RED** 1 | "lands on the shared safe spot, never `<body>`…" |
+  | S13 round-1 Escape restored (`stopPropagation`, close at once) | **RED** 2 | "a panel hook that claims Escape keeps it…", "an unclaimed Escape still closes the panel…" |
+  | S14 top-of-stack check removed from the trap | **RED** 1 | "only the TOP trap acts…" |
+  | S15 frame focuses on mount unconditionally | **RED** 1 | "leaves a child's autoFocus alone…" |
+  | S16 `usePeakWizard` stops claiming Escape | **RED** 1 | "CLAIMS the Escape it consumes…" |
+
+  Eager bundle: parent `b50f6602` **912,824 B** → tip **913,548 B**, **+724 B**
+  (budget 920,400 B, so 6,852 B of headroom left). Both built after
+  `rm -rf node_modules/.vite`; the tip figure reproduced twice.
+
+  **Round 3 (2026-09-18) — the review's regression, closed; the ladder made
+  one rule.** Round 2 removed `ToolWindow`'s `stopPropagation()` (correctly —
+  it was killing every window-bubble Escape consumer) but left two
+  PRE-EXISTING listeners that `preventDefault()` on every Escape they see:
+  `LibraryWorkspace` (Tiles) and `QuickFigureBuilderWorkspace`. Reproduced in
+  real Chromium: with Tiles open and a workshop focused, Escape closed the
+  WORKSPACE and left the workshop open — and the second Escape did nothing at
+  all, because closing Tiles pulled focus out of the panel onto a Library row.
+  The only keyboard dismissal a workshop has was dead exactly where a user
+  would reach for it, and no spec in the suite paired the two surfaces.
+  - **The invariant, now one mechanism: the innermost open surface claims
+    Escape, and the next Escape goes to the one below it.** **(Overstated as
+    written — CORRECTED in round 4 below: two of `useGlobalShortcuts`' three
+    tiers were still claiming inline ahead of every registered surface, and
+    the Stage's four deselect listeners still fired alongside whatever claimed
+    the key. Round 4 moved every one of them into the registry and restates the
+    invariant with its two documented exceptions.)**
+    `frontend/src/lib/escapeStack.ts` (new, 143 lines) is a module-level
+    ordered registry. Surfaces register on open with a handler; ONE listener —
+    `window`, BUBBLE phase, the last stop on the propagation path — walks the
+    stack top-down and the first handler that returns `true` stops the walk.
+    Order is layer first (`window` ▸ `workspace` ▸ `app`), then OPEN order
+    within a layer (`useEscapeSurface` registers once per mount and reads the
+    handler through a ref, so a new callback identity cannot reshuffle the
+    stack). `ToolWindow`, `LibraryWorkspace` and `QuickFigureBuilderWorkspace`
+    stopped listening individually; `useGlobalShortcuts`' revert-the-armed-tool
+    tier moved into the `app` layer so an open surface is always dismissed
+    first. A `ToolWindow` DECLINES when focus is not inside its own frame,
+    which is how Escape from a Library row still closes Tiles with a panel
+    open, and how several open windows stay sane.
+  - Bubble phase is what keeps the other owners intact with no special case:
+    everything that already owns Escape does it by stopping propagation
+    (`ConfirmDialog` and the eight backdrop dialogs on window-capture,
+    `ContextMenu` on document-bubble, `CommandPalette` through React), so the
+    dispatcher is simply never reached. Round 2's one-macrotask deferral is
+    kept verbatim, and is what still lets `usePeakWizard` keep an Escape it
+    claimed with `preventDefault()` from inside its own window.
+  - **One keystroke, one close.** `closeTimer` was a single ref every keydown
+    OVERWROTE without clearing: two Escapes called `onClose` twice (the second
+    after unmount) and a HELD Escape called it twelve times. The registry
+    ignores `event.repeat`, clears any pending walk before arming a new one,
+    and `ToolWindow` carries a `closed` ref so a panel already on its way out
+    does not close twice.
+  - **The safe landing always exists.** `focusSafeLanding()` aimed only at
+    `[data-scroll-out-focus]`, which just the three VIRTUALIZED Library
+    renderers put in the DOM — with zero rows the Library takes its flat
+    branch and renders none, and `?.focus()` was a silent no-op that left the
+    user on `<body>`. It now falls back to the shell root
+    (`frontend/src/lib/appRoot.ts`, `tabIndex={-1}` on `App.tsx`'s `.qzk-app`),
+    and only then — in a harness that renders neither — to the browser's own
+    `<body>`, documented rather than silent. **Round 2's absolute claim
+    ("focus lands on the Library's focus-loss container …, never `<body>`") was
+    false as written and is corrected here: the landing is the Library
+    container when one is rendered, otherwise the shell root.**
+  - **Round 2's three unpinned "also closed" claims are pinned** (the no-yank
+    guard, the `FOCUSABLE` widening, the `hiddenWithin` ancestor walk), each
+    with a DOM case that goes red when the behaviour is reverted — the same
+    defect class round 2 existed to close. So are two of its NITs: the trap
+    stack now orders by MOUNT order (reopening an OUTER dialog no longer traps
+    Tab in the dialog behind the topmost one), and `useGlobalShortcuts`' Escape
+    branch has a top-level `defaultPrevented` check so a key a closer handler
+    claimed is not also double-handled here. The fifth hand-rolled `isEditing`
+    copy (`LibraryWorkspace`) is gone — that predicate is the dispatcher's now.
+  - **e2e gap closed.** `frontend/e2e/specs/workshop-escape-ladder.spec.ts`
+    pairs a workshop with Tiles in a real browser, both directions (focus
+    inside the panel, and focus on a Library row). That pairing is what the
+    56-test suite never had, which is why a real regression shipped green.
+
+  | Sabotage (round 3) | Result | Failing test |
+  |---|---|---|
+  | S-R1 `LibraryWorkspace` back to its own unconditional-`preventDefault` document listener | **RED** 1 | "Escape closes the WORKSHOP and leaves Tiles open; the next Escape closes Tiles" |
+  | S-R2 `QuickFigureBuilderWorkspace` back to its own unconditional-`preventDefault` window listener | **RED** 1 | "Escape closes the WORKSHOP and leaves the builder open; the next Escape closes the builder" |
+  | S17a registry stops ignoring an auto-repeating Escape | **RED** 1 | "a HELD Escape runs the walk once, not once per repeat" |
+  | S17b registry stops clearing the pending walk before arming a new one | **RED** 1 | "two Escapes inside one tick arm ONE walk, not two" |
+  | S17c `ToolWindow` drops the `closed` one-close-per-window guard | **RED** 1 | "a second Escape on a panel that is already closing does not close it again" |
+  | S-F4 `focusSafeLanding` loses the app-root fallback | **RED** 1 | "lands on the app root when the Library renders no focus-loss container" |
+  | S18 restore yanks focus back unconditionally | **RED** 1 | "does NOT yank focus the user has already moved elsewhere (S18)" |
+  | S19 `FOCUSABLE` reverted to the five classic form controls | **RED** 1 | "traps a contenteditable field, not just the classic form controls (S19)" |
+  | S20 `hiddenWithin` reverted to the element-only check | **RED** 1 | "skips a focusable inside an aria-hidden wrapper, not only a hidden element (S20)" |
+  | S-N6 trap stack back to push order | **RED** 1 | "orders traps by OPEN order, so reopening an outer one does not steal Tab (NIT 6)" |
+  | S-N9 `useGlobalShortcuts`' Escape branch drops its `defaultPrevented` check | **RED** 1 | "leaves a live gesture alone when a closer handler already claimed the Escape" |
+
+  Each sabotage applied alone against a 324-test scope (`lib/escapeStack`,
+  `components/overlays`, `LibraryWorkspace`, `quickfigurebuilder`,
+  `useGlobalShortcuts`), green at baseline, and restored after.
+
+  Eager bundle: parent `5e651e48` **888,455 B** → tip **889,632 B**,
+  **+1,177 B** (budget 920,400 B, so **30,768 B** of headroom left). Both
+  built after `rm -rf node_modules/.vite`, the parent in its own worktree
+  after `npm ci`.
+
+  **Named residuals added in round 3.**
+  - **R7** (round 3, review NIT 7) — the multi-Escape ladder is real and is now
+    deliberate: an Escape dismisses ONE thing, innermost first. Measured with
+    the real hook and a real `ToolWindow`:
+    · workshop open + `plotTool: "region"` → Esc① closes the window, tool stays
+      `region`; Esc② reverts it to `pointer`.
+    · a panel hook claiming Escape (the `usePeakWizard` shape) + a tool armed →
+      Esc① pauses the marker edit (window open, tool `region`); Esc② closes the
+      window (tool still `region`); Esc③ reverts the tool.
+    · Tiles open + `plotTool: "zoom"` → Esc① closes Tiles, tool stays `zoom`;
+      Esc② reverts it.
+    · **(added round 6)** a LIVE drag + the Peak Analyzer at step ② → Esc①
+      cancels the drag ONLY (marker edit still live, tool still armed); Esc②
+      pauses the marker edit (tool still armed, because the wizard's
+      `preventDefault()` stops the walk); Esc③ then falls to the surfaces
+      below — the hosting `ToolWindow` if focus is inside its frame, otherwise
+      the `app` tier's tool revert. The first two keystrokes are measured with
+      the real hooks in `usePeakWizard.test.ts`; on round 5's tree Esc① did
+      both of those actions at once (review finding 1).
+    Round 2's order was the inverse for the workshop case (the tool reverted
+    first and the panel stayed), which is the inconsistency this fixes; the
+    workspace case already behaved this way and still does.
+  - **R9** (round 3, found while writing the e2e spec) — `App.tsx` renders
+    `LibraryWorkspace` and `QuickFigureBuilderWorkspace` LAZILY behind a
+    `Suspense` fallback that carries the same `aria-label`, and that
+    placeholder registers no Escape handler. For the few hundred ms before the
+    chunk arrives, Escape does nothing. Pre-existing (the listener always lived
+    in the real component) and invisible to a user who did not press Escape
+    within that window; recorded because it cost an afternoon to diagnose in
+    the spec, which now waits for a real tile rather than the label.
+  - **R8** (round 3, review NIT 10) — `hiddenWithin` moves the WRAP boundary
+    only. A focusable inside an `aria-hidden` wrapper is still reached by an
+    ordinary Tab BETWEEN the first and last stops, because the trap intervenes
+    at the two ends and nowhere else. Delivering the attribute's full meaning
+    needs `inert`, which is a separate decision from this pass.
+
+  **Round 4 (2026-09-18) — every Escape consumer is in the ladder, and a
+  declined close keeps the key.** Rounds 2 and 3 each shipped a fix that
+  inverted Escape somewhere else, because each was verified only where it was
+  aimed. Round 3's review found two NEW user-visible inversions of the same
+  class the registry exists to kill, plus an unpinned guard and seven nits.
+  This round closes all of them and states the invariant so it is true as
+  written.
+
+  **The corrected invariant.** *The innermost open surface claims Escape, ONE
+  Escape performs ONE action, and the next Escape goes to the surface below.*
+  Round 3's wording ("the innermost open surface claims Escape") was false on
+  two counts: two of `useGlobalShortcuts`' three tiers still claimed inline
+  ahead of every registered surface, and four Stage listeners fired
+  ALONGSIDE whatever claimed the key. The invariant now has exactly two
+  documented exceptions, both named in `lib/escapeStack.ts`'s header and both
+  conditional on their own surface being present (so neither can swallow an
+  Escape nothing wanted): `SymbolPalette`, a popover opened FROM a text field,
+  which must keep Escape in the one state the dispatcher deliberately gives to
+  the field (`isEditingTarget`); and `usePeakWizard`'s marker-edit pause, a
+  window-bubble claim from inside its own `ToolWindow`.
+
+  **The ladder as it now stands**, top (innermost) to bottom. The first four
+  layers are new or newly populated this round.
+
+  | Layer | Consumer | Why it sits there |
+  |---|---|---|
+  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** |
+  | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. Resolved synchronously at keydown since round 5, and since round 6 a claim here also `preventDefault()`s, so a late window-bubble consumer cannot act on the same key. |
+  | `window` | `ToolWindow` (every workshop host, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. **("all 48 hosts" as written in round 4 was not reproducible — CORRECTED in round 6, review finding 5. Measured at round 6's tip: **40** production `.tsx` files render `<ToolWindow` across **41** render sites, and **44** import it; counting test files too gives 45 files / 78 sites / 50 importers. The substance — one registry entry per `ToolWindow` mount, so every host gets it — is unchanged; only the decorative count was wrong.)** |
+  | `workspace` | `LibraryWorkspace` (Tiles), `QuickFigureBuilderWorkspace` | Full-Stage workspaces; mutually exclusive in `App.tsx`, so two can never co-exist. |
+  | `selection` | the four Stage deselects (`useShapeEdit`, `useAnnotationEdit`, `useShapeDraw`, `worksheet/useWorksheetView`) + the idle-armed quick-fit gadget | A live selection or an idle-armed gadget is BELOW any open surface (finding 3: a committed ROI sitting behind a focused window is not innermost) and ABOVE the tool revert (clearing a selection is a smaller undo than disarming the tool that made it). Each registers only while it has something to clear, so the most recently armed one claims first. |
+  | `app` | `useGlobalShortcuts` → revert the armed plot tool to Pointer | The whole-app fallback: it only ever sees an Escape every surface declined. |
+
+  Never reached, because they stop propagation upstream: `ConfirmDialog` and
+  the eight backdrop dialogs (window capture), `ContextMenu` (document bubble,
+  plus the dispatcher's `.qzk-ctx` belt-and-braces), `CommandPalette` (React
+  synthetic, plus the dispatcher's `cmdkOpen` early-out). Guarded away by the
+  dispatcher's one `isEditingTarget` check: every rename / cell-edit /
+  label-edit `onKeyDown`. Deliberately NOT surfaces: `TooltipLayer` (dismissing
+  a passive hint alongside another action is correct) and `LibraryTree`'s
+  Escape-blur (a focus move, not a dismissal — and the e2e ladder spec depends
+  on an Escape from a Library row still reaching Tiles).
+
+  **What changed.**
+  - **Finding 1 — a declined close no longer kills the key** (`ToolWindow.tsx`).
+    The per-mount `closed` ref was set before `onClose()` ran and never reset.
+    Two shipped panels legitimately do not unmount on close
+    (`usePageLifecycle.requestClose` on a declined "Close without saving?",
+    `PackProjectPanel` while packing/cancelling), and for those the latch stuck
+    on: every later Escape was dead AND, because the guard DECLINED rather than
+    doing nothing, the walk fell through and the workspace behind the focused
+    panel closed instead. The window now claims whenever it is the innermost
+    surface and invoked `onClose` — claiming is not conditional on unmounting.
+    One-keystroke-one-close stays entirely in the registry, where it belongs
+    (`event.repeat` + the pending-walk clear); a later, separate keypress is a
+    second intent and brings the confirm back.
+  - **Findings 2+3 — the two tiers left inline moved in**
+    (`useGlobalShortcuts.ts`). Round 3 re-homed only the tool-revert. Measured
+    on that tree: with Tiles open over a committed `qfitRoi`, Escape destroyed
+    the ROI and left Tiles open (the parent closed Tiles and kept the ROI); and
+    with a focused workshop over an idle committed ROI, the ROI was cleared
+    while the window stayed open. Escape is now handled in NO raw listener in
+    that file — the gesture cancel is a `gesture` surface, the idle gadget a
+    `selection` surface, the tool revert the `app` surface.
+  - **The deleted `stopPropagation`'s promise, restored.** `LibraryWorkspace`'s
+    removed shield was commented "This workspace owns the keystroke"; the four
+    Stage deselect listeners (none of which `preventDefault`) had been firing
+    alongside the workspace close ever since — two actions, one key. All four
+    are `selection` surfaces now.
+  - **Finding 4 — the mid-walk staleness skip is pinned.**
+    `escapeStack.ts`'s `if (!stack.includes(entry)) continue;` was deletable
+    with the whole suite still green.
+  - **NIT 5** — a handler that throws no longer eats the key for every surface
+    below it: the walk catches, logs and continues (it is treated as a
+    decline). Previously the exception escaped the `setTimeout` outside any
+    React error boundary and recurred on every Escape.
+  - **NIT 6** — the Quick Figure Builder's new editing guard is disclosed here,
+    not only in a code comment: Escape in one of that builder's own fields now
+    belongs to the field, so pressing it on its one `<select>` (dropdown
+    closed) no longer dismisses the builder.
+  - **NIT 7 — the menus own Escape.** `MenuBar` and `AppearanceMenu` are
+    `menu`-layer surfaces. `SymbolPalette` could not join (see the exceptions
+    above) and instead claims explicitly with `preventDefault()`, which the
+    walk's re-read honours — so it too is now one Escape, one action.
+  - **NIT 8 — `OriginSavedPreviewWindow` joined the registry.** Its bespoke
+    window-CAPTURE listener with `stopPropagation()` and no focus / editing /
+    palette / menu guard swallowed every Escape in the app while the preview
+    was open — including one aimed at a text field — and its own `ToolWindow`
+    entry never ran. Deleted; the host's `window`-layer entry does the same
+    close, correctly scoped to focus inside the frame.
+  - **NIT 10 — one `defaultPrevented` gate, not two.** The synchronous copy in
+    `onKeyDown` could only ever fire for a document-bubble claimant, which the
+    deferred re-read catches too (along with every claim that lands after the
+    keydown, which the synchronous copy could not see). Removed, and the
+    re-read is pinned by a document-bubble case of its own.
+  - **NIT 11** — `useFocusTrap`'s lazy per-instance id is `useState(() =>
+    nextTrapSeq++)` instead of a render-phase module mutation.
+
+  | Sabotage (round 4) | Result | Failing test(s) |
+  |---|---|---|
+  | R4-1 `ToolWindow` gets its per-mount `closed` latch back | **RED** 1 | "claims Escape every time, and the workspace behind it never sees the key" |
+  | R4-2 the idle-gadget tier claims inline again (round 3 shape) | **RED** 2 | "closes Tiles and PRESERVES a committed quick-fit ROI (finding 2)", "the focused window closes first; the committed ROI survives until the next Escape" |
+  | R4-3 `useShapeEdit` back to a bare window-keydown deselect | **RED** 1 | "one Escape performs ONE action: the Stage deselect does not fire with it" |
+  | R4-4 the `gesture` layer drops to rank 0 | **RED** 2 | "cancels a registered gesture instead of reverting the tool", "ranks menu ▸ gesture ▸ window ▸ workspace ▸ selection ▸ app" |
+  | R4-5 `walk` drops the mid-walk staleness skip (finding 4) | **RED** 1 | "does not call a handler that unregistered during this same walk" |
+  | R4-6 the walk stops catching a throwing handler (NIT 5) | **RED** 1 | "logs it, and the surface below still gets its turn" |
+  | R4-7 `MenuBar` stops registering (NIT 7) | **RED** 1 | "closes the open menu and claims the key, so nothing below also acts" |
+  | R4-8 `OriginSavedPreviewWindow` keeps its capture-phase swallow (NIT 8) | **RED** 1 | "does not swallow an Escape aimed at a text field" |
+  | R4-9 `walk` stops re-reading `defaultPrevented` (NIT 10) | **RED** 5 | incl. "a DOCUMENT-bubble consumer that preventDefaults still stops the walk", "a panel hook that claims Escape keeps it — the window does NOT close" |
+  | R4-10 every focus trap gets the same seq (NIT 11's ordering) | **RED** 1 | "only the TOP trap acts, and closing it hands control back to the outer one" |
+
+  Each applied alone against a 12-file / **253-test** scope (`escapeStack`,
+  `ToolWindow`, `LibraryWorkspace`, `useGlobalShortcuts`, `MenuBar`,
+  `AppearanceMenu`, the three Stage deselect hooks, `Worksheet`,
+  `FiguresSection`, `dialogFocus.a11y`), green at baseline, and restored after.
+
+  Eager bundle: parent `eb696722` **889,632 B** → tip **889,141 B**,
+  **−491 B** (the deleted listeners outweigh the new registrations; budget
+  920,400 B, so **31,259 B** of headroom). Both built after
+  `rm -rf node_modules/.vite`, the parent in its own worktree after `npm ci`.
+
+  **Named residuals added in round 4.**
+  - **R10** — `components/windows/PlotWindowFrame.tsx` (multi-plot document
+    windows) still has no Escape dismissal and no registry entry, so Escape
+    with focus inside one falls through to the `workspace`/`selection`/`app`
+    layers. Deliberately left as a hole rather than filled: a plot window is a
+    DURABLE container with saved layout, not a transient workshop panel, and
+    giving it Escape-to-close is a product decision for the owner, not an a11y
+    fix. Recorded so the ladder has no silent gaps.
+  - **R11** — `usePeakWizard`'s marker-edit pause claims Escape with
+    `preventDefault()` without checking that focus is inside its own window, so
+    at step ② it can pause the edit from a keystroke aimed elsewhere. Narrow
+    (step ② only, and only while there is something to pause) and pre-existing;
+    it is one of the two documented exceptions above, and closing it needs the
+    hook to reach its host frame's ref.
+
+  - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
+    macrotask later.** Round 4 landed locally and was NOT pushed, because
+    `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
+    without committing a result; tool stays armed") went intermittent on it —
+    1–2 of the spec's 6 projects failing in each of three consecutive runs,
+    always at `aria-pressed` reading `"false"`: the tool was DISARMED as well
+    as the gesture cancelled.
+
+    **The measured mechanism** (instrumented build, real Chromium,
+    deviceScaleFactor 2.0 — timestamps from one run):
+
+    | t (ms) | what happened |
+    |---|---|
+    | 1525.5 | mousedown on the plot arms the Integrate drag; `setActiveGestureCancel(fn)` |
+    | 1628.9 | **Escape keydown** — the dispatcher sees the stack `gesture, app` and arms the walk with `setTimeout(…, 0)` |
+    | 1632.3 | **the queued `mouseup` is delivered FIRST** — Chromium runs a pending input task ahead of a 0 ms timer |
+    | 1632.4 | `uplotRegionTools`' own release handler clears the canceller and COMMITS the region (`dpx=430`) |
+    | 1657.3 | the walk finally runs, 25 ms late: `gesture` has nothing to cancel and declines → `app` reverts the tool |
+
+    So it is not the stack that went stale — the `gesture` entry never
+    unregisters — it is the CLAIM. Round 4 chose the acting surface inside the
+    deferred walk, so a surface could lose its claim in the gap and the key
+    fell through to a lower layer: one keystroke, a committed result AND a
+    disarmed tool, the same class rounds 2–4 kept producing.
+
+    **The fix** (`lib/escapeStack.ts`, ~+80 lines of code and rationale; no
+    new surfaces, no layer added, moved or reordered).
+    - `onKeyDown` snapshots the ordered stack, and `walk` runs THAT snapshot
+      instead of re-reading `stack`. A surface that goes away between the
+      keydown and the walk was the innermost one when the key was pressed, so
+      the walk now STOPS there rather than handing the keystroke to a lower
+      layer. Round 4's mid-walk staleness skip is kept and is now explicitly a
+      different moment in time — an entry killed DURING the walk (by a handler
+      that already ran) is still skipped, and the walk continues.
+    - The `gesture` layer is resolved SYNCHRONOUSLY, inside the keydown
+      listener (`RESOLVES_AT_KEYDOWN`). This layer cannot be deferred at all:
+      cancelling a drag means removing the listeners that would commit it, so
+      it has to happen before the browser can deliver the release. Acting there
+      costs nothing, because a claim that arrived BEFORE the dispatcher
+      (window-capture / document-bubble — how `SymbolPalette` claims) is
+      already visible in `defaultPrevented` and still wins, and nothing below
+      `gesture` may outrank it anyway. The synchronous scan stops at the first
+      surface of another layer, so an open `menu` still owns Escape and still
+      goes through the walk exactly as before.
+
+    **Evidence.** A forced-race Playwright probe dispatching the Escape
+    keydown and the drag's `mouseup` in the SAME task (the worst ordering the
+    scheduler can produce, every time) against two builds of the identical
+    tree: parent `6fd193f9` → `aria-pressed=false, chips=1`; with the fix →
+    `aria-pressed=true, chips=0`. Then `region-tool-escape` **passed 10
+    consecutive runs** (6 tests each, 11.3–11.9 s), against 3 of 3 runs
+    failing before it.
+
+    | Sabotage (round 5) | Result | Failing test(s) |
+    |---|---|---|
+    | R5-1 the walk falls through a surface that died in the gap | **RED** 1 | "STOPS when the surface that owned the key at keydown is gone by the walk" |
+    | R5-2 the `gesture` layer is resolved in the deferred walk again | **RED** 2 | "gives the gesture layer the key SYNCHRONOUSLY, before the walk is armed", "a gesture that ends between keydown and the walk cannot disarm the tool" |
+    | R5-3 the synchronous path ignores `defaultPrevented` | **RED** 2 | "a claim that landed BEFORE the dispatcher still beats the gesture layer", "leaves a live gesture alone when a closer handler already claimed the Escape" |
+    | R5-4 the synchronous scan walks past surfaces of other layers | **RED** 6 | incl. "an open menu still outranks a live gesture, and the walk still decides", "a bubble consumer that claims the key with preventDefault keeps it" |
+    | R5-5 the walk re-reads the live stack instead of the snapshot | **RED** 1 | "STOPS when the surface that owned the key at keydown is gone by the walk" |
+
+    Each applied alone against `escapeStack.test.ts` + `useGlobalShortcuts.test.ts`
+    (**40 tests**, green at baseline) and restored after.
+
+    Eager bundle: parent `6fd193f9` **889,141 B** → tip **889,423 B**,
+    **+282 B** (budget 920,400 B, **30,977 B** of headroom). Both built after
+    `rm -rf node_modules/.vite` on the same `npm ci` tree.
+
+    **Lesson.** A deferred dispatch must resolve its TARGET synchronously and
+    defer only the action — and any surface whose claim is destroyed by
+    waiting (a live drag) has to act synchronously too. Deciding later who
+    should have acted is how one keystroke becomes two actions.
+
+  - **Round 6 2026-09-18 — a synchronous claim consumes the KEY, and only an
+    offered surface can swallow it.** Round 5's review found that the new
+    synchronous `gesture` claim reproduced the rounds 2–4 defect class one more
+    time, plus a swallow-direction regression and three false records. Two
+    one-rule code changes, both in `lib/escapeStack.ts`; no surface, layer or
+    order changed.
+
+    - **Finding 1 — the synchronous claim now `preventDefault()`s.** The
+      dispatcher returned from a synchronous claim without marking the event,
+      so the keystroke carried on down the propagation path un-claimed. The
+      dispatcher's own listener is attached FIRST and stays for the life of the
+      app (`useGlobalShortcuts` registers `gesture` and `app` unconditionally),
+      so every later window-bubble consumer runs after it; there is exactly one
+      in the tree, `usePeakWizard`'s marker-edit pause. **Measured with the
+      real hooks** (`useGlobalShortcuts` mounted first, then `usePeakWizard` at
+      step ②, a live gesture registered through `setActiveGestureCancel`), ONE
+      Escape:
+
+      | tree | drag cancelled | marker edit paused | actions on one key |
+      |---|---|---|---|
+      | round 5 `a67b3222` | yes | **yes** | **2** |
+      | round 6 (tip) | yes | no | **1** |
+
+      At registry level the same A/B is `["gesture","late-bubble-claimant"]` →
+      `["gesture"]`, and `event.defaultPrevented` after a synchronous claim goes
+      `false` → `true`.
+    - **The round-5 commit body's corner-case note is CORRECTED here.** It said
+      *"Escape now cancels the drag where it previously paused the wizard's
+      marker edit … the second Escape pauses the marker edit as before."* On the
+      round-5 tree that was false: the FIRST Escape already did both, so nothing
+      was left for the second. Round 6 makes the sentence true — Esc① cancels
+      the drag only, Esc② pauses the marker edit (and, because the wizard's
+      claim stops the walk, still does not revert the tool). Both keystrokes are
+      pinned in `usePeakWizard.test.ts`.
+    - **Finding 2 — only the keydown CLAIMANT can swallow the key by dying.**
+      Round 5 stopped the walk for ANY snapshot entry that was gone at walk
+      time. An entry below the first was never the claimant — the walk reaches
+      it only because everything above it declined, and it is not offered the
+      key either — so stopping there let a surface that was never in the running
+      swallow the keystroke. Measured on round 5: a `window` surface that
+      DECLINES (focus outside its frame) over a `workspace` that closes itself
+      in the gap gave `["window"]`, and the `app` tier below never ran; round 6
+      gives `["window","app"]`, which is what round 4 did. The rule is now
+      `ordered[0]` only.
+    - **What finding 2 deliberately does NOT change, and why.** The review's two
+      cited probes — Tiles under a declining `ToolWindow` that unregisters in
+      the gap, and close-and-identical-reopen in the gap — are both cases where
+      the dying surface IS `ordered[0]`, the claimant. Reproduced at round 5's
+      tip: both give `[]`, and they still give `[]` at round 6. They are
+      indistinguishable at walk time from the case round 5 exists to protect
+      (the pinned "STOPS when the surface that owned the key at keydown is gone
+      by the walk"): in all three the innermost entry at keydown is simply gone,
+      and what its handler WOULD have returned is unknowable. Restoring them
+      means deleting round 5's rule outright, which sabotage M-e shows reddens
+      that test. Recorded as the accepted cost of the round-5 protection rather
+      than silently "fixed"; reachability is a ~0 ms unregistration window and
+      the next Escape does the job.
+    - **The three staleness rules stay separately pinned**, one sabotage each
+      (S6-2 / S6-3 / S6-4 below) — they are not merged.
+    - **Finding 3 (record)** — the `menu` row of round 4's ladder table above is
+      corrected in place: with the wizard at step ② an open menu does not close,
+      and that is residual R11's class.
+    - **Finding 4 (record), both numbers restated from measurement.**
+      `useWorksheetView.ts`'s pin was **never ratcheted**: the file went 647 →
+      646 lines in round 4 and its `architecture.test.ts` pin stayed **648**
+      (comment still "Unchanged at 648 (BUG-009)"). That is legal — pins are
+      ceilings and the rule is "never raise" — and `architecture.test.ts` is
+      untouched by rounds 4, 5 and 6, so no pin was raised anywhere; the brief's
+      "ratcheted DOWN 648 → 646" simply did not happen. And "all 48 ToolWindow
+      hosts" is not reproducible: measured at round 6's tip, **40** production
+      `.tsx` files render `<ToolWindow` across **41** render sites and **44**
+      import it (45 files / 78 sites / 50 importers if test files are counted).
+      The table and `ToolWindow.tsx`'s header now say what was measured.
+
+    | Sabotage (round 6) | Result | Failing test(s) |
+    |---|---|---|
+    | S6-1 the synchronous claim stops calling `preventDefault()` | **RED** 4 | "stops a LATE window-bubble consumer from acting on the same key", "marks the event itself, which is how a later consumer can tell", "Esc① cancels the drag only; the marker edit stays live", "Esc② then pauses the marker edit, and still does not revert the tool" |
+    | S6-2 any dead snapshot entry stops the walk again (round 5's blanket rule) | **RED** 1 | "walks PAST a snapshot entry that was never the claimant and died in the gap" |
+    | S6-3 the keydown claimant no longer swallows the key by dying | **RED** 2 | "STILL stops when the CLAIMANT itself dies, with the same stack below it", "STOPS when the surface that owned the key at keydown is gone by the walk" (round 5) |
+    | S6-4 the mid-walk staleness skip becomes a stop (round 4's rule, M-d) | **RED** 1 | "still skips — and walks past — a surface killed DURING the walk (round 4)" |
+
+    Each applied alone against `escapeStack.test.ts` +
+    `useGlobalShortcuts.test.ts` + `components/workshops/peakwizard`
+    (**69 tests**, green at baseline), and restored after.
+
+  **Named residuals (why this is `[~]`).**
+  - **R1** — eight backdrop dialogs (Split, Separate, Combine, ReimportAll,
+    Shortcuts, TextFormatHelp, Preferences, Help) still take no focus, trap no
+    Tab, and restore nothing. Their Escape is a window-capture listener and
+    DOES work, which is why they were left for a later, lower-risk slice
+    rather than swept in here: each renders enough of its own chrome that
+    focus-in needs a per-dialog decision about which control is the safe
+    landing spot.
+  - **R2** — `CommandPalette` focuses its input but never restores focus to
+    the opener on close.
+  - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
+    plan-level promise commits to one; GUI_INTERACTION #10's recoverability
+    promise is met by title-bar clamping plus the keyboard-reachable View-menu
+    "Reset window positions". Not invented here.
+  - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
+    alone and does not say WHICH panel it closes. That belongs to the
+    accessible-names box above, not this one.
+  - **R5** (round 2, review NIT 12) — under React StrictMode's dev-only
+    mount→cleanup→mount, `useOpenerRestore`'s cleanup restores to the opener
+    mid-open and the re-run pulls focus back in. Net-correct, one dev-only
+    flicker; not worth a latch that would complicate the real path.
+  - **R6** (round 2, review NIT 13) — a SECOND `ToolWindow` mounting takes
+    focus from the first. Correct for a user-initiated open, wrong for a panel
+    that appears by itself; `ResultsWindow` is the only auto-appear candidate
+    and nothing currently renders it, so there is no such path to fix against.
 - [~] Accessible names/state for icons, plots, trees, dialogs, progress.
   ~143 `aria-label`s already exist app-wide; this box has NOT had a full
   audit and stays `[~]` for that reason. What was verified and fixed
@@ -5557,7 +6351,7 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Chosen by measured coupling over the two larger candidates: `loadWorkspace`
   (170 lines) writes 40 `AppState` fields and is where every newly persisted
   field gets wired, and `applyOriginFigure` + `facetByColumn` + `breakAtGaps`
-  (342 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
+  (336 lines) write 24 PlotView fields that `plotViewSettings.ts` also writes;
   this cluster writes 15, of which the 4 it owns means this module holds every
   ACTION that edits them one at a time — bulk restores write them wholesale
   and stay outside the cluster on purpose: `loadWorkspace`'s `.dwk` hydrate,
@@ -5627,6 +6421,119 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   inside the ≈3.6 kB headroom and `EAGER_JS_BUDGET` untouched. All findings
   were test/doc/comment-only, plus the seven import-line repoints in F5; no
   other runtime behavior changed.
+
+  **THIRD domain extracted 2026-09-18**, same discipline: the **bulk view
+  appliers** — the three actions that install a WHOLE plot view in one gesture
+  from a source description rather than editing one setting at a time:
+  `applyOriginFigure` (an imported Origin graph window, in its four branches —
+  cross-book overlay, double-Y layer pair, spatial multi-panel family, and the
+  single-layer fallback), `facetByColumn` (a small-multiples partition by a
+  category column) and `breakAtGaps` (a paneled x-break arrangement). 336
+  implementation lines (base `useApp.ts` 985-1320: `applyOriginFigure`
+  985-1215, `facetByColumn` 1226-1281, `breakAtGaps` 1288-1320), plus their
+  24 interface-declaration lines and the
+  `ORIGIN_FIGURE_AXIS` constant all three spread, moved to the new
+  `store/viewAppliers.ts` (443 lines by the repo's `split("\n")` ceiling
+  metric, `ViewAppliersSlice`, composed with one import + one word on the
+  `extends` clause + one spread, exactly like `plotViewSettings.ts` and
+  `reportsFigureDocs.ts`). `store/useApp.ts` **2,012 → 1,639 lines (−373)**;
+  its `STORE_PINS` entry ratcheted DOWN to 1,639 with a dated justification.
+  The three bodies are byte-identical modulo one indentation level (they moved
+  from an object literal at depth 1 into the creator's `return {` at depth 2);
+  nothing else changed, and nine now-unused imports left `useApp.ts` with them.
+  This is the LARGER of the two candidates the second domain's note deferred —
+  chosen now *because* of that note's coupling objection rather than despite
+  it: these three do write PlotView fields `plotViewSettings.ts` also writes,
+  but they write them as one whole-view INSTALL, which is a different job from
+  a per-setting writer, and `plotViewSettings.ts`'s own header already listed
+  all three by name as the bulk-appliers it does not own. The split is by
+  gesture, not by field. `loadWorkspace` (170 lines) is still in `useApp.ts`
+  and is the obvious next domain. Deliberately left behind as NOT this domain:
+  the Origin-apply PREFLIGHTS (`confirmOriginReapplyDiscard`,
+  `deferOriginFigureApply`, `deferOriginApplyLibs`), which stay in
+  `store/originFigureApply.ts` — one of the three modules grandfathered to
+  import `components/` — so that `viewAppliers.ts` sits below the component
+  layer and the store layering guard gains **no new grandfathered entry**.
+  Characterization net: `store/viewAppliers.characterization.test.ts`, 28
+  specs at the extraction (35 after 2026-09-18 review round 3 F1 added the
+  cross-book overlay branch's own key-set specs, closing the one branch the
+  net didn't cover — see that round's findings below), written and run GREEN
+  against the pre-extraction `store/useApp.ts` and passing byte-unchanged
+  after the move. It pins, per action AND per
+  branch, the exact set of top-level store keys each call changes — a whole
+  `getState()` diff against a POISONED baseline that now also poisons
+  `composition`/`qfitBusy`/`qfitError`/`gadgetBusy`/`gadgetError`, so the
+  `focusTransientReset()` a rebind performs is visible in the diff too — plus
+  the applied axis/channel/composition values, the undo label pushed (or that
+  none is) and the macro step recorded; the four no-op branches (missing
+  dataset, empty analysis view, no finite levels, no qualifying x-gap) are
+  pinned with an EMPTY changed set and their toast text. The pins are explicit
+  `toEqual` arrays, not inline snapshots, so a stray `vitest -u` cannot
+  rewrite them. Sabotage-proven both directions: an EXTRA key written by
+  `breakAtGaps` (`plotTitle`) and a SKIPPED key in `facetByColumn`
+  (`facetKey: col`) each turn the net red. Eager bundle, both trees built after
+  their own `npm ci` and a `node_modules/.vite` wipe: **911,295 B at
+  `16535ee0`** (`HEAD~2` of the extraction; tree-identical to the branch base
+  `3f43467b` — `git rev-parse 16535ee0^{tree}` = `3f43467b^{tree}`) →
+  **911,331 B on the extraction commit, +36 B**
+  (the new chunk boundary's own cost; `EAGER_JS_BUDGET` untouched and 8.9 kB
+  under budget). `HEAD~1` is the test-only characterization commit, which
+  cannot move the eager graph. The box stays `[~]`: `store/useApp.ts` is still far over the 500-line module
+  ceiling, and `lib/api.ts` / `lib/uplotOpts.ts` / `lib/uplotOverlays.ts` are
+  untouched by every pass so far.
+
+  **Review round 3, 2026-09-18 (adversarial review of `977fc5f5` +
+  `b2cde0a2`; verdict CLEAN, nine findings, all closed test/doc-only — no
+  product-code change).** F1: the cross-book OVERLAY branch of
+  `applyOriginFigure` had NO changed-key spec at all, despite this note (and
+  `architecture.test.ts`'s pin justification) claiming coverage "per action
+  AND per branch" across all four branches — closed by adding two new-overlay
+  and two already-active-overlay specs to
+  `store/viewAppliers.characterization.test.ts` (28 → 35), sabotage-proven
+  against both mutations the review reproduced (an extra carried-along
+  `plotTitle` write, and a dropped `facetKey: null` clear — the latter only
+  observable in the already-active scenario, since a genuine dataset switch
+  masks it via `setActive`'s own `datasetViewDefaults` reset). Closing that
+  gap also surfaced a real hole in the characterization file's own `poison()`
+  helper: `plotTitle` was never poisoned or reset at all, so a sabotage that
+  wrote it would silently leak into every later test's baseline within the
+  same run — fixed by adding it to `poison()`. F3: `poison()`'s `pageSetup:
+  null` matched the field's own default AND what the spatial branch actually
+  writes for every fixture (undecoded page), making that write invisible —
+  fixed to a non-default `PageSetup`, `pageSetup` added to the spatial
+  branch's expected key set, and the rest of `poison()` audited (documented
+  inline: `regionShades: []` is safe by array IDENTITY despite matching its
+  default by value; `stackMode`/`legendStatic`/`showGrid` match their own
+  defaults but are safe because no branch in this domain ever writes them
+  back to that value). F4: `breakAtGaps` had only a DIFFERENT-dataset
+  key-set spec, the one case that cannot observe its `facetKey: null` clear
+  being dropped (same masking as F1) — added the ALREADY-active-dataset
+  spec `facetByColumn` already had. F5: `recordMacro`'s LABEL argument was
+  never asserted anywhere in the file, only its `code` — added a
+  `macroLabels()` helper and label assertions for all three actions. F6:
+  `facetByColumn`'s `recordHistory`/`setActive` ordering (and the L3 dedup
+  that keeps our own undo entry over `setActive`'s pinned-window
+  `createWindow` fallback) was unpinned — added a spec that pins the pushed
+  snapshot as the PRE-rebind state and the surviving label. F9: a FIFTH
+  `breakAtGaps` no-op branch (`compositionPanelCount(composition) < 2` — an
+  explicit break list that leaves fewer than 2 panels) was untested and
+  unmentioned; "four no-op branches" corrected to five here and in
+  `architecture.test.ts`'s pin justification, and a spec added. F2: "342
+  implementation lines" was measured wrong — the removal hunk is
+  authoritative at 336 (`985-1320`, three sub-ranges above); corrected here,
+  in the earlier 2026-09-17 note's mention above, and in
+  `architecture.test.ts`'s pin justification. F7: the bundle-parent SHA
+  above was labeled `3f43467b` "`is` `HEAD~2`" when `HEAD~2` is actually
+  `16535ee0` (the #365 merge) and `3f43467b` is that merge's second
+  parent — corrected above to measure and label `16535ee0`, noting the two
+  are tree-identical so the number itself was never wrong. F8: two stale
+  `store/useApp.ts` comments pointing at the moved actions —
+  `lib/originPanels.ts:5` and `lib/exportParity2.test.ts:289` — now say
+  `store/viewAppliers.ts`. All changes were to
+  `store/viewAppliers.characterization.test.ts`, the two comment files, this
+  plan and `architecture.test.ts`'s comments; no gate command, budget or
+  pin changed, and the extraction's own byte-identical bodies (this note's
+  earlier paragraph) are untouched.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy

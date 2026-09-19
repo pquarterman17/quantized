@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   axisDisplayName,
@@ -13,6 +13,7 @@ import {
   useAcquisitionAxis,
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMappingActions";
+import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import type { QuickPlotTemplateScope } from "../../../lib/quickPlotTemplates";
 import type { Dataset } from "../../../lib/types";
@@ -201,17 +202,19 @@ export default function QuickFigureBuilderWorkspace() {
   const dataset = useApp((s) => s.datasets.find((candidate) => candidate.id === datasetId));
   const close = useApp((s) => s.closeQuickFigureBuilder);
 
-  useEffect(() => {
-    const cancelOnEscape = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      const state = useApp.getState();
-      if (state.cmdkOpen || document.querySelector(".qzk-ctx")) return;
-      event.preventDefault();
-      close();
-    };
-    window.addEventListener("keydown", cancelOnEscape);
-    return () => window.removeEventListener("keydown", cancelOnEscape);
-  }, [close]);
+  // ROUND 3 (review findings 1+2): this was a `window` listener that
+  // `preventDefault()`ed every Escape, so a focused workshop opened over the
+  // builder lost its only keyboard dismissal — measured: Escape closed the
+  // BUILDER and left the panel open. It now registers on the shared ordered
+  // registry (`lib/escapeStack.ts`) at the `workspace` layer, behind any
+  // floating window and in front of the whole-app fallbacks. The dispatcher
+  // owns the editing / command-palette / open-menu guards; the editing one is
+  // new here, and correct — Escape in one of this builder's own fields belongs
+  // to the field, not to the workspace around it.
+  useEscapeSurface("workspace", () => {
+    close();
+    return true;
+  });
 
   if (!dataset) {
     return (

@@ -5,11 +5,13 @@
 // footer link in calc-only mode; the accent/density/theme/palette controls
 // and full-app behavior are unchanged either way.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import AppearanceMenu from "./AppearanceMenu";
 import { useApp } from "../../store/useApp";
+import { pressEscape } from "../../test/pressEscape";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 
 function open(): void {
   fireEvent.click(screen.getByTitle("Appearance (theme · accent · density · palette)"));
@@ -71,5 +73,24 @@ describe("AppearanceMenu — calc-only view (?view=calc)", () => {
     render(<AppearanceMenu />);
     open();
     expect(screen.queryByText("All preferences…")).not.toBeInTheDocument();
+  });
+});
+
+// ── ROUND 4 (review of round 3, NIT 7) ──────────────────────────────────
+// Escape used to close this dropdown from a plain document-keydown with no
+// `preventDefault`, so the shared Escape registry walked on the same keystroke
+// and a surface below acted too. It is a `menu`-layer surface now.
+describe("AppearanceMenu Escape ownership (P3.3 round 4)", () => {
+  it("closes the dropdown and claims the key", async () => {
+    useApp.setState({ plotTool: "zoom" });
+    renderHook(() => useGlobalShortcuts());
+    render(<AppearanceMenu />);
+    fireEvent.click(screen.getByTitle(/Appearance/));
+    expect(screen.getByText("Theme")).toBeInTheDocument();
+
+    await pressEscape();
+
+    expect(screen.queryByText("Theme")).not.toBeInTheDocument();
+    expect(useApp.getState().plotTool).toBe("zoom"); // ONLY the menu closed
   });
 });

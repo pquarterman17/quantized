@@ -8,6 +8,7 @@ import { useEffect, useId, useRef } from "react";
 import { create } from "zustand";
 
 import { Button } from "../primitives";
+import { useFocusTrap } from "./useDialogFocus";
 
 interface ConfirmState {
   title: string | null;
@@ -58,6 +59,13 @@ export default function ConfirmDialog() {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const messageId = useId();
+
+  // P3.3: the ONE gap this dialog had. Focus-in and restore below were already
+  // built and are deliberately left alone (their choices — Cancel first, the
+  // `isConnected` guard — are argued out in the comments there and pinned by
+  // tests). Tab from the confirm button used to walk out of an `aria-modal`
+  // dialog into the page behind the backdrop; now it wraps to Cancel.
+  useFocusTrap(dialogRef, title !== null);
 
   // Enter confirms, Escape cancels — captured before app-level shortcuts so the
   // dialog owns those keys while open (capture phase + stopPropagation).

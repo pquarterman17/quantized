@@ -16,6 +16,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { useEscapeSurface } from "../../lib/escapeStack";
 import {
   clampToolWindowPos,
   defaultToolWindowLayout,
@@ -26,6 +27,7 @@ import {
 import { workshopHelpTopic } from "../../lib/workshopHelp";
 import { openHelpTopic } from "../../store/help";
 import { useApp } from "../../store/useApp";
+import { useOpenerRestore } from "./useDialogFocus";
 
 let zTop = 0;
 
@@ -99,6 +101,98 @@ export default function ToolWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Give focus back when the panel closes (round 2, review finding 1). The
+  // frame takes focus on mount (below); taking it without returning it is the
+  // exact regression `useDialogFocus` exists to prevent — Escape-closing a
+  // workshop dropped the user on `<body>`, where `useGlobalShortcuts`'
+  // Delete/Backspace removes the active dataset.
+  // Same render-time opener latch as the dialogs, so the Library row or menu
+  // item the workshop was opened from gets focus back. `closeNow` moves focus
+  // BEFORE the panel goes away (lib/focusGuard.ts's `removeRowSafely`
+  // pattern) — the hook's unmount cleanup is a later flush, and until it runs
+  // focus sits on <body>; it stays as the backstop for closes that do not
+  // come through this component.
+  const restoreOpener = useOpenerRestore(winRef, true);
+  const closeNow = () => {
+    restoreOpener();
+    onClose?.();
+  };
+
+  // P3.3 "cancel": until this landed, NO workshop could be dismissed from the
+  // keyboard — the only close affordance in the whole family of panels (40
+  // production components render this host at round 6, 41 render sites) was
+  // the title bar's ✕, reachable only by tabbing to it. The fix belongs here,
+  // at the shared host, exactly once.
+  //
+  // ROUND 3 (review findings 1+2): this is no longer a React `onKeyDown` on
+  // the frame. That shape had no way to outrank a workspace whose own
+  // `document`/`window` listener `preventDefault()`s every Escape it sees, so
+  // with Tiles or the Quick Figure Builder open the WORKSPACE closed and the
+  // focused workshop stayed put — undismissable from the keyboard. The window
+  // now registers on the shared ordered registry (`lib/escapeStack.ts`) in the
+  // `window` layer, which is in front of every workspace; that module's header
+  // carries the phase/deferral reasoning (round 2's finding 2) that used to
+  // live here.
+  //
+  // One guard of its own:
+  //  - focus must be INSIDE this frame. Several windows can be open at once,
+  //    and Escape belongs to the one the user is in — not to whichever mounted
+  //    last. Declining lets the walk fall through to the surface below, which
+  //    is how Escape still closes Tiles while focus is on a Library row.
+  // ROUND 4 (review of round 3, finding 1): there used to be a second guard
+  // here — a per-mount `closed` ref, set before `onClose()` ran and never
+  // reset. It was wrong twice over, and both halves were user-visible.
+  //
+  // Not every `onClose` unmounts the window. `usePageLifecycle.requestClose`
+  // asks "Close without saving?" for a saved page with unsaved edits and
+  // leaves the panel mounted when the user says no; `PackProjectPanel`
+  // deliberately stays put while packing or cancelling. For those panels the
+  // latch stuck on after the first Escape, so (a) every later Escape was dead
+  // — the panel was mouse-closable and keyboard-undismissable, the exact shape
+  // of round 2's defect — and (b) the guard DECLINED rather than doing
+  // nothing, so the walk fell straight through and the workspace behind the
+  // focused panel closed instead. Measured on the round-3 tree: Escape ①
+  // called `onClose` once, Escape ② called it 0 more times and closed Tiles.
+  //
+  // So the window CLAIMS the key whenever it is the innermost surface and it
+  // invoked `onClose` — claiming is not conditional on unmounting. "One
+  // keystroke, one close" is the registry's job and stays entirely there: it
+  // ignores `event.repeat` (a held key) and clears any pending walk before
+  // arming a new one (two Escapes in one tick), so a single burst runs the
+  // walk exactly once. A later, SEPARATE keypress is a second intent and must
+  // reach the panel again — that is how the declined confirm reappears.
+  const closeLatest = useRef(closeNow);
+  useEffect(() => {
+    closeLatest.current = closeNow;
+  });
+  useEscapeSurface(
+    "window",
+    (e) => {
+      const frame = winRef.current;
+      if (!frame || !(e.target instanceof Node) || !frame.contains(e.target)) return false;
+      closeLatest.current();
+      return true;
+    },
+    onClose !== undefined,
+  );
+
+  // Take focus on open so that Escape — and Tab into the panel's controls —
+  // works immediately. A workshop launched from the command palette or a menu
+  // otherwise leaves focus on the unmounted trigger, i.e. on <body>, where a
+  // root-level React handler never fires. Focus lands on the FRAME
+  // (`tabIndex={-1}`), never on a control, so nothing is armed to activate.
+  // Non-modal: nothing is trapped.
+  //
+  // Round 2 (review finding 5): skipped when something inside the frame is
+  // already focused after the first commit. React applies a child's
+  // `autoFocus` during that commit and this passive effect runs after it, so
+  // the first cut took focus back off any panel that opens straight into a
+  // field — the opposite of what its own commit body claimed.
+  useEffect(() => {
+    const frame = winRef.current;
+    if (frame && !frame.contains(document.activeElement)) frame.focus({ preventScroll: true });
+  }, []);
+
   const onTitleDown = (e: React.PointerEvent) => {
     dragRef.current = { dx: e.clientX - layout.x, dy: e.clientY - layout.y };
     (e.target as Element).setPointerCapture(e.pointerId);
@@ -148,6 +242,7 @@ export default function ToolWindow({
     <div
       ref={winRef}
       className="qzk-glass qzk-win"
+      tabIndex={-1}
       style={{
         left: layout.x,
         top: layout.y,
@@ -171,7 +266,9 @@ export default function ToolWindow({
             className="qzk-win-close"
             title="Close"
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={onClose}
+            // `closeNow`, not `onClose`: the ✕ unmounts the panel with focus
+            // ON ITSELF, so the restore has to run before it disappears.
+            onClick={closeNow}
           />
         )}
         <span className="grow">{title}</span>

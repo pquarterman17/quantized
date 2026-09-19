@@ -3,7 +3,6 @@
 // Stage while they inspect or remake the native graph. No reconstruction
 // state is inferred from the bitmap.
 
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "../primitives";
@@ -23,17 +22,14 @@ export default function OriginSavedPreviewWindow({
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
   const preview = entry.figure.saved_preview;
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [onClose]);
-
+  // Round 4 (review of round 3, NIT 8): this used to add its OWN window-CAPTURE
+  // Escape listener with `stopPropagation()` and no focus, editing, palette or
+  // menu guard — the first stop on the propagation path, so while this preview
+  // was open it swallowed every Escape in the app, including one aimed at a
+  // text field, and its own `ToolWindow` registry entry never ran. It was the
+  // last surface outranking the registry unconditionally. Deleted: the
+  // `ToolWindow` below already registers in the `window` layer and closes on
+  // Escape when focus is inside its frame, which is the same close this ran.
   if (!preview) return null;
   const attribution = preview.confidence === "exact_page"
     ? "Exact graph-page attribution"

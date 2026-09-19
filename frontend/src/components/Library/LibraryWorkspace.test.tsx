@@ -1,7 +1,12 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryWorkspace from "./LibraryWorkspace";
+import ToolWindow from "../overlays/ToolWindow";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
+import { useShapeEdit } from "../Stage/useShapeEdit";
+import { pressEscape } from "../../test/pressEscape";
 import { createPageDocument } from "../../lib/pageDocumentActions";
 import type { Dataset } from "../../lib/types";
 import { clearThumbnailCache } from "../../lib/thumbnailCache";
@@ -81,7 +86,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(useApp.getState().activeId).toBe("a");
   });
 
-  it("Escape returns to the unchanged plot and posts a canonical reveal target", () => {
+  it("Escape returns to the unchanged plot and posts a canonical reveal target", async () => {
     const onClose = vi.fn();
     useApp.setState({
       workbooks: [{ id: "w1", name: "Run" }],
@@ -91,7 +96,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     });
     render(<LibraryWorkspace onClose={onClose} />);
 
-    fireEvent.keyDown(screen.getByLabelText("Library workspace"), { key: "Escape" });
+    await pressEscape(screen.getByLabelText("Library workspace"));
     expect(onClose).toHaveBeenCalledOnce();
     expect(useApp.getState().revealTarget).toBe("worksheet:a");
     expect(useApp.getState().activeId).toBe("a");
@@ -297,7 +302,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     expect(document.activeElement).toBe(screen.getByRole("listitem", { name: "a.csv, Worksheet" }));
   });
 
-  it("Escape while editing (input/textarea/select/contenteditable) never closes the workspace", () => {
+  it("Escape while editing (input/textarea/select/contenteditable) never closes the workspace", async () => {
     const onClose = vi.fn();
     useApp.setState({
       workbooks: [{ id: "w1", name: "Run" }],
@@ -313,17 +318,17 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
     for (const id of ["probe-select", "probe-input"]) {
       const field = screen.getByTestId(id);
       field.focus();
-      fireEvent.keyDown(field, { key: "Escape" });
+      await pressEscape(field);
     }
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("lets the command palette and context menu own Escape", () => {
+  it("lets the command palette and context menu own Escape", async () => {
     const onClose = vi.fn();
     useApp.setState({ cmdkOpen: true });
     const { rerender } = render(<LibraryWorkspace onClose={onClose} />);
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    await pressEscape(document);
     expect(onClose).not.toHaveBeenCalled();
 
     useApp.setState({ cmdkOpen: false });
@@ -333,7 +338,7 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
         <ContextMenu x={0} y={0} items={[{ label: "Open", run: vi.fn() }]} onClose={vi.fn()} />
       </>,
     );
-    fireEvent.keyDown(document, { key: "Escape" });
+    await pressEscape(document);
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -470,5 +475,155 @@ describe("LibraryWorkspace — PR E wide Tile browser", () => {
 
     expect(screen.getByRole("list", { name: "Run items" })).toBeInTheDocument();
     expect(screen.getByRole("listitem", { name: "a.csv, Worksheet" })).toBeInTheDocument();
+  });
+});
+
+// ── The Escape ladder: a workshop on top of Tiles (P3.3 round 3) ─────────
+// THE REGRESSION this closes (review findings 1+2, reproduced in real
+// Chromium on the round-2 tree): this workspace's Escape listener
+// `preventDefault()`ed unconditionally, so with Tiles open and a workshop
+// focused, Escape closed the WORKSPACE and left the panel open — and the
+// second Escape did nothing at all, because closing Tiles pulled focus out of
+// the panel onto a Library row. The workshop's only keyboard dismissal was
+// dead exactly where it mattered. No test in the suite paired the two.
+//
+// The invariant now: the INNERMOST open surface claims Escape, and the next
+// Escape goes to the one below it.
+describe("LibraryWorkspace + workshop Escape ladder (P3.3 round 3)", () => {
+  function TilesWithWorkshop({ closeTiles }: { closeTiles: () => void }) {
+    const [panelOpen, setPanelOpen] = useState(true);
+    return (
+      <>
+        <LibraryWorkspace onClose={closeTiles} />
+        {panelOpen && (
+          <ToolWindow id="ladder-peaks" title="Find peaks" onClose={() => setPanelOpen(false)}>
+            <button type="button">Run</button>
+          </ToolWindow>
+        )}
+      </>
+    );
+  }
+
+  it("Escape closes the WORKSHOP and leaves Tiles open; the next Escape closes Tiles", async () => {
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    const { container } = render(<TilesWithWorkshop closeTiles={closeTiles} />);
+
+    const frame = container.querySelector(".qzk-win");
+    expect(frame).not.toBeNull();
+    expect(frame).toHaveFocus(); // the panel took focus on open
+
+    await pressEscape(frame!);
+    expect(container.querySelector(".qzk-win")).toBeNull(); // the workshop went…
+    expect(closeTiles).not.toHaveBeenCalled(); // …and the workspace stayed
+    expect(screen.getByLabelText("Library workspace")).toBeInTheDocument();
+
+    await pressEscape(document.activeElement ?? document);
+    expect(closeTiles).toHaveBeenCalledOnce(); // now the workspace
+  });
+
+  it("Escape from a Library row closes Tiles even with a workshop open elsewhere", async () => {
+    // The window layer declines when focus is not inside its own frame, so the
+    // walk falls through instead of swallowing the key.
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+    });
+    const { container } = render(<TilesWithWorkshop closeTiles={closeTiles} />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(container.querySelector(".qzk-win")).not.toBeNull(); // panel untouched
+  });
+
+  it("with Tiles open, Escape dismisses the workspace and leaves the armed tool armed", async () => {
+    // The app-layer fallback (useGlobalShortcuts' revert-to-Pointer) is the
+    // LAST rung of the ladder, so an open surface is always dismissed first.
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      plotTool: "zoom",
+    });
+    renderHook(() => useGlobalShortcuts());
+    render(<LibraryWorkspace onClose={closeTiles} />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(useApp.getState().plotTool).toBe("zoom");
+  });
+});
+
+// ── ROUND 4: the tiers that were still claiming ahead of the walk ────────
+// Review of round 3, findings 2+3. Round 3 re-homed only ONE of
+// `useGlobalShortcuts`' three Escape tiers; the gesture-cancel and the
+// idle-armed-gadget tiers stayed inline and `preventDefault()`ed ahead of
+// EVERY registered surface, and the deferred walk then declined. Measured on
+// the round-3 tree with Tiles open over a committed `qfitRoi: [1, 2]`:
+// Tiles stayed open (0 closes) and the ROI was destroyed — the parent tree
+// closed Tiles and kept the ROI. The same shield loss let the Stage's four
+// deselect listeners fire ALONGSIDE the workspace close: two actions, one key.
+describe("LibraryWorkspace Escape vs the Stage's own tiers (P3.3 round 4)", () => {
+  it("closes Tiles and PRESERVES a committed quick-fit ROI (finding 2)", async () => {
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      plotTool: "qfit",
+      qfitRoi: [1, 2],
+    });
+    renderHook(() => useGlobalShortcuts());
+    render(<LibraryWorkspace onClose={closeTiles} />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(useApp.getState().qfitRoi).toEqual([1, 2]); // the ROI survives
+    // …and the ROI is what the NEXT Escape clears, once Tiles is gone.
+    expect(useApp.getState().plotTool).toBe("qfit");
+  });
+
+  it("one Escape performs ONE action: the Stage deselect does not fire with it", async () => {
+    // The `stopPropagation()` that round 3 deleted carried this promise in a
+    // comment ("This workspace owns the keystroke"). It is the ladder's job
+    // now: a Stage selection is a `selection`-layer surface, BELOW the
+    // workspace, so it waits its turn instead of firing alongside.
+    const closeTiles = vi.fn();
+    useApp.setState({
+      workbooks: [{ id: "w1", name: "Run" }],
+      datasets: [worksheet("a", "w1")],
+      selectedShapeId: "s1",
+      plotTool: "pointer",
+    });
+    renderHook(() => useShapeEdit("pointer"));
+    // A host that really unmounts the workspace, so the second Escape has
+    // somewhere to fall through TO — a bare `vi.fn()` would keep Tiles
+    // registered and claim it again.
+    function TilesHost() {
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <LibraryWorkspace
+          onClose={() => {
+            closeTiles();
+            setOpen(false);
+          }}
+        />
+      ) : null;
+    }
+    render(<TilesHost />);
+
+    await pressEscape(screen.getByLabelText("Library workspace"));
+    expect(closeTiles).toHaveBeenCalledOnce();
+    expect(useApp.getState().selectedShapeId).toBe("s1"); // NOT also deselected
+
+    // The second Escape is the one that clears the selection.
+    await pressEscape(document.activeElement ?? document);
+    expect(useApp.getState().selectedShapeId).toBeNull();
   });
 });

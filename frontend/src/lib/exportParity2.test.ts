@@ -286,7 +286,7 @@ describe("8. Formerly fail-closed, now FIXED (GUI_INTERACTION #12 slice 4b)", ()
   // family (rows 1-7 above), not the Stat Stage's own hook-local exporter.
 
   // 8b — xy facet-export xKey/yKeys reset: FIXED (GUI_INTERACTION #12 slice
-  // 4b). `facetByColumn` (store/useApp.ts) computes its panels from the LIVE
+  // 4b). `facetByColumn` (store/viewAppliers.ts) computes its panels from the LIVE
   // xKey/yKeys when the target dataset is already active (captured
   // correctly — the facetPanels below really do reflect the pre-facet
   // selection), then calls `setActive(datasetId)` to normalize window/tab

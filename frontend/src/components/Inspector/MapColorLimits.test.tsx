@@ -100,6 +100,24 @@ describe("MapColorLimits (P2.8)", () => {
     ]);
   });
 
+  // Review round 7, finding 3: the shared `useMapColorLimitsField` hook's
+  // Escape-to-revert (added for the toolbar control, review round 6) is
+  // documented as applying to BOTH controls, but only the toolbar's own
+  // suite ever exercised it — this row's Escape handler was reachable and
+  // untested.
+  it("Escape reverts the field to the last committed pair, without committing", () => {
+    useApp.getState().setMapColorLimits("ds-a", [10, 50]);
+    const historyBefore = useApp.getState().history.length; // the setup commit above
+    render(<MapColorLimits />);
+    fireEvent.change(lo(), { target: { value: "999" } });
+    expect((lo() as HTMLInputElement).value).toBe("999");
+    fireEvent.keyDown(lo(), { key: "Escape" });
+    expect((lo() as HTMLInputElement).value).toBe("10");
+    // Nothing was committed by the Escape itself.
+    expect(view("ds-a").colorLimits).toEqual([10, 50]);
+    expect(useApp.getState().history).toHaveLength(historyBefore);
+  });
+
   it("follows the ACTIVE dataset — switching shows that map's own limits", () => {
     useApp.getState().setMapColorLimits("ds-a", [10, 50]);
     useApp.getState().setMapColorLimits("ds-b", [1, 2]);

@@ -13,6 +13,7 @@ import TitleBar from "./components/Shell/TitleBar";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import { buildAppActions } from "./appCommands";
+import { appRootFocusProps } from "./lib/appRoot";
 import { health } from "./lib/api";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import {
@@ -203,7 +204,7 @@ export default function App() {
   const mainCls = `qzk-main${leftCollapsed ? " lc" : ""}${rightCollapsed ? " rc" : ""}`;
 
   return (
-    <div className="qzk-app">
+    <div className="qzk-app" {...appRootFocusProps}>
       <TitleBar />
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
       <div className={mainCls}>
