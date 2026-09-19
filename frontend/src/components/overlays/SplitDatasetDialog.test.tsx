@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DataStruct } from "../../lib/types";
+import { pushEscapeSurface } from "../../lib/escapeStack";
 import { useApp } from "../../store/useApp";
 import SplitDatasetDialog from "./SplitDatasetDialog";
 
@@ -199,6 +200,29 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(useApp.getState().splitDialogTargetId).toBeNull());
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  // Round 9 review, LOW. Registration used to be gated on `targetId` alone
+  // while the render and `useDialogFocus` also require the dataset to exist,
+  // so a stale id put an INVISIBLE modal on the stack — and because a modal
+  // traps the key, the surface below was never offered it either. One Escape,
+  // nothing on screen, nothing happens.
+  it("a stale target id registers no modal, so Escape still reaches the surface below", async () => {
+    useApp.setState({ splitDialogTargetId: "gone" });
+    const { container } = render(<SplitDatasetDialog />);
+    expect(container.firstChild).toBeNull();
+
+    let belowActed = false;
+    const off = pushEscapeSurface("workspace", () => {
+      belowActed = true;
+      return true;
+    });
+    try {
+      fireEvent.keyDown(window, { key: "Escape" });
+      await waitFor(() => expect(belowActed).toBe(true));
+    } finally {
+      off();
+    }
   });
 
   it("Confirm splits the active preview and closes", async () => {

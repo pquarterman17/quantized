@@ -3800,9 +3800,10 @@ covers a much smaller subset and guards focus on Analyze.
   fixed across nine rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
   **round 8 NARROWED R1** after measuring that its Escape half was closed on
   a false claim, and filed the measured defect as **BUG-018**; **round 9 fixed
-  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: ten residuals
-  remain (R2–R12 below), each a distinct, smaller gap — none of them a dialog
-  with no keyboard dismissal at all, which is what the audit originally found.
+  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: eleven
+  residuals remain (R2–R12 below), each a distinct, smaller gap — none of them
+  a dialog with no keyboard dismissal at all, which is what the audit
+  originally found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -4195,6 +4196,16 @@ covers a much smaller subset and guards focus on Analyze.
     it is one of the two documented exceptions above, and closing it needs the
     hook to reach its host frame's ref.
 
+    **Widened in the recording, not in the code (round 9).** The stray-keystroke
+    half above is only one side of it: because the pause is a window-BUBBLE
+    `preventDefault()` claimant that does not check focus, it also OUT-RANKS
+    surfaces that should beat it. The `menu` row of the layer table above
+    already records it beating an open menu. Round 9 measured it beating a
+    `modal` too, while that layer was still deferred — Preferences stayed open
+    and the pause fired instead — and fixed the MODAL side by resolving that
+    layer at keydown. The menu side is unchanged and still R11's to close: a
+    `menu` is resolved in the deferred walk, so the pause still wins there.
+
   - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
     mounted at once, and each one hides the app's live regions.** Follows
     directly from BUG-018: with Preferences and Shortcuts both open, both
@@ -4554,11 +4565,34 @@ covers a much smaller subset and guards focus on Analyze.
     The two coincide while `modal` is the top rank, but the claimant form is
     the narrower statement of the same rule — it can only suspend a guard for a
     keystroke a modal is actually going to be offered, and it stays correct if
-    a layer is ever added above this one. It is a TRAP rather than a priority:
-    with a modal claimant the walk is restricted to modal entries, so a modal
-    that DECLINES cannot hand a text field's Escape down to a workspace or the
-    app fallbacks — the surfaces `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` exist
-    to protect.
+    a layer is ever added above this one. Nothing below a modal is offered the
+    key either, whether the modal claims it or declines it, so a modal that
+    DECLINES cannot hand a text field's Escape down to a workspace or the app
+    fallbacks — the surfaces `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` exist to
+    protect.
+  - **The modal claim resolves SYNCHRONOUSLY at keydown and marks the event**
+    (round-9 review, MED-HIGH — a measured regression in the first cut, fixed
+    before landing). Built on the DEFERRED walk, the layer could be beaten by
+    a window-BUBBLE listener that claims with `preventDefault()` during the
+    same dispatch: `walk`'s own `defaultPrevented` re-read then aborted the
+    dialog's close. Measured with Preferences open and a listener of
+    `usePeakWizard`'s exact shape — its marker-edit pause, live at step ②
+    whenever there is something to pause — **the pause fired and the dialog
+    stayed open**, where the parent tree's per-dialog window-capture
+    `stopPropagation()` had shielded it. Reachable with no mouse: Peak
+    Analyzer at step ②, then `Ctrl+,`. The fix is rounds 5–6's `gesture`
+    treatment applied to the same class of problem, and it is what makes the
+    `menu`-row correction at the top of this table (the wizard out-claiming an
+    open menu) NOT extend to modals. What the layer guarantees is therefore
+    stated precisely rather than as "it traps Escape": it outranks every
+    registry surface and every later listener that honours `defaultPrevented`;
+    it cannot stop one that ignores it, and it does not try to beat a claim
+    that landed before the dispatcher (window-capture / document-bubble — how
+    `SymbolPalette` claims and how `WhatIsThis` still owns Escape outright).
+    Pinned at both levels: "stops a LATE window-bubble consumer from killing a
+    MODAL's claim" (`lib/escapeStack.test.ts`) and "a window-bubble claimant
+    behind the dialog cannot swallow the dialog's Escape"
+    (`stackedDialogEscape.test.tsx`).
   - **The four editing-target landing spots, which killed round 8's attempt,
     are measured one test each** (jsdom, real components,
     `user.keyboard("{Escape}")` at the dialog's own landing spot): Help's
@@ -4586,6 +4620,21 @@ covers a much smaller subset and guards focus on Analyze.
   - `escapeStack.ts` 324 → 377 lines (ceiling 500). Bundle: 888,754 B eager
     against the parent `8f79207d`'s 888,562 B (+192 B), 221 chunks either
     side — no seam moved and the pin is untouched.
+  - **Review round (2026-09-19), before landing.** One behavioural finding —
+    the deferred-modal regression above — plus four doc/gating defects, all
+    fixed on top: two orphaned comments that still said this fix was
+    impossible (`SeparateWorksheetsDialog`, `SplitDatasetDialog`, both on
+    unrelated effects, a pre-existing misplacement); eight stale "kept as its
+    own window-capture listener rather than joining `lib/escapeStack.ts`"
+    preambles sitting directly above the call that joins it; this plan's own
+    residual miscount; and `SplitDatasetDialog` registering its modal on
+    `targetId` alone while the render and `useDialogFocus` also require the
+    dataset — a stale id put an INVISIBLE modal on the stack, and since
+    nothing below a modal is offered the key, one Escape did nothing at all.
+    Registration is now gated on the same condition as render, pinned by "a
+    stale target id registers no modal, so Escape still reaches the surface
+    below". The other nine dialogs were audited for the same mismatch: all
+    nine already register and render on the same condition.
 
   **Named residuals (why this is `[~]`).**
   - **R1** — **CLOSED (round 9).** Both halves now hold. The FOCUS half closed

@@ -62,13 +62,12 @@ export default function ReimportAllDialog() {
   const titleId = useId();
   const open = rows !== null || busy;
 
-  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
-  // its own window-capture listener rather than joining `lib/escapeStack.ts`
-  // — a true backdrop modal always wins over anything mounted behind it, and
-  // window-capture already guarantees that ahead of the registry's window-
-  // bubble listener. Also the coordinator-review G1 discipline above: this
-  // must stay `cancel()`, never a raw close, so an in-flight stage is
-  // actually cancelled.
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): a `modal`
+  // surface in `lib/escapeStack.ts` — a true backdrop modal outranks every
+  // other registry surface, and the registry is what orders two of these
+  // against EACH OTHER, which window-capture could not. Also the
+  // coordinator-review G1 discipline above: this must stay `cancel()`, never
+  // a raw close, so an in-flight stage is actually cancelled.
   // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
   // app's one ordered registry on its `modal` layer, so the innermost open
   // dialog closes and nothing below it acts on the same keystroke. The

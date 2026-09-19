@@ -39,24 +39,15 @@ export default function SeparateWorksheetsDialog() {
   // `null` on both success and a fresh open still carries a NEW plan object
   // the same requested set could legitimately re-trigger).
   const requestedKey = plan?.requestedWorksheetIds.join(",");
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     setName("");
     setCommitError(null);
   }, [requestedKey]);
 
-  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
-  // its own window-capture listener rather than joining `lib/escapeStack.ts`
-  // — a true backdrop modal always wins over anything mounted behind it, and
-  // window-capture already guarantees that ahead of the registry's window-
-  // bubble listener.
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): a `modal`
+  // surface in `lib/escapeStack.ts` — a true backdrop modal outranks every
+  // other registry surface, and the registry is what orders two of these
+  // against EACH OTHER, which window-capture could not.
   // FIXED 2026-09-19 (BUG-018, P3.3 round 9) — see `lib/escapeStack.ts`'s
   // `modal` layer. That layer also suspends the registry's `isEditingTarget`
   // bail, which matters here: this dialog's landing spot is the Name

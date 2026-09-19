@@ -19,13 +19,13 @@ export default function ShortcutsDialog() {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
-  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as its
-  // own window-capture listener rather than joining `lib/escapeStack.ts` — this
-  // is a true backdrop modal (blocks the pointer entirely), so it must always
-  // win regardless of anything mounted behind it, exactly like ConfirmDialog
-  // and RecoveryChoiceDialog. Window-capture already guarantees that (it runs
-  // ahead of the registry's window-BUBBLE listener), so joining the registry
-  // would add ordering machinery this dialog never needs.
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): a `modal`
+  // surface in `lib/escapeStack.ts` — this is a true backdrop modal (blocks
+  // the pointer entirely), so it outranks every other registry surface,
+  // exactly like ConfirmDialog and RecoveryChoiceDialog. Round 8's reason for
+  // staying out of the registry ("it would add ordering machinery this dialog
+  // never needs") was measured FALSE for dialog-over-dialog, which is the one
+  // case the ordering exists to settle: see BUG-018.
   // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
   // app's one ordered registry on its `modal` layer, so the innermost open
   // dialog closes and nothing below it acts on the same keystroke. The

@@ -128,11 +128,12 @@ import { useApp } from "../store/useApp";
  *  one layer whose claim cannot survive the deferral, so it is resolved
  *  synchronously — see `RESOLVES_AT_KEYDOWN`.
  *  `menu` — an open menu owns Escape (GUI_INTERACTION #9).
- *  `modal` — a true backdrop modal: a surface that blocks the pointer over
- *  the whole app and, by definition, TRAPS Escape. Top of the ladder, and the
- *  only layer that suspends this dispatcher's three "this key is not ours"
- *  early returns — see `onKeyDown`. The ten backdrop dialogs under
- *  `components/overlays` are the members. */
+ *  `modal` — a true backdrop modal: a surface that blocks the pointer over the
+ *  whole app. Top of the ladder, the only layer that suspends this
+ *  dispatcher's three "this key is not ours" early returns, and — with
+ *  `gesture` — one of the two resolved synchronously at keydown. See
+ *  `TRAPS_ESCAPE` for exactly what it does and does not guarantee. The ten
+ *  backdrop dialogs under `components/overlays` are the members. */
 export type EscapeLayer = "app" | "selection" | "workspace" | "window" | "gesture" | "menu" | "modal";
 
 /** Return `true` to CLAIM the keystroke and stop the walk; `false` to decline
@@ -150,7 +151,32 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
   modal: 6,
 };
 
-/** The layer that TRAPS Escape (round 9, BUG-018).
+/** The top layer: a true backdrop modal (round 9, BUG-018).
+ *
+ *  WHAT IT GUARANTEES, precisely (round 9 review — the first cut of this
+ *  header said "by definition, TRAPS Escape", which is more than the code can
+ *  deliver):
+ *   - it outranks every other surface in this registry, and nothing below a
+ *     modal is offered the key — whether the modal claims it or declines it;
+ *   - its claim is resolved SYNCHRONOUSLY at keydown and marks the event with
+ *     `preventDefault()`, so any listener that honours `defaultPrevented` and
+ *     runs after this dispatcher stands down. `usePeakWizard`'s marker-edit
+ *     pause is the one in the tree, and it does honour it.
+ *  WHAT IT DOES NOT:
+ *   - it cannot stop a listener that ignores `defaultPrevented`, and it cannot
+ *     stop one that claims BEFORE this dispatcher runs — a window-capture or
+ *     document-bubble claimant (how `SymbolPalette` claims, and how the
+ *     `WhatIsThis` mode still owns Escape outright) is already visible in
+ *     `defaultPrevented` here and correctly wins;
+ *   - ordering among same-node, same-phase window-bubble listeners is
+ *     registration order, so this only beats consumers registered after the
+ *     dispatcher's own listener. In the real app that listener is attached at
+ *     App mount, by `useGlobalShortcuts`' unconditional `gesture`/`app`
+ *     surfaces, long before any of them.
+ *
+ *  Both halves are pinned: "stops a LATE window-bubble consumer from killing a
+ *  MODAL's claim" (this module's tests) and "a window-bubble claimant behind
+ *  the dialog cannot swallow the dialog's Escape" (`stackedDialogEscape`).
  *
  *  A modal blocks every surface behind it, so the three early returns in
  *  `onKeyDown` — "the key belongs to the text field", "the command palette
@@ -167,14 +193,26 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *  only ever suspend a guard for a keystroke a modal is actually going to be
  *  offered, and it stays correct if a layer is ever added above this one.
  *
- *  It is a TRAP, not merely a priority: when the claimant is a modal, the
- *  walk is restricted to modal entries, so a modal that DECLINES cannot hand
- *  a text field's Escape down to a workspace or the app fallbacks — the
- *  surfaces the bypassed guards existed to protect. */
+ *  The bypass is paired with the rule above — nothing below a modal is
+ *  offered the key — so a modal that DECLINES cannot hand a text field's
+ *  Escape down to a workspace or the app fallbacks, which are the surfaces
+ *  the bypassed guards existed to protect.
+ *
+ *  ROUND 9 REVIEW. This layer was first built on the DEFERRED walk, and that
+ *  was a measured behavioural regression against the per-dialog
+ *  window-capture `stopPropagation()` it replaced: a window-BUBBLE listener
+ *  that claims with `preventDefault()` fired during the same dispatch, and
+ *  `walk`'s own `defaultPrevented` re-read then aborted the modal's action.
+ *  Measured with Preferences open and a listener of `usePeakWizard`'s shape:
+ *  the pause fired and the dialog stayed open — Escape dead for the dialog.
+ *  Resolving at keydown and marking the key is rounds 5–6's fix for the
+ *  `gesture` layer, applied to the same class of problem. */
 const TRAPS_ESCAPE: EscapeLayer = "modal";
 
-/** The one layer whose handler runs SYNCHRONOUSLY, in the keydown listener,
- *  instead of in the deferred walk (round 5).
+/** The NON-MODAL layer whose handler runs SYNCHRONOUSLY, in the keydown
+ *  listener, instead of in the deferred walk (round 5). `TRAPS_ESCAPE` above
+ *  is the other one, for a different reason and since round 9; `onKeyDown`
+ *  picks between them, never both at once.
  *
  *  A live drag is not merely stale by walk time — it is GONE, and it took its
  *  result with it. Measured: the queued `mouseup` beat the 0 ms timer by 25 ms,
@@ -196,11 +234,11 @@ const TRAPS_ESCAPE: EscapeLayer = "modal";
  *  Escape" is unchanged and a modal traps it.
  *
  *  A claim here CLAIMS THE EVENT too — `onKeyDown` calls `preventDefault()`
- *  (round 6, finding 1). The deferred walk marks a claimed keystroke by
- *  construction (every surface below is skipped and the two documented
- *  exceptions gate on `defaultPrevented`), but this path returns while the
- *  event is still propagating, so without the mark a window-bubble consumer
- *  registered after the dispatcher acted on the SAME key. */
+ *  (round 6, finding 1). The deferred walk does NOT mark a claimed keystroke,
+ *  and round 9's review measured what that costs a layer that needs the mark:
+ *  see `TRAPS_ESCAPE`. This path returns while the event is still
+ *  propagating, so without the mark a window-bubble consumer registered after
+ *  the dispatcher acted on the SAME key. */
 const RESOLVES_AT_KEYDOWN: EscapeLayer = "gesture";
 
 type Entry = { layer: EscapeLayer; seq: number; handler: EscapeHandler };
@@ -300,15 +338,23 @@ function onKeyDown(event: KeyboardEvent): void {
     // that forgets to. The Shell's own menus are `menu`-layer surfaces instead.
     if (document.querySelector(".qzk-ctx")) return;
   }
-  // Resolve the layer that cannot wait, NOW, inside the keydown listener.
+  // Resolve the layers that cannot wait, NOW, inside the keydown listener.
   // Only surfaces ABOVE the first non-synchronous one can be offered the key
   // here: a `menu` outranks a drag, and asking a menu synchronously would
   // defeat the deferral that the two documented `preventDefault()` claimants
-  // rely on. So the scan stops at the first entry that is not
-  // `RESOLVES_AT_KEYDOWN`, and everything from there down goes to the walk.
+  // rely on. So the scan stops at the first entry that does not resolve here,
+  // and everything from there down goes to the walk.
+  //
+  // Which layers those are depends on whether a modal is the claimant. With
+  // one, ONLY modal entries may be offered at all — that is the trap, and it
+  // is why the scan cannot simply test both layers at once: a modal that
+  // declined would otherwise let a live `gesture` beneath it act on a key the
+  // modal was asked about first.
+  const resolvesNow = (layer: EscapeLayer): boolean =>
+    trapped ? layer === TRAPS_ESCAPE : layer === RESOLVES_AT_KEYDOWN;
   let rest = 0;
   if (!event.defaultPrevented) {
-    while (rest < ordered.length && ordered[rest].layer === RESOLVES_AT_KEYDOWN) {
+    while (rest < ordered.length && resolvesNow(ordered[rest].layer)) {
       const entry = ordered[rest];
       rest++;
       if (!offer(entry, event)) continue; // nothing live: the layer declines
@@ -331,11 +377,11 @@ function onKeyDown(event: KeyboardEvent): void {
       return;
     }
   }
-  // The trap: nothing BELOW a modal may act on this keystroke, whether the
-  // modal claims it or declines it. (`modal` is the top rank, so this is the
-  // same prefix `slice(rest)` would produce — stated as a filter because the
-  // property being enforced is "modals only", not "from here down".)
-  const snapshot = trapped ? ordered.filter((e) => e.layer === TRAPS_ESCAPE) : ordered.slice(rest);
+  // Every modal declined (or something upstream had already claimed the key).
+  // Nothing BELOW a modal may act on this keystroke, so no walk is armed.
+  if (trapped) return;
+
+  const snapshot = ordered.slice(rest);
   if (snapshot.length === 0) return;
 
   if (pending !== null) clearTimeout(pending);

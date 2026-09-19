@@ -145,6 +145,41 @@ describe("BUG-018 — one Escape closes the INNERMOST backdrop dialog only", () 
     expect(openDialogs()).toBe(0);
   });
 
+  // Round 9 review, MED-HIGH — measured on the first cut of this fix and on
+  // its parent. `usePeakWizard`'s marker-edit pause is a window-BUBBLE
+  // listener that claims Escape with `preventDefault()` (it is live at step ②
+  // whenever there is something to pause, and does not check that focus is
+  // inside its own window — residual R11). With the modal's action deferred
+  // one macrotask, that claim landed during the dispatch and the walk's own
+  // `defaultPrevented` re-read then aborted it: the pause fired and
+  // Preferences STAYED OPEN — Escape dead for the dialog, where the parent's
+  // per-dialog window-capture `stopPropagation()` had shielded it.
+  // Reachable with no mouse: Peak Analyzer at step ②, then `Ctrl+,`.
+  it("a window-bubble claimant behind the dialog cannot swallow the dialog's Escape", async () => {
+    const user = userEvent.setup();
+    render(<PreferencesDialog />);
+    act(() => useApp.getState().setPrefsOpen(true));
+
+    let paused = false;
+    // usePeakWizard's exact shape (components/workshops/peakwizard).
+    const pause = (e: KeyboardEvent): void => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      paused = true;
+    };
+    window.addEventListener("keydown", pause);
+    try {
+      await user.keyboard("{Escape}");
+      await settle();
+
+      expect(useApp.getState().prefsOpen).toBe(false);
+      expect(openDialogs()).toBe(0);
+      expect(paused).toBe(false); // one Escape, ONE action — and it is the dialog's
+    } finally {
+      window.removeEventListener("keydown", pause);
+    }
+  });
+
   // The control that proves the cases above are about STACKING and not about
   // Escape being broken generally: a single dialog closes on exactly one
   // Escape, as it always has.

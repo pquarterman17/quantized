@@ -39,7 +39,9 @@ export default function RecoveryChoiceDialog() {
   //
   // Escape maps to Cancel — the choice that touches nothing (the autosave
   // stays in storage, the project file stays on disk), matching the backdrop.
-  // Window capture, like ConfirmDialog, so it works wherever focus is.
+  // A `modal` surface in `lib/escapeStack.ts`, like ConfirmDialog, so it works
+  // wherever focus is — including inside a field, which the `modal` layer's
+  // bypass of `isEditingTarget` is what makes true.
   // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
   // app's one ordered registry on its `modal` layer, so the innermost open
   // dialog closes and nothing below it acts on the same keystroke. The
