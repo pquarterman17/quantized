@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -22,7 +22,7 @@ describe("ShortcutsDialog", () => {
     expect(document.querySelector(".qzk-kbd")).toBeInTheDocument();
   });
 
-  it("closes on the Close button, Escape, and a backdrop click", () => {
+  it("closes on the Close button, Escape, and a backdrop click", async () => {
     useApp.getState().setShortcutsOpen(true);
     const { rerender } = render(<ShortcutsDialog />);
     fireEvent.click(screen.getByText("Close"));
@@ -31,7 +31,10 @@ describe("ShortcutsDialog", () => {
     useApp.getState().setShortcutsOpen(true);
     rerender(<ShortcutsDialog />);
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(useApp.getState().shortcutsOpen).toBe(false);
+    // Escape now goes through the ordered registry (`lib/escapeStack.ts`,
+    // BUG-018), whose walk is deferred one macrotask, so wait on the STATE the
+    // close produces rather than reading it in the same tick.
+    await waitFor(() => expect(useApp.getState().shortcutsOpen).toBe(false));
 
     useApp.getState().setShortcutsOpen(true);
     rerender(<ShortcutsDialog />);

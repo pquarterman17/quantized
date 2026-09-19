@@ -24,6 +24,7 @@ import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 export default function SplitDatasetDialog() {
   const targetId = useApp((s) => s.splitDialogTargetId);
@@ -77,14 +78,6 @@ export default function SplitDatasetDialog() {
   // dataset as well would fix that but re-seed on EVERY edit, wiping a
   // tolerance the user typed while a recalc lands — the worse of the two, so
   // this is a deliberate trade, not an oversight.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!dataset) return;
     setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));
@@ -92,22 +85,31 @@ export default function SplitDatasetDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, col]);
 
-  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
-  // its own window-capture listener rather than joining `lib/escapeStack.ts`
-  // — a true backdrop modal always wins over anything mounted behind it, and
-  // window-capture already guarantees that ahead of the registry's window-
-  // bubble listener.
-  useEffect(() => {
-    if (!targetId) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        close();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [targetId, close]);
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): a `modal`
+  // surface in `lib/escapeStack.ts` — a true backdrop modal outranks every
+  // other registry surface, and the registry is what orders two of these
+  // against EACH OTHER, which window-capture could not.
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9) — see `lib/escapeStack.ts`'s
+  // `modal` layer. That layer also suspends the registry's `isEditingTarget`
+  // bail, which matters here: this dialog's landing spot is the Column
+  // `<select>`, and on the `window` layer Escape from there did nothing.
+  //
+  // Gated on the SAME condition as the render below and as `useDialogFocus`,
+  // not on `targetId` alone (round 9 review). A stale or missing id renders
+  // nothing, and a surface registered with nothing on screen is a modal that
+  // eats the keystroke — and since nothing below a modal is offered the key,
+  // the surface underneath never acts either, so Escape would simply do
+  // nothing while the user looks at an unobstructed app. The gating mismatch
+  // predates this fix; the modal layer is what makes the swallow total, so it
+  // is closed here.
+  useEscapeSurface(
+    "modal",
+    () => {
+      close();
+      return true;
+    },
+    targetId !== null && dataset !== undefined,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Column
   // select — it's the FIRST decision (it also decides whether Tolerance even
@@ -166,7 +168,13 @@ export default function SplitDatasetDialog() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canSplit) runSplit();
-          e.stopPropagation();
+          // Escape is deliberately let through (BUG-018): it belongs to the
+          // `modal` surface registered above, and that dispatcher listens on
+          // `window` in the BUBBLE phase. Measured — a React synthetic
+          // `stopPropagation()` calls `stopPropagation()` on the native event
+          // at the React root container, so stopping Escape here made the
+          // registry's listener unreachable from inside this dialog.
+          if (e.key !== "Escape") e.stopPropagation();
         }}
       >
         <h2 id={titleId}>Split by column value</h2>

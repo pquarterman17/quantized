@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -108,7 +108,7 @@ describe("HelpDialog", () => {
     expect(titleShown("Cycle Y axis scale (linear/log/reciprocal)")).toBe(true);
   });
 
-  it("closes on the backdrop, the Close button, and Escape", () => {
+  it("closes on the backdrop, the Close button, and Escape", async () => {
     const { container } = render(<HelpDialog />);
 
     act(() => useHelp.getState().openHelp());
@@ -121,7 +121,10 @@ describe("HelpDialog", () => {
 
     act(() => useHelp.getState().openHelp());
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(useHelp.getState().open).toBe(false);
+    // Escape now goes through the ordered registry (`lib/escapeStack.ts`,
+    // BUG-018), whose walk is deferred one macrotask, so wait on the STATE the
+    // close produces rather than reading it in the same tick.
+    await waitFor(() => expect(useHelp.getState().open).toBe(false));
   });
 
   it("resets the query between opens", () => {
@@ -390,5 +393,22 @@ describe("HelpDialog focus-in / Escape / restore (P3.3 R1)", () => {
     await user.keyboard("{Escape}");
     expect(useHelp.getState().open).toBe(false);
     expect(opener).toHaveFocus();
+  });
+
+  // BUG-018 acceptance criterion, stated on its own rather than as a side
+  // effect of the restore case above: the Search tab's landing spot IS the
+  // search `<input>`, and `escapeStack`'s `isEditingTarget` bail would make
+  // Escape from there dead (measured on the reverted `window`-layer attempt —
+  // nothing happened, twice). The `modal` layer suspends that bail.
+  it("Escape from the search box — the landing spot — still closes it", async () => {
+    const user = userEvent.setup();
+    render(<HelpDialog />);
+    act(() => useHelp.getState().openHelp());
+    const box = screen.getByLabelText("Search help");
+    expect(box).toHaveFocus();
+    expect(box.tagName).toBe("INPUT"); // the exact shape `isEditingTarget` bails on
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(useHelp.getState().open).toBe(false));
   });
 });

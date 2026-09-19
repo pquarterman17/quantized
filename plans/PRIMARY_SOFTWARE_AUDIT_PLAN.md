@@ -3797,12 +3797,14 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [~] Keyboard reachability, focus, order, cancel. **Audited in full and
-  fixed across eight rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
+  fixed across nine rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
   **round 8 NARROWED R1** after measuring that its Escape half was closed on
-  a false claim, and filed the measured defect as **BUG-018**. Stays `[~]`
-  rather than `[x]`: twelve residuals remain (R2–R13 below), each a distinct,
-  smaller gap — none of them a dialog with no keyboard dismissal at all,
-  which is what the audit originally found.
+  a false claim, and filed the measured defect as **BUG-018**; **round 9 fixed
+  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: twelve
+  residuals remain (R2–R12 and R14 below — R13 is closed, and R14 was opened by
+  the round-9 re-review), each a distinct, smaller gap — none of them a dialog
+  with no keyboard dismissal at all, which is what the audit originally
+  found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -3817,7 +3819,7 @@ covers a much smaller subset and guards focus on Analyze.
   | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
-  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | **Y alone, WRONG stacked (BUG-018)** | Y | R1 narrowed (round 8) — focus-in + trap + restore closed; Escape OWNERSHIP is not |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (stacked too, round 9) | Y | R1 CLOSED — focus-in + trap + restore in round 7; Escape ownership in round 9, on `escapeStack`'s `modal` layer (BUG-018) |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
@@ -4195,6 +4197,16 @@ covers a much smaller subset and guards focus on Analyze.
     it is one of the two documented exceptions above, and closing it needs the
     hook to reach its host frame's ref.
 
+    **Widened in the recording, not in the code (round 9).** The stray-keystroke
+    half above is only one side of it: because the pause is a window-BUBBLE
+    `preventDefault()` claimant that does not check focus, it also OUT-RANKS
+    surfaces that should beat it. The `menu` row of the layer table above
+    already records it beating an open menu. Round 9 measured it beating a
+    `modal` too, while that layer was still deferred — Preferences stayed open
+    and the pause fired instead — and fixed the MODAL side by resolving that
+    layer at keydown. The menu side is unchanged and still R11's to close: a
+    `menu` is resolved in the deferred walk, so the pause still wins there.
+
   - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
     mounted at once, and each one hides the app's live regions.** Follows
     directly from BUG-018: with Preferences and Shortcuts both open, both
@@ -4226,6 +4238,47 @@ covers a much smaller subset and guards focus on Analyze.
     `CombineWorkbooks` or `ReimportAll`. Recorded rather than renamed: the
     three missing reachability pins are worth adding with BUG-018's fix,
     when the mechanism they would pin is the one that will actually ship.
+
+    **CLOSED (round 9).** The three pins were added with BUG-018's fix, against
+    the mechanism that shipped — `SeparateWorksheetsDialog.test.tsx`,
+    `CombineWorkbooksDialog.test.tsx` and `ReimportAllDialog.test.tsx` each
+    gained a `fireEvent.keyDown(window, …)` case beside their focus-in/restore
+    one, and ReimportAll's asserts `cancelReimportAll()`'s effect rather than a
+    raw close (G1). Sabotaging the registration reddens both cases in that
+    file, so reachability is now discriminated separately from focus. The case
+    NAMES this residual complained about are unchanged; what they promised is
+    covered by the new cases beside them.
+
+    Side effect worth recording rather than leaving to be rediscovered: the
+    registry's walk is deferred one macrotask, so five pre-existing
+    `fireEvent`-then-read-state Escape tests (Help, Preferences, Shortcuts,
+    Split, TextFormatHelp) now wait on the STATE the close produces. They are
+    state waits, not mock-call waits, so `architecture.test.ts`'s weak-wait
+    ratchet is unmoved.
+
+  - **R14** (round 9 re-review) — **an Escape pressed while an IME composition
+    is in flight now closes the dialog AND suppresses the composition's own
+    cancel.** `isComposing` is checked NOWHERE in this tree (measured: zero
+    hits across `frontend/src`), so this is pre-existing — but the round-9
+    delta makes it strictly worse, and that is recorded here rather than left
+    in a review thread. Before it, `modal` acted on the deferred walk and
+    never called `preventDefault()`, so Escape's default composition-cancel
+    survived and the IME behaved normally; the synchronous claim now marks the
+    event, so the candidate window is denied its own cancel and the dialog
+    closes underneath it. The correct shape is the standard one — bail out of
+    the dispatcher on `event.isComposing` (or `keyCode === 229`) so the key
+    belongs to the IME, exactly as `isEditingTarget` gives it to a text field
+    — and it would have to be applied to the `modal` bypass too, since a
+    composition is happening IN an editing target.
+
+    **UNVERIFIED, deliberately.** Neither jsdom nor headless Chromium here can
+    drive a real IME, and `KeyboardEvent.isComposing` cannot be forged through
+    Playwright's input pipeline, so a fix could be written but not measured —
+    and an unmeasured keyboard-dispatch change is what rounds 2–5 each
+    regressed on. Booked for someone with a real IME (Japanese/Chinese/Korean
+    input on Windows or macOS) rather than guessed at. Scope: any Escape
+    pressed mid-composition anywhere in the app; the ten backdrop dialogs are
+    where the new `preventDefault()` makes it visible.
 
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because
@@ -4525,9 +4578,122 @@ covers a much smaller subset and guards focus on Analyze.
     because the dialog's own effect satisfies them — the same disclosure
     round 7 made.
 
+  **Round 9 (2026-09-19) — R1 CLOSED: BUG-018 fixed, R13 closed.** Built the
+  option-1 fix BUG-018's entry offers: `lib/escapeStack.ts` gains a `modal`
+  layer ranked above `menu`, and all ten backdrop dialogs are surfaces on it
+  rather than on their own `window`-capture listeners. Option 2
+  (`stopImmediatePropagation()` plus a shared sequence number) was rejected for
+  the reason round 8 recorded: it would have left ten dialogs permanently
+  outside the single ordered walk — the split that produced the bug.
+  - **The bypass is keyed on THE CLAIMANT resolving to a modal**
+    (`ordered[0].layer === "modal"`), not on "a modal is registered anywhere".
+    The two coincide while `modal` is the top rank, but the claimant form is
+    the narrower statement of the same rule — it can only suspend a guard for a
+    keystroke a modal is actually going to be offered, and it stays correct if
+    a layer is ever added above this one. Nothing below a modal is offered the
+    key either, whether the modal claims it or declines it, so a modal that
+    DECLINES cannot hand a text field's Escape down to a workspace or the app
+    fallbacks — the surfaces `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` exist to
+    protect.
+  - **The modal claim resolves SYNCHRONOUSLY at keydown and marks the event**
+    (round-9 review, MED-HIGH — a measured regression in the first cut, fixed
+    before landing). Built on the DEFERRED walk, the layer could be beaten by
+    a window-BUBBLE listener that claims with `preventDefault()` during the
+    same dispatch: `walk`'s own `defaultPrevented` re-read then aborted the
+    dialog's close. Measured with Preferences open and a listener of
+    `usePeakWizard`'s exact shape — its marker-edit pause, live at step ②
+    whenever there is something to pause — **the pause fired and the dialog
+    stayed open**, where the parent tree's per-dialog window-capture
+    `stopPropagation()` had shielded it. Reachable with no mouse: Peak
+    Analyzer at step ②, then `Ctrl+,`. The fix is rounds 5–6's `gesture`
+    treatment applied to the same class of problem, and it is what makes the
+    `menu`-row correction at the top of this table (the wizard out-claiming an
+    open menu) NOT extend to modals. What the layer guarantees is therefore
+    stated precisely rather than as "it traps Escape": it outranks every
+    registry surface and every later listener that honours `defaultPrevented`;
+    it cannot stop one that ignores it, and it does not try to beat a claim
+    that landed before the dispatcher (window-capture / document-bubble — how
+    `SymbolPalette` claims and how `WhatIsThis` still owns Escape outright).
+    Pinned at both levels: "stops a LATE window-bubble consumer from killing a
+    MODAL's claim" (`lib/escapeStack.test.ts`) and "a window-bubble claimant
+    behind the dialog cannot swallow the dialog's Escape"
+    (`stackedDialogEscape.test.tsx`).
+  - **The four editing-target landing spots, which killed round 8's attempt,
+    are measured one test each** (jsdom, real components,
+    `user.keyboard("{Escape}")` at the dialog's own landing spot): Help's
+    search box (`INPUT`), Separate's and Combine's Name field (`INPUT`) and
+    Split's Column select (`SELECT`) each close on ONE Escape, where the
+    reverted attempt left all four Escape-DEAD.
+  - **A second blocker round 8 never reached.** Combine, Separate and Split
+    call `e.stopPropagation()` for EVERY key in the dialog box's React
+    `onKeyDown`. Measured: a React synthetic `stopPropagation()` calls
+    `stopPropagation()` on the NATIVE event at the React root container, which
+    is below `window`, so the registry's window-BUBBLE listener was
+    unreachable from inside those three dialogs. Escape is now let through
+    there; every other key still stops.
+  - **The ladder is not disturbed.** Rounds 2–5 each produced an inversion, so
+    this was measured rather than assumed: the full frontend suite is 680 files
+    / 11552 passed, and in Chromium `e2e/specs/region-tool-escape.spec.ts` ran
+    6 consecutive clean runs (6 passed each) plus a full `npm run e2e` at 62
+    passed / 1 skipped, every run under `CI=1` so `reuseExistingServer` could
+    not serve another checkout's SPA. Five sabotages each reddened exactly the
+    cases they should — see BUG-018's completion record.
+  - **What did NOT change: R12.** This fix decides who gets the KEY, not the
+    ARIA surface. Two `aria-modal="true"` dialogs can still be mounted at once
+    and `aria-modal` still hides the toaster and status-bar live regions;
+    R12's wording below stands unaltered.
+  - `escapeStack.ts` 324 → **465** lines (ceiling 500 — 35 lines of headroom,
+    worth watching: the next substantial change to this dispatcher should
+    extract a sibling rather than grow it). Bundle: **888,757 B** eager
+    against the parent `8f79207d`'s 888,562 B (+195 B), 221 chunks either
+    side — no seam moved and the pin is untouched. (Both figures were stale in
+    an earlier draft of this record — 377 lines and 888,754 B, measured before
+    the two review rounds below; corrected here from a fresh `npm ci` build.)
+  - **Re-review (2026-09-19), before landing.** No inversion in the sync-claim
+    delta — confirmed in real Chromium for the mid-drag case (Preferences
+    opened mid-drag: Escape ① closes the dialog only and the tool stays armed,
+    Escape ② reverts the tool), held-Escape, the native `<select>` popup and
+    `SymbolPalette` (which claims on document-bubble, before the dispatcher,
+    so it cannot race the synchronous claim). Four findings, all closed here:
+    - **A modal that DECLINES traps the key; a modal that THROWS does not.**
+      `offer()` folded an exception into "declined", and once a decline
+      started trapping that meant one throwing dialog made Escape dead
+      app-wide for as long as it was mounted — reintroducing, through the
+      back door, the very defect review NIT 5 added that catch to prevent.
+      `offer()` now returns `claimed`/`declined`/`threw`; the walk still
+      treats a throw as a decline (it has no trap to lift), and under a modal
+      a throw lifts the trap so the layers below get the key. Both halves
+      pinned, and the `offer()` header's "the surface below still gets its
+      turn" is narrowed to where it is actually true.
+    - **The trapped return no longer leaked a stale walk.** It skipped the
+      `clearTimeout` the fall-through path runs, so a walk armed by keydown ①
+      survived keydown ② and fired a macrotask later, handing the key to a
+      surface BENEATH the modal — precisely what the trap exists to prevent.
+      Needs two keydowns in one macrotask, so it is ~unreachable from real
+      input; fixed and pinned regardless.
+    - **The IME residual is booked as R14** rather than guessed at.
+    - **Stale numbers in this record corrected** (see the bullet above).
+
+  - **Review round (2026-09-19), before landing.** One behavioural finding —
+    the deferred-modal regression above — plus four doc/gating defects, all
+    fixed on top: two orphaned comments that still said this fix was
+    impossible (`SeparateWorksheetsDialog`, `SplitDatasetDialog`, both on
+    unrelated effects, a pre-existing misplacement); eight stale "kept as its
+    own window-capture listener rather than joining `lib/escapeStack.ts`"
+    preambles sitting directly above the call that joins it; this plan's own
+    residual miscount; and `SplitDatasetDialog` registering its modal on
+    `targetId` alone while the render and `useDialogFocus` also require the
+    dataset — a stale id put an INVISIBLE modal on the stack, and since
+    nothing below a modal is offered the key, one Escape did nothing at all.
+    Registration is now gated on the same condition as render, pinned by "a
+    stale target id registers no modal, so Escape still reaches the surface
+    below". The other nine dialogs were audited for the same mismatch: all
+    nine already register and render on the same condition.
+
   **Named residuals (why this is `[~]`).**
-  - **R1** — **NARROWED (round 8), not closed.** The FOCUS half is closed and
-    stays closed: the eight backdrop dialogs (Split, Separate, Combine,
+  - **R1** — **CLOSED (round 9).** Both halves now hold. The FOCUS half closed
+    in round 7 and stays closed: the eight backdrop dialogs (Split, Separate,
+    Combine,
     ReimportAll, Shortcuts, TextFormatHelp, Preferences, Help) take focus on
     open, trap Tab, and restore it to the opener on close, via the same
     `useDialogFocus`/`useFocusTrap` infrastructure every other dialog in this
@@ -4552,6 +4718,18 @@ covers a much smaller subset and guards focus on Analyze.
     with that reproduction and pinned by
     `components/overlays/stackedDialogEscape.test.tsx`. Pre-existing, not
     introduced by round 7 — the Escape effects are byte-identical to base.
+
+    **The ESCAPE half closed in round 9** (`5d6ef1b9`): all ten backdrop
+    dialogs are now `modal`-layer surfaces in `lib/escapeStack.ts`, so the
+    innermost open dialog closes and nothing below it acts on the same
+    keystroke — the three stacked pairs go 2 → 1 → 0 on two Escapes, a pending
+    `ConfirmDialog` underneath stays PENDING and resolves `false` only on the
+    second, and a lone dialog is unchanged at 1 → 0.
+    `stackedDialogEscape.test.tsx` is inverted from the `DIVERGENCE` pin to an
+    assertion of the ladder, covering all four rows. Round 7's claim that a
+    backdrop dialog "can never be out-ranked" is now true of the mechanism
+    rather than asserted of it: the ordering is the registry's, not listener
+    phase's.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
@@ -6846,6 +7024,91 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Test-only change: `git diff` outside
   `workspaceHydration.characterization.test.ts` (plus the two comment
   fixes above) touches no `frontend/src` product code.
+
+  **FIFTH domain extracted 2026-09-19**, same discipline: the **macro
+  recorder + pipeline view** — `startMacro`/`stopMacro`/`clearMacro`/
+  `recordMacro` (the recorder; curated call sites throughout the store
+  invoke `recordMacro` unconditionally — the gate on whether it actually
+  appends a step, and the anti-self-recording-loop guard while the pipeline
+  runner replays steps, both live in this cluster) and
+  `updateStepParams`/`toggleStep`/`removeStep`/`moveStep`/`insertStep`/
+  `loadSteps`/`setPipelineRunning` (the editable pipeline view, #6, over the
+  SAME `macroSteps` list the recorder fills) — 11 actions over 3 fields
+  (`macroRecording`, `macroSteps`, `pipelineRunning`) — moved verbatim to
+  the new `store/macroPipeline.ts` (`MacroPipelineSlice`), composed exactly
+  like `plotViewSettings.ts`/`reportsFigureDocs.ts`/`viewAppliers.ts`/
+  `workspaceHydration.ts`: one import line, one word on the `extends`
+  clause, one creator-spread line. `store/useApp.ts` **1,451 → 1,386 lines
+  (−65, measured by `src.split("\n").length` as `architecture.test.ts`
+  measures it — one more than the `wc -l` count because the file ends with
+  a trailing newline)**; its `STORE_PINS` entry ratcheted DOWN to 1,386 with
+  a dated justification.
+  Unlike the fourth extraction (workspace hydration) immediately above,
+  the FIELDS moved WITH the actions — declared and initialized on
+  `MacroPipelineSlice` itself, not on `AppState` — because this is a genuine
+  own-state slice (`store/gadget.ts`'s shape), not a shared-field mutator
+  (`store/corrections.ts`'s/`plotViewSettings.ts`'s shape): grep across
+  `store/*.ts` before the move found nothing outside this cluster WRITING
+  `macroRecording`/`macroSteps`/`pipelineRunning` except
+  `store/workspaceHydration.ts`'s `loadWorkspace` (`ws.macroSteps ?? []`, a
+  plain-object-literal bulk `.dwk` restore — the same "bulk restores stay
+  outside the cluster" shape every earlier P4.1 domain already documents for
+  its own fields, not a functional dependency on this slice). Chosen for
+  its isolation: unlike every other candidate left in `useApp.ts`
+  (dataset CRUD/selection, the folder tree, the ~30 workshop open-flags),
+  this domain touches no `datasets`, no windows, no history, and — unlike
+  every earlier P4.1 domain — none of its 11 actions call
+  `get().recordHistory` or `toast(...)` at all; macro/pipeline edits are
+  simply not part of the undo stack (`history.ts`'s own exclusion list),
+  which is why this extraction's characterization file has no undo-label/
+  toast half the way the first four do. No new `store/` layering
+  grandfathered entry: `macroPipeline.ts` imports only `lib/pipeline`'s pure
+  step primitives and the `AppState` TYPE from `./useApp`.
+  Characterization net: `store/macroPipeline.characterization.test.ts` (26
+  specs), written and run GREEN against the pre-extraction `store/useApp.ts`
+  and passing unchanged after the move. It pins, per action AND per branch,
+  the exact set of top-level store keys each call changes — a poisoned
+  whole-`getState()` diff — including the one genuine short-circuit
+  (`moveStep`'s "id not found" branch returns a literal `{}` and writes
+  nothing at all, not even a new `macroSteps` array reference) told apart
+  from every OTHER unmatched-id branch (`updateStepParams`/`toggleStep`/
+  `removeStep`), which still produces a NEW `macroSteps` array reference via
+  `.map`/`.filter` even though its content is unchanged — and from the three
+  plain boolean flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`),
+  where a store-wide non-default poison would have hidden half of each
+  writer's behavior (the "already at the target value" case), so each of
+  those specs arranges its own starting value instead and a dedicated pair
+  of specs pins the "no observable diff when already at the target" case as
+  real, documented behavior. Sabotage-proven four ways: removing the
+  `!pipelineRunning` half of `recordMacro`'s gate, removing `moveStep`'s
+  `i < 0` short-circuit, dropping `clearMacro`'s `macroRecording: false`
+  half, and skipping `updateStepParams`'s `regenerateStep` call for a
+  runnable kind — each reddened exactly the spec written to catch it and
+  nothing else, confirmed by re-running the file after each single-line
+  break and restoring it before the next.
+
+  **Adversarial review of the fifth extraction (2026-09-19), findings closed
+  same day.** Verdict: all four sabotages reproduced exactly as claimed, the
+  pre-extraction green was confirmed at the characterization commit, the
+  layering guard and the 1,386 pin both check out, and the full gate
+  matched. Two findings, both test/doc-only. MED (confirmed): `poison()`
+  seeded only `macroSteps`/`pipelineRunning` — `macroRecording` was never
+  poisoned for the seven pipeline-view actions
+  (`updateStepParams`/`toggleStep`/`removeStep`/`moveStep`/`insertStep`/
+  `loadSteps`/`setPipelineRunning`), which passed only via file-order
+  carryover from the preceding `recordMacro` block leaving it `true` —
+  proven by isolating them (`vitest run -t`), where it read back as the
+  default `false`, contradicting the file's own "each spec arranges its own
+  starting value" rule and leaving that coverage order-dependent. Fixed by
+  seeding `macroRecording: true` in `poison()`; all 26 specs still pass, and
+  each of the seven pipeline-view describes was re-run in isolation
+  (`vitest run -t` on all seven, not just two) and still passes — none of
+  the seven writes `macroRecording` (confirmed by source), so no
+  changed-key `toEqual([...])` array needed updating; the fix makes
+  existing, correct coverage order-independent rather than surfacing a new
+  gap. LOW (confirmed): this note's own "the two plain boolean
+  flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`)" named three,
+  not two — corrected to "three" above.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy

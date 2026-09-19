@@ -39,6 +39,7 @@ import { toast } from "../../store/toasts";
 import { useCombineDialog } from "../../store/combineDialog";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 export default function CombineWorkbooksDialog() {
   const seed = useCombineDialog((s) => s.seed);
@@ -78,30 +79,22 @@ export default function CombineWorkbooksDialog() {
     setCommitError(null);
   }, [seed]);
 
-  // Esc closes even when focus isn't inside the dialog. R1 (P3.3): kept as
-  // its own window-capture listener rather than joining `lib/escapeStack.ts`
-  // — a true backdrop modal always wins over anything mounted behind it, and
-  // window-capture already guarantees that ahead of the registry's window-
-  // bubble listener.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
-  useEffect(() => {
-    if (!seed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        close();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [seed, close]);
+  // Esc closes even when focus isn't inside the dialog. R1 (P3.3), through
+  // the app's one ordered Escape registry, on its `modal` layer (BUG-018,
+  // round 9): the innermost open dialog closes and nothing below it acts on
+  // the same keystroke. The per-dialog `window`-capture listener this replaces
+  // used `stopPropagation()`, which does not stop a same-node, same-phase
+  // sibling, so two open dialogs both closed on ONE Escape. The `modal` layer
+  // also suspends the registry's `isEditingTarget` bail, which matters here:
+  // this dialog's landing spot is the Name `<input>` (see below).
+  useEscapeSurface(
+    "modal",
+    () => {
+      close();
+      return true;
+    },
+    seed !== null,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. Landing spot: the Name field —
   // it drives whether Combine is even enabled (`canCombine` requires a
@@ -171,7 +164,13 @@ export default function CombineWorkbooksDialog() {
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Enter" && canCombine) runCombine();
-          e.stopPropagation();
+          // Escape is deliberately let through (BUG-018): it belongs to the
+          // `modal` surface registered above, and that dispatcher listens on
+          // `window` in the BUBBLE phase. Measured — a React synthetic
+          // `stopPropagation()` calls `stopPropagation()` on the native event
+          // at the React root container, so stopping Escape here made the
+          // registry's listener unreachable from inside this dialog.
+          if (e.key !== "Escape") e.stopPropagation();
         }}
       >
         <h2 id={titleId}>Combine into new workbook</h2>

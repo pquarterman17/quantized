@@ -5,7 +5,7 @@
 // command registry entry exists in commands/uiCommands.ts (source-scan,
 // architecture.test style — the App tree is too heavy to render in jsdom).
 
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -104,10 +104,13 @@ describe("TextFormatHelp", () => {
     expect(screen.getByText(/renders literally/)).toBeInTheDocument();
   });
 
-  it("closes on Escape, backdrop click, and the Close button", () => {
+  it("closes on Escape, backdrop click, and the Close button", async () => {
     const { rerender } = open();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(useApp.getState().textFormatHelpOpen).toBe(false);
+    // Escape now goes through the ordered registry (`lib/escapeStack.ts`,
+    // BUG-018), whose walk is deferred one macrotask, so wait on the STATE the
+    // close produces rather than reading it in the same tick.
+    await waitFor(() => expect(useApp.getState().textFormatHelpOpen).toBe(false));
 
     useApp.getState().setTextFormatHelpOpen(true);
     rerender(<TextFormatHelp />);

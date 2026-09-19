@@ -6,11 +6,12 @@
 // ShortcutsDialog conventions: a read-only modal on the store
 // `textFormatHelpOpen` flag; backdrop click / Esc / Close dismiss it.
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 
 import { Button, RichText } from "../primitives";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
+import { useEscapeSurface } from "../../lib/escapeStack";
 
 /** Worked examples: [what you type, note]. Rendered live via RichText. */
 const EXAMPLES: [string, string][] = [
@@ -71,29 +72,23 @@ export default function TextFormatHelp() {
   const titleId = useId();
 
   // Esc closes even when focus isn't inside the dialog (ShortcutsDialog). R1
-  // (P3.3): kept as its own window-capture listener, not the escape registry
-  // — a true backdrop modal must always win over anything behind it, and
-  // window-capture already guarantees that ahead of the registry's window-
-  // bubble listener.
-  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
-  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
-  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
-  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
-  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
-  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
-  // the bug entry for that measurement before attempting it again.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        setOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, setOpen]);
+  // (P3.3): a `modal` surface in `lib/escapeStack.ts` — a true backdrop modal
+  // outranks every other registry surface, and the registry is what orders two
+  // of these against EACH OTHER, which window-capture could not.
+  // FIXED 2026-09-19 (BUG-018, P3.3 round 9). Escape now goes through the
+  // app's one ordered registry on its `modal` layer, so the innermost open
+  // dialog closes and nothing below it acts on the same keystroke. The
+  // per-dialog `window`-capture listener this replaces used
+  // `stopPropagation()`, which does not stop a same-node, same-phase sibling,
+  // so two open dialogs both closed on ONE Escape.
+  useEscapeSurface(
+    "modal",
+    () => {
+      setOpen(false);
+      return true;
+    },
+    open,
+  );
 
   // R1: focus-in, Tab trap, restore-to-opener. Read-only sheet, one real
   // control (Close) — the hook's default first-focusable landing is it.
