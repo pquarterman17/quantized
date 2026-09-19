@@ -3797,12 +3797,12 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [~] Keyboard reachability, focus, order, cancel. **Audited in full and
-  fixed across eight rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
+  fixed across nine rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
   **round 8 NARROWED R1** after measuring that its Escape half was closed on
-  a false claim, and filed the measured defect as **BUG-018**. Stays `[~]`
-  rather than `[x]`: twelve residuals remain (R2–R13 below), each a distinct,
-  smaller gap — none of them a dialog with no keyboard dismissal at all,
-  which is what the audit originally found.
+  a false claim, and filed the measured defect as **BUG-018**; **round 9 fixed
+  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: ten residuals
+  remain (R2–R12 below), each a distinct, smaller gap — none of them a dialog
+  with no keyboard dismissal at all, which is what the audit originally found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -3817,7 +3817,7 @@ covers a much smaller subset and guards focus on Analyze.
   | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
-  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | **Y alone, WRONG stacked (BUG-018)** | Y | R1 narrowed (round 8) — focus-in + trap + restore closed; Escape OWNERSHIP is not |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (stacked too, round 9) | Y | R1 CLOSED — focus-in + trap + restore in round 7; Escape ownership in round 9, on `escapeStack`'s `modal` layer (BUG-018) |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
@@ -4227,6 +4227,23 @@ covers a much smaller subset and guards focus on Analyze.
     three missing reachability pins are worth adding with BUG-018's fix,
     when the mechanism they would pin is the one that will actually ship.
 
+    **CLOSED (round 9).** The three pins were added with BUG-018's fix, against
+    the mechanism that shipped — `SeparateWorksheetsDialog.test.tsx`,
+    `CombineWorkbooksDialog.test.tsx` and `ReimportAllDialog.test.tsx` each
+    gained a `fireEvent.keyDown(window, …)` case beside their focus-in/restore
+    one, and ReimportAll's asserts `cancelReimportAll()`'s effect rather than a
+    raw close (G1). Sabotaging the registration reddens both cases in that
+    file, so reachability is now discriminated separately from focus. The case
+    NAMES this residual complained about are unchanged; what they promised is
+    covered by the new cases beside them.
+
+    Side effect worth recording rather than leaving to be rediscovered: the
+    registry's walk is deferred one macrotask, so five pre-existing
+    `fireEvent`-then-read-state Escape tests (Help, Preferences, Shortcuts,
+    Split, TextFormatHelp) now wait on the STATE the close produces. They are
+    state waits, not mock-call waits, so `architecture.test.ts`'s weak-wait
+    ratchet is unmoved.
+
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because
     `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
@@ -4525,9 +4542,55 @@ covers a much smaller subset and guards focus on Analyze.
     because the dialog's own effect satisfies them — the same disclosure
     round 7 made.
 
+  **Round 9 (2026-09-19) — R1 CLOSED: BUG-018 fixed, R13 closed.** Built the
+  option-1 fix BUG-018's entry offers: `lib/escapeStack.ts` gains a `modal`
+  layer ranked above `menu`, and all ten backdrop dialogs are surfaces on it
+  rather than on their own `window`-capture listeners. Option 2
+  (`stopImmediatePropagation()` plus a shared sequence number) was rejected for
+  the reason round 8 recorded: it would have left ten dialogs permanently
+  outside the single ordered walk — the split that produced the bug.
+  - **The bypass is keyed on THE CLAIMANT resolving to a modal**
+    (`ordered[0].layer === "modal"`), not on "a modal is registered anywhere".
+    The two coincide while `modal` is the top rank, but the claimant form is
+    the narrower statement of the same rule — it can only suspend a guard for a
+    keystroke a modal is actually going to be offered, and it stays correct if
+    a layer is ever added above this one. It is a TRAP rather than a priority:
+    with a modal claimant the walk is restricted to modal entries, so a modal
+    that DECLINES cannot hand a text field's Escape down to a workspace or the
+    app fallbacks — the surfaces `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` exist
+    to protect.
+  - **The four editing-target landing spots, which killed round 8's attempt,
+    are measured one test each** (jsdom, real components,
+    `user.keyboard("{Escape}")` at the dialog's own landing spot): Help's
+    search box (`INPUT`), Separate's and Combine's Name field (`INPUT`) and
+    Split's Column select (`SELECT`) each close on ONE Escape, where the
+    reverted attempt left all four Escape-DEAD.
+  - **A second blocker round 8 never reached.** Combine, Separate and Split
+    call `e.stopPropagation()` for EVERY key in the dialog box's React
+    `onKeyDown`. Measured: a React synthetic `stopPropagation()` calls
+    `stopPropagation()` on the NATIVE event at the React root container, which
+    is below `window`, so the registry's window-BUBBLE listener was
+    unreachable from inside those three dialogs. Escape is now let through
+    there; every other key still stops.
+  - **The ladder is not disturbed.** Rounds 2–5 each produced an inversion, so
+    this was measured rather than assumed: the full frontend suite is 680 files
+    / 11552 passed, and in Chromium `e2e/specs/region-tool-escape.spec.ts` ran
+    6 consecutive clean runs (6 passed each) plus a full `npm run e2e` at 62
+    passed / 1 skipped, every run under `CI=1` so `reuseExistingServer` could
+    not serve another checkout's SPA. Five sabotages each reddened exactly the
+    cases they should — see BUG-018's completion record.
+  - **What did NOT change: R12.** This fix decides who gets the KEY, not the
+    ARIA surface. Two `aria-modal="true"` dialogs can still be mounted at once
+    and `aria-modal` still hides the toaster and status-bar live regions;
+    R12's wording below stands unaltered.
+  - `escapeStack.ts` 324 → 377 lines (ceiling 500). Bundle: 888,754 B eager
+    against the parent `8f79207d`'s 888,562 B (+192 B), 221 chunks either
+    side — no seam moved and the pin is untouched.
+
   **Named residuals (why this is `[~]`).**
-  - **R1** — **NARROWED (round 8), not closed.** The FOCUS half is closed and
-    stays closed: the eight backdrop dialogs (Split, Separate, Combine,
+  - **R1** — **CLOSED (round 9).** Both halves now hold. The FOCUS half closed
+    in round 7 and stays closed: the eight backdrop dialogs (Split, Separate,
+    Combine,
     ReimportAll, Shortcuts, TextFormatHelp, Preferences, Help) take focus on
     open, trap Tab, and restore it to the opener on close, via the same
     `useDialogFocus`/`useFocusTrap` infrastructure every other dialog in this
@@ -4552,6 +4615,18 @@ covers a much smaller subset and guards focus on Analyze.
     with that reproduction and pinned by
     `components/overlays/stackedDialogEscape.test.tsx`. Pre-existing, not
     introduced by round 7 — the Escape effects are byte-identical to base.
+
+    **The ESCAPE half closed in round 9** (`5d6ef1b9`): all ten backdrop
+    dialogs are now `modal`-layer surfaces in `lib/escapeStack.ts`, so the
+    innermost open dialog closes and nothing below it acts on the same
+    keystroke — the three stacked pairs go 2 → 1 → 0 on two Escapes, a pending
+    `ConfirmDialog` underneath stays PENDING and resolves `false` only on the
+    second, and a lone dialog is unchanged at 1 → 0.
+    `stackedDialogEscape.test.tsx` is inverted from the `DIVERGENCE` pin to an
+    assertion of the ladder, covering all four rows. Round 7's claim that a
+    backdrop dialog "can never be out-ranked" is now true of the mechanism
+    rather than asserted of it: the ordering is the registry's, not listener
+    phase's.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No

@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
+**Updated:** 2026-09-19 (BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal and traps the key, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
 — `plans/BUNDLE_HEADROOM.md` slice 3 added two more sites in modules the
 record already named, then slice 4's own 2026-09-18 review round re-measured
 after slice 4 added nine seams across three new modules, landing at 28;
@@ -47,7 +47,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — round 2 recovered "derived vs chosen" from the palette slot itself in `lib/exportStyles.stripDerivedColors`, a function round 3 DELETED); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). **Review round 3 (2026-09-18)** replaced round 2's recovery-by-comparison with PROVENANCE: `buildExportStyles` records `ExportSeriesStyle.colorDerived` on every colour it emits, the document persists it, and the single wire boundary `exportStyles.toWireSeriesStyles` applies the grouped rule and strips the flag — so a theme flip, a palette preset or a display-position shift between the pin and the export can no longer resurrect the one-hue regression, and a grouped request never sends a derived colour while an explicit one is always sent. The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets; plus one scoped migration residual for documents saved before provenance existed. **Review round 4 (2026-09-18)** moved that migration to LOAD time — `publicationStyles.sanitizeExportSeriesStyles` decides a flagless colour once, when the document arrives, and the `.dwk` FigureDoc path now runs that sanitizer at all — so a re-save really does persist provenance, a malformed persisted flag cannot flip it, an imported Origin template records its decoded colours as CHOSEN, a pinned array is re-cut to `y_keys` when a channel was hidden after the pin, and the export route refuses a leaked `colorDerived` with a 422. **Review round 5 (2026-09-18)** removed the palette inference from BOTH places it had lived: the palette a pin was taken under is persisted in no document, so round 4's load-time comparison read the READER's theme and then FROZE a possibly-wrong answer on the next save (measured: a figure saved under one palette and opened under another shipped both derived colours to a grouped export — round 1's regression — permanently). Provenance is now recorded ONLY by the five producers; an unflagged colour is UNVOUCHED and fails closed, omitted from a grouped export and kept on a flat one, until the figure is RE-PINNED (loading and re-saving retire nothing). The pin re-cut is reduced to a hidden-channel filter over the pin, closing the three guard clauses round 4's review sabotaged green, and `/figure-hitmap`'s 422 gains the test the claim rested on |
 | UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 28 `lazy()` sites (17 at filing, +2 from `BUNDLE_HEADROOM.md` slice 3, +9 from slice 4, 2026-09-18), zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites at filing, 19 after slice 3, 28 after slice 4) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
-| BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Unassigned | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9` across three stacked pairs + a lone-dialog control. **Pinned by `stackedDialogEscape.test.tsx` in the house `DIVERGENCE` style, not fixed** — the preferred fix (migrating all ten onto `useEscapeSurface`) was built, measured to work on the stacked pairs, and REVERTED because `escapeStack`'s `isEditingTarget` bail made four dialogs Escape-dead from their own documented landing spot. P3.3 residual R1 narrowed to match |
+| BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal and is a TRAP — a modal that declines cannot hand the key downward — which is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
 
 ---
 
@@ -6919,7 +6919,7 @@ one-line patch to slip into a bundle-diet follow-up.
 ## BUG-018 — one Escape closes TWO stacked backdrop dialogs (and silently answers a pending confirmation)
 
 **Priority:** P2 — a destructive-action confirmation can be answered by a keystroke the user aimed at the dialog above it  
-**State:** Open — reproduced, pinned by test, not fixed (a fix was built, measured and reverted; see Investigation)  
+**State:** **FIXED** 2026-09-19 (`5d6ef1b9`) — option 1 built, measured, sabotage-verified; owner verification remains  
 **Reported:** 2026-09-19 by Claude (agent), from the adversarial review of `cee0494f`  
 **Investigated:** 2026-09-19 — root cause confirmed in code and measured in jsdom on `490243f9`; the reviewer reproduced it independently in real Chromium  
 **Suggested implementation owner/model:** —  
@@ -7029,19 +7029,78 @@ Option 2 is the smaller change and does not touch the ladder; option 1 is the
 one that makes "one ordered walk" true for every surface in the app. Either
 way, the four editing-target landing spots are the acceptance criterion.
 
+**FIXED 2026-09-19 (`5d6ef1b9`) — option 1.** `lib/escapeStack.ts` gains a
+`modal` layer ranked above `menu`, and all ten backdrop dialogs are surfaces on
+it. Option 2 was rejected for the reason recorded above: it would have left ten
+dialogs permanently outside the single ordered walk, which is the split that
+produced this bug.
+
+**The bypass rule chosen: THE CLAIMANT resolves to a modal**
+(`ordered[0].layer === "modal"`), not "a modal is registered anywhere". The two
+coincide while `modal` is the top rank, but the claimant form is the narrower
+statement of the same rule — it can only suspend a guard for a keystroke a
+modal is actually going to be offered, and it stays correct if a layer is ever
+added above this one. It is also a TRAP rather than a priority: when the
+claimant is a modal the walk is restricted to modal entries, so a modal that
+DECLINES cannot hand a text field's Escape down to a workspace or the app
+fallbacks — the surfaces the bypassed guards existed to protect.
+
+**The four editing-target landing spots, measured individually** (jsdom, real
+components, `user.keyboard("{Escape}")` at the dialog's own landing spot, one
+test each, each in its own dialog's test file):
+
+| landing spot | tag `isEditingTarget` bails on | reverted attempt | this fix |
+|---|---|---|---|
+| Help's search box | `INPUT` | dead (nothing, twice) | closes on ONE Escape |
+| `SeparateWorksheets`' Name field | `INPUT` | dead | closes on ONE Escape |
+| `CombineWorkbooks`' Name field | `INPUT` | dead | closes on ONE Escape |
+| `SplitDataset`'s Column select | `SELECT` | dead | closes on ONE Escape |
+
+**A second blocker the first attempt never reached, found and fixed here.**
+`CombineWorkbooks`, `SeparateWorksheets` and `SplitDataset` call
+`e.stopPropagation()` for EVERY key in the dialog box's React `onKeyDown`.
+Measured in jsdom: a React synthetic `stopPropagation()` calls
+`stopPropagation()` on the NATIVE event at the React root container, which is
+below `window` — so the registry's window-BUBBLE listener was unreachable from
+inside those three dialogs. Escape is now let through there; every other key
+still stops, exactly as before.
+
+**Close semantics preserved.** `ReimportAll` still calls `cancel()`,
+`RecoveryChoice` still `applyCancelRecovery()`, and `ConfirmDialog` keeps ENTER
+on its own window-capture listener — the `e.repeat` safeguard and the
+"a focused button activates itself" rule are about that dialog's own
+destructive-action gate, not the Escape ladder, so only Escape moved. The
+registry's own `event.repeat` guard covers Escape.
+
+**`WhatIsThis.tsx` is deliberately untouched.** It uses the same listener shape
+but is a MODE, not a backdrop dialog, and is mutually exclusive with them; its
+window-capture `stopPropagation()` therefore still owns Escape outright while
+the mode is on.
+
+**R12 is NOT addressed and its wording is unchanged by this fix.** Two
+`aria-modal="true"` dialogs can still be mounted at once — this fix changes who
+gets the KEY, not the ARIA surface — and `aria-modal` still hides the toaster
+and status-bar live regions. Closing it needs the `inert`-plus-live-region-
+hoisting design decision R12 records.
+
 #### Implementation
 
-- [ ] Minimal safe behavior defined — one Escape closes the innermost open
-      backdrop dialog and nothing else
-- [ ] Failure and ambiguous-data behavior defined — a dialog whose landing
+- [x] Minimal safe behavior defined — one Escape closes the innermost open
+      backdrop dialog and nothing else; a modal TRAPS the key, so nothing
+      below it acts on the same keystroke whether the modal claims or declines
+- [x] Failure and ambiguous-data behavior defined — a dialog whose landing
       spot is a text field or `<select>` must still close on Escape from that
-      control (the four named above)
-- [ ] Data integrity and backward compatibility considered — `ReimportAll`
-      must keep calling `cancelReimportAll()` (coordinator-review G1), and
-      `ConfirmDialog` must keep Enter's `e.repeat` safeguard
-- [ ] UI wording/tooltips/accessibility included where relevant — see R12
-      (two concurrent `aria-modal` dialogs, and `aria-modal` hiding the
-      toaster and status-bar live regions)
+      control (the four named above); measured in the table in Investigation,
+      one test each, from the real landing spot
+- [x] Data integrity and backward compatibility considered — `ReimportAll`
+      still calls `cancelReimportAll()` (coordinator-review G1), and
+      `ConfirmDialog` keeps Enter's `e.repeat` safeguard on its own
+      window-capture listener (only Escape moved)
+- [ ] UI wording/tooltips/accessibility included where relevant — **NOT done,
+      and deliberately out of scope here**: see R12 (two concurrent
+      `aria-modal` dialogs, and `aria-modal` hiding the toaster and status-bar
+      live regions). This fix changes who gets the KEY, not the ARIA surface,
+      so R12's wording is unchanged by it
 
 #### Tests and acceptance
 
@@ -7051,23 +7110,43 @@ way, the four editing-target landing spots are the acceptance criterion.
       concrete values both sides produce and asserts they differ from the
       intended ladder, with the intended value recorded inline next to each.
       Fixing the bug inverts each `ACTUAL` expectation to its `INTENDED` one.
-- [x] Relevant focused tests pass
-- [x] Type-check/build/repository gates pass
-- [ ] Agent verifies acceptance criteria — after the fix
+- [x] Relevant focused tests pass — the scoped `components/overlays` +
+      `lib/escapeStack` + `architecture.test.ts` suite is 26 files / 358 tests
+      GREEN (the reverted attempt left 9 failed / 264 passed across 7 files)
+- [x] Type-check/build/repository gates pass — `tsc -b --force` and
+      `eslint src --max-warnings=0` clean; full vitest 680 files / 11552
+      passed; `npm run e2e` 62 passed / 1 skipped and
+      `region-tool-escape.spec.ts` 6/6 consecutive clean runs, all under
+      `CI=1` so no foreign dev server could be reused
+- [x] Agent verifies acceptance criteria — 2026-09-19, see the tables above
 - [ ] Owner verifies when required
 
 #### Completion record
 
-- PR/commit: filed 2026-09-19; not fixed
-- Automated tests: `stackedDialogEscape.test.tsx` (3 cases: Preferences over
-  Help, Preferences over a pending `ConfirmDialog`, and a lone-dialog control
-  proving this is about stacking and not about Escape generally). Each
-  sabotage-verified — see the filing commit's body.
-- Agent verification: —
+- PR/commit: filed 2026-09-19; **fixed 2026-09-19 in `5d6ef1b9`**
+- Automated tests: `stackedDialogEscape.test.tsx`, inverted from the
+  `DIVERGENCE` pin to an assertion of the ladder and extended to all four rows
+  of the table above (Preferences+Shortcuts, Preferences+Help, Preferences over
+  a pending `ConfirmDialog`, and the lone-dialog control). Four landing-spot
+  cases, one per dialog, in `HelpDialog.test.tsx`,
+  `SeparateWorksheetsDialog.test.tsx`, `CombineWorkbooksDialog.test.tsx` and
+  `SplitDatasetDialog.test.tsx`. R13's three missing Escape-reachability pins
+  (`fireEvent.keyDown(window, …)`) added to Separate, Combine and ReimportAll.
+  Five synchronous `fireEvent` Escape tests converted to wait on STATE rather
+  than a tick (the registry's walk is deferred one macrotask) — state waits, so
+  the weak-wait ratchet is unmoved.
+- Agent verification: five sabotages, each reverted after measuring — bypass
+  forced off (9 RED, including all four landing spots); Combine's box re-stops
+  Escape (2 RED); Shortcuts' handler returns `false` (1 RED, the
+  Preferences+Shortcuts row); ReimportAll never registers (2 RED, including its
+  new R13 pin); `ConfirmDialog` reclaims Escape on window capture (1 RED, the
+  pending-confirm row).
 - Owner verification: —
 - Notes: the reviewer's Chromium reproduction and this entry's jsdom
-  measurements agree exactly. See P3.3's round-8 record for the reverted
-  migration's full measurement.
+  measurements agreed exactly. See P3.3's round-8 record for the reverted
+  migration's full measurement and round 9's for what shipped. Bundle:
+  888,754 B eager against the parent's (`8f79207d`) 888,562 B, +192 B, 221
+  chunks either side — no seam moved, and the pin is untouched.
 
 ---
 
